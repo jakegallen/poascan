@@ -57,8 +57,13 @@ def main():
         c, b = req(base + "/sitemap.xml"); check("sitemap.xml", c == 200 and b"<urlset" in b and b"https://poascan.io/about" in b)
         c, b = req(base + "/blocks"); check("canonical /blocks -> /epochs", b'rel="canonical" href="https://poascan.io/epochs"' in b and b'og:url" content="https://poascan.io/epochs"' in b)
         c, b = req(base + "/"); check("home JSON-LD + h1", b"application/ld+json" in b and b"<h1>" in b and b'href="/find"' in b)
+        c, b = req(base + "/llms.txt"); check("llms.txt Join section", b"## Join PoA" in b and b"https://minepoa.com/mcp" in b and b"invite or referral" in b)
+        c, b = req(base + "/llms-full.txt"); check(f"llms-full.txt -> {c}", c == 200 and b"## MCP tools" in b and b"## Endpoints" in b)
+        for u in ["/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"]:
+            c, b = req(base + u); check(f"server card {u}", c == 200 and json.loads(b)["remotes"][0]["url"].endswith("/mcp"))
+        c, b = req(base + "/.well-known/ai-catalog.json"); check("ai-catalog.json", c == 200 and json.loads(b)["entries"][0]["type"] == "application/mcp-server-card+json")
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/llms.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/find", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)

@@ -205,6 +205,12 @@ class H(BaseHTTPRequestHandler):
             if path == "/sitemap.xml": return self.send(200, sitemap(), "application/xml; charset=utf-8", {"Cache-Control": "public, max-age=600"})
             if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
             if path == "/openapi.json": return self.send(200, json.dumps(AG.openapi(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
+            if path == "/llms-full.txt": return self.send(200, AG.llms_full_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
+            if path in ("/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"):
+                ct = "application/json" if path.endswith(".json") else "application/mcp-server-card+json"
+                return self.send(200, json.dumps(AG.server_card(), indent=1), ct, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET", "Cache-Control": "public, max-age=3600"})
+            if path in ("/.well-known/ai-catalog.json", "/.well-known/mcp/catalog.json"):
+                return self.send(200, json.dumps(AG.ai_catalog(), indent=1), "application/ai-catalog+json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
