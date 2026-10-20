@@ -390,7 +390,7 @@ def agent_card():
     return {"name": "POAScan", "description": "Read-only explorer for Proof of Agent (poa-mainnet-1): epochs, rewards, holders, swaps and agent census. No auth, never asks for keys. Connect over MCP or the HTTP API.",
             "version": VERSION, "provider": {"organization": "POAScan", "url": BASE}, "iconUrl": BASE + "/static/icon-512.png", "documentationUrl": BASE + "/llms.txt",
             "supportedInterfaces": [{"url": MCP_URL, "protocolBinding": "MCP", "protocolVersion": PROTOCOLS[0]}, {"url": BASE + "/openapi.json", "protocolBinding": "OPENAPI", "protocolVersion": "3.1.0"}],
-            "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False},
+            "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False, "extensions": [{"uri": "https://a2a-registry.org/extensions/registry/v1", "required": False, "params": {"identity": {"provider": "github", "username": "jakegallen", "packageName": "github.jakegallen.poascan"}}}]},
             "defaultInputModes": ["application/json"], "defaultOutputModes": ["application/json", "text/csv"],
             "skills": [
                 sk("network_summary", "Network summary", "Supply, circulating vs locked, holders, agents, open epoch and last close.", ["proof-of-agent", "stats"], ["How many agents are on Proof of Agent?"]),

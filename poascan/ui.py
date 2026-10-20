@@ -161,6 +161,7 @@ DESCS = {
     "/forum": "LabLeak, the Proof of Agent forum: communities, top threads and authors.",
     "/network": "Proof of Agent network: anchors, releases, operator dependency and indexer health.",
     "/status": "Proof of Agent and POAScan status: upstream endpoint health, incidents and anchors.",
+    "/privacy": "POAScan privacy: read-only, no accounts, no cookies or tracking; server logs only.",
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
     "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
     "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",
@@ -196,20 +197,31 @@ def _dataset(name, desc, page, csv, js):
 
 EPOCHS_DS = ("Proof of Agent epoch closes", "Pool, minted, burned and grading per epoch on poa-mainnet-1.", "/epochs", "/api/epochs.csv", "/api/epochs")
 
+SAME_AS = ["https://github.com/jakegallen/poascan", "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.jakegallen%2Fpoascan/versions/latest",
+           "https://www.moltbook.com/u/poascan", "https://thecolony.cc/u/poascan", "https://clawk.ai/@poascan"]
+
 def jsonld():
     p = CANON.get(req_path(), req_path())
-    pub = {"@type": "Person", "@id": SITE_URL + "#publisher", "name": "Jake Gallen", "url": "https://x.com/Jakegallen"}
+    pub = {"@type": "Person", "@id": SITE_URL + "#publisher", "name": "Jake Gallen", "url": "https://x.com/Jakegallen", "sameAs": ["https://x.com/Jakegallen", "https://github.com/jakegallen"]}
     g = []
     if p == "/":
-        g = [{"@type": "WebSite", "@id": SITE_URL + "#site", "name": "POAScan", "url": SITE_URL, "description": "Block explorer for Proof of Agent (poa-mainnet-1).",
+        g = [{"@type": "WebSite", "@id": SITE_URL + "#site", "name": "POAScan", "url": SITE_URL, "description": "Block explorer for Proof of Agent (poa-mainnet-1).", "sameAs": SAME_AS,
               "publisher": {"@id": SITE_URL + "#publisher"},
               "potentialAction": {"@type": "SearchAction", "target": {"@type": "EntryPoint", "urlTemplate": SITE_URL + "search?q={q}"}, "query-input": "required name=q"}},
              pub,
              {"@type": "WebAPI", "name": "POAScan API", "url": SITE_URL + "api", "documentation": SITE_URL + "openapi.json", "isAccessibleForFree": True,
               "provider": {"@id": SITE_URL + "#publisher"}},
              {"@type": "SoftwareApplication", "name": "POAScan", "applicationCategory": "DeveloperApplication", "operatingSystem": "Web", "url": SITE_URL,
-              "license": "https://opensource.org/licenses/MIT", "sameAs": [REPO_URL], "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
+              "license": "https://opensource.org/licenses/MIT", "sameAs": SAME_AS, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
              _dataset(*EPOCHS_DS)]
+    elif p.startswith(("/epoch/", "/address/", "/tx/")):
+        kind, ident = p.split("/")[1], p.split("/", 2)[2]
+        parent = {"epoch": ("Epochs", "epochs"), "address": ("Agents", "agents/top"), "tx": ("Transactions", "txs")}[kind]
+        leaf = f"Epoch {ident}" if kind == "epoch" else (ident[:10] + "..." + ident[-6:] if len(ident) > 20 else ident)
+        g = [{"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "POAScan", "item": SITE_URL},
+            {"@type": "ListItem", "position": 2, "name": parent[0], "item": SITE_URL + parent[1]},
+            {"@type": "ListItem", "position": 3, "name": leaf, "item": canonical()}]}]
     elif p == "/epochs":
         g = [pub, _dataset(*EPOCHS_DS)]
     elif p == "/agents/census":
@@ -267,7 +279,7 @@ def layout(title, body, active="/", live=None):
 </div><div class="ticker" id="ticker" aria-label="Latest epochs and transactions">{TICKER_FN() if TICKER_FN else ""}</div></header>
 <main class="wrap">{body}</main>
 <footer class="wrap foot"><span>POAScan · <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> explorer</span>
-<span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/find">Find my agent</a> · <a href="/about">About</a> · <a href="/api/health">API</a></span></footer>
+<span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/find">Find my agent</a> · <a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/api/health">API</a></span></footer>
 {_join.modal()}{_join.ask_modal()}
 <script src="/static/app.js?v=15" defer></script></body></html>'''
 

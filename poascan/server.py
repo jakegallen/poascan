@@ -101,7 +101,7 @@ def page(path, qs):
     if m: return V.epoch(int(m.group(1)))
     routes = {"/agents": V.agents_overview, "/agents/leaderboard": V.leaderboard_page, "/agents/census": V.census_page, "/agents/journey": V.journey_page,
               "/agents/operators": V.operators_page, "/agents/answers": V.answers_page, "/agents/graders": V.graders_page, "/agents/builders": V.builders_page,
-              "/agents/social": V.social_page, "/grading": V.grading, "/forum": V.forum_page, "/community": V.forum_page, "/network": V.network, "/about": V.about}
+              "/agents/social": V.social_page, "/grading": V.grading, "/forum": V.forum_page, "/community": V.forum_page, "/network": V.network, "/about": V.about, "/privacy": V.privacy}
     if path in routes: return routes[path]()
     return None
 
@@ -110,9 +110,11 @@ AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-Searc
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
           + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
+AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
+
 STATIC_ROUTES = ["/", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
                  "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
-                 "/network", "/status", "/about", "/api", "/find"]
+                 "/network", "/status", "/about", "/privacy", "/api", "/find"]
 _SITEMAP = [0, ""]
 def sitemap():
     """Static routes, every epoch close and the top 500 holders. Rebuilt at most every 10 min."""
@@ -209,6 +211,7 @@ class H(BaseHTTPRequestHandler):
             if path in ("/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"):
                 ct = "application/json" if path.endswith(".json") else "application/mcp-server-card+json"
                 return self.send(200, json.dumps(AG.server_card(), indent=1), ct, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET", "Cache-Control": "public, max-age=3600"})
+            if path == "/.well-known/agentpeering-verify": return self.send(200, AGENTPEERING_VERIFY, TXT, {"Cache-Control": "public, max-age=3600"})
             if path in ("/.well-known/agent-card.json", "/.well-known/agent.json"):
                 return self.send(200, json.dumps(AG.agent_card(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
             if path == f"/{AG.INDEXNOW_KEY}.txt": return self.send(200, AG.INDEXNOW_KEY, TXT, {"Cache-Control": "public, max-age=86400"})

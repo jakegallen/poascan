@@ -67,8 +67,11 @@ def main():
         INDEXNOW_KEY = re.search(r'INDEXNOW_KEY = "([0-9a-f]+)"', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "agentapi.py")).read()).group(1)
         c, b = req(base + f"/{INDEXNOW_KEY}.txt"); check("IndexNow key file", c == 200 and b.decode().strip() == INDEXNOW_KEY)
         c, b = req(base + "/BingSiteAuth.xml"); check(f"BingSiteAuth.xml off without env -> {c}", c == 404)
+        c, b = req(base + "/privacy"); check("privacy page", c == 200 and b"No cookies" in b and b'href="/privacy"' in b)
+        c, b = req(base + "/.well-known/agentpeering-verify"); check("agentpeering verify", c == 200 and b.strip() == b"ap-verify-cec18af41a029ed83d4e21ee0268f52c")
+        c, b = req(base + "/epoch/1"); check("epoch breadcrumbs", b"BreadcrumbList" in b)
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/find", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)

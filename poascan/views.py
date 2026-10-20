@@ -561,6 +561,17 @@ def network():
 <div class="grid2">{card("Latest anchors", al)}{card("Releases", rels)}</div>{card("Indexer", idx)}'''
     return page("Network", body, "/network")
 
+def privacy():
+    body = card("Privacy", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>
+<h3>What is collected</h3><ul><li><b>No cookies, no analytics, no tracking.</b> POAScan sets no cookies and runs no analytics or ad scripts.</li>
+<li><b>Server logs.</b> Each request is logged with IP address, time, path and status, for abuse prevention, rate limiting and debugging. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
+<li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li>
+<li><b>Fonts.</b> Pages load fonts from Google Fonts, which receives your IP address and browser details when you visit.</li></ul>
+<h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
+<h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data and logged like any other request. Inputs are not stored beyond those logs.</p>
+<h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener">GitHub issues</a>.</p><p class="na">Updated 2026-10-20.</p>''')
+    return layout("Privacy", f'<div class="sechead"><h1>Privacy</h1></div>{body}', "/privacy")
+
 def about():
     from . import agentapi as AG
     body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener">LabLeak</a>. It needs no wallet and never asks for keys.</p>
