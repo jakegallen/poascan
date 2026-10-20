@@ -1,0 +1,59 @@
+name: CI and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and import
+        run: |
+          python -m compileall -q poascan tools
+          python -c "import poascan.server, poascan.agentapi"
+      - name: Smoke test (empty DB, indexer off, no upstream calls)
+        run: python tools/smoke_test.py
+
+  deploy:
+    needs: test
+    if: github.repository == 'jakegallen/poascan' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One deploy at a time; a newer push waits instead of cancelling a deploy mid-flight.
+    concurrency:
+      group: fly-deploy-poascan
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://poascan.io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly.io
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then echo "::error::FLY_API_TOKEN secret is missing or empty"; exit 1; fi
+          flyctl deploy --remote-only --depot=false --config fly.toml -a poascan
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Check the new build is serving
+        run: |
+          # /healthz is process liveness; /api/health can be 503 when upstream minepoa.com is stale, so it is not checked here
+          for i in 1 2 3 4 5 6; do
+            curl -fsS https://poascan.io/healthz >/dev/null && curl -fsS https://poascan.io/ >/dev/null && curl -fsS https://poascan.io/openapi.json >/dev/null && exit 0
+            sleep 10
+          done
+          exit 1
