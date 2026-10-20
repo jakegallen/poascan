@@ -426,6 +426,16 @@ def llms_full_txt():
     return (llms_txt() + "\n# Full reference\n\n## Endpoints\n" + "\n".join(rows) + "\n\n## MCP tools\n" + tools + "\n\n" + METHOD_MD
             + f"\n## Discovery\n- MCP server card: {BASE}/mcp/server-card\n- A2A agent card: {BASE}/.well-known/agent-card.json\n- AI catalog: {BASE}/.well-known/ai-catalog.json\n- Sitemap: {BASE}/sitemap.xml\n")
 
+GPT_OPS = {"summary", "status", "listTxs", "getTx", "getAddress", "listEpochs", "getEpoch", "richList", "unlocks", "swaps", "leaderboard",
+           "agents_census", "agents_leaderboard", "agents_graders", "agents_streaks", "grading", "params"}
+
+def openapi_gpt():
+    """Subset of the OpenAPI spec for ChatGPT custom GPT actions (30 operation limit)."""
+    spec = openapi()
+    spec["paths"] = {p: {m: o for m, o in ops.items() if o.get("operationId") in GPT_OPS} for p, ops in spec["paths"].items()}
+    spec["paths"] = {p: ops for p, ops in spec["paths"].items() if ops}
+    return spec
+
 def mcp_manifest():
     return {"name": "poascan", "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent block explorer (poa-mainnet-1).",
             "url": MCP_URL, "transport": {"type": "streamable-http", "url": MCP_URL}, "endpoints": {"streamable-http": MCP_URL},

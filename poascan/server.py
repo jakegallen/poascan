@@ -206,6 +206,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})
             if path == "/sitemap.xml": return self.send(200, sitemap(), "application/xml; charset=utf-8", {"Cache-Control": "public, max-age=600"})
             if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
+            if path == "/openapi-gpt.json": return self.send(200, json.dumps(AG.openapi_gpt(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/openapi.json": return self.send(200, json.dumps(AG.openapi(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/llms-full.txt": return self.send(200, AG.llms_full_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path in ("/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"):
