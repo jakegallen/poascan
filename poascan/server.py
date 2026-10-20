@@ -1,5 +1,6 @@
 """POASCAN HTTP server: pages, read-only JSON/CSV API, static files. Python stdlib only."""
 import json, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
+from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG
 
@@ -104,6 +105,27 @@ def page(path, qs):
     if path in routes: return routes[path]()
     return None
 
+AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Perplexity-User",
+           "Google-Extended", "Applebot-Extended", "CCBot"]
+ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
+          + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
+
+STATIC_ROUTES = ["/", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
+                 "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
+                 "/network", "/status", "/about", "/api", "/find"]
+_SITEMAP = [0, ""]
+def sitemap():
+    """Static routes, every epoch close and the top 500 holders. Rebuilt at most every 10 min."""
+    if time.time() - _SITEMAP[0] < 600 and _SITEMAP[1]: return _SITEMAP[1]
+    base = "https://poascan.io"; ep = A.epoch_rows(); day = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t or time.time()))
+    last = day(max([r["close_ts"] or 0 for r in ep] or [0]) or None)
+    urls = [(base + p, last) for p in STATIC_ROUTES] + [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
+    try: urls += [(f"{base}/address/{r['addr']}", last) for r in A.holders()["rows"][:500]]
+    except Exception: pass
+    body = "".join(f"<url><loc>{E(u)}</loc><lastmod>{d}</lastmod></url>" for u, d in urls)
+    _SITEMAP[:] = [time.time(), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>\n"]
+    return _SITEMAP[1]
+
 HUB = L.Hub(lambda: V.live_snapshot())
 
 EM, EN, EMJ, ENJ = chr(0x2014), chr(0x2013), "\\u2014", "\\u2013"
@@ -162,6 +184,7 @@ class H(BaseHTTPRequestHandler):
     do_DELETE = do_PATCH = do_PUT
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        V.REQ.path, V.REQ.qs = path, qs
         try:
             if path == "/ws":
                 return HUB.accept(self)
@@ -178,7 +201,8 @@ class H(BaseHTTPRequestHandler):
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
             if path == "/healthz": return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
-            if path == "/robots.txt": return self.send(200, "User-agent: *\nAllow: /\n", "text/plain")
+            if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})
+            if path == "/sitemap.xml": return self.send(200, sitemap(), "application/xml; charset=utf-8", {"Cache-Control": "public, max-age=600"})
             if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
             if path == "/openapi.json": return self.send(200, json.dumps(AG.openapi(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})

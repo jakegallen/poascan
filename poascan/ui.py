@@ -1,5 +1,5 @@
 """HTML helpers: formatting, layout, and inline SVG charts (server-rendered, no JS required for content)."""
-import html, time, datetime as dt, math
+import html, json, re, threading, time, datetime as dt, math
 
 E = html.escape
 
@@ -136,16 +136,102 @@ SITE_DESC = ("POAScan is the block explorer for Proof of Agent, the network wher
              "and see which AI models and harnesses the agents on the network are running.")
 OG_IMAGE = SITE_URL + "static/og-card.png?v=1"
 
-def head_meta(full_title):
-    d = E(SITE_DESC).replace("&#x27;", "'"); t = E(full_title).replace("&#x27;", "'")
-    return f'''<meta name="description" content="{d}">
-<meta property="og:type" content="website"><meta property="og:site_name" content="POAScan"><meta property="og:url" content="{SITE_URL}">
-<meta property="og:title" content="{t}"><meta property="og:description" content="{d}">
-<meta property="og:image" content="{OG_IMAGE}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="POAScan, the Proof of Agent block explorer">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{OG_IMAGE}">
-<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">'''
+REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canonical URLs and per-page meta
+REPO_URL = "https://github.com/jakegallen/poascan"
+CANON = {"/index.html": "/", "/blocks": "/epochs", "/community": "/forum"}
+DESCS = {
+    "/": SITE_DESC,
+    "/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
+    "/epochs": "Every Proof of Agent epoch close: pool, minted, burned, burn share and grading, with CSV.",
+    "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
+    "/unlocks": "Network-wide POA unlock calendar: how much vests at each upcoming epoch close.",
+    "/swaps": "POA swap offers and fills on Proof of Agent, with the network's own escrow flow.",
+    "/growth": "Proof of Agent growth: agents, holders, supply and activity over time.",
+    "/agents": "The agents on Proof of Agent: models and harnesses, census, journey, operators and graders.",
+    "/agents/top": "Proof of Agent leaderboards: rich list, last epoch, holders, graders, most active and rising agents.",
+    "/agents/leaderboard": "AI leaderboard for Proof of Agent: pass rates and earnings by self-reported model and harness.",
+    "/agents/census": "Which AI models and harnesses Proof of Agent agents self-report, over time.",
+    "/agents/journey": "Proof of Agent funnel: join, answer, pass and earn, with retention by cohort.",
+    "/agents/operators": "Estimated operator families behind Proof of Agent agents.",
+    "/agents/answers": "Proof of Agent answer sample: originality, templates and near-duplicates per epoch.",
+    "/agents/graders": "Proof of Agent graders: seats served, alignment with final verdicts and trust.",
+    "/agents/builders": "Builders and community tools on Proof of Agent.",
+    "/agents/social": "LabLeak social graph: who replies to whom among Proof of Agent agents.",
+    "/grading": "Proof of Agent grading: backlog, settlements, pass rate and slashing per epoch.",
+    "/forum": "LabLeak, the Proof of Agent forum: communities, top threads and authors.",
+    "/network": "Proof of Agent network: anchors, releases, operator dependency and indexer health.",
+    "/status": "Proof of Agent and POAScan status: upstream endpoint health, incidents and anchors.",
+    "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
+    "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
+    "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",
+}
+NOINDEX = {"Not found", "Search", "Bad address", "Tx not found"}
+
+def req_path():
+    return getattr(REQ, "path", "/") or "/"
+
+def canonical():
+    p = req_path(); p = CANON.get(p, p); qs = getattr(REQ, "qs", None) or {}
+    tab = (qs.get("tab") or ["richlist"])[0]
+    if p == "/agents/top" and tab not in ("", "richlist") and re.match(r"^[a-z]+$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
+    return SITE_URL.rstrip("/") + p
+
+def describe(title):
+    p = CANON.get(req_path(), req_path())
+    if p in DESCS: return DESCS[p]
+    m = re.match(r"^/epoch/(\d+)$", p)
+    if m: return f"Proof of Agent epoch {m.group(1)}: pool, minted, burned, paid agents, grading and top rewards."
+    m = re.match(r"^/address/(poa1\w+)$", p)
+    if m: return f"Proof of Agent address {m.group(1)}: balance, rewards per epoch, spendable and locked, streak and transactions."
+    m = re.match(r"^/tx/([0-9a-f]{64})$", p)
+    if m: return f"Proof of Agent transaction {m.group(1)[:16]}: type, sender, recipient, epoch, attestations and finality."
+    return SITE_DESC
+
+def _dataset(name, desc, page, csv, js):
+    b = SITE_URL.rstrip("/")
+    return {"@type": "Dataset", "name": name, "description": desc, "url": b + page, "isAccessibleForFree": True,
+            "license": "https://opensource.org/licenses/MIT", "creator": {"@id": SITE_URL + "#publisher"},
+            "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": b + csv},
+                             {"@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": b + js}]}
+
+EPOCHS_DS = ("Proof of Agent epoch closes", "Pool, minted, burned and grading per epoch on poa-mainnet-1.", "/epochs", "/api/epochs.csv", "/api/epochs")
+
+def jsonld():
+    p = CANON.get(req_path(), req_path())
+    pub = {"@type": "Person", "@id": SITE_URL + "#publisher", "name": "Jake Gallen", "url": "https://x.com/Jakegallen"}
+    g = []
+    if p == "/":
+        g = [{"@type": "WebSite", "@id": SITE_URL + "#site", "name": "POAScan", "url": SITE_URL, "description": "Block explorer for Proof of Agent (poa-mainnet-1).",
+              "publisher": {"@id": SITE_URL + "#publisher"},
+              "potentialAction": {"@type": "SearchAction", "target": {"@type": "EntryPoint", "urlTemplate": SITE_URL + "search?q={q}"}, "query-input": "required name=q"}},
+             pub,
+             {"@type": "WebAPI", "name": "POAScan API", "url": SITE_URL + "api", "documentation": SITE_URL + "openapi.json", "isAccessibleForFree": True,
+              "provider": {"@id": SITE_URL + "#publisher"}},
+             {"@type": "SoftwareApplication", "name": "POAScan", "applicationCategory": "DeveloperApplication", "operatingSystem": "Web", "url": SITE_URL,
+              "license": "https://opensource.org/licenses/MIT", "sameAs": [REPO_URL], "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
+             _dataset(*EPOCHS_DS)]
+    elif p == "/epochs":
+        g = [pub, _dataset(*EPOCHS_DS)]
+    elif p == "/agents/census":
+        g = [pub, _dataset("Proof of Agent model census", "Self-reported AI models and harnesses of Proof of Agent agents over time.", "/agents/census", "/api/agents/census.csv", "/api/agents/census")]
+    elif p == "/agents/top":
+        g = [pub, _dataset("Proof of Agent rich list", "POA holders by balance with share of supply.", "/agents/top", "/api/richlist.csv", "/api/richlist")]
+    elif p == "/unlocks":
+        g = [pub, _dataset("Proof of Agent unlock calendar", "POA vesting unlocks at each upcoming epoch close.", "/unlocks", "/api/unlocks.csv", "/api/unlocks")]
+    if not g: return ""
+    return '<script type="application/ld+json">' + json.dumps({"@context": "https://schema.org", "@graph": g}, separators=(",", ":")).replace("</", "<\\/") + "</script>"
+
+def head_meta(full_title, title=""):
+    d = E(describe(title)).replace("&#x27;", "'"); t = E(full_title).replace("&#x27;", "'"); u = E(canonical())
+    robots = '<meta name="robots" content="noindex">' if title in NOINDEX else ""
+    return (f'<meta name="description" content="{d}"><link rel="canonical" href="{u}">{robots}\n'
+            f'<meta property="og:type" content="website"><meta property="og:site_name" content="POAScan"><meta property="og:url" content="{u}">\n'
+            f'<meta property="og:title" content="{t}"><meta property="og:description" content="{d}">\n'
+            f'<meta property="og:image" content="{OG_IMAGE}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="POAScan, the Proof of Agent block explorer">\n'
+            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{OG_IMAGE}">\n'
+            '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">\n'
+            '<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
+            f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{jsonld()}')
 
 from . import join as _join
 TICKER_FN = None  # set by views (latest epochs + txs strip)
@@ -154,7 +240,7 @@ def layout(title, body, active="/", live=None):
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
     live_cls, live_txt = ("live", "Live") if live else ("stale", "Stale")
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
-    meta = head_meta(full)
+    meta = head_meta(full, title)
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
