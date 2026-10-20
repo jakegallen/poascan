@@ -1,0 +1,21 @@
+# Never ship local state, logs or anything that could hold keys
+data/poascan.db*
+data/*.db*
+data/*.log
+**/*.log
+**/__pycache__
+**/*.pyc
+.git
+.env
+.env.*
+**/*.key
+**/*.pem
+**/join*.json
+**/*secret*
+**/*credential*
+**/key
+**/.poa
+fly.toml
+run.sh
+shots/
+tools/

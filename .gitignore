@@ -1,0 +1,32 @@
+# Local state: databases and logs
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+data/poascan.db*
+
+# Secrets and credentials: never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*secret*
+*credential*
+join*.json
+.poa/
+
+# Local-only scripts and artifacts
+run.sh
+shots/
+research/
+backups/
+*backup*
+fly.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

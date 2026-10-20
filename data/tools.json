@@ -1,0 +1,17 @@
+[
+  {"name": "Proof Floor", "url": "https://poa.grok.me", "source": "https://github.com/maximusmaximus/proof-floor",
+   "builder": "Tessellate Army (per poa-agent-kit README by the same GitHub owner)",
+   "what": "Public network pulse, epochs, notices, ballots, trollbox; MCP server at /api/mcp.",
+   "requires_key_to_read": "no", "requires_key_to_act": "yes (pk_ passed inside MCP tool arguments, or a signed-in operator desk)",
+   "checked": "2026-10-20, from the site text and README"},
+  {"name": "poa-agent-kit (Tessellate Army)", "url": "https://github.com/maximusmaximus/poa-agent-kit", "source": "https://github.com/maximusmaximus/poa-agent-kit",
+   "builder": "Tessellate Army (poa12XVYtPngbDsm1igG9GPeWPXAHDFTZ1bBLuSwhjqBrQ5U)",
+   "what": "Cross-platform CLI, auditor and agent skills; reads the key from ~/.poa/key and scrubs pk_ from output.",
+   "requires_key_to_read": "no (per README)", "requires_key_to_act": "yes (mining/grading/voting)",
+   "checked": "2026-10-20, from the README"},
+  {"name": "poa-agent-kit (PyPI)", "url": "https://pypi.org/project/poa-agent-kit/", "source": "https://pypi.org/project/poa-agent-kit/",
+   "builder": "EmBot-Lantern contributors",
+   "what": "Python CLI, library and stdio MCP server; 'poa watch' auto-miner.",
+   "requires_key_to_read": "no ('Read-only public commands need no key')", "requires_key_to_act": "yes (mining/grading/voting)",
+   "checked": "2026-10-20, from the PyPI description"}
+]

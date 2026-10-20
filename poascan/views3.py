@@ -1,0 +1,189 @@
+"""Batch 3: unlock calendar + circulating supply, address reward tracker, /growth."""
+import time, json, collections, datetime as dt
+from html import escape as E
+from . import db, analytics as A, agents as G
+from .ui import *
+from . import prompts as PR
+from .ui import _ic
+
+def page(*a):
+    from . import views
+    return views.page(*a)
+
+DAY = 86400
+
+def _vest(): return int(A.params().get("vesting_epochs") or 100)
+
+def _minted_by_epoch():
+    out = collections.Counter()
+    for a, r in A.rewards_by_addr().items():
+        for k, v in r.items(): out[k] += v
+    return dict(out)
+
+def _close_ts(j):
+    """Estimated close time of epoch j (j >= open epoch); past epochs use the real close."""
+    o = A.open_epoch(); n = o["epoch"]
+    for r in A.epoch_rows():
+        if r["epoch"] == j: return r["close_ts"]
+    if o["est_close"] is None: return None
+    return o["est_close"] + (j - n) * o["period"]
+
+@A.cached("unlocks", 60)
+def unlock_data():
+    vest = _vest(); R = _minted_by_epoch(); o = A.open_epoch(); n = o["epoch"]; tot = sum(R.values())
+    def circ(j):  # circulating right after epoch j closes (open epoch = j+1)
+        return sum(v * min(1.0, max(0, j + 1 - k) / vest) for k, v in R.items())
+    past = [(r["close_ts"], circ(r["epoch"])) for r in A.epoch_rows()]
+    last_k = max(R) if R else n
+    fut = []
+    for j in range(n, last_k + vest):
+        t = _close_ts(j)
+        if t: fut.append((j, t, circ(j), circ(j) - circ(j - 1)))
+    now_c = circ(n - 1)
+    hit = {}
+    for p in (.25, .5, 1.0):
+        hit[p] = next(((j, t) for j, t, c, _ in fut if c >= p * tot - 1e-6), None) if now_c < p * tot - 1e-6 else ("done", None)
+    return dict(vest=vest, total=tot, now=now_c, past=past, fut=fut, hit=hit, period=o["period"], open=n,
+                next=fut[0] if fut else None)
+
+def _days(t):
+    if not t: return '<span class="na">···</span>'
+    d = (t - time.time()) / DAY
+    return f'<span class="num">{d:,.1f}</span> <span class="unit">days</span>'
+
+def unlock_stats():
+    u = unlock_data(); nx = u["next"]
+    def th(p):
+        h = u["hit"][p]
+        return '<span class="tag ok">REACHED</span>' if h and h[0] == "done" else (_days(h[1]) if h else '<span class="na">···</span>')
+    return "".join([
+        stat("Circulating", poa(u["now"]), "", ICON_LOCK, "vest"),
+        stat("Circulating %", pct(u["now"] / u["total"]) if u["total"] else "···"),
+        stat("Next unlock", (poa(nx[3]) + f' <span class="dim small">· E{nx[0]} close</span>') if nx else "···"),
+        stat("Next unlock in", f'<span class="xcd num" data-close="{int(nx[1])}"></span>' if nx else "···"),
+        stat("To 25%", th(.25)), stat("To 50%", th(.5)), stat("To 100%", th(1.0)),
+        stat("Vesting", f'<span class="num">{u["vest"]}</span> <span class="unit">epochs</span>')])
+
+def unlock_chart():
+    u = unlock_data(); now = time.time()
+    pts = u["past"] + [(t, c) for _, t, c, _ in u["fut"]]
+    if pts and pts[0][1] > 0: pts = [(pts[0][0] - u["period"], 0.0)] + pts
+    marks = [(h[1], f"{int(p*100)}%") for p, h in u["hit"].items() if h and h[0] != "done" and h[1]]
+    return line(pts, height=200, color="#E3A33A", fmt=compact, xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"),
+                marks=marks, proj_from=now, y0=0)
+
+def unlock_calendar(nrows=12):
+    u = unlock_data(); tot = u["total"] or 1
+    rows = [[f'E{j}', utc(t, "%m-%d %H:%M"), poa(d), poa(c), pct(c / tot)] for j, t, c, d in u["fut"][:nrows]]
+    return table(["At close", "Time (UTC)", "Unlocks", "Circulating", "%"], rows)
+
+def unlock_section():
+    return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), PR.ask([PR.UNLOCK, PR.SPENDABLE]), cls="")}'
+            f'<div class="stats eight">{unlock_stats()}</div>'
+            f'{card("Unlock calendar", unlock_calendar(), "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>")}')
+
+def unlocks_api():
+    u = unlock_data()
+    return [dict(epoch_close=j, ts=int(t), unlocks=round(d, 6), circulating=round(c, 6), pct=round(c / u["total"], 6) if u["total"] else None) for j, t, c, d in u["fut"]]
+
+# ---------------- address reward tracker ----------------
+def reward_tracker(a, p):
+    vest = _vest(); o = A.open_epoch(); n = o["epoch"]; rb = p["rewards"]
+    sett = collections.defaultdict(lambda: [0, 0])
+    for e, _, ok in p["settled"]:
+        sett[e][1] += 1; sett[e][0] += 1 if ok else 0
+    eps = sorted(set(p["answered"]) | set(rb) | set(sett))
+    if not eps: return '<p class="na">No answers yet.</p>', ""
+    rows = []
+    for k in reversed(eps):
+        sub = k in p["answered"]
+        if k >= n: gr, gs = ("open", "cur")
+        elif sett.get(k): gr, gs = (f'{sett[k][0]}/{sett[k][1]} pass', "ok" if sett[k][0] else "bad")
+        elif sub: gr, gs = ("unsettled", "dimx")
+        else: gr, gs = ("···", "off")
+        r = rb.get(k)
+        if k >= n: pd, ps = ("at close", "cur")
+        elif r: pd, ps = (poa(r, dec=2), "ok")
+        else: pd, ps = ("0", "off" if not sub else "bad")
+        if r:
+            f = min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1)
+            vs = (f'<span class="vbar"><i style="width:{f*100:.1f}%"></i></span><span class="num">{f*100:.0f}%</span>'
+                  + (f' <span class="dim small">full {utc(done_t, "%m-%d")}</span>' if f < 1 else ""))
+            vss = "ok" if f >= 1 else "cur"
+        else: vs, vss = ("···", "off")
+        step = lambda st, lab, val: f'<div class="rs {st}"><i></i><b>{lab}</b><span>{val}</span></div>'
+        rows.append(f'<div class="rtr"><a class="rte" href="/epoch/{k}">E{k}</a><div class="rsteps">'
+                    + step("ok" if sub else ("off" if k < n else "cur"), "Submitted", "yes" if sub else (("grader only" if r else "···") if k < n else "…"))
+                    + step(gs, "Graded", gr) + step(ps, "Paid", pd) + step(vss, "Vesting", vs) + '</div></div>')
+    # schedule
+    nxt = sum(v / vest for k, v in rb.items() if k <= n - 1 and n + 1 - k <= vest)
+    full_t = _close_ts(max(rb) + vest - 1) if rb else None
+    tot = sum(rb.values()); unl = sum(v * min(1.0, max(0, n - k) / vest) for k, v in rb.items())
+    t_next = o["est_close"]
+    sched = "".join([stat("Unlocked", pct(unl / tot) if tot else "···"), stat("Next unlock", poa(nxt) if rb else "···"),
+                     stat("Next in", f'<span class="xcd num" data-close="{int(t_next)}"></span>' if t_next and rb else "···"),
+                     stat("Fully vested", utc(full_t, "%m-%d %H:%M") if full_t else "···")])
+    return f'<div class="rtrack">{"".join(rows)}</div>', f'<div class="stats eight">{sched}</div>'
+
+def invite_tree(a, depth=2, cap=40):
+    acc = G.accounts_all(); kids = collections.defaultdict(list)
+    for x, r in acc.items():
+        if r["invited_by"]: kids[r["invited_by"]].append(x)
+    rb = A.rewards_by_addr(); nm = A.forum_names()
+    def node(x, d):
+        ch = kids.get(x, [])
+        earned = sum(rb.get(x, {}).values())
+        lab = f'{addr_link(x, nm)} <span class="dim small">{compact(earned)} POA · {len(ch)} inv</span>'
+        if not ch or d >= depth: return f'<li>{lab}</li>'
+        inner = "".join(node(c, d + 1) for c in sorted(ch, key=lambda c: -sum(rb.get(c, {}).values()))[:cap])
+        more = f'<li class="dim small">+{len(ch)-cap} more</li>' if len(ch) > cap else ""
+        return f'<li><details{" open" if d == 0 else ""}><summary>{lab}</summary><ul>{inner}{more}</ul></details></li>'
+    up = acc.get(a, {}).get("invited_by") if acc.get(a) else None
+    upline = f'<div class="small dim">Invited by {addr_link(up, nm)}</div>' if up else ""
+    n_inv = len(kids.get(a, []))
+    return upline + (f'<ul class="itree">{node(a, 0)}</ul>' if n_inv else '<p class="na">No invites yet.</p>'), n_inv
+
+# ---------------- growth ----------------
+@A.cached("growth", 120)
+def growth_data():
+    s = A.accounts_series()
+    agents = [(t, a) for t, a, h, sup, tx in s if a]
+    holders = [(t, h) for t, a, h, sup, tx in s if h]
+    supply = [(t, sup) for t, a, h, sup, tx in s if sup]
+    day = db.q("SELECT (ts/86400)*86400 AS d, COUNT(*) AS n FROM txs WHERE ts IS NOT NULL GROUP BY d ORDER BY d")
+    hour = db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM txs WHERE ts IS NOT NULL GROUP BY h ORDER BY h")
+    ans = G.answerers(); rows = A.epoch_rows()
+    paid = {r["epoch"]: r["paid"] for r in rows}
+    per_ep = [(k, len(ans.get(k, ())), paid.get(k, 0)) for k in sorted(set(ans) | set(paid))]
+    ms = []
+    for th in (500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000):
+        hit = next((t for t, a in agents if a >= th), None)
+        if hit and agents[0][1] < th: ms.append((hit, f"{th//1000}k" if th % 1000 == 0 else f"{th/1000:g}k", "agents"))
+    for r in rows: ms.append((r["close_ts"], f"E{r['epoch']}", "close"))
+    sw = db.q1("SELECT MIN(created_ts) AS t FROM swaps")
+    if sw and sw["t"]: ms.append((sw["t"], "1st swap", "swap"))
+    return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
+
+def growth_page():
+    g = growth_data()
+    xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
+    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap")]
+    em = [(t, l) for t, l, k in g["ms"] if k == "close"]
+    la = g["agents"][-1][1] if g["agents"] else None; lh = g["holders"][-1][1] if g["holders"] else None
+    a24 = next((a for t, a in g["agents"] if t >= time.time() - DAY), None)
+    tday = g["day"][-1]["n"] if g["day"] else None
+    pe = g["per_ep"]
+    st = "".join([stat("Agents", intc(la), "", ICON_BOT, "agents"), stat("Agents · 24h", f'<span class="num">+{la - a24:,}</span>' if la and a24 else "···"),
+                  stat("Holders", intc(lh), "", ICON_USERS), stat("Txs today (UTC)", intc(tday)),
+                  stat("Answerers · last epoch", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None))), stat("Paid · last epoch", intc(pe[-2][2] if len(pe) > 1 else None))])
+    ac = line(g["agents"], height=200, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, y0=0)
+    hc = line(g["holders"], height=200, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, y0=0)
+    tc = bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
+    th = line([(r["h"], r["n"]) for r in g["hour"][:-1]], height=170, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
+    ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe], colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answerers", "Paid"])
+    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])] for t, l, k in reversed(g["ms"])])
+    body = f'''<div class="sechead"><h1>Growth</h1></div><div class="stats six">{st}</div>
+<div class="grid2">{card(ICON_BOT + "Agents", ac)}{card(ICON_USERS + "Holders", hc)}</div>
+<div class="grid2">{card("Txs / day · indexed", tc)}{card("Txs / hour · indexed", th)}</div>
+<div class="grid2">{card(ICON_CUBE + "Answers per epoch", ec)}{card("Milestones", ml)}</div>'''
+    return page("Growth", body, "/growth")
