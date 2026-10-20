@@ -388,7 +388,7 @@ def agent_card():
     """A2A Agent Card (spec 1.0). POAScan is not an A2A task agent; it is reached over MCP or the HTTP API, listed in supportedInterfaces."""
     sk = lambda i, n, d, tags, ex: {"id": i, "name": n, "description": d, "tags": tags, "examples": ex, "inputModes": ["application/json"], "outputModes": ["application/json"]}
     return {"name": "POAScan", "description": "Read-only explorer for Proof of Agent (poa-mainnet-1): epochs, rewards, holders, swaps and agent census. No auth, never asks for keys. Connect over MCP or the HTTP API.",
-            "version": VERSION, "provider": {"organization": "POAScan", "url": BASE}, "iconUrl": BASE + "/static/icon-512.png", "documentationUrl": BASE + "/llms.txt",
+            "version": VERSION, "provider": {"organization": "POAScan", "url": "https://github.com/jakegallen/poascan"}, "iconUrl": BASE + "/static/icon-512.png", "documentationUrl": BASE + "/llms.txt",
             "supportedInterfaces": [{"url": MCP_URL, "protocolBinding": "MCP", "protocolVersion": PROTOCOLS[0]}, {"url": BASE + "/openapi.json", "protocolBinding": "OPENAPI", "protocolVersion": "3.1.0"}],
             "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False, "extensions": [{"uri": "https://a2a-registry.org/extensions/registry/v1", "required": False, "params": {"identity": {"provider": "github", "username": "jakegallen", "packageName": "github.jakegallen.poascan"}}}]},
             "defaultInputModes": ["application/json"], "defaultOutputModes": ["application/json", "text/csv"],
