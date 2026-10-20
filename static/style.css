@@ -270,7 +270,7 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
  .tk-track{animation:none!important}.ticker{overflow-x:auto}.js .chart{clip-path:none}.vessel .molten::after{display:none}}
 /* hero fit + feed + address head */
-.hero .sv .unit{display:none}.hero .sv[data-live="vest"]{font-size:var(--t20);margin-top:20px}
+.hero .sv .unit{display:none}
 .fw .al{flex-wrap:nowrap;white-space:nowrap;overflow:hidden}.fw .fname{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .addrhead{display:flex;align-items:center;gap:14px;margin:4px 0 16px;min-width:0}.addrhead .idn{width:44px;height:44px;border-radius:8px}
 .addrhead h1{font:500 var(--t20)/1.3 var(--mono);color:var(--hi);overflow-wrap:anywhere;min-width:0}.addrhead .lbl{margin-bottom:4px}
@@ -461,14 +461,9 @@ table.sortable th[data-dir=asc]::after{content:"↑";opacity:1;color:var(--amber
 a.aname,.al a.fname{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color var(--fast),color var(--fast)}
 a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--amber);text-decoration:none}
 /* home head: h1 + Join / Find my agent */
-.homehead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 16px}
-.homehead h1{margin:0;font-size:var(--t28);font-weight:700;line-height:var(--lh-tight);color:var(--hi);letter-spacing:-.01em}
-.hcta{display:flex;align-items:center;gap:10px}
-.hcta .joinbtn{animation:none}
-.findbtn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border:1px solid var(--line2);border-radius:999px;color:var(--txt);font:600 var(--t14)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;transition:border-color var(--fast),color var(--fast)}
-.findbtn:hover{border-color:#6B5420;color:var(--amber);text-decoration:none}
 .findf{display:flex;gap:8px}
 .findf input{flex:1;min-width:0;height:44px;border:1px solid var(--line2);border-radius:10px;background:var(--inset);color:var(--txt);font:400 var(--t14) var(--mono);padding:0 12px;outline:none}
 .findf input:focus{border-color:#7a5d1c;box-shadow:0 0 0 3px rgba(255,176,0,.12)}
 .findf button{height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--gold);color:#1A1205;font:700 var(--t14)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
-@media (max-width:640px){.homehead h1{font-size:var(--t20)}.hcta{width:100%}.hcta>*{flex:1;justify-content:center}.homehead .hjoin{display:none}.findbtn{padding:0 14px}}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

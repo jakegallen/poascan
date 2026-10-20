@@ -157,7 +157,7 @@ def home():
     h = headline(); ep = A.epoch_rows(); tc = A.tx_counts()
     st = A.status()
     stats = "".join(h[k] for k in ("mined", "holders", "accounts", "last", "burn", "vest", "height", "checkpoint"))
-    body = f'''<div class="homehead"><h1>Proof of Agent explorer</h1><div class="hcta">{_ui._join.button("hjoin")}<a class="findbtn" href="/find">Find my agent</a></div></div>
+    body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
 <div class="herogrid"><div class="stats eight">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
 <div class="grid2 realrow">{V2.real_card()}{card(V2.ICON_SWAP + "Market", f'<div class="stats two">{V2.market_mini()}{V2.price_stats_html()}</div>', '<a class="more" href="/swaps">Swaps →</a>')}</div>

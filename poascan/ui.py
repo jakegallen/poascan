@@ -245,11 +245,11 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=19"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=20"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
-<form class="search" action="/search" method="get" role="search"><input name="q" placeholder="Address / tx hash / epoch" aria-label="Search" autocomplete="off" enterkeyhint="search"><button aria-label="Search">{ICON_SEARCH}</button></form>
+<form class="search" action="/search" method="get" role="search"><input name="q" placeholder="Address / agent / tx / epoch" aria-label="Search" autocomplete="off" enterkeyhint="search"><button aria-label="Search">{ICON_SEARCH}</button></form>
 <a class="pill {live_cls}" id="livepill" href="/status" title="Status"><i></i><span>{live_txt}</span></a>
 <a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
 {_join.button("hdrjoin")}
@@ -257,7 +257,7 @@ def layout(title, body, active="/", live=None):
 </div><div class="ticker" id="ticker" aria-label="Latest epochs and transactions">{TICKER_FN() if TICKER_FN else ""}</div></header>
 <main class="wrap">{body}</main>
 <footer class="wrap foot"><span>POAScan · <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> explorer</span>
-<span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/about">About</a> · <a href="/api/health">API</a></span></footer>
+<span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/find">Find my agent</a> · <a href="/about">About</a> · <a href="/api/health">API</a></span></footer>
 {_join.modal()}{_join.ask_modal()}
 <script src="/static/app.js?v=15" defer></script></body></html>'''
 
