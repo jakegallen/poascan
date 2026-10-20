@@ -1,0 +1,12 @@
+{
+  "name": "poascan",
+  "version": "1.1.0",
+  "description": "Read-only Proof of Agent explorer: epochs, rewards, holders, swaps and agent census. No auth.",
+  "mcpServers": {
+    "poascan": {
+      "httpUrl": "https://poascan.io/mcp",
+      "timeout": 30000
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}
