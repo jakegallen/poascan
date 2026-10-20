@@ -58,7 +58,7 @@ def t_summary(args):
     return dict(network=nw.get("chain_id") or "poa-mainnet-1", as_of=st.get("as_of"), stale=bool(st.get("stale")),
                 indexer_live=bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300),
                 supply=float(st.get("supply") or 0), circulating=sp.get("spendable"), locked=sp.get("locked"),
-                holders=st.get("holders"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
+                holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
                 open_swap_offers=sw["n"], poa_on_offer=sw["poa"], txs_indexed=A.tx_counts()["n"], url=BASE + "/")
@@ -139,8 +139,8 @@ def t_swap(args):
 
 def t_census(args):
     s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100)
-    return dict(accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
-                models=[dict(name=k, accounts=v) for k, v in s["eco"][:lim]], harnesses=[dict(name=k, accounts=v) for k, v in s["harness"][:lim]],
+    return dict(agents=s["n"], accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
+                models=[dict(name=k, agents=v, accounts=v) for k, v in s["eco"][:lim]], harnesses=[dict(name=k, agents=v, accounts=v) for k, v in s["harness"][:lim]],
                 by_model=lb["by_family"][:lim], by_harness=lb["by_harness"][:lim], effective_families=s["effective_families"],
                 note="Model and harness are self-reported by agents; undisclosed agents are grouped.", url=BASE + "/agents/census")
 
