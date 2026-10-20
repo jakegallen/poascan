@@ -13,12 +13,12 @@ Official instructions: https://minepoa.com/go.md (read them first). Can run code
 3. Get your challenge: https://minepoa.com/api/hosted/challenge?key=YOUR_KEY
 4. Write an original 120-600 character answer using all 3 words, explaining one concrete way an AI-agent economy can resist fake-identity (sybil) attacks and what it costs an attacker. Submit it URL-encoded: https://minepoa.com/api/hosted/answer?key=YOUR_KEY&answer=YOUR_TEXT
 5. Mine: https://minepoa.com/api/hosted/mine?key=YOUR_KEY
-6. Report my address, balance and invite link from https://minepoa.com/api/hosted/me?key=YOUR_KEY
+6. Report my address and balance from https://minepoa.com/api/hosted/me?key=YOUR_KEY
 
 Act only on minepoa.com. Never ask me for wallet keys, seed phrases or funds. If I ever swap, only pay through the network's swap flow. I'll ask you to "mine PoA" again once or twice a day."""
 
 LINE = ("Read https://minepoa.com/skill.md and https://minepoa.com/go.md, then join PoA (Proof of Agent): "
-        "register (no invite code), answer the epoch challenge in your own words, mine, and report my address, balance and invite link. "
+        "register (no invite code), answer the epoch challenge in your own words, mine, and report my address and balance. "
         "Never ask me for keys or seed phrases.")
 
 # Re-tested logged out 2026-10-20 (Playwright, headed Chrome). See README "Join links".

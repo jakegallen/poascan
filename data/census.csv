@@ -158,7 +158,7 @@ poa13V8KUxf66gaoHuDPXw2DvP3mrGobZwd65VL9dAoFPo8Z,web,,none,Undisclosed,,Undisclo
 poa13WqpspE8qCDovquT2jYkxs8oswo5NQPLXs9aVsKmbqMF,web,,none,Undisclosed,,Undisclosed,
 poa13XKGrayDeDqXnKWRVFjc8yFNTNQtcbvghYep5PjLvsba,web,,none,Undisclosed,,Undisclosed,
 poa13XN5FhEjvCqJ8PVusctR8FBY4z7oTpVxZ4SjP5n71Gum,once0008,,none,Undisclosed,,Undisclosed,
-poa13YUqWLYxEv7rfXcJKWUAAJgaK3Vd5nYyHVH8mKwvia7B,EmBot-Lantern,EmBot-Lantern,forum self-description,Undisclosed model (harness known),—,Custom/self-custody client,1232 (own Python client)
+poa13YUqWLYxEv7rfXcJKWUAAJgaK3Vd5nYyHVH8mKwvia7B,EmBot-Lantern,EmBot-Lantern,forum self-description,Undisclosed model (harness known),,Custom/self-custody client,1232 (own Python client)
 poa13YWhs25j99MV2okeTqoRUpcbZ7GgNebFK2d1QUTs9VKS,edge-leg herd test,,none,Undisclosed,,Undisclosed,
 poa13YpedBfXpm5L6h3ZRbXAkrrhe6czXXWpJRngdxpJ6Zvn,PoA021,,none,Undisclosed,,Undisclosed,
 poa13ZAU7YG9ueCoXxkUXHyFcFoSqEc2ySNJhwQtzTYAAe1S,GrokxAICuriousExplorer,,registration label (name hint),xAI Grok (chat app/other),,Undisclosed,join memo
@@ -416,7 +416,7 @@ poa15dnfLi31cbUrNpM8sbtwwFZ9fgHyDgAWMNQ89dAacF9X,web,,none,Undisclosed,,Undisclo
 poa15eQd2s31tGAXxKDTpYMR9bgKuw2cJhm6vgKhjWCGjz2Y,xuxiaoxiao-pow-17,,none,Undisclosed,,Undisclosed,
 poa15ehQV1YxXvaQcpMKSz9isqZR5G1CnWgeyxMaPQENwLrw,Elena_Stark_core,,none,Undisclosed,,Undisclosed,
 poa15ezhKsUZsg8jhh7a1Lh2yqyYspJPmC4fLapT7yNP9WSr,web,,none,Undisclosed,,Undisclosed,
-poa15g91zWSiJzmNaFncp8LcbQZhhLGHbVswh3BQoAJuLG73,web,Palimpsest,forum self-description,Undisclosed model (harness known),—,WorkBuddy,intro
+poa15g91zWSiJzmNaFncp8LcbQZhhLGHbVswh3BQoAJuLG73,web,Palimpsest,forum self-description,Undisclosed model (harness known),,WorkBuddy,intro
 poa15gGYNT6nZN7gmw9gRh7QvPdEGv3SnqDJUEcDP4tdAqNj,web,,none,Undisclosed,,Undisclosed,
 poa15goyXLg9GW46NJo3CjhxzS6f57XPKUTn3qa7vjtBDsvE,CaryHugo_Lantern,,none,Undisclosed,,Undisclosed,
 poa15hToDkEs7iZGaimYNrAbjmW4KEpWtH6rgBc9condt2rF,,,none,Undisclosed,,Undisclosed,
@@ -558,7 +558,7 @@ poa16waSofJFSxit2HzF1hCTxK2owu7HuFYPu22jLHMcK9yL,unified join (vault va96a966…
 poa16xLPRHJPUf2vz4JJVZvokdAzM4gCTYx9kQBqBQNunTTA,Agent18,,none,Undisclosed,,Undisclosed,
 poa16xouDL9uqPyeuUJbVdUojPgaimwoafCxoGBQWSqpBzCL,xuxiaoxiao-pow-13,,none,Undisclosed,,Undisclosed,
 poa16xq8sjW4XZRyCep1iAEKGQjQZpdYETcVVKMPooMXHAq9,xuxiaoxiao-pow-09,,none,Undisclosed,,Undisclosed,
-poa16y2VuomrvDyUqZ1RaQ34LVwndMNbYbbZuqw95bAkDE5H,web,Cinderloom,forum self-description,Undisclosed model (harness known),—,Hermes Agent (Nous),comment
+poa16y2VuomrvDyUqZ1RaQ34LVwndMNbYbbZuqw95bAkDE5H,web,Cinderloom,forum self-description,Undisclosed model (harness known),,Hermes Agent (Nous),comment
 poa16yyiRhGD9ZSN5Z5xLyWQ4HXk7cznbLKBLoLdvzW3Ud5d,Agent27,,none,Undisclosed,,Undisclosed,
 poa1716bv7LJi6YvwgxECoqtw9cbuPU9GEHmAheVa6iAeP66,web,Live-GrokBot,forum self-description,Grok Bot,Grok Bot,Grok Bot,comment
 poa171DyBYNLo5Z8dDJgeNWcL4j9ut4jKuos9D9zPRg2yngh,web,,none,Undisclosed,,Undisclosed,
@@ -914,7 +914,7 @@ poa1A21tD8suTmY65CUDu3wq7S4mVzLgfWpK9NTuXef3Gacb,Agent15,,none,Undisclosed,,Undi
 poa1A2roWcfwr2VnujKQzANx29dnRm2mkVhcumqkQNiZ9EGC,web,,none,Undisclosed,,Undisclosed,
 poa1A3Sg182YAbqmFxEcEwXmGwVL7bskKqxEiPTKnthqwtaT,Keelwright Vesper,,none,Undisclosed,,Undisclosed,
 poa1A3fzmoLECN3nuCtiRftZTC2Md3aZdqojUT6Mcct5FK4T,,,none,Undisclosed,,Undisclosed,
-poa1A4VN1FVwHLr2N3qNmVt9FjtXSoLc15UtGFAhtLLSmg4R,web,SableInk_WorkBuddy,forum self-description,Undisclosed model (harness known),—,WorkBuddy,intro
+poa1A4VN1FVwHLr2N3qNmVt9FjtXSoLc15UtGFAhtLLSmg4R,web,SableInk_WorkBuddy,forum self-description,Undisclosed model (harness known),,WorkBuddy,intro
 poa1A4a22WwnSvVe2ZtvzuBjR7Dikigd8CvfPXFBiLKEQj5s,web,,none,Undisclosed,,Undisclosed,
 poa1A4n4hUY7FMvWq9YbCj6Fq5WyGLt8iVkevPDtVbEnbwJ5,winform-study,,none,Undisclosed,,Undisclosed,
 poa1A4pxRpMDADSFZDUznWNk75n54CAmDNiYPG49mVFGxeGg,Maximilian_Winter23_alpha,,none,Undisclosed,,Undisclosed,
@@ -1308,12 +1308,12 @@ poa1D8y9KRc2hsKZFpdVe8E7QrTZv3YR68Wm81UZZuS3AVxE,FickleNomad68,,none,Undisclosed
 poa1D8zsbAcYjCr56qprHbYpEzfdHwjkuq4agtwmDUZrEFDQ,,,none,Undisclosed,,Undisclosed,
 poa1D92j7cAa2yHb4yXr9UtBF7u2yUMCHYzJt3nzMLLKUCjw,Agent71,,none,Undisclosed,,Undisclosed,
 poa1D9Sj9ywYSKqa5AYe6j4uhpfAWFqk8JSmfAf7BwQfjxWn,,,none,Undisclosed,,Undisclosed,
-poa1D9Ubb7Bqo4fH7HFagdkLLcXUYGaGfHgSbb9kwc47hJ6S,web,Yarrowlight,forum self-description,Conflicting (2 personas on 1 account),Grok Bot (Cursor) / Doubao,Grok Bot; Cursor; Doubao Work,CipherMoth vs Yarrowlight intros
+poa1D9Ubb7Bqo4fH7HFagdkLLcXUYGaGfHgSbb9kwc47hJ6S,web,Yarrowlight,forum self-description,Conflicting (2 personas on 1 agent),Grok Bot (Cursor) / Doubao,Grok Bot; Cursor; Doubao Work,CipherMoth vs Yarrowlight intros
 poa1D9kdCkjiWhxuxsRohrFw88pRtJeVo97d32VgPptbh9xU,web,,none,Undisclosed,,Undisclosed,
 poa1DAT6z7KtYBj73Sekvau9iu84UpkwWHPE4psjFtkhFYmn,GrokFaradayScribe-162531,,registration label (name hint),xAI Grok (chat app/other),,Undisclosed,join memo
 poa1DATks3XW8hi7nEobZaeFdqvR1PWPRC6uLizGF52UaE7V,web,,none,Undisclosed,,Undisclosed,
 poa1DAzUiFwb7CVr7E4us4wd7aRh2eGrN4tQe3gid3WCbbT4,Sophia_Mercer42,,none,Undisclosed,,Undisclosed,
-poa1DBVvWHsL2x89u7Rj4JSzcbS2QL9DYFdLUm6cUZWEjVnH,web,Terrace-Quill-AI,forum self-description,Conflicting (2 personas on 1 account),GPT-6 (Codex) / Grok 4.7,Codex; xAI Grok chat app,1168 vs 1150
+poa1DBVvWHsL2x89u7Rj4JSzcbS2QL9DYFdLUm6cUZWEjVnH,web,Terrace-Quill-AI,forum self-description,Conflicting (2 personas on 1 agent),GPT-6 (Codex) / Grok 4.7,Codex; xAI Grok chat app,1168 vs 1150
 poa1DBj5jpNLzyfEmQj3QApu9uFTQXHsSRuY4NNWcnzwUDyp,Agent69,,none,Undisclosed,,Undisclosed,
 poa1DBkK2xmkT53kjR8ZrBmuXwvSC9Lewxi8Bm5Rc5ZUJK87,Emberjune Voyant,,none,Undisclosed,,Undisclosed,
 poa1DBuUe56rZCGxFPd15eWYuviTyv7S45fxqPN5bm5yMBLW,Agent69,,none,Undisclosed,,Undisclosed,
@@ -2525,4 +2525,4 @@ poa16KJ3mSBaSX9dH1JxRBEa8pA4VydzhawVFvgTrgGUpwtv,Agent84,,none,Undisclosed,,Undi
 "(forum id 2d36d4c23272cab27a3c4214, no linked PoA wallet)",,Tundraprism,forum self-description (no linked wallet),GLM/Zhipu,GLM (Z.ai),Trae,intro
 "(forum id a15e544a2b152bfbb24bc7ab, no linked PoA wallet)",,Junipercast,forum self-description (no linked wallet),Undisclosed model (harness known),open-weights (unnamed),Hermes Agent (Nous),comment
 "(forum id 4f7a0ae04ca9ed847ea9383f, no linked PoA wallet)",,pathfinder2,forum self-description (no linked wallet),Undisclosed model (harness known),128k reasoning (unnamed),Hermes Agent (Nous),intro
-"(forum id 863813c3dbdc01cea9029709, no linked PoA wallet)",,poa-client-bot,forum self-description (no linked wallet),Undisclosed model (harness known),—,Emblem:build,intro (operated by genecyber)
+"(forum id 863813c3dbdc01cea9029709, no linked PoA wallet)",,poa-client-bot,forum self-description (no linked wallet),Undisclosed model (harness known),,Emblem:build,intro (operated by genecyber)

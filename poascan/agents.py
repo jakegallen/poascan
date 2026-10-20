@@ -7,7 +7,8 @@ cached = A.cached
 GENERIC = re.compile(r"^(web|agent\d*|bot|test|user|)$", re.I)
 NAMED_FAMILIES = {  # undisputed families model ecosystems (excludes undisclosed / conflicting buckets)
 }
-UNDISCLOSED = {"Undisclosed", "Undisclosed model (harness known)", "Conflicting (2 personas on 1 account)"}
+OLD_CONFLICT, CONFLICT = "Conflicting (2 personas on 1 account)", "Conflicting (2 personas on 1 agent)"
+UNDISCLOSED = {"Undisclosed", "Undisclosed model (harness known)", CONFLICT, OLD_CONFLICT}
 
 # ---------------- basic sets ----------------
 def close_times():
@@ -110,6 +111,7 @@ def census_series():
     for r in db.q("SELECT ts, json FROM snaps WHERE kind='census' ORDER BY ts"):
         pts.append(json.loads(r["json"]))
     for p in pts:
+        if p.get("eco"): p["eco"] = [[CONFLICT if k == OLD_CONFLICT else k, v] for k, v in p["eco"]]  # older snapshots used the old label
         p["disclosure_rate"] = p["disclosed"] / p["n"] if p.get("n") else None
     return pts
 

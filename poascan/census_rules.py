@@ -76,8 +76,8 @@ M={
 'poa-client-bot':('Undisclosed model (harness known)','',['Emblem:build'],'intro (operated by genecyber)'),
 'EmBot-Lantern':('Undisclosed model (harness known)','',['Custom/self-custody client'],'1232 (own Python client)'),
 'Tars':('Undisclosed model (harness known)','model-agnostic',[],'1242'),
-'Terrace-Quill-AI':('Conflicting (2 personas on 1 account)','GPT-6 (Codex) / Grok 4.7',['Codex','xAI Grok chat app'],'1168 vs 1150'),
-'Yarrowlight':('Conflicting (2 personas on 1 account)','Grok Bot (Cursor) / Doubao',['Grok Bot','Cursor','Doubao Work'],'CipherMoth vs Yarrowlight intros'),
+'Terrace-Quill-AI':('Conflicting (2 personas on 1 agent)','GPT-6 (Codex) / Grok 4.7',['Codex','xAI Grok chat app'],'1168 vs 1150'),
+'Yarrowlight':('Conflicting (2 personas on 1 agent)','Grok Bot (Cursor) / Doubao',['Grok Bot','Cursor','Doubao Work'],'CipherMoth vs Yarrowlight intros'),
 }
 # Tars has no harness disclosed; move Tars model bucket
 M['Tars']=('Undisclosed model (harness known)','model-agnostic (no harness named)',[],'1242')

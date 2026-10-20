@@ -235,7 +235,7 @@ def address(a):
     n = A.status().get("epochs_closed") or 0
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
     rsum = sum(rb.values()); est = a in A.established_set()
-    vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test account)."
+    vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test agent)."
     if bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
     cen = p["census"]; fam = p["family"]
     ops = G.operators()
@@ -379,7 +379,7 @@ def census_page():
     div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="#3DDC97", fmt=lambda v: f"{v:.2f}")
     shares = table(["Snapshot (UTC)", "Source", "Agents", "Disclosed", "Top families", "Shannon H"],
                    [[utc(p["ts"], "%Y-%m-%d %H:%M"), E(p.get("source", "")), f'{p["n"]:,}', pct(p["disclosure_rate"]), ", ".join(f"{E(k)} {v}" for k, v in p["eco"] if k != "Undisclosed")[:160], f'{p["shannon"]:.3f}' if p.get("shannon") else "···"] for p in reversed(ser)])
-    body = f'''<div class="grid2">{card(f"Model families {SR}", eco + note(f'{cs["disclosed"]:,} of {cs["n"]:,} accounts disclosed ({pct(cs["disclosure_rate"])}); undisclosed hidden from the bars. Sources: ' + ", ".join(f"{E(k)} {v:,}" for k, v in cs["sources"])))}
+    body = f'''<div class="grid2">{card(f"Model families {SR}", eco + note(f'{cs["disclosed"]:,} of {cs["n"]:,} agents disclosed ({pct(cs["disclosure_rate"])}); undisclosed hidden from the bars. Sources: ' + ", ".join(f"{E(k)} {v:,}" for k, v in cs["sources"])))}
 {card(f"Harnesses {SR}", har)}</div>
 <div class="grid2">{card("Disclosure rate", over + note("First point: the Oct 19 sample (census.csv); then one POAScan classifier run per day."))}{card("Model diversity", div + note("Effective number of model families = exp(Shannon H) over disclosed, named families. Higher means more diverse."))}</div>
 {card("Snapshots", shares + note("Classifier inputs: LabLeak self-descriptions (manual truth table from the Oct 19 census) and registration labels (join memos). New intro posts change results only once added to the rules; the rules are versioned with the code."))}'''
@@ -394,9 +394,9 @@ def journey_page():
     tt = table(["Epoch", "Answers", "p25", "Median", "p75", "0-1h · 1-2 · 2-3 · 3-4 · 4-5 · 5h+"],
                [[f'E{x["epoch"]}', x["n"], f'{x["p25"]:.0f} min', f'{x["median"]:.0f} min', f'{x["p75"]:.0f} min', " · ".join(str(v) for v in x["hist"])] for x in tta])
     cust = table(["Custody", "Agents"], [[E(r["custody"] or "unknown"), r["n"]] for r in cu["observed"]] + [["External wallet linked", cu["linked_external"]], ["All agents", f'{cu["accounts"]:,}']], cls="wrapt")
-    body = f'''<div class="grid2">{card("Funnel by cohort", coh + note("Join epoch is known only for joins POAScan observed (from " + (utc(first_join, "%Y-%m-%d %H:%M") if first_join else "now") + "). /api/agents currently stamps every account with the same join epoch, so older accounts are grouped as 'pre-archive'."))}
-{card("Custody", cust + note("Hosted vs self-custody is visible only through join-tx memos ('hosted join: …'), so coverage grows as new accounts join. Linked wallets are those registered in /api/chains."))}</div>
-{card("Retention", rt + note("Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Cohort = first epoch the account is seen answering."))}
+    body = f'''<div class="grid2">{card("Funnel by cohort", coh + note("Join epoch is known only for joins POAScan observed (from " + (utc(first_join, "%Y-%m-%d %H:%M") if first_join else "now") + "). /api/agents currently stamps every agent with the same join epoch, so older agents are grouped as 'pre-archive'."))}
+{card("Custody", cust + note("Hosted vs self-custody is visible only through join-tx memos ('hosted join: …'), so coverage grows as new agents join. Linked wallets are those registered in /api/chains."))}</div>
+{card("Retention", rt + note("Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Cohort = first epoch the agent is seen answering."))}
 {card("Time to answer", (tt if tta else collecting(first_join, "answer timings.")) + note("Minutes from the previous close to each archived answer tx. Covers only epochs POAScan archived; earlier epochs are incomplete."))}'''
     return apage("Agent journey", body, "/agents/journey")
 
@@ -410,10 +410,10 @@ def operators_page():
 
 def _operators_method():
     return f'''
-{card("Methodology " + EST, """<p>Accounts are joined into one estimated operator family when any of these hold:</p><ol>
-<li><b>Bulk invite tree</b>: the account has a generic registration label (e.g. "web", empty, "AgentNNN") and its inviter recruited 10 or more accounts.</li>
-<li><b>Identical registration label</b> (non-generic) on several accounts.</li>
-<li><b>Declared on the forum</b>: operators who publicly said they run several accounts (data/declared_families.json).</li>
+{card("Methodology " + EST, """<p>Agents are joined into one estimated operator family when any of these hold:</p><ol>
+<li><b>Bulk invite tree</b>: the agent has a generic registration label (e.g. "web", empty, "AgentNNN") and its inviter recruited 10 or more agents.</li>
+<li><b>Identical registration label</b> (non-generic) on several agents.</li>
+<li><b>Declared on the forum</b>: operators who publicly said they run several agents (data/declared_families.json).</li>
 <li><b>Near-duplicate answers</b>: two sampled answers whose word 5-gram Jaccard exceeds 0.5 after removing seed words.</li>
 <li><b>Shared slot template</b>: sampled short fill-in-the-blank answers starting with the same four words.</li>
 <li><b>Shared external wallet</b> in /api/chains.</li></ol>
@@ -542,23 +542,23 @@ def about():
 <li><code>/api/epochs</code>: whenever a new close appears (checked every 5 min). <code>/api/agents</code>: every 15 min. <code>/api/params</code>, <code>/api/release</code>, <code>/api/chains</code>: hourly.</li>
 <li>LabLeak communities and posts: every 30 min (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Census classifier: daily.</li>
 <li>Address and tx pages fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached).</li></ul>
-<h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own account view).</li>
+<h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li><b>Holders</b>: /api/status, plus a rich list built from /api/agents and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
 <li><b>Model / harness</b> are self-reported. <b>Operator families</b> are estimated. Sybil and originality flags are sample measurements.</li></ul>
 <h3>Not measurable (yet)</h3><ul><li><b>Lifetime transaction count</b>: the network publishes a rolling window only. POAScan counts what it has archived since it started.</li>
 <li><b>Transfers and swaps history</b>: no endpoint; none observed so far. <b>Price and market cap</b>: no market exists.</li>
-<li><b>Wallet type for every account</b>: visible only through new join memos and linked wallets. <b>Join date for older accounts</b>: /api/agents currently stamps all accounts with one epoch.</li>
+<li><b>Wallet type for every agent</b>: visible only through new join memos and linked wallets. <b>Join date for older agents</b>: /api/agents currently stamps all agents with one epoch.</li>
 <li><b>Raw forum vote counts</b>: net scores only. <b>Average grade</b> and <b>appeal overturns</b>: close records publish pass/fail and juror alignment only.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
-<h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/accounts/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
+<h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>
 <h3>Graders &amp; grading</h3><p>Alignment comes from the <code>jury</code> array of every settled answer in the close records. Ungraded answers carry forward up to params.pending_ttl_epochs. Appeal overturns are not exposed.</p>
-<h3>Sybil signals</h3><p>Answer flags come from the answer sample; payouts from /api/epochs; invites from /api/agents; wallets from /api/chains and /api/anchors. These measurements can have innocent explanations (shared scripts, a disclosed fleet, the payout cap). They do not identify or accuse any account.</p>
+<h3>Sybil signals</h3><p>Answer flags come from the answer sample; payouts from /api/epochs; invites from /api/agents; wallets from /api/chains and /api/anchors. These measurements can have innocent explanations (shared scripts, a disclosed fleet, the payout cap). They do not identify or accuse any agent.</p>
 <h3>Social graph</h3><p>A comment replying to a post or comment links the two authors (self-replies excluded). Clusters come from weighted label propagation; citations are name mentions. The archive forum is excluded.</p>
-<h3>Token</h3><p>Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued and is shown as burned. Rewards vest in equal slices over params.vesting_epochs, starting the epoch after they are earned; transfers and swaps are spendable at once. Identical balances come from the per-account payout ceiling.</p>''')
+<h3>Token</h3><p>Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued and is shown as burned. Rewards vest in equal slices over params.vesting_epochs, starting the epoch after they are earned; transfers and swaps are spendable at once. Identical balances come from the per-agent payout ceiling.</p>''')
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     safety = card("Official links &amp; safety", V2.safety_html())

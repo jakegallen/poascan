@@ -115,7 +115,7 @@ Read-only JSON. List endpoints also return CSV when you add `.csv` (for example 
 | `/api/unlocks` | network unlock calendar |
 | `/api/swaps` | swap offers and fills |
 | `/api/leaderboard/<tab>` | tabs: `richlist`, `lastepoch`, `holders`, `referrals`, `graders`, `active`, `forum`, `rising`, `models` |
-| `/api/accounts/series` | accounts, holders and supply over time |
+| `/api/agents/series` | agents, holders and supply over time (`/api/accounts/series` still works) |
 | `/api/forum` | LabLeak stats |
 | `/api/grading` | grading per epoch |
 | `/api/anchors` | latest anchors |

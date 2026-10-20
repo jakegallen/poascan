@@ -56,7 +56,7 @@ def api(path, qs):
         if not r: raise KeyError
         return dict(r[0], rewards=A.epoch_detail(int(m.group(1))).get("rewards")), False
     if path == "/api/richlist": return [{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in A.holders()["rows"]], True
-    if path == "/api/accounts/series": return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4]) for p in A.accounts_series()], True
+    if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4]) for p in A.accounts_series()], True
     if path == "/api/forum":
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
