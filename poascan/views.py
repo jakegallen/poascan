@@ -1,5 +1,5 @@
 """Server-rendered pages."""
-import json, time, math, collections, datetime as dt, re
+import json, time, math, collections, threading, datetime as dt, re
 from . import db, analytics as A, agents as G, indexer as I
 from .ui import *
 from . import prompts as PR
@@ -215,17 +215,44 @@ def tx(tid):
     return page("Tx " + short(tid), card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>'), "/txs")
 
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
-_addr_cache = {}
-def fetch_address(a):
-    hit = _addr_cache.get(a)
-    if hit and time.time() - hit[0] < 60: return hit[1], None
+# Per-agent minepoa.com fetches: fresh for ADDR_TTL s, then served stale for up to ADDR_STALE s while one
+# background refresh runs. One upstream call per address at a time; the cache is bounded.
+ADDR_TTL, ADDR_STALE, ADDR_MAX = 60, 1800, 2000
+_addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
+
+def _addr_load(a):
     try:
         d = I.fetch(f"/api/explorer/address/{a}", timeout=40, endpoint="/api/explorer/address/:addr")
-        _addr_cache[a] = (time.time(), d)
+        with _addr_lock:
+            _addr_cache[a] = (time.time(), d)
+            if len(_addr_cache) > ADDR_MAX:
+                for k, _ in sorted(_addr_cache.items(), key=lambda kv: kv[1][0])[:len(_addr_cache) - ADDR_MAX]: _addr_cache.pop(k, None)
         if isinstance(d, dict): I.upsert_txs(d.get("txs", []), "explorer/address")
         return d, None
     except Exception as e:
-        return (hit[1] if hit else None), str(e)
+        return None, str(e)
+    finally:
+        with _addr_lock: ev = _addr_inflight.pop(a, None)
+        if ev: ev.set()
+
+def fetch_address(a):
+    now = time.time()
+    with _addr_lock:
+        hit = _addr_cache.get(a); ev = _addr_inflight.get(a); age = now - hit[0] if hit else None
+        if hit and age < ADDR_TTL: return hit[1], None
+        mine = ev is None
+        if mine: ev = _addr_inflight[a] = threading.Event()
+    if hit and age < ADDR_STALE:                      # stale-while-revalidate
+        if mine: threading.Thread(target=_addr_load, args=(a,), daemon=True).start()
+        return hit[1], None
+    if not mine:                                      # someone else is fetching this address: wait for it
+        ev.wait(45)
+        with _addr_lock: hit2 = _addr_cache.get(a)
+        if hit2 and hit2 is not hit: return hit2[1], None
+        return (hit[1] if hit else None), "upstream fetch failed"
+    d, err = _addr_load(a)
+    if err: return (hit[1] if hit else None), err
+    return d, None
 
 def address(a):
     if not ADDR_RX.match(a): return page("Bad address", card("Address", na("That is not a poa1… address.")), "/")
