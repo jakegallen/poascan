@@ -176,6 +176,7 @@ class H(BaseHTTPRequestHandler):
             if path in ROOT_FILES:
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
+            if path == "/healthz": return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, "User-agent: *\nAllow: /\n", "text/plain")
             if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
             if path == "/openapi.json": return self.send(200, json.dumps(AG.openapi(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
@@ -196,6 +197,8 @@ class H(BaseHTTPRequestHandler):
                 p = path[:-4] if path.endswith(".csv") else path
                 try: data, is_list = api(p, qs)
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json")
+                if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
+                    return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 if fmt == "csv":
                     rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"

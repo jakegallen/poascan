@@ -272,7 +272,8 @@ LIST_EPS = {"/api/agents/leaderboard", "/api/agents/leaderboard-harness", "/api/
 
 def openapi():
     P = {
-        "/api/health": _op("Service and indexer health", oid="health", tag="meta"),
+        "/api/health": _op("Service and indexer health", oid="health", tag="meta", desc="HTTP 503 with the same JSON body when ok is false (live feed older than 5 min). Use /healthz for process liveness."),
+        "/healthz": _op("Process liveness (200 while the server is up)", oid="healthz", tag="meta"),
         "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed", oid="summary"),
         "/api/live": _op("Live-feed (WebSocket hub) stats", oid="live", tag="meta"),
         "/api/status": _op("Upstream endpoint health, incidents and anchors", oid="status", tag="meta"),

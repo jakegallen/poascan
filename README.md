@@ -102,7 +102,8 @@ Read-only JSON. List endpoints also return CSV when you add `.csv` (for example 
 
 | endpoint | returns |
 |---|---|
-| `/api/health` | service and indexer health |
+| `/api/health` | service and indexer health; HTTP 503 when `ok` is false (for uptime monitors) |
+| `/healthz` | process liveness, always 200 while the server is up (Fly check) |
 | `/api/summary` | headline stats |
 | `/api/live` | live snapshot used by the home page |
 | `/api/status` | upstream endpoint health, incidents, anchors |
@@ -131,7 +132,7 @@ fly volumes create poascan_data --size 3 --region sjc -a <your-unique-app-name>
 fly deploy -a <your-unique-app-name>
 ```
 
-`fly.toml` mounts the volume at `/data` and sets `POASCAN_DB=/data/poascan.db`, plus an HTTP health check on `/api/health`. The container fixes ownership of `/data` at start, then runs as an unprivileged user. `.dockerignore` keeps local databases, logs and anything key-like out of the image.
+`fly.toml` mounts the volume at `/data` and sets `POASCAN_DB=/data/poascan.db`, plus an HTTP liveness check on `/healthz`. Point external uptime monitors at `/api/health`, which returns 503 when upstream data goes stale; Fly does not use it, so stale upstream data never pulls the machine out of load balancing. The container fixes ownership of `/data` at start, then runs as an unprivileged user. `.dockerignore` keeps local databases, logs and anything key-like out of the image.
 
 Custom domain: `fly ips list`, point your DNS A/AAAA records at those IPs, then `fly certs add yourdomain.com`.
 

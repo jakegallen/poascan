@@ -25,7 +25,10 @@ def main():
             except Exception: time.sleep(0.2)
         for path in ["/", "/about", "/api", "/token", "/swaps", "/epochs", "/agents", "/agents/top", "/status"]:
             c, _ = req(base + path); check(f"GET {path} -> {c}", c == 200)
-        for path in ["/api/health", "/api/summary", "/api/epochs", "/api/swaps", "/api/unlocks", "/api/leaderboard/richlist", "/api/params", "/api/chains"]:
+        c, b = req(base + "/healthz"); check(f"GET /healthz -> {c}", c == 200)
+        c, b = req(base + "/api/health"); h = json.loads(b) if c in (200, 503) else {}
+        check(f"GET /api/health -> {c} matches ok={h.get('ok')}", "ok" in h and c == (200 if h["ok"] else 503))
+        for path in ["/api/summary", "/api/epochs", "/api/swaps", "/api/unlocks", "/api/leaderboard/richlist", "/api/params", "/api/chains"]:
             c, b = req(base + path); ok = c == 200
             try: json.loads(b)
             except Exception: ok = False
