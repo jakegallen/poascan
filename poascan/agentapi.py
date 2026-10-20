@@ -333,6 +333,7 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 - Cursor and other clients: {{"mcpServers": {{"poascan": {{"url": "{MCP_URL}"}}}}}}
 - Manifest: {BASE}/.well-known/mcp.json · Server card: {BASE}/mcp/server-card
 - Official MCP Registry name: io.github.jakegallen/poascan
+- A2A agent card: {BASE}/.well-known/agent-card.json
 
 Tools:
 {tools}
@@ -381,8 +382,30 @@ def server_card():
             "icons": [{"src": BASE + "/static/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"]}],
             "remotes": [{"type": "streamable-http", "url": MCP_URL}]}
 
+INDEXNOW_KEY = "90354056b13ed723e3724008f1e8f063"  # public by design (IndexNow spec); served at /90354056b13ed723e3724008f1e8f063.txt
+
+def agent_card():
+    """A2A Agent Card (spec 1.0). POAScan is not an A2A task agent; it is reached over MCP or the HTTP API, listed in supportedInterfaces."""
+    sk = lambda i, n, d, tags, ex: {"id": i, "name": n, "description": d, "tags": tags, "examples": ex, "inputModes": ["application/json"], "outputModes": ["application/json"]}
+    return {"name": "POAScan", "description": "Read-only explorer for Proof of Agent (poa-mainnet-1): epochs, rewards, holders, swaps and agent census. No auth, never asks for keys. Connect over MCP or the HTTP API.",
+            "version": VERSION, "provider": {"organization": "POAScan", "url": BASE}, "iconUrl": BASE + "/static/icon-512.png", "documentationUrl": BASE + "/llms.txt",
+            "supportedInterfaces": [{"url": MCP_URL, "protocolBinding": "MCP", "protocolVersion": PROTOCOLS[0]}, {"url": BASE + "/openapi.json", "protocolBinding": "OPENAPI", "protocolVersion": "3.1.0"}],
+            "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False},
+            "defaultInputModes": ["application/json"], "defaultOutputModes": ["application/json", "text/csv"],
+            "skills": [
+                sk("network_summary", "Network summary", "Supply, circulating vs locked, holders, agents, open epoch and last close.", ["proof-of-agent", "stats"], ["How many agents are on Proof of Agent?"]),
+                sk("epochs", "Epochs", "Open epoch countdown and every close: pool, minted, burned, paid agents.", ["epochs", "rewards"], ["When does the current epoch close?", "How much was burned in epoch 5?"]),
+                sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
+                sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
+                sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
+                sk("swaps", "Swaps", "Open swap offers and fills on the network's own swap flow.", ["swaps", "market"], ["List open swap offers."]),
+                sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
+            ],
+            "links": {"mcp": MCP_URL, "openapi": BASE + "/openapi.json", "llms": BASE + "/llms.txt", "serverCard": BASE + "/mcp/server-card", "repository": "https://github.com/jakegallen/poascan"}}
+
 def ai_catalog():
-    return {"entries": [{"identifier": "urn:air:poascan.io:mcp:poascan", "type": "application/mcp-server-card+json", "url": BASE + "/mcp/server-card"}]}
+    return {"entries": [{"identifier": "urn:air:poascan.io:mcp:poascan", "type": "application/mcp-server-card+json", "url": BASE + "/mcp/server-card"},
+                        {"identifier": "urn:air:poascan.io:a2a:poascan", "type": "application/a2a-agent-card+json", "url": BASE + "/.well-known/agent-card.json"}]}
 
 METHOD_MD = """## Methodology (short)
 - Burned = epoch pool minus rewards paid. It is unissued supply, not destroyed balances.
@@ -401,7 +424,7 @@ def llms_full_txt():
             d = o.get("description"); rows.append(f"- {meth.upper()} {BASE}{path}: {o['summary']}" + (f". {d}" if d else ""))
     tools = "\n".join(f"- {n} ({t}): {d}\n  input: {json.dumps(sch, separators=(',', ':'))}" for n, t, d, sch, _ in TOOLS)
     return (llms_txt() + "\n# Full reference\n\n## Endpoints\n" + "\n".join(rows) + "\n\n## MCP tools\n" + tools + "\n\n" + METHOD_MD
-            + f"\n## Discovery\n- MCP server card: {BASE}/mcp/server-card\n- AI catalog: {BASE}/.well-known/ai-catalog.json\n- Sitemap: {BASE}/sitemap.xml\n")
+            + f"\n## Discovery\n- MCP server card: {BASE}/mcp/server-card\n- A2A agent card: {BASE}/.well-known/agent-card.json\n- AI catalog: {BASE}/.well-known/ai-catalog.json\n- Sitemap: {BASE}/sitemap.xml\n")
 
 def mcp_manifest():
     return {"name": "poascan", "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent block explorer (poa-mainnet-1).",

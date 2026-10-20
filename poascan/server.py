@@ -209,6 +209,13 @@ class H(BaseHTTPRequestHandler):
             if path in ("/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"):
                 ct = "application/json" if path.endswith(".json") else "application/mcp-server-card+json"
                 return self.send(200, json.dumps(AG.server_card(), indent=1), ct, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET", "Cache-Control": "public, max-age=3600"})
+            if path in ("/.well-known/agent-card.json", "/.well-known/agent.json"):
+                return self.send(200, json.dumps(AG.agent_card(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
+            if path == f"/{AG.INDEXNOW_KEY}.txt": return self.send(200, AG.INDEXNOW_KEY, TXT, {"Cache-Control": "public, max-age=86400"})
+            if V.SITE_VERIFY.get("google_file") and path == "/" + V.SITE_VERIFY["google_file"]:
+                return self.send(200, "google-site-verification: " + V.SITE_VERIFY["google_file"], "text/html; charset=utf-8")
+            if path == "/BingSiteAuth.xml" and V.SITE_VERIFY.get("bing"):
+                return self.send(200, f'<?xml version="1.0"?>\n<users>\n\t<user>{E(V.SITE_VERIFY["bing"])}</user>\n</users>\n', "application/xml; charset=utf-8")
             if path in ("/.well-known/ai-catalog.json", "/.well-known/mcp/catalog.json"):
                 return self.send(200, json.dumps(AG.ai_catalog(), indent=1), "application/ai-catalog+json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})

@@ -1,6 +1,6 @@
 """CI smoke test: start POAScan on an empty database with the indexer off (no upstream calls), then check
 key pages, the API, openapi.json, llms.txt and the MCP server. Usage: python3 tools/smoke_test.py"""
-import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
@@ -62,6 +62,11 @@ def main():
         for u in ["/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"]:
             c, b = req(base + u); check(f"server card {u}", c == 200 and json.loads(b)["remotes"][0]["url"].endswith("/mcp"))
         c, b = req(base + "/.well-known/ai-catalog.json"); check("ai-catalog.json", c == 200 and json.loads(b)["entries"][0]["type"] == "application/mcp-server-card+json")
+        for u in ["/.well-known/agent-card.json", "/.well-known/agent.json"]:
+            c, b = req(base + u); j = json.loads(b); check(f"agent card {u}", c == 200 and j["supportedInterfaces"][0]["url"].endswith("/mcp") and len(j["skills"]) >= 5)
+        INDEXNOW_KEY = re.search(r'INDEXNOW_KEY = "([0-9a-f]+)"', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "agentapi.py")).read()).group(1)
+        c, b = req(base + f"/{INDEXNOW_KEY}.txt"); check("IndexNow key file", c == 200 and b.decode().strip() == INDEXNOW_KEY)
+        c, b = req(base + "/BingSiteAuth.xml"); check(f"BingSiteAuth.xml off without env -> {c}", c == 404)
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/find", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)

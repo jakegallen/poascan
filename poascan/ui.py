@@ -1,5 +1,5 @@
 """HTML helpers: formatting, layout, and inline SVG charts (server-rendered, no JS required for content)."""
-import html, json, re, threading, time, datetime as dt, math
+import html, json, os, re, threading, time, datetime as dt, math
 
 E = html.escape
 
@@ -221,6 +221,16 @@ def jsonld():
     if not g: return ""
     return '<script type="application/ld+json">' + json.dumps({"@context": "https://schema.org", "@graph": g}, separators=(",", ":")).replace("</", "<\\/") + "</script>"
 
+# Search console verification, set via env (fly secrets set ...). Tokens are not secret but stay out of the repo.
+_gf = os.environ.get("GOOGLE_SITE_VERIFICATION_FILE", "").strip().lstrip("/")
+SITE_VERIFY = {"google": os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip(), "bing": os.environ.get("BING_SITE_VERIFICATION", "").strip(),
+               "google_file": _gf if re.fullmatch(r"google[0-9a-f]+\.html", _gf) else ""}
+def _verify_meta():
+    out = ""
+    if SITE_VERIFY["google"]: out += f'<meta name="google-site-verification" content="{E(SITE_VERIFY["google"])}">'
+    if SITE_VERIFY["bing"]: out += f'<meta name="msvalidate.01" content="{E(SITE_VERIFY["bing"])}">'
+    return out
+
 def head_meta(full_title, title=""):
     d = E(describe(title)).replace("&#x27;", "'"); t = E(full_title).replace("&#x27;", "'"); u = E(canonical())
     robots = '<meta name="robots" content="noindex">' if title in NOINDEX else ""
@@ -231,7 +241,7 @@ def head_meta(full_title, title=""):
             f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{OG_IMAGE}">\n'
             '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">\n'
             '<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
-            f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{jsonld()}')
+            f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{_verify_meta()}{jsonld()}')
 
 from . import join as _join
 TICKER_FN = None  # set by views (latest epochs + txs strip)

@@ -57,3 +57,6 @@ jobs:
             sleep 10
           done
           exit 1
+      - name: Ping IndexNow with the main pages
+        continue-on-error: true
+        run: python3 tools/indexnow.py
