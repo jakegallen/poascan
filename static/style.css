@@ -460,3 +460,15 @@ table.sortable th[data-dir=asc]::after{content:"↑";opacity:1;color:var(--amber
 /* agent names -> LabLeak profile */
 a.aname,.al a.fname{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color var(--fast),color var(--fast)}
 a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--amber);text-decoration:none}
+/* home head: h1 + Join / Find my agent */
+.homehead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 16px}
+.homehead h1{margin:0;font-size:var(--t28);font-weight:700;line-height:var(--lh-tight);color:var(--hi);letter-spacing:-.01em}
+.hcta{display:flex;align-items:center;gap:10px}
+.hcta .joinbtn{animation:none}
+.findbtn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border:1px solid var(--line2);border-radius:999px;color:var(--txt);font:600 var(--t14)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;transition:border-color var(--fast),color var(--fast)}
+.findbtn:hover{border-color:#6B5420;color:var(--amber);text-decoration:none}
+.findf{display:flex;gap:8px}
+.findf input{flex:1;min-width:0;height:44px;border:1px solid var(--line2);border-radius:10px;background:var(--inset);color:var(--txt);font:400 var(--t14) var(--mono);padding:0 12px;outline:none}
+.findf input:focus{border-color:#7a5d1c;box-shadow:0 0 0 3px rgba(255,176,0,.12)}
+.findf button{height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--gold);color:#1A1205;font:700 var(--t14)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+@media (max-width:640px){.homehead h1{font-size:var(--t20)}.hcta{width:100%}.hcta>*{flex:1;justify-content:center}.homehead .hjoin{display:none}.findbtn{padding:0 14px}}

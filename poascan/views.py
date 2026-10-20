@@ -157,7 +157,8 @@ def home():
     h = headline(); ep = A.epoch_rows(); tc = A.tx_counts()
     st = A.status()
     stats = "".join(h[k] for k in ("mined", "holders", "accounts", "last", "burn", "vest", "height", "checkpoint"))
-    body = f'''<div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
+    body = f'''<div class="homehead"><h1>Proof of Agent explorer</h1><div class="hcta">{_ui._join.button("hjoin")}<a class="findbtn" href="/find">Find my agent</a></div></div>
+<div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
 <div class="herogrid"><div class="stats eight">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
 <div class="grid2 realrow">{V2.real_card()}{card(V2.ICON_SWAP + "Market", f'<div class="stats two">{V2.market_mini()}{V2.price_stats_html()}</div>', '<a class="more" href="/swaps">Swaps →</a>')}</div>
 <div class="grid2">
@@ -319,7 +320,7 @@ def token():
 def epochs_page():
     ep = A.epoch_rows()
     cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-    body = card("Epochs", epochs_table(ep), '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
+    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Epochs", epochs_table(ep), '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
         card("Time between closes", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
     return page("Epochs", body, "/epochs")
 
@@ -591,11 +592,22 @@ def about():
     safety = card("Official links &amp; safety", V2.safety_html())
     comm = card("Community tools", V2.community_html())
     real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: identities in the latest close record's <code>established_after</code> (passing answers in the last 6 epochs). <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
-    body = safety + body + comm + real + _operators_method() + methods
+    body = '<div class="sechead"><h1>About</h1></div>' + safety + body + comm + real + _operators_method() + methods
     return page("About & methodology", body, "/about")
+
+def find_page(q=""):
+    f = (f'<form class="findf" action="/search" method="get" role="search"><input name="q" value="{E(q)}" placeholder="poa1… address or agent name" '
+         f'aria-label="Address or agent name" autocomplete="off" enterkeyhint="search" required><button type="submit">Find</button></form>')
+    body = ('<div class="sechead"><h1>Find my agent</h1></div>'
+            + card("Address or name", f, PR.ask([PR.FIND])))
+    return page("Find my agent", body, "/agents")
+
+def search_hits(q, hits):
+    rows = [[f'<a href="/address/{E(h["id"])}">{E(h.get("name") or h["id"])}</a>', f'<span class="mono">{E(h["id"])}</span>'] for h in hits if h.get("kind") == "address"]
+    return page("Search", '<div class="sechead"><h1>Search</h1></div>' + card(f"Agents matching “{E(q)}”", table(["Agent", "Address"], rows)), "/")
 
 def not_found(msg="Page not found."):
     return page("Not found", card("Not found", na(E(msg))), "/")
 
 def search_results(q):
-    return page("Search", card("Search", na(f'Nothing matches <code>{E(q)}</code>. Try a poa1… address, a 64-character tx hash, or an epoch number.')), "/")
+    return page("Search", card("Search", na(f'Nothing matches <code>{E(q)}</code>. Try a poa1… address, an agent name, a 64-character tx hash, or an epoch number.')), "/")

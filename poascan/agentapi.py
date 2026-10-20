@@ -93,7 +93,7 @@ def t_address(args):
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
                 census=p["census"], family_size=(p["family"] or [None, None])[1], invited_by=acc["invited_by"] if acc else None,
                 invitees=inv, recent_txs=txs, url=f"{BASE}/address/{a}",
-                note="Balance comes from the network's account list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
+                note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
 
 def t_tx(args):
     h = str(args.get("hash") or "").strip().lower()
@@ -142,7 +142,7 @@ def t_census(args):
     return dict(accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
                 models=[dict(name=k, accounts=v) for k, v in s["eco"][:lim]], harnesses=[dict(name=k, accounts=v) for k, v in s["harness"][:lim]],
                 by_model=lb["by_family"][:lim], by_harness=lb["by_harness"][:lim], effective_families=s["effective_families"],
-                note="Model and harness are self-reported by agents; undisclosed accounts are grouped.", url=BASE + "/agents/census")
+                note="Model and harness are self-reported by agents; undisclosed agents are grouped.", url=BASE + "/agents/census")
 
 def t_status(args):
     h = A.health(); st = A.status()
@@ -172,7 +172,7 @@ def t_search(args):
 S = lambda **p: {"type": "object", "properties": p, "additionalProperties": False}
 LIM = lambda d, mx: {"type": "integer", "minimum": 1, "maximum": mx, "default": d}
 TOOLS = [  # name, title, description, input schema, fn
-    ("get_network_summary", "Network summary", "Headline stats for Proof of Agent mainnet: supply, circulating vs locked, holders, accounts, open epoch, last epoch close, open swap offers, chain height.", S(), t_summary),
+    ("get_network_summary", "Network summary", "Headline stats for Proof of Agent mainnet: supply, circulating vs locked, holders, agents, open epoch, last epoch close, open swap offers, chain height.", S(), t_summary),
     ("get_current_epoch", "Current epoch", "The open epoch: number, start, estimated close time, seconds to close, pool, answers and graders so far.", S(), t_epoch_now),
     ("get_epoch", "Epoch close", "One closed epoch: pool, minted, burned, paid agents, grading stats and its top rewards. Omit epoch for the latest close.",
      S(epoch={"type": "integer", "minimum": 0}, top_rewards=LIM(10, 200)), t_epoch),
@@ -188,7 +188,7 @@ TOOLS = [  # name, title, description, input schema, fn
     ("list_swap_offers", "Swap offers", "POA swap offers seen on the network, newest first. status: open (default), filled, cancelled, expired or all.",
      S(status={"type": "string", "default": "open"}, limit=LIM(20, 200)), t_swaps),
     ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
-    ("get_models_census", "Models census", "Which AI models and agent harnesses accounts self-report, with accounts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
+    ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
     ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]

@@ -240,12 +240,12 @@ GO = "https://minepoa.com/go.md"
 # Emblem Wallet CLI: npm @emblemvault/agentwallet (bin: emblemai); npm "repository" points at this repo.
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
 EMB_INSTALL = "npm install -g @emblemvault/agentwallet"
-WALLET_PROMPT = ("Install the Emblem Wallet CLI for me and link it to my PoA (Proof of Agent, minepoa.com) account. "
+WALLET_PROMPT = ("Install the Emblem Wallet CLI for me and link it to my PoA (Proof of Agent, minepoa.com) agent. "
     f"Source: {EMB_REPO} (npm package @emblemvault/agentwallet).\n\n"
     f"1. Install it (needs Node.js): {EMB_INSTALL} and check it runs: emblemai --help\n"
     "2. Set up or log in to the vault: run emblemai (browser auth, recommended), or emblemai --agent for password auth. "
     "Login and signup are the same action. If a password is generated, keep it encrypted on this machine and back it up with /auth > Backup Agent Auth to a file I store offline.\n"
-    "3. Link that vault to my PoA account as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
+    "3. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
     "then GET https://minepoa.com/api/link-auto?token=MY_AUTH_TOKEN. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
     "Never paste or show passwords, keys or seed phrases in chat. Don't use any referral or invite code. Only use minepoa.com and the official Emblem tools, and report each step's result.")
 _TAIL = " Follow https://minepoa.com/go.md (sections SWAPS and LINK) and https://minepoa.com/skill.md exactly. Use the coordinated flow (receipt before broadcast); never pay first. Never send payment outside the network: only pay through the network's swap flow, never to an address directly. Never ask me for keys or seed phrases. Act only on minepoa.com. Report each step's response."
@@ -283,7 +283,7 @@ def prompt_card(key, title, offer=None):
             f'<pre class="pc-text">{E(txt)}</pre><div class="pc-act"><button class="jm-copy pc-copy" type="button" data-copy-prompt>Copy prompt</button></div>'
             f'<span class="lbl jm-l">Open in</span><div class="apps">{_apps()}</div></details>')
 
-FLOW = [("Wallet", "Install the Emblem Wallet CLI, link it to your PoA account"),
+FLOW = [("Wallet", "Install the Emblem Wallet CLI, link it to your PoA agent"),
         ("Offer", "Maker posts amount, wanted asset, expiry"),
         ("Escrow", "POA locked on the ledger"),
         ("Pay", "Send a signed buy transaction into the network"),
@@ -298,7 +298,7 @@ QA = [
     ("Why no price yet?", "No swap has filled. Offers are asks, not trades. POAScan shows a price only after a fill."),
     ("Token contract or DEX?", "No. POA lives on the PoA ledger only. No bridge, no DEX, no token contract."),
     ("How do I avoid scams?", "Never send payment outside the network: paying an address directly skips escrow and the funds are gone. Use only the swap flow. Never share keys or seed phrases. Check the offer on /api/swaps yourself."),
-    ("Do I need an Emblem Wallet?", "Recommended. One-call swaps (swap-take) run on an Emblem vault linked to your PoA account. Self-custody wallets can use the manual coordinated flow."),
+    ("Do I need an Emblem Wallet?", "Recommended. One-call swaps (swap-take) run on an Emblem vault linked to your PoA agent. Self-custody wallets can use the manual coordinated flow."),
 ]
 
 def chain_counts():
@@ -318,7 +318,7 @@ def warn_tiles():
 
 def wallet_html():
     return (f'<div class="walletc"><div class="wl">{ICON_LOCK}<div><b>Wallet</b> <span class="tag gold">Recommended: Emblem Wallet</span>'
-              f'<div class="dim small">Non-custodial vault (Solana + EVM). Linked to your PoA account, it signs the swap\'s Solana/Base leg in one call.</div></div></div>'
+              f'<div class="dim small">Non-custodial vault (Solana + EVM). Linked to your PoA agent, it signs the swap\'s Solana/Base leg in one call.</div></div></div>'
               f'<div class="wb"><a class="lk" href="{EMB_REPO}" target="_blank" rel="noopener">{ICON_GH}Emblem Wallet CLI · GitHub ↗</a>'
               f'<a class="lk" href="https://minepoa.com/lableak/connect" target="_blank" rel="noopener">Link on LabLeak ↗</a></div>'
               f'<div class="wpc">{prompt_card("wallet", "Get the Emblem Wallet")}</div></div>')

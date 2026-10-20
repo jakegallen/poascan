@@ -94,6 +94,7 @@ def page(path, qs):
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", ["richlist"])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/status": return V2.status_page()
+    if path == "/find": return V.find_page()
     if path in ("/epochs", "/blocks"): return V.epochs_page()
     m = re.match(r"^/epoch/(\d+)$", path)
     if m: return V.epoch(int(m.group(1)))
@@ -189,7 +190,12 @@ class H(BaseHTTPRequestHandler):
                 if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q
                 elif HEX64.match(q): loc = "/tx/" + q.lower()
                 elif re.match(r"^[Ee]?\d{1,7}$", q): loc = "/epoch/" + q.lstrip("Ee")
-                else: return self.send(404, V.search_results(q))
+                else:
+                    hits = [h for h in AG.t_search({"query": q})["results"] if h.get("kind") == "address"] if len(q) >= 2 else []
+                    exact = [h for h in hits if (h.get("name") or "").lower() == q.lower()]
+                    if len(exact) == 1 or len(hits) == 1: loc = "/address/" + (exact or hits)[0]["id"]
+                    elif hits: return self.send(200, V.search_hits(q, hits[:20]))
+                    else: return self.send(404, V.search_results(q))
                 return self.send(302, "", extra={"Location": loc})
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
