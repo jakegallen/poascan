@@ -1,7 +1,7 @@
 """POASCAN HTTP server: pages, read-only JSON/CSV API, static files. Python stdlib only."""
 import json, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -61,6 +61,8 @@ def api(path, qs):
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
     if path == "/api/anchors": return A.anchors_latest(500), True
+    if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False
+    if path == "/api/chains": return db.get_blob("chains")[0] or {}, False
     if path == "/api/agents/health": return G.network_health(), False
     if path == "/api/agents/leaderboard": return G.leaderboard()["by_family"], True
     if path == "/api/agents/leaderboard-harness": return G.leaderboard()["by_harness"], True
@@ -110,6 +112,11 @@ def nodash(t):
     if EM not in t and EMJ not in t and EN not in t and ENJ not in t: return t
     return _DASH.sub(", ", t).replace(EN, "-").replace(ENJ, "-")
 
+MCP_HDRS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID",
+            "Access-Control-Expose-Headers": "Mcp-Session-Id", "Allow": "POST, OPTIONS"}
+TXT = "text/plain; charset=utf-8"
+
 class H(BaseHTTPRequestHandler):
     server_version = "POASCAN/1.0"
     def log_message(self, fmt, *a): log.info("%s %s", self.address_string(), fmt % a)
@@ -126,8 +133,32 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
     def do_HEAD(self): self.do_GET()
-    def do_POST(self): self.send(405, "read-only", "text/plain")
-    do_PUT = do_DELETE = do_PATCH = do_POST
+    def client_ip(self):
+        return (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or self.client_address[0])
+    def do_POST(self):
+        """The only write-shaped method we accept is JSON-RPC to the read-only MCP server."""
+        if (urllib.parse.urlparse(self.path).path.rstrip("/") or "/") != "/mcp": return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
+        try:
+            ok, wait = AG.LIMIT.allow(self.client_ip())
+            if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
+            n = int(self.headers.get("Content-Length") or -1)
+            if n < 0: return self.send(411, json.dumps(AG._err(None, -32600, "Content-Length required")), "application/json", MCP_HDRS)
+            if n > 65536: return self.send(413, json.dumps(AG._err(None, -32600, "request too large")), "application/json", MCP_HDRS)
+            pv = self.headers.get("MCP-Protocol-Version")
+            if pv and pv not in AG.PROTOCOLS: return self.send(400, json.dumps(AG._err(None, -32600, "unsupported MCP-Protocol-Version")), "application/json", MCP_HDRS)
+            code, out = AG.handle_mcp(self.rfile.read(n))
+            if out is None: return self.send(202, b"", "application/json", MCP_HDRS)
+            return self.send(code, json.dumps(out, default=str), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
+        except BrokenPipeError: pass
+        except Exception as e:
+            log.error("mcp error: %s\n%s", e, traceback.format_exc())
+            try: self.send(500, json.dumps(AG._err(None, -32603, "internal error")), "application/json", MCP_HDRS)
+            except Exception: pass
+    def do_OPTIONS(self):
+        if (urllib.parse.urlparse(self.path).path.rstrip("/") or "/") == "/mcp": return self.send(204, b"", "text/plain", MCP_HDRS)
+        return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
+    def do_PUT(self): self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
+    do_DELETE = do_PATCH = do_PUT
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
         try:
@@ -146,6 +177,11 @@ class H(BaseHTTPRequestHandler):
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
             if path == "/robots.txt": return self.send(200, "User-agent: *\nAllow: /\n", "text/plain")
+            if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
+            if path == "/openapi.json": return self.send(200, json.dumps(AG.openapi(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
+            if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
+            if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
+            if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
             if path == "/search":
                 q = (qs.get("q", [""])[0] or "").strip()

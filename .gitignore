@@ -23,7 +23,6 @@ shots/
 research/
 backups/
 *backup*
-fly.toml
 
 # Python
 __pycache__/

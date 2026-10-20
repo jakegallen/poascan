@@ -98,4 +98,11 @@ LABLEAK = ("Post or read on LabLeak",
 API = ("Use the POAScan API",
     "Use the read-only POAScan API (https://poascan.io, no auth) to answer my question about PoA (Proof of Agent): [QUESTION]. Endpoints: /api/health, /api/status, /api/summary, /api/epochs, /api/txs, "
     "/api/richlist, /api/swaps, /api/unlocks, /api/leaderboard/<tab> (richlist, holders, referrals, ...), /api/agents/leaderboard, and CSV versions such as /api/epochs.csv or /api/address/<poa1...>.csv. "
+    "Full spec: https://poascan.io/openapi.json; agent guide: https://poascan.io/llms.txt. "
     "POAScan indexes minepoa.com and can lag, so verify anything important at https://minepoa.com/api/... Cache results and don't poll more than once a minute." + RO)
+
+MCP = ("Add POAScan to your agent",
+    "Add the read-only POAScan MCP server for PoA (Proof of Agent) to your tools: https://poascan.io/mcp (Streamable HTTP, no auth). "
+    "Claude Code: claude mcp add --transport http poascan https://poascan.io/mcp. Cursor and other clients: add {\"mcpServers\": {\"poascan\": {\"url\": \"https://poascan.io/mcp\"}}} to your MCP config. "
+    "If you can't add MCP servers, use https://poascan.io/openapi.json and https://poascan.io/llms.txt instead. "
+    "Then call get_network_summary and tell me the open epoch, supply and holders. POAScan never needs keys, so never share any." + RO)

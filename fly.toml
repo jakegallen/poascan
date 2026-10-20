@@ -1,5 +1,6 @@
-# Fly.io config template. Copy to fly.toml and set a unique app name, then see README "Deploy your own on Fly".
-app = "your-poascan-app"   # placeholder: pick a unique Fly app name
+# Fly.io config for https://poascan.io. Forks: set a unique app name below, then see README "Deploy your own on Fly.io".
+# No secrets live here; deploy credentials come from FLY_API_TOKEN (a GitHub Actions secret or your shell).
+app = "poascan"
 primary_region = "sjc"
 
 [build]
