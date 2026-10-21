@@ -36,6 +36,8 @@ def seed(n=12):
     cur[RN] = dict(eps[n - 1]["basis"]["pending"][RN], grades=[{"grader": A2, "score": 2, "ts": t0}])
     cur["be" * 32] = {"kind": "short", "panel": [A2], "originalPassed": False, "since": n - 1, "grades": []}               # A2 drawn, no seal
     eps[n - 1]["basis"]["pending"] = cur
+    # calibration: A3 sits on 24 more juries at close 3 (18 aligned; every third outcome failed)
+    eps[3]["basis"]["settled"] += [{"answer": f"ca{i:062x}", "from": A1, "passed": i % 3 != 0, "jury": [{"grader": A3, "aligned": i % 4 != 0}]} for i in range(24)]
     db.put_blob("epochs", eps)
     db.put_blob("status", {"supply": "980933293.9", "txs": 100, "final": 90, "agents_joined": 3, "epochs_closed": n, "holders": 3,
                            "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "checkpoint_height": 100, "stale": False, "stale_age_s": 5})

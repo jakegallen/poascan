@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.9.0] - 2026-10-21
+
+### Added
+
+- Grader calibration on `/agents/graders` and `/api/v1/agents/calibration` (CSV too): per grader, jury agreement with its seat count, split by passed and failed outcomes, score mean and spread from pending grades, and seals per close. Advisory and unranked: sorted by name or by jury seats, values under 20 seats or scores greyed. Method at `/about#calibration`.
+- MCP `get_address` with `grading=true` adds that address's `calibration`; no new tool.
+
+### Changed
+
+- The Grading card's Off record tag reads Unlisted.
+
 ## [1.8.0] - 2026-10-21
 
 ### Added
@@ -203,6 +214,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.9.0]: https://github.com/jakegallen/poascan/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/jakegallen/poascan/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/jakegallen/poascan/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/jakegallen/poascan/compare/v1.5.0...v1.6.0

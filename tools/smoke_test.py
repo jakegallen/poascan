@@ -368,6 +368,29 @@ def history(base, check):
           and len(sc.get("recent_txs") or []) == 25 and sc.get("next_tx_cursor") and len((sc.get("grading") or {}).get("rows") or []) == 2
           and not {t["id"] for t in sc["recent_txs"]} & {t["id"] for t in s2.get("recent_txs") or []} and b'id="history"' in req(base + "/about")[1])
 
+def calibration(base, check):
+    """Grader calibration: sample sizes, outcome split, low-n greying, neutral sort, no ranking words."""
+    A1, A3 = "poa1" + "A" * 40, "poa1" + "C" * 40
+    d = json.loads(req(base + "/api/v1/agents/calibration")[1]); by = {r["grader"]: r for r in d["rows"]}; r3 = by[A3]
+    check("calibration API: seats, aligned, outcome split, scores, low_n, name order",
+          d["min_n"] == 20 and d["graders_count"] == len(d["rows"]) == 5 and r3["seats"] == 25 and r3["aligned"] == 19 and r3["seats_failed"] == 8 and r3["aligned_failed"] == 6
+          and r3["low_n"] is False and by[A1]["low_n"] is True and by[A1]["scored"] == 9 and by[A1]["score_mean"] == 2.0 and by[A1]["seals_by_close"]
+          and [r["grader"] for r in d["rows"]] == sorted(by) and d["method"].endswith("/about#calibration"))
+    n = json.loads(req(base + "/api/v1/agents/calibration?sort=n")[1]); c, h, b = reqh(base + "/api/v1/agents/calibration.csv")
+    check("calibration: sort=n, CSV rows, 400 on a bad sort", n["rows"][0]["grader"] == A3 and c == 200 and b.decode().count("\n") == 6 and req(base + "/api/v1/agents/calibration?sort=best")[0] == 400)
+    pg = req(base + "/agents/graders")[1].decode(); p2 = req(base + "/agents/graders?sort=n")[1].decode()
+    card = pg[pg.index('id="calibration"'):]; card = card[:card.index("</section>")]
+    check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks",
+          "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'class="chip on">n<' in p2
+          and "Read my calibration" in card and not any(w in card.lower() for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
+    spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": A3, "tx_limit": 1, "grading": True}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
+          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 21)
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -395,6 +418,7 @@ def fixture_pages(check):
         backlog(base, check)
         records(base, check)
         history(base, check)
+        calibration(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)

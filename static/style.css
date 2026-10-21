@@ -692,3 +692,6 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @media (max-width:640px){.hist td,.hist th{padding:9px 5px}.hist td:first-child,.hist th:first-child{padding-left:0}.hist td:last-child,.hist th:last-child{padding-right:0}.hist .ep{display:block}.hist .tag{padding:3px 6px;letter-spacing:.04em}}
 .hist .tag.ep{display:inline-block;margin-top:4px}
 @media (max-width:640px){.hist .tag.ep{display:table;margin-top:5px}}
+.cal td small{display:block;margin-top:2px;font-size:var(--t12);color:var(--mute);white-space:nowrap}.cal td.r{white-space:nowrap}.cal th.r,.cal td.r{text-align:right}.cal tr.low td{opacity:.5}.cal td .tag{margin-left:4px}
+.cal td:first-child .aname{display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.histc .chips .sp{flex:1}.histc .chips .tag{align-self:center}
+@media (max-width:640px){.cal .dk{display:none}.cal td:first-child .aname{max-width:104px}.cal td:first-child small{white-space:normal}.cal td:first-child small .tag{margin:3px 0 0;display:table}.cal td,.cal th{padding-left:4px;padding-right:4px}.cal th{white-space:normal;vertical-align:bottom}.cal td small{font-size:11px}}
