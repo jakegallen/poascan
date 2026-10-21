@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.8.0] - 2026-10-21
+
+### Added
+
+- Full address history: `/api/v1/address/{address}/txs` pages every archived tx newest first with an opaque keyset cursor (`next_cursor`, `X-Next-Cursor`), a `type` filter, CSV, type counts and a `coverage` block (archive start, txs indexed, highest nonce seen and the gap). `/address` shows 25 at a time with Load more and type chips.
+- Grading assignments: `/api/v1/address/{address}/assignments` and a Grading card on `/address` list each answer a grader sat on or sealed, whether a seal was submitted (from the jury, grades, pre-merge panel or seal tx), and the seal tx. Off record marks seals on the ledger that the close record does not list.
+- MCP `get_address` takes `tx_cursor`, `tx_type` and `grading` (with `grading_cursor`, `grading_limit`); no new tool. Method at `/about#history`.
+- Indexes on (from_addr, ts, id) and (to_addr, ts, id) for keyset paging.
+
 ## [1.7.0] - 2026-10-21
 
 ### Added
@@ -194,6 +203,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.8.0]: https://github.com/jakegallen/poascan/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/jakegallen/poascan/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/jakegallen/poascan/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/jakegallen/poascan/compare/v1.4.0...v1.5.0

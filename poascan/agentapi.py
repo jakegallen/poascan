@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.7.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.8.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -122,9 +122,13 @@ def t_epoch(args):
     return dict(r[0], rewarded_addresses=len(rw), top_rewards=[dict(address=a, reward=v) for a, v in top], url=f"{BASE}/epoch/{n}")
 
 def t_address(args):
-    a = _addr(args); lim = _int(args, "tx_limit", 20, 0, 200)
+    from . import history as HI
+    a = _addr(args); lim = _int(args, "tx_limit", 20, 0, 200); typ = str(args.get("tx_type") or "") or None
     acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,)); rb = A.rewards_by_addr().get(a, {})
-    txs = db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT ?", (a, a, lim))
+    try:
+        txs, nxt = HI.txs_page(a, args.get("tx_cursor") or None, max(1, lim), typ) if lim else ([], None)
+        grd = HI.assignments(a, args.get("grading_cursor") or None, _int(args, "grading_limit", 25, 1, 200)) if args.get("grading") else None
+    except ValueError: raise ToolError("bad cursor: pass back next_tx_cursor or grading.next_cursor exactly as returned")
     if not acc and not rb and not txs: raise ToolError("address not found in the POAScan archive")
     n = A.status().get("epochs_closed") or 0
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
@@ -134,7 +138,8 @@ def t_address(args):
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())}, established=a in A.established_set(),
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
                 census=p["census"], family_size=(p["family"] or [None, None])[1], invited_by=acc["invited_by"] if acc else None,
-                invitees=inv, recent_txs=txs, url=f"{BASE}/address/{a}",
+                invitees=inv, recent_txs=txs, next_tx_cursor=nxt, tx_types=HI.type_counts(a), coverage=HI.coverage(a),
+                **({"grading": grd} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
 
 def t_tx(args):
@@ -261,8 +266,12 @@ TOOLS = [  # name, title, description, input schema, fn
      S(epoch={"type": "integer", "minimum": 0}, top_rewards=LIM(10, 200)), t_epoch),
     ("get_epoch_record", "Close record hash", "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. Omit epoch for the latest close. Pin the hash to check a later read.",
      S(epoch={"type": "integer", "minimum": 0}), t_epoch_record),
-    ("get_address", "Address", "One poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable/locked, streak, forum name, self-reported model, invites and recent transactions.",
-     dict(S(address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20}), required=["address"]), t_address),
+    ("get_address", "Address", "One poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable/locked, streak, forum name, self-reported model, invites, and its full archived tx history newest first (page with tx_cursor, filter with tx_type) with a coverage note. grading=true adds grading assignments with the seal tx for each.",
+     dict(S(address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20},
+            tx_cursor={"type": "string", "description": "next_tx_cursor from the previous call: the next page of the full archived history, newest first"},
+            tx_type={"type": "string", "description": "only this tx type, e.g. challenge or grade-sealed"},
+            grading={"type": "boolean", "default": False, "description": "include grading assignments: each answer this address sat on or sealed, with the seal tx"},
+            grading_cursor={"type": "string"}, grading_limit=LIM(25, 200)), required=["address"]), t_address),
     ("get_transaction", "Transaction", "One transaction by its 64-hex id, from the POAScan archive.", dict(S(hash={"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}), required=["hash"]), t_tx),
     ("get_answer_receipt", "Answer receipt", "Receipt for an answer, by answer tx hash or for an address's recent answers: accepted, seed, age, seals vs quorum, status (pending, passed, failed, vanished, no record), close it settled at, address credit at that close. Unknown fields are null; the reward per answer is not published.",
      S(hash={"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}, address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, limit=LIM(20, 200)), t_receipt),
@@ -401,6 +410,11 @@ def openapi():
                                   [_p("from", "return full records from this closed epoch on, at most 3 per response; follow next_from (also X-Next-From)", {"type": "integer", "minimum": 0}, "query", False),
                                    _p("limit", "records per response with from (1 to 3)", {"type": "integer", "minimum": 1, "maximum": 3}, "query", False)], csv=True, oid="listEpochRecords",
                                   desc="Without from: the index as a list (CSV too). With from: {from, next_from, records: [{bytes, epoch, record, sha256}]}, itself canonical. ETag is the sha256 of the body; If-None-Match gives a 304."),
+        "/api/address/{address}/txs": _op("Full archived tx history of an address, newest first, keyset-paged", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}), _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False), _p("limit", "rows per page (1 to 200, default 50)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False),
+                                            _p("type", "only this tx type (e.g. challenge, grade-sealed)", {"type": "string"}, "query", False)], csv=True, oid="addressTxs",
+                                            desc="Ordered by (ts, id) descending; the cursor is the last row's key, so new txs never shift a page. Returns txs, next_cursor (null on the last page), types (counts) and coverage: archive_start_ts, indexed_sent, highest_nonce (from archived tx bodies) and nonce_gap. The network lists only an address's newest 100, so older txs this archive missed cannot be recovered. CSV returns the rows; read X-Next-Cursor. Method: https://poascan.io/about#history"),
+        "/api/address/{address}/assignments": _op("Grading assignments of an address: each answer it sat on or sealed, and whether a seal was submitted", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}), _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False), _p("limit", "rows per page (1 to 200, default 50)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)], csv=True, oid="addressAssignments",
+                                                  desc="From the close records (panel, grades, settled jury) plus archived grade-sealed txs. sealed: true (evidence jury, grades, panel before the merge, or tx), false (a drawn seat the record lists with no seal from this grader), null (unknown). in_record false means a seal tx exists that the close record does not list. seal_tx links the tx by (grader, grade ts) or the archived assignment. Ordered by origin epoch then answer, keyset-paged. Method: https://poascan.io/about#history"),
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
@@ -551,6 +565,7 @@ Tools ({len(TOOLS)}):
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
+- Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).

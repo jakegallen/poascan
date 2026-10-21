@@ -283,7 +283,7 @@ def backlog(base, check):
           d.get("ttl_epochs") == 6 and d.get("merge_from_epoch") == 11 and d.get("seals_basis") == "grades" and d.get("seals_exact") is True and d.get("quorum") == 3)
     check("backlog histogram sums to rows, unknown kept apart, open epoch null",
           all(sum(r["seals"].values()) == r["pending"] for r in d["rows"] if r["seals"]) and rows[11]["seals"]["unknown"] == 1 and rows[12]["seals"] is None
-          and d["seals_total"] == {"0": 5, "1": 15, "2": 0, "3": 0, "4+": 0, "unknown": 1})
+          and d["seals_total"] == {"0": 6, "1": 15, "2": 0, "3": 0, "4+": 0, "unknown": 1})
     check("backlog expiry = since + ttl, estimated from the last close",
           rows[2]["expires_close"] == 8 and all(r["expires_est_ts"] - rows[2]["expires_est_ts"] == (r["epoch"] - 2) * 21600 for r in d["rows"]))
     check("backlog last close: origin, grew, dropped",
@@ -331,6 +331,43 @@ def records(base, check):
     check("record in OpenAPI, llms.txt, MCP (hash, no blob) and /about", "/api/v1/epoch/{n}/record" in spec["paths"] and "/api/v1/epoch-records" in spec["paths"]
           and b"/record" in req(base + "/llms.txt")[1] and sc.get("sha256") == sha and "pending" in sc and "basis" not in sc and b'id="records"' in req(base + "/about")[1])
 
+def history(base, check):
+    """Address history: keyset pages with no gaps or repeats, type filter, CSV, coverage; grading assignments with seal txs."""
+    a2 = "poa1" + "B" * 40; RN, RV = "c2" * 32, "c3" * 32
+    first = json.loads(req(base + f"/api/v1/address/{a2}/txs?limit=25")[1]); total = sum(first["types"].values()); seen = []; d = first; pages = 0
+    while True:
+        seen += [(t["ts"], t["id"]) for t in d["txs"]]; pages += 1
+        if not d["next_cursor"] or pages > 10: break
+        d = json.loads(req(base + f"/api/v1/address/{a2}/txs?limit=25&cursor={d['next_cursor']}")[1])
+    check(f"history: {pages} pages, {len(seen)} rows, no gaps or repeats, newest first", pages == 3 and len(seen) == total == len(set(seen)) and seen == sorted(seen, reverse=True))
+    ty = json.loads(req(base + f"/api/v1/address/{a2}/txs?type=grade-sealed&limit=200")[1]); c, h, b = reqh(base + f"/api/v1/address/{a2}/txs.csv?limit=10")
+    check("history: type filter, CSV with X-Next-Cursor, 400 on a bad cursor", len(ty["txs"]) == 60 and all(t["type"] == "grade-sealed" for t in ty["txs"]) and ty["next_cursor"] is None
+          and c == 200 and b.decode().count("\n") == 11 and h.get("X-Next-Cursor") and req(base + f"/api/v1/address/{a2}/txs?cursor=x")[0] == 400)
+    cv = first["coverage"]
+    check("history coverage: archive start, sent, highest nonce and gap", cv["indexed_sent"] == 60 and cv["highest_nonce"] == 90 and cv["nonce_gap"] == 30 and cv["complete"] is False and cv["archive_start_ts"])
+    g = json.loads(req(base + f"/api/v1/address/{a2}/assignments?limit=200")[1]); by = {r["answer"]: r for r in g["rows"]}
+    check("grading: sealed via grades with seal tx, drawn seat with no seal, seal tx off record",
+          by[RN]["sealed"] is True and by[RN]["evidence"] == "grades" and by[RN]["seal_tx"] == "4b" * 32 and by["be" * 32]["sealed"] is False and by["be" * 32]["seat"] == "panel"
+          and by[RV]["sealed"] is True and by[RV]["evidence"] == "tx" and by[RV]["in_record"] is False and by[RV]["seal_tx"] == "4a" * 32 and g["not_in_record"] >= 1)
+    p1 = json.loads(req(base + f"/api/v1/address/{a2}/assignments?limit=3")[1]); p2 = json.loads(req(base + f"/api/v1/address/{a2}/assignments?limit=3&cursor={p1['next_cursor']}")[1])
+    check("grading pages continue without repeats", p1["next_cursor"] and not {r["answer"] for r in p1["rows"]} & {r["answer"] for r in p2["rows"]} and [r["answer"] for r in p1["rows"] + p2["rows"]] == [r["answer"] for r in g["rows"][:6]])
+    ad = req(base + f"/address/{a2}")[1].decode()
+    fr = json.loads(req(base + "/fragment/addr?a=" + a2 + "&k=txs&cursor=" + first["next_cursor"])[1])
+    check("/address: Transactions + Grading cards, Load more, chips, coverage note; fragment pages",
+          'id="txs"' in ad and 'id="grading"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "Off record" in ad and ">No seal<" in ad and "nonce 90" in ad
+          and 'href="/about#history"' in ad and fr["html"].count("<tr>") == 25 and fr["next"] and "\u2014" not in ad)
+    spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": a2, "tx_limit": 25, "grading": True, "grading_limit": 2}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    call2 = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": a2, "tx_limit": 25, "tx_cursor": sc.get("next_tx_cursor")}}}).encode(),
+                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    s2 = (call2.get("result") or {}).get("structuredContent") or {}
+    check("history in OpenAPI, llms.txt, MCP get_address (cursor + grading) and /about",
+          "/api/v1/address/{address}/txs" in spec["paths"] and "/api/v1/address/{address}/assignments" in spec["paths"] and "/assignments" in llms
+          and len(sc.get("recent_txs") or []) == 25 and sc.get("next_tx_cursor") and len((sc.get("grading") or {}).get("rows") or []) == 2
+          and not {t["id"] for t in sc["recent_txs"]} & {t["id"] for t in s2.get("recent_txs") or []} and b'id="history"' in req(base + "/about")[1])
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -357,6 +394,7 @@ def fixture_pages(check):
         receipts(base, check)
         backlog(base, check)
         records(base, check)
+        history(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
