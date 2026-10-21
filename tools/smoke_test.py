@@ -291,7 +291,7 @@ def backlog(base, check):
           and lc.get("grew_unknown") == 7 and lc.get("dropped") == 1 and rows[8]["dropped"] == 1 and len(d["closes"]) == 11)
     lv = req(base + "/live")[1].decode()
     check("/live backlog panel: Seals / quorum, expiry, settled origin, grew, dropped, unknown",
-          "Seals / 3" in lv and ">E8<small>" in lv and "Settled at E11" in lv and ">Grew<" in lv and ">Dropped<" in lv and "1 row" in lv and "\u2014" not in lv)
+          "Seals / 3" in lv and ">E8<small>" in lv and "Settled at E11" in lv and ">Grew<" in lv and ">Dropped<" in lv and "1 row" in lv and ">Next close<" in lv and lv.count(">Unknown<") == 1 and "\u2014" not in lv)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_pending_by_epoch", "arguments": {}}}).encode(),
                         {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])

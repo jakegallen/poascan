@@ -695,7 +695,7 @@ def pending_card():
     ge = "" if d.get("seals_exact") else "≥"   # before the merge, panel counts miss some accepted seals
     def hist(r):
         h = r.get("seals")
-        if not h: return f'<td class="r" colspan="4">{RC.UNK}</td>'
+        if not h: return '<td class="r dim" colspan="4">Next close</td>'   # open epoch: seals land in the next close record
         return "".join(f'<td class="r num{" q3" if k == "3" else ""}">{h[k]:,}</td>' for k in ("0", "1", "2", "3"))
     def exp(r):
         t = _pt(r.get("expires_est_ts"))
