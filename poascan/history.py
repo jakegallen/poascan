@@ -66,7 +66,7 @@ def grading_index():
             jy = frozenset(j.get("grader") for j in s.get("jury") or [])
             rec.setdefault(t, {})["s"] = (n, bool(s.get("passed")), jy)
             for g in jy: by.setdefault(g, set()).add(t)
-    v = dict(rec=rec, by=by, last=max((int(e.get("epoch", 0)) for e in raw), default=None),
+    v = dict(rec=rec, by=by, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
              merge=A.params().get("pending_merge_from_epoch"))
     with _lock: _gx.update(key=id(raw), v=v)
     return v
@@ -80,11 +80,13 @@ def _one(g, t, r, ix, seal_ts, seal_as):
     if s and g in s[2]: sealed, ev = True, "jury"
     if p and p[4] is not None and g in p[4]: sealed, ev, ts = True, ev or "grades", p[4][g]
     if sealed is None and p and p[4] is None and p[1] == "short" and on: sealed, ev = True, "panel"   # before the merge a short row's panel listed its counted seals
-    tx = None
-    if ts is not None: tx = (seal_ts.get(ts) or [None])[0] if len(seal_ts.get(ts) or []) == 1 else seal_as.get(t)
-    else: tx = seal_as.get(t)
+    tx = None; sa = seal_as.get(t)
+    if ts is not None: tx = (seal_ts.get(ts) or [None])[0] if len(seal_ts.get(ts) or []) == 1 else (sa or (None,))[0]
+    elif sa: tx = sa[0]
     in_rec = sealed is True
-    if sealed is not True and tx: sealed, ev = True, "tx"
+    if sealed is not True and sa:
+        sealed, ev, ts = True, "tx", sa[1]
+        if ix.get("last_ts") and sa[1] > ix["last_ts"]: in_rec = None        # cast after the latest close: the next record decides
     if sealed is None and on and p and (p[4] is not None or s): sealed = False        # drawn seat, the record lists no seal from this grader
     return dict(answer=t, since=p[2] if p else None, status=status, close=close, seat=("panel" if on else "off_panel") if p else None,
                 sealed=sealed, evidence=ev, in_record=in_rec if sealed else None, seal_tx=tx, seal_ts=ts)
@@ -97,19 +99,21 @@ def assignments(g, cursor=None, limit=50):
     seal_ts, seal_as = {}, {}
     for x in rows:
         seal_ts.setdefault(x["ts"], []).append(x["id"])
-        if x["a"]: seal_as[x["a"]] = x["id"]
+        if x["a"]: seal_as[x["a"]] = (x["id"], x["ts"])
     ts_used = set()
     out = []
     for t in (ix["by"].get(g) or set()) | set(seal_as):
         o = _one(g, t, ix["rec"].get(t, {}), ix, seal_ts, seal_as)
         if o["since"] is None and o["status"] == "unrecorded":
             e = db.q1("SELECT epoch FROM txs WHERE id = ?", (t,)); o["since"] = e["epoch"] if e else None
+            if o["since"] is not None and ix["last"] is not None and o["since"] > ix["last"]: o["status"] = "awaiting_close"; o["in_record"] = None
         if o["seal_tx"]: ts_used.add(o["seal_tx"])
         out.append(o)
     out.sort(key=lambda o: (o["since"] if o["since"] is not None else -1, o["answer"]), reverse=True)
     summary = dict(assignments=len(out), sealed=sum(1 for o in out if o["sealed"] is True), not_sealed=sum(1 for o in out if o["sealed"] is False),
                    unknown=sum(1 for o in out if o["sealed"] is None), seal_txs_indexed=len(rows),
-                   seal_txs_linked=len(ts_used), not_in_record=sum(1 for o in out if o["evidence"] == "tx"))
+                   seal_txs_linked=len(ts_used), not_in_record=sum(1 for o in out if o["evidence"] == "tx" and o["in_record"] is False and o["status"] != "awaiting_close"),
+                   after_close=sum(1 for o in out if o["evidence"] == "tx" and (o["in_record"] is None or o["status"] == "awaiting_close")))
     if cursor:
         sv, ans = dec(cursor, 2); k = (int(sv), str(ans))
         out = [o for o in out if (o["since"] if o["since"] is not None else -1, o["answer"]) < k]
