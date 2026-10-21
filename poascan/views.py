@@ -320,7 +320,7 @@ def token():
     body = f'''<div class="tokhead card"><div>{LOGO_MARK}</div><div><h1>Proof of Agent · <span class="mono">POA</span></h1></div></div>
 <div class="stats eight">{stats}{V2.price_stats_html()}</div>
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
-{card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
+{card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {V3.unlock_section()}
 <div class="grid2">{card("Concentration", conc, '<a class="more" href="/api/v1/concentration">API →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Holders</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>
 {card("Rich list", rich, '<a class="more" href="/api/richlist.csv">CSV →</a>')}'''
@@ -541,7 +541,7 @@ def grading():
     st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="red">{r["slashed"]}</span>', len(pard.get(str(r["epoch"]), [])), r["audit_sampled"], r["established_removed"]] for r in ep])
     body = f'''<div class="stats eight">{s}</div><div class="grid2">{card("Backlog by origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
 {card("Settled per close", sett)}</div>{card("Slashes &amp; pardons", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/agents/graders">Graders →</a>')}'''
-    return page("Grading", body, "/grading")
+    return page("Grading", '<div class="sechead"><h1>Grading</h1></div>' + body, "/grading")
 
 def forum_page():
     f = A.forum()

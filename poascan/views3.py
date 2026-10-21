@@ -13,6 +13,7 @@ def page(*a):
 DAY = 86400
 
 def _vest(): return int(A.params().get("vesting_epochs") or 100)
+def vest_days(): return f'≈{_vest() * int(A.params().get("auto_epoch_seconds") or 21600) / 86400:.0f} days'
 
 def _minted_by_epoch():
     out = collections.Counter()
@@ -62,7 +63,7 @@ def unlock_stats():
         stat("Next unlock", (poa(nx[3]) + f' <span class="dim small">· E{nx[0]} close</span>') if nx else "···"),
         stat("Next unlock in", f'<span class="xcd num" data-close="{int(nx[1])}"></span>' if nx else "···"),
         stat("To 25%", th(.25)), stat("To 50%", th(.5)), stat("To 100%", th(1.0)),
-        stat("Vesting", f'<span class="num">{u["vest"]}</span> <span class="unit">epochs</span>')])
+        stat("Vesting", f'<span class="num">{u["vest"]}</span> <span class="unit">epochs · {vest_days()}</span>')])
 
 def unlock_chart():
     u = unlock_data(); now = time.time()

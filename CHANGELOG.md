@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added
+
+- Vesting shows its length in days (≈25) on `/unlocks`, `/token` and in the FAQ.
+- `/grading` has an h1.
+
 ### Fixed
 
 - `/grading` returned 500 once 8 origin epochs were pending: the backlog chart legend ran out of colors. Legend colors now wrap, and origins before the last five share one "Older" series.

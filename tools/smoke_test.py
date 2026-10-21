@@ -235,6 +235,8 @@ def fixture_pages(check):
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
+        check("fixture: /grading has an h1", b"<h1" in g and b">Grading</h1>" in g)
+        check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])
     finally:
         p.terminate(); p.wait(10)
 
