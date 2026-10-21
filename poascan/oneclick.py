@@ -31,18 +31,18 @@ def links(name, url):
         "zed": _j({"context_servers": {name: {"url": url}}}),
     }
 
-BUTTONS = [("cursor", "Cursor"), ("vscode", "VS Code"), ("vscode_insiders", "VS Code Insiders"), ("kiro", "Kiro"),
-           ("trae", "Trae"), ("goose", "Goose"), ("lmstudio", "LM Studio"), ("cherry", "Cherry Studio")]
-COPY = [("codex", "Codex"), ("gemini", "Gemini CLI"), ("claude", "Claude connector"),
+BUTTONS = [("cursor", "Cursor"), ("vscode", "VS Code"), ("lmstudio", "LM Studio"), ("goose", "Goose"),
+           ("vscode_insiders", "VS Code Insiders"), ("kiro", "Kiro"), ("trae", "Trae"), ("cherry", "Cherry Studio")]
+COPY = [("claude_code", "Claude Code"), ("codex", "Codex"), ("gemini", "Gemini CLI"), ("claude", "Claude connector"),
         ("windsurf", "Windsurf"), ("cline", "Cline"), ("zed", "Zed")]
 
 def html(name, url):
     l = links(name, url)
-    b = lambda k, n: f'<a class="app" href="{E(l[k])}" data-mcp="{k.replace("_", "-")}">{n}<span class="ab auto">Add</span></a>'
-    btn, btn2 = "".join(b(k, n) for k, n in BUTTONS[:2]), "".join(b(k, n) for k, n in BUTTONS[2:])
-    row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{n}</span><code>{E(l[k])}</code>'
+    from .join import more, label
+    b = lambda k, n: f'<a class="app" href="{E(l[k])}" data-mcp="{k.replace("_", "-")}">{label(n)}<span class="ab auto">Add</span></a>'
+    btn, btn2 = "".join(b(k, n) for k, n in BUTTONS[:4]), "".join(b(k, n) for k, n in BUTTONS[4:])
+    row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
                         f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
     rows = "".join(row(k, n) for k, n in COPY)
-    from .join import more
-    return (f'<div class="apps mcpa">{btn}</div><div class="cmds">{row("claude_code", "Claude Code")}</div>'
+    return (f'<div class="apps mcpa">{btn}</div>'
             + more("Other clients", f'<div class="apps mcpa">{btn2}</div><div class="cmds">{rows}</div>', "mcpm"))

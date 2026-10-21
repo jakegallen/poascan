@@ -4,7 +4,7 @@
 --amber:#FFB000;--amber-d:#C8742B;--green:#3DDC97;--red:#FF5A4E;--steel:#8FA3B8;
 --txt:#EDE6D6;--hi:#F6F0E2;--dim:#A59C8A;--mute:#7A725F;
 --ui:"Space Grotesk","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
---t12:12px;--t14:14px;--t16:16px;--t20:20px;--t28:28px;--t40:40px;
+--t12:12px;--t13:13px;--t14:14px;--t16:16px;--t20:20px;--t28:28px;--t40:40px;
 --lh-tight:1.15;--lh:1.5;--track-label:.08em;--r:10px;--fast:160ms;--ease:cubic-bezier(.2,.7,.2,1);
 --gold:linear-gradient(92deg,#FFD36B,#E3A33A 45%,#C8742B)}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip}
@@ -502,7 +502,7 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .startp .apps.oc{grid-template-columns:repeat(4,minmax(0,1fr))}
 .startp .apps.oc .app.cpy{min-height:36px;font-size:var(--t13)}
 .startp .jm-copy.sec{display:inline-block;width:auto;height:36px;padding:0 16px;margin:0 0 18px;background:transparent;color:var(--amber);border:1px solid var(--line2);box-shadow:none;font-size:var(--t14)}
-.apps.mcpa{grid-template-columns:repeat(2,minmax(0,1fr));max-width:420px;margin-bottom:10px}
+.apps.mcpa{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:10px}
 @media(max-width:640px){.startp .apps.oc{grid-template-columns:repeat(2,minmax(0,1fr))}.apps.mcpa{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .startp .jm-p{max-height:240px;overflow:auto}.startp .jm-l{display:block;margin:16px 0 8px}
 /* /swaps: swap panel + book */
@@ -619,9 +619,7 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 /* /start: header row with close, copy pinned inside the prompt box */
 .startp .sthd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px 0 18px}
 .startp .sthd .jm-x{width:32px;height:32px;text-decoration:none}
-.pbox{position:relative}
-.pbox .jm-p{padding-top:44px}
-.pcopy{position:absolute;top:8px;right:8px;z-index:1;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid rgba(255,176,0,.45);border-radius:8px;background:#1C1709;color:var(--amber);font:600 var(--t13)/1 var(--ui);letter-spacing:.02em;cursor:pointer;box-shadow:0 4px 14px -6px rgba(0,0,0,.6);transition:background var(--fast),border-color var(--fast),color var(--fast)}
+.pcopy{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border:1px solid rgba(255,176,0,.45);border-radius:8px;background:#1C1709;color:var(--amber);font:600 var(--t13)/1 var(--ui);letter-spacing:.02em;cursor:pointer;transition:background var(--fast),border-color var(--fast),color var(--fast)}
 .pcopy svg{width:14px;height:14px;flex:none}
 .pcopy:hover{background:#2A210C;border-color:var(--amber)}
 .pcopy.ok{color:var(--green);border-color:rgba(61,220,151,.5);animation:okflash .6s var(--ease)}
@@ -649,7 +647,7 @@ html.js .morep:not(.open){display:none}
 .xemb>summary{min-height:32px;box-sizing:border-box}
 .xembb .moreb,.xhob .moreb{display:flex}
 /* one prompt box everywhere: Copy pinned inside, top right */
-.pbox{position:relative;margin:0 0 14px}.pbox>pre{margin:0;padding-top:44px}
+.pbox{margin:0 0 14px}
 .startp .pbox,.xembb .pbox,.xhob .pbox{margin-bottom:0}
 .am .pbox,.jm .pbox{margin-bottom:16px}
 /* Ask dialog with several prompts: the selected chip names it, so the title is screen-reader only */
@@ -663,3 +661,19 @@ html.js .morep:not(.open){display:none}
 .xembr .xemb>summary::after{display:none}
 @media (max-width:420px){.xembr .xsafe{font-size:11px}.xembr .xsafe svg{display:none}.xembr .xemb>summary{font-size:11px;gap:5px;padding:4px 9px 4px 7px}}
 @media (max-width:380px){.xp{padding-left:12px;padding-right:12px}.xembr .xsafe{font-size:10.5px;letter-spacing:-.005em}.xembr .xemb>summary{gap:4px;padding:4px 8px 4px 6px}.xembr .xemb .embl{width:14px;height:14px}}
+
+/* Prompt box: Copy sits in a fixed strip, the prompt scrolls below it */
+.pbox{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--inset);overflow:hidden}
+.pbar{display:flex;justify-content:flex-end;flex:none;padding:5px;border-bottom:1px solid var(--line);background:var(--card)}
+.pbox>pre{margin:0;border:0;border-radius:0;background:transparent;padding-top:10px}
+/* Brand marks: logo left of the name, same treatment as network logos */
+.an{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.ant{min-width:0}
+.blogo{width:16px;height:16px;flex:none;display:block;object-fit:contain}
+i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--line2);color:var(--hi);font:700 10px/1 var(--ui);font-style:normal}
+.app .an{flex:1}
+.cmd{grid-template-columns:150px minmax(0,1fr) auto}
+.cmd .lbl .an{gap:6px}
+@media(max-width:640px){.cmd{grid-template-columns:minmax(0,1fr) auto}}
+@media(max-width:900px){.apps .app{padding:0 9px;gap:6px}.app .an{gap:6px}.ab.auto{padding:0 6px}}
+@media(max-width:380px){.apps .app{font-size:13px;padding:0 8px;gap:5px}.app .an{gap:5px}}

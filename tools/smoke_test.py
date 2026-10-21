@@ -136,7 +136,7 @@ def main():
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
-              and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
+              and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
@@ -156,8 +156,20 @@ def main():
               and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
         check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
         _pb = [req(base + u)[1] for u in ("/start", "/swaps", "/how-to-buy-poa", "/api", "/how-to-mine-poa")]
-        check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x and x.count(b'<div class="pbox"><button class="pcopy"') >= 1 for x in _pb)
+        check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
               and all(x.count(b'class="pcopy"') == x.count(b'<div class="pbox">') for x in _pb))
+        import os as _os
+        _bd = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "static", "brands")
+        _lg = _re.findall(r'<span class="an">(?:<img class="blogo" src="/static/brands/([^"?]+)\?v=1"[^>]*>|<i class="blogo mono")', _m)
+        check("logos: every option on /start has a brand mark, files exist and serve, SOURCES.md listed",
+              len(_lg) == _m.count('<span class="an">') == 29 and all(f and _os.path.isfile(_os.path.join(_bd, f)) for f in _lg)
+              and all(req(base + "/static/brands/" + f)[0] == 200 for f in set(_lg))
+              and all(f in open(_os.path.join(_bd, "SOURCES.md")).read() for f in set(_lg))
+              and all(b'<span class="an"><img class="blogo"' in x for x in _pb))
+        _mc = _m[_m.index('apps mcpa'):]; _oc = _mc.index('>Other clients<')
+        check("/start Mine: four one-click Add up front, everything else under Other clients", _mc[:_oc].count('data-mcp=') == 4
+              and all(f'data-mcp="{k}"' in _mc[:_oc] for k in ("cursor", "vscode", "lmstudio", "goose")) and 'class="cmd"' not in _mc[:_oc]
+              and _mc[_oc:].count('class="cmd"') == 7 and _mc[_oc:].index('data-mcp="cherry"') < _mc[_oc:].index('data-mcp="claude-code"'))
         check("/start: Open in apps + collapsed Steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)

@@ -42,8 +42,8 @@ COPY = ('<button class="pcopy" type="button" data-copy-prompt aria-label="Copy p
         '<path d="M3 10.5V3.6A1.1 1.1 0 0 1 4.1 2.5H10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><span class="cpt">Copy</span></button>')
 
 def pbox(pre):
-    """The one prompt box: Copy pinned top-right inside it, visible while the prompt scrolls."""
-    return f'<div class="pbox">{COPY}{pre}</div>'
+    """The one prompt box: Copy in a fixed top strip, the prompt scrolls below it."""
+    return f'<div class="pbox"><div class="pbar">{COPY}</div>{pre}</div>'
 
 def button(cls=""):
     return f'<a class="joinbtn {cls}" href="/start">Start</a>'
@@ -52,10 +52,26 @@ def _badge(kind):
     return ('<span class="ab auto" title="Opens a new chat with the prompt">Auto</span>' if kind == "auto"
             else '<span class="ab paste" title="Prompt is copied; paste it in"><i></i></span>')
 
+# Brand marks, self-hosted under static/brands (sources in SOURCES.md). Keyed by option label.
+BRAND = {"ChatGPT": "openai.svg", "Codex": "openai.svg", "Claude": "claude.svg", "Claude Code": "claude.svg",
+         "Claude connector": "claude.svg", "Grok": "grok.png", "Grok Bot": "grok.png", "Perplexity": "perplexity.svg",
+         "Kimi": "kimi.svg", "Z.ai": "zai.png", "Muse": "meta.svg", "Gemini": "gemini.svg", "Gemini CLI": "gemini.svg",
+         "DeepSeek": "deepseek.svg", "Le Chat": "mistral.svg", "HuggingChat": "huggingface.svg", "MiniMax": "minimax.svg",
+         "OpenRouter": "openrouter.svg", "Cursor": "cursor.svg", "VS Code": "vscode.png", "VS Code Insiders": "vscode-insiders.png",
+         "Kiro": "kiro.svg", "Trae": "trae.svg", "Goose": "goose.svg", "LM Studio": "lmstudio.svg", "Cherry Studio": "cherry.png",
+         "Windsurf": "windsurf.svg", "Cline": "cline.svg", "Zed": "zed.svg"}
+
+def label(n):
+    """Logo then name, for every option button and row."""
+    f = BRAND.get(n)
+    img = (f'<img class="blogo" src="/static/brands/{f}?v=1" width="16" height="16" alt="" aria-hidden="true" loading="lazy">'
+           if f else f'<i class="blogo mono" aria-hidden="true">{E(n[:1])}</i>')
+    return f'<span class="an">{img}<span class="ant">{E(n)}</span></span>'
+
 def _app(n, kind, base, pre):
     if kind == "auto":
-        return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{_badge(kind)}</a>'
-    return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{n}{_badge(kind)}</button>'
+        return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{label(n)}{_badge(kind)}</a>'
+    return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{label(n)}{_badge(kind)}</button>'
 
 _N = [0]
 def more(label, inner, cls=""):

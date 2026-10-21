@@ -13,6 +13,8 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed (swaps coming soon)
 
+- Every option button and install row (chat apps, More, MCP clients, Other clients, the Ask your agent dialog, /start, /swaps, /api) shows the product's logo left of its name, 16px like the network logos. Marks are self-hosted in static/brands, with sources and licenses in static/brands/SOURCES.md.
+- Prompt boxes: Copy now sits in a slim fixed strip across the top of the box, and the prompt scrolls below it, never beside the button.
 - Ask your agent dialog: with several prompts, the selected chip names the prompt and the title is screen-reader only, so the label shows once.
 - Indexer: the live tx feed is read first and no longer waits on /api/status or /api/networks, which get a 20 second timeout and their own backoff. A slow /api/networks had been holding the header pill on Stale.
 - Every prompt box (the /start prompt, Add Emblem Wallet and the swap prompt on /swaps, the Ask your agent dialog and prompt cards) now has its Copy button pinned top right inside the box, switching to "Copied". The separate Copy prompt buttons below are gone.
