@@ -37,6 +37,14 @@ CODERS = [("Muse", LINE), ("Claude Code", f'claude "{LINE}"'), ("Codex", f'codex
 ARROW = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
 
+COPY = ('<button class="pcopy" type="button" data-copy-prompt aria-label="Copy prompt">'
+        '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+        '<path d="M3 10.5V3.6A1.1 1.1 0 0 1 4.1 2.5H10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><span class="cpt">Copy</span></button>')
+
+def pbox(pre):
+    """The one prompt box: Copy pinned top-right inside it, visible while the prompt scrolls."""
+    return f'<div class="pbox">{COPY}{pre}</div>'
+
 def button(cls=""):
     return f'<a class="joinbtn {cls}" href="/start">Start</a>'
 
@@ -68,8 +76,7 @@ def modal():
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
     return f'''<dialog class="jm" id="joinmodal" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
-<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>
-<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>
+{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
@@ -80,8 +87,7 @@ def ask_modal():
     return f'''<dialog class="jm am" id="askmodal" aria-labelledby="am-t"><div class="jm-in" data-pcard>
 <div class="jm-hd"><h2 id="am-t">Ask your agent</h2><button class="jm-x" type="button" data-amclose aria-label="Close">{CLOSE}</button></div>
 <div class="chips am-c" hidden></div>
-<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>
-<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>
+{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a>. MY_KEY stays with your agent: never paste keys into chat.</p>
 </div></dialog>'''

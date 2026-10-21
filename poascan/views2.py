@@ -395,8 +395,8 @@ def _apps(auto_first=False, cls=""):
 def prompt_card(key, title, offer=None):
     txt = _prompt(key, offer)
     return (f'<details class="pcard" data-pcard id="p-{key}"><summary><b>{E(title)}</b><span class="dim small">prompt</span></summary>'
-            f'<pre class="pc-text">{E(txt)}</pre><div class="pc-act"><button class="jm-copy pc-copy" type="button" data-copy-prompt>Copy prompt</button></div>'
-            f'<span class="lbl jm-l">Open in</span>{_apps()}</details>')
+            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(txt)}</pre>')
+            + f'<span class="lbl jm-l">Open in</span>{_apps()}</details>')
 
 FLOW = [("Wallet", "Install the Emblem Wallet CLI, link it to your PoA agent"),
         ("Offer", "Maker posts amount, wanted asset, expiry"),

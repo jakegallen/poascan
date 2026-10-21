@@ -103,6 +103,8 @@ def panel():
            '<button class="xbtn" type="button" id="xgo" data-up="1">Connect</button>' if up else
            '<button class="xbtn up" type="button" id="xgo" data-up="0" disabled><i></i>Being upgraded</button>')
     apps, apps2 = V2._apps(cls="oc"), V2._apps(cls="oc")
+    emb_box = V2._J.pbox('<pre class="pc-text" tabindex="0">' + E(tpl["connect"]) + '</pre>')
+    swap_box = V2._J.pbox('<pre class="pc-text" tabindex="0"></pre>')
     lg = f' <span class="dim">· last good read {rel(h["last_good_read"])}</span>' if h["last_good_read"] else ""
     note = "" if up or not V2.SWAPS_LIVE else f'<p class="xnote" role="status">{V2.UPGRADE_MSG}{lg}</p>'
     return f'''<section class="card xp" id="xp" data-fee="{fee}" data-sellmax="{int(A.supply_split().get("spendable") or 0)}" data-tpl="{E(json.dumps(tpl))}">
@@ -115,10 +117,9 @@ def panel():
 <p class="xhint" id="xhint" hidden></p><dl class="xd"><div><dt>Rate</dt><dd id="xpx">···</dd></div><div><dt>Fee</dt><dd>{fee / 100:g}%</dd></div><div><dt>Route</dt><dd><span id="xroute">···</span> <span class="xvia">{ICON_WALLET}via Emblem</span></dd></div></dl>
 {note}{btn}
 <p class="xsafe">{ICON_INFO}{SAFE}</p>
-<div class="xembr"><details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
-<span class="lbl jm-l">One click</span>{apps}<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details><a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a></div>
-<details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard><pre class="pc-text" tabindex="0"></pre><span class="lbl jm-l">One click</span>{apps2}
-<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
+<div class="xembr"><details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard>{emb_box}
+<span class="lbl jm-l">One click</span>{apps}</div></details><a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a></div>
+<details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard>{swap_box}<span class="lbl jm-l">One click</span>{apps2}</div></details>
 </section>'''
 
 NA = '<span class="na">-</span>'   # plain hyphen: no price yet
