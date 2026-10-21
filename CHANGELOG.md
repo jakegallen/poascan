@@ -11,6 +11,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (paged Agents)
+
+- `/api/v1/agents/view`: every Agent in pages ordered by address (`limit` 1 to 500, `after=<next_cursor>`), with a weak `ETag`; `If-None-Match` returns 304 when the page is unchanged. CSV too. Mirrored as the `list_agents` MCP tool (18 tools).
+
 ### Added (cluster signals)
 
 - Cluster signals on /agents/operators: groups of Agents sharing near-duplicate answers, synchronized timing (3 or more first challenges in one 5-second window), a vault link or funding. Signals, not findings. `/api/v1/clusters` and the `get_cluster_signals` MCP tool (17 tools). Method on /about#signals.

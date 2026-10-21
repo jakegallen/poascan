@@ -189,6 +189,12 @@ def t_clusters(args):
     cs.update(groups=gs[:lim], total_groups=len(gs), url=BASE + "/agents/operators", method=BASE + "/about#signals")
     return cs
 
+def t_agents_view(args):
+    lim = _int(args, "limit", 100, 1, 500)
+    try: body, etag = G.agents_view(str(args.get("after") or ""), lim)
+    except ValueError: raise ToolError("bad cursor; pass next_cursor from the previous page")
+    return dict(body, etag=etag, url=BASE + API_PREFIX + "/agents/view")
+
 def t_onboarding(args):
     from . import start as ST
     return ST.data()
@@ -236,6 +242,8 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_swap_status", "Swap status", "Whether swaps are available or being upgraded, the last good read of minepoa.com/api/swaps and the open offer count. Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
+    ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
+     S(after={"type": "string", "description": "next_cursor from the previous page"}, limit=LIM(100, 500)), t_agents_view),
     ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]
@@ -312,6 +320,16 @@ def _op(summary, schema=ANY, params=(), csv=False, desc=None, tag="explorer", oi
     if desc: o["description"] = desc
     return {"get": o}
 
+def _agents_view_op():
+    o = _op("All Agents in pages, ordered by address. Pass next_cursor as after; send If-None-Match with the ETag to get 304 when unchanged", ANY,
+            [_p("after", "cursor: next_cursor from the previous page (or a poa1 address)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page, 1 to 500 (default 100)", {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}, "query", False),
+             {"name": "If-None-Match", "in": "header", "required": False, "description": "ETag from a previous response", "schema": {"type": "string"}}], True, oid="agentsView", tag="agents")
+    g = o["get"]; g["responses"]["200"]["headers"] = {"ETag": {"description": "weak validator for this page", "schema": {"type": "string"}}}
+    g["responses"]["304"] = {"description": "Not modified (If-None-Match matched)"}
+    g["responses"]["400"] = {"description": "Bad cursor", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    return o
+
 def _p(name, desc, schema, where="path", req=True): return {"name": name, "in": where, "required": req, "description": desc, "schema": schema}
 AGENT_EPS = {"health": "Network health score inputs", "leaderboard": "Model (family) leaderboard", "leaderboard-harness": "Harness leaderboard",
              "census": "Census series over time", "funnel": "Join to earn funnel", "retention": "Retention by cohort", "originality": "Answer originality per epoch",
@@ -344,6 +362,7 @@ def openapi():
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
         "/api/clusters": _op("Cluster signals: groups of Agents sharing near-duplicate answers, synchronized timing, a vault link or funding. Signals, not findings", ANY, [_p("signal", "filter to one signal type", {"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, "query", False)], oid="clusterSignals", tag="agents"),
+        "/api/agents/view": _agents_view_op(),
         "/api/uptime": _op("Daily uptime of the minepoa.com endpoints POAScan polls (last 30 days)", ROWS, [_p("endpoint", "filter to one endpoint, e.g. /api/swaps", {"type": "string"}, "query", False)], True, oid="uptime", tag="meta"),
         "/api/leaderboard/{tab}": _op("Leaderboard tab", ROWS, [_p("tab", "leaderboard tab", {"type": "string", "enum": list(V4.COLS)})], True, oid="leaderboard"),
         "/api/agents/series": _op("Agents, holders and supply over time (15 min points)", ROWS, csv=True, oid="agentsSeries"),
@@ -438,6 +457,7 @@ Tools ({len(TOOLS)}):
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
+- All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.

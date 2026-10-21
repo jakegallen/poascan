@@ -261,6 +261,14 @@ class H(BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
                 p = path[:-4] if path.endswith(".csv") else path
+                if p == "/api/agents/view":
+                    try: body, etag = G.agents_view(qs.get("after", [""])[0], qs.get("limit", ["100"])[0] if qs.get("limit", ["100"])[0].isdigit() else 100)
+                    except ValueError: return self.send(400, json.dumps({"error": "bad cursor"}), "application/json", {"X-API-Version": AG.VERSION})
+                    m = AG.meta(); hd = dict(AG.meta_headers(m), **{"ETag": etag, "Cache-Control": "max-age=15", "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "ETag"})
+                    inm = [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]
+                    if etag in inm or etag.replace('W/', '') in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
+                    if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
+                    return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
                 try: data, is_list = api(p, qs)
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
                 m = AG.meta(); mh = AG.meta_headers(m)

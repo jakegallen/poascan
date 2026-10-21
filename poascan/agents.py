@@ -522,3 +522,42 @@ def cluster_signals():
     return dict(groups=out, counts={k: sum(1 for x in out if x["signal"] == k) for k in kinds}, agents_flagged=len(flagged), agents=len(acc),
                 thresholds=dict(near_duplicate_jaccard=0.5, sync_window_s=SYNC_WINDOW_S, sync_min_agents=SYNC_MIN, funding_min_recipients=FUND_MIN),
                 note="Signals, not findings. Shared scripts, busy moments and block timing can link unrelated Agents.")
+
+# ---------------- paged Agent view (cursor + ETag) ----------------
+import base64 as _b64, hashlib as _hl
+PROFILE = "https://minepoa.com/lableak/#/u/{}"
+
+@cached("agents_view", 60)
+def _view_rows():
+    acc = accounts_all(); rb = A.rewards_by_addr(); nm = _names(); fam = operators()["fam_of"]
+    out = []
+    for a in sorted(set(acc) | set(rb)):
+        r = acc.get(a) or {}; rw = rb.get(a, {}); paid = [e for e, v in rw.items() if v > 0]
+        out.append(dict(addr=a, name=nm.get(a), balance=r.get("balance"), lifetime_rewards=round(sum(rw.values()), 6), epochs_paid=len(paid),
+                        last_paid_epoch=max(paid) if paid else None, invited_by=r.get("invited_by"),
+                        first_seen=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(r["first_seen"])) if r.get("first_seen") else None,
+                        family_size=(fam.get(a) or (None, 1))[1], profile=PROFILE.format(a), url=f"https://poascan.io/address/{a}"))
+    return out
+
+def cursor_of(addr): return _b64.urlsafe_b64encode(addr.encode()).decode().rstrip("=")
+def _uncursor(c):
+    if not c: return ""
+    if c.startswith("poa1"): return c
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,120}", c): raise ValueError("bad cursor")
+    try: a = _b64.urlsafe_b64decode(c + "=" * (-len(c) % 4)).decode()
+    except Exception: raise ValueError("bad cursor")
+    if not a.startswith("poa1"): raise ValueError("bad cursor")
+    return a
+
+def agents_view(after="", limit=100):
+    rows = _view_rows(); limit = max(1, min(500, int(limit or 100))); start = _uncursor(after)
+    lo, hi = 0, len(rows)
+    while lo < hi:                         # first row with addr > start
+        mid = (lo + hi) // 2
+        if rows[mid]["addr"] <= start: lo = mid + 1
+        else: hi = mid
+    page = rows[lo:lo + limit] if start else rows[:limit]
+    nxt = cursor_of(page[-1]["addr"]) if page and (lo if start else 0) + len(page) < len(rows) else None
+    body = dict(rows=page, next_cursor=nxt, limit=limit, total=len(rows), order="addr ascending")
+    etag = 'W/"' + _hl.sha1(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()[:20] + '"'
+    return body, etag
