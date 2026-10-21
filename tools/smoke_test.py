@@ -2,6 +2,10 @@
 key pages, the API, openapi.json, llms.txt and the MCP server. Usage: python3 tools/smoke_test.py"""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
+def _og_ok():
+    from poascan import og
+    return og.available()
+
 def db_first_tx(path):
     import sqlite3
     try: return (sqlite3.connect(path).execute("SELECT id FROM txs ORDER BY id LIMIT 1").fetchone() or [None])[0]
@@ -521,7 +525,7 @@ def maintenance(base, root, env, check):
     check("maintenance: /upgrade serves the card with its own title, description, canonical and OG image",
           c == 200 and "<title>Network upgrade · POAScan</title>" in up and 'id="upgrade"' in up and '<link rel="canonical" href="https://poascan.io/upgrade">' in up
           and 'property="og:title" content="Network upgrade · POAScan"' in up and "Hosted mining paused for network upgrades, joining open, rewards paying" in up
-          and 'og:image" content="https://poascan.io/og/upgrade.png"' in up and 'name="twitter:title" content="Network upgrade · POAScan"' in up)
+          and ('og:image" content="https://poascan.io/og/upgrade.png"' in up or not _og_ok()) and 'name="twitter:title" content="Network upgrade · POAScan"' in up)
     c, png = req(base + "/og/upgrade.png"); check("maintenance: /og/upgrade.png is a PNG", c == 200 and png[:4] == b"\x89PNG")
     r = subprocess.run([sys.executable, "-c", JOIN_CHECK], cwd=root, env=dict(env, POASCAN_JOIN_OPEN="0"), capture_output=True, text=True)
     o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
