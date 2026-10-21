@@ -89,7 +89,7 @@ def swap_market():
     done = [r for r in fl if r["fill_txid"] in fin]
     at = lambda r: r.get("fill_usd") or usd(r["asset"])   # USD at fill time when recorded, else the current reference
     vall = [r["want"] * at(r) for r in done if at(r)]
-    return dict(last_fill_usd_per_poa=px, last_fill_ts=int(last["fill_ts"]) if last else None,
+    return dict(last_fill_usd_per_poa=float(f"{px:.6g}") if px else px, last_fill_ts=int(last["fill_ts"]) if last else None,
                 market_cap_usd=round(px * circ, 2) if px and circ else None, fdv_usd=round(px * mined, 2) if px and mined else None,
                 circulating_supply=circ, mined_supply=mined, trades_24h=len(day),
                 volume_24h_usd=round(sum(vol), 2) if vol else (None if day else 0.0),
