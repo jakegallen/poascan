@@ -16,6 +16,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Reconciliation on `/status` and `/api/v1/reconcile` (CSV too): POAScan's totals beside the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, final, invalid, pending), with the difference, a match, explained or differs state, a reason where known and when each side was read. Mint per close compares each close record with the node's supply step across that close. Built only from reads POAScan already makes. Method at `/about#reconcile`.
 - MCP `get_indexer_status` adds a `reconcile` block; no new tool.
 
+### Changed
+
+- MCP tool descriptions say when to use each tool and which neighbour to use instead (get_leaderboard ranks by one measure, get_rich_list ranks by balance with concentration, get_models_census covers self-reported models and disclosure), and every parameter is described. `list_swap_offers` lists its status values as an enum. No tool was added or removed.
+
 ## [1.10.0] - 2026-10-21
 
 ### Added

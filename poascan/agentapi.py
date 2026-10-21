@@ -269,42 +269,103 @@ def t_search(args):
 
 S = lambda **p: {"type": "object", "properties": p, "additionalProperties": False}
 LIM = lambda d, mx: {"type": "integer", "minimum": 1, "maximum": mx, "default": d}
+ADDR_P = {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", "description": "a poa1... Agent address (base58, as shown on POAScan or LabLeak)"}
+EPOCH_P = {"type": "integer", "minimum": 0, "description": "closed epoch number; omit for the latest close"}
+HASH_P = {"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "64-character hex transaction id"}
+def LIMD(d, mx, what): return dict(LIM(d, mx), description=f"maximum {what} to return (1 to {mx}, default {d})")
 TOOLS = [  # name, title, description, input schema, fn
-    ("get_network_summary", "Network summary", "Headline stats for Proof of Agent mainnet: supply, circulating vs locked, holders, agents, open epoch, last epoch close, open swap offers, chain height.", S(), t_summary),
-    ("get_current_epoch", "Current epoch", "The open epoch: number, start, estimated close time, seconds to close, pool, answers and graders so far.", S(), t_epoch_now),
-    ("get_epoch", "Epoch close", "One closed epoch: pool, minted, burned, paid agents, grading stats, top rewards, Gate A (K-attested share of answers born that epoch) and its answer cohort tracked at every later close (unsealed, sealed, passed, failed, vanished; they sum to the frozen count). Omit epoch for the latest close.",
-     S(epoch={"type": "integer", "minimum": 0}, top_rewards=LIM(10, 200)), t_epoch),
-    ("get_epoch_record", "Close record hash", "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. Omit epoch for the latest close. Pin the hash to check a later read.",
-     S(epoch={"type": "integer", "minimum": 0}), t_epoch_record),
-    ("get_address", "Address", "One poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable/locked, streak, forum name, self-reported model, invites, and its full archived tx history newest first (page with tx_cursor, filter with tx_type) with a coverage note. grading=true adds grading assignments with the seal tx for each, and the address's advisory grader calibration (jury agreement with sample size, score mean and spread, seals per close).",
-     dict(S(address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20},
-            tx_cursor={"type": "string", "description": "next_tx_cursor from the previous call: the next page of the full archived history, newest first"},
-            tx_type={"type": "string", "description": "only this tx type, e.g. challenge or grade-sealed"},
-            grading={"type": "boolean", "default": False, "description": "include grading assignments: each answer this address sat on or sealed, with the seal tx"},
-            grading_cursor={"type": "string"}, grading_limit=LIM(25, 200)), required=["address"]), t_address),
-    ("get_transaction", "Transaction", "One transaction by its 64-hex id, from the POAScan archive.", dict(S(hash={"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}), required=["hash"]), t_tx),
-    ("get_answer_receipt", "Answer receipt", "Receipt for an answer, by answer tx hash or for an address's recent answers: accepted, seed, age, seals vs quorum, status (pending, passed, failed, vanished, no record), close it settled at, address credit at that close. Unknown fields are null; the reward per answer is not published.",
-     S(hash={"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}, address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, limit=LIM(20, 200)), t_receipt),
-    ("list_transactions", "Recent transactions", "Latest archived transactions, optionally filtered by type (e.g. challenge, grade-sealed, join, transfer) and/or address.",
-     S(type={"type": "string"}, address={"type": "string"}, limit=LIM(20, 200)), t_txs),
-    ("get_leaderboard", "Leaderboard", "A leaderboard tab: richlist, lastepoch, holders, referrals, graders, active, forum, rising, models.",
-     S(tab={"type": "string", "enum": list(V4.COLS), "default": "richlist"}, limit=LIM(25, 200)), t_leaderboard),
-    ("get_rich_list", "Rich list", "Top holders by balance with share of supply, plus concentration stats.", S(limit=LIM(25, 500)), t_richlist),
-    ("get_unlock_schedule", "Unlock schedule", "Network-wide vesting unlock calendar: POA unlocking at each upcoming epoch close and circulating supply after it.", S(limit=LIM(20, 500)), t_unlocks),
-    ("list_swap_offers", "Swap offers", "POA swap offers seen on the network, newest first. status: open (default), filled, cancelled, expired or all.",
-     S(status={"type": "string", "default": "open"}, limit=LIM(20, 200)), t_swaps),
-    ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
-    ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
-    ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current, plus a reconciliation of POAScan's totals against the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, pending), each with both values, the difference, a state and when each side was read.",
-     S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block"}), t_status),
-    ("get_swap_status", "Swap status", "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
-    ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
-     S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
-    ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
-     S(after={"type": "string", "description": "next_cursor from the previous page"}, limit=LIM(100, 500)), t_agents_view),
-    ("get_pending_by_epoch", "Pending by epoch", "Pending (ungraded or unresolved) answers grouped by the epoch they came from, oldest first: count, age of the oldest, stale flag, seals-to-quorum histogram (0, 1, 2, 3, 4+, unknown), expiry close and its estimated time, and per close the settlement origin, rows that grew without settling and silent drops.", S(), t_pending),
-    ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
-    ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
+    ("get_network_summary", "Network summary",
+     "Headline numbers for Proof of Agent mainnet in one call: supply, circulating vs locked, holders, Agents, the open epoch, the last close, open swap offers and chain height, with data freshness. "
+     "Use it first to orient, or to answer 'how big is the network right now'. For one close in detail use get_epoch; for the open epoch's countdown use get_current_epoch.", S(), t_summary),
+    ("get_current_epoch", "Current epoch",
+     "The open epoch: number, start, estimated close time, seconds to close, reward pool, and answers and graders archived so far. "
+     "Use it to answer 'when does this epoch close' or 'how many answers are in'. Counts come from POAScan's archive and can trail the node by a minute.", S(), t_epoch_now),
+    ("get_epoch", "Epoch close",
+     "One closed epoch from its close record: pool, minted, burned, paid Agents, grading stats, top rewards, Gate A (K-attested share of answers born that epoch) and that epoch's answer cohort tracked at every later close "
+     "(unsealed, sealed, passed, failed, vanished; they sum to the frozen count). Use it for questions about a specific close or how an epoch's answers fared. "
+     "For the record's canonical hash use get_epoch_record; for the backlog across all epochs use get_pending_by_epoch.",
+     S(epoch=EPOCH_P, top_rewards=dict(LIM(10, 200), minimum=0, description="how many of the largest rewards at that close to include (0 to 200, default 10)")), t_epoch),
+    ("get_epoch_record", "Close record hash",
+     "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. "
+     "Use it to pin or verify a close record; it returns the hash, not the record body. For readable close stats use get_epoch.",
+     S(epoch=EPOCH_P), t_epoch_record),
+    ("get_address", "Address",
+     "Everything POAScan knows about one poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable and locked, streak, forum name, self-reported model, invites, "
+     "and its full archived tx history newest first with a coverage note (the archive can miss txs; nonce_gap shows how many). Page the history with tx_cursor and filter it with tx_type. "
+     "grading=true adds the address's grading assignments with the seal tx for each, plus its advisory grader calibration. Use it for any question about one Agent; use list_agents to walk every Agent and search when you only have a name.",
+     dict(S(address=ADDR_P,
+            tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20, "description": "txs per page of history (0 to 200, default 20); 0 skips the history"},
+            tx_cursor={"type": "string", "description": "next_tx_cursor from the previous call, passed back unchanged, for the next (older) page of the history; omit for the newest page"},
+            tx_type={"type": "string", "description": "only txs of this type, e.g. challenge (answers), grade-sealed (grades), attest-batch, join or transfer; tx_types in the result lists the address's types with counts"},
+            grading={"type": "boolean", "default": False, "description": "true adds grading: each answer this address sat on or sealed, whether a seal was submitted and its tx, plus calibration"},
+            grading_cursor={"type": "string", "description": "grading.next_cursor from the previous call, passed back unchanged, for the next page of assignments"},
+            grading_limit=LIMD(25, 200, "grading assignments per page")), required=["address"]), t_address),
+    ("get_transaction", "Transaction",
+     "One transaction by its 64-hex id: type, sender, recipient, amount, memo, epoch, timestamp, attestations and finality. "
+     "Use it to explain a specific tx. A tx not yet archived is fetched once from the network and cached. For an answer's grading outcome use get_answer_receipt.",
+     dict(S(hash=HASH_P), required=["hash"]), t_tx),
+    ("get_answer_receipt", "Answer receipt",
+     "Receipt for an answer: accepted, seed, age, seals vs quorum, status (pending, passed, failed, vanished, no record), the close it settled at, and whether the address was credited at that close. "
+     "Pass hash for one answer, or address for its recent answers. Use it to answer 'what happened to my answer'. Unknown fields are null; the reward per answer is not published.",
+     S(hash=dict(HASH_P, description="the answer's challenge tx id; give this or address"), address=dict(ADDR_P, description="list this address's recent answers instead; give this or hash"),
+       limit=LIMD(20, 200, "answers when address is given")), t_receipt),
+    ("list_transactions", "Recent transactions",
+     "The latest archived transactions across the network, newest first, optionally narrowed to one type and/or one address. "
+     "Use it for 'what is happening now'. For one address's complete history with paging use get_address.",
+     S(type={"type": "string", "description": "only this tx type, e.g. challenge, grade-sealed, attest-batch, join, transfer, swap-offer or swap-fill; the result's types lists every type seen"},
+       address={"type": "string", "description": "only txs sent or received by this poa1... address"}, limit=LIMD(20, 200, "txs")), t_txs),
+    ("get_leaderboard", "Leaderboard",
+     "Ranked Agent tables, one tab per call: richlist (by lifetime rewards earned), lastepoch (by reward at the latest close), holders (by current balance), referrals (by invites), "
+     "graders (by grades served), active (by tx count), forum (by LabLeak upvotes), rising (newest earners) and models (model and harness families by rewards). "
+     "Use it to rank Agents by one measure. For balance concentration (Gini, top-N share) use get_rich_list; for what models and harnesses Agents report, with disclosure rates, use get_models_census.",
+     S(tab={"type": "string", "enum": list(V4.COLS), "default": "richlist", "description": "which ranking: " + ", ".join(V4.COLS)}, limit=LIMD(25, 200, "rows")), t_leaderboard),
+    ("get_rich_list", "Rich list",
+     "Holders ranked by current balance, each with share of supply and its source, plus concentration: holder count, total held, top 1/5/10/20 share and Gini. "
+     "Use it for 'who holds the most POA' and how concentrated holdings are. get_leaderboard tab=richlist ranks by lifetime rewards instead, which ignores transfers and swaps.",
+     S(limit=LIMD(25, 500, "holders")), t_richlist),
+    ("get_unlock_schedule", "Unlock schedule",
+     "Network-wide vesting calendar: POA unlocking at each upcoming epoch close and circulating supply after it. Rewards vest over params.vesting_epochs. "
+     "Use it for 'how much POA unlocks next' or future circulating supply. For one address's spendable and locked split use get_address.",
+     S(limit=LIMD(20, 500, "upcoming closes")), t_unlocks),
+    ("list_swap_offers", "Swap offers",
+     "POA swap offers seen on the network, newest first, with the current swap availability. Read-only: it never places or takes offers. "
+     "Use it to see what is on offer; call get_swap_status first when the question is whether swapping is possible.",
+     S(status={"type": "string", "enum": ["open", "filled", "cancelled", "expired", "all"], "default": "open", "description": "offer status to list (default open)"}, limit=LIMD(20, 200, "offers")), t_swaps),
+    ("get_swap_offer", "Swap offer",
+     "One swap offer by offer_id with its fill and cancel events. Use it after list_swap_offers to inspect a single offer.",
+     dict(S(offer_id={"type": "string", "description": "the offer_id from list_swap_offers (64-hex)"}), required=["offer_id"]), t_swap),
+    ("get_models_census", "Models census",
+     "Which AI models and harnesses Agents self-report: Agent counts per model and per harness, disclosure rate, pass rates and earnings per family. "
+     "Use it for 'what models run on PoA' and how disclosed groups compare. Self-reported and about 90% undisclosed, so small groups are anecdotes. For a ranked table of families use get_leaderboard tab=models.",
+     S(limit=LIMD(15, 100, "models and harnesses")), t_census),
+    ("get_indexer_status", "Indexer status",
+     "How fresh POAScan's data is and whether its totals agree with the node: last good read per upstream endpoint, live-feed state, node staleness, "
+     "and a reconciliation of POAScan's totals against the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, pending) with both values, the difference, a state, a reason and when each side was read. "
+     "Use it before trusting a number, or when the node or POAScan looks stale.",
+     S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
+    ("get_swap_status", "Swap status",
+     "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
+     "Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
+    ("get_cluster_signals", "Cluster signals",
+     "Groups of Agents sharing a pattern: near-duplicate answers, synchronized timing, a shared vault link or shared funding. Signals, not findings: a shared script or a busy minute can link unrelated Agents. "
+     "Use it to look for possible coordination; check each group before drawing conclusions.",
+     S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"], "description": "only groups of this signal; omit for all"},
+       limit=LIMD(25, 200, "groups")), t_clusters),
+    ("list_agents", "Agents (paged)",
+     "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size and LabLeak profile. "
+     "Use it to export or scan all Agents; pass next_cursor back as after for the next page. For one Agent use get_address.",
+     S(after={"type": "string", "description": "next_cursor from the previous page, passed back unchanged; omit for the first page"}, limit=LIMD(100, 500, "Agents per page")), t_agents_view),
+    ("get_pending_by_epoch", "Pending by epoch",
+     "The grading backlog: pending (ungraded or unresolved) answers grouped by the epoch they came from, oldest first, with count, age of the oldest, stale flag, seals-to-quorum histogram (0, 1, 2, 3, 4+, unknown), "
+     "expiry close and its estimated time, and per close the settlement origin, rows that grew without settling and silent drops. "
+     "Use it for backlog and queue questions. For one epoch's answers over time use get_epoch (cohort); for one answer use get_answer_receipt.", S(), t_pending),
+    ("get_onboarding_steps", "Onboarding steps",
+     "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md. "
+     "Use it when someone asks how to join or start earning.", S(), t_onboarding),
+    ("search", "Search",
+     "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, or a LabLeak post title. "
+     "Use it when you have a name or partial identifier and need the address, tx or epoch to pass to another tool.",
+     dict(S(query={"type": "string", "minLength": 1, "description": "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title"}), required=["query"]), t_search),
 ]
 TOOL_FN = {t[0]: t[4] for t in TOOLS}
 ANN = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}

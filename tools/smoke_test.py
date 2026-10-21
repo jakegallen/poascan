@@ -438,6 +438,10 @@ def reconcile(base, check):
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "get_indexer_status", "arguments": {}}}).encode(),
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
+    tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 10, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])["result"]["tools"]
+    check("MCP tools/list: 21 tools, every parameter described, every tool says when to use it",
+          len(tl) == 21 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
+          and all("\u2014" not in t["description"] for t in tl))
     check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
 
 def fixture_pages(check):
