@@ -13,13 +13,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- The standalone swap site (`swapsite/`, Fly app `swapsite`, on its own domain). It runs the swap module with its own host, layout and teal brand, and follows POAScan's public swap API, so minepoa.com load is unchanged. POAScan keeps the swap tables.
 - `/api/v1/swaps/status` gains `names` (Agent names for the makers and takers in the book) and `market.usd_ref_rates` (current SOL and ETH USD reference).
-- `POASCAN_SWAPS_MOVED_TO`: when set, `/swaps` answers 301 to that URL and leaves the sitemap. Unset by default, so nothing changes until the cutover.
 
 ### Changed
 
-- The swap module loads its host from `SWAP_HOST` (`poascan/swap/host.py` dispatches; POAScan's host is `host_poascan.py`). A mirror host can answer health, price and market through three optional hooks.
+- The swap module is self-contained and loads its host from `SWAP_HOST` (`poascan/swap/host.py` dispatches; POAScan's host is `host_poascan.py`). A mirror host can answer health, price and market through three optional hooks.
 
 ## [1.17.0] - 2026-10-21
 
@@ -32,7 +30,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 - Swaps are one self-contained module, `poascan/swap/`: config, tables, indexer jobs, market and price, page, agent prompts, FAQ, `swap.css` and `swap.js`, and its API routes including `/api/v1/price`. It reaches POAScan only through `poascan/swap/host.py`.
 - The explorer reads swap data only through `/api/v1/price` and `/api/v1/swaps*` (`poascan/swapclient.py`): the home Market tile, price stats on `/token`, every ≈$, swap rows on `/tx`, reconciliation and the MCP swap tools. Setting `POASCAN_SWAP_API` points it at a remote swap site.
-- The swap page takes its base URL, page path and brand from config (`SWAP_BASE_URL`, `SWAP_PAGE_PATH`, `SWAP_BRAND`), so the same module can render at poascan.io/swaps or on its own site. `poascan/swap/LIFTING.md` lists the spin-out steps.
+- The swap page takes its base URL, page path and brand from config (`SWAP_BASE_URL`, `SWAP_PAGE_PATH`, `SWAP_BRAND`), so the module stays self-contained.
 - No visible change: same URLs, same pages, same responses apart from the additions above. Swaps stay "Coming soon".
 
 ### Removed

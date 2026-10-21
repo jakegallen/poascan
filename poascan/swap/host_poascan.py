@@ -1,5 +1,5 @@
 """POAScan as the swap module's host: its database, cache, rate-limited minepoa.com client, page layout and HTML helpers.
-Loaded through host.py (the default host). A separate site supplies its own host (swapsite/host.py)."""
+Loaded through host.py (the default host). Another site supplies its own host module."""
 from html import escape as E   # noqa: F401  (re-exported)
 
 # ---- storage: one SQLite database; the module owns the swaps and swap_events tables, and reads two host blobs (fx, chains) ----

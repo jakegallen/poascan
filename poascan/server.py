@@ -11,7 +11,6 @@ ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": (
 log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
-SWAPS_MOVED_TO = os.environ.get("POASCAN_SWAPS_MOVED_TO", "").strip()   # e.g. https://swap.example.com/ ; empty: /swaps is served here (default)
 
 def to_csv(rows):
     if not rows: return ""
@@ -180,7 +179,7 @@ def sitemap():
     if time.time() - _SITEMAP[0] < 600 and _SITEMAP[1]: return _SITEMAP[1]
     base = "https://poascan.io"; ep = A.epoch_rows(); day = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t or time.time()))
     last = day(max([r["close_ts"] or 0 for r in ep] or [0]) or None)
-    urls = [(base + p, last) for p in STATIC_ROUTES if not (p == "/swaps" and SWAPS_MOVED_TO)] + [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
+    urls = [(base + p, last) for p in STATIC_ROUTES] + [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
     try: urls += [(f"{base}/address/{r['addr']}", last) for r in A.holders()["rows"][:500]]
     except Exception: pass
     body = "".join(f"<url><loc>{E(u)}</loc><lastmod>{d}</lastmod></url>" for u, d in urls)
@@ -345,8 +344,6 @@ class H(BaseHTTPRequestHandler):
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
             if path == "/upgrade" and not MT.state()["active"]: return self.send(302, "", extra={"Location": "/network?tab=health"})
-            if path == SW.config.PAGE_PATH and SWAPS_MOVED_TO:   # cutover switch: the swap page now lives on its own site
-                return self.send(301, "", TXT, {"Location": SWAPS_MOVED_TO + ("?" + u.query if u.query else ""), "Cache-Control": "public, max-age=3600"})
             loc = moved(path, qs)
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":

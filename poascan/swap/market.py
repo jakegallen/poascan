@@ -9,7 +9,7 @@ SOON_MSG = "Swaps are coming soon. Link an Emblem Wallet now to be ready."
 def swap_msg(): return UPGRADE_MSG if C.SWAPS_LIVE else SOON_MSG
 
 def _up(name):
-    """A mirror host (a separate swap site) answers from the instance it follows; a host that indexes minepoa.com itself has no hook."""
+    """A mirror host answers from the instance it follows; a host that indexes minepoa.com itself has no hook."""
     f = getattr(H, "upstream_" + name, None)
     return f() if f else None
 

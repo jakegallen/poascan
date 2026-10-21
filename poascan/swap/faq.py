@@ -39,7 +39,7 @@ PAGE = dict(
         ("Where do I find sellers?", 'The on-ledger offer book (<a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')])
 
 
-# ---------------- "How swaps work": one terse section shared by POAScan /about and the separate site's /about ----------------
+# ---------------- "How swaps work": one terse section shared by POAScan /about and any other host ----------------
 # Facts only from minepoa.com go.md and skill.md (SWAPS, LINK; copies checked 2026-10-20) and on-ledger data: the first
 # mainnet fill (offer 9d09...37d2, fill 74a0...2f32) carries proof {chain, ref, recv_sig}; its Solana leg is a durable-nonce
 # transfer of exactly want.amount to want.to; the fill reached 5 attestations.

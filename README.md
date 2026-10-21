@@ -73,7 +73,7 @@ No secrets are required.
 One Python process:
 * **Indexer** (`poascan/indexer.py`): polls public minepoa.com endpoints on a schedule and archives into SQLite. Failures back off exponentially (30 s to 15 min) and honour `retry_after_seconds` on 503 "busy". Please keep polling polite if you change the schedule.
 * **Server** (`poascan/server.py`): server-rendered pages (`views*.py`, `ui.py`), the JSON/CSV API, a WebSocket live feed (`/ws`) and static assets in `static/`.
-* **Swap module** (`poascan/swap/`): the swap page, data and API, entered only through its host (`SWAP_HOST`). The same module runs a standalone swap site (`swapsite/`, https://swap.example.com), which follows POAScan's swap API; see `swapsite/README.md`.
+* **Swap module** (`poascan/swap/`): the swap page, data and API, entered only through its host (`SWAP_HOST`). The module is self-contained, so another host can run it unchanged.
 
 | every | upstream endpoint(s) |
 |---|---|

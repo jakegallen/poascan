@@ -754,7 +754,7 @@ td a.mono{display:inline-block;min-width:24px}
 .faqc{scroll-margin-top:90px}
 @media (max-width:1100px){.faqc{scroll-margin-top:170px}}
 
-/* How swaps work (/about on POAScan and the separate site): four numbered steps that wrap, then a short fact list */
+/* How swaps work (/about): four numbered steps that wrap, then a short fact list */
 .hsw{list-style:none;margin:4px 0 14px;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;counter-reset:none}
 .hsw li{position:relative;padding:12px;border:1px solid var(--line2);border-radius:var(--r);background:var(--inset);display:flex;flex-direction:column;gap:4px;font-size:var(--t13);color:var(--dim);line-height:1.45}
 .hsw li b{display:flex;align-items:center;gap:8px;font:600 var(--t14)/1.2 var(--ui);color:var(--hi)}

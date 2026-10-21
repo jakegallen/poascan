@@ -1,6 +1,6 @@
 """The swap page: pair panel (Buy | Sell, estimate from the live book, Coming soon until SWAPS_LIVE), stats row, order book,
 price chart, recent fills and activity. Renders through host.page; links come from config, so the same page works at
-poascan.io/swaps or at the root of swap.example.com."""
+poascan.io/swaps or at the root of a standalone site."""
 import json
 from . import host as H, config as C, market as M, store as S, prompts as P
 from .host import E, card, table, poa, utc, rel, addr_link, tx_link, line, plain, short, chart_skel, _ic
