@@ -81,7 +81,7 @@ def fills_html():
     _, fl = _rows(); nm = V2.names()
     rows = [[f'<span class="dim">{utc(r["fill_ts"], "%m-%d %H:%M")}</span>', net_logo(r["chain"]) + f'<span class="num">{_n(r["want"] / r["poa"] * 1e6, 5)}</span> <span class="unit">{E(r["asset"] or "")}</span>',
              poa(r["poa"]), addr_link(r["taker"], nm) if r["taker"] else "···"] for r in fl[:10] if r["poa"] and r["want"]]
-    if not rows: return '<div class="xempty" aria-label="none">···</div>'
+    if not rows: return '<div class="xempty na" aria-label="none">-</div>'
     return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker"], rows, cls="xft")
 
 def chart_html():
