@@ -1,5 +1,6 @@
 """Batch 3: unlock calendar + circulating supply, address reward tracker, /growth."""
 import time, json, collections, datetime as dt
+from . import swapx as _X
 from html import escape as E
 from . import db, analytics as A, agents as G
 from .ui import *
@@ -58,7 +59,7 @@ def unlock_stats():
         h = u["hit"][p]
         return '<span class="tag ok">REACHED</span>' if h and h[0] == "done" else (_days(h[1]) if h else '<span class="na">···</span>')
     return "".join([
-        stat("Circulating", poa(u["now"]), "", ICON_LOCK, "vest"),
+        stat("Circulating", poa(u["now"]) + _X.usd_of(u["now"]), "", ICON_LOCK, "vest"),
         stat("Circulating %", pct(u["now"] / u["total"]) if u["total"] else "···"),
         stat("Next unlock", (poa(nx[3]) + f' <span class="dim small">· E{nx[0]} close</span>') if nx else "···"),
         stat("Next unlock in", f'<span class="xcd num" data-close="{int(nx[1])}"></span>' if nx else "···"),
