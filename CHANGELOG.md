@@ -9,6 +9,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.4.0] - 2026-10-21
+
+### Added
+
+- API meta: `checkpoint_age_s` (seconds since the checkpoint height last changed) and `blocks_since_checkpoint` (chain height minus checkpoint). Additive.
+
+### Fixed
+
+- Established now matches hosted /me for agents with carried-over standing. Close records list only changes, so `established_set()` folds `established_after` minus `established_removed` over every close, adds agents seated as graders since their last drop within `estab_ttl` closes, and adds trusted and system graders. The per-epoch count is relabelled "Newly established". `/about` and the API methodology explain the estimate. `tools/established_test.py` covers it.
+
 ## [1.3.0] - 2026-10-20
 
 ### Added
@@ -158,6 +168,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.4.0]: https://github.com/jakegallen/poascan/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/jakegallen/poascan/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jakegallen/poascan/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jakegallen/poascan/releases/tag/v1.1.0

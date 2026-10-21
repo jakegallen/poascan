@@ -16,7 +16,7 @@ def reqh(url):
         with urllib.request.urlopen(url, timeout=20) as f: return f.status, dict(f.headers), f.read()
     except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read()
 
-META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of", "fetched_at", "stale", "stale_after_s"}
+META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of", "fetched_at", "stale", "stale_after_s", "checkpoint_age_s", "blocks_since_checkpoint"}
 
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -270,6 +270,8 @@ def fixture_pages(check):
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
+        _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
+        check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
         _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/epochs", "/txs", "/api", "/network", "/growth")}
         check(f"one Ask agent button per page {_asks}", set(_asks.values()) == {1})

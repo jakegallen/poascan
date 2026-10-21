@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
 
-VERSION = "1.3.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.4.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -24,7 +24,9 @@ def meta():
         _META[1] = dict(api_version=VERSION, network=nw.get("chain_id") or "poa-mainnet-1", source_height=nw.get("height"),
                         checkpoint=nw.get("checkpoint_height"), epoch=o.get("epoch"), node_as_of=st.get("as_of"), fetched_at=_iso(live),
                         stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S,
-                        node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"))
+                        node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"),
+                        checkpoint_age_s=int(now - cpm) if (cpm := A.cp_moved()) else None,
+                        blocks_since_checkpoint=(nw["height"] - nw["checkpoint_height"]) if nw.get("height") and nw.get("checkpoint_height") else None)
         _META[0] = now
     return dict(_META[1], generated_at=_iso(now))
 
@@ -448,7 +450,9 @@ def openapi():
                                                     "stale": {"type": "boolean", "description": "true when fetched_at is older than stale_after_s or upstream reports stale"},
                                                     "stale_after_s": {"type": "integer"},
                                                     "node_stale": {"type": "boolean", "description": "minepoa.com's own /api/status stale flag for its node snapshot"},
-                                                    "node_stale_age_s": {"type": ["integer", "null"], "description": "minepoa.com's stale_age_s"}}}},
+                                                    "node_stale_age_s": {"type": ["integer", "null"], "description": "minepoa.com's stale_age_s"},
+                                                    "checkpoint_age_s": {"type": ["integer", "null"], "description": "Seconds since the checkpoint height last changed (from our own status snapshots)"},
+                                                    "blocks_since_checkpoint": {"type": ["integer", "null"], "description": "Chain height minus checkpoint height"}}}},
                 "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
                             "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 
@@ -488,7 +492,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
-- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
 - Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 
