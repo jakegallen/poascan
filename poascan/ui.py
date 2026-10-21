@@ -356,7 +356,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=73">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=74">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>

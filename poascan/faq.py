@@ -66,6 +66,7 @@ def about_html(card):
         same = lambda q: q.rstrip("?").lower() == d["title"].rstrip("?").lower()
         qa = "".join(f'<div class="faq">{"" if same(q) else f"<h3>{E(q)}</h3>"}<p>{_a(a)}</p></div>' for q, a in d["qa"])
         out.append(card(E(d["title"]), qa, cls="faqc", id=anchor(p)))
+        if p == SF.PAGE_KEY: out.append(card("How swaps work", SF.how_html(), cls="faqc hswc", id=SF.HOW_ID))   # right after How to buy POA
     return "".join(out)
 
 def links_html(cur=None):

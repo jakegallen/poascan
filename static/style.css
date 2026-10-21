@@ -753,3 +753,15 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:640px){.smalls{grid-template-columns:minmax(0,1fr)}.hsearch{height:50px}.hsearch input{font-size:var(--t14);padding:0 14px}.mtile .stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .faqc{scroll-margin-top:90px}
 @media (max-width:1100px){.faqc{scroll-margin-top:170px}}
+
+/* How swaps work (/about on POAScan and the separate site): four numbered steps that wrap, then a short fact list */
+.hsw{list-style:none;margin:4px 0 14px;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;counter-reset:none}
+.hsw li{position:relative;padding:12px;border:1px solid var(--line2);border-radius:var(--r);background:var(--inset);display:flex;flex-direction:column;gap:4px;font-size:var(--t13);color:var(--dim);line-height:1.45}
+.hsw li b{display:flex;align-items:center;gap:8px;font:600 var(--t14)/1.2 var(--ui);color:var(--hi)}
+.hsw li:not(:last-child)::after{content:"";position:absolute;right:-7px;top:22px;width:6px;height:6px;border-top:1.5px solid var(--amber);border-right:1.5px solid var(--amber);transform:rotate(45deg)}
+.hsn{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1px solid var(--amber-d);color:var(--amber);font:600 var(--t12)/1 var(--mono)}
+.hsf{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0 0 10px}
+.hsf dt{font-weight:600;color:var(--hi)}.hsf dd{margin:0;max-width:72ch;color:var(--txt)}
+.hse{margin:0;font-size:var(--t13);color:var(--dim)}
+@media (max-width:720px){.hsw{grid-template-columns:repeat(2,minmax(0,1fr))}.hsw li:nth-child(2)::after{display:none}}
+@media (max-width:480px){.hsw{grid-template-columns:1fr}.hsw li::after{display:none}.hsf{grid-template-columns:1fr;gap:2px 0}.hsf dd{margin-bottom:8px}}
