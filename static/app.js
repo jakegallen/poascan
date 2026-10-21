@@ -159,7 +159,9 @@ $$("form[role=search]").forEach(function(f){var inp=$("input",f),box=$(".sopts",
   t=setTimeout(function(){var n=++seq;fetch("/fragment/suggest?q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(xs){if(n!==seq)return;sel=-1;
    box.innerHTML=xs.map(function(x){return '<a role="option" href="/address/'+x.id+'"><span class="idn" data-a="'+x.id+'"></span>'+x.name.replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})+'<small>'+x.id.slice(0,6)+'…'+x.id.slice(-4)+'</small></a>'}).join("");paintIds(box)}).catch(function(){})},180)});
  inp.addEventListener("keydown",function(e){var a=$$("a",box);if(!a.length)return;if(e.key==="ArrowDown"){e.preventDefault();pick(sel+1)}else if(e.key==="ArrowUp"){e.preventDefault();pick(sel-1)}else if(e.key==="Enter"&&sel>=0){e.preventDefault();location.href=a[sel].href}})});
-if(location.hash==="#find"){var fi=$(".hsearch input")||$(".search input");if(fi){var fs=fi.closest("form");if(fs&&fs.classList.contains("search"))fs.classList.add("open");fi.focus()}}
+/* narrow header bar: short placeholder (the hint below says what search takes) */
+(function(){var i=$(".hdr .search input");if(!i)return;var full=i.placeholder;function fit(){i.placeholder=i.clientWidth&&i.clientWidth<240?"Search":full}fit();addEventListener("resize",fit)})();
+if(location.hash==="#find"){var fi=$$(".hsearch input,.search input").filter(function(x){return x.offsetParent!==null})[0];if(fi){var fs=fi.closest("form");if(fs&&fs.classList.contains("search"))fs.classList.add("open");fi.focus()}}
 
 /* ask your agent: shared prompt dialog */
 var am=$("#askmodal");
