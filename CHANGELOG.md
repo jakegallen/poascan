@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.6.0] - 2026-10-21
+
+### Added
+
+- Backlog detail on `/live` and `/api/v1/pending-by-epoch`: rows per origin epoch at 0, 1, 2 and 3 seals (plus 4+ and unknown in the API), the expiry close (origin + `pending_ttl_epochs`) with an estimated PT time, and for the latest close the settlement origin, rows that grew without settling and silent drops. The API also returns every close in `closes`. Seals come from each row's `grades` from `pending_merge_from_epoch` on; earlier panel counts are lower bounds and pre-merge appeal rows are unknown.
+- Receipts: a pending answer's seals now come from its `grades` list when the close record has one (exact as of `seals_as_of_close`).
+
+### Changed
+
+- `/tx` for an answer no longer repeats the seed in the raw fields when the Receipt card shows it.
+
 ## [1.5.0] - 2026-10-21
 
 ### Added
@@ -175,6 +186,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.6.0]: https://github.com/jakegallen/poascan/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/jakegallen/poascan/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jakegallen/poascan/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/jakegallen/poascan/compare/v1.2.0...v1.3.0

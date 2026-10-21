@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
 
-VERSION = "1.5.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.6.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -273,7 +273,7 @@ TOOLS = [  # name, title, description, input schema, fn
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
     ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
      S(after={"type": "string", "description": "next_cursor from the previous page"}, limit=LIM(100, 500)), t_agents_view),
-    ("get_pending_by_epoch", "Pending by epoch", "Pending (ungraded or unresolved) answers grouped by the epoch they came from, oldest first: count, age of the oldest, and whether the epoch is before the current one.", S(), t_pending),
+    ("get_pending_by_epoch", "Pending by epoch", "Pending (ungraded or unresolved) answers grouped by the epoch they came from, oldest first: count, age of the oldest, stale flag, seals-to-quorum histogram (0, 1, 2, 3, 4+, unknown), expiry close and its estimated time, and per close the settlement origin, rows that grew without settling and silent drops.", S(), t_pending),
     ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]
@@ -394,8 +394,8 @@ def openapi():
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
-        "/api/pending-by-epoch": _op("Pending answers by origin epoch: count, oldest age, stale flag for epochs before the current one", ANY, oid="pendingByEpoch",
-                                     desc="Carried-forward answers come from basis.pending of the latest close record; current-epoch answers are those archived since the last close. Method: https://poascan.io/about#pending"),
+        "/api/pending-by-epoch": _op("Pending answers by origin epoch: count, oldest age, stale flag, seal histogram, expiry, settlement origin, growth and silent drops", {"$ref": "#/components/schemas/PendingByEpoch"}, oid="pendingByEpoch",
+                                     desc="Carried-forward answers come from basis.pending of the latest close record; current-epoch answers are those archived since the last close. Seals are distinct graders in each row's grades list (from params.pending_merge_from_epoch on); before that, a short row's panel length is a lower bound and appeal rows are unknown. Expiry close = origin epoch + params.pending_ttl_epochs; its time is an estimate from the last close plus auto_epoch_seconds per close. Method: https://poascan.io/about#pending"),
         "/api/clusters": _op("Cluster signals: groups of Agents sharing near-duplicate answers, synchronized timing, a vault link or funding. Signals, not findings", ANY, [_p("signal", "filter to one signal type", {"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, "query", False)], oid="clusterSignals", tag="agents"),
         "/api/agents/view": _agents_view_op(),
         "/api/uptime": _op("Daily uptime of the minepoa.com endpoints POAScan polls (last 30 days)", ROWS, [_p("endpoint", "filter to one endpoint, e.g. /api/swaps", {"type": "string"}, "query", False)], True, oid="uptime", tag="meta"),
@@ -443,6 +443,21 @@ def openapi():
                                   "properties": {"holders": {"type": "integer"}, "total_balance": {"type": "number"}, "top1_share": {"type": ["number", "null"]}, "top5_share": {"type": ["number", "null"]},
                                                  "top10_share": {"type": ["number", "null"]}, "top20_share": {"type": ["number", "null"]}, "gini": {"type": ["number", "null"]}, "median_balance": {"type": ["number", "null"]},
                                                  "min_activity": {"type": "object", "properties": {"agents": {"type": "integer"}, "share_of_holders": {"type": ["number", "null"]}, "share_of_supply": {"type": ["number", "null"]}, "definition": {"type": "string"}}}}},
+                "PendingByEpoch": {"type": "object", "description": "Pending answers by origin epoch. Null means unknown from public records, not zero.",
+                                   "properties": {"as_of_close": {"type": ["integer", "null"]}, "total": {"type": "integer"}, "stale_total": {"type": "integer"},
+                                                  "ttl_epochs": {"type": ["integer", "null"], "description": "params.pending_ttl_epochs"},
+                                                  "merge_from_epoch": {"type": ["integer", "null"], "description": "params.pending_merge_from_epoch: first close whose pending rows carry grades"},
+                                                  "quorum": {"type": ["integer", "null"]}, "seals_basis": {"type": ["string", "null"], "enum": ["grades", "panel", None]},
+                                                  "seals_exact": {"type": ["boolean", "null"], "description": "false: counts are lower bounds (panel before the merge)"},
+                                                  "seals_total": {"type": ["object", "null"], "description": "rows per distinct seal count: 0, 1, 2, 3, 4+, unknown"},
+                                                  "last_close": {"type": ["object", "null"], "description": "the latest entry of closes"},
+                                                  "closes": {"type": "array", "description": "per close from E1: settled, settled_by_origin [{epoch, count}] (origin = since in the previous close's pending, else the answer tx epoch, else unknown), carried, grew (carried rows with more distinct seals than at the previous close), grew_unknown (either count unknown), dropped (left pending with no settled record), grew_by_epoch, dropped_by_epoch", "items": ANY},
+                                                  "rows": {"type": "array", "items": {"type": "object", "properties": {
+                                                      "epoch": {"type": "integer"}, "pending": {"type": "integer"}, "oldest_age_s": {"type": ["integer", "null"]},
+                                                      "seals": {"type": ["object", "null"], "description": "histogram at the latest close; null for the open epoch"},
+                                                      "seals_exact": {"type": ["boolean", "null"]}, "grew": {"type": ["integer", "null"]}, "dropped": {"type": ["integer", "null"]},
+                                                      "expires_close": {"type": ["integer", "null"]}, "expires_est_ts": {"type": ["integer", "null"], "description": "estimated unix time of the expiry close"}}, "additionalProperties": True}}},
+                                   "additionalProperties": True},
                 "Receipt": {"type": "object", "description": "One answer's receipt. Null means unknown from public records, not zero or no.",
                             "properties": {"tx": {"type": "string"}, "address": {"type": ["string", "null"]}, "epoch": {"type": ["integer", "null"]},
                                            "accepted": {"type": "boolean", "description": "the answer tx exists on the ledger (refused submissions never create one)"},
@@ -452,7 +467,8 @@ def openapi():
                                            "closes_waited": {"type": ["integer", "null"], "description": "closes since the answer's epoch, while pending or vanished"},
                                            "status": {"type": "string", "enum": ["awaiting_close", "pending", "passed", "failed", "vanished", "unrecorded", "refused"]},
                                            "kind": {"type": ["string", "null"]}, "panel": {"type": ["integer", "null"], "description": "graders drawn, from the pending record"},
-                                           "seals": {"type": ["integer", "null"]}, "seals_exact": {"type": "boolean", "description": "true from the settled jury; false means a lower bound from archived grade-sealed txs"},
+                                           "seals": {"type": ["integer", "null"]}, "seals_exact": {"type": "boolean", "description": "true from the settled jury or a pending row's grades list (as of seals_as_of_close); false means a lower bound from archived grade-sealed txs"},
+                                           "seals_as_of_close": {"type": ["integer", "null"], "description": "close whose pending grades gave the seal count, when it came from there"},
                                            "quorum": {"type": "integer"}, "settled_close": {"type": ["integer", "null"]}, "passed": {"type": ["boolean", "null"]},
                                            "paid_close": {"type": ["integer", "null"]}, "address_credited": {"type": ["boolean", "null"], "description": "author address in rewards at the settling close (address level)"},
                                            "reward_attributable": {"type": "null", "description": "always null: close records publish rewards per address, not per answer"},
@@ -521,7 +537,7 @@ Tools ({len(TOOLS)}):
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
-- Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; method at {BASE}/about#pending).
+- Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.

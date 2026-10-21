@@ -255,8 +255,8 @@ def receipts(base, check):
     check("receipt passed: seed, exact seals vs quorum, settled close, address credit, per-answer reward unknown",
           p["status"] == "passed" and p["seed"] == "61ada059" and p["seals"] == 4 and p["seals_exact"] and p["quorum"] == 3 and p["settled_close"] == 10
           and p["paid_close"] == 10 and p["address_credited"] is True and p["reward_attributable"] is None and "meta" in p)
-    check("receipt pending: neutral, unknown seed and seals, age in closes, not paid",
-          n["status"] == "pending" and n["seed"] is None and n["seals"] is None and n["closes_waited"] == 1 and n["passed"] is None and n["address_credited"] is None and n["panel"] == 1)
+    check("receipt pending: neutral, unknown seed, seals from grades, age in closes, not paid",
+          n["status"] == "pending" and n["seed"] is None and n["seals"] == 1 and n["seals_exact"] and n["seals_as_of_close"] == 11 and n["closes_waited"] == 1 and n["passed"] is None and n["address_credited"] is None and n["panel"] == 1)
     check("receipt vanished and awaiting close", v["status"] == "vanished" and v["vanished"] is True and w["status"] == "awaiting_close" and not w["vanished"])
     check("receipt 404 for non-answers", req(base + "/api/v1/receipt/" + "ab" * 32)[0] == 404)
     lst = json.loads(req(base + "/api/v1/receipts?address=" + a1)[1]); csv_ = req(base + "/api/v1/receipts.csv?address=" + a1)
@@ -264,7 +264,7 @@ def receipts(base, check):
     tn, tp, tv = (req(base + "/tx/" + t)[1].decode() for t in (RN, RP, RV))
     check("/tx receipt: Pending neutral, Passed green, Vanished amber, unknown shown as Unknown",
           '<span class="tag ">Pending</span>' in tn and "Unknown" in tn and ">Receipt<" in tn and '<span class="tag ok">Passed · E10</span>' in tp
-          and "61ada059" in tp and '<span class="tag warn">Vanished · E8</span>' in tv and "\u2014" not in tn)
+          and tp.count("61ada059") == 1 and '<span class="tag warn">Vanished · E8</span>' in tv and "\u2014" not in tn)
     ad = req(base + "/address/" + a1)[1].decode()
     check("/address compact receipt list", "Answers · 4" in ad and ad.count('class="rcpt"') == 1 and "Seals / 3" in ad and ad.count("Not settled") == 0)
     spec = json.loads(req(base + "/openapi.json")[1])
@@ -275,6 +275,29 @@ def receipts(base, check):
     check("receipt in OpenAPI, llms.txt and MCP", "/api/v1/receipt/{hash}" in spec["paths"] and "/api/v1/receipts" in spec["paths"] and "Receipt" in spec["components"]["schemas"]
           and b"/receipt/" in req(base + "/llms.txt")[1] and any(t["name"] == "get_answer_receipt" for t in tl["result"]["tools"]) and sc.get("status") == "pending")
     check("/about explains receipts", b'id="receipts"' in req(base + "/about")[1])
+
+def backlog(base, check):
+    """Pending panel: seal histogram, expiry from params, settlement origin, grew and dropped (fixture: merge at E11, ttl 6)."""
+    d = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); lc = d.get("last_close") or {}; rows = {r["epoch"]: r for r in d["rows"]}
+    check("backlog api: params-driven ttl and merge, exact seals from grades",
+          d.get("ttl_epochs") == 6 and d.get("merge_from_epoch") == 11 and d.get("seals_basis") == "grades" and d.get("seals_exact") is True and d.get("quorum") == 3)
+    check("backlog histogram sums to rows, unknown kept apart, open epoch null",
+          all(sum(r["seals"].values()) == r["pending"] for r in d["rows"] if r["seals"]) and rows[11]["seals"]["unknown"] == 1 and rows[12]["seals"] is None
+          and d["seals_total"] == {"0": 5, "1": 15, "2": 0, "3": 0, "4+": 0, "unknown": 1})
+    check("backlog expiry = since + ttl, estimated from the last close",
+          rows[2]["expires_close"] == 8 and all(r["expires_est_ts"] - rows[2]["expires_est_ts"] == (r["epoch"] - 2) * 21600 for r in d["rows"]))
+    check("backlog last close: origin, grew, dropped",
+          lc.get("close") == 11 and lc.get("settled") == 1 and lc.get("settled_by_origin") == [{"epoch": 9, "count": 1}] and lc.get("grew") == 3
+          and lc.get("grew_unknown") == 7 and lc.get("dropped") == 1 and rows[8]["dropped"] == 1 and len(d["closes"]) == 11)
+    lv = req(base + "/live")[1].decode()
+    check("/live backlog panel: Seals / quorum, expiry, settled origin, grew, dropped, unknown",
+          "Seals / 3" in lv and ">E8<small>" in lv and "Settled at E11" in lv and ">Grew<" in lv and ">Dropped<" in lv and "1 row" in lv and "\u2014" not in lv)
+    spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
+    tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_pending_by_epoch", "arguments": {}}}).encode(),
+                        {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (tl.get("result") or {}).get("structuredContent") or {}
+    check("backlog in OpenAPI, llms.txt, MCP and /about", "PendingByEpoch" in spec["components"]["schemas"] and "settlement origin" in llms
+          and (sc.get("last_close") or {}).get("grew") == 3 and "seals_total" in sc and b"<b>Dropped</b>" in req(base + "/about")[1])
 
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
@@ -300,6 +323,7 @@ def fixture_pages(check):
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
         receipts(base, check)
+        backlog(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
