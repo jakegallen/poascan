@@ -643,3 +643,9 @@ html.js .morep:not(.open){display:none}
 .xbtn.soon::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgba(255,176,0,.16) 50%,transparent 65%);transform:translateX(-100%);animation:soonsweep 4.5s ease-in-out infinite}
 @keyframes soonsweep{0%{transform:translateX(-100%)}55%,100%{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){.xbtn.soon::after{animation:none;opacity:0}}
+/* /swaps: one-line safety notice; Emblem pill and Self-custody share a row */
+.xsafe{white-space:nowrap}
+.xembr{position:relative;margin-top:10px}.xembr .xemb{margin-top:0}
+.xemb>summary{min-height:32px;box-sizing:border-box}
+.xembr .xself{position:absolute;top:0;right:0;height:32px;margin:0;display:flex;align-items:center;white-space:nowrap}
+.xembb .moreb,.xhob .moreb{display:flex}

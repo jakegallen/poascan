@@ -114,7 +114,7 @@ def main():
         check("swaps: Coming soon once, no upgrade copy", _mn0.count(b"Coming soon") == 1 and _mn0.lower().count(b"coming soon") == 1 and b"being upgraded" not in _mn0.lower()
               and b'<button class="xbtn soon" type="button" id="xgo" data-up="0" aria-disabled="true">Coming soon</button>' in _mn0 and b'class="xnote"' not in _mn0)
         _mn = b.split(b"<main")[1].split(b"</main>")[0]
-        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Only swap through the network. Never send payment outside it.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
+        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Never send payment outside the network.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
         check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
         check("swaps: book, price, fills", all(x in _mn for x in (b'id="xbook"', b"Order book", b"Recent fills", b"No fills yet")) and req(base + "/static/swap.js")[0] == 200)
         check("swap prompts say coming soon and gate on swaps/status", b"Swaps are coming soon. Until https://poascan.io/api/v1/swaps/status shows available:true" in b and b"don&#x27;t call swap-offer, swap-take" in b and b"being upgraded" not in b)

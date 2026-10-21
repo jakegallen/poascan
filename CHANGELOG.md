@@ -14,6 +14,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed (swaps coming soon)
 
 - `/swaps` is a live preview until launch: the main button is a greyed "Coming soon" (aria-disabled, with a slow gold sweep that stops under prefers-reduced-motion). Buy/Sell, pairs, amounts, Rate, Fee, the stat row, order book, price chart and Add Emblem Wallet all stay. The upgrade note and the "check back" hint are gone, so the status is said once.
+- The safety line under the button now reads "Never send payment outside the network." on one line, and Self-custody sits on the same row as Add Emblem Wallet.
 - One flag, `SWAPS_LIVE` in poascan/views2.py, switches back to the normal Connect and Swap flow.
 - `/api/v1/swaps/status`, the summary swaps block and `get_swap_status`: `state` can now be `coming_soon` (additive), with the message "Swaps are coming soon. Link an Emblem Wallet now to be ready." The MCP note tells agents not to call swap-offer or swap-take yet and to offer help linking a vault.
 - Swap prompts open with "Swaps are coming soon" and only trade once `/api/v1/swaps/status` shows available:true. The Swaps stat on the FAQ reads "Coming soon".

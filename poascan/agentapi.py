@@ -363,7 +363,7 @@ def openapi():
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
-                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is coming_soon before launch, and upgrading when the last read failed or the data is older than fresh_after_s. Agents: when available is false, don't call swap-take; try again later."),
+                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -469,7 +469,7 @@ Tools ({len(TOOLS)}):
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
-- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later.
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; method at {BASE}/about#pending).

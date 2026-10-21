@@ -14,7 +14,7 @@ def net_logo(chain):
 ICON_INFO = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v3.6M8 5.1v.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
 ICON_DOWN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 ICON_WALLET = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="4" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 8.5h1.5M4 4l6-2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
-SAFE = "Only swap through the network. Never send payment outside it."
+SAFE = "Never send payment outside the network."
 
 BUY = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET}. Take offer {OFFERS} from https://minepoa.com/api/swaps: check its amount, "
        "what it wants and its expiry, and confirm with me. Use my Emblem vault linked to my PoA agent (go.md LINK; link it first if it isn't). "
@@ -115,11 +115,10 @@ def panel():
 <p class="xhint" id="xhint" hidden></p><dl class="xd"><div><dt>Rate</dt><dd id="xpx">···</dd></div><div><dt>Fee</dt><dd>{fee / 100:g}%</dd></div><div><dt>Route</dt><dd><span id="xroute">···</span> <span class="xvia">{ICON_WALLET}via Emblem</span></dd></div></dl>
 {note}{btn}
 <p class="xsafe">{ICON_INFO}{SAFE}</p>
-<details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
-<span class="lbl jm-l">One click</span>{apps}<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
+<div class="xembr"><details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
+<span class="lbl jm-l">One click</span>{apps}<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details><a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a></div>
 <details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard><pre class="pc-text" tabindex="0"></pre><span class="lbl jm-l">One click</span>{apps2}
 <button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
-<a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a>
 </section>'''
 
 NA = '<span class="na">-</span>'   # plain hyphen: no price yet
