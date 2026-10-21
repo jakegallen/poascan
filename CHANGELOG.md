@@ -9,6 +9,23 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.16.0] - 2026-10-21
+
+### Changed
+
+- Desktop header: the search bar fills the space between the nav and the pill, GitHub icon and Start, with the "Find my agent" hint and Agent name suggestions. Home shows its own search box only below 1101px, so there is one search per screen.
+- Network upgrade states come from a live probe of the hosted endpoints first (every 5 minutes, off the node), with the halt tracker filling the rest and taking over when the probe is stale or unreachable. Hosted mining reads paused as soon as its endpoints answer halted, and back once they answer again. `meta.maintenance.surfaces_source` can now be `probe`, `tracker` or `probe+tracker`. Only derived states are published.
+- Live numbers roll: only the digits that change slide into place, in one frame per update. Epoch countdown rings pulse in the last minute and flash once at the close (transform and opacity only).
+- New txs on `/txs` and new closes on home and `/epochs` fade in at the top of their tables. The rows come from POAScan's own archive, fetched only when a live update shows something new.
+- Charts are visible without JavaScript and draw in once; charts below the fold draw when they scroll into view.
+- Rankings show 50 rows with Load more (was a fixed 300). Load more shows skeleton rows at the real row height, and empty charts keep their final size.
+- `/about` renders its long sections as they scroll near; the text stays in the page for search and anchors.
+- Home epoch card at 390px: Epoch and Closes in, then Answers and Graders, then Ask agent and More.
+
+### Added
+
+- Sparklines on the stat cards of `/token` (supply, holders, circulating, locked), Agents Overview (Established) and Epochs → Grading (backlog, decided, passed, grades served, jurors).
+
 ## [1.15.0] - 2026-10-21
 
 ### Changed

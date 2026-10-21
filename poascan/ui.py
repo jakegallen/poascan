@@ -129,6 +129,11 @@ def idn(a):
     """Deterministic hex identicon placeholder; static/app.js paints it from the address."""
     return f'<i class="idn" data-a="{E(a)}" aria-hidden="true"></i>' if a else ""
 
+def chart_skel(w=640, h=170, why=""):
+    """Placeholder sized to the chart it stands for (same aspect ratio as the SVG viewBox), so nothing moves when data lands."""
+    t = f'<span>{why}</span>' if why else ""
+    return f'<div class="skel cskel" aria-busy="true" style="aspect-ratio:{w}/{h}"><i></i>{t}</div>'
+
 def skel(lines=3):
     return '<div class="skel" aria-busy="true">' + "".join(f'<i style="width:{w}%"></i>' for w in (92, 76, 58, 84, 66)[:lines]) + '</div>'
 
@@ -351,7 +356,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=71"><script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=72"><script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -364,7 +369,7 @@ def layout(title, body, active="/", live=None):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=26" defer></script></body></html>'''
+<script src="/static/app.js?v=27" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -438,7 +443,7 @@ def na(why): return f'<div class="naBox">{why}</div>'   # empty and error states
 # ---------- SVG charts ----------
 def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):
     """series: list of (xlabel, [v1, v2, ...]). Stacked bar chart."""
-    if not series: return skel()
+    if not series: return chart_skel(640, height)
     W = max(640, 18 * len(series)); H = height; pad_l, pad_b, pad_t = 56, 26, 10
     mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
     bw = (W - pad_l) / len(series) * 0.62; step = (W - pad_l) / len(series)
@@ -470,7 +475,7 @@ def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=com
 def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None):
     """marks: [(x, label)] dashed markers. proj_from: x after which the line is drawn dashed (projection)."""
     pts = [(x, y) for x, y in points if y is not None]
-    if len(pts) < 2: return skel()
+    if len(pts) < 2: return chart_skel(640, height)
     W, H, pl, pb, pt = 640, height, 56, 24, 14
     x0, x1 = pts[0][0], pts[-1][0]; ymin = min(y for _, y in pts) if y0 is None else y0; y1 = max(y for _, y in pts)
     if y1 == ymin: y1 = ymin + 1

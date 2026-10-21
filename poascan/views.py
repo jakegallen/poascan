@@ -178,7 +178,7 @@ def home():
 <div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
 <div class="herogrid"><div class="stats four kstats">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
 <div class="grid2">
-{card(ICON_CUBE + "Closed", home_epochs(ep), '<a href="/epochs" class="more">Full list →</a>')}
+{card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/epochs" class="more">Full list →</a>')}
 {card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All txs →</a>')}
 </div>
 {card(V2.ICON_SWAP + "Market", f'<div class="stats four">{V2.market_mini()}{V2.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>', cls="mtile")}'''
@@ -208,14 +208,27 @@ def txs(qs):
     if typ and any(t["type"] == typ for t in rest): top, rest = top + [t for t in rest if t["type"] == typ], [t for t in rest if t["type"] != typ]
     more = (f'<details class="chipmore"><summary class="chip">More <small>{len(rest)}</small></summary><div class="chipmenu">{"".join(chip(t) for t in rest)}</div></details>') if rest else ""
     tabs = f'<a href="/txs" class="chip {"on" if not typ else ""}">All</a>' + "".join(chip(t) for t in top) + more
-    tb = table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", "Time (UTC)"],
-               [[tx_link(t["id"], (6, 4)), badge(t["type"]), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
-                 "E" + E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows], pri=(0, 1, 2))
+    tb = tx_table(rows, nm)
+    if page_n == 1 and not typ and rows: tb = f'<div data-liverows="txs" data-top="{E(rows[0]["id"])}">{tb}</div>'   # new txs fade in at the top (4.3)
     pages = max(1, math.ceil(total / per))
     q = f"&type={E(typ)}" if typ else ""
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
     body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
     return page("Transactions", body, "/txs")
+
+def tx_table(rows, nm):
+    return table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", "Time (UTC)"],
+               [[tx_link(t["id"], (6, 4)), badge(t["type"]), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
+                 "E" + E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows], pri=(0, 1, 2))
+
+def live_rows(kind):
+    """/fragment/rows: the newest rows of a live table as bare <tr>s, from the local archive (no upstream call).
+    The client asks only after a WS snapshot shows a new tx or close, and keeps only rows it does not have."""
+    if kind == "txs": h = tx_table(db.q("SELECT * FROM txs ORDER BY ts DESC LIMIT 10"), names())
+    elif kind == "closes-home": h = home_epochs(A.epoch_rows())
+    elif kind == "closes": h = epochs_table(A.epoch_rows()[-5:])
+    else: return None
+    m = re.search(r"<tbody>(.*)</tbody>", h, re.S); return m.group(1) if m else ""
 
 def tx(tid):
     err = None
@@ -466,8 +479,12 @@ def token():
     halv = int(p.get("halving_epochs") or 720); e0 = float(p.get("E0") or 1e9); per = int(p.get("auto_epoch_seconds") or 21600)
     sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
     rich = table(["#", "Agent", "Balance", "Share"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*r["share"]:.2f}%'] for r in h["rows"][:10]], pri=(0, 1, 2), usd=(2,))
-    stats = "".join([stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), stat("Holders", intc(st.get("holders"))),
-                     stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])),
+    g = V3.growth_data(); u = V3.unlock_data(); circ = u["past"] + [(time.time(), u["now"])]
+    cum, run = {}, 0.0
+    for r in ep: run += r["minted"] or 0; cum[r["close_ts"]] = run
+    locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
+    stats = "".join([spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]),
+                     spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
     c = A.concentration(); ma = c["min_activity"]
     gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"
@@ -528,7 +545,7 @@ def epochs_page(qs=None):
         inner = grading()
     else:
         cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-        inner = (card("History", epochs_table(ep), X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
+        inner = (card("History", f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{epochs_table(ep)}</div>', X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
                  + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
     body = f'<div class="sechead"><h1>Epochs</h1></div>{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
@@ -594,7 +611,9 @@ def health_card():
     """Is it real? Network health and the sybil-resistance numbers in one card (was two: home's Is it real? and Network health here)."""
     h = G.network_health(); sy = A.sybil(); est = len(A.established_set())
     inv = sy["invited"]; k = sy["inviter_count"] or 0; top5 = sum(x["n"] for x in sy["inviters"])
-    s = "".join([stat("Established", intc(est)), stat("Est. operators", intc(h["families"])),
+    run, ser = 0, []
+    for r in A.epoch_rows(): run += (r["established"] or 0) - (r["established_removed"] or 0); ser.append((r["close_ts"], run))
+    s = "".join([spark_in(stat("Established", intc(est)), ser), stat("Est. operators", intc(h["families"])),
                  stat("Agents / operator", f'<span class="num">{h["accounts"]/max(1,h["families"]):.2f}</span>'),
                  stat("Invite fan-out", f'<span class="num">{(inv/k if k else 0):.1f}</span>', tip=f'{inv:,} invited Agents over {k:,} inviters'),
                  stat("Top-5 inviters", pct(top5 / inv) if inv else "···", tip="Share of invited Agents brought in by the 5 biggest inviters"),
@@ -780,10 +799,12 @@ def grading():
     back = bars([(f"E{r['epoch']}", row(r)) for r in ep], legend=(["Older"] if old else []) + [f"from E{k}" for k in keep],
                 colors=("#8FA3B8", "#FFB000", "#E3A33A", "#C8742B", "#FF5A4E", "#3DDC97", "#6b7a8a"))
     sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled"] - r["settled_passed"]]) for r in ep], legend=["Passed", "Failed"], colors=("#3DDC97", "#FF5A4E"))
-    s = "".join([stat("Backlog", intc(last["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
+    sk = lambda f: [(r["close_ts"], f(r)) for r in ep]
+    s = "".join([spark_in(stat("Backlog", intc(last["pending"])), sk(lambda r: r["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
                  stat("Awaiting graders", intc(last["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
-                 stat("Decided", intc(last["settled"]), tip="Answers whose grading finished at the latest close (settled)"), stat("Passed", intc(last["settled_passed"])),
-                 stat("Grades served", intc(last["grades"])), stat("Jurors", intc(last["graders"]), tip="Agents who graded at the latest close")])
+                 spark_in(stat("Decided", intc(last["settled"]), tip="Answers whose grading finished at the latest close (settled)"), sk(lambda r: r["settled"])),
+                 spark_in(stat("Passed", intc(last["settled_passed"])), sk(lambda r: r["settled_passed"])),
+                 spark_in(stat("Grades served", intc(last["grades"])), sk(lambda r: r["grades"])), spark_in(stat("Jurors", intc(last["graders"]), tip="Agents who graded at the latest close"), sk(lambda r: r["graders"]))])
     pard = p.get("slash_pardons") or {}
     pn = lambda r: len(pard.get(str(r["epoch"]), [])); tot = sum(r["slashed"] for r in ep); unp = tot - sum(pn(r) for r in ep)
     s += stat("Slashes", f'<span class="num{" red" if unp > 0 else ""}">{tot}</span>')   # red only when some were not pardoned
@@ -909,10 +930,11 @@ def about():
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     from . import faq as FQ
-    safety = card("Official links &amp; safety", V2.safety_html()) + FQ.about_html(card)
+    safety = card("Official links &amp; safety", V2.safety_html()) + '<div class="lzs">' + FQ.about_html(card) + "</div>"
     comm = card("Community tools", V2.community_html())
     real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority. <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
-    body = '<div class="sechead"><h1>About</h1></div>' + safety + body + comm + real + _operators_method() + methods
+    # the long methodology sections render when scrolled near (content-visibility); the text stays in the HTML for search and anchors
+    body = '<div class="sechead"><h1>About</h1></div>' + safety + body + '<div class="lzs">' + comm + real + _operators_method() + methods + '</div>'
     return page("About & methodology", body, "/about")
 
 def search_hits(q, hits):

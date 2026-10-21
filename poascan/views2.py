@@ -186,7 +186,7 @@ def price_history():
 
 def price_chart_html():
     rows = [r for r in price_history() if r["price_per_1m_poa"] is not None]
-    if not rows: return '<div class="naBox">No fills yet.</div>'
+    if not rows: return chart_skel(640, 170, "No fills yet.")
     out = []
     for a in sorted({r["asset"] for r in rows}):
         pts = [(r["ts"], r["price_per_1m_poa"]) for r in rows if r["asset"] == a]

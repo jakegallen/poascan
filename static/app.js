@@ -53,16 +53,19 @@ function tick(){var now=Date.now()/1000;
   var m=v.querySelector(".molten"),t=v.querySelector(".vp");if(m)m.style.width=(f*100).toFixed(2)+"%";if(t)t.textContent=Math.floor(f*100)+"%"});
  times()}
 
-/* number tween (<200ms) */
-var prev={};
-function tween(el,from,to,f){var fn=FMT[f]||FMT.int,t0=null,DUR=180;
- if(RM||from==null||from===to){return}
- function step(ts){if(!t0)t0=ts;var k=Math.min(1,(ts-t0)/DUR),v=from+(to-from)*(1-Math.pow(1-k,3));el.textContent=fn(v);if(k<1)requestAnimationFrame(step)}
- requestAnimationFrame(step)}
+/* digit roll: only the digits that changed slide up into place (transform + opacity, clipped per digit, no reflow).
+   Updates from one snapshot are applied in a single animation frame. Reduced motion sets the text directly. */
+var prev={},rq=[],rqT=0;
+function esc(c){return c==="<"?"&lt;":c==="&"?"&amp;":c}
+function roll(n,t){rq.push([n,t]);if(!rqT)rqT=requestAnimationFrame(flushRoll)}
+function flushRoll(){rqT=0;var q=rq;rq=[];q.forEach(function(x){var n=x[0],t=x[1],o=n.textContent;if(o===t)return;
+ if(RM||D.hidden){n.textContent=t;return}
+ if(o.length!==t.length){n.textContent=t;n.classList.remove("rfade");void n.offsetWidth;n.classList.add("rfade");return}
+ var h="";for(var i=0;i<t.length;i++){var c=t.charAt(i);h+=c!==o.charAt(i)&&/[0-9]/.test(c)?'<span class="rl"><span>'+c+"</span></span>":esc(c)}
+ n.innerHTML=h;clearTimeout(n._rt);n._rt=setTimeout(function(){if(n.textContent===t)n.textContent=t},700)})}
 function setNum(key,val,f){if(val==null)return;var old=prev[key];prev[key]=val;if(old===undefined||old===val)return;
  $$('[data-live="'+key+'"]').forEach(function(box){var n=box.matches(".num")?box:box.querySelector(".num");if(!n)return;
-  var fn=FMT[f]||FMT.int;n.title="";tween(n,old,val,f);setTimeout(function(){n.textContent=fn(val)},RM?0:190);
-  box.classList.remove("bump");void box.offsetWidth;box.classList.add("bump")})}
+  n.title="";roll(n,(FMT[f]||FMT.int)(val))})}
 
 /* feed merge: new rows slide in */
 function mergeFeed(html){var f=$("#feed");if(!f||!html)return;var tmp=D.createElement("div");tmp.innerHTML=html;
@@ -76,6 +79,18 @@ function mergeFeed(html){var f=$("#feed");if(!f||!html)return;var tmp=D.createEl
 function setTicker(html){var t=$("#ticker");if(!t||!html)return;var tmp=D.createElement("div");tmp.innerHTML=html;var n=$(".tk-track",tmp),o=$(".tk-track",t);
  if(o&&n&&o.dataset.sig===n.dataset.sig)return;t.innerHTML=html;paintIds(t);times(t)}
 
+/* live tables: when a snapshot shows a new tx or close, fetch only the newest rows from POAScan itself and fade in the ones we lack */
+function usdOn(){var b=$('.utog button[aria-pressed="true"]');return !!(b&&b.dataset.u==="usd")}
+function rk(r){var a=r.querySelector("a[href]");return a?a.getAttribute("href"):r.textContent}
+function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.dataset.liverows,top=k==="txs"?((s.feed||"").match(/data-id="([^"]+)"/)||[])[1]:s.last&&s.last.epoch;
+  if(top==null||String(top)===box.dataset.top||box._busy)return;box._busy=1;
+  fetch("/fragment/rows?t="+k,{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(h){box._busy=0;box.dataset.top=String(top);
+   var tb=$("tbody",box);if(!tb)return;var tmp=D.createElement("tbody");tmp.innerHTML=h;var have={},cur=$$("tr:not(.xrow)",tb);cur.forEach(function(r){have[rk(r)]=1});
+   var fresh=$$("tr",tmp).filter(function(r){return !have[rk(r)]});if(!fresh.length)return;
+   fresh.reverse().forEach(function(r){r.classList.add("in");tb.insertBefore(r,tb.firstChild)});
+   if(box.dataset.keep!=="all"){var all=$$("tr:not(.xrow)",tb);for(var i=cur.length;i<all.length;i++){var nx=all[i].nextElementSibling;if(nx&&nx.classList.contains("xrow"))nx.remove();all[i].remove()}}
+   paintIds(tb);times(tb);pris(box);if($(".utog"))usdApply(usdOn())}).catch(function(){box._busy=0})})}
+
 /* apply a snapshot (from WS or polling) */
 function apply(s){if(!s||s.t&&s.t!=="snap")return;
  var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""};p.className="pill "+f.state;if(f.href)p.setAttribute("href",f.href);p.title=f.state=="live"?"Status":(f.why||f.label);var l=p.querySelector("span");if(l)l.textContent=f.label}
@@ -85,7 +100,7 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
   $$(".cd[data-close]").forEach(function(c){if(s.epoch.close)c.dataset.close=s.epoch.close});
   var be=$('[data-live="bm_ep"]');if(be&&s.epoch.n!=null)be.textContent=s.epoch.n}
  if(s.frags)Object.keys(s.frags).forEach(function(id){var el=D.getElementById(id);if(el&&el.dataset.h!==String(s.frags[id].length+":"+s.frags[id].slice(-40))){el.innerHTML=s.frags[id];el.dataset.h=s.frags[id].length+":"+s.frags[id].slice(-40);paintIds(el);times(el);tick()}});
- mergeFeed(s.feed);setTicker(s.ticker)}
+ mergeFeed(s.feed);setTicker(s.ticker);liveRows(s)}
 
 /* transport: WebSocket with backoff, polling fallback */
 var ws=null,fails=0,pollT=null,wantLive=!!($("#feed")||$("#tracker")||$("#ticker")||$("[data-live]"));
@@ -101,9 +116,14 @@ function connect(){if(!("WebSocket" in W)){startPoll();return}
  ws.onerror=function(){try{ws.close()}catch(e){}}}
 function retry(){var d=Math.min(30000,1000*Math.pow(2,Math.min(fails,5)))*(0.7+Math.random()*0.6);setTimeout(function(){if(!D.hidden)connect();else D.addEventListener("visibilitychange",function v(){if(!D.hidden){D.removeEventListener("visibilitychange",v);connect()}})},d)}
 
-/* charts: draw-in on view + crosshair tooltip */
-function charts(){var io="IntersectionObserver" in W?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})},{rootMargin:"0px 0px -40px 0px"}):null;
- $$(".chart").forEach(function(c){if(io&&!RM)io.observe(c);else c.classList.add("in")});
+/* charts: visible by default and drawn in once by CSS on load. Only charts below the fold are held back (.pre) until they
+   scroll into view, so a chart is never left hidden if this script or IntersectionObserver is missing. + crosshair tooltip */
+function charts(){if(RM||!("IntersectionObserver" in W))return chartTips();
+ var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){var c=e.target;c.classList.remove("pre");void c.getBoundingClientRect();c.classList.add("in");io.unobserve(c)}})},{rootMargin:"0px 0px -40px 0px"});
+ $$(".chart").forEach(function(c){if(c.getBoundingClientRect().top>innerHeight){c.classList.add("pre");io.observe(c)}});
+ W.addEventListener("beforeprint",function(){$$(".chart.pre").forEach(function(c){c.classList.remove("pre")})});
+ chartTips()}
+function chartTips(){
  $$(".chartbox").forEach(function(b){var svg=$("svg",b);if(!svg)return;var items=$$("[data-tip]",svg);if(!items.length)return;
   var xh=D.createElement("i"),xt=D.createElement("div");xh.className="xh";xt.className="xt";b.appendChild(xh);b.appendChild(xt);var on=null;
   function move(e){var r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,x=(e.clientX-r.left)/sx,best=null,bd=1e9;
@@ -212,10 +232,14 @@ paintIds();times();charts();sortables();pris();usdInit();setInterval(tick,1000);
 /* Load more: appends the next keyset page to the card's table; the button carries the next cursor */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(".more-btn");if(!b||b.disabled)return;e.preventDefault();
  var tb=$("tbody",b.closest(".cb"));if(!tb)return;b.disabled=true;b.textContent="Loading";
- fetch(b.dataset.more,{headers:{Accept:"application/json"}}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
-  var t=D.createElement("tbody");t.innerHTML=d.html;while(t.firstChild)tb.appendChild(t.firstChild);paintIds(tb);times(tb);
+ /* skeleton rows at the real row height hold the space while the page loads */
+ var lr=$$("tr:not(.xrow)",tb).pop(),rh=lr?lr.offsetHeight:44,nc=lr?lr.cells.length:1,sk=[];
+ for(var i=0;i<3;i++){var x=D.createElement("tr");x.className="skr";x.setAttribute("aria-hidden","true");x.innerHTML='<td colspan="'+nc+'"><i style="width:'+[88,72,80][i]+'%"></i></td>';x.style.height=rh+"px";tb.appendChild(x);sk.push(x)}
+ function unsk(){sk.forEach(function(x){x.remove()})}
+ fetch(b.dataset.more,{headers:{Accept:"application/json"}}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){unsk();
+  var t=D.createElement("tbody");t.innerHTML=d.html;while(t.firstChild){var r=t.firstChild;if(r.nodeType===1)r.classList.add("in");tb.appendChild(r)}paintIds(tb);times(tb);pris(tb.closest(".cb"));if($(".utog"))usdApply(usdOn());
   if(d.next){b.dataset.more=d.next;b.disabled=false;b.textContent="Load more"}else b.remove()})
- .catch(function(){b.disabled=false;b.textContent="Retry"})});
+ .catch(function(){unsk();b.disabled=false;b.textContent="Retry"})});
 if(wantLive)connect();
 })();
 /* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */

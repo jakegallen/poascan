@@ -386,6 +386,13 @@ def history(base, check):
           and 'id="txs"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "nonce 90" in ad and 'href="/about#history"' in ad and "tab=txs&amp;type=" in ad
           and 'id="grading"' in gd and "Unlisted" in gd and ">No seal<" in gd
           and fr["html"].count("<tr>") == 25 and fr["next"] and not any("\u2014" in x for x in (ov, ad, gd)))
+    rw = req(base + "/fragment/rows?t=txs"); rc = req(base + "/fragment/rows?t=closes"); lb = json.loads(req(base + "/fragment/lb?tab=holders&offset=0")[1])
+    tx1 = req(base + "/txs")[1].decode(); ab = req(base + "/about")[1].decode(); hm = req(base + "/")[1].decode(); ep1 = req(base + "/epochs")[1].decode()
+    check("batch 4: live rows fragments, Rankings Load more, lazy /about, live tables marked, chart skeletons sized",
+          rw[0] == 200 and rw[1].count(b"<tr>") >= 1 and b"<table" not in rw[1] and rc[0] == 200 and req0(base + "/fragment/rows?t=nope")[0] == 404
+          and req0(base + "/fragment/lb?tab=nope")[0] == 400 and "html" in lb and 'data-liverows="txs"' in tx1 and 'data-liverows="closes-home"' in hm
+          and 'data-liverows="closes" data-keep="all"' in ep1 and ab.count('class="lzs"') == 2 and 'id="real"' in ab
+          and 'aspect-ratio:640/170' in __import__("poascan.ui", fromlist=["x"]).line([(0, 1)]))
     check("/address: header carries name or address once, meta line; overview rows do not repeat the header",
           'class="ameta"' in ov and "First seen" in ov and ">Balance<" not in ov.split('class="chips atabs scroll"')[1] and "Spendable / Locked" not in ov)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()

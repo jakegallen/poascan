@@ -374,6 +374,13 @@ class H(BaseHTTPRequestHandler):
                     nm = A.forum_names(); hits = [(n.lower().find(q), len(n), a, n) for a, n in nm.items() if n and q in n.lower()]
                     out = [dict(id=a, name=n) for _, _, a, n in sorted(hits)[:6]]
                 return self.send(200, json.dumps(out), "application/json", {"Cache-Control": "public, max-age=60"})
+            if path == "/fragment/lb":   # Rankings Load more
+                try: return self.send(200, json.dumps(V4.fragment(qs)), "application/json", {"Cache-Control": "no-store"})
+                except ValueError: return self.send(400, json.dumps({"error": "bad tab or offset"}), "application/json")
+            if path == "/fragment/rows":   # new txs or closes for a live table, local archive only
+                h = V.live_rows(qs.get("t", [""])[0])
+                if h is None: return self.send(404, "", "text/plain")
+                return self.send(200, h, extra={"Cache-Control": "no-store"})
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]

@@ -115,21 +115,39 @@ def _cell(kind, v):
     if kind == "ep": return f'<td data-v="{v}"><a href="/epoch/{v}">E{v}</a></td>'
     return f'<td data-v="{E(str(v))}">{E(str(v))}</td>'
 
-def table_html(tab, limit=300):
-    rs = rows(tab); nm = _nm(); cols = COLS[tab]
-    first = "Model / harness" if tab == "models" else "Agent"
-    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)   # first metric stays visible at 390px; POA columns convert to USD
-    th = f'<th data-sort="num" class="p">#</th><th data-sort="text" class="p">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}" class="{cl(i, k)}">{h}</th>' for i, (_, h, k) in enumerate(cols))
-    if tab == "referrals": th += "<th>Tree</th>"
-    body = []
-    for x in rs[:limit]:
+PAGE = 50   # rows per page; Load more appends the next 50 (/fragment/lb)
+
+def _rows_html(tab, rs, nm):
+    cols = COLS[tab]; body = []
+    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)
+    for x in rs:
         who = (f'<td data-v="{E(x["name"])}" class="p">{E(x["name"])}</td>' if tab == "models"
                else f'<td data-v="{E(x.get("name") or x["addr"])}" class="p">{addr_link(x["addr"], nm)}</td>')
         tr = f'<td data-v="{x["rank"]}" class="rk p">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)).replace("<td ", f'<td class="{cl(i, k)}" ', 1) for i, (c, _, k) in enumerate(cols))
         if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>' if ADDR_RX.match(x["addr"] or "") else '<td></td>'
         body.append(f"<tr>{tr}</tr>")
-    more = f'<p class="dim small">Top {limit} of {len(rs):,} · full list in CSV</p>' if len(rs) > limit else ""
-    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{"".join(body) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
+    return "".join(body)
+
+def _next(tab, off, n): return f"/fragment/lb?tab={tab}&offset={off}" if off < n else None
+
+def fragment(qs):
+    """Load more for Rankings: the next PAGE rows as JSON {html, next}. Raises ValueError on a bad tab or offset."""
+    tab = ALIAS.get(qs.get("tab", [""])[0], qs.get("tab", [""])[0])
+    if tab not in COLS: raise ValueError("tab")
+    off = int(qs.get("offset", ["0"])[0] or 0)
+    if off < 0: raise ValueError("offset")
+    rs = rows(tab)
+    return dict(html=_rows_html(tab, rs[off:off + PAGE], _nm()), next=_next(tab, off + PAGE, len(rs)))
+
+def table_html(tab, limit=PAGE):
+    rs = rows(tab); nm = _nm(); cols = COLS[tab]
+    first = "Model / harness" if tab == "models" else "Agent"
+    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)   # first metric stays visible at 390px; POA columns convert to USD
+    th = f'<th data-sort="num" class="p">#</th><th data-sort="text" class="p">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}" class="{cl(i, k)}">{h}</th>' for i, (_, h, k) in enumerate(cols))
+    if tab == "referrals": th += "<th>Tree</th>"
+    nx = _next(tab, limit, len(rs))
+    more = f'<button type="button" class="btn ghost more-btn" data-more="{E(nx)}">Load more</button>' if nx else ""
+    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
 
 def leaderboard_page(tab, apage):
     tab = ALIAS.get(tab, tab); tab = PAGE_ALIAS.get(tab, tab); tab = tab if tab in dict(TABS) else "holders"
