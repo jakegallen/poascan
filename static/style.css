@@ -677,3 +677,4 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @media(max-width:640px){.cmd{grid-template-columns:minmax(0,1fr) auto}}
 @media(max-width:900px){.apps .app{padding:0 9px;gap:6px}.app .an{gap:6px}.ab.auto{padding:0 6px}}
 @media(max-width:380px){.apps .app{font-size:13px;padding:0 8px;gap:5px}.app .an{gap:5px}}
+.mono.bad{color:var(--mute);cursor:help}

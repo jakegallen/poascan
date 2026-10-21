@@ -363,7 +363,9 @@ SR = '<span class="tag sr">self-reported</span>'; EST = '<span class="tag est">e
 
 def apage(title, body, active):
     sub = "".join(f'<a href="{h}" class="chip {"on" if h == active else ""}">{n}</a>' for h, n in SUB)
-    hdr = f'<div class="sechead"><h1>The Agents</h1><div class="chips">{sub}</div></div>'
+    # Subpages get their own h1; the active chip already shows the name, so it stays screen-reader only.
+    h1 = "<h1>The Agents</h1>" if active == "/agents" else f'<h1 class="sr-only">{E(title)}</h1>'
+    hdr = f'<div class="sechead">{h1}<div class="chips">{sub}</div></div>'
     return page(title, hdr + body, "/agents")
 
 def collecting(since, what):
@@ -527,7 +529,9 @@ def grading():
     ep = A.epoch_rows(); last = ep[-1] if ep else None; p = A.params()
     if not last: return page("Grading", card("Grading", na("No close records yet.")), "/grading")
     origins = sorted({k for r in ep for k in r["pending_by_origin"]})
-    back = bars([(f"E{r['epoch']}", [r["pending_by_origin"].get(k, 0) for k in origins]) for r in ep], legend=[f"from E{k}" for k in origins],
+    keep = origins[-5:]; old = origins[:-5]   # last 5 origin epochs each get a color, earlier ones share "Older"
+    row = lambda r: ([sum(r["pending_by_origin"].get(k, 0) for k in old)] if old else []) + [r["pending_by_origin"].get(k, 0) for k in keep]
+    back = bars([(f"E{r['epoch']}", row(r)) for r in ep], legend=(["Older"] if old else []) + [f"from E{k}" for k in keep],
                 colors=("#8FA3B8", "#FFB000", "#E3A33A", "#C8742B", "#FF5A4E", "#3DDC97", "#6b7a8a"))
     sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled"] - r["settled_passed"]]) for r in ep], legend=["Passed", "Failed"], colors=("#3DDC97", "#FF5A4E"))
     s = "".join([stat("Backlog", intc(last["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
@@ -551,7 +555,7 @@ def forum_page():
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
 <div class="grid2">{card("Top threads", th, PR.ask([PR.LABLEAK]))}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items. Includes POAScan\'s builder, Plus1.'))}</div>'''
-    return page("Community", body, "/forum")
+    return page("Community", '<div class="sechead"><h1>Community</h1></div>' + body, "/forum")
 
 def network():
     ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_ = db.get_blob("release")[0] or {}; p = A.params(); st = A.status(); sy = A.sybil(); h = A.health()
@@ -581,7 +585,7 @@ def network():
     idx = table(["Endpoint", "Last OK", "Last error", "Fails", "Next try"], [[f'<code>{E(r["endpoint"])}</code>', rel(r["last_ok"]), E(r["err"] or "···") if r["fails"] else "···", r["fails"] or 0, rel(r["next_at"]) if r["next_at"] and r["next_at"] > time.time() else "now"] for r in h["endpoints"]], cls="wrapt")
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
 <div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>{card("Indexer", idx)}'''
-    return page("Network", body, "/network")
+    return page("Network", '<div class="sechead"><h1>Network</h1></div>' + body, "/network")
 
 def privacy():
     body = card("What we collect", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>

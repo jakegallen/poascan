@@ -210,7 +210,33 @@ def main():
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)
+    fixture_pages(check)
     print(f"{len(fails)} failure(s)"); sys.exit(1 if fails else 0)
+
+def fixture_pages(check):
+    """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
+    port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "f.db"), POASCAN_INDEXER="0")
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    subprocess.run([sys.executable, "tools/fixture.py"], cwd=root, env=env, check=True)
+    p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
+    try:
+        for _ in range(50):
+            try: req(base + "/api/health"); break
+            except Exception: time.sleep(0.2)
+        home = req(base + "/")[1].decode()
+        nav = re.findall(r'<a href="(/[^"]*)" class="(?:on)?">', home)
+        site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
+        paths = sorted(set(nav + site))
+        bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) >= 10 and len(paths) > 30 and not bad)
+        g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
+        op = req(base + "/agents/operators")[1]
+        check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))
+        check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
+              and b'<h1 class="sr-only">Operators</h1>' in op)
+    finally:
+        p.terminate(); p.wait(10)
 
 if __name__ == "__main__":
     main()

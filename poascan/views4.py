@@ -117,7 +117,7 @@ def table_html(tab, limit=300):
         who = (f'<td data-v="{E(x["name"])}">{E(x["name"])}</td>' if tab == "models"
                else f'<td data-v="{E(x.get("name") or x["addr"])}">{addr_link(x["addr"], nm)}</td>')
         tr = f'<td data-v="{x["rank"]}" class="rk">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)) for c, _, k in cols)
-        if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>'
+        if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>' if ADDR_RX.match(x["addr"] or "") else '<td></td>'
         body.append(f"<tr>{tr}</tr>")
     more = f'<p class="dim small">Top {limit} of {len(rs):,} · full list in CSV</p>' if len(rs) > limit else ""
     return (f'<div class="tw"><table class="sortable lb"><thead><tr>{th}</tr></thead><tbody>{"".join(body) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))

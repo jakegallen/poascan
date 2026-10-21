@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Fixed
+
+- `/grading` returned 500 once 8 origin epochs were pending: the backlog chart legend ran out of colors. Legend colors now wrap, and origins before the last five share one "Older" series.
+- Malformed addresses from upstream data (for example an inviter ending in "-") show as plain text instead of linking to a 404.
+- `/network` and `/community` have an h1; `/agents` subpages each have their own (Operators, Leaderboard and so on) instead of repeating "The Agents".
+- Smoke test renders every nav and sitemap page against seeded data with 12 epochs (`tools/fixture.py`).
+
 ### Changed (swaps coming soon)
 
 - `/swaps` stat row shows cumulative Trades and Volume (every finalized fill, USD at fill time when recorded, else the current reference; method on /about). `STATS_WINDOW` in poascan/views2.py switches back to 24h. The swaps status `market` object adds `trades_all_time` and `volume_all_time_usd`; the 24h fields stay.

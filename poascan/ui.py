@@ -70,8 +70,11 @@ def author_link(name, rev):
     """Forum author name -> profile link via a {name: public_id} map."""
     return name_link(name, (rev or {}).get(name), cls="") if name else ""
 
+ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
+
 def addr_link(a, names=None, n=(8, 6)):
     if not a: return '<span class="na">···</span>'
+    if not ADDR_RX.match(a): return f'<span class="mono bad" title="Not a valid poa1 address">{E(short(a, *n))}</span>'   # malformed upstream value: no link
     nm = (names or {}).get(a)
     label = E(short(a, *n))
     extra = " " + name_link(nm, a) if nm else ""
@@ -303,7 +306,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=51"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=52"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -364,7 +367,7 @@ def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=com
         if i % every == 0: out.append(f'<text x="{x+bw/2:.1f}" y="{H-8}" class="ax" text-anchor="middle">{E(str(lab))}</text>')
     out.append("</svg>")
     lg = ""
-    if legend: lg = '<div class="legend">' + "".join(f'<span><i style="background:{colors[j]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
+    if legend: lg = '<div class="legend">' + "".join(f'<span><i style="background:{colors[j % len(colors)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
     return '<div class="chartbox">' + "".join(out) + "</div>" + lg
 
 def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None):
