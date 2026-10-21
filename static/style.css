@@ -738,3 +738,16 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 .nfc{margin-top:20px}.nfc .lks{margin:0}
 td a,.feed a,.kv a,.lks a,.foot a,.hints a,dd a{padding-block:4px}
 .tk-i,.ticker{display:none}
+
+/* ≈$ stays on the number's line at every width: one nowrap baseline row, the number shrinks to fit its card */
+.stat:has(.sv.fit){container-type:inline-size}
+.sv.fit{display:flex;flex-wrap:nowrap;align-items:baseline;gap:0 6px;white-space:nowrap;overflow-wrap:normal;min-height:calc(1em * var(--lh-tight))}
+.sv.fit>.num,.sv.fit>.na{font-size:clamp(12px,calc((100cqi - var(--fx,80px)) / (var(--nc,8) * .6)),1em);min-width:0}
+.sv.fit>.unit{flex:none;margin:0}
+.sv.fit>.usd{flex:none;font:400 12px/1 var(--mono);color:var(--mute);margin:0;vertical-align:baseline;letter-spacing:0}
+@container (max-width:240px){.sv.fit:not(.ku)>.unit{display:none}.sv.fit:not(.ku)>.num,.sv.fit:not(.ku)>.na{font-size:clamp(12px,calc((100cqi - var(--fxn,50px)) / (var(--nc,8) * .6)),1em)}}
+@container (max-width:96px){.sv.fit>.usd{display:none}}
+.bm-leg{gap:8px 16px}
+.bm{container:bm/inline-size}
+@container bm (min-width:340px){.bm-leg{flex-wrap:nowrap;gap:8px 10px}.bm-leg>span{gap:4px;white-space:nowrap}.bm-leg .lbl{letter-spacing:.02em}.bm-leg b{font-size:var(--t14)}}
+.stats{grid-auto-rows:1fr}

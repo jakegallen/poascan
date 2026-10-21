@@ -315,7 +315,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=67"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=68"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -337,7 +337,19 @@ def stat(label, value, sub="", icon="", key=None, asof=None):
     """Terse stat card: label + value. `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read."""
     k = f' data-live="{key}"' if key else ""
     a = f'<div class="asof">as of {rel(asof)}</div>' if asof else ""
+    if 'class="usd"' in value:   # number, unit and ≈$ share one line; the number shrinks to fit (style.css .sv.fit)
+        k += _fit(value)
+        ku = " ku" if 'class="unit"' in value and not re.search(r'<span class="unit">POA</span>', value) else ""   # keep SOL/ETH units
+        return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
+
+def _fit(value):
+    """Inline sizing hints: --nc number characters, --fx px taken by unit, ≈$ and gaps (12px mono is ~7.2px a character)."""
+    txt = lambda cls: re.sub(r"<[^>]+>", "", (re.search(rf'<span class="{cls}[^"]*"[^>]*>(.*?)</span>', value) or [None, ""])[1])
+    nc = max(len(txt("num")), 4) + .5        # headroom for live updates
+    fxn = len(txt("usd")) * 7.4 + 6 + 4           # ≈$ and its gap, plus slack
+    fx = fxn + (len(txt("unit")) * 7.4 + 6 if 'class="unit"' in value else 0)
+    return f' style="--nc:{nc};--fx:{fx:.0f}px;--fxn:{fxn:.0f}px"'
 
 def table(headers, rows, cls=""):
     th = "".join(f"<th>{h}</th>" for h in headers)

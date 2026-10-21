@@ -130,7 +130,7 @@ def price_stats_html():
     """Last trade with the guarded ≈$ per 1M POA; best ask in its own asset only (asks are never a USD price)."""
     from .swapx import price as _pr, money
     s = swap_stats(); p = _pr()
-    u = f' <span class="usd">≈{money(p["usd_per_1m_poa"], p["sig_figs"])}</span>' if p["shown"] else ""
+    u = f'<span class="usd">≈{money(p["usd_per_1m_poa"], p["sig_figs"])}</span>' if p["shown"] else ""
     last = (_pfmt(s["last"][0][0], None, s["last"][1]) + u) if s["last"] else '<span class="na">···</span>'
     ask = _pfmt(s["best"][1], None, s["best"][2]["asset"]) if s["best"] else '<span class="na">···</span>'
     return (stat("Last trade · 1M POA", last, "", ICON_SWAP, "swap_last") + stat("Best ask · 1M POA", ask, "", ICON_SWAP, "swap_ask"))
