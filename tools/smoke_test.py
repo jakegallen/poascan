@@ -535,7 +535,7 @@ def swap_module(base, spec, check):
         if n != "db.py" and _re.search(r"\b(FROM|JOIN|INTO|UPDATE)\s+swap(s|_events)\b", t): bad.append(n + " (swap tables)")
     for f in glob.glob(os.path.join(root, "poascan", "swap", "*.py")):
         t = open(f).read()
-        if os.path.basename(f) != "host.py" and _re.search(r"from \.\.|import poascan", t): bad.append("swap/" + os.path.basename(f) + " (host import outside host.py)")
+        if not os.path.basename(f).startswith("host") and _re.search(r"from \.\.|import poascan", t): bad.append("swap/" + os.path.basename(f) + " (host import outside host*.py)")
     check(f"swap boundary: explorer reads swaps via the API, the module enters POAScan only via host.py {bad}", not bad
           and not os.path.exists(os.path.join(root, "poascan", "swapx.py")) and not os.path.exists(os.path.join(root, "static", "swap.js"))
           and os.path.isfile(os.path.join(root, "poascan", "swap", "LIFTING.md")))
@@ -559,6 +559,23 @@ def swap_module(base, spec, check):
     out = _sp.run([_sys.executable, "-c", "from poascan.swap import config as C, prompts as P, faq as F, pages as G; "
                    "print(C.PAGE_URL, C.STATUS_URL, C.link(C.METHOD_URL), C.link(C.START_URL), 'swap.example.com/api/v1/swaps/status' in P._CHECK_SOON)"],
                   capture_output=True, text=True, env=env, timeout=60).stdout.split()
+    import socket as _so, tempfile as _tf
+    _s = _so.socket(); _s.bind(("127.0.0.1", 0)); _pt = _s.getsockname()[1]; _s.close()
+    _p = _sp.Popen([_sys.executable, "-m", "poascan.server"], cwd=root, env=dict(os.environ, PORT=str(_pt), HOST="127.0.0.1", POASCAN_DB=os.path.join(_tf.mkdtemp(), "c.db"),
+                   POASCAN_INDEXER="0", POASCAN_SWAPS_MOVED_TO="https://swap.example.com/", PYTHONPATH=root), stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+    try:
+        for _ in range(150):
+            try: urllib.request.urlopen(f"http://127.0.0.1:{_pt}/healthz", timeout=2); break
+            except Exception: time.sleep(0.2)
+        class _NR(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a): return None
+        try: _c, _loc = urllib.request.build_opener(_NR).open(f"http://127.0.0.1:{_pt}/swaps?pair=SOL", timeout=10).status, None
+        except urllib.error.HTTPError as _e: _c, _loc = _e.code, _e.headers.get("Location")
+        _sm = urllib.request.urlopen(f"http://127.0.0.1:{_pt}/sitemap.xml", timeout=10).read().decode()
+        _api = urllib.request.urlopen(f"http://127.0.0.1:{_pt}/api/v1/swaps/status", timeout=10).status
+    finally: _p.terminate()
+    check(f"cutover switch POASCAN_SWAPS_MOVED_TO: /swaps 301 to swap.example.com, out of the sitemap, API stays -> {_c} {_loc}",
+          _c == 301 and _loc == "https://swap.example.com/?pair=SOL" and "/swaps</loc>" not in _sm and _api == 200 and "/swaps</loc>" in req(base + "/sitemap.xml")[1].decode())
     check(f"swap config: base URL, page path and method link move with the env (swap.example.com) {out}",
           out[:5] == ["https://swap.example.com/", "https://swap.example.com/api/v1/swaps/status", "/method", "https://poascan.io/start", "True"])
 

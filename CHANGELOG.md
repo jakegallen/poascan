@@ -9,6 +9,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.18.0] - 2026-10-21
+
+### Added
+
+- The standalone swap site (`swapsite/`, Fly app `swapsite`, on its own domain). It runs the swap module with its own host, layout and teal brand, and follows POAScan's public swap API, so minepoa.com load is unchanged. POAScan keeps the swap tables.
+- `/api/v1/swaps/status` gains `names` (Agent names for the makers and takers in the book) and `market.usd_ref_rates` (current SOL and ETH USD reference).
+- `POASCAN_SWAPS_MOVED_TO`: when set, `/swaps` answers 301 to that URL and leaves the sitemap. Unset by default, so nothing changes until the cutover.
+
+### Changed
+
+- The swap module loads its host from `SWAP_HOST` (`poascan/swap/host.py` dispatches; POAScan's host is `host_poascan.py`). A mirror host can answer health, price and market through three optional hooks.
+
 ## [1.17.0] - 2026-10-21
 
 ### Added

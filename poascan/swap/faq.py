@@ -12,14 +12,14 @@ def _swaps():
 
 def _buy_now():
     h = M.swap_health()
-    if not h["available"]: return (M.UPGRADE_MSG + ' Open offers show on <a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a> once swaps are back.') if C.SWAPS_LIVE else M.SOON_MSG + ' Preview them on <a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a>.'
-    return f'There are {h["open_offers"]} open offers right now. See <a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a> or https://minepoa.com/api/swaps.'
+    if not h["available"]: return (M.UPGRADE_MSG + ' Open offers show on <a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a> once swaps are back.') if C.SWAPS_LIVE else M.SOON_MSG + ' Preview them on <a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a>.'
+    return f'There are {h["open_offers"]} open offers right now. See <a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a> or https://minepoa.com/api/swaps.'
 
 def _price():
     s = M.swap_stats()
     if s["last"] and s["last"][0][0] is not None:
-        return f'The last filled swap priced 1M POA at {s["last"][0][0]:.6g} {E(s["last"][1] or "")}. {C.BRAND} shows prices only from filled swaps, on <a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a>.'
-    return 'No swap has filled yet, so there is no trade price. Open offers are asks, not trades. ' + C.BRAND + ' shows a price on <a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a> after a fill.'
+        return f'The last filled swap priced 1M POA at {s["last"][0][0]:.6g} {E(s["last"][1] or "")}. {C.BRAND} shows prices only from filled swaps, on <a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a>.'
+    return 'No swap has filled yet, so there is no trade price. Open offers are asks, not trades. ' + C.BRAND + ' shows a price on <a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a> after a fill.'
 
 
 PAGE_KEY = "/how-to-buy-poa"
@@ -36,4 +36,4 @@ PAGE = dict(
         ("What if a take times out?", "Re-call swap-take with the same offer. Re-calling is safe. Don't loop: if https://minepoa.com/api/swaps doesn't answer, swaps are being upgraded, so try again later."),
         ("Can a seller cancel?", "Yes, after expiry, with swap-cancel. Cancels and expired offers refund the seller in full."),
         ("Can I use my own wallet?", "Yes. Self-custody wallets use the coordinated flow in go.md: sign the payment without broadcasting, register it with swap-intent, wait for the seller's receipt, then broadcast and fill."),
-        ("Where do I find sellers?", 'The on-ledger offer book (<a href="' + C.PAGE_PATH + '">' + C.PAGE_PATH + '</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')])
+        ("Where do I find sellers?", 'The on-ledger offer book (<a href="' + C.PAGE_PATH + '">' + C.PAGE_LABEL + '</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')])

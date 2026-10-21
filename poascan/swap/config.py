@@ -18,6 +18,7 @@ FRESH_S = 900           # swaps data older than this (or a failed last fetch) re
 SWAPS_EP = "/api/swaps" # upstream endpoint the indexer polls (60 s, with the host's backoff)
 
 PAGE_URL = BASE_URL + PAGE_PATH
+PAGE_LABEL = PAGE_PATH if PAGE_PATH != "/" else BASE_URL.split("//", 1)[-1].rstrip("/")   # link text: /swaps, or swap.example.com at a site root
 STATUS_URL = BASE_URL + API_PATH + "/swaps/status"
 
 def link(url):

@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.17.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.18.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -613,7 +613,9 @@ def openapi():
                                                                                     "usd_ref": {"type": "string"}, "price": {"type": "object", "description": "same object as /api/price"},
                                                                                     "last_trade": {"type": ["object", "null"], "description": "last fill: per_1m_poa (in its own asset) and asset"},
                                                                                     "best_ask": {"type": ["object", "null"], "description": "cheapest open offer once a fill exists: per_1m_poa and asset (asks are never a USD price)"},
-                                                                                    "poa_on_offer": {"type": "number"}, "fills": {"type": "integer"}}}}},
+                                                                                    "poa_on_offer": {"type": "number"}, "fills": {"type": "integer"},
+                                                                                    "usd_ref_rates": {"type": "object", "description": "current USD reference per paid asset (SOL, ETH), CoinGecko"}}},
+                                                          "names": {"type": "object", "description": "Agent names for makers and takers in the book, by poa1 address"}}},
                             "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
                                      "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
                                                     "checkpoint": {"type": ["integer", "null"], "description": "checkpoint height"}, "epoch": {"type": ["integer", "null"], "description": "open epoch"},

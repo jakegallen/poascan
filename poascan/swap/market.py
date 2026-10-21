@@ -8,8 +8,15 @@ UPGRADE_MSG = "Swaps are being upgraded. Check back soon."
 SOON_MSG = "Swaps are coming soon. Link an Emblem Wallet now to be ready."
 def swap_msg(): return UPGRADE_MSG if C.SWAPS_LIVE else SOON_MSG
 
+def _up(name):
+    """A mirror host (a separate swap site) answers from the instance it follows; a host that indexes minepoa.com itself has no hook."""
+    f = getattr(H, "upstream_" + name, None)
+    return f() if f else None
+
 def swap_health():
     """Upstream /api/swaps health from the indexer's own fetch log. No extra upstream calls."""
+    u = _up("health")
+    if u is not None: return u
     r = H.fetch_log(C.SWAPS_EP)
     now = int(time.time()); ok, er = r.get("last_ok"), r.get("last_err")
     failed = bool(r.get("fails")) and (er or 0) >= (ok or 0)
@@ -37,6 +44,8 @@ def sig(v, n):
 @H.cached("swap_price", 30)
 def price():
     """POA in USD from filled swaps only; open offers (asks) are never used. Served as /api/v1/price."""
+    u = _up("price")
+    if u is not None: return u
     now = time.time(); fx = S.fx()
     fl = sorted((r for r in S.swaps_all() if r["status"] == "filled" and r["fill_ts"] and r["poa"] and r["want"]), key=lambda r: -r["fill_ts"])
     pts = [(r, r["want"] / r["poa"] * u, r["want"] * u) for r in fl for u in [_ref(r)] if u]
@@ -73,6 +82,8 @@ def swap_stats():
 
 def swap_market():
     """Market stats from filled swaps only (no estimate from asks). USD via the CoinGecko reference; USDC counts at 1."""
+    u = _up("market")
+    if u is not None: return u
     now = time.time(); f = S.fx(); usd = lambda a: 1.0 if (a or "").upper() == "USDC" else (f.get((a or "").upper()) or None)
     fl = sorted([r for r in S.swaps_all() if r["status"] == "filled" and r["fill_ts"] and r["poa"] and r["want"]], key=lambda r: -r["fill_ts"])
     last = fl[0] if fl else None
@@ -95,7 +106,8 @@ def swap_market():
                 volume_24h_usd=round(sum(vol), 2) if vol else (None if day else 0.0),
                 trades_all_time=len(done), volume_all_time_usd=round(sum(vall), 2) if vall else (None if done else 0.0),
                 usd_ref=f.get("src") or "CoinGecko", price=pr,
-                last_trade=lt, best_ask=ba, poa_on_offer=st["on_offer"], fills=st["fills"])
+                last_trade=lt, best_ask=ba, poa_on_offer=st["on_offer"], fills=st["fills"],
+                usd_ref_rates={k: f.get(k) for k in ("SOL", "ETH")})
 
 def swap_status_api():
     """/api/v1/swaps/status: availability plus market. The explorer reads swaps only through this, /price and /swaps."""
@@ -103,7 +115,12 @@ def swap_status_api():
     return dict(available=h["available"], state=h["state"], message=None if h["available"] else swap_msg(),
                 last_good_read=iso(h["last_good_read"]), last_good_read_age_s=h["last_good_read_age_s"], last_attempt=iso(h["last_attempt"]),
                 last_attempt_status=h["last_attempt_status"], open_offers=h["open_offers"], fresh_after_s=h["fresh_after_s"],
-                upstream=C.UPSTREAM + C.SWAPS_EP, url=C.PAGE_URL, market=swap_market())
+                upstream=C.UPSTREAM + C.SWAPS_EP, url=C.PAGE_URL, market=swap_market(), names=swap_names())
+
+def swap_names():
+    """Agent names for the makers and takers in the book (so a mirror can link them without a names feed)."""
+    nm = H.names(); ads = {a for r in S.swaps_all() for a in (r.get("maker"), r.get("taker")) if a}
+    return {a: nm[a] for a in sorted(ads) if nm.get(a)}
 
 # ---------------- book and history ----------------
 # go.md SWAPS: open chains solana, ethereum, base; one-call take pays native SOL/ETH; token legs (USDC on Solana) use the coordinated flow
