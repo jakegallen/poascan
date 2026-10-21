@@ -11,18 +11,25 @@ LINE = ("Read https://minepoa.com/go.md (or use the MCP connector https://minepo
         "register (no invite code), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
         "and report my address and balance. Skip any invite or referral link. Never ask me for keys or seed phrases.")
 
-# Re-tested logged out 2026-10-20 (Playwright, headed Chrome). See README "Join links".
-# kind "auto": the URL itself carries the prompt into a NEW chat; "paste": we copy, open a new chat, user pastes.
+# Re-tested logged out 2026-10-20 (Playwright, Chrome).
+# kind "auto": the URL itself carries the prompt into a new chat; "paste": we copy, open the site, user pastes.
+# top: shown up front; the rest sit behind the More toggle, auto first.
 APPS = [
-    # Meta's Muse (Muse Spark, Meta Superintelligence Labs) at meta.ai. ?prompt= is the documented param but did not
-    # prefill logged out; we still pass it (harmless) and always copy first.
-    ("Muse", "paste", "https://www.meta.ai/", "https://www.meta.ai/?prompt="),
-    ("ChatGPT", "auto", "https://chatgpt.com/", "https://chatgpt.com/?q="),          # logged out: auto-sends; logged in: prefilled
-    ("Grok", "auto", "https://grok.com/", "https://grok.com/?q="),                  # prefilled + one-tap "Send this message?"
-    ("Claude", "auto", "https://claude.ai/new", "https://claude.ai/new?q="),        # login keeps returnTo=/new?q=...
-    ("Perplexity", "auto", "https://www.perplexity.ai/", "https://www.perplexity.ai/search?q="),  # runs immediately
-    ("Gemini", "paste", "https://gemini.google.com/app", ""),                       # ?q= / ?prompt= ignored
-    ("Grok Bot", "paste", "", ""),                                                  # deep link needs a per-user bot id
+    ("ChatGPT", "auto", "https://chatgpt.com/", "https://chatgpt.com/?q=", 1),          # logged out: auto-sends; logged in: prefilled
+    ("Claude", "auto", "https://claude.ai/new", "https://claude.ai/new?q=", 1),        # login keeps returnTo=/new?q=...
+    ("Grok", "auto", "https://grok.com/", "https://grok.com/?q=", 1),                  # prefilled + one-tap "Send this message?"
+    ("Perplexity", "auto", "https://www.perplexity.ai/", "https://www.perplexity.ai/search?q=", 1),  # runs immediately
+    ("Kimi", "auto", "https://www.kimi.com/", "https://www.kimi.com/_prefill_chat?send_immediately=false&prefill_prompt=", 0),  # prefilled, full prompt
+    ("Z.ai", "auto", "https://chat.z.ai/", "https://chat.z.ai/?q=", 0),                # prefilled, full prompt
+    # Meta's Muse at meta.ai. ?prompt= is documented but did not prefill logged out; passed anyway, always copied first.
+    ("Muse", "paste", "https://www.meta.ai/", "https://www.meta.ai/?prompt=", 0),
+    ("Gemini", "paste", "https://gemini.google.com/app", "", 0),                       # ?q= / ?prompt= ignored
+    ("DeepSeek", "paste", "https://chat.deepseek.com/", "", 0),                        # ?q= dropped by the sign-in redirect
+    ("Le Chat", "paste", "https://chat.mistral.ai/chat", "", 0),                       # login wall, ?q= not confirmed
+    ("HuggingChat", "paste", "https://huggingface.co/chat/", "", 0),                   # login wall, ?prompt= not confirmed
+    ("MiniMax", "paste", "https://agent.minimax.io/", "", 0),                          # ?q= ignored
+    ("OpenRouter", "paste", "https://openrouter.ai/chat", "", 0),                      # ?q= ignored
+    ("Grok Bot", "paste", "", "", 0),                                                  # deep link needs a per-user bot id
 ]
 CODERS = [("Muse", LINE), ("Claude Code", f'claude "{LINE}"'), ("Codex", f'codex "{LINE}"'), ("Cursor CLI", f'agent "{LINE}"'),
           ("OpenClaw", f'openclaw agent --agent main --message "{LINE}"'), ("Hermes", f'hermes chat -q "{LINE}"')]
@@ -33,47 +40,48 @@ CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8
 def button(cls=""):
     return f'<a class="joinbtn {cls}" href="/start">Start</a>'
 
+def _badge(kind):
+    return ('<span class="ab auto" title="Opens a new chat with the prompt">Auto</span>' if kind == "auto"
+            else '<span class="ab paste" title="Prompt is copied; paste it in"><i></i></span>')
+
+def _app(n, kind, base, pre):
+    if kind == "auto":
+        return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{_badge(kind)}</a>'
+    return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{n}{_badge(kind)}</button>'
+
+_N = [0]
+def more(label, inner, cls=""):
+    """Collapsed group behind one toggle. Without JS it stays open."""
+    _N[0] += 1; i = f"mp{_N[0]}"
+    return (f'<button class="moreb" type="button" aria-expanded="false" aria-controls="{i}" data-more>{label}<i aria-hidden="true"></i></button>'
+            f'<div class="morep {cls}" id="{i}">{inner}</div>')
+
+def apps(cls=""):
+    """The one 'Open in' option set, used everywhere a prompt can be sent to a chat app."""
+    top = "".join(_app(n, k, b, p) for n, k, b, p, t in APPS if t)
+    rest = "".join(_app(n, k, b, p) for n, k, b, p, t in sorted((a for a in APPS if not a[4]), key=lambda a: a[1] != "auto"))
+    return f'<div class="apps {cls}">{top}</div>' + more("More", rest, f"apps {cls}")
+
 def modal():
     # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback
-    def badge(kind):
-        return ('<span class="ab auto" title="Opens a new chat with the prompt">Auto</span>' if kind == "auto"
-                else '<span class="ab paste" title="Prompt is copied; paste it in"><i></i></span>')
-    apps = ""
-    for n, kind, base, pre in APPS:
-        hot = " hot" if n == "Muse" else ""
-        if kind == "auto":
-            apps += (f'<a class="app{hot}" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">'
-                     f'{n}{badge(kind)}</a>')
-        else:
-            apps += (f'<button class="app cpy{hot}" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">'
-                     f'{n}{badge(kind)}</button>')
     coders = "".join(f'<div class="cmd"><span class="lbl">{n}</span><code>{E(c)}</code>'
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
     return f'''<dialog class="jm" id="joinmodal" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
 <pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>
 <button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>
-<span class="lbl jm-l">Open in</span><div class="apps">{apps}</div>
+<span class="lbl jm-l">Open in</span>{apps()}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
 </div></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>'''
 
 def ask_modal():
     """Shared 'Ask your agent' dialog; app.js fills title/prompt from the clicked [data-ask] button."""
-    def badge(kind):
-        return ('<span class="ab auto" title="Opens a new chat with the prompt">Auto</span>' if kind == "auto"
-                else '<span class="ab paste" title="Prompt is copied; paste it in"><i></i></span>')
-    apps = ""
-    for n, kind, base, pre in APPS:
-        if kind == "auto":
-            apps += f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{badge(kind)}</a>'
-        else:
-            apps += f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{n}{badge(kind)}</button>'
     return f'''<dialog class="jm am" id="askmodal" aria-labelledby="am-t"><div class="jm-in" data-pcard>
 <div class="jm-hd"><h2 id="am-t">Ask your agent</h2><button class="jm-x" type="button" data-amclose aria-label="Close">{CLOSE}</button></div>
 <div class="chips am-c" hidden></div>
 <pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>
 <button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>
-<span class="lbl jm-l">Open in</span><div class="apps">{apps}</div>
+<span class="lbl jm-l">Open in</span>{apps()}
 <p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a>. MY_KEY stays with your agent: never paste keys into chat.</p>
 </div></dialog>'''

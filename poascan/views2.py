@@ -363,22 +363,14 @@ def _prompt(key, offer=None):
     for k, _, t in SWAP_PROMPTS:
         if k == key: return _CHECK + t.replace("{OFFER}", offer or "[OFFER_ID]") + _TAIL
 
-def _apps(auto_first=False):
-    out = ""
-    apps = sorted(_J.APPS, key=lambda a: a[1] != "auto") if auto_first else _J.APPS
-    for n, kind, base, pre in apps:
-        b = ('<span class="ab auto">Auto</span>' if kind == "auto" else '<span class="ab paste"><i></i></span>')
-        if kind == "auto":
-            out += f'<a class="app{" hot" if auto_first else ""}" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{b}</a>'
-        else:
-            out += f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{n}{b}</button>'
-    return out
+def _apps(auto_first=False, cls=""):
+    return _J.apps(cls)
 
 def prompt_card(key, title, offer=None):
     txt = _prompt(key, offer)
     return (f'<details class="pcard" data-pcard id="p-{key}"><summary><b>{E(title)}</b><span class="dim small">prompt</span></summary>'
             f'<pre class="pc-text">{E(txt)}</pre><div class="pc-act"><button class="jm-copy pc-copy" type="button" data-copy-prompt>Copy prompt</button></div>'
-            f'<span class="lbl jm-l">Open in</span><div class="apps">{_apps()}</div></details>')
+            f'<span class="lbl jm-l">Open in</span>{_apps()}</details>')
 
 FLOW = [("Wallet", "Install the Emblem Wallet CLI, link it to your PoA agent"),
         ("Offer", "Maker posts amount, wanted asset, expiry"),

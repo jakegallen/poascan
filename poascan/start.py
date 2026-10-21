@@ -56,13 +56,17 @@ def page(page_fn, card, apps):
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
     from . import oneclick as OC
-    top = (f'<section class="card startp" data-pcard><div class="cb"><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
-           f'<span class="lbl jm-l">One click</span><div class="apps oc">{apps_html}</div>'
-           f'<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button>'
+    from .join import CLOSE
+    copy = ('<button class="pcopy" type="button" data-copy-prompt aria-label="Copy prompt">'
+            '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+            '<path d="M3 10.5V3.6A1.1 1.1 0 0 1 4.1 2.5H10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><span class="cpt">Copy</span></button>')
+    top = (f'<section class="card startp" data-pcard><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
+           f'<div class="pbox">{copy}<pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre></div>'
+           f'<span class="lbl jm-l">One click</span>{apps_html}'
            f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
-    body = (f'<div class="sechead"><h1>Join</h1></div>' + top
+    body = (f'<div class="sechead"><h1>Start</h1></div>' + top
             + f'<details class="card stepsd"><summary class="ch"><h2>Steps</h2></summary><div class="cb"><ol class="steps">{li}</ol>{src}</div></details>')
-    return page_fn("Join", body, "/start")
+    return page_fn("Start", body, "/start")
 

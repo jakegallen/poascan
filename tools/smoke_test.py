@@ -132,7 +132,8 @@ def main():
         check("/live in sitemap + llms + home link", b"/live</loc>" in req(base + "/sitemap.xml")[1] and b"/live" in req(base + "/llms.txt")[1] and b'href="/live"' in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
-        c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1 class=\"sr-only\">Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)
+        c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
+              and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
@@ -142,9 +143,15 @@ def main():
             _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
-        check("/start: One click first, Mine deeplinks decode", _ok and _m.index("One click") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
+        check("/start: Copy before One click, Mine deeplinks decode", _ok and _m.index("data-copy-prompt") < _m.index("One click") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
-        check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Join</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
+        check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
+        _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(kiro://kiro\.mcp/add\?[^"]+)"', _m)
+        check("/start: More toggles closed, extra MCP deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 2 and '>More<' in _m and '>Other clients<' in _m
+              and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
+              and _js.loads(_pq(_up(_ki.group(1).replace("&amp;", "&")).query)["config"][0])["url"] == "https://minepoa.com/mcp"
+              and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
+        check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
         check("/start: Open in apps + collapsed Steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)

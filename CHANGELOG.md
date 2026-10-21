@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Changed (/start)
+
+- `/start` reads as a card, so it now has a Close button in its top-right corner. It goes back when you came from POAScan, otherwise home. Escape does the same. The tab title is "Start · POAScan"; /join and /onboarding still work.
+- The prompt's Copy button sits inside the prompt box, top right, and stays visible while the prompt scrolls. It is the only Copy prompt button on the page.
+- Every "Open in" set shows ChatGPT, Claude, Grok and Perplexity, with the rest under one More toggle: Kimi and Z.ai open with the prompt filled in; Muse, Gemini, DeepSeek, Le Chat, HuggingChat, MiniMax, OpenRouter and Grok Bot copy it and open the site.
+- MCP install options (Mine on /start, POAScan on /api): Cursor, VS Code and Claude Code up front. Other clients holds one-click links for VS Code Insiders, Kiro, Trae, Goose, LM Studio and Cherry Studio, plus copy-ready lines for Codex, Gemini CLI, the Claude connector URL, Windsurf, Cline and Zed.
+- Referrer-Policy is now same-origin: nothing is sent to other sites, and the Close button can tell a same-site visit.
+
 ### Added (pending by epoch)
 
 - `/live`: a Pending panel lists ungraded or unresolved answers by the epoch they came from, oldest first, with count and oldest age. Epochs before the current one are highlighted. Requested on LabLeak (post 1315, comment 2444).

@@ -616,3 +616,25 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 @media (prefers-reduced-motion:reduce){.xemb>summary::before{animation:none;display:none}.xemb>summary{transition:none}}
 .xself{color:#968D79}.xself:hover{color:var(--amber)}
 .pend th.r,.pend td.r{text-align:right}.pend{max-width:560px}
+/* /start: header row with close, copy pinned inside the prompt box */
+.startp .sthd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px 0 18px}
+.startp .sthd .jm-x{width:32px;height:32px;text-decoration:none}
+.pbox{position:relative}
+.pbox .jm-p{padding-top:44px}
+.pcopy{position:absolute;top:8px;right:8px;z-index:1;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid rgba(255,176,0,.45);border-radius:8px;background:#1C1709;color:var(--amber);font:600 var(--t13)/1 var(--ui);letter-spacing:.02em;cursor:pointer;box-shadow:0 4px 14px -6px rgba(0,0,0,.6);transition:background var(--fast),border-color var(--fast),color var(--fast)}
+.pcopy svg{width:14px;height:14px;flex:none}
+.pcopy:hover{background:#2A210C;border-color:var(--amber)}
+.pcopy.ok{color:var(--green);border-color:rgba(61,220,151,.5);animation:okflash .6s var(--ease)}
+.pcopy:focus-visible,.moreb:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (max-width:640px){.startp .sthd{padding:10px 12px 0 14px}}
+/* More toggle: one per option set, closed by default, open without JS */
+.moreb{display:inline-flex;align-items:center;gap:6px;height:32px;margin:-8px 0 14px;padding:0 4px;border:0;background:none;color:var(--dim);font:600 var(--t13)/1 var(--ui);letter-spacing:.02em;cursor:pointer}
+.moreb:hover{color:var(--amber)}
+.moreb i{width:8px;height:8px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform var(--fast) var(--ease)}
+.moreb[aria-expanded="true"] i{transform:translateY(2px) rotate(-135deg)}
+html:not(.js) .moreb{display:none}
+html.js .morep:not(.open){display:none}
+.morep.open{animation:moreIn .18s var(--ease)}
+@keyframes moreIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.morep.mcpm{display:block}html.js .morep.mcpm:not(.open){display:none}
+@media (prefers-reduced-motion:reduce){.morep.open{animation:none}.moreb i{transition:none}}

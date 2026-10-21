@@ -100,7 +100,7 @@ def panel():
     a0, c0 = pr[0]
     btn = (f'<button class="xbtn" type="button" id="xgo" data-up="1">Connect</button>' if up else
            f'<button class="xbtn up" type="button" id="xgo" data-up="0" disabled><i></i>Being upgraded</button>')
-    apps = V2._apps(auto_first=True)
+    apps, apps2 = V2._apps(cls="oc"), V2._apps(cls="oc")
     lg = f' <span class="dim">· last good read {rel(h["last_good_read"])}</span>' if h["last_good_read"] else ""
     note = "" if up else f'<p class="xnote" role="status">{V2.UPGRADE_MSG}{lg}</p>'
     return f'''<section class="card xp" id="xp" data-fee="{fee}" data-sellmax="{int(A.supply_split().get("spendable") or 0)}" data-tpl="{E(json.dumps(tpl))}">
@@ -114,8 +114,8 @@ def panel():
 {note}{btn}
 <p class="xsafe">{ICON_INFO}{SAFE}</p>
 <details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
-<span class="lbl jm-l">One click</span><div class="apps oc">{apps}</div><button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
-<details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard><pre class="pc-text" tabindex="0"></pre><span class="lbl jm-l">One click</span><div class="apps oc">{apps}</div>
+<span class="lbl jm-l">One click</span>{apps}<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
+<details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard><pre class="pc-text" tabindex="0"></pre><span class="lbl jm-l">One click</span>{apps2}
 <button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
 <a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a>
 </section>'''
