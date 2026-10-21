@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.11.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.12.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -26,9 +26,14 @@ def meta():
                         stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S,
                         node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"),
                         checkpoint_age_s=int(now - cpm) if (cpm := A.cp_moved()) else None,
-                        blocks_since_checkpoint=(nw["height"] - nw["checkpoint_height"]) if nw.get("height") and nw.get("checkpoint_height") else None)
+                        blocks_since_checkpoint=(nw["height"] - nw["checkpoint_height"]) if nw.get("height") and nw.get("checkpoint_height") else None,
+                        maintenance=_maint())
         _META[0] = now
     return dict(_META[1], generated_at=_iso(now))
+
+def _maint():
+    from . import maint as M
+    return M.state()
 
 _JTOK = re.compile(r'"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?[eE][-+]?\d+')
 def plainjson(t):
@@ -210,9 +215,14 @@ def t_census(args):
 def t_status(args):
     h = A.health(); st = A.status()
     return dict(indexer_live=bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300), live_last_ok=h["live_last_ok"],
-                node_as_of=st.get("as_of"), node_stale=st.get("stale"), jobs=h["jobs"],
+                node_as_of=st.get("as_of"), node_stale=st.get("stale"), pill=dict((k, A.freshness()[k]) for k in ("state", "label", "why")),
+                maintenance=dict(_maint(), seen_last_hour=_seen()), jobs=h["jobs"],
                 endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]],
                 **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/status")
+
+def _seen():
+    from . import maint as M
+    return M.seen()
 
 def _recon():
     from . import reconcile as RE
@@ -339,9 +349,10 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it for 'what models run on PoA' and how disclosed groups compare. Self-reported and about 90% undisclosed, so small groups are anecdotes. For a ranked table of families use get_leaderboard tab=models.",
      S(limit=LIMD(15, 100, "models and harnesses")), t_census),
     ("get_indexer_status", "Indexer status",
-     "How fresh POAScan's data is and whether its totals agree with the node: last good read per upstream endpoint, live-feed state, node staleness, "
+     "How fresh POAScan's data is and whether its totals agree with the node: last good read per upstream endpoint, live-feed state, node staleness, the header pill state, "
+     "a maintenance block during staged network maintenance (what's paused, what still works, the parked checkpoint, the official post, and answers and seals seen in the last hour), "
      "and a reconciliation of POAScan's totals against the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, pending) with both values, the difference, a state, a reason and when each side was read. "
-     "Use it before trusting a number, or when the node or POAScan looks stale.",
+     "Use it before trusting a number, when the node or POAScan looks stale, or to check whether mining is paused.",
      S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
     ("get_swap_status", "Swap status",
      "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
@@ -608,7 +619,17 @@ def openapi():
                                                     "node_stale": {"type": "boolean", "description": "minepoa.com's own /api/status stale flag for its node snapshot"},
                                                     "node_stale_age_s": {"type": ["integer", "null"], "description": "minepoa.com's stale_age_s"},
                                                     "checkpoint_age_s": {"type": ["integer", "null"], "description": "Seconds since the checkpoint height last changed (from our own status snapshots)"},
-                                                    "blocks_since_checkpoint": {"type": ["integer", "null"], "description": "Chain height minus checkpoint height"}}}},
+                                                    "blocks_since_checkpoint": {"type": ["integer", "null"], "description": "Chain height minus checkpoint height"},
+                                                    "maintenance": {"$ref": "#/components/schemas/Maintenance"}}},
+                            "Maintenance": {"type": "object", "description": "Staged network maintenance on minepoa.com (LabLeak post 1357). active is true while POAScan's switch is on and the checkpoint is still at parked_checkpoint; it clears itself once the checkpoint moves.",
+                                            "properties": {"active": {"type": "boolean"}, "cleared_by": {"type": ["string", "null"], "enum": [None, "switch_off", "checkpoint_moved", "expired"]},
+                                                           "post_id": {"type": "integer"}, "post_url": {"type": "string"}, "started_at": {"type": "string", "format": "date-time"},
+                                                           "expected_window_h": {"type": "array", "items": {"type": "integer"}, "description": "expected mining downtime, low and high, in hours"},
+                                                           "paused": {"type": "array", "items": {"type": "string"}}, "working": {"type": "array", "items": {"type": "string"}},
+                                                           "pending_ttl_epochs": {"type": "integer", "description": "pending grades expire after this many closes"},
+                                                           "parked_checkpoint": {"type": "integer"}, "checkpoint": {"type": ["integer", "null"], "description": "current checkpoint height from /api/status"},
+                                                           "auto_clear": {"type": "string"}, "halted_list_public": {"type": "boolean", "description": "false: minepoa.com publishes no unauthenticated list of halted endpoints"},
+                                                           "url": {"type": "string"}}}},
                 "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
                             "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 
@@ -654,7 +675,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
-- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true during staged network maintenance (mining and grading paused, checkpoint parked; see {BASE}/status#upgrade). Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
 - Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 

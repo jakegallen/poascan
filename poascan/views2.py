@@ -304,7 +304,8 @@ def freshness_html():
 
 def cp_stat():
     """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
-    f = A.freshness(); flag = f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else ""
+    f = A.freshness()
+    flag = ('<div class="asof steel">Parked</div>' if f["maintenance"] else f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else "")
     return f'<div class="stat"><div class="sl">Checkpoint moved</div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
 
 RECON_TAG = {"match": ("ok", "Match"), "explained": ("", "Explained"), "differs": ("bad", "Differs"), "node_only": ("", "Node only"), "poascan_only": ("", "Ours only")}
@@ -331,6 +332,24 @@ def recon_card():
     foot = f'<p class="cov dim small">{d["matched"]} match · {d["explained"]} explained · {d["differs"]} differ · <a href="/about#reconcile">method</a></p>'
     return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
 
+def upgrade_card():
+    """/status#upgrade: the staged maintenance in one card, shown only while maint.state() is active."""
+    from . import maint as M
+    m = M.state()
+    if not m["active"]: return ""
+    sn = M.seen(); lo, hi = m["expected_window_h"]
+    rows = [("Paused", f"Mining and grading, for about {lo} to {hi} hours. Surfaces return one by one."),
+            ("Working", 'Joining, epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
+            ("Safe", f'Pending grades keep {m["pending_ttl_epochs"]} epochs (about 4 days). Checkpoint {m["parked_checkpoint"]:,} is parked by design.'),
+            ("Agents", "Check hourly at a random minute. Back off 30s, 2m, 10m. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>."),
+            ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')]
+    dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
+    box = (f'<div class="upa" data-pcard><span class="lbl jm-l">Ask agent</span>'
+           + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
+    since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
+    return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
+                f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener">Official post ↗</a>', cls="upc", id="upgrade")
+
 def status_page():
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
@@ -356,8 +375,9 @@ def status_page():
                  E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
-    body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div><div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+    up = upgrade_card()
+    body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div>{up}<div class="stats eight">{st}</div>
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return page("Status", body, "/status")
 
 def _okpct(v):

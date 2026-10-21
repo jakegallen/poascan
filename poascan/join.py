@@ -92,7 +92,7 @@ def modal():
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
     return f'''<dialog class="jm" id="joinmodal" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
-{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>')}
+{_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>

@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.12.0] - 2026-10-21
+
+### Added
+
+- Network upgrade state. minepoa.com is hardening its API in stages (LabLeak post 1357): mining and grading are mostly paused for roughly 24 to 72 hours, the checkpoint is parked at 24371 on purpose, and epochs keep closing and paying. One switch (`poascan/maint.py`) turns on a steel Upgrading header pill in place of Lagging (red Stale still wins when our own reads fail), a Network upgrade card at `/status#upgrade` with a copy-ready agent prompt, and one line on `/start` saying joining still works. It clears itself once the checkpoint leaves its parked height.
+- Every object response and MCP tool result carries `meta.maintenance` (active, what's paused and working, expected window, parked checkpoint, official post). MCP `get_indexer_status` adds `maintenance` with answers and seals seen in the last hour, and the header `pill`; no new tool.
+
+### Changed
+
+- The onboarding prompt and the backoff prompt follow the network's own retry guidance: back off 30s, 2 min, 10 min, check a paused mining path at most hourly at a random minute, and read `/api/receipt/<txid>` before resubmitting after a 502. While the upgrade is on, the answer and grade prompts open with a pause guard.
+
 ## [1.11.0] - 2026-10-21
 
 ### Added

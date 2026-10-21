@@ -444,10 +444,51 @@ def reconcile(base, check):
           and all("\u2014" not in t["description"] for t in tl))
     check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
 
+MAINT_CHECK = r"""
+import json, sys, time
+from poascan import analytics as A, maint as M
+def fresh(): A._cache.clear(); return A.freshness()
+out = dict(up=fresh()["state"])
+h0 = A.health; A.health = lambda: dict(h0(), live_last_ok=time.time() - 3600); out["stale"] = fresh()["state"]; A.health = h0
+s0 = A.status; A.status = lambda: dict(s0(), checkpoint_height=M.PARKED + 1); out["moved"] = fresh()["state"]; out["cleared"] = M.state()["cleared_by"]; A.status = s0
+print(json.dumps(out))
+"""
+
+def maintenance(base, root, env, check):
+    """Network upgrade: Upgrading pill (not Lagging) linking to /status#upgrade, one card there, one line on /start, meta and MCP carry it.
+    Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
+    n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); st = st[st.index("<main"):st.index("</main>")]
+    check("maintenance: pill reads Upgrading, links to /status#upgrade, one live indicator, checkpoint Parked not Stalled",
+          'class="pill up" id="livepill" href="/status#upgrade"' in n and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
+          and 'asof steel">Parked<' in n and ">Stalled<" not in n)
+    card = s[s.index('id="upgrade"'):]; card = card[:card.index("</section>")]
+    check("maintenance: /status#upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
+          s.index('id="upgrade"') < s.index('class="stats eight"') and all(f"<dt>{k}</dt>" in card for k in ("Paused", "Working", "Safe", "Agents", "Last hour"))
+          and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" in card and "24,371" in card
+          and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
+    check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
+          st.count('class="upn"') == 1 and "Join now" in st and 'href="/status#upgrade"' in st and st.count('class="pbox"') == 1
+          and "once an hour at a random minute" in st and "30s, then 2 min, then 10 min" in st and "api/receipt/TXID" in st)
+    m = json.loads(req(base + "/api/v1/status")[1]).get("meta", {}).get("maintenance") or {}
+    sm = json.loads(req(base + "/api/v1/summary")[1])
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "get_indexer_status", "arguments": {"reconcile": False}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    check("maintenance: meta.maintenance, summary pill and MCP get_indexer_status carry it",
+          m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["mining", "grading"]
+          and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/status#upgrade"
+          and (sc.get("maintenance") or {}).get("active") is True and "answers" in (sc["maintenance"].get("seen_last_hour") or {}) and sc.get("pill", {}).get("label") == "Upgrading")
+    ask = req(base + "/live")[1].decode()
+    check("maintenance: answer and grade prompts carry the pause guard", "paused for a network upgrade" in ask.replace("&#x27;", "'"))
+    r = subprocess.run([sys.executable, "-c", MAINT_CHECK], cwd=root, env=env, capture_output=True, text=True)
+    o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
+    check(f"maintenance: Stale still wins, and moving past the parked checkpoint clears it {o}",
+          o.get("up") == "up" and o.get("stale") == "stale" and o.get("moved") in ("live", "lag") and o.get("cleared") == "checkpoint_moved")
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
-    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "f.db"), POASCAN_INDEXER="0")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "f.db"), POASCAN_INDEXER="0", POASCAN_MAINTENANCE="0")
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     subprocess.run([sys.executable, "tools/fixture.py"], cwd=root, env=env, check=True)
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
@@ -488,6 +529,14 @@ def fixture_pages(check):
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)
         _snap = json.loads(req(base + "/api/v1/summary")[1]); check("summary carries the pill state", _snap.get("pill", {}).get("state") == "lag")
+        # same fixture, network upgrade switched on
+        port2 = free_port(); env2 = dict(env, PORT=str(port2), POASCAN_MAINTENANCE="1"); p2 = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env2)
+        try:
+            for _ in range(50):
+                try: req(f"http://127.0.0.1:{port2}/api/health"); break
+                except Exception: time.sleep(0.2)
+            maintenance(f"http://127.0.0.1:{port2}", root, env2, check)
+        finally: p2.terminate()
         from poascan import indexer as _IX
         _jobs = {j[0]: j[2] for j in _IX.JOBS}
         check("probe: only / and /go.md, every 10 min, first 1 KB", _IX.PROBES == ["/", "/go.md"] and _jobs["probe"] == 600

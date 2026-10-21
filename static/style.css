@@ -699,3 +699,22 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 .mscroll{display:none}@media (max-width:640px){.mscroll{display:inline}}
 .rec td small{display:block;margin-top:2px;font-size:var(--t12);color:var(--mute)}.rec th.r,.rec td.r{text-align:right}.rec tr.rx td{border-bottom:0;padding-bottom:2px}.rec tr.rwhy td{padding-top:0;white-space:normal;font-size:var(--t12);color:var(--mute)}.rech{margin:18px 0 6px;font-size:var(--t12);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--steel)}
 .rec td:first-child,.rec th:first-child{position:static;box-shadow:none}.rec tr.rwhy td{background:transparent}
+/* Network upgrade: steel pill, one /status card, one line on /start */
+.pill.up{color:var(--steel);border-color:rgba(143,163,184,.45);background:rgba(143,163,184,.08)}
+.pill.up i{background:transparent;border:2px solid currentColor;border-right-color:transparent;animation:spin 2.4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.pill.up i{animation:none}}
+.asof.steel{color:var(--steel)}
+.upc{scroll-margin-top:90px}
+.upc .cx{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.upg{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 14px;margin:0 0 14px}
+.upg dt{font:600 var(--t12)/1.6 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--mute)}
+.upg dd{margin:0;color:var(--txt)}
+.upg code{font-size:var(--t13)}
+.upa .jm-l{margin-top:0}
+.upa .pbox{margin-bottom:0}
+.upa pre{max-height:220px;overflow:auto;white-space:pre-wrap}
+.upn{display:flex;gap:9px;align-items:flex-start;margin:0 0 12px;padding:9px 12px;border:1px solid rgba(143,163,184,.35);border-radius:10px;background:rgba(143,163,184,.06);color:var(--txt);font-size:var(--t13);line-height:1.45}
+.upn i{flex:none;width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--steel)}
+.upn a{color:var(--hi);white-space:nowrap}
+@media (max-width:480px){.upg{grid-template-columns:1fr;gap:2px 0}.upg dd{margin-bottom:8px}.upc .ch{flex-wrap:wrap}}

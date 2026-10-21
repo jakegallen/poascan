@@ -99,9 +99,9 @@ One Python process:
 | `/search?q=` | address, 64-hex tx hash or epoch number |
 
 ## API
-Read-only JSON under `/api/v1` (API version 1.11.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
+Read-only JSON under `/api/v1` (API version 1.12.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
 
-Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, ...). List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
+Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, `maintenance`, ...). `maintenance.active` is true during staged network maintenance on minepoa.com; the switch lives in `poascan/maint.py` and clears itself once the checkpoint leaves its parked height. List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
 
 | endpoint | returns |
 |---|---|

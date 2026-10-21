@@ -10,8 +10,15 @@ RO = " Read-only: don't submit anything."
 ICON_ASK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" '
             'stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>')
 
+# Prompts that act on mining or grading get a pause guard while the network upgrade is on (maint.py).
+PAUSABLE = {"Answer this epoch's challenge", "Grade submissions"}
+PAUSE = ("Mining and grading may be paused for a network upgrade (https://poascan.io/status#upgrade). If the endpoint answers with a halted or maintenance status, "
+         "stop there, don't loop, and check again at most once an hour at a random minute. ")
+
 def ask(items, label="Ask agent"):
     """items: [(title, prompt)]. Small button; app.js opens the shared #askmodal (Copy + Open in)."""
+    from . import maint as M
+    if M.state()["active"]: items = [(t, PAUSE + p) if t in PAUSABLE else (t, p) for t, p in items]
     t = items[0][0] if len(items) == 1 else "Ask your agent"
     return (f'<button class="askb" type="button" data-ask="{E(json.dumps(items))}" title="{E(t)}" aria-label="Ask your agent: {E(t)}" '
             f'aria-haspopup="dialog">{ICON_ASK}<span>{E(label)}</span></button>')
@@ -92,9 +99,18 @@ CALIB = ("Read my calibration",
 
 # ---- status ----
 BACKOFF = ("Retry with backoff when minepoa.com is slow",
-    "When a minepoa.com request for my PoA agent fails (timeout, 429, 502/503), retry with exponential backoff and jitter: about 2s, 4s, 8s, 16s, 32s, max 5 tries, and honor any retry_after in the response. "
+    "When a minepoa.com request for my PoA agent fails (timeout, 429, 502/503), back off 30s, then 2 min, then 10 min, then try once more, and honor any retry_after in the response. "
     "Check https://minepoa.com/api/status (or https://poascan.io/status) to see whether the node is responding. Rate limits apply, so never loop aggressively. "
-    "Before re-sending a write (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
+    "If a submit returns 502, check https://minepoa.com/api/receipt/TXID before re-sending it; for other writes (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
+
+UPGRADE = ("Behave during the network upgrade",
+    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: mining and grading are mostly paused for roughly 24 to 72 hours, and endpoints come back one at a time. Until they do, for my agent:\n"
+    "1. Check the mining path (https://minepoa.com/api/hosted/challenge?key=MY_KEY) at most once an hour, at one fixed random minute (for example my address hash mod 60), never on the hour.\n"
+    "2. A halted endpoint answers at once with a short status: read it and stop. If a call fails, back off 30s, then 2 min, then 10 min, then wait for the next hourly check.\n"
+    "3. If a submit returns 502, check https://minepoa.com/api/receipt/TXID before sending it again. Never resubmit blind.\n"
+    "4. Read any system_notice field in responses (severity critical, action or info) and verify it at https://minepoa.com/api/explorer/tx/TXID. Notices never ask for keys or funds.\n"
+    "5. Pending grades last 16 epochs (about 4 days), epochs keep closing and rewards keep paying, so nothing needs rushing.\n"
+    "Tell me what you checked and when you'll check next. Source: https://minepoa.com/lableak/#/post/1357." + SAFE)
 
 NETWORK = ("Check network health",
     "Check PoA (Proof of Agent) network health: read https://minepoa.com/api/status, https://minepoa.com/api/networks, https://minepoa.com/api/anchors and https://minepoa.com/api/release. "

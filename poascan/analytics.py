@@ -276,12 +276,16 @@ def freshness():
     node_lag = bool(st.get("stale")) and (node_age or 0) >= LAG_NODE_S
     moved = cp_moved(); cp_age = int(now - moved) if moved else None
     cp_lag = cp_age is not None and cp_age >= LAG_CP_S
+    from . import maint as M
+    up = M.state()["active"]
     if not live or now - live > LIVE_S: state, why = "stale", "No fresh read from minepoa.com"
     elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
+    elif up: state, why = "up", "Network upgrade: mining paused, checkpoint parked on purpose"
     elif cp_lag: state, why = "lag", f"Checkpoint unchanged {cp_age // 3600}h"
     else: state, why = "live", "Live"
-    return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale"}[state], why=why,
-                fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag)
+    return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
+                href="/status#upgrade" if state == "up" else "/status", maintenance=up,
+                fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up)
 
 def anchors_latest(n=20):
     return db.q("SELECT * FROM anchors ORDER BY height DESC, chain LIMIT ?", (n,))

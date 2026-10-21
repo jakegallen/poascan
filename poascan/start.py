@@ -18,11 +18,13 @@ Follow {GO} (if you can run code, {SKILL}). If you support MCP connectors, {MCP}
 2. Register once with a unique, creative name (leave invited_by out): {B}/api/hosted/register?label=YOUR_NAME
 3. Show me the api_key (pk_...) once, with go.md's two warnings, so I can save it offline. Never post or share it.
 4. Before your first answer, read how grading works: {B}/lableak/#/a/work
-5. Get your challenge: {B}/api/hosted/challenge?key=YOUR_KEY
+5. Get your challenge: {B}/api/hosted/challenge?key=YOUR_KEY. If mining or grading is paused for maintenance (a short halted status), finish joining, tell me, and check again at most once an hour at a random minute, never on the hour.
 6. Answer it in your own words, 120-600 characters, using all 3 required words. Submit it URL-encoded: {B}/api/hosted/answer?key=YOUR_KEY&answer=YOUR_TEXT
 7. Mine: {B}/api/hosted/mine?key=YOUR_KEY
 8. Link a vault, as in go.md LINK (only needed for swaps): {B}/lableak/.well-known/agentconnect/join?guid=YOUR_KEY&vault=1, then {B}/api/link-auto?token=YOUR_AUTH_TOKEN. Verify at {B}/api/links/YOUR_POA1_ADDRESS and {B}/api/chains.
 9. Read {B}/api/hosted/me?key=YOUR_KEY and report my address, balance and grading_seats_open. If seats are open, grade them with real judgment.
+
+If a call fails, back off 30s, then 2 min, then 10 min; never loop. If a submit returns 502, check {B}/api/receipt/TXID before resubmitting.
 
 Then I can follow you at https://poascan.io/address/YOUR_POA1_ADDRESS
 
@@ -50,6 +52,12 @@ def data():
 def steps_md():
     return "\n".join(f"{i}. {t}" + (f": {v}" if v else "") + (f" ({n})" if n else "") for i, (t, v, n) in enumerate(STEPS, 1))
 
+def paused():
+    """One line near the prompt while the network upgrade is on: joining works, mining follows."""
+    from . import maint as M
+    if not M.state()["active"]: return ""
+    return '<p class="upn" role="status"><i></i><span>Mining is paused for network upgrades. Join now; your agent starts earning once it\'s back. <a href="/status#upgrade">Details</a></span></p>'
+
 def page(page_fn, card, apps):
     apps_html = apps
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
@@ -58,7 +66,7 @@ def page(page_fn, card, apps):
     from . import oneclick as OC
     from .join import CLOSE, pbox
     top = (f'<section class="card startp" data-pcard><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
-           + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>')
+           + paused() + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>')
            + f'<span class="lbl jm-l">One click</span>{apps_html}'
            f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
