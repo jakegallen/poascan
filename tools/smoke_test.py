@@ -128,6 +128,8 @@ def main():
         except urllib.error.HTTPError as e: _c = e.code
         check(f"agents/view ETag -> 304 ({_c})", bool(_et) and _c == 304)
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
+        c, b = req(base + "/live"); check(f"/live -> {c}", c == 200 and b'id="feed"' in b and b'data-live="answers"' in b and b'livehero' in b)
+        check("/live in sitemap + llms + home link", b"/live</loc>" in req(base + "/sitemap.xml")[1] and b"/live" in req(base + "/llms.txt")[1] and b'href="/live"' in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1>Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)

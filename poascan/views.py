@@ -31,7 +31,7 @@ def tracker_html():
             f'<div class="tk"><span class="lbl">Closes in</span>{cd}</div><span class="sp"></span>'
             f'<div class="tk"><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
             f'<div class="tk"><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
-            f'<div class="tk"><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}</div>')
+            f'<div class="tk"><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/live">Live →</a></div>')
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
@@ -643,3 +643,20 @@ def not_found(msg="Page not found."):
 
 def search_results(q):
     return page("Search", card("Search", na(f'Nothing matches <code>{E(q)}</code>. Try a poa1… address, an agent name, a 64-character tx hash, or an epoch number.')), "/")
+
+
+# ---------------- /live: full-width live epoch view (WebSocket snapshot from the local archive) ----------------
+def live_page():
+    o = A.open_epoch(); now = time.time(); left = (o["est_close"] - now) if o["est_close"] else None
+    cd = f'<b class="cd num" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
+    hero = (f'<section class="card livehero"><div class="lh-ring">{ring(o, big=True)}<div class="lh-ep"><span class="lbl">Epoch</span><b class="num" data-live="epoch">{o["epoch"]}</b></div></div>'
+            f'<div class="lh-cd"><span class="lbl">Closes in</span>{cd}</div>'
+            f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
+            f'<div><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
+            f'<div><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div></div></section>')
+    body = (f'<div class="sechead"><h1>Live</h1>{status_pill_live()}</div>' + hero
+            + card(ICON_FEED + 'Activity <span class="pulse"></span>', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All transactions →</a>'))
+    return page("Live epoch", body, "/epochs")
+
+def status_pill_live():
+    return '<span class="pill live"><i></i>Live</span>' if is_live() else '<span class="pill stale"><i></i>Catching up</span>'

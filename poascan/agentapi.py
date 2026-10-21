@@ -468,6 +468,7 @@ Tools ({len(TOOLS)}):
 ## Pages
 - {BASE}/ live epoch, stats, feed
 - {BASE}/start one prompt to start mining PoA
+- {BASE}/live the current epoch in real time
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/token, {BASE}/unlocks, {BASE}/swaps, {BASE}/agents/top, {BASE}/agents/census
 - {BASE}/about methodology and safety

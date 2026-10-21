@@ -11,6 +11,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (live epoch)
+
+- `/live`: the current epoch full width in real time (countdown, answers, graders, pool, activity feed), fed by the existing WebSocket snapshot from POAScan's own archive with the polling fallback. Linked from the epoch tracker; in the sitemap and llms.txt.
+
 ### Added (paged Agents)
 
 - `/api/v1/agents/view`: every Agent in pages ordered by address (`limit` 1 to 500, `after=<next_cursor>`), with a weak `ETag`; `If-None-Match` returns 304 when the page is unchanged. CSV too. Mirrored as the `list_agents` MCP tool (18 tools).

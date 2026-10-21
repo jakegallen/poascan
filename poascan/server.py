@@ -101,6 +101,7 @@ def page(path, qs):
     m = re.match(r"^/address/(poa1\w+)$", path)
     if m: return V.address(m.group(1))
     if path == "/token": return V.token()
+    if path == "/live": return V.live_page()
     if path == "/swaps": return V2.swaps_page(None)
     if path in FQ.PAGES: return FQ.page(path, V.page, V.card)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps(auto_first=True))
@@ -125,7 +126,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/live", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
                  "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
                  "/network", "/status", "/about", "/privacy", "/api", "/find"] + list(FQ.PAGES)
 _SITEMAP = [0, ""]
