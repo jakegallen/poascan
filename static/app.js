@@ -77,7 +77,7 @@ function setTicker(html){var t=$("#ticker");if(!t||!html)return;var tmp=D.create
 
 /* apply a snapshot (from WS or polling) */
 function apply(s){if(!s||s.t&&s.t!=="snap")return;
- var p=$("#livepill");if(p){p.className="pill "+(s.live?"live":"stale");var l=p.querySelector("span");if(l)l.textContent=s.live?"Live":"Stale"}
+ var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""};p.className="pill "+f.state;p.title=f.state=="live"?"Status":(f.why||f.label);var l=p.querySelector("span");if(l)l.textContent=f.label}
  if(s.nums)Object.keys(s.nums).forEach(function(k){setNum(k,s.nums[k][0],s.nums[k][1])});
  if(s.cards)Object.keys(s.cards).forEach(function(k){var el=$('.sv[data-live="'+k+'"]');if(!el)return;var tmp=D.createElement("div");tmp.innerHTML=s.cards[k];var nv=$(".sv",tmp);if(nv&&nv.innerHTML!==el.innerHTML)el.innerHTML=nv.innerHTML});
  if(s.epoch){$$(".ring,.vessel[data-close]").forEach(function(r){if(s.epoch.start)r.dataset.start=s.epoch.start;if(s.epoch.close)r.dataset.close=s.epoch.close});

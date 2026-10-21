@@ -227,6 +227,40 @@ def health():
     live = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint='/api/explorer/txs'")
     return dict(endpoints=fl, jobs=jobs, live_last_ok=live["last_ok"] if live else None)
 
+# ---- freshness: one state for the header pill, /api/live and /status
+LIVE_S = 300            # our own last good read of the live feed
+LAG_NODE_S = 600        # minepoa's node snapshot flagged stale and at least this old
+LAG_CP_S = 6 * 3600     # checkpoint height unchanged this long
+
+def _ts(iso):
+    try: return int(dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp())
+    except Exception: return None
+
+@cached("cp_moved", 60)
+def cp_moved():
+    """When the checkpoint height last changed, from our own status snapshots (3-day window)."""
+    cur = status().get("checkpoint_height")
+    if not cur: return None
+    since = int(time.time()) - 3 * 86400; ex = "CAST(json_extract(json, '$.checkpoint_height') AS INTEGER)"
+    r = db.q1(f"SELECT MAX(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {ex} IS NOT NULL AND {ex} != ?", (since, int(cur)))
+    r = db.q1(f"SELECT MIN(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {ex} = ?", (r["t"] or since, int(cur)))
+    return r["t"]
+
+@cached("freshness", 15)
+def freshness():
+    """live: our live fetch is current. lag: it is, but minepoa's node is stale or its checkpoint stalled. stale: our fetch failed."""
+    now = time.time(); st = status(); live = health().get("live_last_ok")
+    node_t = _ts(st.get("as_of")); node_age = int(now - node_t) if node_t else None
+    node_lag = bool(st.get("stale")) and (node_age or 0) >= LAG_NODE_S
+    moved = cp_moved(); cp_age = int(now - moved) if moved else None
+    cp_lag = cp_age is not None and cp_age >= LAG_CP_S
+    if not live or now - live > LIVE_S: state, why = "stale", "No fresh read from minepoa.com"
+    elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
+    elif cp_lag: state, why = "lag", f"Checkpoint unchanged {cp_age // 3600}h"
+    else: state, why = "live", "Live"
+    return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale"}[state], why=why,
+                fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag)
+
 def anchors_latest(n=20):
     return db.q("SELECT * FROM anchors ORDER BY height DESC, chain LIMIT ?", (n,))
 

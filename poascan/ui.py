@@ -299,19 +299,22 @@ def _quiet_h1(body, active):
 def layout(title, body, active="/", live=None):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
-    live_cls, live_txt = ("live", "Live") if live else ("stale", "Stale")
+    if not isinstance(live, dict):
+        from . import analytics as _A
+        live = _A.freshness()
+    live_cls, live_txt, live_why = live["state"], live["label"], (live["why"] if live["state"] != "live" else "Status")
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
     meta = head_meta(full, title)
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=52"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=53"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
 <form class="search" action="/search" method="get" role="search"><input name="q" placeholder="Address / agent / tx / epoch" aria-label="Search" autocomplete="off" enterkeyhint="search"><button aria-label="Search">{ICON_SEARCH}</button></form>
-<a class="pill {live_cls}" id="livepill" href="/status" title="Status"><i></i><span>{live_txt}</span></a>
+<a class="pill {live_cls}" id="livepill" href="/status" title="{E(live_why)}"><i></i><span>{live_txt}</span></a>
 <a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
@@ -319,15 +322,16 @@ def layout(title, body, active="/", live=None):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=19" defer></script></body></html>'''
+<script src="/static/app.js?v=20" defer></script></body></html>'''
 
 def card(title, body, extra="", cls=""):
     return f'<section class="card {cls}"><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
 
-def stat(label, value, sub="", icon="", key=None):
-    """Terse stat card: label + value. `sub` is accepted for compatibility and ignored."""
+def stat(label, value, sub="", icon="", key=None, asof=None):
+    """Terse stat card: label + value. `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read."""
     k = f' data-live="{key}"' if key else ""
-    return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div></div>'
+    a = f'<div class="asof">as of {rel(asof)}</div>' if asof else ""
+    return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
 
 def table(headers, rows, cls=""):
     th = "".join(f"<th>{h}</th>" for h in headers)

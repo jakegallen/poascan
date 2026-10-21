@@ -288,6 +288,25 @@ def _iso(s):
     try: return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
     except Exception: return None
 
+def _every(s): return f"{s // 3600}h" if s >= 3600 else f"{s // 60}m"
+
+def freshness_html():
+    """One row per upstream source: how often we read it, when the last good read landed, and backoff."""
+    now = time.time(); rows = []
+    for r in A.health()["endpoints"]:
+        ev = I.EVERY.get(r["endpoint"]); age = now - r["last_ok"] if r["last_ok"] else None
+        old = age is None or (ev and age > 3 * ev)
+        last = f'<span class="{"amber" if old else ""}">{rel(r["last_ok"])}</span>'
+        rows.append([f'<code>{E(r["endpoint"])}</code>', _every(ev) if ev else "···", last,
+                     (f'{r["fails"]} <span class="dim">{E((r["err"] or "")[:60])}</span>') if r["fails"] else "0",
+                     rel(r["next_at"]) if r["next_at"] and r["next_at"] > now else "now"])
+    return table(["Source", "Every", "Last read", "Fails", "Next try"], rows, cls="wrapt")
+
+def cp_stat():
+    """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
+    f = A.freshness(); flag = f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else ""
+    return f'<div class="stat"><div class="sl">Checkpoint moved</div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
+
 def status_page():
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
@@ -303,18 +322,18 @@ def status_page():
     p50 = _pctl([e["p50"] for e in core if e["p50"]], .5)
     st = "".join([stat("Upstream", state), stat("Success · 1h", pct(sum(s1) / len(s1)) if s1 else "···"), stat("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else "···"),
                   stat("Open incidents", f'<span class="num {"red" if ongoing else ""}">{len(ongoing)}</span>'),
-                  stat("Checkpoint lag", intc(lagv), "blocks"), stat("Checkpoint moved", rel(d["last_cp_change"])), stat("Anchor · Solana", anc_age("sol")), stat("Anchor · Base", anc_age("base"))])
-    tb = table(["Endpoint", "1h", "24h", "p50", "p95", "Last OK", "Last error"],
+                  stat("Checkpoint lag", intc(lagv), "blocks"), cp_stat(), stat("Anchor · Solana", anc_age("sol")), stat("Anchor · Base", anc_age("base"))])
+    tb = table(["Endpoint", "1h", "24h", "p50", "p95", "Last error"],
                [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
                  _okpct(e["s1"]), _okpct(e["s24"]), f'{e["p50"]:,} ms' if e["p50"] else "···", f'{e["p95"]:,} ms' if e["p95"] else "···",
-                 rel(e["last_ok"]), (rel(e["last_err"]) + f' <span class="dim">{E(e["last_code"] or "")}</span>') if e["last_err"] else "···"] for e in d["eps"]], cls="wrapt")
+                 (rel(e["last_err"]) + f' <span class="dim">{E(e["last_code"] or "")}</span>') if e["last_err"] else "···"] for e in d["eps"]], cls="wrapt")
     it = table(["Start (UTC)", "End", "Duration", "What", "Fails"],
                [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else utc(b, "%m-%d %H:%M")), dur(((b or now) - a)),
                  E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div><div class="stats eight">{st}</div>
-{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return page("Status", body, "/status")
 
 def _okpct(v):

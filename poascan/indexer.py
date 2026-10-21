@@ -403,6 +403,11 @@ def seed(seed_dir):
     db.put_blob("seeded", {"from": seed_dir})
 
 # ---------------- scheduler ----------------
+# How often each upstream source is read when healthy (for the /status freshness table).
+EVERY = {"/api/explorer/txs": 60, "/api/status": 60, "/api/networks": 60, "/api/swaps": 60, "/api/txs": 600, "/api/anchors": 300,
+         "/api/notices": 300, "/api/ballots": 300, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600, "/api/release": 3600,
+         "/api/chains": 3600, "/lableak/api/communities": 1800, "/lableak/api/posts": 1800}
+
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("live", job_live, 60, "/api/explorer/txs"),
     ("swaps", job_swaps, 60, "/api/swaps"),

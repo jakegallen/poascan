@@ -7,11 +7,12 @@ from . import ui as _ui
 from . import views2 as V2
 from . import views3 as V3
 
-def is_live():
-    h = A.health(); t = h.get("live_last_ok")
-    return bool(t and time.time() - t < 300)
+def is_live(): return A.freshness()["state"] != "stale"
 
-def page(title, body, active): return layout(title, body, active, live=is_live())
+def pill():
+    f = A.freshness(); return dict(state=f["state"], label=f["label"], why=f["why"])
+
+def page(title, body, active): return layout(title, body, active, live=A.freshness())
 
 def names(): return A.forum_names()
 def _rev(): return {v: k for k, v in A.forum_names().items() if v}
@@ -103,7 +104,7 @@ def live_snapshot():
             "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"]}
     ss = V2.swap_stats(); nums.update({"swap_open": [ss["open"], "int"], "swap_fills": [ss["fills"], "int"], "swap_onoffer": [ss["on_offer"], "c2"]})
     h = headline()
-    return dict(live=is_live(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
+    return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
                 cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags={"swapsopen": V2.open_offers_html()},
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
@@ -118,7 +119,7 @@ def _swap_cards():
 
 def summary_json():
     h = headline(); o = A.open_epoch(); st = A.status()
-    return dict(live=is_live(), as_of=st.get("as_of"), stale=st.get("stale"), tracker=tracker_html(), feed=feed_rows(), cards=h,
+    return dict(live=is_live(), pill=pill(), as_of=st.get("as_of"), stale=st.get("stale"), tracker=tracker_html(), feed=feed_rows(), cards=h,
                 open_epoch=o, supply=st.get("supply"), holders=st.get("holders"), accounts=st.get("agents_joined"))
 
 
@@ -558,16 +559,15 @@ def forum_page():
     return page("Community", '<div class="sechead"><h1>Community</h1></div>' + body, "/forum")
 
 def network():
-    ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_ = db.get_blob("release")[0] or {}; p = A.params(); st = A.status(); sy = A.sybil(); h = A.health()
+    ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}; p = A.params(); p_t = db.get_blob("params")[1]; st = A.status(); sy = A.sybil(); h = A.health()
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
     gaps = [r["gap_s"] for r in ep if r["gap_s"]]
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc.get("last") else None
     s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Checkpoint", intc(nw.get("checkpoint_height")), "", "", "checkpoint"), stat("Checkpoint lag", intc(lag)),
                  stat("Epoch cadence", f'<span class="num">{(sum(gaps)/len(gaps)/3600 if gaps else 0):.2f}h</span>'), stat("Closes", intc(len(ep))),
                  stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
-                 stat("Signers", " · ".join(E(x["s"]) for x in anc["sigs"]) or "···"), stat("K", intc(p.get("K"))),
-                 stat("Version", f'<span class="mono">{E((rel_.get("current") or {}).get("version","···"))}</span>'), stat("Releases", intc(len(rel_.get("history",[])))),
-                 stat("Node data", '<span class="tag warn">stale</span>' if st.get("stale") else '<span class="tag ok">fresh</span>')])
+                 stat("Signers", " · ".join(E(x["s"]) for x in anc["sigs"]) or "···"), stat("K", intc(p.get("K")), asof=p_t),
+                 stat("Version", f'<span class="mono">{E((rel_.get("current") or {}).get("version","···"))}</span>', asof=rel_t), stat("Releases", intc(len(rel_.get("history",[])))), V2.cp_stat()])
     g0 = rel_.get("g0") or {}
     dep = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in [
         ("G0", addr_link(g0.get("addr"), names())), ("Powers", ", ".join(E(x) for x in g0.get("powers", [])) or "···"),
@@ -582,9 +582,8 @@ def network():
         ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
         ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
-    idx = table(["Endpoint", "Last OK", "Last error", "Fails", "Next try"], [[f'<code>{E(r["endpoint"])}</code>', rel(r["last_ok"]), E(r["err"] or "···") if r["fails"] else "···", r["fails"] or 0, rel(r["next_at"]) if r["next_at"] and r["next_at"] > time.time() else "now"] for r in h["endpoints"]], cls="wrapt")
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>{card("Indexer", idx)}'''
+<div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>'''
     return page("Network", '<div class="sechead"><h1>Network</h1></div>' + body, "/network")
 
 def privacy():
@@ -620,7 +619,9 @@ def about():
 <li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
-    methods = card("More methodology", '''<h3 id="pending">Pending answers</h3><p>The Pending panel on <a href="/live">/live</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><h3 id="market">Swap market stats</h3><p>From filled swaps only, never from open asks, priced in USD with the CoinGecko SOL and ETH reference (USDC counts at $1). Market Cap is the last fill price times circulating supply (unlocked, spendable POA). FDV is the last fill price times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. Trades counts every finalized swap-fill since launch, and Volume sums them in USD: each fill at the SOL or ETH reference POAScan recorded when it indexed the fill (within 3 hours of it), or at the current reference when none was recorded. The first fill predates recording, so it uses the current reference. The API also returns 24h Trades and 24h Volume.</p><h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
+    methods = card("More methodology", '''<h3 id="freshness">Live, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
+<b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
+<b>Stale</b>: we have not read the feed for 5+ minutes. Per-source read times are on <a href="/status">/status</a>.</p><h3 id="pending">Pending answers</h3><p>The Pending panel on <a href="/live">/live</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><h3 id="market">Swap market stats</h3><p>From filled swaps only, never from open asks, priced in USD with the CoinGecko SOL and ETH reference (USDC counts at $1). Market Cap is the last fill price times circulating supply (unlocked, spendable POA). FDV is the last fill price times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. Trades counts every finalized swap-fill since launch, and Volume sums them in USD: each fill at the SOL or ETH reference POAScan recorded when it indexed the fill (within 3 hours of it), or at the current reference when none was recorded. The first fill predates recording, so it uses the current reference. The API also returns 24h Trades and 24h Volume.</p><h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>
 <h3>Graders &amp; grading</h3><p>Alignment comes from the <code>jury</code> array of every settled answer in the close records. Ungraded answers carry forward up to params.pending_ttl_epochs. Appeal overturns are not exposed.</p>

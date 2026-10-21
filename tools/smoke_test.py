@@ -161,6 +161,7 @@ def main():
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
         check("/start: Copy before One click, Mine deeplinks decode", _ok and _m.index("data-copy-prompt") < _m.index("One click") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
+        check("pill: Stale (red) when our own fetch has nothing", b'class="pill stale" id="livepill"' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
         _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
@@ -251,12 +252,19 @@ def fixture_pages(check):
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
+        _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
+        check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
+              'class="pill lag" id="livepill"' in _n and "Checkpoint unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
+        check("/network: as-of on Version and K, checkpoint flagged", _n.count('<div class="asof">as of') == 2 and 'asof amber">Stalled<' in _n)
+        check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
+        check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)
+        _snap = json.loads(req(base + "/api/v1/summary")[1]); check("summary carries the pill state", _snap.get("pill", {}).get("state") == "lag")
         from poascan import indexer as _IX
         _jobs = {j[0]: j[2] for j in _IX.JOBS}
         check("probe: only / and /go.md, every 10 min, first 1 KB", _IX.PROBES == ["/", "/go.md"] and _jobs["probe"] == 600
               and _IX.uptime_name("/api/status") == "probe /api/status" and _IX.uptime_name("/api/params") == "/api/params")
         _st = req(base + "/status")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
-        check("uptime: derived /api/status folds into one continuous series", _st.count("<code>/api/status</code>") == 2 and "/api/status,fetch" not in _csv.replace('"', ""))
+        check("uptime: derived /api/status folds into one continuous series", ",/api/status,probe,25,25," in _csv and ",/api/status,fetch" not in _csv)
         check("fixture: /grading has an h1", b"<h1" in g and b">Grading</h1>" in g)
         check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])
     finally:

@@ -23,6 +23,7 @@ def seed(n=12):
     db.put_blob("params", {"K": 5, "auto_epoch_seconds": 21600, "panel_size": 5, "grade_quorum": 3, "pending_ttl_epochs": 6,
                            "slash_pardons": {"0": [A3]}, "swap_fee_bp": 100, "E0": 1e9, "halving_epochs": 720})
     db.put_blob("networks", {"chains": [{"chain_id": "poa-mainnet-1", "height": 200, "checkpoint_height": 100}]})
+    db.put_blob("release", {"current": {"version": "1.8.0"}, "history": [{"version": "1.8.0", "ts": now - 86400}]})
     db.put_blob("fx", {"SOL": 100.0, "ETH": 3000.0, "src": "CoinGecko"})
     db.write("INSERT OR REPLACE INTO accounts(addr, invited_by, balance, balance_s, first_seen, last_seen) VALUES(?,?,?,?,?,?)",
              [(A1, None, 1.5e8, "150000000", t0, now), (A2, A1, 5e7, "50000000", t0, now), (A3, BAD, 2e7, "20000000", t0, now)], many=True)
@@ -30,6 +31,10 @@ def seed(n=12):
     rows = [(now - 7200 + i * 60, ep, 1, 100, "200") for i in range(10) for ep in ("probe /api/status", "/api/status", "probe /explorer", "probe /", "probe /go.md")]
     rows += [(now - 600 + i * 60, "probe /api/status", 1, 90, "200") for i in range(5)]
     db.write("INSERT INTO probes VALUES(?,?,?,?,?)", rows, many=True)
+    # our reads are current; the checkpoint last moved 8h ago, so the pill reads Lagging
+    db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes) VALUES(?,?,0,0,100)", [("/api/explorer/txs", now), ("/api/status", now), ("/api/params", now - 3 * 3600)], many=True)
+    for i, t in enumerate(range(now - 10 * 3600, now, 600)):
+        db.add_snap("status", {"checkpoint_height": 90 if t < now - 8 * 3600 else 100}, t)
 
 if __name__ == "__main__":
     seed()
