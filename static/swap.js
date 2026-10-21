@@ -29,7 +29,7 @@ function render(){var r=est(),a=asset();$("#xu-in").textContent=side==="buy"?a:"
  $$(".xbk").forEach(function(b){b.hidden=b.dataset.pair!==pairKey()});$$(".pgrid>[data-asset]").forEach(function(b){b.hidden=b.dataset.asset!==a});
  var none=side==="buy"&&!r.max;
  if(btn.dataset.up==="1"){btn.disabled=none;btn.classList.toggle("off",none);btn.textContent=none?"No offers":(conn()?"Swap":"Connect")}
- if(none)h='Switch to <button type="button" data-goside="sell">Sell</button> or check back';
+ if(none&&btn.dataset.up==="1")h='Switch to <button type="button" data-goside="sell">Sell</button> or check back';
  hint.innerHTML=h;hint.hidden=!h;
  if(!xh.hidden)setPrompt(prompt(r));return r}
 $$(".xtabs button").forEach(function(b){b.addEventListener("click",function(){side=b.dataset.side;pick=null;$$(".xtabs button").forEach(function(x){var on=x===b;x.classList.toggle("on",on);x.setAttribute("aria-selected",on?"true":"false")});xp.dataset.side=side;render()})});

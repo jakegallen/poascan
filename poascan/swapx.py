@@ -29,7 +29,8 @@ BUY_TOKEN = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET} on {
              "/api/hosted/swap-broadcast and /api/hosted/swap-fill with that ref. I expect about {OUT} POA after the network fee.")
 
 def templates():
-    return {"buy": V2._CHECK + BUY + V2._TAIL, "buy_token": V2._CHECK + BUY_TOKEN + V2._TAIL, "sell": V2._CHECK + SELL + V2._TAIL, "connect": V2.WALLET_PROMPT}
+    c = V2._check()
+    return {"buy": c + BUY + V2._TAIL, "buy_token": c + BUY_TOKEN + V2._TAIL, "sell": c + SELL + V2._TAIL, "connect": V2.WALLET_PROMPT}
 
 def _rows():
     rows = V2.swaps_all()
@@ -98,11 +99,12 @@ def panel():
     lis = "".join(f'<li role="option" tabindex="-1" data-v="{E(a)}|{E(c)}"{" aria-selected=\"true\"" if k == 0 else ""}>{net_logo(c)}<b>POA / {E(a)}</b>'
                   f'<span class="xoc">{(str(cnt[(a, c)]) + (" offers" if cnt[(a, c)] > 1 else " offer")) if cnt.get((a, c)) else ""}</span></li>' for k, (a, c) in enumerate(pr))
     a0, c0 = pr[0]
-    btn = (f'<button class="xbtn" type="button" id="xgo" data-up="1">Connect</button>' if up else
-           f'<button class="xbtn up" type="button" id="xgo" data-up="0" disabled><i></i>Being upgraded</button>')
+    btn = ('<button class="xbtn soon" type="button" id="xgo" data-up="0" aria-disabled="true">Coming soon</button>' if not V2.SWAPS_LIVE else
+           '<button class="xbtn" type="button" id="xgo" data-up="1">Connect</button>' if up else
+           '<button class="xbtn up" type="button" id="xgo" data-up="0" disabled><i></i>Being upgraded</button>')
     apps, apps2 = V2._apps(cls="oc"), V2._apps(cls="oc")
     lg = f' <span class="dim">· last good read {rel(h["last_good_read"])}</span>' if h["last_good_read"] else ""
-    note = "" if up else f'<p class="xnote" role="status">{V2.UPGRADE_MSG}{lg}</p>'
+    note = "" if up or not V2.SWAPS_LIVE else f'<p class="xnote" role="status">{V2.UPGRADE_MSG}{lg}</p>'
     return f'''<section class="card xp" id="xp" data-fee="{fee}" data-sellmax="{int(A.supply_split().get("spendable") or 0)}" data-tpl="{E(json.dumps(tpl))}">
 <div class="xhd"><div class="xtabs" role="tablist"><button type="button" role="tab" class="on" aria-selected="true" data-side="buy">Buy</button><button type="button" role="tab" aria-selected="false" data-side="sell">Sell</button></div>
 <div class="xpair"><button type="button" class="xselb" id="xselb" aria-haspopup="listbox" aria-expanded="false" aria-label="Pair"><span id="xsell">{net_logo(c0)}</span><b id="xselt">POA / {E(a0)}</b></button>
@@ -142,5 +144,5 @@ def page():
     body = ('<h1 class="sr-only">Swap POA</h1>'
             f'<div class="xgrid"><div class="xl">{panel()}</div><div class="xr">{side}</div></div>'
             + card("Activity", V2.history_html(), '<a class="more" href="/api/swaps.csv">CSV →</a>')
-            + '<script src="/static/swap.js?v=4" defer></script>')
+            + '<script src="/static/swap.js?v=5" defer></script>')
     return V2.page("Swaps", body, "/swaps")

@@ -106,15 +106,18 @@ def main():
         c, b = req(base + "/epoch/1"); check("epoch breadcrumbs", b"BreadcrumbList" in b)
         c, b = req(base + "/api/v1/swaps/status"); sw = json.loads(b) if c == 200 else {}
         check(f"swaps status -> {c}", c == 200 and {"available", "state", "last_good_read", "open_offers", "meta"} <= set(sw))
-        check("swaps status upgrading on empty DB", sw.get("available") is False and sw.get("state") == "upgrading")
-        c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "upgrading"))
+        check("swaps status coming soon before launch", sw.get("available") is False and sw.get("state") == "coming_soon" and "coming soon" in (sw.get("message") or ""))
+        c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "coming_soon", "upgrading"))
         c, b = req(base + "/swaps"); low = b.decode().lower()
-        check("swaps pill", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("xnote")[1][:400] for w in ("down", "broken", "outage", "error")))
+        import re as _re0
+        _mn0 = _re0.sub(rb'data-tpl="[^"]*"', b"", b.split(b"<main")[1].split(b"</main>")[0])
+        check("swaps: Coming soon once, no upgrade copy", _mn0.count(b"Coming soon") == 1 and _mn0.lower().count(b"coming soon") == 1 and b"being upgraded" not in _mn0.lower()
+              and b'<button class="xbtn soon" type="button" id="xgo" data-up="0" aria-disabled="true">Coming soon</button>' in _mn0 and b'class="xnote"' not in _mn0)
         _mn = b.split(b"<main")[1].split(b"</main>")[0]
-        check("swap panel: Buy/Sell, pair, upgrading button, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" disabled', b"Only swap through the network. Never send payment outside it.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
+        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Only swap through the network. Never send payment outside it.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
         check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
         check("swaps: book, price, fills", all(x in _mn for x in (b'id="xbook"', b"Order book", b"Recent fills", b"No fills yet")) and req(base + "/static/swap.js")[0] == 200)
-        check("swap prompts check /api/swaps first", b"Before anything else, GET https://minepoa.com/api/swaps" in b and b"don&#x27;t call swap-take" in b)
+        check("swap prompts say coming soon and gate on swaps/status", b"Swaps are coming soon. Until https://poascan.io/api/v1/swaps/status shows available:true" in b and b"don&#x27;t call swap-offer, swap-take" in b and b"being upgraded" not in b)
         c, b = req(base + "/api/v1/concentration"); cj = json.loads(b) if c == 200 else {}
         check(f"concentration -> {c}", c == 200 and {"top1_share", "top5_share", "top10_share", "top20_share", "gini", "min_activity", "meta"} <= set(cj))
         check("summary concentration + openapi", "concentration" in json.loads(req(base + "/api/v1/summary")[1]) and "/api/v1/concentration" in spec["paths"] and "Concentration" in spec["components"]["schemas"])

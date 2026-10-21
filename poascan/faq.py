@@ -15,11 +15,11 @@ def _live():
 
 def _swaps():
     h = V2.swap_health()
-    return stat("Swaps", '<span class="num">Available</span>' if h["available"] else '<span class="num">Upgrading</span>', "", ICON_SWAP) + stat("Open offers", intc(h["open_offers"]), "", ICON_SWAP)
+    return stat("Swaps", '<span class="num">Available</span>' if h["available"] else ('<span class="num">Upgrading</span>' if V2.SWAPS_LIVE else '<span class="num">Coming soon</span>'), "", ICON_SWAP) + stat("Open offers", intc(h["open_offers"]), "", ICON_SWAP)
 
 def _buy_now():
     h = V2.swap_health()
-    if not h["available"]: return V2.UPGRADE_MSG + ' Open offers show on <a href="/swaps">/swaps</a> once swaps are back.'
+    if not h["available"]: return (V2.UPGRADE_MSG + ' Open offers show on <a href="/swaps">/swaps</a> once swaps are back.') if V2.SWAPS_LIVE else V2.SOON_MSG + ' Preview them on <a href="/swaps">/swaps</a>.'
     return f'There are {h["open_offers"]} open offers right now. See <a href="/swaps">/swaps</a> or https://minepoa.com/api/swaps.'
 
 def _price():

@@ -638,3 +638,8 @@ html.js .morep:not(.open){display:none}
 @keyframes moreIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .morep.mcpm{display:block}html.js .morep.mcpm:not(.open){display:none}
 @media (prefers-reduced-motion:reduce){.morep.open{animation:none}.moreb i{transition:none}}
+/* /swaps before launch: one greyed "Coming soon" button with a slow gold sweep */
+.xbtn.soon{position:relative;overflow:hidden;isolation:isolate;background:var(--card2);color:var(--dim);border:1px solid var(--line2);box-shadow:none;cursor:default;filter:none}
+.xbtn.soon::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgba(255,176,0,.16) 50%,transparent 65%);transform:translateX(-100%);animation:soonsweep 4.5s ease-in-out infinite}
+@keyframes soonsweep{0%{transform:translateX(-100%)}55%,100%{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.xbtn.soon::after{animation:none;opacity:0}}

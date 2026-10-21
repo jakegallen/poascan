@@ -179,6 +179,8 @@ def t_status(args):
 def t_swap_status(args):
     d = V2.swap_status_api()
     d["note"] = ("Swaps are available." if d["available"] else
+                 "Swaps are coming soon. Don't call swap-offer or swap-take yet; tell the user they're coming soon and offer to help link an Emblem vault so they're ready."
+                 if d["state"] == "coming_soon" else
                  "Swaps are being upgraded. Don't call swap-take now; tell the user to check back soon and offer to try again later.")
     d["safety"] = SAFETY
     return d
@@ -242,7 +244,7 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
     ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
-    ("get_swap_status", "Swap status", "Whether swaps are available or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, 24h trades, 24h volume in USD). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
+    ("get_swap_status", "Swap status", "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, 24h trades, 24h volume in USD). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
     ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
@@ -360,8 +362,8 @@ def openapi():
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
-        "/api/swaps/status": _op("Swap availability: available or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
-                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is upgrading when the last read failed or the data is older than fresh_after_s. Agents: when available is false, don't call swap-take; try again later."),
+        "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
+                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is coming_soon before launch, and upgrading when the last read failed or the data is older than fresh_after_s. Agents: when available is false, don't call swap-take; try again later."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -415,7 +417,7 @@ def openapi():
                                                  "top10_share": {"type": ["number", "null"]}, "top20_share": {"type": ["number", "null"]}, "gini": {"type": ["number", "null"]}, "median_balance": {"type": ["number", "null"]},
                                                  "min_activity": {"type": "object", "properties": {"agents": {"type": "integer"}, "share_of_holders": {"type": ["number", "null"]}, "share_of_supply": {"type": ["number", "null"]}, "definition": {"type": "string"}}}}},
                 "SwapStatus": {"type": "object", "description": "Swap availability from POAScan's scheduled read of minepoa.com/api/swaps",
-                                           "properties": {"available": {"type": "boolean"}, "state": {"type": "string", "enum": ["available", "upgrading"]},
+                                           "properties": {"available": {"type": "boolean"}, "state": {"type": "string", "enum": ["available", "coming_soon", "upgrading"]},
                                                           "message": {"type": ["string", "null"], "description": "Visitor-facing note when not available"},
                                                           "last_good_read": {"type": ["string", "null"], "format": "date-time", "description": "last successful read, ISO 8601 UTC"},
                                                           "last_good_read_age_s": {"type": ["integer", "null"]}, "last_attempt": {"type": ["string", "null"], "format": "date-time"},
@@ -467,7 +469,7 @@ Tools ({len(TOOLS)}):
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
-- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; method at {BASE}/about#pending).
@@ -541,7 +543,7 @@ def agent_card():
                 sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
                 sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
                 sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
-                sk("swaps", "Swaps", "Open swap offers, fills and swap availability (available or being upgraded) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
+                sk("swaps", "Swaps", "Open swap offers, fills and swap availability (available, coming soon or being upgraded) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
                 sk("onboarding", "Start mining", "The steps and copy-ready prompt to start mining PoA, from https://poascan.io/start.", ["onboarding", "mining"], ["How do I start mining PoA?"]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],
