@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (concentration)
+
+- `/api/v1/concentration`: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (holders paid in at most one epoch). Also in `/api/v1/summary`, the `get_network_summary` and `get_rich_list` MCP tools, and a Concentration card on /token. Method on /about.
+- Uptime chart y-axis now tops out at 100%.
+
 ### Changed (/swaps)
 
 - /swaps is now a swap panel: pair, Buy/Sell, amount in, estimated amount out from the live open offers, and one Connect then Swap button that hands a prefilled prompt to your agent (One click buttons, Copy as fallback). POAScan still never signs or holds anything.

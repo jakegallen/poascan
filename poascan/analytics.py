@@ -235,3 +235,17 @@ def anchor_summary():
     r["signers"] = db.q("SELECT DISTINCT chain, anchored_by FROM anchors")
     r["sigs"] = db.q("SELECT substr(memo, instr(memo,':sigs')+1) AS s, COUNT(*) AS n FROM anchors GROUP BY s")
     return r
+
+MIN_ACTIVITY_EPOCHS = 1  # an Agent paid in at most this many epochs counts as min-activity
+
+@cached("concentration", 60)
+def concentration():
+    """Share of supply held by the top 1/5/10/20 holders, Gini, and min-activity Agents (paid in <= 1 epoch)."""
+    h = holders(); rows = h["rows"]; tot = h["total"] or 0; bal = [r["balance"] for r in rows]
+    rb = rewards_by_addr()
+    low = [r for r in rows if len([v for v in rb.get(r["addr"], {}).values() if v > 0]) <= MIN_ACTIVITY_EPOCHS]
+    top = {f"top{n}_share": (sum(bal[:n]) / tot if tot else None) for n in (1, 5, 10, 20)}
+    return dict(holders=len(rows), total_balance=tot, **top, gini=h["gini"], median_balance=h["median"],
+                min_activity=dict(agents=len(low), share_of_holders=(len(low) / len(rows)) if rows else None,
+                                  share_of_supply=(sum(r["balance"] for r in low) / tot) if tot else None,
+                                  definition=f"holders paid in at most {MIN_ACTIVITY_EPOCHS} epoch"))

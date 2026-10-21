@@ -305,15 +305,19 @@ def token():
     rich = table(["Rank", "Address", "Balance", "Share", "Source"], [[r["rank"], addr_link(r["addr"], names()), poa(r["balance"], mined=True, dec=4), f'{100*r["share"]:.3f}%', E(r["src"])] for r in h["rows"][:50]])
     stats = "".join([stat("Total supply", poa(sup, mined=True)), stat("Holders", intc(st.get("holders"))),
                      stat("Circulating", poa(sp["spendable"])), stat("Locked", poa(sp["locked"])),
-                     stat("Top-10 share", pct(h["top10_share"], 2)), stat("Top-1 share", pct(h["top1_share"], 2)),
-                     stat("Gini", f'<span class="num">{h["gini"]:.3f}</span>' if h["gini"] is not None else "···"), stat("Median holder", num(h["median"]))])
+                     stat("Median holder", num(h["median"])), stat("Transfers", '<span class="num">0</span>')])
+    c = A.concentration(); ma = c["min_activity"]
+    gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"
+    conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20))
+            + f'<div><span class="lbl">Gini</span>{gi}</div>')
+    conc += f'<div><span class="lbl">Min-activity Agents</span><span class="num">{ma["agents"]:,}</span> <span class="dim small">{pct(ma["share_of_supply"], 1)}</span></div></div>'
+
     body = f'''<div class="tokhead card"><div>{LOGO_MARK}</div><div><h1>Proof of Agent · <span class="mono">POA</span></h1></div></div>
 <div class="stats eight">{stats}{V2.price_stats_html()}</div>
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {V3.unlock_section()}
-<div class="grid2">{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Holders</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}
-{card("Transfers", '<div class="big">0</div>')}</div>
+<div class="grid2">{card("Concentration", conc, '<a class="more" href="/api/v1/concentration">API →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Holders</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>
 {card("Rich list", rich, '<a class="more" href="/api/richlist.csv">CSV →</a>')}'''
     return page("POA token", body, "/token")
 
@@ -596,7 +600,7 @@ def about():
 <li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
-    methods = card("More methodology", '''<h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
+    methods = card("More methodology", '''<h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>
 <h3>Graders &amp; grading</h3><p>Alignment comes from the <code>jury</code> array of every settled answer in the close records. Ungraded answers carry forward up to params.pending_ttl_epochs. Appeal overturns are not exposed.</p>

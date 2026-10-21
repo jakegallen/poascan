@@ -309,11 +309,11 @@ def note(t): return ""  # caveat notes removed site-wide; methodology lives on /
 def na(why): return f'<div class="naBox"><b>Not measurable</b> {why}</div>'
 
 # ---------- SVG charts ----------
-def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True):
+def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):
     """series: list of (xlabel, [v1, v2, ...]). Stacked bar chart."""
     if not series: return skel()
     W = max(640, 18 * len(series)); H = height; pad_l, pad_b, pad_t = 56, 26, 10
-    mx = max((sum(v) if stacked else max(v)) for _, v in series) or 1
+    mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
     bw = (W - pad_l) / len(series) * 0.62; step = (W - pad_l) / len(series)
     out = [f'<svg class="chart" viewBox="0 0 {W} {H}" role="img"' + (f' style="min-width:{int(W*0.75)}px"' if W > 640 else "") + '>']
     for i in range(5):

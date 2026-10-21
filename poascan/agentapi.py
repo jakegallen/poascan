@@ -87,7 +87,7 @@ def t_summary(args):
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
-                open_swap_offers=sw["n"], poa_on_offer=sw["poa"], swaps=V2.swap_status_api(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
+                open_swap_offers=sw["n"], poa_on_offer=sw["poa"], swaps=V2.swap_status_api(), concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
 
 def t_epoch_now(args):
     o = dict(A.open_epoch()); p = A.params()
@@ -143,7 +143,7 @@ def t_leaderboard(args):
 
 def t_richlist(args):
     h = A.holders(); lim = _int(args, "limit", 25, 1, 500)
-    return dict(holders=h["count"], total_balance=h["total"], top10_share=h["top10_share"], gini=h["gini"],
+    return dict(holders=h["count"], total_balance=h["total"], top10_share=h["top10_share"], gini=h["gini"], concentration=A.concentration(),
                 rows=[{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in h["rows"][:lim]], url=BASE + "/token")
 
 def t_unlocks(args):
@@ -334,6 +334,7 @@ def openapi():
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is upgrading when the last read failed or the data is older than fresh_after_s. Agents: when available is false, don't call swap-take; try again later."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
+        "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
         "/api/uptime": _op("Daily uptime of the minepoa.com endpoints POAScan polls (last 30 days)", ROWS, [_p("endpoint", "filter to one endpoint, e.g. /api/swaps", {"type": "string"}, "query", False)], True, oid="uptime", tag="meta"),
         "/api/leaderboard/{tab}": _op("Leaderboard tab", ROWS, [_p("tab", "leaderboard tab", {"type": "string", "enum": list(V4.COLS)})], True, oid="leaderboard"),
         "/api/agents/series": _op("Agents, holders and supply over time (15 min points)", ROWS, csv=True, oid="agentsSeries"),
@@ -375,7 +376,11 @@ def openapi():
             "servers": [{"url": BASE}], "externalDocs": {"url": BASE + "/llms.txt", "description": "Agent guide"},
             "paths": P, "components": {
                 "schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}},
-                            "SwapStatus": {"type": "object", "description": "Swap availability from POAScan's scheduled read of minepoa.com/api/swaps",
+                            "Concentration": {"type": "object", "description": "Holder concentration from the rich list. Shares are fractions of the total held balance (0 to 1).",
+                                  "properties": {"holders": {"type": "integer"}, "total_balance": {"type": "number"}, "top1_share": {"type": ["number", "null"]}, "top5_share": {"type": ["number", "null"]},
+                                                 "top10_share": {"type": ["number", "null"]}, "top20_share": {"type": ["number", "null"]}, "gini": {"type": ["number", "null"]}, "median_balance": {"type": ["number", "null"]},
+                                                 "min_activity": {"type": "object", "properties": {"agents": {"type": "integer"}, "share_of_holders": {"type": ["number", "null"]}, "share_of_supply": {"type": ["number", "null"]}, "definition": {"type": "string"}}}}},
+                "SwapStatus": {"type": "object", "description": "Swap availability from POAScan's scheduled read of minepoa.com/api/swaps",
                                            "properties": {"available": {"type": "boolean"}, "state": {"type": "string", "enum": ["available", "upgrading"]},
                                                           "message": {"type": ["string", "null"], "description": "Visitor-facing note when not available"},
                                                           "last_good_read": {"type": ["string", "null"], "format": "date-time", "description": "last successful read, ISO 8601 UTC"},
@@ -423,6 +428,7 @@ Tools ({len(TOOLS)}):
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
+- Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}).

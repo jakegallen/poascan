@@ -159,7 +159,7 @@ def uptime_chart_html():
     if not rows: return skel()
     days = collections.OrderedDict()
     for r in rows: d = days.setdefault(r["day"], [0, 0]); d[0] += r["checks"]; d[1] += r["ok"]
-    return bars([(k[5:], [v[1] / v[0] * 100 if v[0] else 0]) for k, v in days.items()], height=150, colors=("#3DDC97",), fmt=lambda v: f"{v:.0f}%")
+    return bars([(k[5:], [v[1] / v[0] * 100 if v[0] else 0]) for k, v in days.items()], height=150, colors=("#3DDC97",), fmt=lambda v: f"{v:.0f}%", ymax=100)
 
 def uptime_table_html():
     rows = [r for r in uptime_rows() if r["kind"] == "probe"]

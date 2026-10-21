@@ -47,6 +47,7 @@ def api(path, qs):
     if path == "/api/swaps/status": return V2.swap_status_api(), False
     if path == "/api/swaps/price-history": return V2.price_history(), True
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
+    if path == "/api/concentration": return A.concentration(), False
     if path == "/api/uptime":
         rows = V2.uptime_rows(); ep = qs.get("endpoint", [""])[0]
         return ([r for r in rows if r["endpoint"] == ep] if ep else rows), True
@@ -205,7 +206,7 @@ class H(BaseHTTPRequestHandler):
             if path in ("/api/summary", "/api/live"):
                 m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
                 if isinstance(d, dict):
-                    if path == "/api/summary": d["swaps"] = V2.swap_status_api()
+                    if path == "/api/summary": d["swaps"] = V2.swap_status_api(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **{"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}))
             if path.startswith("/static/"):
