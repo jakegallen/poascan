@@ -466,3 +466,16 @@ def profile(addr):
     return dict(census=cen, rewards=rb, settled=sett, jury=jur, served=served, streak=st, answered=answered,
                 forum_posts=fp, forum_comments=fc, forum_name=name, builder_posts=bp, credit=credit,
                 family=fam, label=lab)
+
+
+def new_per_day():
+    """New Agents per UTC day from POAScan's /api/status snapshots (agents_joined). The first day is partial."""
+    last = {}
+    for t, a, h, sup, tx in A.accounts_series():
+        if a: d = t // 86400 * 86400; last.setdefault(d, [a, a]); last[d][1] = a
+    out, prev = [], None
+    for d in sorted(last):
+        first, end = last[d]
+        out.append(dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, new_agents=end - (prev if prev is not None else first), total=end, partial=prev is None))
+        prev = end
+    return out

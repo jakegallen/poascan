@@ -122,6 +122,47 @@ def _swap_ask():
     keys = (["take"] if off else []) + ["buy", "sell", "status"]
     return PR.ask([(t, _prompt(k, off if k == "take" else None)) for k in keys for kk, t, _ in SWAP_PROMPTS if kk == k])
 
+# ---------------- history (from data POAScan already indexes) ----------------
+def price_history():
+    """One row per filled swap: POA price per 1M POA in the paying asset."""
+    out = []
+    for r in db.q("SELECT offer_id, fill_txid, fill_ts, chain, asset, poa, want FROM swaps WHERE status='filled' AND fill_ts IS NOT NULL ORDER BY fill_ts"):
+        pm = (r["want"] / r["poa"] * 1e6) if r["poa"] and r["want"] else None
+        out.append(dict(ts=r["fill_ts"], asset=(r["asset"] or "").upper() or None, chain=r["chain"], poa=r["poa"], paid=r["want"], price_per_1m_poa=pm, offer_id=r["offer_id"], fill_txid=r["fill_txid"]))
+    return out
+
+def price_chart_html():
+    rows = [r for r in price_history() if r["price_per_1m_poa"] is not None]
+    if not rows: return '<div class="naBox">No fills yet.</div>'
+    out = []
+    for a in sorted({r["asset"] for r in rows}):
+        pts = [(r["ts"], r["price_per_1m_poa"]) for r in rows if r["asset"] == a]
+        if len(pts) == 1: pts = pts + [(pts[0][0] + 1, pts[0][1])]  # one fill: flat at its own time
+        out.append(f'<div><div class="minihd">{E(a or "?")} · 1M POA</div>' + line(pts, height=170, color="#FFB000" if a == "SOL" else "#8FA3B8", fmt=lambda v: f"{v:.4g}", y0=0) + "</div>")
+    return f'<div class="pgrid">{"".join(out)}</div>'
+
+@cached("uptime_daily", 120)
+def uptime_rows(days=30):
+    now = int(time.time()); cut = (now // 86400 - days + 1) * 86400
+    by = {(r["day"], r["endpoint"]): r for r in db.q("SELECT day, endpoint, n, ok, ms FROM uptime_daily WHERE day >= ?", (cut,))}
+    for r in db.q("SELECT (ts/86400)*86400 AS day, endpoint, COUNT(*) AS n, SUM(ok) AS ok, CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER) AS ms FROM probes WHERE ts >= ? GROUP BY 1, 2", (max(cut, now - 2 * 86400),)):
+        by[(r["day"], r["endpoint"])] = r
+    return [dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, endpoint=e.replace("probe ", ""), kind="probe" if e.startswith("probe ") else "fetch",
+                 checks=r["n"], ok=r["ok"], uptime=round(r["ok"] / r["n"], 4) if r["n"] else None, avg_ms=r["ms"]) for (d, e), r in sorted(by.items())]
+
+def uptime_chart_html():
+    rows = [r for r in uptime_rows() if r["kind"] == "probe"]
+    if not rows: return skel()
+    days = collections.OrderedDict()
+    for r in rows: d = days.setdefault(r["day"], [0, 0]); d[0] += r["checks"]; d[1] += r["ok"]
+    return bars([(k[5:], [v[1] / v[0] * 100 if v[0] else 0]) for k, v in days.items()], height=150, colors=("#3DDC97",), fmt=lambda v: f"{v:.0f}%")
+
+def uptime_table_html():
+    rows = [r for r in uptime_rows() if r["kind"] == "probe"]
+    eps = sorted({r["endpoint"] for r in rows}); days = sorted({r["day"] for r in rows})[-7:]
+    m = {(r["day"], r["endpoint"]): r["uptime"] for r in rows}
+    return table(["Endpoint"] + [d[5:] for d in days], [[f'<code>{E(e)}</code>'] + [_okpct(m.get((d, e))) for d in days] for e in eps], cls="wrapt")
+
 def swaps_page(_q=None):
     s = swap_stats(); f = fx()
     st = "".join([stat("Open offers", intc(s["open"]), "", ICON_SWAP, "swap_open"), stat("POA on offer", poa(s["on_offer"]), "", ICON_LOCK, "swap_onoffer"),
@@ -131,6 +172,7 @@ def swaps_page(_q=None):
 {upgrade_banner()}{wallet_html()}
 <div class="stats eight">{st}{price_stats_html()}</div><p class="howlink"><a href="#howto">How to swap ↓</a></p>
 {card(ICON_SWAP + 'Open offers <span class="pulse"></span>', f'<div id="swapsopen">{open_offers_html()}</div>', _swap_ask() + '<a class="more" href="https://minepoa.com/lableak/#/a/sales" target="_blank" rel="noopener">a/sales ↗</a>')}
+{card(ICON_SWAP + "Price history · fills", price_chart_html(), '<a class="more" href="/api/v1/swaps/price-history.csv">CSV →</a>')}
 {card("History", history_html(), '<a class="more" href="/api/swaps.csv">CSV →</a>')}
 {howto_html(next((r["offer_id"] for r in swaps_all() if r["status"] == "open"), None))}'''
     return page("Swaps", body, "/swaps")
@@ -218,7 +260,7 @@ def status_page():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div><div class="stats eight">{st}</div>
-{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div>{card("Incidents · 14d", it)}'''
+{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return page("Status", body, "/status")
 
 def _okpct(v):

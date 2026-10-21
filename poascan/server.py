@@ -45,6 +45,11 @@ def api(path, qs):
     if path == "/api/epochs": return A.epoch_rows(), True
     if path == "/api/swaps": return V2.swaps_all(), True
     if path == "/api/swaps/status": return V2.swap_status_api(), False
+    if path == "/api/swaps/price-history": return V2.price_history(), True
+    if path == "/api/agents/new-per-day": return G.new_per_day(), True
+    if path == "/api/uptime":
+        rows = V2.uptime_rows(); ep = qs.get("endpoint", [""])[0]
+        return ([r for r in rows if r["endpoint"] == ep] if ep else rows), True
     if path == "/api/unlocks": return V3.unlocks_api(), True
     if path.startswith("/api/leaderboard/"):
         t = path.rsplit("/", 1)[1]; t = V4.ALIAS.get(t, t)

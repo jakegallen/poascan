@@ -21,6 +21,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Home: "Start mining in one paste" card with the same prompt as `/start` and a copy button.
 - MCP tools `get_swap_status` (available or being upgraded, last good read, open offers) and `get_onboarding_steps` (same content as `/start`). 16 tools in total.
 - FAQ pages: `/what-is-proof-of-agent`, `/how-to-mine-poa`, `/how-to-buy-poa`, `/what-is-poascan`, with FAQPage JSON-LD. Linked from `/about` and the footer; in the sitemap and llms files.
+- History endpoints: `/api/v1/swaps/price-history` (filled swaps, price per 1M POA per paying asset), `/api/v1/agents/new-per-day`, `/api/v1/uptime` (daily uptime per polled minepoa.com endpoint, optional `?endpoint=`). JSON and CSV.
+- Charts: price history on `/swaps`, New Agents per day on `/agents`, daily uptime on `/status`.
+- `uptime_daily` table: one row per UTC day and endpoint, rolled up from probes and kept a year.
 - A2A agent card: `onboarding` skill; the `swaps` skill covers swap availability.
 
 ### Changed

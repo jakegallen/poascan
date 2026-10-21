@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS labels(addr TEXT PRIMARY KEY, label TEXT, custody TEX
 CREATE TABLE IF NOT EXISTS probes(ts INTEGER, endpoint TEXT, ok INTEGER, ms INTEGER, code TEXT);
 CREATE INDEX IF NOT EXISTS probes_ep ON probes(endpoint, ts);
 CREATE INDEX IF NOT EXISTS probes_ts ON probes(ts);
+CREATE TABLE IF NOT EXISTS uptime_daily(day INTEGER, endpoint TEXT, n INTEGER, ok INTEGER, ms INTEGER, PRIMARY KEY(day, endpoint));
 CREATE TABLE IF NOT EXISTS swaps(offer_id TEXT PRIMARY KEY, maker TEXT, poa REAL, chain TEXT, asset TEXT, want REAL, pay_to TEXT,
   expires_ts INTEGER, created_ts INTEGER, status TEXT, taker TEXT, fill_txid TEXT, fill_ts INTEGER, ext_ref TEXT,
   cancel_txid TEXT, cancel_ts INTEGER, fee_bp INTEGER, memo TEXT, last_open_seen INTEGER, updated INTEGER);

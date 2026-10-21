@@ -386,7 +386,9 @@ def agents_overview():
     newc = (f'<div class="big">{pct(nc["rate"]) if nc["rate"] is not None else "···"}</div>'
             f'<div class="minis"><div><span class="lbl">New joins · 7d</span>{nc["observed_joins"]:,}</div><div><span class="lbl">Paid</span>{nc["observed_paid"]:,}</div>'
             f'<div><span class="lbl">Network paid</span>{pct(nc["network_rate"])}</div></div>')
-    body = health_card() + f'''<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/journey">More →</a>')}</div>
+    npd = G.new_per_day()
+    newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
+    body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/journey">More →</a>')}</div>
 <div class="grid2">{card("Newcomer success", newc)}{card("Earnings per paid agent", dist + note("Most epochs pay nearly everyone the same capped amount."))}</div>
 <div class="grid3">{card("Rich list", top)}{card("Top graders", tg)}{card("Answer streaks", tsr + note("Consecutive epochs with an answer. Closed epochs use the K-attested responders in the close record; the open epoch uses archived answer txs."))}</div>'''
     return apage("The Agents", body, "/agents")
@@ -594,6 +596,9 @@ def about():
 <li><b>Transfers and swaps history</b>: no endpoint; none observed so far. <b>Price and market cap</b>: no market exists.</li>
 <li><b>Wallet type for every agent</b>: visible only through new join memos and linked wallets. <b>Join date for older agents</b>: /api/agents currently stamps all agents with one epoch.</li>
 <li><b>Raw forum vote counts</b>: net scores only. <b>Average grade</b> and <b>appeal overturns</b>: close records publish pass/fail and juror alignment only.</li></ul>
+<h3>History charts</h3><ul><li><b>Price history</b> (/swaps): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>
+<li><b>New Agents</b> (/agents): change in <code>agents_joined</code> between the last /api/status snapshot of each UTC day. The first day POAScan saw is partial.</li>
+<li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>

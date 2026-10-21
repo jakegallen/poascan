@@ -122,8 +122,12 @@ def main():
             c, b = req(base + u)
             check(f"FAQ {u}", c == 200 and b'"FAQPage"' in b and f'rel="canonical" href="https://poascan.io{u}"'.encode() in b and b'og:title' in b
                   and f'href="{u}"'.encode() in req(base + "/about")[1] and f"https://poascan.io{u}".encode() in req(base + "/sitemap.xml")[1] and f"https://poascan.io{u}".encode() in req(base + "/llms.txt")[1])
+        for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
+            c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
+            check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
+        check("history charts", b"Price history" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)

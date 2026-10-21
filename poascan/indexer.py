@@ -62,6 +62,14 @@ def job_probe():
         except Exception as e: _probe("probe " + path, False, t0, type(e).__name__)
         time.sleep(0.5)
     db.write("DELETE FROM probes WHERE ts < ?", (int(time.time()) - 14 * 86400,))
+    rollup_uptime()
+
+def rollup_uptime(now=None):
+    """Fold the last two UTC days of probe and fetch outcomes into one small row per day and endpoint; keep a year."""
+    now = int(now or time.time()); d0 = (now // 86400 - 1) * 86400
+    db.write("""INSERT OR REPLACE INTO uptime_daily(day, endpoint, n, ok, ms)
+      SELECT (ts/86400)*86400, endpoint, COUNT(*), SUM(ok), CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER) FROM probes WHERE ts >= ? GROUP BY 1, 2""", (d0,))
+    db.write("DELETE FROM uptime_daily WHERE day < ?", (now - 365 * 86400,))
 
 def _fail(ep, err, retry):
     row = db.q1("SELECT fails FROM fetch_log WHERE endpoint=?", (ep,))
