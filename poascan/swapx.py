@@ -132,8 +132,9 @@ def _usd(v):
 
 def stats_html():
     m = V2.swap_market()
-    items = [("Market Cap", _usd(m["market_cap_usd"])), ("FDV", _usd(m["fdv_usd"])), ("24h Trades", f'{m["trades_24h"]:,}'),
-             ("24h Volume", _usd(m["volume_24h_usd"]))]
+    tr, vo = (("Trades", m["trades_all_time"]), ("Volume", m["volume_all_time_usd"])) if V2.STATS_WINDOW == "all" else \
+             (("24h Trades", m["trades_24h"]), ("24h Volume", m["volume_24h_usd"]))
+    items = [("Market Cap", _usd(m["market_cap_usd"])), ("FDV", _usd(m["fdv_usd"])), (tr[0], f'{tr[1]:,}'), (vo[0], _usd(vo[1]))]
     return '<div class="xstats" role="group" aria-label="Market">' + "".join(f'<div class="xst"><span class="lbl">{l}</span><b class="num">{v}</b></div>' for l, v in items) + "</div>"
 
 def page():

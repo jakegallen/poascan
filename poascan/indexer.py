@@ -268,6 +268,10 @@ def ingest_swap_tx(d):
         ref = _ref(b)
         db.write("UPDATE swaps SET status='filled', taker=?, fill_txid=?, fill_ts=?, ext_ref=?, updated=? WHERE offer_id=?",
                  (d.get("from_addr"), d["id"], ts, ref, now, offer))
+        r = db.q1("SELECT asset FROM swaps WHERE offer_id=?", (offer,)) or {}; a = (r.get("asset") or "").upper()
+        fx = db.get_blob("fx")[0] or {}; rate = 1.0 if a == "USDC" else fx.get(a)
+        if rate and now - ts < 3 * 3600:   # only near fill time; older fills fall back to the current reference
+            db.write("UPDATE swaps SET fill_usd=? WHERE offer_id=? AND fill_usd IS NULL", (rate, offer))
     elif typ == "swap-cancel" and offer:
         db.write("UPDATE swaps SET status='cancelled', cancel_txid=?, cancel_ts=?, updated=? WHERE offer_id=? AND status!='filled'", (d["id"], ts, now, offer))
     db.write("INSERT OR REPLACE INTO swap_events VALUES(?,?,?,?,?,?)", (d["id"], offer, typ, d.get("from_addr"), ts, json.dumps(b)[:20000]))

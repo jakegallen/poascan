@@ -251,7 +251,7 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
     ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
-    ("get_swap_status", "Swap status", "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, 24h trades, 24h volume in USD). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
+    ("get_swap_status", "Swap status", "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
     ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
@@ -435,7 +435,10 @@ def openapi():
                                                                                     "market_cap_usd": {"type": ["number", "null"], "description": "last fill price x circulating (unlocked) supply"},
                                                                                     "fdv_usd": {"type": ["number", "null"], "description": "last fill price x total supply mined to date, including locked and vesting"},
                                                                                     "circulating_supply": {"type": ["number", "null"]}, "mined_supply": {"type": ["number", "null"]},
-                                                                                    "trades_24h": {"type": "integer"}, "volume_24h_usd": {"type": ["number", "null"]}, "usd_ref": {"type": "string"}}}}},
+                                                                                    "trades_24h": {"type": "integer"}, "volume_24h_usd": {"type": ["number", "null"]},
+                                                                                    "trades_all_time": {"type": "integer", "description": "every finalized swap-fill"},
+                                                                                    "volume_all_time_usd": {"type": ["number", "null"], "description": "sum of fills in USD at fill time when recorded, else at the current reference"},
+                                                                                    "usd_ref": {"type": "string"}}}}},
                             "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
                                      "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
                                                     "checkpoint": {"type": ["integer", "null"], "description": "checkpoint height"}, "epoch": {"type": ["integer", "null"], "description": "open epoch"},
@@ -478,7 +481,7 @@ Tools ({len(TOOLS)}):
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
-- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later.
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; method at {BASE}/about#pending).

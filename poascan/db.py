@@ -56,6 +56,8 @@ def conn():
 def init():
     with _wlock:
         conn().executescript(SCHEMA)
+        if "fill_usd" not in {r[1] for r in conn().execute("PRAGMA table_info(swaps)")}:
+            conn().execute("ALTER TABLE swaps ADD COLUMN fill_usd REAL")  # USD per unit of the paid asset, recorded when the fill is indexed
         conn().commit()
 
 def write(sql, args=(), many=False):

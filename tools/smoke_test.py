@@ -143,6 +143,11 @@ def main():
               and not _re.search(r"\d[eE][-+]\d", req(base + "/api/v1/swaps/status")[1].decode().split('"meta"')[0])
               and [_U(v) for v in (327.56, 10388.08, 0.11, 0.00001059)] == ["$327.56", "$10,388", "$0.11", "$0.000011"]
               and _IX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
+        _mk = json.loads(req(base + "/api/v1/swaps/status")[1])["market"]; _sw = req(base + "/swaps")[1].decode()
+        check("swaps market: all-time fields added, 24h kept; /swaps row says Trades and Volume once",
+              {"trades_all_time", "volume_all_time_usd", "trades_24h", "volume_24h_usd"} <= set(_mk) and isinstance(_mk["trades_all_time"], int)
+              and _sw.count('<span class="lbl">Trades</span>') == 1 and _sw.count('<span class="lbl">Volume</span>') == 1 and "24h Trades" not in _sw
+              and "trades_all_time" in spec["components"]["schemas"]["SwapStatus"]["properties"]["market"]["properties"])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
               and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
@@ -195,7 +200,7 @@ def main():
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
         check("history charts", b"Price</h2>" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
-        sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">24h Trades<", b">24h Volume<")) and sb.count(b"Trades") == 1)
+        sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">Trades<", b">Volume<")) and sb.count(b"Trades") == 1 and sb.count(b"Volume") == 1)
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
         lv = req(base + "/live")[1]; check("live pending panel", b"Pending</h2>" in lv and b"\xe2\x80\x94" not in lv)

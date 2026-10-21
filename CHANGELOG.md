@@ -13,6 +13,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed (swaps coming soon)
 
+- `/swaps` stat row shows cumulative Trades and Volume (every finalized fill, USD at fill time when recorded, else the current reference; method on /about). `STATS_WINDOW` in poascan/views2.py switches back to 24h. The swaps status `market` object adds `trades_all_time` and `volume_all_time_usd`; the 24h fields stay.
 - Swap fills: the Solana (or Base, Ethereum) payment ref is read from the fill's proof, so Recent fills has a Payment column linking to the explorer and Activity links the payment leg. Existing fills are backfilled from stored tx bodies, with no extra upstream reads.
 - Numbers never use scientific notation: swap stats show $327.56, $10,388 and $0.11 style values, prices and the price chart axis print plain decimals, and JSON responses and MCP text write 0.00001059 rather than 1.059e-05 (same value).
 - `meta` adds `node_stale` and `node_stale_age_s` (additive), so a `stale: true` caused by minepoa.com's own /api/status flag is visible as such. llms.txt now describes `stale` the same way as the OpenAPI spec.
