@@ -307,6 +307,30 @@ def cp_stat():
     f = A.freshness(); flag = f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else ""
     return f'<div class="stat"><div class="sl">Checkpoint moved</div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
 
+RECON_TAG = {"match": ("ok", "Match"), "explained": ("", "Explained"), "differs": ("bad", "Differs"), "node_only": ("", "Node only"), "poascan_only": ("", "Ours only")}
+
+def recon_card():
+    from . import reconcile as RE
+    from .views import rel_t
+    d = RE.reconcile()
+    def v(x, unit, at):
+        if x is None: return '<span class="na">···</span>'
+        n = num(x, 2) if unit == "poa" else intc(x)
+        return f'{n}<small title="read {dt.datetime.fromtimestamp(int(at), dt.timezone.utc):%Y-%m-%d %H:%M} UTC">{rel_t(at)}</small>' if at else n
+    def tag(st): c, t = RECON_TAG[st]; return f'<span class="tag {c}">{t}</span>'
+    def sub(r):
+        dv = None if r["diff"] in (None, 0) else (f'Δ {"+" if r["diff"] > 0 else "-"}{compact(abs(r["diff"]), 2)}' if r["unit"] == "poa" else f'Δ {r["diff"]:+,}')
+        t = " · ".join(E(x) for x in (dv, r["reason"]) if x)
+        return f'<tr class="rwhy"><td colspan="4">{t}</td></tr>' if t else ""
+    trs = "".join(f'<tr class="{"rx" if sub(r) else ""}"><td><b>{E(r["label"])}</b></td><td class="r">{v(r["poascan"], r["unit"], r["poascan_as_of"])}</td>'
+                  f'<td class="r">{v(r["node"], r["unit"], r["node_as_of"])}</td><td class="r">{tag(r["state"])}</td></tr>' + sub(r) for r in d["rows"])
+    tb = f'<div class="tw"><table class="hist rec"><thead><tr><th>Figure</th><th class="r">POAScan</th><th class="r">Node</th><th class="r">State</th></tr></thead><tbody>{trs}</tbody></table></div>'
+    pc = [p for p in d["per_close"] if p["state"] != "no_reads"]
+    pt = "".join(f'<tr><td><a class="mono" href="/epoch/{p["epoch"]}">E{p["epoch"]}</a></td><td class="r">{num(p["record_mint"], 2)}</td><td class="r">{num(p["supply_step"], 2)}</td><td class="r">{tag(p["state"])}</td></tr>' for p in pc)
+    per = (f'<h3 class="rech">Mint per close</h3><div class="tw"><table class="hist rec"><thead><tr><th>Close</th><th class="r">Record</th><th class="r">Supply step</th><th class="r">State</th></tr></thead><tbody>{pt}</tbody></table></div>') if pc else ""
+    foot = f'<p class="cov dim small">{d["matched"]} match · {d["explained"]} explained · {d["differs"]} differ · <a href="/about#reconcile">method</a></p>'
+    return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
+
 def status_page():
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
@@ -333,7 +357,7 @@ def status_page():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div><div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return page("Status", body, "/status")
 
 def _okpct(v):

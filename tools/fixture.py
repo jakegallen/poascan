@@ -82,6 +82,11 @@ def seed(n=12):
     db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes) VALUES(?,?,0,0,100)", [("/api/explorer/txs", now), ("/api/status", now), ("/api/params", now - 3 * 3600)], many=True)
     for i, t in enumerate(range(now - 10 * 3600, now, 600)):
         db.add_snap("status", {"checkpoint_height": 90 if t < now - 8 * 3600 else 100}, t)
+    # reconciliation: supply reads across close 10 step by its mint; across close 9 they are 1 POA short
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+    for c, step in ((now - 21600, "170000000"), (now - 43200, "169999999")):
+        db.add_snap("status", {"supply": "500000000", "as_of": iso(c - 120)}, c - 60)
+        db.add_snap("status", {"supply": str(500000000 + int(step)), "as_of": iso(c + 30)}, c + 60)
 
 if __name__ == "__main__":
     seed()

@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.11.0] - 2026-10-21
+
+### Added
+
+- Reconciliation on `/status` and `/api/v1/reconcile` (CSV too): POAScan's totals beside the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, final, invalid, pending), with the difference, a match, explained or differs state, a reason where known and when each side was read. Mint per close compares each close record with the node's supply step across that close. Built only from reads POAScan already makes. Method at `/about#reconcile`.
+- MCP `get_indexer_status` adds a `reconcile` block; no new tool.
+
 ## [1.10.0] - 2026-10-21
 
 ### Added
@@ -221,6 +228,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.11.0]: https://github.com/jakegallen/poascan/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/jakegallen/poascan/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/jakegallen/poascan/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/jakegallen/poascan/compare/v1.7.0...v1.8.0

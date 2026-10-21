@@ -697,3 +697,5 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @media (max-width:640px){.cal .dk{display:none}.cal td:first-child .aname{max-width:104px}.cal td:first-child small{white-space:normal}.cal td:first-child small .tag{margin:3px 0 0;display:table}.cal td,.cal th{padding-left:4px;padding-right:4px}.cal th{white-space:normal;vertical-align:bottom}.cal td small{font-size:11px}}
 .coh td,.coh th{text-align:right}.coh td:first-child,.coh th:first-child{text-align:left}.coh td{min-width:44px}
 .mscroll{display:none}@media (max-width:640px){.mscroll{display:inline}}
+.rec td small{display:block;margin-top:2px;font-size:var(--t12);color:var(--mute)}.rec th.r,.rec td.r{text-align:right}.rec tr.rx td{border-bottom:0;padding-bottom:2px}.rec tr.rwhy td{padding-top:0;white-space:normal;font-size:var(--t12);color:var(--mute)}.rech{margin:18px 0 6px;font-size:var(--t12);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--steel)}
+.rec td:first-child,.rec th:first-child{position:static;box-shadow:none}.rec tr.rwhy td{background:transparent}

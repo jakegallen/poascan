@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -105,6 +105,7 @@ def api(path, qs):
     if path == "/api/agents/operators":
         o = dict(G.operators()); o.pop("fam_of", None); return o, False
     if path == "/api/agents/graders": return [dict(grader=g, settled=n, aligned=al, rate=r, served=s, trusted=t) for g, n, al, r, s, t in G.graders()["graders"]], True
+    if path == "/api/reconcile": return dict(RE.reconcile(), method=AG.BASE + "/about#reconcile"), False
     if path == "/api/cohorts": return dict(CO.cohorts(), rows=CO.rows(), method=AG.BASE + "/about#cohorts"), False
     if path == "/api/agents/calibration":
         by = qs.get("sort", ["name"])[0]
@@ -359,7 +360,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts") else [data])
+                    rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))

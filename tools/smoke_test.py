@@ -416,6 +416,30 @@ def cohorts(base, check):
     check("cohorts in OpenAPI, llms.txt and MCP get_epoch",
           "/api/v1/cohorts" in spec["paths"] and "/cohorts" in llms and (sc.get("cohort") or {}).get("answers") == 9 and (sc.get("gate_a") or {}).get("eligible") == 2)
 
+def reconcile(base, check):
+    """Reconciliation: both sides, diff, state and read times per figure; mint per close against the node's supply step."""
+    d = json.loads(req(base + "/api/v1/reconcile")[1]); rows = {r["key"]: r for r in d["rows"]}
+    keys = {"mined", "burned", "held", "holders", "agents", "epochs", "height", "checkpoint", "txs", "final", "invalid", "pending"}
+    check("reconcile: every figure has both sides, diff = POAScan minus node, a state and read times",
+          set(rows) == keys and all(r["state"] in ("match", "explained", "differs", "node_only", "poascan_only") for r in rows.values())
+          and all(r["diff"] is None or abs(r["diff"] - (r["poascan"] - r["node"])) < 1e-3 for r in rows.values())
+          and all((r["state"] == "match") == (r["reason"] is None) for r in rows.values()) and rows["height"]["state"] == "node_only" and rows["height"]["node_as_of"]
+          and rows["agents"]["node"] == 3 and rows["epochs"]["state"] == "match" and rows["pending"]["state"] == "match" and rows["txs"]["node"] == 100
+          and d["matched"] + d["explained"] + d["differs"] == sum(r["state"] in ("match", "explained", "differs") for r in rows.values()))
+    pc = {p["epoch"]: p for p in d["per_close"]}
+    check("reconcile: mint per close matches a supply step and flags a short one", pc[10]["state"] == "match" and pc[10]["supply_step"] == pc[10]["record_mint"]
+          and pc[9]["state"] == "differs" and abs(pc[9]["diff"] - 1) < 1e-6 and pc[3]["state"] == "no_reads")
+    c, h, b = reqh(base + "/api/v1/reconcile.csv"); pg = req(base + "/status")[1].decode()
+    card = pg[pg.index('id="reconcile"'):]; card = card[:card.index("</section>")]
+    check("/status: Reconciliation card with states, reasons, mint per close and method; CSV rows",
+          c == 200 and b.decode().count("\n") == 13 and ">Node only<" in card and ">Match<" in card and "Mint per close" in card and 'href="/about#reconcile"' in card
+          and card.count("<th>") + card.count("<th ") == 8 and "\u2014" not in pg and b'id="reconcile"' in req(base + "/about")[1])
+    spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "get_indexer_status", "arguments": {}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -445,6 +469,7 @@ def fixture_pages(check):
         history(base, check)
         calibration(base, check)
         cohorts(base, check)
+        reconcile(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)

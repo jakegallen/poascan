@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.10.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.11.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -211,7 +211,14 @@ def t_status(args):
     h = A.health(); st = A.status()
     return dict(indexer_live=bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300), live_last_ok=h["live_last_ok"],
                 node_as_of=st.get("as_of"), node_stale=st.get("stale"), jobs=h["jobs"],
-                endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]], url=BASE + "/status")
+                endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]],
+                **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/status")
+
+def _recon():
+    from . import reconcile as RE
+    d = RE.reconcile()
+    return dict(matched=d["matched"], explained=d["explained"], differs=d["differs"], rows=d["rows"],
+                per_close=[p for p in d["per_close"] if p["state"] != "no_reads"], method=BASE + "/about#reconcile")
 
 def t_swap_status(args):
     d = V2.swap_status_api()
@@ -288,7 +295,8 @@ TOOLS = [  # name, title, description, input schema, fn
      S(status={"type": "string", "default": "open"}, limit=LIM(20, 200)), t_swaps),
     ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
-    ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
+    ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current, plus a reconciliation of POAScan's totals against the node's own numbers (mined, burned, held, holders, Agents, closes, height, checkpoint, txs, pending), each with both values, the difference, a state and when each side was read.",
+     S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block"}), t_status),
     ("get_swap_status", "Swap status", "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
@@ -421,6 +429,8 @@ def openapi():
         "/api/agents/calibration": _op("Grader calibration, advisory and unranked: jury agreement, score mean and spread, seals per close", ANY,
                                        [_p("sort", "name (default) or n (jury seats)", {"type": "string", "enum": ["name", "n"], "default": "name"}, "query", False)], csv=True, oid="calibration", tag="agents",
                                        desc="One row per grader in rows (CSV: the rows). seats and aligned come from settled juries in every close; aligned_rate is agreement with the panel, not accuracy, and seats_passed/failed split it by outcome. score_mean, score_sd and score_hist come from pending rows' grades (0 to 3) from params.pending_merge_from_epoch on; juries publish no scores. seals_by_close counts distinct seals (record grades plus archived grade-sealed txs) per close window; seals_per_close averages them over closes since the first seal. low_n is true when both seats and scored are under min_n. Rows are never ranked. Method: https://poascan.io/about#calibration"),
+        "/api/reconcile": _op("POAScan's totals beside the node's own numbers, from reads POAScan already makes", ANY, csv=True, oid="reconcile", tag="meta",
+                              desc="rows[]: key, label, poascan, node, diff (poascan minus node), unit (int or poa), state (match, explained, differs, node_only, poascan_only), reason (null on a match), and the source and read time (unix s) of each side. explained: the gap equals a known cause, such as POA escrowed in open swap offers. per_close: mint in each close record against the step in the node's reported supply across that close, from archived /api/status reads (no_reads when POAScan has no read on both sides). CSV: the rows. Method: https://poascan.io/about#reconcile"),
         "/api/cohorts": _op("Frozen answer cohorts: answers born in each epoch by status at every later close, plus Gate A per close", ANY, csv=True, oid="cohorts",
                             desc="cohorts[].answers is the denominator, frozen at the birth close (pending rows with since equal to that epoch). Each closes[] entry splits it into unsealed, sealed, passed, failed and vanished, which always sum to answers; age is closes after birth. sealed_is_lower_bound marks closes before params.pending_merge_from_epoch with empty short panels (unsealed is then an upper bound). gate_a: basis.challenge_eligible size over answers born at that close (K-attested responders). CSV: one row per cohort and close. Method: https://poascan.io/about#cohorts"),
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
@@ -574,6 +584,7 @@ Tools ({len(TOOLS)}):
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
+- Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
