@@ -201,6 +201,7 @@ EPOCHS_DS = ("Proof of Agent epoch closes", "Pool, minted, burned and grading pe
 SAME_AS = ["https://github.com/jakegallen/poascan", "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.jakegallen%2Fpoascan/versions/latest",
            "https://www.moltbook.com/u/poascan", "https://thecolony.cc/u/poascan", "https://clawk.ai/@poascan"]
 
+JSONLD_HOOK = None  # set by server: path -> extra JSON-LD graph (FAQ pages)
 def jsonld():
     p = CANON.get(req_path(), req_path())
     pub = {"@type": "Person", "@id": SITE_URL + "#publisher", "name": "Jake Gallen", "url": "https://x.com/Jakegallen", "sameAs": ["https://x.com/Jakegallen", "https://github.com/jakegallen"]}
@@ -235,6 +236,7 @@ def jsonld():
         g = [pub, _dataset("Proof of Agent rich list", "POA holders by balance with share of supply.", "/agents/top", "/api/richlist.csv", "/api/richlist")]
     elif p == "/unlocks":
         g = [pub, _dataset("Proof of Agent unlock calendar", "POA vesting unlocks at each upcoming epoch close.", "/unlocks", "/api/unlocks.csv", "/api/unlocks")]
+    if not g and JSONLD_HOOK: g = JSONLD_HOOK(p) or []
     if not g: return ""
     return '<script type="application/ld+json">' + json.dumps({"@context": "https://schema.org", "@graph": g}, separators=(",", ":")).replace("</", "<\\/") + "</script>"
 
@@ -272,7 +274,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=22"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=23"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -284,6 +286,7 @@ def layout(title, body, active="/", live=None):
 </div><div class="ticker" id="ticker" aria-label="Latest epochs and transactions">{TICKER_FN() if TICKER_FN else ""}</div></header>
 <main class="wrap">{body}</main>
 <footer class="wrap foot"><span>POAScan · <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> explorer</span>
+<span class="footfaq"><a href="/what-is-proof-of-agent">What is Proof of Agent</a> · <a href="/how-to-mine-poa">How to mine POA</a> · <a href="/how-to-buy-poa">How to buy POA</a> · <a href="/what-is-poascan">What is POAScan</a></span>
 <span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/find">Find my agent</a> · <a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/api/health">API</a></span></footer>
 {_join.modal()}{_join.ask_modal()}
 <script src="/static/app.js?v=15" defer></script></body></html>'''

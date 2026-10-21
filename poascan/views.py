@@ -600,7 +600,8 @@ def about():
 <h3>Token</h3><p>Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued and is shown as burned. Rewards vest in equal slices over params.vesting_epochs, starting the epoch after they are earned; transfers and swaps are spendable at once. Identical balances come from the per-agent payout ceiling.</p>''')
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
-    safety = card("Official links &amp; safety", V2.safety_html())
+    from . import faq as FQ
+    safety = card("Official links &amp; safety", V2.safety_html()) + card("Questions", FQ.links_html())
     comm = card("Community tools", V2.community_html())
     real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: identities in the latest close record's <code>established_after</code> (passing answers in the last 6 epochs). <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + comm + real + _operators_method() + methods

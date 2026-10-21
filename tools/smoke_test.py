@@ -117,8 +117,12 @@ def main():
         c, b = req(base + "/"); check("Join button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Join</a>' in b)
         c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
         check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
+        for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan"]:
+            c, b = req(base + u)
+            check(f"FAQ {u}", c == 200 and b'"FAQPage"' in b and f'rel="canonical" href="https://poascan.io{u}"'.encode() in b and b'og:title' in b
+                  and f'href="{u}"'.encode() in req(base + "/about")[1] and f"https://poascan.io{u}".encode() in req(base + "/sitemap.xml")[1] and f"https://poascan.io{u}".encode() in req(base + "/llms.txt")[1])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)

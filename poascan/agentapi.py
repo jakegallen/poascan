@@ -432,6 +432,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/token, {BASE}/unlocks, {BASE}/swaps, {BASE}/agents/top, {BASE}/agents/census
 - {BASE}/about methodology and safety
+- FAQ: {BASE}/what-is-proof-of-agent, {BASE}/how-to-mine-poa, {BASE}/how-to-buy-poa, {BASE}/what-is-poascan
 
 ## Safety
 - POAScan only reads. It never asks for keys and cannot move funds.
