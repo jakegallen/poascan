@@ -34,6 +34,7 @@ def seed(n=12):
     eps[n - 2]["basis"]["pending"]["bd" * 32] = {"kind": "short", "panel": [], "originalPassed": False, "since": n - 4}   # dropped
     cur["bu" * 32] = {"kind": "appeal", "panel": [A1] * 12, "originalPassed": True, "since": n - 1}                   # no grades: unknown
     cur[RN] = dict(eps[n - 1]["basis"]["pending"][RN], grades=[{"grader": A2, "score": 2, "ts": t0}])
+    cur["be" * 32] = {"kind": "short", "panel": [A2], "originalPassed": False, "since": n - 1, "grades": []}               # A2 drawn, no seal
     eps[n - 1]["basis"]["pending"] = cur
     db.put_blob("epochs", eps)
     db.put_blob("status", {"supply": "980933293.9", "txs": 100, "final": 90, "agents_joined": 3, "epochs_closed": n, "holders": 3,
@@ -56,6 +57,13 @@ def seed(n=12):
                  "ts": t0 + e * 21600 + 600, "body": {"type": "challenge", "epoch": e}}), now))
     db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,1)", (TX, json.dumps({"id": TX, "type": "transfer", "from_addr": A1, "to_addr": A2, "amount": "1250",
              "epoch": n - 1, "ts": now - 600, "final": True, "atts": 5, "body": {"type": "transfer", "epoch": n - 1}}), now))
+    # grader history for A2: 60 grade-sealed txs, pairs share a timestamp (keyset ties break on id)
+    g = [(f"{i:02x}" * 32, "grade-sealed", A2, None, t0 + 1000 + (i // 2) * 10, 5, 5, 1) for i in range(16, 74)]
+    g += [("4a" * 32, "grade-sealed", A2, None, t0 + 5000, 5, 5, 1), ("4b" * 32, "grade-sealed", A2, None, t0, 5, 5, 1)]
+    db.write("INSERT OR REPLACE INTO txs(id, type, from_addr, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?)", g, many=True)
+    for tid, ts, asg, nonce in (("4a" * 32, t0 + 5000, RV, 90), ("4b" * 32, t0, RN, 12)):   # 4a: on the ledger, not in any close record
+        db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,1)", (tid, json.dumps({"id": tid, "type": "grade-sealed", "from_addr": A2, "ts": ts, "final": True,
+                 "body": {"type": "grade-sealed", "assignment": asg, "from": A2, "nonce": nonce, "ts": ts}}), now))
     # uptime history from before the probe cut: old dedicated probes and bare fetch rows, then derived rows
     rows = [(now - 7200 + i * 60, ep, 1, 100, "200") for i in range(10) for ep in ("probe /api/status", "/api/status", "probe /explorer", "probe /", "probe /go.md")]
     rows += [(now - 600 + i * 60, "probe /api/status", 1, 90, "200") for i in range(5)]

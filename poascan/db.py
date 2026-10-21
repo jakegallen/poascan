@@ -14,6 +14,8 @@ CREATE INDEX IF NOT EXISTS txs_ts ON txs(ts DESC);
 CREATE INDEX IF NOT EXISTS txs_from ON txs(from_addr, ts DESC);
 CREATE INDEX IF NOT EXISTS txs_to ON txs(to_addr, ts DESC);
 CREATE INDEX IF NOT EXISTS txs_type ON txs(type, ts DESC);
+CREATE INDEX IF NOT EXISTS txs_from_k ON txs(from_addr, ts DESC, id DESC);
+CREATE INDEX IF NOT EXISTS txs_to_k ON txs(to_addr, ts DESC, id DESC);
 CREATE TABLE IF NOT EXISTS invalid_txs(txid TEXT PRIMARY KEY, error TEXT, first_seen INTEGER);
 CREATE TABLE IF NOT EXISTS tx_detail(id TEXT PRIMARY KEY, json TEXT, fetched INTEGER, final INTEGER);
 CREATE TABLE IF NOT EXISTS snaps(kind TEXT, ts INTEGER, json TEXT);

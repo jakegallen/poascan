@@ -173,6 +173,13 @@ function sortables(){$$("table.sortable").forEach(function(tb){$$("th[data-sort]
   rs.forEach(function(r){bd.appendChild(r)})}
  th.addEventListener("click",go);th.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}})})})}
 paintIds();times();charts();sortables();setInterval(tick,1000);tick();
+/* Load more: appends the next keyset page to the card's table; the button carries the next cursor */
+D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(".more-btn");if(!b||b.disabled)return;e.preventDefault();
+ var tb=$("tbody",b.closest(".cb"));if(!tb)return;b.disabled=true;b.textContent="Loading";
+ fetch(b.dataset.more,{headers:{Accept:"application/json"}}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
+  var t=D.createElement("tbody");t.innerHTML=d.html;while(t.firstChild)tb.appendChild(t.firstChild);paintIds(tb);times(tb);
+  if(d.next){b.dataset.more=d.next;b.disabled=false;b.textContent="Load more"}else b.remove()})
+ .catch(function(){b.disabled=false;b.textContent="Retry"})});
 if(wantLive)connect();
 })();
 /* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */

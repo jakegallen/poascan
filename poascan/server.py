@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -37,6 +37,15 @@ def api(path, qs):
         return db.q(sql, tuple(a) + (lim, off)), True
     m = re.match(r"^/api/tx/([0-9a-fA-F]{64})$", path)
     if m: return I.get_tx_detail(m.group(1).lower()), False
+    m = re.match(r"^/api/address/(poa1\w+)/(txs|assignments)$", path)
+    if m:
+        a, k = m.groups(); c = qs.get("cursor", [""])[0] or None; lim = qs.get("limit", ["50"])[0]; lim = int(lim) if lim.isdigit() else 50
+        if not V.ADDR_RX.match(a): return {"error": "address must be a poa1 address"}, False
+        try:
+            if k == "assignments": return dict(address=a, **HI.assignments(a, c, lim), method=AG.BASE + "/about#history"), False
+            typ = qs.get("type", [""])[0] or None; rows, nxt = HI.txs_page(a, c, lim, typ)
+        except ValueError: raise BadRequest("bad cursor")
+        return dict(address=a, type=typ, txs=rows, next_cursor=nxt, types=HI.type_counts(a), coverage=HI.coverage(a), method=AG.BASE + "/about#history"), False
     m = re.match(r"^/api/address/(poa1\w+)$", path)
     if m:
         a = m.group(1); p = G.profile(a); d, err = V.fetch_address(a)
@@ -171,6 +180,8 @@ TXT = "text/plain; charset=utf-8"
 HSTS = "max-age=31536000"
 MPID = re.compile(rb'"mp\d+"')
 IMMUTABLE = "public, max-age=31536000, immutable"
+
+class BadRequest(Exception): pass
 
 class H(BaseHTTPRequestHandler):
     server_version = "POASCAN/1.0"
@@ -316,6 +327,9 @@ class H(BaseHTTPRequestHandler):
                     elif hits: return self.send(200, V.search_hits(q, hits[:20]))
                     else: return self.send(404, V.search_results(q))
                 return self.send(302, "", extra={"Location": loc})
+            if path == "/fragment/addr":
+                try: return self.send(200, json.dumps(V.addr_fragment(qs)), "application/json", {"Cache-Control": "no-store"})
+                except ValueError: return self.send(400, json.dumps({"error": "bad cursor or address"}), "application/json")
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
@@ -331,12 +345,15 @@ class H(BaseHTTPRequestHandler):
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
                 try: data, is_list = api(p, qs)
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
+                except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION})
                 m = AG.meta(); mh = AG.meta_headers(m)
+                if isinstance(data, dict) and data.get("next_cursor"):
+                    mh = dict(mh, **{"X-Next-Cursor": data["next_cursor"], "Access-Control-Expose-Headers": mh["Access-Control-Expose-Headers"] + ", X-Next-Cursor"})
                 if not is_list and isinstance(data, dict) and fmt != "csv": data = dict(data); data.setdefault("meta", m)
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else [data])
+                    rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
