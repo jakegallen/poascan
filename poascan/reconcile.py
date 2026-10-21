@@ -1,5 +1,5 @@
 """POAScan's own totals beside the node's reported numbers, from reads POAScan already makes. No extra upstream calls."""
-import time, json
+import time, json, collections
 from decimal import Decimal as D
 from . import db, analytics as A
 from .analytics import cached
@@ -43,10 +43,10 @@ def per_close():
                         before_as_of=b[0] if b else None, after_as_of=a[0] if a else None))
     return out
 
-def _held_why(gap, esc):
-    if esc and abs(gap - esc) <= D("0.01"): return f"{esc:,.6f} POA sits in open swap offers, escrowed out of balances"
-    if esc: return f"more than the {esc:,.6f} POA in open swap offers; /api/agents and close records are read at different times"
-    return "/api/agents and close records are read at different times"
+def _held_why(gap, esc, unl, n):
+    parts = ([f"{n} rewarded address{'es' if n != 1 else ''} missing from /api/agents ({unl:,.6f} POA)"] if n else []) + ([f"{esc:,.6f} POA escrowed in open swap offers"] if esc else [])
+    if parts and abs(gap - esc - unl) <= D("0.01"): return " plus ".join(parts)
+    return "beyond " + " and ".join(parts) + ", /api/agents and close records are read at different times" if parts else "/api/agents and close records are read at different times"
 
 @cached("reconcile", 60)
 def reconcile():
@@ -62,6 +62,12 @@ def reconcile():
                 "the node's status read predates the latest close" if behind else "not explained by the public reads")
     held = sum((_d(r["balance_s"]) or D(0)) for r in db.q("SELECT balance_s FROM accounts WHERE balance_s IS NOT NULL"))
     esc = sum((_d(r["poa"]) or D(0)) for r in db.q("SELECT poa FROM swaps WHERE status='open'"))
+    listed = {r["addr"] for r in db.q("SELECT addr FROM accounts")}
+    unl = collections.defaultdict(D)
+    for e in E:
+        for a, v in (e.get("rewards") or {}).items():
+            if a not in listed: unl[a] += _d(v) or D(0)
+    unl_sum = sum(unl.values(), D(0))
     hold = len(A.holders()["rows"])
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")
     tx = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs") or {}
@@ -74,7 +80,7 @@ def reconcile():
         _row("burned", "Burned", pool - mint, (pool - sup) if sup is not None else None, "pool minus rewards, close records", ep_t, "pool minus /api/status supply", node_at, "poa",
              "burn is pool minus mined, so it moves with Mined", tol=EPS * 10),
         _row("held", "Held", mint, held, "sum of rewards in close records", ep_t, "sum of /api/agents balances", acc_t, "poa",
-             _held_why(mint - held, esc), explained=esc, tol=D("0.01")),
+             _held_why(mint - held, esc, unl_sum, len(unl)), explained=esc + unl_sum, tol=D("0.01")),
         _row("holders", "Holders", hold, st.get("holders"), "balances above 0, plus reward sums missing from /api/agents", acc_t, "/api/status holders", node_at,
              reason="/api/agents and /api/status are read at different times"),
         _row("agents", "Agents", acc, st.get("agents_joined"), "addresses in /api/agents", acc_t, "/api/status agents_joined", node_at,
@@ -86,11 +92,11 @@ def reconcile():
         _row("checkpoint", "Checkpoint", anc.get("h"), st.get("checkpoint_height"), "highest anchored height in /api/anchors", (db.get_blob("anchors")[1]), "/api/status checkpoint_height", node_at,
              reason="the checkpoint is ahead of its anchors" if anc.get("h") is not None and st.get("checkpoint_height") and anc["h"] < st["checkpoint_height"] else "an anchor beyond the node's checkpoint"),
         _row("txs", "Txs", tx.get("n"), st.get("txs"), "txs archived", tx_t, "/api/status txs", node_at,
-             reason="the archive holds txs the node count leaves out" if (tx.get("n") or 0) > (st.get("txs") or 0) else "txs missed during outages or bursts"),
+             reason="the node counts fewer txs than the archive holds; which txs it counts is not published" if (tx.get("n") or 0) > (st.get("txs") or 0) else "txs missed during outages or bursts"),
         _row("final", "Final", tx.get("f"), st.get("final"), "archived txs marked final", tx_t, "/api/status final", node_at,
-             reason="finality is updated only while a tx is still in a feed POAScan reads"),
+             reason="moves with Txs; finality is updated only while a tx is still in a feed POAScan reads"),
         _row("invalid", "Invalid", inv, st.get("invalid"), "invalid txs seen in /api/txs", (db.get_blob("job:window")[0] or {}).get("ran"), "/api/status invalid", node_at,
-             reason="invalid txs appear in /api/txs only briefly"),
+             reason="POAScan keeps every invalid tx it has seen; the node figure looks like a current count"),
         _row("pending", "Pending", pend_ours, pend_rec, "Pending panel, carried forward", ep_t, "basis.pending, latest close", ep_t,
              reason="not explained by the public reads"),
     ]
