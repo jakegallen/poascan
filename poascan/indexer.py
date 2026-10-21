@@ -46,18 +46,21 @@ def fetch(path, timeout=60, endpoint=None):
         raise Busy(str(e))
 
 def _probe(ep, ok, t0, code):
-    try: db.write("INSERT INTO probes VALUES(?,?,?,?,?)", (int(time.time()), ep, 1 if ok else 0, int((time.time() - t0) * 1000), code))
+    try: db.write("INSERT INTO probes VALUES(?,?,?,?,?)", (int(time.time()), uptime_name(ep), 1 if ok else 0, int((time.time() - t0) * 1000), code))
     except Exception: pass
 
-# Status probes: fixed public pages/endpoints, plain GET, nothing parsed except success + latency.
-PROBES = ["/", "/go.md", "/explorer", "/api/status", "/api/swaps", "/lableak/api/communities"]
+# Status probes: only the two public pages, every 10 min, first 1 KB. The JSON endpoints we already
+# poll (status, swaps, communities) count toward uptime from those regular fetches instead.
+PROBES = ["/", "/go.md"]
+DERIVED = ("/api/status", "/api/swaps", "/lableak/api/communities")
+def uptime_name(ep): return "probe " + ep if ep in DERIVED else ep
 def job_probe():
     for path in PROBES:
         t0 = time.time()
         try:
-            req = urllib.request.Request(BASE + path, headers={"User-Agent": UA})
+            req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Range": "bytes=0-1023"})
             with urllib.request.urlopen(req, timeout=30) as r:
-                r.read(65536); _probe("probe " + path, 200 <= r.status < 400, t0, str(r.status))
+                r.read(1024); _probe("probe " + path, 200 <= r.status < 400, t0, str(r.status))
         except urllib.error.HTTPError as e: _probe("probe " + path, False, t0, str(e.code))
         except Exception as e: _probe("probe " + path, False, t0, type(e).__name__)
         time.sleep(0.5)
@@ -68,7 +71,9 @@ def rollup_uptime(now=None):
     """Fold the last two UTC days of probe and fetch outcomes into one small row per day and endpoint; keep a year."""
     now = int(now or time.time()); d0 = (now // 86400 - 1) * 86400
     db.write("""INSERT OR REPLACE INTO uptime_daily(day, endpoint, n, ok, ms)
-      SELECT (ts/86400)*86400, endpoint, COUNT(*), SUM(ok), CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER) FROM probes WHERE ts >= ? GROUP BY 1, 2""", (d0,))
+      SELECT (ts/86400)*86400, CASE WHEN endpoint IN (?,?,?) THEN 'probe ' || endpoint ELSE endpoint END, COUNT(*), SUM(ok), CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER)
+      FROM probes WHERE ts >= ? GROUP BY 1, 2""", DERIVED + (d0,))
+    db.write("DELETE FROM uptime_daily WHERE day >= ? AND endpoint IN (?,?,?)", (d0,) + DERIVED)
     db.write("DELETE FROM uptime_daily WHERE day < ?", (now - 365 * 86400,))
 
 def _fail(ep, err, retry):
@@ -401,7 +406,7 @@ def seed(seed_dir):
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("live", job_live, 60, "/api/explorer/txs"),
     ("swaps", job_swaps, 60, "/api/swaps"),
-    ("probe", job_probe, 120, None),
+    ("probe", job_probe, 600, None),
     ("fx", job_fx, 900, None),
     ("window", job_window, 600, "/api/txs"),
     ("meta", job_meta, 300, None),

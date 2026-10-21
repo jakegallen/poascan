@@ -251,6 +251,12 @@ def fixture_pages(check):
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
+        from poascan import indexer as _IX
+        _jobs = {j[0]: j[2] for j in _IX.JOBS}
+        check("probe: only / and /go.md, every 10 min, first 1 KB", _IX.PROBES == ["/", "/go.md"] and _jobs["probe"] == 600
+              and _IX.uptime_name("/api/status") == "probe /api/status" and _IX.uptime_name("/api/params") == "/api/params")
+        _st = req(base + "/status")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
+        check("uptime: derived /api/status folds into one continuous series", _st.count("<code>/api/status</code>") == 2 and "/api/status,fetch" not in _csv.replace('"', ""))
         check("fixture: /grading has an h1", b"<h1" in g and b">Grading</h1>" in g)
         check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])
     finally:

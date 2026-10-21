@@ -16,6 +16,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Vesting shows its length in days (≈25) on `/unlocks`, `/token` and in the FAQ.
 - `/grading` has an h1.
 - Versioned static assets (`?v=`) are served `immutable` for a year; HTML carries a weak ETag with `no-cache`, so repeat views revalidate to 304.
+- Uptime probes cut to `/` and `/go.md` every 10 minutes, reading the first 1 KB (from 6 URLs every 2 minutes, about 4,300 requests a day, to 288). Uptime for `/api/status`, `/api/swaps` and the communities feed now comes from the fetches the indexer already makes, folded into the same series so history stays continuous. The `/explorer` probe is retired.
 - HSTS (`max-age=31536000`, no preload). `www.poascan.io` redirects 301 to the apex, keeping path and query.
 
 ### Fixed

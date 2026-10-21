@@ -2,7 +2,7 @@
 import json, time, math, collections, statistics, datetime as dt
 from . import db, analytics as A, agents as G
 from .ui import *
-from . import prompts as PR
+from . import prompts as PR, indexer as I
 from .ui import _ic
 
 def page(title, body, active):
@@ -193,7 +193,9 @@ def price_chart_html():
 def uptime_rows(days=30):
     now = int(time.time()); cut = (now // 86400 - days + 1) * 86400
     by = {(r["day"], r["endpoint"]): r for r in db.q("SELECT day, endpoint, n, ok, ms FROM uptime_daily WHERE day >= ?", (cut,))}
-    for r in db.q("SELECT (ts/86400)*86400 AS day, endpoint, COUNT(*) AS n, SUM(ok) AS ok, CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER) AS ms FROM probes WHERE ts >= ? GROUP BY 1, 2", (max(cut, now - 2 * 86400),)):
+    for k in [k for k in by if k[1] in I.DERIVED and k[0] >= now // 86400 * 86400 - 86400]: del by[k]
+    for r in db.q("SELECT (ts/86400)*86400 AS day, CASE WHEN endpoint IN (?,?,?) THEN 'probe ' || endpoint ELSE endpoint END AS endpoint, COUNT(*) AS n, SUM(ok) AS ok, "
+                  "CAST(AVG(CASE WHEN ok=1 THEN ms END) AS INTEGER) AS ms FROM probes WHERE ts >= ? GROUP BY 1, 2", I.DERIVED + (max(cut, now - 2 * 86400),)):
         by[(r["day"], r["endpoint"])] = r
     return [dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, endpoint=e.replace("probe ", ""), kind="probe" if e.startswith("probe ") else "fetch",
                  checks=r["n"], ok=r["ok"], uptime=round(r["ok"] / r["n"], 4) if r["n"] else None, avg_ms=r["ms"]) for (d, e), r in sorted(by.items())]
@@ -240,7 +242,7 @@ def status_data():
     now = int(time.time())
     rows = db.q("SELECT ts, endpoint, ok, ms, code FROM probes WHERE ts > ? ORDER BY ts", (now - 14 * 86400,))
     by = collections.defaultdict(list)
-    for r in rows: by[r["endpoint"]].append(r)
+    for r in rows: by[I.uptime_name(r["endpoint"])].append(r)
     eps = []
     for ep, rs in by.items():
         h1 = [r for r in rs if r["ts"] > now - 3600]; d1 = [r for r in rs if r["ts"] > now - 86400]
