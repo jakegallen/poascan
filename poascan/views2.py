@@ -340,12 +340,13 @@ def _prompt(key, offer=None):
     for k, _, t in SWAP_PROMPTS:
         if k == key: return _CHECK + t.replace("{OFFER}", offer or "[OFFER_ID]") + _TAIL
 
-def _apps():
+def _apps(auto_first=False):
     out = ""
-    for n, kind, base, pre in _J.APPS:
+    apps = sorted(_J.APPS, key=lambda a: a[1] != "auto") if auto_first else _J.APPS
+    for n, kind, base, pre in apps:
         b = ('<span class="ab auto">Auto</span>' if kind == "auto" else '<span class="ab paste"><i></i></span>')
         if kind == "auto":
-            out += f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{b}</a>'
+            out += f'<a class="app{" hot" if auto_first else ""}" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{n}{b}</a>'
         else:
             out += f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{n}{b}</button>'
     return out

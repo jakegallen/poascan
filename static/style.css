@@ -500,3 +500,9 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .stepsd>summary::after{content:"+";color:var(--amber);font:700 18px var(--mono)}.stepsd[open]>summary::after{content:"−"}
 .stepsd[open]>summary{border-bottom:1px solid var(--line)}
 .stepsd:not([open])>summary{border-bottom:0}
+.startp .apps.oc{grid-template-columns:repeat(4,minmax(0,1fr))}
+.startp .apps.oc .app.cpy{min-height:36px;font-size:var(--t13)}
+.startp .jm-copy.sec{display:inline-block;width:auto;height:36px;padding:0 16px;margin:0 0 18px;background:transparent;color:var(--amber);border:1px solid var(--line2);box-shadow:none;font-size:var(--t14)}
+.apps.mcpa{grid-template-columns:repeat(2,minmax(0,1fr));max-width:420px;margin-bottom:10px}
+@media(max-width:640px){.startp .apps.oc{grid-template-columns:repeat(2,minmax(0,1fr))}.apps.mcpa{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.startp .jm-p{max-height:240px;overflow:auto}.startp .jm-l{display:block;margin:16px 0 8px}

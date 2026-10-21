@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (Join, one click)
+
+- /start leads with One click buttons (ChatGPT, Grok, Claude, Perplexity) that prefill the Join prompt; Copy prompt is a secondary fallback.
+- Mine: one-click MCP install for https://minepoa.com/mcp in Cursor and VS Code, plus the Claude Code command.
+- /api: one-click Cursor and VS Code install for https://poascan.io/mcp.
+
 ### Added
 - `/api/v1/swaps/status`: swap availability (`available`, `state` available or upgrading, `last_good_read`, `last_attempt_status`, `open_offers`). Built from POAScan's scheduled read of minepoa.com/api/swaps; no extra upstream calls.
 - `swaps` block (same shape) in `/api/v1/summary` and the `get_network_summary` MCP tool; `swaps_status` in `list_swap_offers`.

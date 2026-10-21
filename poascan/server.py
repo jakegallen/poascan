@@ -98,7 +98,7 @@ def page(path, qs):
     if path == "/token": return V.token()
     if path == "/swaps": return V2.swaps_page(None)
     if path in FQ.PAGES: return FQ.page(path, V.page, V.card)
-    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps())
+    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps(auto_first=True))
     if path == "/growth": return V3.growth_page()
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", ["richlist"])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")

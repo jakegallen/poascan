@@ -113,6 +113,16 @@ def main():
         check("swap prompts check /api/swaps first", b"Before anything else, GET https://minepoa.com/api/swaps" in b and b"don&#x27;t call swap-take" in b)
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1>Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)
+        import base64 as _b64, json as _js, re as _re
+        from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
+        _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
+        _cur = _re.search(r'href="(cursor://[^"]+)"', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
+        _ok = bool(_cur and _vs)
+        if _ok:
+            _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
+            _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
+            _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
+        check("/start: One click first, Mine deeplinks decode", _ok and _m.index("One click") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("/start: Open in apps + collapsed Steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)

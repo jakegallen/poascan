@@ -50,13 +50,16 @@ def data():
 def steps_md():
     return "\n".join(f"{i}. {t}" + (f": {v}" if v else "") + (f" ({n})" if n else "") for i, (t, v, n) in enumerate(STEPS, 1))
 
-def page(page_fn, card, apps_html):
+def page(page_fn, card, apps):
+    apps_html = apps
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
+    from . import oneclick as OC
     top = (f'<section class="card startp" data-pcard><div class="cb"><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
-           f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>'
-           f'<span class="lbl jm-l">Open in</span><div class="apps">{apps_html}</div></div></section>')
+           f'<span class="lbl jm-l">One click</span><div class="apps oc">{apps_html}</div>'
+           f'<button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button>'
+           f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
     body = (f'<div class="sechead"><h1>Join</h1></div>' + top

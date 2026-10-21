@@ -536,12 +536,18 @@ def mcp_manifest():
             "protocolVersions": list(PROTOCOLS), "authentication": {"required": False}, "capabilities": {"tools": {"listChanged": False}},
             "tools": [t[0] for t in TOOLS], "documentation": BASE + "/llms.txt", "api": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "repository": "https://github.com/jakegallen/poascan"}
 
+def _oc_html():
+    from . import oneclick as OC
+    l = OC.links("poascan", MCP_URL)
+    return (f'<div class="apps mcpa"><a class="app" href="{E(l["cursor"])}" data-mcp="cursor">Cursor<span class="ab auto">Add</span></a>'
+            f'<a class="app" href="{E(l["vscode"])}" data-mcp="vscode">VS Code<span class="ab auto">Add</span></a></div>')
+
 def agents_html():
     """Short 'For agents' block, shared by /api and /about."""
     cp = lambda v, lbl: f'<div class="cmd"><span class="lbl">{lbl}</span><code>{E(v)}</code><button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy {lbl}"><i></i></button></div>'
     return (f'<p>Read-only MCP server at <code>{E(MCP_URL)}</code> (Streamable HTTP, no auth). '
             f'Spec: <a href="/openapi.json">openapi.json</a> · Guide: <a href="/llms.txt">llms.txt</a> · <a href="/api">API index</a>.</p>'
-            f'<div class="cmds">{cp(claude_cmd(), "Claude Code")}{cp(json.dumps({"mcpServers": {"poascan": {"url": MCP_URL}}}), "Cursor / JSON")}</div>')
+            + _oc_html() + f'<div class="cmds">{cp(claude_cmd(), "Claude Code")}{cp(json.dumps({"mcpServers": {"poascan": {"url": MCP_URL}}}), "Cursor / JSON")}</div>')
 
 def api_page(page, card):
     spec = openapi(); rows = []
