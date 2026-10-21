@@ -40,9 +40,9 @@ def coverage(a):
     m = nz.get("m"); sent = s.get("n") or 0
     return dict(archive_start_ts=g.get("t"), indexed=sent + (t.get("n") or 0), indexed_sent=sent, first_ts=s.get("lo"), last_ts=s.get("hi"),
                 highest_nonce=m, nonce_gap=(m - sent) if m is not None and m > sent else 0 if m is not None else None,
-                complete=None if m is None else (m <= sent),
+                complete=False if m is not None and m > sent else None,    # never true: the newest bodies may not be archived, so the nonce is a lower bound
                 note="Archive of the network's tx feed (newest 200, read every minute), its tx window and address reads; the network lists only an address's newest 100. "
-                     "highest_nonce comes from archived tx bodies; nonces count up per sender, so nonce_gap > 0 means txs this archive never saw.")
+                     "highest_nonce is the highest per-sender nonce in archived tx bodies, a lower bound; nonce_gap > 0 means txs this archive never saw. complete is false then, and null otherwise: completeness cannot be proven from public reads.")
 
 # ---------------- grading assignments ----------------
 _lock = threading.Lock(); _gx = {"key": None, "v": None}
