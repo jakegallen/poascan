@@ -109,7 +109,11 @@ def main():
         check("swaps status upgrading on empty DB", sw.get("available") is False and sw.get("state") == "upgrading")
         c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "upgrading"))
         c, b = req(base + "/swaps"); low = b.decode().lower()
-        check("swaps banner", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("sbanner")[1][:400] for w in ("down", "broken", "outage", "error")))
+        check("swaps pill", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("xpill")[1][:400] for w in ("down", "broken", "outage", "error")))
+        _mn = b.split(b"<main")[1].split(b"</main>")[0]
+        check("swap panel: Buy/Sell, pair, upgrading button, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" disabled', b"Only swap through the network. Never send payment outside it.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
+        check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
+        check("swaps: book, price, fills", all(x in _mn for x in (b'id="xbook"', b"Order book", b"Recent fills", b"No fills yet")) and req(base + "/static/swap.js")[0] == 200)
         check("swap prompts check /api/swaps first", b"Before anything else, GET https://minepoa.com/api/swaps" in b and b"don&#x27;t call swap-take" in b)
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1>Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)
@@ -137,7 +141,7 @@ def main():
         for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
-        check("history charts", b"Price history" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
+        check("history charts", b"price-history.csv" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)

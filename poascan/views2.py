@@ -89,6 +89,10 @@ def price_stats_html():
 NOPAY = '<span class="nopay" title="Never send payment to this address directly. It skips escrow; the funds are gone. Take via the network\'s swap flow.">⚠ pay via network only</span>'
 
 def open_offers_html():
+    from . import swapx as X
+    return X.book_html()
+
+def _open_offers_v1():
     now = time.time(); nm = names()
     rows = [r for r in swaps_all() if r["status"] == "open"]
     out = []
@@ -138,7 +142,7 @@ def price_chart_html():
     for a in sorted({r["asset"] for r in rows}):
         pts = [(r["ts"], r["price_per_1m_poa"]) for r in rows if r["asset"] == a]
         if len(pts) == 1: pts = pts + [(pts[0][0] + 1, pts[0][1])]  # one fill: flat at its own time
-        out.append(f'<div><div class="minihd">{E(a or "?")} · 1M POA</div>' + line(pts, height=170, color="#FFB000" if a == "SOL" else "#8FA3B8", fmt=lambda v: f"{v:.4g}", y0=0) + "</div>")
+        out.append(f'<div data-asset="{E(a or "")}"><div class="minihd">{E(a or "?")} · 1M POA</div>' + line(pts, height=170, color="#FFB000" if a == "SOL" else "#8FA3B8", fmt=lambda v: f"{v:.4g}", y0=0) + "</div>")
     return f'<div class="pgrid">{"".join(out)}</div>'
 
 @cached("uptime_daily", 120)
@@ -164,6 +168,10 @@ def uptime_table_html():
     return table(["Endpoint"] + [d[5:] for d in days], [[f'<code>{E(e)}</code>'] + [_okpct(m.get((d, e))) for d in days] for e in eps], cls="wrapt")
 
 def swaps_page(_q=None):
+    from . import swapx as X
+    return X.page()
+
+def _swaps_page_v1(_q=None):
     s = swap_stats(); f = fx()
     st = "".join([stat("Open offers", intc(s["open"]), "", ICON_SWAP, "swap_open"), stat("POA on offer", poa(s["on_offer"]), "", ICON_LOCK, "swap_onoffer"),
                   stat("Fills", intc(s["fills"]), "", ICON_SEAL, "swap_fills"), stat("Swap fee", f'<span class="num">{(A.params().get("swap_fee_bp") or 100)/100:g}%</span>', "", ICON_FLAME)])

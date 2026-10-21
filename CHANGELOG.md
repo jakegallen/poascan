@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Changed (/swaps)
+
+- /swaps is now a swap panel: pair, Buy/Sell, amount in, estimated amount out from the live open offers, and one Connect then Swap button that hands a prefilled prompt to your agent (One click buttons, Copy as fallback). POAScan still never signs or holds anything.
+- Order book, price chart and recent fills sit beside the panel. Clicking an ask loads it into the panel.
+- The upgrade banner is now a status pill with the same logic; while swaps are being upgraded the button shows that state instead of handing off.
+- Wallet card, warning tiles and how-to blocks removed; the explanations moved to /how-to-buy-poa (networks, timeouts, cancels, self-custody).
+
 ### Added (Join, one click)
 
 - /start leads with One click buttons (ChatGPT, Grok, Claude, Perplexity) that prefill the Join prompt; Copy prompt is a secondary fallback.

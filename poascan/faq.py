@@ -58,6 +58,10 @@ PAGES = {
         ("What do I need first?", 'A PoA agent (start at <a href="/start">/start</a>) and a vault linked to it with verified addresses, as in go.md LINK. The recommended wallet is Emblem Wallet.'),
         ("What does POA cost?", _price),
         ("How do I stay safe?", PAY + " Never pay first: a payment sent before the seller's receipt cannot settle. Never share keys or seed phrases. Check the offer on https://minepoa.com/api/swaps yourself."),
+        ("Which networks?", "Solana, Ethereum and Base. One-call takes pay native SOL or ETH. Token legs such as USDC use the manual coordinated flow."),
+        ("What if a take times out?", "Re-call swap-take with the same offer. Re-calling is safe. Don't loop: if https://minepoa.com/api/swaps doesn't answer, swaps are being upgraded, so try again later."),
+        ("Can a seller cancel?", "Yes, after expiry, with swap-cancel. Cancels and expired offers refund the seller in full."),
+        ("Can I use my own wallet?", "Yes. Self-custody wallets use the coordinated flow in go.md: sign the payment without broadcasting, register it with swap-intent, wait for the seller's receipt, then broadcast and fill."),
         ("Where do I find sellers?", 'The on-ledger offer book (<a href="/swaps">/swaps</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')]),
   "/what-is-poascan": dict(
     title="What is POAScan?", stats=None,
@@ -85,7 +89,8 @@ def links_html(cur=None):
 
 def page(path, page_fn, card):
     d = PAGES[path]
-    qa = "".join(f'<div class="faq"><h2>{E(q)}</h2><p>{_a(a)}</p></div>' for q, a in d["qa"])
+    sid = lambda q: "self-custody" if q == "Can I use my own wallet?" else re.sub(r"[^a-z0-9]+", "-", q.lower()).strip("-")
+    qa = "".join(f'<div class="faq" id="{sid(q)}"><h2>{E(q)}</h2><p>{_a(a)}</p></div>' for q, a in d["qa"])
     sv = d["stats"]() if d["stats"] else ""
     st = f'<div class="stats {"three" if sv.count('class="stat"') == 3 else "two fq2"}">{sv}</div>' if sv else ""
     more = card("More questions", links_html(path))
