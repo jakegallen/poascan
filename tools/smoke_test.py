@@ -354,7 +354,7 @@ def history(base, check):
     ad = req(base + f"/address/{a2}")[1].decode()
     fr = json.loads(req(base + "/fragment/addr?a=" + a2 + "&k=txs&cursor=" + first["next_cursor"])[1])
     check("/address: Transactions + Grading cards, Load more, chips, coverage note; fragment pages",
-          'id="txs"' in ad and 'id="grading"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "Off record" in ad and ">No seal<" in ad and "nonce 90" in ad
+          'id="txs"' in ad and 'id="grading"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "Unlisted" in ad and ">No seal<" in ad and "nonce 90" in ad
           and 'href="/about#history"' in ad and fr["html"].count("<tr>") == 25 and fr["next"] and "\u2014" not in ad)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": a2, "tx_limit": 25, "grading": True, "grading_limit": 2}}}).encode(),

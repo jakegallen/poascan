@@ -691,3 +691,4 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 .gsum{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:10px;font-size:var(--t12);color:var(--mute)}.gsum b{color:var(--txt,inherit);margin-left:4px}
 @media (max-width:640px){.hist td,.hist th{padding:9px 5px}.hist td:first-child,.hist th:first-child{padding-left:0}.hist td:last-child,.hist th:last-child{padding-right:0}.hist .ep{display:block}.hist .tag{padding:3px 6px;letter-spacing:.04em}}
 .hist .tag.ep{display:inline-block;margin-top:4px}
+@media (max-width:640px){.hist .tag.ep{display:table;margin-top:5px}}
