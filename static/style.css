@@ -456,7 +456,7 @@ table.sortable th[data-dir=asc]::after{content:"↑";opacity:1;color:var(--amber
 .askb svg{width:14px;height:14px;flex:none}
 .cx{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .tracker .askb{align-self:center}
-.am .am-c{margin-bottom:12px}.am .chip{cursor:pointer;background:none;color:var(--steel);font-family:var(--ui)}.am .chip.on{color:var(--amber);border-color:#6B5420;background:rgba(255,176,0,.06)}
+.am .am-c{margin-bottom:12px}.am .am-c[hidden]{display:none}.am .chip{cursor:pointer;background:none;color:var(--steel);font-family:var(--ui)}.am .chip.on{color:var(--amber);border-color:#6B5420;background:rgba(255,176,0,.06)}
 .am .jm-p{max-height:38vh;overflow:auto}
 @media (max-width:640px){.askb{height:36px;padding:0 12px}}
 /* agent names -> LabLeak profile */

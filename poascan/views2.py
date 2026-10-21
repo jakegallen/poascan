@@ -297,8 +297,8 @@ def freshness_html():
         ev = I.EVERY.get(r["endpoint"]); age = now - r["last_ok"] if r["last_ok"] else None
         old = age is None or (ev and age > 3 * ev)
         last = f'<span class="{"amber" if old else ""}">{rel(r["last_ok"])}</span>'
-        rows.append([f'<code>{E(r["endpoint"])}</code>', _every(ev) if ev else "···", last,
-                     (f'{r["fails"]} <span class="dim">{E((r["err"] or "")[:60])}</span>') if r["fails"] else "0",
+        rows.append([f'<code>{E(r["endpoint"])}</code>', _every(ev) if ev else "on view", last,
+                     (f'<span class="red" title="{E((r["err"] or "")[:160])}">{r["fails"]}</span>') if r["fails"] else "0",
                      rel(r["next_at"]) if r["next_at"] and r["next_at"] > now else "now"])
     return table(["Source", "Every", "Last read", "Fails", "Next try"], rows, cls="wrapt")
 

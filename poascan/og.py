@@ -1,7 +1,7 @@
 """Link-preview images for /tx, /address and /epoch. Rendered from the local archive only (never calls minepoa.com),
 one at a time, cached in memory. Without Pillow the generic og-card.png is served instead."""
 import io, os, re, threading, time, collections
-from . import db, analytics as A, views as V
+from . import db, analytics as A, agents as G, views as V
 from .ui import TYPE_LABEL, ADDR_RX, plain, compact
 
 try:
@@ -77,6 +77,7 @@ def _tx(tid):
     amt = d.get("amount"); title = f"{label} · {_poa(amt)}" if amt not in (None, "", "0") else label
     if not d: return (None, "Transaction", [tid[:32], tid[32:]], []), False
     ep = d.get("epoch") if d.get("epoch") is not None else (d.get("body") or {}).get("epoch")
+    if ep is None and d.get("ts"): ep = G.epoch_of_ts(d["ts"])
     st = [("Epoch", f"E{ep}" if ep is not None else "···"), ("Status", "Final" if d.get("final") else "Pending"), ("Time", time.strftime("%b %d %H:%M UTC", time.gmtime(d["ts"])) if d.get("ts") else "···")]
     return ("Transaction", title, [tid[:32], tid[32:]], st), bool(d.get("final"))
 
