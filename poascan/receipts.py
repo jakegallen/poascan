@@ -114,6 +114,10 @@ def card_html(r):
     return "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
 
 def list_html(rs):
-    return table(["Answer", "Status", "Seals", "Paid"],
-                 [[f'<span class="dim">E{r["epoch"]}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 6, 4))}</a>',
-                   status_tag(r), seals_txt(r), paid_txt(r)] for r in rs], cls="rcpt")
+    """Compact list: quorum sits in the header, unsettled rows leave Paid blank."""
+    q = rs[0]["quorum"] if rs else None
+    def sl(r): return UNK if r["seals"] is None else f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span>'
+    def pd(r): return '<span class="dim">·</span>' if r["passed"] is None else paid_txt(r)
+    return table(["Answer", "Status", f"Seals / {q}" if q else "Seals", "Paid"],
+                 [[f'<span class="ep dim">E{r["epoch"]}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 4, 4))}</a>',
+                   status_tag(r), sl(r), pd(r)] for r in rs], cls="rcpt")

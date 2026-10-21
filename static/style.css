@@ -680,3 +680,5 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @media(max-width:900px){.apps .app{padding:0 9px;gap:6px}.app .an{gap:6px}.ab.auto{padding:0 6px}}
 @media(max-width:380px){.apps .app{font-size:13px;padding:0 8px;gap:5px}.app .an{gap:5px}}
 .mono.bad{color:var(--mute);cursor:help}
+@media (max-width:640px){.rcpt td,.rcpt th{padding:10px 6px}.rcpt td:first-child,.rcpt th:first-child{padding-left:0}.rcpt td:last-child,.rcpt th:last-child{padding-right:0}.rcpt .ep{display:block;font-size:var(--t12)}.rcpt .tag{padding:3px 6px;letter-spacing:.04em}}
+@media (max-width:380px){.rcpt .tag{white-space:normal;max-width:96px;line-height:1.25}}

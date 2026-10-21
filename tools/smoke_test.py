@@ -266,7 +266,7 @@ def receipts(base, check):
           '<span class="tag ">Pending</span>' in tn and "Unknown" in tn and ">Receipt<" in tn and '<span class="tag ok">Passed · E10</span>' in tp
           and "61ada059" in tp and '<span class="tag warn">Vanished · E8</span>' in tv and "\u2014" not in tn)
     ad = req(base + "/address/" + a1)[1].decode()
-    check("/address compact receipt list", "Answers · 4" in ad and ad.count('class="rcpt"') == 1)
+    check("/address compact receipt list", "Answers · 4" in ad and ad.count('class="rcpt"') == 1 and "Seals / 3" in ad and ad.count("Not settled") == 0)
     spec = json.loads(req(base + "/openapi.json")[1])
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_answer_receipt", "arguments": {"hash": RN}}}).encode(),
