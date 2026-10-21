@@ -3,7 +3,7 @@ POAScan never signs or holds anything: Connect and Swap hand a prefilled prompt 
 import json, time
 from html import escape as E
 from . import views2 as V2, db, analytics as A
-from .ui import card, table, poa, utc, rel, addr_link, line
+from .ui import card, table, poa, utc, rel, addr_link, line, plain
 
 CHAIN_NAME = {"solana": "Solana", "base": "Base", "ethereum": "Ethereum"}
 def net_logo(chain):
@@ -59,7 +59,7 @@ def book(asset=None):
     asks.sort(key=lambda o: o["px"])
     return asks, last
 
-def _n(v, d=6): return f"{v:.{d}g}"
+def _n(v, d=6): return plain(v, d)
 
 def book_html():
     asks, last = book(); nm = V2.names()
@@ -70,7 +70,7 @@ def book_html():
     for a, ch in sorted(set(SUPPORTED) | set(by)):
         rs = sorted(by.get((a, ch), []), key=lambda o: -o["px"])[-12:]
         tr = "".join(f'<tr class="ask" data-offer="{E(o["id"])}" tabindex="0"><td class="num">{_n(o["px"], 5)}</td><td class="num">{poa(o["poa"])}</td>'
-                     f'<td class="num">{o["want"]:g}</td><td class="dim">{f"<span class=xcd data-close={int(o["exp"])}></span>" if o["exp"] else "···"}</td></tr>' for o in rs)
+                     f'<td class="num">{plain(o["want"], 8)}</td><td class="dim">{f"<span class=xcd data-close={int(o["exp"])}></span>" if o["exp"] else "···"}</td></tr>' for o in rs)
         tr = tr or '<tr><td colspan="4" class="na">···</td></tr>'
         lk = f"{a}|{ch}"
         mid = f'<tr class="mid"><td colspan="4"><span class="num">{_n(last[lk], 5)}</span> <span class="dim small">last fill</span></td></tr>' if lk in last else ""
@@ -81,9 +81,10 @@ def book_html():
 def fills_html():
     _, fl = _rows(); nm = V2.names()
     rows = [[f'<span class="dim">{utc(r["fill_ts"], "%m-%d %H:%M")}</span>', net_logo(r["chain"]) + f'<span class="num">{_n(r["want"] / r["poa"] * 1e6, 5)}</span> <span class="unit">{E(r["asset"] or "")}</span>',
-             poa(r["poa"]), addr_link(r["taker"], nm) if r["taker"] else "···"] for r in fl[:10] if r["poa"] and r["want"]]
+             poa(r["poa"]), addr_link(r["taker"], nm) if r["taker"] else "···",
+             V2._ext(r["chain"], r.get("ext_ref"), tx=True)] for r in fl[:10] if r["poa"] and r["want"]]
     if not rows: return '<div class="xempty na" aria-label="none">-</div>'
-    return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker"], rows, cls="xft")
+    return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker", "Payment"], rows, cls="xft")
 
 def chart_html():
     rows = [r for r in V2.price_history() if r["price_per_1m_poa"] is not None]
@@ -125,9 +126,9 @@ NA = '<span class="na">-</span>'   # plain hyphen: no price yet
 def _usd(v):
     if v is None: return NA
     if v == 0: return "$0"
-    for d, u in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
-        if v >= d: return f"${v / d:.3g}{u}"
-    return f"${v:,.2f}" if v >= 1 else f"${v:.3g}"
+    for d, u in ((1e9, "B"), (1e6, "M")):
+        if v >= d: return f"${plain(v / d, 3)}{u}"
+    return f"${v:,.0f}" if v >= 1000 else f"${v:,.2f}" if v >= 0.01 else f"${plain(v, 2)}"
 
 def stats_html():
     m = V2.swap_market()
@@ -143,5 +144,5 @@ def page():
     body = ('<h1 class="sr-only">Swap POA</h1>'
             f'<div class="xgrid"><div class="xl">{panel()}</div><div class="xr">{side}</div></div>'
             + card("Activity", V2.history_html(), '<a class="more" href="/api/swaps.csv">CSV →</a>')
-            + '<script src="/static/swap.js?v=5" defer></script>')
+            + '<script src="/static/swap.js?v=6" defer></script>')
     return V2.page("Swaps", body, "/swaps")

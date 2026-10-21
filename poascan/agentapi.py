@@ -1,7 +1,7 @@
 """Agent-native access: OpenAPI spec, llms.txt, /.well-known/mcp.json, the /api page and a stateless MCP server
 (Streamable HTTP, JSON-RPC over POST /mcp). Python stdlib only. Every tool reads POAScan's own archive (SQLite and
 in-process caches); none of them calls minepoa.com."""
-import json, os, re, time, threading, collections
+import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
 
@@ -23,9 +23,16 @@ def meta():
         live = h.get("live_last_ok")
         _META[1] = dict(api_version=VERSION, network=nw.get("chain_id") or "poa-mainnet-1", source_height=nw.get("height"),
                         checkpoint=nw.get("checkpoint_height"), epoch=o.get("epoch"), node_as_of=st.get("as_of"), fetched_at=_iso(live),
-                        stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S)
+                        stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S,
+                        node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"))
         _META[0] = now
     return dict(_META[1], generated_at=_iso(now))
+
+_JTOK = re.compile(r'"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?[eE][-+]?\d+')
+def plainjson(t):
+    """Rewrite JSON numbers like 1.059e-05 as 0.00001059. Same value, no scientific notation. Strings are left alone."""
+    if not isinstance(t, str) or not re.search(r"\d[eE][-+]?\d", t): return t
+    return _JTOK.sub(lambda m: m.group(0) if m.group(0)[0] == '"' else format(decimal.Decimal(m.group(0)), "f"), t)
 
 META_HEADERS = ["X-API-Version", "X-Source-Height", "X-Checkpoint", "X-Epoch", "X-Fetched-At", "X-Stale"]
 def meta_headers(m=None):
@@ -294,7 +301,7 @@ def _one(m):
             data = _clean(json.loads(json.dumps(TOOL_FN[name](args), default=str)))
             if isinstance(data, dict): data.setdefault("meta", meta())
             else: data = {"result": data, "meta": meta()}
-            return ok({"content": [{"type": "text", "text": json.dumps(data)}], "structuredContent": data, "isError": False})
+            return ok({"content": [{"type": "text", "text": plainjson(json.dumps(data))}], "structuredContent": data, "isError": False})
         except ToolError as e:
             return ok({"content": [{"type": "text", "text": str(e)}], "structuredContent": {"error": str(e), "meta": meta()}, "isError": True})
         except Exception as e:
@@ -436,7 +443,9 @@ def openapi():
                                                     "fetched_at": {"type": ["string", "null"], "format": "date-time", "description": "last successful upstream fetch, ISO 8601 UTC"},
                                                     "generated_at": {"type": "string", "format": "date-time", "description": "response time, ISO 8601 UTC"},
                                                     "stale": {"type": "boolean", "description": "true when fetched_at is older than stale_after_s or upstream reports stale"},
-                                                    "stale_after_s": {"type": "integer"}}}},
+                                                    "stale_after_s": {"type": "integer"},
+                                                    "node_stale": {"type": "boolean", "description": "minepoa.com's own /api/status stale flag for its node snapshot"},
+                                                    "node_stale_age_s": {"type": ["integer", "null"], "description": "minepoa.com's stale_age_s"}}}},
                 "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
                             "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 
@@ -476,7 +485,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
-- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}).
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
 - Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 

@@ -164,6 +164,7 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a): log.info("%s %s", self.address_string(), fmt % a)
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
         if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
+        if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
         b = body.encode() if isinstance(body, str) else body
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))

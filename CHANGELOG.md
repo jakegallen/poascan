@@ -13,6 +13,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed (swaps coming soon)
 
+- Swap fills: the Solana (or Base, Ethereum) payment ref is read from the fill's proof, so Recent fills has a Payment column linking to the explorer and Activity links the payment leg. Existing fills are backfilled from stored tx bodies, with no extra upstream reads.
+- Numbers never use scientific notation: swap stats show $327.56, $10,388 and $0.11 style values, prices and the price chart axis print plain decimals, and JSON responses and MCP text write 0.00001059 rather than 1.059e-05 (same value).
+- `meta` adds `node_stale` and `node_stale_age_s` (additive), so a `stale: true` caused by minepoa.com's own /api/status flag is visible as such. llms.txt now describes `stale` the same way as the OpenAPI spec.
 - Every option button and install row (chat apps, More, MCP clients, Other clients, the Ask your agent dialog, /start, /swaps, /api) shows the product's logo left of its name, 16px like the network logos. Marks are self-hosted in static/brands, with sources and licenses in static/brands/SOURCES.md.
 - MCP install, on /start and /api: four one-click Add buttons up front (Cursor, VS Code, LM Studio, Goose), and one collapsed Other clients list with the rest: VS Code Insiders, Kiro, Trae and Cherry Studio, then the copy rows for Claude Code, Codex, Gemini CLI, Claude connector, Windsurf, Cline and Zed. Button grids run 4 across on desktop and 2 on mobile.
 - Every MCP Add button now always does something visible. Cursor and Kiro open their official install pages (cursor.com/install-mcp, kiro.dev/launch/mcp/add) in a new tab; VS Code, VS Code Insiders, LM Studio, Goose, Trae and Cherry Studio use their documented app links. Each click also copies that client's config and shows "Copied. Paste in <App> if it didn't open."

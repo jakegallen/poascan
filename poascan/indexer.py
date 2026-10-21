@@ -211,6 +211,13 @@ def ingest_post(p):
 
 # ---------------- swaps (on-ledger escrow offers, fills, cancels) ----------------
 REF_KEYS = ("ref", "ext_ref", "external_ref", "proof_ref", "tx_ref", "payment_ref", "broadcast_sig", "ext_sig")
+def _ref(b):
+    """External payment ref of a swap-fill body: top level or under proof (minepoa puts it at proof.ref)."""
+    for src in (b, b.get("proof") if isinstance(b.get("proof"), dict) else {}):
+        r = next((src[k] for k in REF_KEYS if isinstance(src.get(k), str) and src[k]), None)
+        if r: return r
+    return None
+
 def _f(x):
     try: return float(x)
     except Exception: return None
@@ -234,6 +241,10 @@ def job_swaps():
                     db.write("UPDATE swaps SET status=?, updated=? WHERE offer_id=?", ("expired" if (r["expires_ts"] or 0) < now else "delisted", now, r["offer_id"]))
     except Busy as e:
         log.warning("/api/swaps: %s", e)
+    for r in db.q("SELECT s.offer_id, e.json AS body FROM swaps s JOIN swap_events e ON e.txid=s.fill_txid WHERE s.status='filled' AND (s.ext_ref IS NULL OR s.ext_ref='')"):
+        try: ref = _ref(json.loads(r["body"]))   # local backfill, no upstream call
+        except Exception: ref = None
+        if ref: db.write("UPDATE swaps SET ext_ref=? WHERE offer_id=?", (ref, r["offer_id"]))
     known = {r["txid"] for r in db.q("SELECT txid FROM swap_events")}
     for t in db.q("SELECT id FROM txs WHERE type LIKE 'swap-%' OR type='attest-fill' ORDER BY ts"):
         if t["id"] in known: continue
@@ -254,7 +265,7 @@ def ingest_swap_tx(d):
                  (offer, d.get("from_addr"), _f(b.get("amount") or d.get("amount")), w.get("chain"), w.get("asset"), _f(w.get("amount")), w.get("to"),
                   b.get("expires_ts"), ts, "expired" if (b.get("expires_ts") or 0) < now else "open", b.get("memo") or d.get("memo"), now))
     elif typ == "swap-fill" and offer:
-        ref = next((b[k] for k in REF_KEYS if isinstance(b.get(k), str)), None)
+        ref = _ref(b)
         db.write("UPDATE swaps SET status='filled', taker=?, fill_txid=?, fill_ts=?, ext_ref=?, updated=? WHERE offer_id=?",
                  (d.get("from_addr"), d["id"], ts, ref, now, offer))
     elif typ == "swap-cancel" and offer:

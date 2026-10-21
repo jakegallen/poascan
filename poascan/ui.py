@@ -15,6 +15,14 @@ def compact(v, dec=2):
         if a >= div: return f"{v/div:.{dec}f}{suf}"
     return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.2f}"
 
+def plain(v, sig=4, comma=True):
+    """Up to `sig` significant digits, never scientific notation: 0.00001059, 10.59, 12,345."""
+    if v is None: return "···"
+    if v == 0: return "0"
+    d = max(0, sig - 1 - math.floor(math.log10(abs(v))))
+    s = f"{v:,.{d}f}" if comma else f"{v:.{d}f}"
+    return s.rstrip("0").rstrip(".") if "." in s else s
+
 def num(v, dec=2, cls="", full_dec=6, title=None):
     """Compact number with the full value on hover."""
     if v is None: return '<span class="na">···</span>'

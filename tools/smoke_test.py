@@ -134,6 +134,15 @@ def main():
         c, b = req(base + "/live"); check(f"/live -> {c}", c == 200 and b'id="feed"' in b and b'data-live="answers"' in b and b'livehero' in b)
         check("/live in sitemap + llms + home link", b"/live</loc>" in req(base + "/sitemap.xml")[1] and b"/live" in req(base + "/llms.txt")[1] and b'href="/live"' in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
+        import re as _re, sys as _sys, os as _os2
+        _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
+        from poascan import agentapi as _AG, indexer as _IX
+        from poascan.swapx import _usd as _U
+        check("no scientific notation: JSON numbers, USD stats, fill payment ref under proof",
+              _AG.plainjson('{"a": 1.059e-05, "s": "1e-05"}') == '{"a": 0.00001059, "s": "1e-05"}'
+              and not _re.search(r"\d[eE][-+]\d", req(base + "/api/v1/swaps/status")[1].decode().split('"meta"')[0])
+              and [_U(v) for v in (327.56, 10388.08, 0.11, 0.00001059)] == ["$327.56", "$10,388", "$0.11", "$0.000011"]
+              and _IX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
               and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)

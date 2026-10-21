@@ -27,8 +27,8 @@ def swap_tx_rows(b, nm=None):
         ch = (o["chain"] or "").lower(); asset = E(o["asset"] or "")
         fee = (o.get("fee_bp") or 100) / 1e4; net = o["poa"] * (1 - fee) if o["poa"] else None
         out.append(("To", addr_link(o["maker"], nm, (48, 0)) + ' <span class="dim small">maker</span>'))
-        out.append(("Amount", f'<span class="num">{o["poa"]:,.6g}</span> <span class="unit">POA</span> for <span class="num">{o["want"]:.6g}</span> <span class="unit">{asset}</span>'
-                    + (f' <span class="dim small">· taker gets {net:,.6g} POA after the {fee * 100:g}% fee</span>' if net else "")))
+        out.append(("Amount", f'<span class="num">{plain(o["poa"], 6)}</span> <span class="unit">POA</span> for <span class="num">{plain(o["want"], 6)}</span> <span class="unit">{asset}</span>'
+                    + (f' <span class="dim small">· taker gets {plain(net, 6)} POA after the {fee * 100:g}% fee</span>' if net else "")))
         out.append(("Offer", f'{net_logo(ch)}<b>POA / {asset}</b> <span class="dim small">{E(o["status"])}</span>'
                     f'<div class="mono wrap small">{E(oid)}</div>'))
     elif oid:
@@ -49,8 +49,8 @@ def _price(r):
 
 def _pfmt(per_m, usd, asset):
     if per_m is None: return '<span class="na">···</span>'
-    s = f'<span class="num">{per_m:.6g}</span> <span class="unit">{E(asset or "")}</span>'
-    if usd is not None: s += f' <span class="dim">· ${usd:,.4g}</span>'
+    s = f'<span class="num">{plain(per_m, 6)}</span> <span class="unit">{E(asset or "")}</span>'
+    if usd is not None: s += f' <span class="dim">· ${plain(usd, 4)}</span>'
     return s
 
 def _ext(chain, addr, tx=False):
@@ -138,7 +138,7 @@ def _open_offers_v1():
         pm, usd = _price(r)
         exp = f'<span class="xcd num" data-close="{int(r["expires_ts"] or 0)}"></span>' if r["expires_ts"] else "···"
         out.append([f'<span class="pair">POA<span class="dim">→</span>{E(r["asset"] or "?")}</span> <span class="tag">{E(r["chain"] or "")}</span>',
-                    poa(r["poa"]), f'<span class="num">{r["want"]:g}</span> <span class="unit">{E(r["asset"] or "")}</span>' if r["want"] is not None else "···",
+                    poa(r["poa"]), f'<span class="num">{plain(r["want"], 8)}</span> <span class="unit">{E(r["asset"] or "")}</span>' if r["want"] is not None else "···",
                     _pfmt(pm, usd, r["asset"]), exp, addr_link(r["maker"], nm), _ext(r["chain"], r["pay_to"]) + NOPAY,
                     f'<button class="cp rowp" type="button" data-copy="{E(_prompt("take", r["offer_id"]))}" aria-label="Copy take-offer prompt"><i></i>Prompt</button>' + NOPAY])
     return table(["Pair", "Size", "Wants", "Price · 1M POA", "Expires", "Maker", "Pay-to", "Take"], out)
@@ -180,7 +180,7 @@ def price_chart_html():
     for a in sorted({r["asset"] for r in rows}):
         pts = [(r["ts"], r["price_per_1m_poa"]) for r in rows if r["asset"] == a]
         if len(pts) == 1: pts = pts + [(pts[0][0] + 1, pts[0][1])]  # one fill: flat at its own time
-        out.append(f'<div data-asset="{E(a or "")}"><div class="minihd">{E(a or "?")} · 1M POA</div>' + line(pts, height=170, color="#FFB000" if a == "SOL" else "#8FA3B8", fmt=lambda v: f"{v:.4g}", y0=0) + "</div>")
+        out.append(f'<div data-asset="{E(a or "")}"><div class="minihd">{E(a or "?")} · 1M POA</div>' + line(pts, height=170, color="#FFB000" if a == "SOL" else "#8FA3B8", fmt=lambda v: plain(v, 4), y0=0) + "</div>")
     return f'<div class="pgrid">{"".join(out)}</div>'
 
 @cached("uptime_daily", 120)
