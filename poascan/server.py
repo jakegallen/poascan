@@ -48,6 +48,10 @@ def api(path, qs):
     if path == "/api/swaps/price-history": return V2.price_history(), True
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
+    if path == "/api/clusters":
+        cs = dict(G.cluster_signals()); sg = qs.get("signal", [""])[0]
+        if sg: cs["groups"] = [g for g in cs["groups"] if g["signal"] == sg]
+        return cs, False
     if path == "/api/uptime":
         rows = V2.uptime_rows(); ep = qs.get("endpoint", [""])[0]
         return ([r for r in rows if r["endpoint"] == ep] if ep else rows), True

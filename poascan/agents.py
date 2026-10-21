@@ -479,3 +479,46 @@ def new_per_day():
         out.append(dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, new_agents=end - (prev if prev is not None else first), total=end, partial=prev is None))
         prev = end
     return out
+
+# ---------------- cluster signals (neutral: signals, not findings) ----------------
+SYNC_WINDOW_S = 5     # first challenges inside the same 5-second window
+SYNC_MIN = 3          # at least this many Agents in one window
+FUND_MIN = 3          # one sender funding at least this many Agents
+
+def _components(pairs):
+    uf = UF(); seen = set()
+    for a, b in pairs: uf.u(a, b); seen.update((a, b))
+    g = collections.defaultdict(list)
+    for a in seen: g[uf.f(a)].append(a)
+    return [sorted(v) for v in g.values() if len(v) > 1]
+
+@cached("cluster_signals", 300)
+def cluster_signals():
+    acc = accounts_all(); out = []
+    # near-duplicate answers (same test as /agents/answers)
+    for m in _components([(a, b) for a, b in originality()["dup_pairs"] if a != b]):
+        out.append(dict(signal="near-duplicate answers", agents=m, size=len(m), detail="sampled answers with word 5-gram Jaccard above 0.5"))
+    # synchronized timing: first challenge of several Agents inside one short window
+    b = collections.defaultdict(set)
+    for r in db.q("SELECT from_addr, MIN(ts) AS t FROM txs WHERE type='challenge' AND from_addr IS NOT NULL GROUP BY from_addr"):
+        if r["t"]: b[r["t"] // SYNC_WINDOW_S].add(r["from_addr"])
+    for k, v in sorted(b.items()):
+        if len(v) >= SYNC_MIN:
+            out.append(dict(signal="synchronized timing", agents=sorted(v), size=len(v),
+                            detail=f"first challenge within the same {SYNC_WINDOW_S}s window", at=k * SYNC_WINDOW_S))
+    # shared vault links: one external address linked to several Agents in /api/chains
+    for ch, addr, v in A.sybil()["shared_ext"]:
+        out.append(dict(signal="shared vault link", agents=sorted(set(v)), size=len(set(v)), detail=f"same {ch} address", external=addr))
+    # shared funding: one sender paying POA to several Agents (on-ledger transfers)
+    f = collections.defaultdict(set)
+    for r in db.q("SELECT from_addr, to_addr FROM txs WHERE type IN ('transfer', 'send') AND from_addr IS NOT NULL AND to_addr IS NOT NULL"):
+        if r["to_addr"] != r["from_addr"]: f[r["from_addr"]].add(r["to_addr"])
+    for s, v in f.items():
+        if len(v) >= FUND_MIN:
+            out.append(dict(signal="shared funding", agents=sorted(v | {s}), size=len(v) + 1, detail=f"one sender to {len(v)} Agents", sender=s))
+    out.sort(key=lambda x: (-x["size"], x["signal"]))
+    kinds = ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]
+    flagged = {a for x in out for a in x["agents"]}
+    return dict(groups=out, counts={k: sum(1 for x in out if x["signal"] == k) for k in kinds}, agents_flagged=len(flagged), agents=len(acc),
+                thresholds=dict(near_duplicate_jaccard=0.5, sync_window_s=SYNC_WINDOW_S, sync_min_agents=SYNC_MIN, funding_min_recipients=FUND_MIN),
+                note="Signals, not findings. Shared scripts, busy moments and block timing can link unrelated Agents.")

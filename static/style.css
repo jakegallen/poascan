@@ -553,3 +553,4 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .pgrid:has(>[data-asset]:not([hidden]):only-of-type),.xcard .pgrid{grid-template-columns:minmax(0,1fr)}
 .xbk[hidden],.pgrid>[hidden]{display:none}
 .xempty.chartbox{align-items:flex-end;padding-bottom:18px}
+.sigt td:nth-child(3){white-space:nowrap}

@@ -183,6 +183,12 @@ def t_swap_status(args):
     d["safety"] = SAFETY
     return d
 
+def t_clusters(args):
+    cs = dict(G.cluster_signals()); sg = str(args.get("signal") or ""); lim = _int(args, "limit", 25, 1, 200)
+    gs = [g for g in cs["groups"] if not sg or g["signal"] == sg]
+    cs.update(groups=gs[:lim], total_groups=len(gs), url=BASE + "/agents/operators", method=BASE + "/about#signals")
+    return cs
+
 def t_onboarding(args):
     from . import start as ST
     return ST.data()
@@ -228,6 +234,8 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
     ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
     ("get_swap_status", "Swap status", "Whether swaps are available or being upgraded, the last good read of minepoa.com/api/swaps and the open offer count. Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
+    ("get_cluster_signals", "Cluster signals", "Groups of Agents sharing a pattern (near-duplicate answers, synchronized timing, shared vault link, shared funding). Signals, not findings.",
+     S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
     ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]
@@ -335,6 +343,7 @@ def openapi():
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
+        "/api/clusters": _op("Cluster signals: groups of Agents sharing near-duplicate answers, synchronized timing, a vault link or funding. Signals, not findings", ANY, [_p("signal", "filter to one signal type", {"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, "query", False)], oid="clusterSignals", tag="agents"),
         "/api/uptime": _op("Daily uptime of the minepoa.com endpoints POAScan polls (last 30 days)", ROWS, [_p("endpoint", "filter to one endpoint, e.g. /api/swaps", {"type": "string"}, "query", False)], True, oid="uptime", tag="meta"),
         "/api/leaderboard/{tab}": _op("Leaderboard tab", ROWS, [_p("tab", "leaderboard tab", {"type": "string", "enum": list(V4.COLS)})], True, oid="leaderboard"),
         "/api/agents/series": _op("Agents, holders and supply over time (15 min points)", ROWS, csv=True, oid="agentsSeries"),
@@ -429,6 +438,7 @@ Tools ({len(TOOLS)}):
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
+- Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}).

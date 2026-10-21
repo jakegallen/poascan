@@ -71,7 +71,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 16 and {"get_swap_status", "get_onboarding_steps"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 17 and {"get_swap_status", "get_onboarding_steps", "get_cluster_signals"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -118,6 +118,9 @@ def main():
         c, b = req(base + "/api/v1/concentration"); cj = json.loads(b) if c == 200 else {}
         check(f"concentration -> {c}", c == 200 and {"top1_share", "top5_share", "top10_share", "top20_share", "gini", "min_activity", "meta"} <= set(cj))
         check("summary concentration + openapi", "concentration" in json.loads(req(base + "/api/v1/summary")[1]) and "/api/v1/concentration" in spec["paths"] and "Concentration" in spec["components"]["schemas"])
+        c, b = req(base + "/api/v1/clusters"); cl = json.loads(b) if c == 200 else {}
+        check(f"clusters -> {c}", c == 200 and {"groups", "counts", "thresholds", "note", "meta"} <= set(cl) and "/api/v1/clusters" in spec["paths"])
+        check("/agents/operators cluster signals + /about method", b"Cluster signals" in req(base + "/agents/operators")[1] and b'id="signals"' in req(base + "/about")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1>Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)

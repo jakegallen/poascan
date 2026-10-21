@@ -11,6 +11,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (cluster signals)
+
+- Cluster signals on /agents/operators: groups of Agents sharing near-duplicate answers, synchronized timing (3 or more first challenges in one 5-second window), a vault link or funding. Signals, not findings. `/api/v1/clusters` and the `get_cluster_signals` MCP tool (17 tools). Method on /about#signals.
+
 ### Added (concentration)
 
 - `/api/v1/concentration`: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (holders paid in at most one epoch). Also in `/api/v1/summary`, the `get_network_summary` and `get_rich_list` MCP tools, and a Concentration card on /token. Method on /about.

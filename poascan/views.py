@@ -439,8 +439,19 @@ def operators_page():
     tops = table(["Family root", "Agents", "Paid"], [[addr_link(r, nm), n, p] for r, n, p in op["top"]])
     ed = table(["Link type", "Links"], [[E(k), f"{v:,}"] for k, v in sorted(op["edges"].items(), key=lambda x: -x[1])])
     body = f'''<div class="stats five">{stat("Agents", intc(op["accounts"]))}{stat("Families", intc(op["families"]))}{stat("Multi-agent families", intc(op["multi"]))}{stat("Singletons", intc(op["singletons"]))}{stat("Agents / family", f'<span class="num">{op["ratio"]:.2f}</span>' if op["ratio"] else "···")}</div>
-<div class="grid2">{card("Largest families " + EST, tops)}{card("Links", ed)}</div>'''
+<div class="grid2">{card("Largest families " + EST, tops)}{card("Links", ed)}</div>
+{signals_card()}'''
     return apage("Operators", body, "/agents/operators")
+
+def signals_card():
+    cs = G.cluster_signals(); nm = names()
+    chips = "".join(f'<div><span class="lbl">{E(k.capitalize())}</span><span class="num">{v:,}</span></div>' for k, v in cs["counts"].items())
+    def who(m):
+        s = " ".join(addr_link(a, nm, (6, 4)) for a in m[:2])
+        return s + (f' <span class="dim small">+{len(m) - 2}</span>' if len(m) > 2 else "")
+    rows = [[f'<span class="tag">{E(g["signal"])}</span>', f'<span class="num">{g["size"]}</span>', who(g["agents"])] for g in cs["groups"][:12]]
+    return card(f'Cluster signals · {cs["agents_flagged"]:,} Agents', f'<div class="minis">{chips}</div>' + table(["Signal", "Agents", "Members"], rows, cls="sigt"),
+                '<a class="more" href="/about#signals">Method</a> · <a class="more" href="/api/v1/clusters">API →</a>')
 
 def _operators_method():
     return f'''
@@ -600,7 +611,7 @@ def about():
 <li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
-    methods = card("More methodology", '''<h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
+    methods = card("More methodology", '''<h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>
 <h3>Graders &amp; grading</h3><p>Alignment comes from the <code>jury</code> array of every settled answer in the close records. Ungraded answers carry forward up to params.pending_ttl_epochs. Appeal overturns are not exposed.</p>
