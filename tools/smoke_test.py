@@ -140,7 +140,7 @@ def main():
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
-        _cur = _re.search(r'href="(cursor://[^"]+)"', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
+        _cur = _re.search(r'href="(https://cursor\.com/install-mcp\?[^"]+)" data-mcp="cursor" target="_blank" rel="noopener" data-mcpcopy=', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
         _ok = bool(_cur and _vs)
         if _ok:
             _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
@@ -149,7 +149,7 @@ def main():
         check("/start: Copy before One click, Mine deeplinks decode", _ok and _m.index("data-copy-prompt") < _m.index("One click") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
-        _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(kiro://kiro\.mcp/add\?[^"]+)"', _m)
+        _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: More toggles closed, extra MCP deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 2 and '>More<' in _m and '>Other clients<' in _m
               and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
               and _js.loads(_pq(_up(_ki.group(1).replace("&amp;", "&")).query)["config"][0])["url"] == "https://minepoa.com/mcp"
@@ -167,6 +167,7 @@ def main():
               and all(f in open(_os.path.join(_bd, "SOURCES.md")).read() for f in set(_lg))
               and all(b'<span class="an"><img class="blogo"' in x for x in _pb))
         _mc = _m[_m.index('apps mcpa'):]; _oc = _mc.index('>Other clients<')
+        check("/start Mine: every Add button also copies a config", all(_re.search(f'data-mcp="{k}"(?: target="_blank" rel="noopener")? data-mcpcopy="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
         check("/start Mine: four one-click Add up front, everything else under Other clients", _mc[:_oc].count('data-mcp=') == 4
               and all(f'data-mcp="{k}"' in _mc[:_oc] for k in ("cursor", "vscode", "lmstudio", "goose")) and 'class="cmd"' not in _mc[:_oc]
               and _mc[_oc:].count('class="cmd"') == 7 and _mc[_oc:].index('data-mcp="cherry"') < _mc[_oc:].index('data-mcp="claude-code"'))

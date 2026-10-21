@@ -308,7 +308,7 @@ def layout(title, body, active="/", live=None):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=18" defer></script></body></html>'''
+<script src="/static/app.js?v=19" defer></script></body></html>'''
 
 def card(title, body, extra="", cls=""):
     return f'<section class="card {cls}"><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

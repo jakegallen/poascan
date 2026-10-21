@@ -119,6 +119,7 @@ var KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘V":"
 function toast(m,big){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(jm&&jm.open)?jm:(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
 function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(jm&&jm.open?jm:D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb()});return Promise.resolve(fb())}
+D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
 if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
  function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?($(".pc-text",c).textContent||"").trim():P}
  $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});
