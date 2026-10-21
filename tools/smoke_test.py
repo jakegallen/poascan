@@ -71,7 +71,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 18 and {"get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 19 and {"get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -162,6 +162,9 @@ def main():
         check("history charts", b"Price</h2>" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">24h Trades<", b">24h Volume<")) and sb.count(b"Trades") == 1)
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
+        pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
+        lv = req(base + "/live")[1]; check("live pending panel", b"Pending</h2>" in lv and b"\xe2\x80\x94" not in lv)
+        check("emblem toggle logo", b"/static/emblem-32.png" in sb and b"<span>Add Emblem Wallet</span>" in sb and b"\xc2\xb7\xc2\xb7\xc2\xb7</span></b>" not in sb.split(b'class="xstats"')[1][:900])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)

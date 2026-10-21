@@ -249,3 +249,41 @@ def concentration():
                 min_activity=dict(agents=len(low), share_of_holders=(len(low) / len(rows)) if rows else None,
                                   share_of_supply=(sum(r["balance"] for r in low) / tot) if tot else None,
                                   definition=f"holders paid in at most {MIN_ACTIVITY_EPOCHS} epoch"))
+
+@cached("pending_by_epoch", 60)
+def pending_by_epoch():
+    """Pending answers grouped by the epoch they were submitted in, oldest first.
+    Carried-forward: basis.pending of the latest close record (ungraded or unresolved answers, keyed by answer txid, with `since` = origin epoch).
+    Current: answers (challenge txs) archived since the last close; none is graded until the next close."""
+    raw = epochs_raw(); o = open_epoch(); cur = o["epoch"]; now = time.time()
+    last = raw[-1] if raw else {}; pend = (last.get("basis") or {}).get("pending", {}) or {}
+    starts = {}
+    for i, e in enumerate(raw): starts[int(e["epoch"]) + 1] = int(e["ts"])      # epoch k opens when k-1 closes
+    groups = collections.defaultdict(lambda: dict(n=0, short=0, appeal=0, ids=[]))
+    for tid, v in pend.items():
+        g = groups[int(v.get("since", 0))]; g["n"] += 1; g["ids"].append(tid)
+        if v.get("kind") in ("short", "appeal"): g[v["kind"]] += 1
+    rows = []
+    if raw and 0 not in starts:
+        g0 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='genesis-identity'"); starts[0] = g0["t"] if g0 and g0["t"] else None
+    def ts_of(ids):  # exact only when every pending answer of the group is in the archive
+        best = None; seen = 0
+        for i in range(0, len(ids), 500):
+            ch = ids[i:i + 500]
+            r = db.q1(f"SELECT MIN(ts) AS t, COUNT(*) AS n FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch))
+            seen += r["n"] or 0
+            if r["t"] and (best is None or r["t"] < best): best = r["t"]
+        return best if seen == len(ids) else None
+    for ep in sorted(groups):
+        g = groups[ep]; t = ts_of(g["ids"]); approx = t is None
+        if approx: t = starts.get(ep)
+        rows.append(dict(epoch=ep, pending=g["n"], short_panel=g["short"], appeal=g["appeal"], oldest_ts=t, oldest_age_s=int(now - t) if t else None,
+                         oldest_approx=approx, stale=ep < cur, source="close"))
+    if o["last_close"]:
+        r = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS t FROM txs WHERE type='challenge' AND ts > ?", (o["last_close"],))
+        if r["n"]:
+            rows = [x for x in rows if x["epoch"] != cur]
+            rows.append(dict(epoch=cur, pending=r["n"], short_panel=None, appeal=None, oldest_ts=r["t"], oldest_age_s=int(now - r["t"]),
+                             oldest_approx=False, stale=False, source="open"))
+    return dict(current_epoch=cur, as_of_close=int(last["epoch"]) if last else None, total=sum(x["pending"] for x in rows),
+                stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=params().get("pending_ttl_epochs"), rows=rows)

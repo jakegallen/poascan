@@ -71,6 +71,7 @@ def api(path, qs):
     if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4]) for p in A.accounts_series()], True
     if path == "/api/forum":
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
+    if path == "/api/pending-by-epoch": return A.pending_by_epoch(), False
     if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
     if path == "/api/anchors": return A.anchors_latest(500), True
     if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False

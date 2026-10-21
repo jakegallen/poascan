@@ -601,3 +601,18 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .xst{display:flex;flex-direction:column;gap:2px;padding:0 12px;min-width:0;border-left:1px solid var(--line)}.xst:first-child{border-left:0}
 .xst .lbl{font-size:11px;color:var(--mute);white-space:nowrap}.xst b{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:520px){.xstats{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:8px}.xst:nth-child(3){border-left:0}}
+.pend td,.pend th{padding:6px 10px}.pend tr.pst td:first-child{box-shadow:inset 2px 0 0 var(--amber)}.pend tr.pst td{color:var(--txt,inherit)}.pend tr.pst .num{color:var(--amber)}.pend .tag{font-size:10px;padding:1px 6px;border:1px solid var(--line2);border-radius:999px;color:var(--mute);margin-left:6px}
+/* Add Emblem Wallet: quiet gold pill with a slow shimmer */
+.xemb>summary{position:relative;overflow:hidden;isolation:isolate;white-space:nowrap;gap:8px;padding:6px 12px 6px 10px;border-radius:999px;
+ border:1px solid rgba(255,176,0,.28);background:linear-gradient(180deg,rgba(255,176,0,.07),rgba(255,176,0,.02));color:var(--txt);
+ box-shadow:0 0 0 0 rgba(255,176,0,0),0 0 14px rgba(255,176,0,.06);transition:border-color var(--fast),box-shadow var(--fast),color var(--fast)}
+.xemb>summary::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:-40%;width:36%;pointer-events:none;
+ background:linear-gradient(100deg,transparent,rgba(255,214,120,.16),transparent);transform:skewX(-18deg);animation:embsh 6s ease-in-out 1.5s infinite}
+@keyframes embsh{0%{left:-40%}22%,100%{left:120%}}
+.xemb>summary:hover,.xemb>summary:focus-visible,.xemb[open]>summary{color:var(--hi);border-color:rgba(255,176,0,.6);box-shadow:0 0 0 1px rgba(255,176,0,.12),0 0 18px rgba(255,176,0,.16)}
+.xemb>summary:focus-visible{outline:2px solid rgba(255,176,0,.55);outline-offset:2px}
+.xemb>summary::after{margin-left:2px}
+.xemb .embl{margin-right:0;border-radius:0;vertical-align:middle}.xemb picture{display:inline-flex;flex:none}
+@media (prefers-reduced-motion:reduce){.xemb>summary::before{animation:none;display:none}.xemb>summary{transition:none}}
+.xself{color:#968D79}.xself:hover{color:var(--amber)}
+.pend th.r,.pend td.r{text-align:right}.pend{max-width:560px}

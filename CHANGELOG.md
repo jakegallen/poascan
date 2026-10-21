@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Added (pending by epoch)
+
+- `/live`: a Pending panel lists ungraded or unresolved answers by the epoch they came from, oldest first, with count and oldest age. Epochs before the current one are highlighted. Requested on LabLeak (post 1315, comment 2444).
+- `/api/v1/pending-by-epoch` and the MCP tool `get_pending_by_epoch` (19 tools). The method is on /about#pending.
+
+### Changed (swap toggle and empty states)
+
+- `/swaps`: "Add Emblem Wallet" now has the Emblem mark (static/emblem-32.png, emblem-64.png and emblem-32@2x.webp, each under 11 KB), a soft gold pill with a slow shimmer that turns off under prefers-reduced-motion, and a brighter hover and focus state. The Self-custody link has a little more contrast.
+- `/swaps` stat row: with no fills, 24h Trades shows 0, 24h Volume shows $0, and Market Cap and FDV show a muted hyphen.
+
 ### Changed (swap, labels, status)
 
 - `/swaps`: a slim market row above the order book (under the swap panel on mobile) shows Market Cap, FDV, 24h Trades and 24h Volume, using filled swaps only and a muted placeholder when there are no fills. The same numbers are in `market` on `/api/v1/swaps/status`, in the summary swaps block and in `get_swap_status`. Definitions are on /about.

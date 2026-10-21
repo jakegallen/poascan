@@ -113,24 +113,25 @@ def panel():
 <p class="xhint" id="xhint" hidden></p><dl class="xd"><div><dt>Rate</dt><dd id="xpx">···</dd></div><div><dt>Fee</dt><dd>{fee / 100:g}%</dd></div><div><dt>Route</dt><dd><span id="xroute">···</span> <span class="xvia">{ICON_WALLET}via Emblem</span></dd></div></dl>
 {note}{btn}
 <p class="xsafe">{ICON_INFO}{SAFE}</p>
-<details class="xemb" id="xemb"><summary>Add Emblem Wallet</summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
+<details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard><pre class="pc-text" tabindex="0">{E(tpl["connect"])}</pre>
 <span class="lbl jm-l">One click</span><div class="apps oc">{apps}</div><button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
 <details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard><pre class="pc-text" tabindex="0"></pre><span class="lbl jm-l">One click</span><div class="apps oc">{apps}</div>
 <button class="jm-copy sec" type="button" data-copy-prompt>Copy prompt</button></div></details>
 <a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a>
 </section>'''
 
+NA = '<span class="na">-</span>'   # plain hyphen: no price yet
 def _usd(v):
-    if v is None: return '<span class="na" aria-label="none">···</span>'
+    if v is None: return NA
+    if v == 0: return "$0"
     for d, u in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
         if v >= d: return f"${v / d:.3g}{u}"
     return f"${v:,.2f}" if v >= 1 else f"${v:.3g}"
 
 def stats_html():
-    m = V2.swap_market(); none = m["last_fill_ts"] is None
-    tr = '<span class="na" aria-label="none">···</span>' if none else f'{m["trades_24h"]:,}'
-    items = [("Market Cap", _usd(m["market_cap_usd"])), ("FDV", _usd(m["fdv_usd"])), ("24h Trades", tr),
-             ("24h Volume", '<span class="na" aria-label="none">···</span>' if none else _usd(m["volume_24h_usd"]))]
+    m = V2.swap_market()
+    items = [("Market Cap", _usd(m["market_cap_usd"])), ("FDV", _usd(m["fdv_usd"])), ("24h Trades", f'{m["trades_24h"]:,}'),
+             ("24h Volume", _usd(m["volume_24h_usd"]))]
     return '<div class="xstats" role="group" aria-label="Market">' + "".join(f'<div class="xst"><span class="lbl">{l}</span><b class="num">{v}</b></div>' for l, v in items) + "</div>"
 
 def page():

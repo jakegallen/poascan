@@ -183,6 +183,9 @@ def t_swap_status(args):
     d["safety"] = SAFETY
     return d
 
+def t_pending(args):
+    d = dict(A.pending_by_epoch()); d.update(url=BASE + "/live", method=BASE + "/about#pending"); return d
+
 def t_clusters(args):
     cs = dict(G.cluster_signals()); sg = str(args.get("signal") or ""); lim = _int(args, "limit", 25, 1, 200)
     gs = [g for g in cs["groups"] if not sg or g["signal"] == sg]
@@ -244,6 +247,7 @@ TOOLS = [  # name, title, description, input schema, fn
      S(signal={"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, limit=LIM(25, 200)), t_clusters),
     ("list_agents", "Agents (paged)", "Every Agent, ordered by address, in pages: balance, lifetime rewards, epochs paid, inviter, estimated family size, LabLeak profile. Pass next_cursor as after for the next page.",
      S(after={"type": "string", "description": "next_cursor from the previous page"}, limit=LIM(100, 500)), t_agents_view),
+    ("get_pending_by_epoch", "Pending by epoch", "Pending (ungraded or unresolved) answers grouped by the epoch they came from, oldest first: count, age of the oldest, and whether the epoch is before the current one.", S(), t_pending),
     ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]
@@ -361,6 +365,8 @@ def openapi():
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
+        "/api/pending-by-epoch": _op("Pending answers by origin epoch: count, oldest age, stale flag for epochs before the current one", ANY, oid="pendingByEpoch",
+                                     desc="Carried-forward answers come from basis.pending of the latest close record; current-epoch answers are those archived since the last close. Method: https://poascan.io/about#pending"),
         "/api/clusters": _op("Cluster signals: groups of Agents sharing near-duplicate answers, synchronized timing, a vault link or funding. Signals, not findings", ANY, [_p("signal", "filter to one signal type", {"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, "query", False)], oid="clusterSignals", tag="agents"),
         "/api/agents/view": _agents_view_op(),
         "/api/uptime": _op("Daily uptime of the minepoa.com endpoints POAScan polls (last 30 days)", ROWS, [_p("endpoint", "filter to one endpoint, e.g. /api/swaps", {"type": "string"}, "query", False)], True, oid="uptime", tag="meta"),
@@ -464,6 +470,7 @@ Tools ({len(TOOLS)}):
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
+- Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; method at {BASE}/about#pending).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
