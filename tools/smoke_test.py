@@ -114,7 +114,7 @@ def main():
         check("swaps: Coming soon once, no upgrade copy", _mn0.count(b"Coming soon") == 1 and _mn0.lower().count(b"coming soon") == 1 and b"being upgraded" not in _mn0.lower()
               and b'<button class="xbtn soon" type="button" id="xgo" data-up="0" aria-disabled="true">Coming soon</button>' in _mn0 and b'class="xnote"' not in _mn0)
         _mn = b.split(b"<main")[1].split(b"</main>")[0]
-        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Never send payment outside the network.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
+        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Never send payment outside the network.", b"via Emblem", b'<summary aria-label="Add Emblem Wallet">', b"<span>Add Wallet</span>")) and b"Self-custody" not in _mn and b'<div class="xembr"><p class="xsafe">' in _mn and _mn.count(b"1%") == 1)
         check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
         check("swaps: book, price, fills", all(x in _mn for x in (b'id="xbook"', b"Order book", b"Recent fills", b"No fills yet")) and req(base + "/static/swap.js")[0] == 200)
         check("swap prompts say coming soon and gate on swaps/status", b"Swaps are coming soon. Until https://poascan.io/api/v1/swaps/status shows available:true" in b and b"don&#x27;t call swap-offer, swap-take" in b and b"being upgraded" not in b)
@@ -177,7 +177,7 @@ def main():
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
         lv = req(base + "/live")[1]; check("live pending panel", b"Pending</h2>" in lv and b"\xe2\x80\x94" not in lv)
-        check("emblem toggle logo", b"/static/emblem-32.png" in sb and b"<span>Add Emblem Wallet</span>" in sb and b"\xc2\xb7\xc2\xb7\xc2\xb7</span></b>" not in sb.split(b'class="xstats"')[1][:900])
+        check("emblem toggle logo", b"/static/emblem-32.png" in sb and b"<span>Add Wallet</span>" in sb and b"\xc2\xb7\xc2\xb7\xc2\xb7</span></b>" not in sb.split(b'class="xstats"')[1][:900])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)

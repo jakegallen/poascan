@@ -114,13 +114,21 @@ def upsert_txs(rows, source):
     return len(out)
 
 def job_live():
-    st = fetch("/api/status"); db.add_snap("status", st); db.put_blob("status", st)
-    nw = fetch("/api/networks"); db.put_blob("networks", nw)
+    # Each read stands alone: a slow /api/networks must not hold back the tx feed that drives the Live pill.
+    rows = fetch("/api/explorer/txs?limit=200")
+    upsert_txs(rows, "explorer/txs")
+    for path, fn in (("/api/status", _live_status), ("/api/networks", _live_networks)):
+        if not can_fetch(path): continue
+        try: fn(fetch(path, timeout=20))
+        except Busy as e: log.warning("%s: %s", path, e)
+
+def _live_status(st): db.add_snap("status", st); db.put_blob("status", st)
+
+def _live_networks(nw):
+    db.put_blob("networks", nw)
     for c in nw.get("chains", []):
         if c.get("chain_id") == "poa-mainnet-1":
             db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height")})
-    rows = fetch("/api/explorer/txs?limit=200")
-    upsert_txs(rows, "explorer/txs")
 
 def job_window():
     d = fetch("/api/txs", timeout=90)

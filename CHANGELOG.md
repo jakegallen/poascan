@@ -13,10 +13,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed (swaps coming soon)
 
+- Ask your agent dialog: with several prompts, the selected chip names the prompt and the title is screen-reader only, so the label shows once.
+- Indexer: the live tx feed is read first and no longer waits on /api/status or /api/networks, which get a 20 second timeout and their own backoff. A slow /api/networks had been holding the header pill on Stale.
 - Every prompt box (the /start prompt, Add Emblem Wallet and the swap prompt on /swaps, the Ask your agent dialog and prompt cards) now has its Copy button pinned top right inside the box, switching to "Copied". The separate Copy prompt buttons below are gone.
 - `/tx` for swap txs: To shows the offer maker, Amount shows POA for the wanted asset with what the taker gets after the fee, and new Offer and Payment rows show the pair with its network logo, offer status, and the external payment linked to its explorer (Solscan, Basescan or Etherscan).
 - `/swaps` is a live preview until launch: the main button is a greyed "Coming soon" (aria-disabled, with a slow gold sweep that stops under prefers-reduced-motion). Buy/Sell, pairs, amounts, Rate, Fee, the stat row, order book, price chart and Add Emblem Wallet all stay. The upgrade note and the "check back" hint are gone, so the status is said once.
-- The safety line under the button now reads "Never send payment outside the network." on one line, and Self-custody sits on the same row as Add Emblem Wallet.
+- Under the button, one row: "Never send payment outside the network." on the left and a compact Add Wallet pill (Emblem mark, aria-label "Add Emblem Wallet") on the right, at every width. The Self-custody link is gone from the panel; that section stays on /how-to-buy-poa.
 - One flag, `SWAPS_LIVE` in poascan/views2.py, switches back to the normal Connect and Swap flow.
 - `/api/v1/swaps/status`, the summary swaps block and `get_swap_status`: `state` can now be `coming_soon` (additive), with the message "Swaps are coming soon. Link an Emblem Wallet now to be ready." The MCP note tells agents not to call swap-offer or swap-take yet and to offer help linking a vault.
 - Swap prompts open with "Swaps are coming soon" and only trade once `/api/v1/swaps/status` shows available:true. The Swaps stat on the FAQ reads "Coming soon".

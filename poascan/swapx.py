@@ -116,9 +116,8 @@ def panel():
 <div class="xf"><span class="lbl" id="xl-out">You get</span><div class="xin"><output id="xout" aria-labelledby="xl-out">0</output><span class="xu" id="xu-out">POA</span></div></div>
 <p class="xhint" id="xhint" hidden></p><dl class="xd"><div><dt>Rate</dt><dd id="xpx">···</dd></div><div><dt>Fee</dt><dd>{fee / 100:g}%</dd></div><div><dt>Route</dt><dd><span id="xroute">···</span> <span class="xvia">{ICON_WALLET}via Emblem</span></dd></div></dl>
 {note}{btn}
-<p class="xsafe">{ICON_INFO}{SAFE}</p>
-<div class="xembr"><details class="xemb" id="xemb"><summary><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Emblem Wallet</span></summary><div class="xembb" data-pcard>{emb_box}
-<span class="lbl jm-l">One click</span>{apps}</div></details><a class="xself" href="/how-to-buy-poa#self-custody">Self-custody</a></div>
+<div class="xembr"><p class="xsafe">{ICON_INFO}<span>{SAFE}</span></p><details class="xemb" id="xemb"><summary aria-label="Add Emblem Wallet"><picture><source type="image/webp" srcset="/static/emblem-32@2x.webp 2x"><img class="netl embl" src="/static/emblem-32.png" srcset="/static/emblem-32.png 1x, /static/emblem-64.png 2x" width="16" height="16" alt="" aria-hidden="true"></picture><span>Add Wallet</span></summary><div class="xembb" data-pcard>{emb_box}
+<span class="lbl jm-l">One click</span>{apps}</div></details></div>
 <details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard>{swap_box}<span class="lbl jm-l">One click</span>{apps2}</div></details>
 </section>'''
 

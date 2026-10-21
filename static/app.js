@@ -159,7 +159,7 @@ if(am){var amP=$("#am-p",am),amT=$("#am-t",am),amC=$(".am-c",am),cur=[];
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;var b=t.closest("[data-ask]");
   if(b){e.preventDefault();try{cur=JSON.parse(b.dataset.ask)}catch(_){return}
    amC.innerHTML="";cur.forEach(function(x,i){var c=D.createElement("button");c.type="button";c.className="chip";c.textContent=x[0];c.addEventListener("click",function(){amSet(i)});amC.appendChild(c)});
-   amC.hidden=cur.length<2;amSet(0);if(am.showModal)am.showModal();else am.setAttribute("open","");D.documentElement.classList.add("jmlock");return}
+   var mu=cur.length>1;amC.hidden=!mu;am.classList.toggle("multi",mu);amT.classList.toggle("sr-only",mu);amSet(0);if(am.showModal)am.showModal();else am.setAttribute("open","");D.documentElement.classList.add("jmlock");return}
   if(am.open&&(t===am||t.closest("[data-amclose]"))){if(am.close)am.close();else am.removeAttribute("open")}});
  am.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")})}
 /* sortable tables */

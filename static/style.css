@@ -647,9 +647,19 @@ html.js .morep:not(.open){display:none}
 .xsafe{white-space:nowrap}
 .xembr{position:relative;margin-top:10px}.xembr .xemb{margin-top:0}
 .xemb>summary{min-height:32px;box-sizing:border-box}
-.xembr .xself{position:absolute;top:0;right:0;height:32px;margin:0;display:flex;align-items:center;white-space:nowrap}
 .xembb .moreb,.xhob .moreb{display:flex}
 /* one prompt box everywhere: Copy pinned inside, top right */
 .pbox{position:relative;margin:0 0 14px}.pbox>pre{margin:0;padding-top:44px}
 .startp .pbox,.xembb .pbox,.xhob .pbox{margin-bottom:0}
 .am .pbox,.jm .pbox{margin-bottom:16px}
+/* Ask dialog with several prompts: the selected chip names it, so the title is screen-reader only */
+.am .jm-in{position:relative}
+.am.multi .jm-hd{position:absolute;top:18px;right:24px;margin:0}
+.am.multi .am-c{padding-right:48px;min-height:36px}
+@media (max-width:640px){.am.multi .jm-hd{top:14px;right:14px}}
+/* /swaps: safety notice left, compact Add Wallet pill right, one row; the wallet panel opens below */
+.xembr .xsafe{position:absolute;left:0;top:0;height:32px;margin:0}
+.xembr .xemb>summary{display:flex;width:max-content;margin-left:auto;gap:6px;padding:5px 10px 5px 8px}
+.xembr .xemb>summary::after{display:none}
+@media (max-width:420px){.xembr .xsafe{font-size:11px}.xembr .xsafe svg{display:none}.xembr .xemb>summary{font-size:11px;gap:5px;padding:4px 9px 4px 7px}}
+@media (max-width:380px){.xp{padding-left:12px;padding-right:12px}.xembr .xsafe{font-size:10.5px;letter-spacing:-.005em}.xembr .xemb>summary{gap:4px;padding:4px 8px 4px 6px}.xembr .xemb .embl{width:14px;height:14px}}
