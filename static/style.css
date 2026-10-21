@@ -705,7 +705,8 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.pill.up i{animation:none}}
 .asof.steel{color:var(--steel)}
-.upc{scroll-margin-top:90px}
+.upc{scroll-margin-top:116px}
+@media (max-width:1100px){.upc{scroll-margin-top:164px}}
 .upc .cx{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .upg{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 14px;margin:0 0 14px}
 .upg dt{font:600 var(--t12)/1.6 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--mute)}
