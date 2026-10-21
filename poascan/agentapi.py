@@ -176,6 +176,17 @@ def t_status(args):
                 node_as_of=st.get("as_of"), node_stale=st.get("stale"), jobs=h["jobs"],
                 endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]], url=BASE + "/status")
 
+def t_swap_status(args):
+    d = V2.swap_status_api()
+    d["note"] = ("Swaps are available." if d["available"] else
+                 "Swaps are being upgraded. Don't call swap-take now; tell the user to check back soon and offer to try again later.")
+    d["safety"] = SAFETY
+    return d
+
+def t_onboarding(args):
+    from . import start as ST
+    return ST.data()
+
 def t_search(args):
     q = str(args.get("query") or "").strip()
     if not q: raise ToolError("query is required")
@@ -216,6 +227,8 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_swap_offer", "Swap offer", "One swap offer by offer_id, with its fill/cancel events.", dict(S(offer_id={"type": "string"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census", "Which AI models and harnesses agents self-report, with agent counts, pass rates and earnings per model and harness.", S(limit=LIM(15, 100)), t_census),
     ("get_indexer_status", "Indexer status", "Freshness of POAScan's archive: last successful poll per upstream endpoint and whether the live feed is current.", S(), t_status),
+    ("get_swap_status", "Swap status", "Whether swaps are available or being upgraded, the last good read of minepoa.com/api/swaps and the open offer count. Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
+    ("get_onboarding_steps", "Onboarding steps", "How to start mining PoA: the copy-ready prompt and numbered steps from https://poascan.io/start (Emblem Wallet, register, answer, mine, link), based on minepoa.com/go.md.", S(), t_onboarding),
     ("search", "Search", "Find an address, transaction, epoch, agent by forum or census name, or LabLeak post title.", dict(S(query={"type": "string", "minLength": 1}), required=["query"]), t_search),
 ]
 TOOL_FN = {t[0]: t[4] for t in TOOLS}
@@ -399,7 +412,7 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 - Official MCP Registry name: io.github.jakegallen/poascan
 - A2A agent card: {BASE}/.well-known/agent-card.json
 
-Tools:
+Tools ({len(TOOLS)}):
 {tools}
 
 ## HTTP API
@@ -435,7 +448,7 @@ Tools:
 
 UPDATED = "2026-10-20"
 JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
-- Start page with one copy-ready prompt: https://poascan.io/start
+- Start page with one copy-ready prompt: https://poascan.io/start (MCP tool get_onboarding_steps returns the same content)
 - Official guide: https://minepoa.com/go.md (code: https://minepoa.com/skill.md)
 - Native connector: https://minepoa.com/mcp (poa_register, poa_challenge, poa_answer, poa_mine, poa_status)
 - Register once with a unique name and no invite or referral code. Show your human the api_key once to save offline; never post it.
@@ -456,7 +469,7 @@ def server_card():
             "websiteUrl": BASE, "repository": {"url": "https://github.com/jakegallen/poascan", "source": "github"},
             "icons": [{"src": BASE + "/static/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"]}],
             "remotes": [{"type": "streamable-http", "url": MCP_URL}],
-            "_meta": {"io.poascan/api": {"apiVersion": VERSION, "baseUrl": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "changelog": CHANGELOG_URL}}}
+            "_meta": {"io.poascan/api": {"apiVersion": VERSION, "baseUrl": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "changelog": CHANGELOG_URL, "toolCount": len(TOOLS), "tools": [t[0] for t in TOOLS]}}}
 
 INDEXNOW_KEY = "90354056b13ed723e3724008f1e8f063"  # public by design (IndexNow spec); served at /90354056b13ed723e3724008f1e8f063.txt
 
@@ -474,7 +487,8 @@ def agent_card():
                 sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
                 sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
                 sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
-                sk("swaps", "Swaps", "Open swap offers and fills on the network's own swap flow.", ["swaps", "market"], ["List open swap offers."]),
+                sk("swaps", "Swaps", "Open swap offers, fills and swap availability (available or being upgraded) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
+                sk("onboarding", "Start mining", "The steps and copy-ready prompt to start mining PoA, from https://poascan.io/start.", ["onboarding", "mining"], ["How do I start mining PoA?"]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],
             "links": {"mcp": MCP_URL, "api": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "changelog": CHANGELOG_URL, "llms": BASE + "/llms.txt", "serverCard": BASE + "/mcp/server-card", "repository": "https://github.com/jakegallen/poascan"}}
@@ -538,6 +552,6 @@ def api_page(page, card):
             + card("For agents", agents_html())
             + card("Endpoints", '<p>No auth. JSON by default; add <code>.csv</code> to list endpoints. Cache results and poll at most once a minute.</p>' + tbl,
                    '<a class="more" href="/openapi.json">openapi.json →</a>')
-            + card("MCP tools", f'<div class="tw"><table class="t"><thead><tr><th>Tool</th><th>Returns</th></tr></thead><tbody>{tools}</tbody></table></div>',
+            + card(f"MCP tools · {len(TOOLS)}", f'<div class="tw"><table class="t"><thead><tr><th>Tool</th><th>Returns</th></tr></thead><tbody>{tools}</tbody></table></div>',
                    '<a class="more" href="/.well-known/mcp.json">mcp.json →</a>'))
     return page("API", body, "/about")

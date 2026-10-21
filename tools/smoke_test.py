@@ -71,7 +71,14 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) >= 10)
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 16 and {"get_swap_status", "get_onboarding_steps"} <= set(tools))
+        readme = open(os.path.join(root, "README.md")).read()
+        check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
+        c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
+        c, b = rpc("tools/call", {"name": "get_swap_status", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
+        check("get_swap_status fields", {"available", "state", "last_good_read", "open_offers"} <= set(sc))
+        c, b = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
+        check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "npm install -g @emblemvault/agentwallet" in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
         for t in tools:
             args = {"address": "poa1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} if t == "get_address" else {"hash": "0" * 64} if t == "get_transaction" else \
                    {"offer_id": "x"} if t == "get_swap_offer" else {"query": "plus1"} if t == "search" else {}
