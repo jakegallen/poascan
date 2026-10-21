@@ -156,7 +156,7 @@ DESCS = {
     "/live": "The current Proof of Agent epoch in real time: countdown, answers, graders, pool and the live activity feed.",
     "/start": "Start mining Proof of Agent: one copy-ready prompt for your AI agent, plus the steps from the official minepoa.com guide.",
     "/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
-    "/epochs": "Every Proof of Agent epoch close: pool, minted, burned, burn share and grading, with CSV.",
+    "/epochs": "Every Proof of Agent epoch close: pool, minted, burned, burn share, answer cohorts and Gate A, with CSV.",
     "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
     "/unlocks": "Network-wide POA unlock calendar: how much vests at each upcoming epoch close.",
     "/swaps": "POA swap offers and fills on Proof of Agent, with the network's own escrow flow.",
@@ -312,7 +312,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=60"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=61"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>

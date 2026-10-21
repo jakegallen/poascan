@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.10.0] - 2026-10-21
+
+### Added
+
+- Answer cohorts: a Cohorts card on `/epochs` and `/api/v1/cohorts` (CSV too). Answers born in each epoch are frozen at that close and split at every later close into unsealed, sealed, passed, failed and vanished, which always sum to the frozen count. Gate A per close: K-attested responders (`basis.challenge_eligible`) over answers born at that close. Method at `/about#cohorts`.
+- MCP `get_epoch` adds `gate_a` and that epoch's `cohort`; no new tool.
+
 ## [1.9.0] - 2026-10-21
 
 ### Added
@@ -214,6 +221,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.10.0]: https://github.com/jakegallen/poascan/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/jakegallen/poascan/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/jakegallen/poascan/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/jakegallen/poascan/compare/v1.6.0...v1.7.0

@@ -36,6 +36,14 @@ def seed(n=12):
     cur[RN] = dict(eps[n - 1]["basis"]["pending"][RN], grades=[{"grader": A2, "score": 2, "ts": t0}])
     cur["be" * 32] = {"kind": "short", "panel": [A2], "originalPassed": False, "since": n - 1, "grades": []}               # A2 drawn, no seal
     eps[n - 1]["basis"]["pending"] = cur
+    # cohorts: six answers born at close 7, then pending, settled or gone at closes 8 and 9
+    CB = [f"cb{i:062x}" for i in range(6)]
+    for i, k in enumerate(CB): eps[7]["basis"]["pending"][k] = {"kind": "short", "panel": [A2] if i >= 3 else [], "since": 7}
+    for i in (0, 1): eps[8]["basis"]["pending"][CB[i]] = {"kind": "short", "panel": [], "since": 7}
+    eps[8]["basis"]["pending"][CB[4]] = {"kind": "short", "panel": [A2], "since": 7}
+    eps[9]["basis"]["pending"][CB[0]] = {"kind": "short", "panel": [], "since": 7}
+    eps[8]["basis"]["settled"] += [{"answer": CB[2], "from": A1, "passed": True, "jury": []}, {"answer": CB[3], "from": A1, "passed": False, "jury": []}]
+    eps[9]["basis"]["settled"].append({"answer": CB[1], "from": A1, "passed": True, "jury": []})
     # calibration: A3 sits on 24 more juries at close 3 (18 aligned; every third outcome failed)
     eps[3]["basis"]["settled"] += [{"answer": f"ca{i:062x}", "from": A1, "passed": i % 3 != 0, "jury": [{"grader": A3, "aligned": i % 4 != 0}]} for i in range(24)]
     db.put_blob("epochs", eps)

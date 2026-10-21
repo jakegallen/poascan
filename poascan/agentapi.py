@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.9.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.10.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -119,7 +119,10 @@ def t_epoch(args):
     if not r: raise ToolError(f"epoch {n} is not closed or not indexed (closed epochs: {rows[0]['epoch']}..{rows[-1]['epoch']})")
     rw = (A.epoch_detail(n) or {}).get("rewards") or {}
     top = sorted(((a, float(v)) for a, v in rw.items()), key=lambda x: -x[1])[:lim]
-    return dict(r[0], rewarded_addresses=len(rw), top_rewards=[dict(address=a, reward=v) for a, v in top], url=f"{BASE}/epoch/{n}")
+    from . import cohorts as CO
+    co = CO.one(n)
+    return dict(r[0], rewarded_addresses=len(rw), top_rewards=[dict(address=a, reward=v) for a, v in top],
+                gate_a=next((g for g in CO.cohorts()["gate_a"] if g["close"] == n), None), cohort=co, url=f"{BASE}/epoch/{n}", cohort_method=BASE + "/about#cohorts")
 
 def t_address(args):
     from . import history as HI, calibration as CA
@@ -262,7 +265,7 @@ LIM = lambda d, mx: {"type": "integer", "minimum": 1, "maximum": mx, "default": 
 TOOLS = [  # name, title, description, input schema, fn
     ("get_network_summary", "Network summary", "Headline stats for Proof of Agent mainnet: supply, circulating vs locked, holders, agents, open epoch, last epoch close, open swap offers, chain height.", S(), t_summary),
     ("get_current_epoch", "Current epoch", "The open epoch: number, start, estimated close time, seconds to close, pool, answers and graders so far.", S(), t_epoch_now),
-    ("get_epoch", "Epoch close", "One closed epoch: pool, minted, burned, paid agents, grading stats and its top rewards. Omit epoch for the latest close.",
+    ("get_epoch", "Epoch close", "One closed epoch: pool, minted, burned, paid agents, grading stats, top rewards, Gate A (K-attested share of answers born that epoch) and its answer cohort tracked at every later close (unsealed, sealed, passed, failed, vanished; they sum to the frozen count). Omit epoch for the latest close.",
      S(epoch={"type": "integer", "minimum": 0}, top_rewards=LIM(10, 200)), t_epoch),
     ("get_epoch_record", "Close record hash", "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. Omit epoch for the latest close. Pin the hash to check a later read.",
      S(epoch={"type": "integer", "minimum": 0}), t_epoch_record),
@@ -418,6 +421,8 @@ def openapi():
         "/api/agents/calibration": _op("Grader calibration, advisory and unranked: jury agreement, score mean and spread, seals per close", ANY,
                                        [_p("sort", "name (default) or n (jury seats)", {"type": "string", "enum": ["name", "n"], "default": "name"}, "query", False)], csv=True, oid="calibration", tag="agents",
                                        desc="One row per grader in rows (CSV: the rows). seats and aligned come from settled juries in every close; aligned_rate is agreement with the panel, not accuracy, and seats_passed/failed split it by outcome. score_mean, score_sd and score_hist come from pending rows' grades (0 to 3) from params.pending_merge_from_epoch on; juries publish no scores. seals_by_close counts distinct seals (record grades plus archived grade-sealed txs) per close window; seals_per_close averages them over closes since the first seal. low_n is true when both seats and scored are under min_n. Rows are never ranked. Method: https://poascan.io/about#calibration"),
+        "/api/cohorts": _op("Frozen answer cohorts: answers born in each epoch by status at every later close, plus Gate A per close", ANY, csv=True, oid="cohorts",
+                            desc="cohorts[].answers is the denominator, frozen at the birth close (pending rows with since equal to that epoch). Each closes[] entry splits it into unsealed, sealed, passed, failed and vanished, which always sum to answers; age is closes after birth. sealed_is_lower_bound marks closes before params.pending_merge_from_epoch with empty short panels (unsealed is then an upper bound). gate_a: basis.challenge_eligible size over answers born at that close (K-attested responders). CSV: one row per cohort and close. Method: https://poascan.io/about#cohorts"),
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
@@ -569,6 +574,7 @@ Tools ({len(TOOLS)}):
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
+- Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).

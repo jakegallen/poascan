@@ -695,3 +695,5 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 .cal td small{display:block;margin-top:2px;font-size:var(--t12);color:var(--mute);white-space:nowrap}.cal td.r{white-space:nowrap}.cal th.r,.cal td.r{text-align:right}.cal tr.low td{opacity:.5}.cal td .tag{margin-left:4px}
 .cal td:first-child .aname{display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.histc .chips .sp{flex:1}.histc .chips .tag{align-self:center}
 @media (max-width:640px){.cal .dk{display:none}.cal td:first-child .aname{max-width:104px}.cal td:first-child small{white-space:normal}.cal td:first-child small .tag{margin:3px 0 0;display:table}.cal td,.cal th{padding-left:4px;padding-right:4px}.cal th{white-space:normal;vertical-align:bottom}.cal td small{font-size:11px}}
+.coh td,.coh th{text-align:right}.coh td:first-child,.coh th:first-child{text-align:left}.coh td{min-width:44px}
+.mscroll{display:none}@media (max-width:640px){.mscroll{display:inline}}

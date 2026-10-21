@@ -391,6 +391,31 @@ def calibration(base, check):
     check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
           "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 21)
 
+def cohorts(base, check):
+    """Frozen answer cohorts: the five states sum to the frozen count at every close; Gate A per close."""
+    d = json.loads(req(base + "/api/v1/cohorts")[1]); cs = d["cohorts"]; S = ("unsealed", "sealed", "passed", "failed", "vanished")
+    check("cohorts: unsealed + sealed + passed + failed + vanished == frozen answers at every close",
+          cs and all(sum(t[k] for k in S) == c["answers"] for c in cs for t in c["closes"]) and all([t["age"] for t in c["closes"]] == list(range(len(c["closes"]))) for c in cs)
+          and all(c["closes"][-1]["close"] == d["as_of_close"] for c in cs))
+    c7 = next(c for c in cs if c["birth"] == 7); tr = [[t[k] for k in S] for t in c7["closes"]]
+    check("cohorts: E7 transitions (seal, pass, fail, vanish) and lower bounds before the merge",
+          tr[1][2:] == [1, 1, 4] and tr[2][2:] == [2, 1, 5] and tr[3] == [0, 0, 2, 1, 6] and c7["closes"][0]["sealed_is_lower_bound"] is True and c7["closes"][3]["sealed_is_lower_bound"] is False)
+    g = {x["close"]: x for x in d["gate_a"]}
+    check("Gate A: challenge_eligible over answers born at that close", g[7]["eligible"] == 2 and g[7]["answers"] == 9 and g[7]["rate"] == round(2 / 9, 4) and c7["gate_a"]["eligible"] == 2 and d["k"] == 5)
+    c, h, b = reqh(base + "/api/v1/cohorts.csv")
+    check("cohorts CSV: one row per cohort and close", c == 200 and b.decode().count("\n") == 1 + sum(len(x["closes"]) for x in cs))
+    pg = req(base + "/epochs")[1].decode(); p2 = req(base + "/epochs?state=passed")[1].decode(); p3 = req(base + "/epochs?state=nope")
+    card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
+    check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
+          ">Gate A<" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200
+          and 'href="/about#cohorts"' in card and "\u2014" not in pg and b'id="cohorts"' in req(base + "/about")[1])
+    spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "get_epoch", "arguments": {"epoch": 7, "top_rewards": 1}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    check("cohorts in OpenAPI, llms.txt and MCP get_epoch",
+          "/api/v1/cohorts" in spec["paths"] and "/cohorts" in llms and (sc.get("cohort") or {}).get("answers") == 9 and (sc.get("gate_a") or {}).get("eligible") == 2)
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -419,6 +444,7 @@ def fixture_pages(check):
         records(base, check)
         history(base, check)
         calibration(base, check)
+        cohorts(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
