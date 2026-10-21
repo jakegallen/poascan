@@ -55,10 +55,11 @@ def page(page_fn, card, apps_html):
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
     top = (f'<section class="card startp" data-pcard><div class="cb"><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
-           f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button></div></section>')
+           f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>'
+           f'<span class="lbl jm-l">Open in</span><div class="apps">{apps_html}</div></div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
     body = (f'<div class="sechead"><h1>Join</h1></div>' + top
-            + card("Steps", f'<ol class="steps">{li}</ol>{src}'))
+            + f'<details class="card stepsd"><summary class="ch"><h2>Steps</h2></summary><div class="cb"><ol class="steps">{li}</ol>{src}</div></details>')
     return page_fn("Join", body, "/start")
 

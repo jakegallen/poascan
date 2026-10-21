@@ -480,7 +480,7 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .sth{grid-area:h;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}.sth span{color:var(--steel);font-size:var(--t12,12px)}
 .stc{grid-area:c;display:flex;align-items:center;gap:8px;min-width:0}.stc code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#D9CFB9}
 .steps li:not(:has(.stc)){grid-template-areas:"n h"}
-@media (max-width:640px){.startp .jm-p{max-height:300px}}
+@media (max-width:640px){.startp .jm-p{max-height:220px}}
 /* FAQ pages */
 .stats.three{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}
 .faqc .cb{display:grid;gap:4px}
@@ -494,4 +494,9 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 @media (max-width:640px){.stats.three{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.stats.three .sv{font-size:var(--t16)}}
 .stats.fq2{margin-bottom:16px}@media (max-width:640px){.stats.two.fq2{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
-.startp .jm-copy{margin:12px 0 0}
+.startp .jm-copy{margin:12px 0 18px}
+.stepsd>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;padding:14px 18px}
+.stepsd>summary::-webkit-details-marker{display:none}.stepsd>summary h2{margin:0}
+.stepsd>summary::after{content:"+";color:var(--amber);font:700 18px var(--mono)}.stepsd[open]>summary::after{content:"−"}
+.stepsd[open]>summary{border-bottom:1px solid var(--line)}
+.stepsd:not([open])>summary{border-bottom:0}
