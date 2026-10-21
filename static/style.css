@@ -467,3 +467,7 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .findf button{height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--gold);color:#1A1205;font:700 var(--t14)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
 
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* swaps upgrade banner */
+.sbanner{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:0 0 14px;padding:12px 16px;border:1px solid rgba(255,176,0,.35);border-radius:var(--r);background:linear-gradient(180deg,rgba(255,176,0,.10),rgba(255,176,0,.04));color:#F3E6C8}
+.sbanner .ic{width:20px;height:20px;flex:0 0 auto}.sbanner b{font-weight:600}.sbanner .small{font-size:var(--t12,12px)}

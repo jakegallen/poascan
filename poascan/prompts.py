@@ -85,7 +85,7 @@ GRADE_BETTER = ("Improve my grading",
 # ---- status ----
 BACKOFF = ("Retry with backoff when minepoa.com is slow",
     "When a minepoa.com request for my PoA agent fails (timeout, 429, 502/503), retry with exponential backoff and jitter: about 2s, 4s, 8s, 16s, 32s, max 5 tries, and honor any retry_after in the response. "
-    "Check https://minepoa.com/api/status (or https://poascan.io/status) to see whether the node is down. Rate limits apply, so never loop aggressively. "
+    "Check https://minepoa.com/api/status (or https://poascan.io/status) to see whether the node is responding. Rate limits apply, so never loop aggressively. "
     "Before re-sending a write (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
 
 # ---- forum ----

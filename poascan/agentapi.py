@@ -5,7 +5,7 @@ import json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
 
-VERSION = "1.2.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.3.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -87,7 +87,7 @@ def t_summary(args):
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
-                open_swap_offers=sw["n"], poa_on_offer=sw["poa"], txs_indexed=A.tx_counts()["n"], url=BASE + "/")
+                open_swap_offers=sw["n"], poa_on_offer=sw["poa"], swaps=V2.swap_status_api(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
 
 def t_epoch_now(args):
     o = dict(A.open_epoch()); p = A.params()
@@ -154,7 +154,7 @@ def t_unlocks(args):
 def t_swaps(args):
     stt = str(args.get("status") or "open"); lim = _int(args, "limit", 20, 1, 200)
     rows = V2.swaps_all(); rows = rows if stt == "all" else [r for r in rows if r["status"] == stt]
-    return dict(status=stt, count=len(rows), offers=[_swap(r) for r in rows[:lim]], safety=SAFETY)
+    return dict(status=stt, count=len(rows), offers=[_swap(r) for r in rows[:lim]], swaps_status=V2.swap_status_api(), safety=SAFETY)
 
 def t_swap(args):
     oid = str(args.get("offer_id") or "").strip().lower()
@@ -302,7 +302,7 @@ def openapi():
     P = {
         "/api/health": _op("Service and indexer health", oid="health", tag="meta", desc="HTTP 503 with the same JSON body when ok is false (live feed older than 5 min). Use /healthz for process liveness."),
         "/healthz": _op("Process liveness (200 while the server is up)", oid="healthz", tag="meta"),
-        "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed", oid="summary"),
+        "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed, swaps availability", oid="summary", desc="Includes a swaps block (schema SwapStatus)."),
         "/api/live": _op("Live-feed (WebSocket hub) stats", oid="live", tag="meta"),
         "/api/status": _op("Upstream endpoint health, incidents and anchors", oid="status", tag="meta"),
         "/api/txs": _op("Archived transactions, newest first", ROWS, [_p("limit", "max 1000", {"type": "integer", "default": 100, "maximum": 1000}, "query", False),
@@ -317,6 +317,8 @@ def openapi():
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
+        "/api/swaps/status": _op("Swap availability: available or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
+                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is upgrading when the last read failed or the data is older than fresh_after_s. Agents: when available is false, don't call swap-take; try again later."),
         "/api/leaderboard/{tab}": _op("Leaderboard tab", ROWS, [_p("tab", "leaderboard tab", {"type": "string", "enum": list(V4.COLS)})], True, oid="leaderboard"),
         "/api/agents/series": _op("Agents, holders and supply over time (15 min points)", ROWS, csv=True, oid="agentsSeries"),
         "/api/accounts/series": _op("Alias of /api/agents/series (kept for compatibility)", ROWS, csv=True, oid="accountsSeries"),
@@ -357,6 +359,13 @@ def openapi():
             "servers": [{"url": BASE}], "externalDocs": {"url": BASE + "/llms.txt", "description": "Agent guide"},
             "paths": P, "components": {
                 "schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}},
+                            "SwapStatus": {"type": "object", "description": "Swap availability from POAScan's scheduled read of minepoa.com/api/swaps",
+                                           "properties": {"available": {"type": "boolean"}, "state": {"type": "string", "enum": ["available", "upgrading"]},
+                                                          "message": {"type": ["string", "null"], "description": "Visitor-facing note when not available"},
+                                                          "last_good_read": {"type": ["string", "null"], "format": "date-time", "description": "last successful read, ISO 8601 UTC"},
+                                                          "last_good_read_age_s": {"type": ["integer", "null"]}, "last_attempt": {"type": ["string", "null"], "format": "date-time"},
+                                                          "last_attempt_status": {"type": ["string", "null"], "description": "HTTP status of the last read, e.g. 200 or 502"},
+                                                          "open_offers": {"type": "integer"}, "fresh_after_s": {"type": "integer"}, "upstream": {"type": "string"}, "url": {"type": "string"}}},
                             "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
                                      "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
                                                     "checkpoint": {"type": ["integer", "null"], "description": "checkpoint height"}, "epoch": {"type": ["integer", "null"], "description": "open epoch"},
@@ -396,6 +405,7 @@ Tools:
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. When available is false, swaps are being upgraded: don't call swap-take; try again later.
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}).
@@ -485,7 +495,7 @@ def llms_full_txt():
     return (llms_txt() + "\n# Full reference\n\n## Endpoints\n" + "\n".join(rows) + "\n\n## MCP tools\n" + tools + "\n\n" + METHOD_MD
             + f"\n## Discovery\n- MCP server card: {BASE}/mcp/server-card\n- A2A agent card: {BASE}/.well-known/agent-card.json\n- AI catalog: {BASE}/.well-known/ai-catalog.json\n- Sitemap: {BASE}/sitemap.xml\n")
 
-GPT_OPS = {"summary", "status", "listTxs", "getTx", "getAddress", "listEpochs", "getEpoch", "richList", "unlocks", "swaps", "leaderboard",
+GPT_OPS = {"summary", "status", "swapsStatus", "listTxs", "getTx", "getAddress", "listEpochs", "getEpoch", "richList", "unlocks", "swaps", "leaderboard",
            "agents_census", "agents_leaderboard", "agents_graders", "agents_streaks", "grading", "params"}
 
 def openapi_gpt():

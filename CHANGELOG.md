@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.3.0] - 2026-10-20
+
+### Added
+- `/api/v1/swaps/status`: swap availability (`available`, `state` available or upgrading, `last_good_read`, `last_attempt_status`, `open_offers`). Built from POAScan's scheduled read of minepoa.com/api/swaps; no extra upstream calls.
+- `swaps` block (same shape) in `/api/v1/summary` and the `get_network_summary` MCP tool; `swaps_status` in `list_swap_offers`.
+- `SwapStatus` schema in `openapi.json`; `swapsStatus` in `openapi-gpt.json`.
+- `/swaps` shows "Swaps are being upgraded. Check back soon." when the last read failed or swaps data is older than 15 minutes.
+
+### Changed
+- Every swap prompt now has the agent check https://minepoa.com/api/swaps first. If it doesn't answer, the agent says swaps are being upgraded, skips swap-take and offers to try again later.
+
 ## [1.2.0] - 2026-10-20
 
 ### Added
@@ -39,6 +50,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.3.0]: https://github.com/jakegallen/poascan/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jakegallen/poascan/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jakegallen/poascan/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jakegallen/poascan/commit/3e706fb

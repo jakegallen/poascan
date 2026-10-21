@@ -44,6 +44,7 @@ def api(path, qs):
                     forum_name=p["forum_name"], established=a in A.established_set(), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     if path == "/api/epochs": return A.epoch_rows(), True
     if path == "/api/swaps": return V2.swaps_all(), True
+    if path == "/api/swaps/status": return V2.swap_status_api(), False
     if path == "/api/unlocks": return V3.unlocks_api(), True
     if path.startswith("/api/leaderboard/"):
         t = path.rsplit("/", 1)[1]; t = V4.ALIAS.get(t, t)
@@ -194,7 +195,9 @@ class H(BaseHTTPRequestHandler):
                 return HUB.accept(self)
             if path in ("/api/summary", "/api/live"):
                 m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
-                if isinstance(d, dict): d.setdefault("meta", m)
+                if isinstance(d, dict):
+                    if path == "/api/summary": d["swaps"] = V2.swap_status_api()
+                    d.setdefault("meta", m)
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **{"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}))
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))

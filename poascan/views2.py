@@ -39,6 +39,35 @@ def _ext(chain, addr, tx=False):
     if not e: return f'<span class="mono">{E(short(addr, 6, 4))}</span>'
     return f'<a class="mono" href="{e[1 if tx else 0]}{E(addr)}" target="_blank" rel="noopener">{E(short(addr, 6, 4))} ↗</a>'
 
+SWAPS_EP = "/api/swaps"
+SWAPS_FRESH_S = 900  # swaps data older than this (or a failed last fetch) shows the upgrade banner
+
+def swap_health():
+    """Upstream /api/swaps health from the indexer's own fetch log. No extra upstream calls."""
+    r = db.q1("SELECT last_ok, last_err, err, fails FROM fetch_log WHERE endpoint=?", (SWAPS_EP,)) or {}
+    now = int(time.time()); ok, er = r.get("last_ok"), r.get("last_err")
+    failed = bool(r.get("fails")) and (er or 0) >= (ok or 0)
+    age = (now - ok) if ok else None
+    available = not failed and age is not None and age <= SWAPS_FRESH_S
+    code = (r.get("err") or "").replace("HTTP ", "").split(":")[0][:40] if failed else ("200" if ok else None)
+    n = db.q1("SELECT COUNT(*) AS n FROM swaps WHERE status='open'")["n"]
+    return dict(available=available, state="available" if available else "upgrading", last_good_read=ok, last_good_read_age_s=age,
+                last_attempt=max(ok or 0, er or 0) or None, last_attempt_status=code, open_offers=n, fresh_after_s=SWAPS_FRESH_S)
+
+def swap_status_api():
+    h = swap_health(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
+    return dict(available=h["available"], state=h["state"], message=None if h["available"] else UPGRADE_MSG,
+                last_good_read=iso(h["last_good_read"]), last_good_read_age_s=h["last_good_read_age_s"], last_attempt=iso(h["last_attempt"]),
+                last_attempt_status=h["last_attempt_status"], open_offers=h["open_offers"], fresh_after_s=h["fresh_after_s"],
+                upstream="https://minepoa.com/api/swaps", url="https://poascan.io/swaps")
+
+UPGRADE_MSG = "Swaps are being upgraded. Check back soon."
+def upgrade_banner():
+    h = swap_health()
+    if h["available"]: return ""
+    t = f' <span class="dim small">Last good read {rel(h["last_good_read"])}</span>' if h["last_good_read"] else ""
+    return f'<div class="sbanner" role="status">{ICON_SWAP}<b>{UPGRADE_MSG}</b>{t}</div>'
+
 def swaps_all(): return db.q("SELECT * FROM swaps ORDER BY COALESCE(fill_ts, cancel_ts, created_ts, last_open_seen) DESC")
 
 def swap_stats():
@@ -99,7 +128,7 @@ def swaps_page(_q=None):
                   stat("Fills", intc(s["fills"]), "", ICON_SEAL, "swap_fills"), stat("Swap fee", f'<span class="num">{(A.params().get("swap_fee_bp") or 100)/100:g}%</span>', "", ICON_FLAME)])
     usd = f'<span class="tag">USD ref · {E(f.get("src","···"))}</span>' if f else ""
     body = f'''<div class="sechead"><h1>Swaps</h1><span class="tag warn">OTC escrow · not a market price</span>{usd}</div>
-{wallet_html()}
+{upgrade_banner()}{wallet_html()}
 <div class="stats eight">{st}{price_stats_html()}</div><p class="howlink"><a href="#howto">How to swap ↓</a></p>
 {card(ICON_SWAP + 'Open offers <span class="pulse"></span>', f'<div id="swapsopen">{open_offers_html()}</div>', _swap_ask() + '<a class="more" href="https://minepoa.com/lableak/#/a/sales" target="_blank" rel="noopener">a/sales ↗</a>')}
 {card("History", history_html(), '<a class="more" href="/api/swaps.csv">CSV →</a>')}
@@ -248,6 +277,8 @@ WALLET_PROMPT = ("Install the Emblem Wallet CLI for me and link it to my PoA (Pr
     "3. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
     "then GET https://minepoa.com/api/link-auto?token=MY_AUTH_TOKEN. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
     "Never paste or show passwords, keys or seed phrases in chat. Don't use any referral or invite code. Only use minepoa.com and the official Emblem tools, and report each step's result.")
+_CHECK = ("Before anything else, GET https://minepoa.com/api/swaps. If it doesn't answer with JSON (no response, a timeout or a non-200 status), "
+          "tell me swaps are being upgraded, don't call swap-take or any other swap endpoint, don't retry in a loop, and offer to try again later. ")
 _TAIL = " Follow https://minepoa.com/go.md (sections SWAPS and LINK) and https://minepoa.com/skill.md exactly. Use the coordinated flow (receipt before broadcast); never pay first. Never send payment outside the network: only pay through the network's swap flow, never to an address directly. Never ask me for keys or seed phrases. Act only on minepoa.com. Report each step's response."
 SWAP_PROMPTS = [
     ("sell", "Sell POA for SOL",
@@ -265,7 +296,7 @@ SWAP_PROMPTS = [
 def _prompt(key, offer=None):
     if key == "wallet": return WALLET_PROMPT
     for k, _, t in SWAP_PROMPTS:
-        if k == key: return t.replace("{OFFER}", offer or "[OFFER_ID]") + _TAIL
+        if k == key: return _CHECK + t.replace("{OFFER}", offer or "[OFFER_ID]") + _TAIL
 
 def _apps():
     out = ""
