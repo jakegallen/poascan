@@ -13,6 +13,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed (swaps coming soon)
 
+- `/tx` for swap txs: To shows the offer maker, Amount shows POA for the wanted asset with what the taker gets after the fee, and new Offer and Payment rows show the pair with its network logo, offer status, and the external payment linked to its explorer (Solscan, Basescan or Etherscan).
 - `/swaps` is a live preview until launch: the main button is a greyed "Coming soon" (aria-disabled, with a slow gold sweep that stops under prefers-reduced-motion). Buy/Sell, pairs, amounts, Rate, Fee, the stat row, order book, price chart and Add Emblem Wallet all stay. The upgrade note and the "check back" hint are gone, so the status is said once.
 - The safety line under the button now reads "Never send payment outside the network." on one line, and Self-custody sits on the same row as Add Emblem Wallet.
 - One flag, `SWAPS_LIVE` in poascan/views2.py, switches back to the normal Connect and Swap flow.

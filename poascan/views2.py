@@ -18,6 +18,26 @@ EXPL = {"solana": ("https://solscan.io/account/", "https://solscan.io/tx/"),
         "base": ("https://basescan.org/address/", "https://basescan.org/tx/"),
         "ethereum": ("https://etherscan.io/address/", "https://etherscan.io/tx/")}
 
+def swap_tx_rows(b, nm=None):
+    """Offer and payment-proof rows for swap txs on /tx: pair, amounts, maker and the external-chain payment."""
+    from .swapx import net_logo
+    out = []; oid = b.get("offer") or ""; pr = b.get("proof") or {}
+    o = db.q1("SELECT * FROM swaps WHERE offer_id=?", (oid,)) if oid else None
+    if o:
+        ch = (o["chain"] or "").lower(); asset = E(o["asset"] or "")
+        fee = (o.get("fee_bp") or 100) / 1e4; net = o["poa"] * (1 - fee) if o["poa"] else None
+        out.append(("To", addr_link(o["maker"], nm, (48, 0)) + ' <span class="dim small">maker</span>'))
+        out.append(("Amount", f'<span class="num">{o["poa"]:,.6g}</span> <span class="unit">POA</span> for <span class="num">{o["want"]:.6g}</span> <span class="unit">{asset}</span>'
+                    + (f' <span class="dim small">· taker gets {net:,.6g} POA after the {fee * 100:g}% fee</span>' if net else "")))
+        out.append(("Offer", f'{net_logo(ch)}<b>POA / {asset}</b> <span class="dim small">{E(o["status"])}</span>'
+                    f'<div class="mono wrap small">{E(oid)}</div>'))
+    elif oid:
+        out.append(("Offer", f'<span class="mono wrap">{E(oid)}</span>'))
+    if pr.get("ref"):
+        ch = (pr.get("chain") or "").lower()
+        out.append(("Payment", f'{net_logo(ch)}{_ext(ch, pr["ref"], tx=True)}'))
+    return out
+
 def fx(): return db.get_blob("fx")[0] or {}
 
 def _price(r):

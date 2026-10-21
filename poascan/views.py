@@ -210,7 +210,12 @@ def tx(tid):
             ("Checkpoint", (f'<b class="mono">{cp.get("height"):,}</b>' if cp.get("height") else '<span class="na">not yet covered</span>')),
             ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···")))), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>')]
     if b.get("answer"): rows.append(("Answer", f'<blockquote>{E(b["answer"])}</blockquote>'))
-    extra = {k: v for k, v in b.items() if k not in ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")}
+    skip = ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")
+    sw = V2.swap_tx_rows(b, nm) if b.get("offer") or b.get("proof") else []
+    if sw:
+        rows[6:8] = [r for r in sw if r[0] in ("To", "Amount")] or rows[6:8]
+        rows += [r for r in sw if r[0] not in ("To", "Amount")]; skip += ("offer", "proof")
+    extra = {k: v for k, v in b.items() if k not in skip}
     if extra: rows.append(("Fields", raw_fields(extra)))
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
     return page("Tx " + short(tid), card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>'), "/txs")
