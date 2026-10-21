@@ -12,7 +12,18 @@ def is_live(): return A.freshness()["state"] != "stale"
 def pill():
     f = A.freshness(); return dict(state=f["state"], label=f["label"], why=f["why"])
 
-def page(title, body, active): return layout(title, body, active, live=A.freshness())
+# One Ask button per page, in the first card header, unless the page already has one.
+PAGE_ASKS = {"/live": lambda: [PR.answer_epoch(A.open_epoch().get("epoch")), PR.GRADE], "/epochs": lambda: [PR.BURN, PR.UNLOCK],
+             "/txs": lambda: [PR.TXS], "/api": lambda: [PR.API, PR.MCP], "/network": lambda: [PR.NETWORK], "/growth": lambda: [PR.GROWTH],
+             "/agents": lambda: [PR.FIND, PR.CLIMB]}
+
+def with_ask(body):
+    path = getattr(REQ, "path", "") or ""
+    key = "/agents" if path.startswith("/agents") else path
+    if key not in PAGE_ASKS or 'class="askb"' in body or '<div class="cx">' not in body: return body
+    return body.replace('<div class="cx">', '<div class="cx">' + PR.ask(PAGE_ASKS[key]()), 1)
+
+def page(title, body, active): return layout(title, with_ask(body), active, live=A.freshness())
 
 def names(): return A.forum_names()
 def _rev(): return {v: k for k, v in A.forum_names().items() if v}
