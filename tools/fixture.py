@@ -23,10 +23,22 @@ def seed(n=12):
     eps[n - 2]["basis"]["settled"].append({"answer": RP, "from": A1, "passed": True, "jury": [{"grader": g, "aligned": True} for g in (A2, A3, A2 + "x", A3 + "x")]})
     for k in (n - 2, n - 1): eps[k]["basis"]["pending"][RN] = {"kind": "short", "panel": [A2], "originalPassed": False, "since": n - 2}
     eps[n - 4]["basis"]["pending"][RV] = {"kind": "short", "panel": [], "originalPassed": False, "since": n - 4}
+    # backlog: the latest close is the first with grades (pending_merge_from_epoch = n - 1); it carries close n-2's rows
+    prev = {k: v for k, v in eps[n - 2]["basis"]["pending"].items() if k.startswith("a")}
+    cur = {}
+    for k, v in prev.items():
+        i = int(k.split("-")[1]); g = list(v["panel"]) + ([A2] if i % 4 == 0 else [])
+        cur[k] = dict(v, grades=[{"grader": x, "score": 2, "ts": t0 + n * 21600 - 60} for x in g])
+    settled = f"a{n - 2}-1"; cur.pop(settled)                       # since n-3, settles at the latest close
+    eps[n - 1]["basis"]["settled"].append({"answer": settled, "from": A2, "passed": True, "jury": [{"grader": A1, "aligned": True}]})
+    eps[n - 2]["basis"]["pending"]["bd" * 32] = {"kind": "short", "panel": [], "originalPassed": False, "since": n - 4}   # dropped
+    cur["bu" * 32] = {"kind": "appeal", "panel": [A1] * 12, "originalPassed": True, "since": n - 1}                   # no grades: unknown
+    cur[RN] = dict(eps[n - 1]["basis"]["pending"][RN], grades=[{"grader": A2, "score": 2, "ts": t0}])
+    eps[n - 1]["basis"]["pending"] = cur
     db.put_blob("epochs", eps)
     db.put_blob("status", {"supply": "980933293.9", "txs": 100, "final": 90, "agents_joined": 3, "epochs_closed": n, "holders": 3,
                            "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "checkpoint_height": 100, "stale": False, "stale_age_s": 5})
-    db.put_blob("params", {"K": 5, "auto_epoch_seconds": 21600, "panel_size": 5, "grade_quorum": 3, "pending_ttl_epochs": 6,
+    db.put_blob("params", {"K": 5, "auto_epoch_seconds": 21600, "panel_size": 5, "grade_quorum": 3, "pending_ttl_epochs": 6, "pending_merge_from_epoch": n - 1,
                            "slash_pardons": {"0": [A3]}, "swap_fee_bp": 100, "E0": 1e9, "halving_epochs": 720})
     db.put_blob("networks", {"chains": [{"chain_id": "poa-mainnet-1", "height": 200, "checkpoint_height": 100}]})
     db.put_blob("release", {"current": {"version": "1.8.0"}, "history": [{"version": "1.8.0", "ts": now - 86400}]})

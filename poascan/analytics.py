@@ -341,5 +341,67 @@ def pending_by_epoch():
             rows = [x for x in rows if x["epoch"] != cur]
             rows.append(dict(epoch=cur, pending=r["n"], short_panel=None, appeal=None, oldest_ts=r["t"], oldest_age_s=int(now - r["t"]),
                              oldest_approx=False, stale=False, source="open"))
+    pr = params(); ttl = pr.get("pending_ttl_epochs"); period = int(pr.get("auto_epoch_seconds") or 21600)
+    bl = backlog(); lc = bl["closes"][-1] if bl["closes"] else None
+    for x in rows:
+        ep = x["epoch"]; h = bl["hist"].get(ep) if x["source"] == "close" else None
+        x["seals"] = h; x["seals_exact"] = bl["exact"] if h else None
+        x["grew"] = lc["grew_by_epoch"].get(ep, 0) if lc and x["source"] == "close" else None
+        x["dropped"] = lc["dropped_by_epoch"].get(ep, 0) if lc and x["source"] == "close" else None
+        x["expires_close"] = ep + int(ttl) if ttl is not None else None
+        x["expires_est_ts"] = int(last["ts"]) + (x["expires_close"] - int(last["epoch"])) * period if last and x["expires_close"] is not None else None
+    tot = collections.Counter()
+    for h in bl["hist"].values(): tot.update(h)
     return dict(current_epoch=cur, as_of_close=int(last["epoch"]) if last else None, total=sum(x["pending"] for x in rows),
-                stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=params().get("pending_ttl_epochs"), rows=rows)
+                stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=ttl, merge_from_epoch=bl["merge_from"],
+                quorum=pr.get("grade_quorum"), epoch_seconds=period, seals_basis=bl["basis"], seals_exact=bl["exact"],
+                seals_total={k: tot.get(k, 0) for k in SEAL_KEYS} if bl["hist"] else None,
+                last_close=lc, closes=bl["closes"], rows=rows)
+
+SEAL_KEYS = ("0", "1", "2", "3", "4+", "unknown")
+
+def _seals(v, close, merge):
+    """Distinct graders on a pending row at a close, and whether that count is exact.
+    From pending_merge_from_epoch on, rows carry grades (the live seal list): exact.
+    Before it, a short row's panel listed the seals the close counted, which missed some accepted seals: lower bound.
+    Appeal panels before the merge are drawn seats, not seals: unknown."""
+    if "grades" in v: return len({g.get("grader") for g in v.get("grades") or []}), True
+    if merge is not None and close < merge and v.get("kind") == "short": return len(v.get("panel") or []), False
+    return None, False
+
+@cached("backlog", 60)
+def backlog():
+    """Per close: settlement origin, rows that grew without settling, silent drops; plus the seal histogram of the latest close."""
+    raw = epochs_raw(); mf = params().get("pending_merge_from_epoch"); mf = int(mf) if mf is not None else None
+    closes = []; prev = None
+    for e in raw:
+        n = int(e["epoch"]); b = e.get("basis") or {}; pend = b.get("pending") or {}
+        st = [x.get("answer") for x in b.get("settled") or [] if x.get("answer")]
+        if prev is not None:
+            pn, pp = prev; sset = set(st); org = collections.Counter(); grew = collections.Counter(); drop = collections.Counter(); unk = 0
+            miss = [t for t in st if t not in pp]
+            tep = {}
+            for i in range(0, len(miss), 500):
+                ch = miss[i:i + 500]
+                for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)): tep[r["id"]] = r["epoch"]
+            for t in st: org[pp[t].get("since") if t in pp else tep.get(t, "unknown")] += 1
+            for t, v in pend.items():
+                if t not in pp: continue
+                a, _ = _seals(pp[t], pn, mf); c, _ = _seals(v, n, mf)
+                if a is None or c is None: unk += 1
+                elif c > a: grew[int(v.get("since", 0))] += 1
+            for t, v in pp.items():
+                if t not in pend and t not in sset: drop[int(v.get("since", 0))] += 1
+            closes.append(dict(close=n, settled=len(st), settled_by_origin=[dict(epoch=k, count=org[k]) for k in sorted(org, key=lambda k: (isinstance(k, str), k))],
+                               carried=sum(1 for t in pend if t in pp), grew=sum(grew.values()), grew_unknown=unk, dropped=sum(drop.values()),
+                               grew_by_epoch=dict(grew), dropped_by_epoch=dict(drop)))
+        prev = (n, pend)
+    hist = {}; exact = None; basis = None
+    if raw:
+        n = int(raw[-1]["epoch"]); ex = []
+        for v in ((raw[-1].get("basis") or {}).get("pending") or {}).values():
+            c, x = _seals(v, n, mf); ep = int(v.get("since", 0)); h = hist.setdefault(ep, {k: 0 for k in SEAL_KEYS})
+            h["unknown" if c is None else "4+" if c >= 4 else str(c)] += 1
+            if c is not None: ex.append(x)
+        exact = all(ex) if ex else None; basis = "grades" if mf is not None and n >= mf else "panel"
+    return dict(closes=closes, hist=hist, exact=exact, basis=basis, merge_from=mf)

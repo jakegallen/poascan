@@ -16,7 +16,8 @@ def index():
         credited[n] = set((e.get("rewards") or {}).keys())
         for t, p in (b.get("pending") or {}).items():
             r = out.setdefault(t, {}); r.setdefault("first", n); r["last"] = n
-            r.update(since=p.get("since"), panel=len(p.get("panel") or []), kind=p.get("kind"))
+            r.update(since=p.get("since"), panel=len(p.get("panel") or []), kind=p.get("kind"),
+                     graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)   # grades: the live seal list, from the merge on
         for s in b.get("settled") or []:
             t = s.get("answer")
             if t: out.setdefault(t, {})["settled"] = dict(close=n, passed=bool(s.get("passed")), seals=len(s.get("jury") or []), author=s.get("from"))
@@ -54,9 +55,12 @@ def receipt(tid, fetch=False, row=None):
     elif r.get("last") is not None: status = "pending"
     elif ep is not None and last is not None and int(ep) <= last: status = "unrecorded"
     else: status = "awaiting_close"
+    seals_close = None
     if st: seals, seals_exact = st["seals"], True
     else:
-        n = ix["seals"].get(tid); seals, seals_exact = (n, False) if n else (None, False)
+        n = ix["seals"].get(tid); g = r.get("graded")
+        if g is not None and (n or 0) <= g: seals, seals_exact, seals_close = g, True, r.get("last")   # exact as of that close
+        else: seals, seals_exact = (n, False) if n else (None, False)
     paid_close = None; paid = None
     if st:
         if st["passed"] and author: paid = author in ix["credited"].get(st["close"], set()); paid_close = st["close"] if paid else None
@@ -66,7 +70,7 @@ def receipt(tid, fetch=False, row=None):
                 seed=body.get("seed"), submitted_at=ts, age_s=int(time.time() - ts) if ts else None,
                 closes_waited=(last - int(since)) if (last is not None and since is not None and status in ("pending", "vanished")) else None,
                 status=status, kind=r.get("kind"), panel=r.get("panel") if status in ("pending", "vanished") else None,
-                seals=seals, seals_exact=seals_exact, quorum=q,
+                seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q,
                 settled_close=st["close"] if st else None, passed=st["passed"] if st else None,
                 paid_close=paid_close, address_credited=paid, reward_attributable=None,
                 vanished=status == "vanished", last_pending_close=r.get("last"))
