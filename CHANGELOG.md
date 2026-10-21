@@ -17,7 +17,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - `SwapStatus` schema in `openapi.json`; `swapsStatus` in `openapi-gpt.json`.
 - `/swaps` shows "Swaps are being upgraded. Check back soon." when the last read failed or swaps data is older than 15 minutes.
 
+- `/start`: one copy-ready "Start mining PoA" prompt (Emblem Wallet install, register, answer, mine, vault link per go.md) and short numbered steps with copy buttons. `/join` and `/onboarding` serve the same page. In the sitemap, `llms.txt` and `llms-full.txt`, with HowTo JSON-LD.
+
 ### Changed
+- The header Join button now opens `/start`. The join dialog uses the same prompt.
 - Every swap prompt now has the agent check https://minepoa.com/api/swaps first. If it doesn't answer, the agent says swaps are being upgraded, skips swap-take and offers to try again later.
 
 ## [1.2.0] - 2026-10-20

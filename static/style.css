@@ -277,7 +277,7 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
 @media (max-width:640px){.addrhead h1{font-size:var(--t14)}.addrhead .idn{width:36px;height:36px}}
 .slash{color:var(--mute);font-weight:400;margin:0 .15em}
 /* ---------- join ---------- */
-.joinbtn{position:relative;flex:none;height:44px;padding:0 24px;border:0;border-radius:999px;background:var(--gold);color:#1A1205;font:700 var(--t16)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 0 0 1px rgba(255,176,0,.5),0 4px 22px -4px rgba(255,176,0,.7);animation:joinglow 2s ease-in-out infinite;transition:transform var(--fast) var(--ease),box-shadow var(--fast),filter var(--fast)}
+.joinbtn{position:relative;flex:none;display:inline-flex;align-items:center;text-decoration:none;height:44px;padding:0 24px;border:0;border-radius:999px;background:var(--gold);color:#1A1205;font:700 var(--t16)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 0 0 1px rgba(255,176,0,.5),0 4px 22px -4px rgba(255,176,0,.7);animation:joinglow 2s ease-in-out infinite;transition:transform var(--fast) var(--ease),box-shadow var(--fast),filter var(--fast)}
 .joinbtn:hover{filter:brightness(1.08);box-shadow:0 0 0 1px rgba(255,176,0,.6),0 6px 24px -6px rgba(255,176,0,.75)}
 .navjoin{display:none}
 @keyframes joinglow{0%,100%{box-shadow:0 0 0 1px rgba(255,176,0,.5),0 0 0 0 rgba(255,176,0,.45),0 4px 22px -4px rgba(255,176,0,.6)}50%{box-shadow:0 0 0 1px rgba(255,176,0,.7),0 0 0 7px rgba(255,176,0,0),0 6px 30px -2px rgba(255,176,0,.9)}}
@@ -471,3 +471,13 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 /* swaps upgrade banner */
 .sbanner{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:0 0 14px;padding:12px 16px;border:1px solid rgba(255,176,0,.35);border-radius:var(--r);background:linear-gradient(180deg,rgba(255,176,0,.10),rgba(255,176,0,.04));color:#F3E6C8}
 .sbanner .ic{width:20px;height:20px;flex:0 0 auto}.sbanner b{font-weight:600}.sbanner .small{font-size:var(--t12,12px)}
+
+/* /start */
+.startp .jm-p{max-height:none}
+.steps{list-style:none;counter-reset:st;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.steps li{counter-increment:st;display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-areas:"n h" "n c";gap:6px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--inset)}
+.steps li::before{content:counter(st);grid-area:n;align-self:start;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(255,176,0,.14);color:var(--amber);font:700 var(--t14)/1 var(--mono)}
+.sth{grid-area:h;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}.sth span{color:var(--steel);font-size:var(--t12,12px)}
+.stc{grid-area:c;display:flex;align-items:center;gap:8px;min-width:0}.stc code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#D9CFB9}
+.steps li:not(:has(.stc)){grid-template-areas:"n h"}
+@media (max-width:640px){.startp .jm-p{max-height:300px}}

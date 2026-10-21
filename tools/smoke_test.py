@@ -105,8 +105,13 @@ def main():
         check("swaps banner", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("sbanner")[1][:400] for w in ("down", "broken", "outage", "error")))
         check("swap prompts check /api/swaps first", b"Before anything else, GET https://minepoa.com/api/swaps" in b and b"don&#x27;t call swap-take" in b)
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
+        c, b = req(base + "/start"); check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
+                                              and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)
+        c, b = req(base + "/"); check("Join button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Join</a>' in b)
+        c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
+        check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)

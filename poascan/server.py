@@ -2,7 +2,7 @@
 import json, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -92,6 +92,7 @@ def page(path, qs):
     if m: return V.address(m.group(1))
     if path == "/token": return V.token()
     if path == "/swaps": return V2.swaps_page(None)
+    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps())
     if path == "/growth": return V3.growth_page()
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", ["richlist"])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
@@ -113,7 +114,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
                  "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
                  "/network", "/status", "/about", "/privacy", "/api", "/find"]
 _SITEMAP = [0, ""]

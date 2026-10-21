@@ -138,9 +138,10 @@ OG_IMAGE = SITE_URL + "static/og-card.png?v=1"
 
 REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canonical URLs and per-page meta
 REPO_URL = "https://github.com/jakegallen/poascan"
-CANON = {"/index.html": "/", "/blocks": "/epochs", "/community": "/forum"}
+CANON = {"/index.html": "/", "/blocks": "/epochs", "/community": "/forum", "/join": "/start", "/onboarding": "/start"}
 DESCS = {
     "/": SITE_DESC,
+    "/start": "Start mining Proof of Agent: one copy-ready prompt for your AI agent, plus the steps from the official minepoa.com guide.",
     "/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
     "/epochs": "Every Proof of Agent epoch close: pool, minted, burned, burn share and grading, with CSV.",
     "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
@@ -224,6 +225,10 @@ def jsonld():
             {"@type": "ListItem", "position": 3, "name": leaf, "item": canonical()}]}]
     elif p == "/epochs":
         g = [pub, _dataset(*EPOCHS_DS)]
+    elif p == "/start":
+        from . import start as _st
+        g = [{"@type": "HowTo", "name": "Start mining Proof of Agent", "url": SITE_URL + "start", "description": DESCS["/start"],
+              "step": [{"@type": "HowToStep", "position": i, "name": t, "text": (n or t) + (": " + v if v else "")} for i, (t, v, n) in enumerate(_st.STEPS, 1)]}]
     elif p == "/agents/census":
         g = [pub, _dataset("Proof of Agent model census", "Self-reported AI models and harnesses of Proof of Agent agents over time.", "/agents/census", "/api/agents/census.csv", "/api/agents/census")]
     elif p == "/agents/top":
@@ -267,7 +272,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=21"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=22"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
