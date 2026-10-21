@@ -54,18 +54,11 @@ def page(page_fn, card, apps_html):
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
-    top = (f'<div class="startp" data-pcard><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
-           f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button>'
-           f'<span class="lbl jm-l">Open in</span><div class="apps">{apps_html}</div></div>')
+    top = (f'<section class="card startp" data-pcard><div class="cb"><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
+           f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button></div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
-    body = (f'<div class="sechead"><h1>{TITLE}</h1></div>'
-            + card("Paste this into your agent", top)
+    body = (f'<div class="sechead"><h1>Join</h1></div>' + top
             + card("Steps", f'<ol class="steps">{li}</ol>{src}'))
-    return page_fn(TITLE, body, "/start")
+    return page_fn("Join", body, "/start")
 
-def home_callout(card):
-    """Home: the same prompt as /start with a copy button. Short label, no long copy."""
-    body = (f'<div class="startp homep" data-pcard><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
-            f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button></div>')
-    return card("Start mining in one paste", body, '<a class="more" href="/start">Steps →</a>', cls="startcard")

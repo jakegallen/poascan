@@ -493,6 +493,5 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .foot .footfaq{flex:1 1 100%}
 @media (max-width:640px){.stats.three{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.stats.three .sv{font-size:var(--t16)}}
 .stats.fq2{margin-bottom:16px}@media (max-width:640px){.stats.two.fq2{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.homep .jm-p{max-height:132px}.homep .jm-copy{margin:12px 0 0}
-@media (max-width:640px){.homep .jm-p{max-height:120px}}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.startp .jm-copy{margin:12px 0 0}
