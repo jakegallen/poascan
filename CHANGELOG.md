@@ -15,6 +15,8 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 - Vesting shows its length in days (≈25) on `/unlocks`, `/token` and in the FAQ.
 - `/grading` has an h1.
+- Versioned static assets (`?v=`) are served `immutable` for a year; HTML carries a weak ETag with `no-cache`, so repeat views revalidate to 304.
+- HSTS (`max-age=31536000`, no preload). `www.poascan.io` redirects 301 to the apex, keeping path and query.
 
 ### Fixed
 

@@ -1,5 +1,5 @@
 """POASCAN HTTP server: pages, read-only JSON/CSV API, static files. Python stdlib only."""
-import json, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
+import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI
@@ -158,6 +158,9 @@ MCP_HDRS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": 
             "Access-Control-Allow-Headers": "Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID",
             "Access-Control-Expose-Headers": "Mcp-Session-Id", "Allow": "POST, OPTIONS"}
 TXT = "text/plain; charset=utf-8"
+HSTS = "max-age=31536000"
+MPID = re.compile(rb'"mp\d+"')
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 class H(BaseHTTPRequestHandler):
     server_version = "POASCAN/1.0"
@@ -168,11 +171,17 @@ class H(BaseHTTPRequestHandler):
         b = body.encode() if isinstance(body, str) else body
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))
+        hdr = dict(extra or {})
+        if code == 200 and ctype.startswith("text/html") and "Cache-Control" not in hdr:
+            tag = 'W/"' + hashlib.sha1(MPID.sub(b"", b)).hexdigest()[:16] + '"'  # toggle ids count up per render; ignore them
+            hdr.update({"ETag": tag, "Cache-Control": "no-cache"})
+            if tag in (self.headers.get("If-None-Match") or ""):
+                self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", "no-cache"); self.send_header("Strict-Transport-Security", HSTS); self.end_headers(); return
         if gz: b = gzip.compress(b, 5)
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
         if gz: self.send_header("Content-Encoding", "gzip"); self.send_header("Vary", "Accept-Encoding")
-        self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "same-origin")
-        for k, v in (extra or {}).items(): self.send_header(k, v)
+        self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "same-origin"); self.send_header("Strict-Transport-Security", HSTS)
+        for k, v in hdr.items(): self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
     def do_HEAD(self): self.do_GET()
@@ -202,7 +211,13 @@ class H(BaseHTTPRequestHandler):
         return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
     def do_PUT(self): self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
     do_DELETE = do_PATCH = do_PUT
+    def www(self):
+        """www.poascan.io redirects to the apex, keeping path and query. Fly health checks use the machine address, never www."""
+        host = (self.headers.get("Host") or "").lower()
+        if not host.startswith("www."): return False
+        self.send(301, "", TXT, {"Location": "https://" + host[4:].split(":")[0] + self.path, "Cache-Control": "public, max-age=86400"}); return True
     def do_GET(self):
+        if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
@@ -220,7 +235,7 @@ class H(BaseHTTPRequestHandler):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")
                 ct = {".ico": "image/x-icon", ".webmanifest": "application/manifest+json"}.get(os.path.splitext(f)[1]) or mimetypes.guess_type(f)[0] or "application/octet-stream"
-                return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": "public, max-age=3600"})
+                return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path in ROOT_FILES:
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
