@@ -359,7 +359,7 @@ def epoch(n):
                  stat("Median reward", num(r["median"])), stat("Max reward", num(r["max"])), stat("Attestations", intc(r["attestations"])),
                  stat("Attesters", intc(r["attesters"])), stat("Slashed", f'<span class="num red">{r["slashed"]}</span>'), stat("Audit sampled", intc(r["audit_sampled"]))])
     det = table(["Field", "Value"], [["Closed", utc(r["close_ts"])], ["Pool", poa(r["pool"])], ["Answerers paid", intc(r["challengers"])],
-        ["Challenge-eligible", intc(r["challenge_eligible"])], ["Established after close", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
+        ["Challenge-eligible", intc(r["challenge_eligible"])], ["Newly established", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
         ["Settled / passed", f'{r["settled"]} / {r["settled_passed"]}'], ["Pending", f'{r["pending"]:,}'], ["Pending appeals", intc(r["pending_appeal"])], ["No panel", intc(r["pending_empty_panel"])],
         ["Graders who served / grades", f'{r["graders"]} / {r["grades"]:,}'], ["Referral payouts", intc(r["referral_paid"])], ["Top-10 share / Gini", f'{pct(r["top10_share"])} / {r["gini"]:.3f}' if r["gini"] is not None else "···"],
         ["Distinct payouts", intc(r["distinct_amounts"])]])
@@ -393,7 +393,7 @@ def health_card():
 
 def agents_overview():
     ep = A.epoch_rows(); f = G.funnel(); nc = G.newcomers(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
-    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Established"], colors=("#FFB000", "#3DDC97"), stacked=False)
+    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("#FFB000", "#3DDC97"), stacked=False)
     fun = funnel_html(f["overall"])
     dist = table(["Epoch", "Paid", "Mean", "Median", "Common payouts"],
                  [[f'E{x["epoch"]}', x["n"], num(x["mean"]), num(x["median"]), " · ".join(f'{compact(a)} ×{c}' for a, c in x["dist"])] for x in e["per_epoch"]])
@@ -644,7 +644,7 @@ def about():
     from . import faq as FQ
     safety = card("Official links &amp; safety", V2.safety_html()) + card("Questions", FQ.links_html())
     comm = card("Community tools", V2.community_html())
-    real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: identities in the latest close record's <code>established_after</code> (passing answers in the last 6 epochs). <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
+    real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority. <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + comm + real + _operators_method() + methods
     return page("About & methodology", body, "/about")
 

@@ -568,7 +568,7 @@ def ai_catalog():
 METHOD_MD = """## Methodology (short)
 - Burned = epoch pool minus rewards paid. It is unissued supply, not destroyed balances.
 - Spendable / locked = each epoch's rewards x the 100-epoch vesting schedule, starting the epoch after they are earned. Transfers and swaps are spendable at once.
-- Established = identities in the latest close record's established_after (a passing answer within the last 6 epochs).
+- Established = estimate of hosted /me established: established_after adds minus established_removed drops, summed over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Close records list changes only.
 - Holders = /api/status plus a rich list built from /api/agents and per-epoch rewards.
 - Model and harness are self-reported. Operator families are estimates from shared labels, invite trees, near-duplicate answers and shared wallets; they never identify anyone.
 - Lifetime transaction counts cover what POAScan has archived; the network publishes a rolling window only.

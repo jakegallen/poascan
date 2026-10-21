@@ -120,9 +120,31 @@ def holders():
                 cluster_balance=cl[0][0] if cl else None, cluster_count=cl[0][1] if cl else 0,
                 cluster_share=(cl[0][1] / len(bal)) if bal else None)
 
+@cached("established_set", 60)
 def established_set():
+    """Best public estimate of who is ESTABLISHED now (what hosted /me reports as established).
+
+    Close records only publish changes: basis.established_after lists identities that became
+    established at that close and basis.established_removed those that lost it. Standing carried
+    in from testnet, and standing restored off-record, is never listed. So we fold the changes
+    over every close and add identities that held a grading seat (graders_served or a settled
+    jury) after their last removal and within estab_ttl closes, plus trusted/system graders.
+    Seats go only to established identities (go.md), so a seat is evidence of standing."""
     ep = epochs_raw()
-    return set(ep[-1].get("basis", {}).get("established_after", [])) if ep else set()
+    if not ep: return set()
+    pp = params(); ttl = int(pp.get("estab_ttl") or 6); last = int(ep[-1].get("epoch", len(ep) - 1))
+    est, seat, removed = set(), {}, {}
+    for e in sorted(ep, key=lambda r: int(r.get("epoch", 0))):
+        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
+        seated = set(b.get("graders_served", {}) or {})
+        seated |= {j.get("grader") for s in (b.get("settled") or []) for j in (s.get("jury") or []) if j.get("grader")}
+        for a in seated: seat[a] = n
+        gone = set(b.get("established_removed", []) or [])
+        for a in gone: removed[a] = n
+        est = (est - gone) | set(b.get("established_after", []) or [])
+    est |= {a for a, n in seat.items() if n > removed.get(a, -1) and n > last - ttl}
+    est |= set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
+    return est
 
 @cached("forum_names", 300)
 def forum_names():
