@@ -168,3 +168,5 @@ function sortables(){$$("table.sortable").forEach(function(tb){$$("th[data-sort]
 paintIds();times();charts();sortables();setInterval(tick,1000);tick();
 if(wantLive)connect();
 })();
+/* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */
+(function(){var b=[].slice.call(document.querySelectorAll(".askb"));b.slice(1).forEach(function(x){x.classList.add("ico")})})();

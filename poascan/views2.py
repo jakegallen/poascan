@@ -54,12 +54,27 @@ def swap_health():
     return dict(available=available, state="available" if available else "upgrading", last_good_read=ok, last_good_read_age_s=age,
                 last_attempt=max(ok or 0, er or 0) or None, last_attempt_status=code, open_offers=n, fresh_after_s=SWAPS_FRESH_S)
 
+def swap_market():
+    """Market stats from filled swaps only (no estimate from asks). USD via the CoinGecko reference; USDC counts at 1."""
+    now = time.time(); f = fx(); usd = lambda a: 1.0 if (a or "").upper() == "USDC" else (f.get((a or "").upper()) or None)
+    fl = sorted([r for r in swaps_all() if r["status"] == "filled" and r["fill_ts"] and r["poa"] and r["want"]], key=lambda r: -r["fill_ts"])
+    last = fl[0] if fl else None
+    px = (last["want"] / last["poa"] * usd(last["asset"])) if last and usd(last["asset"]) else None   # USD per POA, last fill
+    st = A.status(); circ = A.supply_split().get("spendable"); mined = float(st.get("supply") or 0) or None
+    day = [r for r in fl if r["fill_ts"] >= now - 86400]
+    vol = [r["want"] * usd(r["asset"]) for r in day if usd(r["asset"])]
+    return dict(last_fill_usd_per_poa=px, last_fill_ts=int(last["fill_ts"]) if last else None,
+                market_cap_usd=round(px * circ, 2) if px and circ else None, fdv_usd=round(px * mined, 2) if px and mined else None,
+                circulating_supply=circ, mined_supply=mined, trades_24h=len(day),
+                volume_24h_usd=round(sum(vol), 2) if vol else (None if day else 0.0),
+                usd_ref=f.get("src") or "CoinGecko")
+
 def swap_status_api():
     h = swap_health(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
     return dict(available=h["available"], state=h["state"], message=None if h["available"] else UPGRADE_MSG,
                 last_good_read=iso(h["last_good_read"]), last_good_read_age_s=h["last_good_read_age_s"], last_attempt=iso(h["last_attempt"]),
                 last_attempt_status=h["last_attempt_status"], open_offers=h["open_offers"], fresh_after_s=h["fresh_after_s"],
-                upstream="https://minepoa.com/api/swaps", url="https://poascan.io/swaps")
+                upstream="https://minepoa.com/api/swaps", url="https://poascan.io/swaps", market=swap_market())
 
 UPGRADE_MSG = "Swaps are being upgraded. Check back soon."
 def upgrade_banner():
@@ -108,7 +123,7 @@ def _open_offers_v1():
 def history_html():
     nm = names(); ev = []
     for r in swaps_all():
-        pm, usd = _price(r); pair = f'POA→{E(r["asset"] or "?")}'
+        pm, usd = _price(r); from .swapx import net_logo; pair = net_logo(r["chain"]) + f'POA→{E(r["asset"] or "?")}'
         if r["created_ts"]: ev.append((r["created_ts"], "offer", r, pm, usd, pair))
         if r["fill_ts"]: ev.append((r["fill_ts"], "fill", r, pm, usd, pair))
         if r["cancel_ts"]: ev.append((r["cancel_ts"], "cancel", r, pm, usd, pair))
@@ -179,7 +194,7 @@ def _swaps_page_v1(_q=None):
     body = f'''<div class="sechead"><h1>Swaps</h1><span class="tag warn">OTC escrow · not a market price</span>{usd}</div>
 {upgrade_banner()}{wallet_html()}
 <div class="stats eight">{st}{price_stats_html()}</div><p class="howlink"><a href="#howto">How to swap ↓</a></p>
-{card(ICON_SWAP + 'Open offers <span class="pulse"></span>', f'<div id="swapsopen">{open_offers_html()}</div>', _swap_ask() + '<a class="more" href="https://minepoa.com/lableak/#/a/sales" target="_blank" rel="noopener">a/sales ↗</a>')}
+{card(ICON_SWAP + 'Open offers', f'<div id="swapsopen">{open_offers_html()}</div>', _swap_ask() + '<a class="more" href="https://minepoa.com/lableak/#/a/sales" target="_blank" rel="noopener">a/sales ↗</a>')}
 {card(ICON_SWAP + "Price history · fills", price_chart_html(), '<a class="more" href="/api/v1/swaps/price-history.csv">CSV →</a>')}
 {card("History", history_html(), '<a class="more" href="/api/swaps.csv">CSV →</a>')}
 {howto_html(next((r["offer_id"] for r in swaps_all() if r["status"] == "open"), None))}'''

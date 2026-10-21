@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [1.3.0] - 2026-10-20
 
+### Changed (swap, labels, status)
+
+- `/swaps`: a slim market row above the order book (under the swap panel on mobile) shows Market Cap, FDV, 24h Trades and 24h Volume, using filled swaps only and a muted placeholder when there are no fills. The same numbers are in `market` on `/api/v1/swaps/status`, in the summary swaps block and in `get_swap_status`. Definitions are on /about.
+- `/swaps`: a collapsed "Add Emblem Wallet" toggle sits under the safety line, and the Swap prompt appears only after Swap and can be collapsed. Buy is capped at what open offers can fill, with a click-to-fill Max hint, and Sell is capped at spendable supply.
+- `/swaps` pair selector: lists every supported pair (POA/SOL on Solana, POA/ETH on Base and Ethereum, POA/USDC on Solana), puts pairs with live offers first and uses small network logos (static/net-*.svg). A pair with no offers disables Buy and offers Sell. USDC buys use the coordinated flow.
+- The header LIVE/STALE pill is now the only live indicator. Page pills and pulse dots are gone, including on `/swaps` and `/live`.
+- No repeated labels on a screen: the nav item is now "Swap" (`/swaps` is unchanged), page H1s that repeat the nav are screen-reader only, later "Ask agent" buttons show only the icon, and card and column titles that repeated other labels were renamed.
+- The header "Join" button is now "Start", and it still links to `/start`.
+- Footer: one compact row of muted links with no tagline, and it leaves out the current page.
+
 ### Added (live epoch)
 
 - `/live`: the current epoch full width in real time (countdown, answers, graders, pool, activity feed), fed by the existing WebSocket snapshot from POAScan's own archive with the polling fallback. Linked from the epoch tracker; in the sitemap and llms.txt.

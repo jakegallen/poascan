@@ -31,7 +31,7 @@ ARROW = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5
 CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
 
 def button(cls=""):
-    return f'<a class="joinbtn {cls}" href="/start">Join</a>'
+    return f'<a class="joinbtn {cls}" href="/start">Start</a>'
 
 def modal():
     # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback

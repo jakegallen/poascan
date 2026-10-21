@@ -85,12 +85,13 @@ def jsonld(p):
              "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": _plain(_a(a))}} for q, a in d["qa"]]}]
 
 def links_html(cur=None):
-    return '<ul class="faql">' + "".join(f'<li><a href="{p}"{" aria-current=\"page\"" if p == cur else ""}>{E(t)}</a></li>' for p, t in LINKS) + "</ul>"
+    return '<ul class="faql">' + "".join(f'<li><a href="{p}"{" aria-current=\"page\"" if p == cur else ""}>{E(t)}</a></li>' for p, t in LINKS if p != cur) + "</ul>"
 
 def page(path, page_fn, card):
     d = PAGES[path]
     sid = lambda q: "self-custody" if q == "Can I use my own wallet?" else re.sub(r"[^a-z0-9]+", "-", q.lower()).strip("-")
-    qa = "".join(f'<div class="faq" id="{sid(q)}"><h2>{E(q)}</h2><p>{_a(a)}</p></div>' for q, a in d["qa"])
+    same = lambda q: q.rstrip("?").lower() == d["title"].rstrip("?").lower()   # first question often repeats the page title
+    qa = "".join(f'<div class="faq" id="{sid(q)}">{"" if same(q) else f"<h2>{E(q)}</h2>"}<p>{_a(a)}</p></div>' for q, a in d["qa"])
     sv = d["stats"]() if d["stats"] else ""
     st = f'<div class="stats {"three" if sv.count('class="stat"') == 3 else "two fq2"}">{sv}</div>' if sv else ""
     more = card("More questions", links_html(path))

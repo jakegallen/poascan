@@ -126,7 +126,7 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/", "Home"), ("/txs", "Transactions"), ("/epochs", "Epochs"), ("/token", "Token"), ("/swaps", "Swaps"), ("/agents", "Agents"), ("/growth", "Growth"),
+NAV = [("/", "Home"), ("/txs", "Transactions"), ("/epochs", "Epochs"), ("/token", "Token"), ("/swaps", "Swap"), ("/agents", "Agents"), ("/growth", "Growth"),
        ("/grading", "Grading"), ("/forum", "Community"), ("/network", "Network"), ("/about", "About")]
 
 SITE_URL = "https://poascan.io/"
@@ -266,7 +266,27 @@ def head_meta(full_title, title=""):
 from . import join as _join
 TICKER_FN = None  # set by views (latest epochs + txs strip)
 
+FOOT = [("/what-is-proof-of-agent", "What is Proof of Agent"), ("/how-to-mine-poa", "How to mine POA"), ("/how-to-buy-poa", "How to buy POA"), ("/what-is-poascan", "What is POAScan"),
+        (SRC_URL, "Source"), ("/status", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"), ("/find", "Find my agent"), ("/privacy", "Privacy"), ("/api/health", "API")]
+def _footer():
+    """One row of small links. Skips the page you are on (its title already says it); home and About live in the header."""
+    cur = req_path(); ext = lambda h: h.startswith("http")
+    row = '<span class="fsep" aria-hidden="true">·</span>'.join(
+        f'<a href="{h}"' + (' target="_blank" rel="noopener"' if ext(h) else "") + f'>{t}</a>' for h, t in FOOT if h.split("#")[0] != cur)
+    return f'<footer class="wrap foot"><nav class="frow" aria-label="Footer">{row}</nav></footer>'
+
+_H1 = re.compile(r'<h1>([^<]{1,60})</h1>')
+def _quiet_h1(body, active):
+    """Visually hide the page H1 when it repeats the active nav label or the header Start button, or the /start title (kept for SEO)."""
+    lab = dict(NAV).get(active, "")
+    rep = {x.lower() for x in (lab, "The " + lab, "Join", "Start") if x.strip()}
+    m = _H1.search(body)
+    if m and m.group(1).strip().lower() in rep:
+        body = body[:m.start()] + f'<h1 class="sr-only">{m.group(1)}</h1>' + body[m.end():]
+    return body
+
 def layout(title, body, active="/", live=None):
+    body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
     live_cls, live_txt = ("live", "Live") if live else ("stale", "Stale")
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
@@ -275,7 +295,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=33"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=38"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -286,11 +306,9 @@ def layout(title, body, active="/", live=None):
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div><div class="ticker" id="ticker" aria-label="Latest epochs and transactions">{TICKER_FN() if TICKER_FN else ""}</div></header>
 <main class="wrap">{body}</main>
-<footer class="wrap foot"><span>POAScan · <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> explorer</span>
-<span class="footfaq"><a href="/what-is-proof-of-agent">What is Proof of Agent</a> · <a href="/how-to-mine-poa">How to mine POA</a> · <a href="/how-to-buy-poa">How to buy POA</a> · <a href="/what-is-poascan">What is POAScan</a></span>
-<span><a href="{SRC_URL}" target="_blank" rel="noopener">Source</a> · <a href="/status">Status</a> · <a href="/about#safety">Safety</a> · <a href="https://minepoa.com" target="_blank" rel="noopener">minepoa.com</a> · <a href="/find">Find my agent</a> · <a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/api/health">API</a></span></footer>
+{_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=15" defer></script></body></html>'''
+<script src="/static/app.js?v=16" defer></script></body></html>'''
 
 def card(title, body, extra="", cls=""):
     return f'<section class="card {cls}"><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

@@ -101,7 +101,7 @@ def main():
         INDEXNOW_KEY = re.search(r'INDEXNOW_KEY = "([0-9a-f]+)"', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "agentapi.py")).read()).group(1)
         c, b = req(base + f"/{INDEXNOW_KEY}.txt"); check("IndexNow key file", c == 200 and b.decode().strip() == INDEXNOW_KEY)
         c, b = req(base + "/BingSiteAuth.xml"); check(f"BingSiteAuth.xml off without env -> {c}", c == 404)
-        c, b = req(base + "/privacy"); check("privacy page", c == 200 and b"No cookies" in b and b'href="/privacy"' in b)
+        c, b = req(base + "/privacy"); check("privacy page", c == 200 and b"No cookies" in b and b'href="/privacy"' in req(base + "/")[1])
         c, b = req(base + "/.well-known/agentpeering-verify"); check("agentpeering verify", c == 200 and b.strip() == b"ap-verify-cec18af41a029ed83d4e21ee0268f52c")
         c, b = req(base + "/epoch/1"); check("epoch breadcrumbs", b"BreadcrumbList" in b)
         c, b = req(base + "/api/v1/swaps/status"); sw = json.loads(b) if c == 200 else {}
@@ -109,7 +109,7 @@ def main():
         check("swaps status upgrading on empty DB", sw.get("available") is False and sw.get("state") == "upgrading")
         c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "upgrading"))
         c, b = req(base + "/swaps"); low = b.decode().lower()
-        check("swaps pill", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("xpill")[1][:400] for w in ("down", "broken", "outage", "error")))
+        check("swaps pill", b"Swaps are being upgraded. Check back soon." in b and not any(w in low.split("xnote")[1][:400] for w in ("down", "broken", "outage", "error")))
         _mn = b.split(b"<main")[1].split(b"</main>")[0]
         check("swap panel: Buy/Sell, pair, upgrading button, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" disabled', b"Only swap through the network. Never send payment outside it.", b"via Emblem", b'href="/how-to-buy-poa#self-custody"')) and _mn.count(b"1%") == 1)
         check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
@@ -132,7 +132,7 @@ def main():
         check("/live in sitemap + llms + home link", b"/live</loc>" in req(base + "/sitemap.xml")[1] and b"/live" in req(base + "/llms.txt")[1] and b'href="/live"' in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
-        c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1>Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)
+        c, b = req(base + "/start"); check("/start: h1 Join, one Copy prompt", b"<h1 class=\"sr-only\">Join</h1>" in b and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1)
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
@@ -143,11 +143,13 @@ def main():
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
         check("/start: One click first, Mine deeplinks decode", _ok and _m.index("One click") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
+        check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
+        check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Join</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
         check("/start: Open in apps + collapsed Steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)
         c, b = req(base + "/"); check("home has no second onboarding CTA", b"Start mining in one paste" not in b and b.count(b'href="/start"') == 1)
-        check("Join button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Join</a>' in b)
+        check("Start button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Start</a>' in b)
         c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
         check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
         for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan"]:
@@ -157,7 +159,9 @@ def main():
         for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
-        check("history charts", b"price-history.csv" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
+        check("history charts", b"Price</h2>" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
+        sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">24h Trades<", b">24h Volume<")) and sb.count(b"Trades") == 1)
+        mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)

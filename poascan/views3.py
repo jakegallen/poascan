@@ -183,7 +183,7 @@ def growth_page():
     ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe], colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answerers", "Paid"])
     ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])] for t, l, k in reversed(g["ms"])])
     body = f'''<div class="sechead"><h1>Growth</h1></div><div class="stats six">{st}</div>
-<div class="grid2">{card(ICON_BOT + "Agents", ac)}{card(ICON_USERS + "Holders", hc)}</div>
+<div class="grid2">{card(ICON_BOT + "Joined", ac)}{card(ICON_USERS + "Holding", hc)}</div>
 <div class="grid2">{card("Txs / day · indexed", tc)}{card("Txs / hour · indexed", th)}</div>
 <div class="grid2">{card(ICON_CUBE + "Answers per epoch", ec)}{card("Milestones", ml)}</div>'''
     return page("Growth", body, "/growth")

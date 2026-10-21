@@ -31,7 +31,7 @@ def tracker_html():
             f'<div class="tk"><span class="lbl">Closes in</span>{cd}</div><span class="sp"></span>'
             f'<div class="tk"><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
             f'<div class="tk"><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
-            f'<div class="tk"><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/live">Live →</a></div>')
+            f'<div class="tk"><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/live">Full view →</a></div>')
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
@@ -163,7 +163,7 @@ def home():
 <div class="grid2 realrow">{V2.real_card()}{card(V2.ICON_SWAP + "Market", f'<div class="stats two">{V2.market_mini()}{V2.price_stats_html()}</div>', '<a class="more" href="/swaps">Swaps →</a>')}</div>
 <div class="grid2">
 {card(ICON_CUBE + "Latest epochs", home_epochs(ep), '<a href="/epochs" class="more">View all epochs →</a>')}
-{card(ICON_FEED + 'Mining feed <span class="pulse"></span>', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">View all transactions →</a>')}
+{card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">View all transactions →</a>')}
 </div>
 <div class="grid3">
 {card("Indexed txs", f'<div class="big">{intc(tc["n"])}</div>')}
@@ -290,7 +290,7 @@ def address(a):
     head = (f'<div class="addrhead">{idn(a)}<div><span class="lbl">Address</span><h1>{E(a)}</h1></div>{copy(a)}</div>'
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) if bal is not None else "···")}{stat("Total rewards", poa(rsum, mined=True))}'
             f'{stat("Spendable", poa(sp))}{stat("Locked", poa(lk))}</div>')
-    body = head + f'''{card("Address", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener">Source JSON ↗</a>')}
+    body = head + f'''{card("Overview", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener">Source JSON ↗</a>')}
 {card(ICON_CUBE + "Reward tracker", trk_sched + trk)}
 <div class="grid2">{card("Rewards", rew)}{card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)]))}</div>
 {card(f"Transactions · {len(rows)}", tb, f'<a class="more" href="/api/address/{E(a)}.csv">CSV →</a>')}'''
@@ -301,7 +301,7 @@ def token():
     sup = float(st.get("supply") or 0)
     chart = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("#E3A33A", "#FF5A4E"))
     halv = int(p.get("halving_epochs") or 720); e0 = float(p.get("E0") or 1e9); per = int(p.get("auto_epoch_seconds") or 21600)
-    sched = table(["Epochs", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
+    sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
     rich = table(["Rank", "Address", "Balance", "Share", "Source"], [[r["rank"], addr_link(r["addr"], names()), poa(r["balance"], mined=True, dec=4), f'{100*r["share"]:.3f}%', E(r["src"])] for r in h["rows"][:50]])
     stats = "".join([stat("Total supply", poa(sup, mined=True)), stat("Holders", intc(st.get("holders"))),
                      stat("Circulating", poa(sp["spendable"])), stat("Locked", poa(sp["locked"])),
@@ -324,7 +324,7 @@ def token():
 def epochs_page():
     ep = A.epoch_rows()
     cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Epochs", epochs_table(ep), '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
+    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Closed", epochs_table(ep), '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
         card("Time between closes", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
     return page("Epochs", body, "/epochs")
 
@@ -427,7 +427,7 @@ def journey_page():
                  " · ".join(f'E{c}: {k}/{b}' for c, (b, k) in r["cohorts"].items())] for r in ret])
     tt = table(["Epoch", "Answers", "p25", "Median", "p75", "0-1h · 1-2 · 2-3 · 3-4 · 4-5 · 5h+"],
                [[f'E{x["epoch"]}', x["n"], f'{x["p25"]:.0f} min', f'{x["median"]:.0f} min', f'{x["p75"]:.0f} min', " · ".join(str(v) for v in x["hist"])] for x in tta])
-    cust = table(["Custody", "Agents"], [[E(r["custody"] or "unknown"), r["n"]] for r in cu["observed"]] + [["External wallet linked", cu["linked_external"]], ["All agents", f'{cu["accounts"]:,}']], cls="wrapt")
+    cust = table(["Type", "Agents"], [[E(r["custody"] or "unknown"), r["n"]] for r in cu["observed"]] + [["External wallet linked", cu["linked_external"]], ["All agents", f'{cu["accounts"]:,}']], cls="wrapt")
     body = f'''<div class="grid2">{card("Funnel by cohort", coh + note("Join epoch is known only for joins POAScan observed (from " + (utc(first_join, "%Y-%m-%d %H:%M") if first_join else "now") + "). /api/agents currently stamps every agent with the same join epoch, so older agents are grouped as 'pre-archive'."))}
 {card("Custody", cust + note("Hosted vs self-custody is visible only through join-tx memos ('hosted join: …'), so coverage grows as new agents join. Linked wallets are those registered in /api/chains."))}</div>
 {card("Retention", rt + note("Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Cohort = first epoch the agent is seen answering."))}
@@ -437,7 +437,7 @@ def journey_page():
 def operators_page():
     op = G.operators(); nm = names()
     tops = table(["Family root", "Agents", "Paid"], [[addr_link(r, nm), n, p] for r, n, p in op["top"]])
-    ed = table(["Link type", "Links"], [[E(k), f"{v:,}"] for k, v in sorted(op["edges"].items(), key=lambda x: -x[1])])
+    ed = table(["Link type", "Count"], [[E(k), f"{v:,}"] for k, v in sorted(op["edges"].items(), key=lambda x: -x[1])])
     body = f'''<div class="stats five">{stat("Agents", intc(op["accounts"]))}{stat("Families", intc(op["families"]))}{stat("Multi-agent families", intc(op["multi"]))}{stat("Singletons", intc(op["singletons"]))}{stat("Agents / family", f'<span class="num">{op["ratio"]:.2f}</span>' if op["ratio"] else "···")}</div>
 <div class="grid2">{card("Largest families " + EST, tops)}{card("Links", ed)}</div>
 {signals_card()}'''
@@ -469,7 +469,7 @@ def answers_page():
     if not tr["n"]: return apage("Answers", collecting(since, "answer text samples."), "/agents/answers")
     lang = hbars(tr["langs"], total=tr["n"]); hist = bars([(k, [v]) for k, v in tr["hist"]], colors=("#8FA3B8",), fmt=lambda v: f"{v:.0f}")
     fam = table(["Family", "Answers", "Mean", "Median"], [[E(k), n, f"{m:.0f}", f"{md:.0f}"] for k, n, m, md in tr["by_family"]])
-    oi = table(["Epoch", "Sampled", "Template", "Near-dup", "Originality"],
+    oi = table(["Epoch", "Sampled", "Template", "Near-dup", "Score"],
                [[f'E{x["epoch"]}', x["n"], pct(x["template_share"]), pct(x["near_dup_share"]), f'<b>{pct(x["originality"])}</b>'] for x in org["epochs"]])
     mx = max((v for row in clk.values() for v in row), default=1) or 1
     heat = '<div class="heat"><div class="hrow hh"><span></span>' + "".join(f"<b>{h:02d}</b>" for h in range(24)) + "</div>" + "".join(
@@ -544,7 +544,7 @@ def forum_page():
     com = table(["Community", "Posts", "Comments", "Status", "Created"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active", E((c["created_at"] or "")[:10])] for c in f["per_community"]])
     th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
-    body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("Communities", com)}</div>
+    body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
 <div class="grid2">{card("Top threads", th, PR.ask([PR.LABLEAK]))}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items. Includes POAScan\'s builder, Plus1.'))}</div>'''
     return page("Community", body, "/forum")
 
@@ -575,11 +575,11 @@ def network():
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
     idx = table(["Endpoint", "Last OK", "Last error", "Fails", "Next try"], [[f'<code>{E(r["endpoint"])}</code>', rel(r["last_ok"]), E(r["err"] or "···") if r["fails"] else "···", r["fails"] or 0, rel(r["next_at"]) if r["next_at"] and r["next_at"] > time.time() else "now"] for r in h["endpoints"]], cls="wrapt")
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{card("Latest anchors", al)}{card("Releases", rels)}</div>{card("Indexer", idx)}'''
+<div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>{card("Indexer", idx)}'''
     return page("Network", body, "/network")
 
 def privacy():
-    body = card("Privacy", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>
+    body = card("What we collect", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>
 <h3>What is collected</h3><ul><li><b>No cookies, no analytics, no tracking.</b> POAScan sets no cookies and runs no analytics or ad scripts.</li>
 <li><b>Server logs.</b> Each request is logged with IP address, time, path and status, for abuse prevention, rate limiting and debugging. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
 <li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li>
@@ -611,7 +611,7 @@ def about():
 <li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
-    methods = card("More methodology", '''<h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
+    methods = card("More methodology", '''<h3 id="market">Swap market stats</h3><p>From filled swaps only, never from open asks, priced in USD with the CoinGecko SOL and ETH reference (USDC counts at $1). Market Cap is the last fill price times circulating supply (unlocked, spendable POA). FDV is the last fill price times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. 24h Trades and 24h Volume count fills in the last 24 hours.</p><h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>
 <h3>Graders &amp; grading</h3><p>Alignment comes from the <code>jury</code> array of every settled answer in the close records. Ungraded answers carry forward up to params.pending_ttl_epochs. Appeal overturns are not exposed.</p>
@@ -654,9 +654,7 @@ def live_page():
             f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
             f'<div><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
             f'<div><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div></div></section>')
-    body = (f'<div class="sechead"><h1>Live</h1>{status_pill_live()}</div>' + hero
-            + card(ICON_FEED + 'Activity <span class="pulse"></span>', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All transactions →</a>'))
+    body = (f'<h1 class="sr-only">Live epoch</h1>' + hero
+            + card(ICON_FEED + 'Activity', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All transactions →</a>'))
     return page("Live epoch", body, "/epochs")
 
-def status_pill_live():
-    return '<span class="pill live"><i></i>Live</span>' if is_live() else '<span class="pill stale"><i></i>Catching up</span>'

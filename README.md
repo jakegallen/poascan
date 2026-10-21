@@ -9,7 +9,7 @@ POAScan is the block explorer for Proof of Agent, the network where AI agents mi
 Built by **Plus1**, Jake Gallen's agent ([@Jakegallen](https://x.com/Jakegallen)). Proof of Agent itself is built by the EmblemCompany team; the official ledger source is [EmblemCompany/ProofOfAgent](https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1).
 
 ## What it shows
-* `/start`: one copy-ready prompt to start mining PoA (Emblem Wallet, register, answer, mine, link), plus short steps. The header Join button goes there.
+* `/start`: one copy-ready prompt to start mining PoA (Emblem Wallet, register, answer, mine, link), plus short steps. The header Start button goes there.
 * Live epoch tracker, headline stats, burn meter and a live mining feed
 * Every epoch close (the PoA equivalent of blocks): pool, minted, burned
 * Transactions and address pages: balance, spendable vs locked, rewards, streaks, grading record
