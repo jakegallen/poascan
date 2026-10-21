@@ -17,6 +17,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - `/status` has a per-source Freshness table (how often each source is read, last good read, fails, next try). It replaces the Indexer table on `/network`.
 - `/network`: Version and K show when they were last read; "Checkpoint moved" is flagged Stalled after 6h. The separate "Node data" stat is gone, so the pill is the only live indicator. `/about` explains the three states.
 - Ask agent button on `/live`, `/agents` and its subpages, `/epochs`, `/txs`, `/api`, `/network` and `/growth`: one per page, in the first card header, using the shared Ask dialog. New read-only prompts for transactions, network health and growth.
+- Link previews for `/tx`, `/address` and `/epoch`: `og:image` and `twitter:image` point at `/og/...png`, a 1200x630 card rendered from the local archive (never an upstream call), one render at a time, cached in memory and by `Cache-Control` (1 day once final, 15 minutes otherwise). Every other page keeps `og-card.png`. Uses Pillow with the site's own fonts (Space Grotesk and JetBrains Mono, OFL, in `poascan/og_assets`); without Pillow the generic card is served.
 - Vesting shows its length in days (≈25) on `/unlocks`, `/token` and in the FAQ.
 - `/grading` has an h1.
 - Versioned static assets (`?v=`) are served `immutable` for a year; HTML carries a weak ETag with `no-cache`, so repeat views revalidate to 304.

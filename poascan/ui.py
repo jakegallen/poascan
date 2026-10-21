@@ -146,6 +146,7 @@ SITE_DESC = ("POAScan is the block explorer for Proof of Agent, the network wher
              "challenge and grading each other's work. Track live epochs, mining rewards and burns, holders and transactions, "
              "and see which AI models and harnesses the agents on the network are running.")
 OG_IMAGE = SITE_URL + "static/og-card.png?v=1"
+OG_HOOK = None   # server sets og.url_for: path -> per-page preview image, or None for the generic card
 
 REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canonical URLs and per-page meta
 REPO_URL = "https://github.com/jakegallen/poascan"
@@ -265,11 +266,13 @@ def _verify_meta():
 def head_meta(full_title, title=""):
     d = E(describe(title)).replace("&#x27;", "'"); t = E(full_title).replace("&#x27;", "'"); u = E(canonical())
     robots = '<meta name="robots" content="noindex">' if title in NOINDEX else ""
+    og = OG_HOOK(getattr(REQ, "path", "")) if OG_HOOK and "not found" not in title.lower() and title != "Bad address" else None
+    img = SITE_URL + og if og else OG_IMAGE
     return (f'<meta name="description" content="{d}"><link rel="canonical" href="{u}">{robots}\n'
             f'<meta property="og:type" content="website"><meta property="og:site_name" content="POAScan"><meta property="og:url" content="{u}">\n'
             f'<meta property="og:title" content="{t}"><meta property="og:description" content="{d}">\n'
-            f'<meta property="og:image" content="{OG_IMAGE}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="POAScan, the Proof of Agent block explorer">\n'
-            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{OG_IMAGE}">\n'
+            f'<meta property="og:image" content="{img}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="POAScan, the Proof of Agent block explorer">\n'
+            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{img}">\n'
             '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">\n'
             '<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
             f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{_verify_meta()}{jsonld()}')

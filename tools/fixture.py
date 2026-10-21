@@ -1,10 +1,11 @@
 """Seed a test database with 12 closed epochs, Agents (one with a malformed inviter), a fill and status blobs.
 Used by smoke_test.py to render every page against realistic data. Usage: POASCAN_DB=path python3 tools/fixture.py"""
-import os, sys, time
+import json, os, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from poascan import db
 
 A1, A2, A3 = ("poa1" + c * 40 for c in "ABC")
+TX = "ab" * 32
 BAD = "poa132rYmMupMdxEk7RWNDC4atRy7pVY92LwWfiAdsbC46P8-"
 
 def seed(n=12):
@@ -27,6 +28,10 @@ def seed(n=12):
     db.put_blob("fx", {"SOL": 100.0, "ETH": 3000.0, "src": "CoinGecko"})
     db.write("INSERT OR REPLACE INTO accounts(addr, invited_by, balance, balance_s, first_seen, last_seen) VALUES(?,?,?,?,?,?)",
              [(A1, None, 1.5e8, "150000000", t0, now), (A2, A1, 5e7, "50000000", t0, now), (A3, BAD, 2e7, "20000000", t0, now)], many=True)
+    db.write("INSERT OR REPLACE INTO txs(id, type, from_addr, to_addr, amount, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?,?,?)",
+             (TX, "transfer", A1, A2, "1250", n - 1, now - 600, 5, 5, 1))
+    db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,1)", (TX, json.dumps({"id": TX, "type": "transfer", "from_addr": A1, "to_addr": A2, "amount": "1250",
+             "epoch": n - 1, "ts": now - 600, "final": True, "atts": 5, "body": {"type": "transfer", "epoch": n - 1}}), now))
     # uptime history from before the probe cut: old dedicated probes and bare fetch rows, then derived rows
     rows = [(now - 7200 + i * 60, ep, 1, 100, "200") for i in range(10) for ep in ("probe /api/status", "/api/status", "probe /explorer", "probe /", "probe /go.md")]
     rows += [(now - 600 + i * 60, "probe /api/status", 1, 90, "200") for i in range(5)]

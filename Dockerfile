@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 WORKDIR /app
+RUN pip install --no-cache-dir pillow==12.3.0
 COPY poascan/ poascan/
 COPY static/ static/
 COPY data/census.csv data/tools.json data/declared_families.json data/

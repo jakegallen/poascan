@@ -229,6 +229,24 @@ def headers(base, check):
     c, h, _ = raw(base, "/live?a=1&b=2", {"Host": "www.poascan.io"}); check("www redirects to the apex with path and query", c == 301 and h.get("location") == "https://poascan.io/live?a=1&b=2")
     c, _, b = raw(base, "/healthz", {"Host": "172.19.0.2:8080"}); check("health check unaffected", c == 200 and b == b"ok\n")
 
+def og_images(base, check):
+    """Detail pages point og:image and twitter:image at a rendered 1200x630 PNG; everything else keeps og-card.png."""
+    a1 = "poa1" + "A" * 40; bad = []
+    try: import PIL; pil = True
+    except ImportError: pil = False
+    for page, img in (("/tx/" + "ab" * 32, "/og/tx/" + "ab" * 32 + ".png"), ("/address/" + a1, "/og/address/" + a1 + ".png"), ("/epoch/5", "/og/epoch/5.png")):
+        h = req(base + page)[1].decode()
+        tags = re.findall(r'<meta (?:property="og:image"|name="twitter:image") content="([^"]+)"', h)
+        c, hd, b = raw(base, img)
+        want = "https://poascan.io" + img if pil else "https://poascan.io/static/og-card.png?v=1"   # without Pillow the generic card stays
+        ok = tags == [want] * 2 and c == 200 and hd.get("content-type") == "image/png" and b[:8] == b"\x89PNG\r\n\x1a\n"
+        ok = ok and int.from_bytes(b[16:20], "big") == 1200 and int.from_bytes(b[20:24], "big") == 630 and "max-age" in hd.get("cache-control", "")
+        if not ok: bad.append(page)
+    check(f"og:image per tx, address and epoch renders a cached 1200x630 PNG (Pillow {pil}), failures {bad}", not bad)
+    home = req(base + "/")[1].decode(); nf = req(base + "/epoch/99999")[1].decode()
+    check("og:image falls back to og-card.png elsewhere", 'og:image" content="https://poascan.io/static/og-card.png' in home and "og-card.png" in nf and not re.search(r'class="[^"]*share|navigator\.share|>Share<', req(base + "/epoch/5")[1].decode()))
+    check("og route rejects junk", raw(base, "/og/tx/nothex.png")[0] in (200, 404) and raw(base, "/og/zzz/1.png")[0] == 404)
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -252,6 +270,7 @@ def fixture_pages(check):
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
+        og_images(base, check)
         _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/epochs", "/txs", "/api", "/network", "/growth")}
         check(f"one Ask agent button per page {_asks}", set(_asks.values()) == {1})
         from poascan import prompts as _PR

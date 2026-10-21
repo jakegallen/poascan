@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -144,6 +144,7 @@ def sitemap():
     return _SITEMAP[1]
 
 UI.JSONLD_HOOK = FQ.jsonld
+UI.OG_HOOK = OG.url_for
 UI.DESCS.update({p: d["desc"] for p, d in FQ.PAGES.items()})
 HUB = L.Hub(lambda: V.live_snapshot())
 
@@ -239,6 +240,11 @@ class H(BaseHTTPRequestHandler):
             if path in ROOT_FILES:
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
+            if path.startswith("/og/"):
+                r = OG.render(path) if OG.available() else None
+                if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
+                if OG.ROUTE.match(path): return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
+                return self.send(404, "not found", TXT)
             if path == "/healthz": return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})
             if path == "/sitemap.xml": return self.send(200, sitemap(), "application/xml; charset=utf-8", {"Cache-Control": "public, max-age=600"})
