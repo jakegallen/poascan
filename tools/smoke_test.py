@@ -114,7 +114,8 @@ def main():
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         c, b = req(base + "/start"); check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)
-        c, b = req(base + "/"); check("Join button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Join</a>' in b)
+        c, b = req(base + "/"); check("home start callout", b"Start mining in one paste" in b and b"npm install -g @emblemvault/agentwallet" in b and b"data-copy-prompt" in b)
+        check("Join button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Join</a>' in b)
         c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
         check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
         for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan"]:

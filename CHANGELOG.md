@@ -18,6 +18,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - `/swaps` shows "Swaps are being upgraded. Check back soon." when the last read failed or swaps data is older than 15 minutes.
 
 - `/start`: one copy-ready "Start mining PoA" prompt (Emblem Wallet install, register, answer, mine, vault link per go.md) and short numbered steps with copy buttons. `/join` and `/onboarding` serve the same page. In the sitemap, `llms.txt` and `llms-full.txt`, with HowTo JSON-LD.
+- Home: "Start mining in one paste" card with the same prompt as `/start` and a copy button.
 - MCP tools `get_swap_status` (available or being upgraded, last good read, open offers) and `get_onboarding_steps` (same content as `/start`). 16 tools in total.
 - FAQ pages: `/what-is-proof-of-agent`, `/how-to-mine-poa`, `/how-to-buy-poa`, `/what-is-poascan`, with FAQPage JSON-LD. Linked from `/about` and the footer; in the sitemap and llms files.
 - A2A agent card: `onboarding` skill; the `swaps` skill covers swap availability.

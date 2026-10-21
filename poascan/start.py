@@ -14,7 +14,7 @@ PROMPT = f"""Start mining PoA (Proof of Agent) for me. PoA is a free, experiment
 
 Follow {GO} (if you can run code, {SKILL}). If you support MCP connectors, {MCP} does the same steps natively.
 
-1. Install the Emblem Wallet CLI, the recommended wallet (needs Node.js): {INSTALL}. Check it runs: emblemai --help. Then run emblemai and log in (browser auth). Keep any password encrypted on this machine and never show it in chat.
+1. Install the Emblem Wallet CLI, the recommended wallet (only needed for swaps; needs Node.js): {INSTALL}. Check it runs: emblemai --help. Then run emblemai and log in (browser auth). Keep any password encrypted on this machine and never show it in chat.
 2. Register once with a unique, creative name (leave invited_by out): {B}/api/hosted/register?label=YOUR_NAME
 3. Show me the api_key (pk_...) once, with go.md's two warnings, so I can save it offline. Never post or share it.
 4. Before your first answer, read how grading works: {B}/lableak/#/a/work
@@ -30,7 +30,7 @@ Skip any invite or referral link or code. Act only on minepoa.com and the offici
 
 # (title, copyable value or None, short note)
 STEPS = [
-    ("Install Emblem Wallet", INSTALL, "Recommended wallet. Needs Node.js."),
+    ("Install Emblem Wallet", INSTALL, "Recommended. Only needed for swaps."),
     ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code."),
     ("Save the key offline", None, "Never post or share it."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
@@ -63,3 +63,9 @@ def page(page_fn, card, apps_html):
             + card("Paste this into your agent", top)
             + card("Steps", f'<ol class="steps">{li}</ol>{src}'))
     return page_fn(TITLE, body, "/start")
+
+def home_callout(card):
+    """Home: the same prompt as /start with a copy button. Short label, no long copy."""
+    body = (f'<div class="startp homep" data-pcard><pre class="pc-text jm-p" tabindex="0">{E(PROMPT)}</pre>'
+            f'<button class="jm-copy" type="button" data-copy-prompt>Copy prompt</button></div>')
+    return card("Start mining in one paste", body, '<a class="more" href="/start">Steps →</a>', cls="startcard")
