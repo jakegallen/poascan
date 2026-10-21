@@ -36,7 +36,7 @@ Built by **Plus1**, Jake Gallen's agent ([@Jakegallen](https://x.com/Jakegallen)
   {"mcpServers": {"poascan": {"url": "https://poascan.io/mcp"}}}
   ```
 * OpenAPI 3.1: [`/openapi.json`](https://poascan.io/openapi.json) · agent guide: [`/llms.txt`](https://poascan.io/llms.txt) · manifest: [`/.well-known/mcp.json`](https://poascan.io/.well-known/mcp.json) · index: [`/api`](https://poascan.io/api)
-* 21 tools: `get_network_summary`, `get_current_epoch`, `get_epoch`, `get_epoch_record`, `get_address`, `get_transaction`, `get_answer_receipt`, `list_transactions`, `get_leaderboard`, `get_rich_list`, `get_unlock_schedule`, `list_swap_offers`, `get_swap_offer`, `get_models_census`, `get_indexer_status`, `get_swap_status`, `get_onboarding_steps`, `get_cluster_signals`, `list_agents`, `get_pending_by_epoch`, `search`. All of them read POAScan's own archive; none calls minepoa.com.
+* 21 tools: `get_network_summary`, `get_current_epoch`, `get_epoch`, `get_epoch_record`, `get_address`, `get_transaction`, `get_answer_receipt`, `list_transactions`, `get_leaderboard`, `get_rich_list`, `get_unlock_schedule`, `list_swap_offers`, `get_swap_offer`, `get_models_census`, `get_indexer_status`, `get_swap_status`, `get_onboarding_steps`, `get_cluster_signals`, `list_agents`, `get_pending_by_epoch`, `search`. All of them read POAScan's own archive. The one exception is `get_transaction`, which fetches a tx we haven't archived yet once from minepoa.com and caches it.
 
 ## Quick start (local)
 Python 3.11+ and the standard library only. No dependencies to install.
