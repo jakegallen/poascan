@@ -72,7 +72,7 @@ def book_html():
                      f'<td class="num">{o["want"]:g}</td><td class="dim">{f"<span class=xcd data-close={int(o["exp"])}></span>" if o["exp"] else "···"}</td></tr>' for o in rs)
         tr = tr or '<tr><td colspan="4" class="na">···</td></tr>'
         lk = f"{a}|{ch}"
-        mid = f'<tr class="mid"><td colspan="4"><span class="num">{_n(last[lk], 5)}</span> <span class="dim small">last fill</span></td></tr>' if lk in last else '<tr class="mid"><td colspan="4" class="dim small">No fills yet</td></tr>'
+        mid = f'<tr class="mid"><td colspan="4"><span class="num">{_n(last[lk], 5)}</span> <span class="dim small">last fill</span></td></tr>' if lk in last else ""
         out.append(f'<div class="xbk" data-asset="{E(a)}" data-pair="{E(a)}|{E(ch)}"><table class="xbt"><thead><tr><th>{net_logo(ch)}Price · {E(a)} / 1M POA</th><th>Size · POA</th><th>Total · {E(a)}</th><th>Expires</th></tr></thead>'
                    f'<tbody>{tr}{mid}<tr><td colspan="4" class="na">No bids</td></tr></tbody></table></div>')
     return f'<div id="xbook" data-book="{E(data)}">{"".join(out)}</div>'
@@ -81,7 +81,7 @@ def fills_html():
     _, fl = _rows(); nm = V2.names()
     rows = [[f'<span class="dim">{utc(r["fill_ts"], "%m-%d %H:%M")}</span>', net_logo(r["chain"]) + f'<span class="num">{_n(r["want"] / r["poa"] * 1e6, 5)}</span> <span class="unit">{E(r["asset"] or "")}</span>',
              poa(r["poa"]), addr_link(r["taker"], nm) if r["taker"] else "···"] for r in fl[:10] if r["poa"] and r["want"]]
-    if not rows: return '<div class="xempty">No fills yet</div>'
+    if not rows: return '<div class="xempty" aria-label="none">···</div>'
     return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker"], rows, cls="xft")
 
 def chart_html():

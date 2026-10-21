@@ -577,7 +577,7 @@ a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--am
 .xho[hidden]{display:none}
 /* footer: one flowing row of small muted links */
 .foot{display:block;padding:14px 24px;font-size:11px;line-height:1.9}
-.frow{display:block}.frow a{color:var(--mute);text-decoration:none;white-space:nowrap}.frow a:hover{color:var(--amber)}
+.frow{display:flex;flex-wrap:wrap;align-items:center;row-gap:2px}.frow a{color:var(--mute);text-decoration:none;white-space:nowrap}.frow a:hover{color:var(--amber)}
 
 .fsep{margin:0 6px;color:var(--line2)}
 @media(max-width:640px){.foot{padding:12px 16px}.fsep{margin:0 4px}}
