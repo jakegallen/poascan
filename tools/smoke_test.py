@@ -11,6 +11,13 @@ def req(url, data=None, headers=None):
         with urllib.request.urlopen(r, timeout=20) as f: return f.status, f.read()
     except urllib.error.HTTPError as e: return e.code, e.read()
 
+def reqh(url):
+    try:
+        with urllib.request.urlopen(url, timeout=20) as f: return f.status, dict(f.headers), f.read()
+    except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read()
+
+META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of", "fetched_at", "stale", "stale_after_s"}
+
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
     env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0")
@@ -34,8 +41,26 @@ def main():
             try: json.loads(b)
             except Exception: ok = False
             check(f"GET {path} -> {c} json", ok)
+        root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        ver = re.search(r'VERSION = "([0-9.]+)"', open(os.path.join(root_dir, "poascan", "agentapi.py")).read()).group(1)
+        for f in ("server.json", "gemini-extension.json"):
+            check(f"{f} version {ver}", json.load(open(os.path.join(root_dir, f))).get("version") == ver)
+        check("CHANGELOG has version", f"## [{ver}]" in open(os.path.join(root_dir, "CHANGELOG.md")).read())
+        for path in ["/api/summary", "/api/health", "/api/params", "/api/status"]:
+            c1, h1, b1 = reqh(base + path); c2, h2, b2 = reqh(base + "/api/v1" + path[4:])
+            d1 = json.loads(b1) if b1 else {}; d2 = json.loads(b2) if b2 else {}
+            check(f"v1 alias {path} -> {c1}/{c2}", c1 == c2 and set(d1) == set(d2))
+            check(f"{path} meta + X-API-Version", META_KEYS <= set(d2.get("meta", {})) and h2.get("X-API-Version") == ver)
+        for path in ["/api/v1/epochs", "/api/epochs", "/api/v1/richlist.csv", "/api/agents/series"]:
+            c, h, b = reqh(base + path)
+            ok = c == 200 and all(k in h for k in ("X-API-Version", "X-Source-Height", "X-Epoch", "X-Fetched-At", "X-Stale"))
+            if not path.endswith(".csv"): ok = ok and isinstance(json.loads(b), list)
+            check(f"list headers {path}", ok)
+        c, h, _ = reqh(base + "/api/v1/nope"); check(f"v1 404 -> {c}", c == 404 and h.get("X-API-Version") == ver)
         c, b = req(base + "/openapi.json"); spec = json.loads(b) if c == 200 else {}
         check("openapi.json 3.1 with paths", spec.get("openapi", "").startswith("3.1") and len(spec.get("paths", {})) > 20)
+        check("openapi v1 paths, version, Meta", spec.get("info", {}).get("version") == ver and "/api/v1/summary" in spec.get("paths", {})
+              and spec["paths"]["/api/v1/summary"]["get"].get("x-alias") == "/api/summary" and "Meta" in spec.get("components", {}).get("schemas", {}))
         c, b = req(base + "/llms.txt"); check("llms.txt", c == 200 and b.startswith(b"# POAScan") and b"/mcp" in b)
         c, b = req(base + "/.well-known/mcp.json"); check("mcp.json", c == 200 and "tools" in json.loads(b))
         c, _ = req(base + "/api/health", b"x", {"Content-Type": "text/plain"}); check(f"POST /api/health -> {c} (read-only)", c == 405)
@@ -52,6 +77,8 @@ def main():
                    {"offer_id": "x"} if t == "get_swap_offer" else {"query": "plus1"} if t == "search" else {}
             c, b = rpc("tools/call", {"name": t, "arguments": args}); r = json.loads(b) if c == 200 else {}
             check(f"mcp tools/call {t}", c == 200 and "result" in r and r["result"]["content"][0]["type"] == "text")
+            sc = (r.get("result") or {}).get("structuredContent") or {}
+            check(f"mcp tools/call {t} meta", META_KEYS <= set(sc.get("meta", {})))
         c, b = rpc("nope/nope"); check("mcp unknown method -> -32601", json.loads(b).get("error", {}).get("code") == -32601)
         c, b = req(base + "/robots.txt"); check("robots.txt allows AI bots + sitemap", c == 200 and b"GPTBot" in b and b"Sitemap: https://poascan.io/sitemap.xml" in b)
         c, b = req(base + "/sitemap.xml"); check("sitemap.xml", c == 200 and b"<urlset" in b and b"https://poascan.io/about" in b)

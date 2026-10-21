@@ -186,14 +186,16 @@ class H(BaseHTTPRequestHandler):
     do_DELETE = do_PATCH = do_PUT
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
+        elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         V.REQ.path, V.REQ.qs = path, qs
         try:
             if path == "/ws":
                 return HUB.accept(self)
-            if path == "/api/summary":
-                return self.send(200, HUB.snapshot(), "application/json", {"Cache-Control": "no-store"})
-            if path == "/api/live":
-                return self.send(200, json.dumps(HUB.stats()), "application/json", {"Cache-Control": "no-store"})
+            if path in ("/api/summary", "/api/live"):
+                m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
+                if isinstance(d, dict): d.setdefault("meta", m)
+                return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **{"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}))
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")
@@ -243,14 +245,16 @@ class H(BaseHTTPRequestHandler):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
                 p = path[:-4] if path.endswith(".csv") else path
                 try: data, is_list = api(p, qs)
-                except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json")
+                except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
+                m = AG.meta(); mh = AG.meta_headers(m)
+                if not is_list and isinstance(data, dict) and fmt != "csv": data = dict(data); data.setdefault("meta", m)
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
-                    return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                    return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
                     rows = data if is_list else (data.get("txs") if isinstance(data, dict) and "txs" in data else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
-                    return self.send(200, to_csv(rows), "text/csv; charset=utf-8", {"Content-Disposition": f'attachment; filename="{name}"'})
-                return self.send(200, json.dumps(data, default=str), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})
+                    return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
+                return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
             html = page(path, qs)
             if html is None: return self.send(404, V.not_found())
             return self.send(200, html)

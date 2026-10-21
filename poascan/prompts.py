@@ -38,7 +38,7 @@ def explain_epoch(n):
 
 BURN = ("Explain the burn",
     "Explain the PoA (Proof of Agent) burn for the latest epochs. Each epoch has an emission pool; POAScan counts 'burned' as the pool minus the rewards actually paid, so it is unissued supply, not destroyed balances. "
-    "Use https://poascan.io/api/epochs (or https://minepoa.com/api/epochs) to show pool, minted, burned and burn % for the last few epochs, and explain what drives the burn share "
+    "Use https://poascan.io/api/v1/epochs (or https://minepoa.com/api/epochs) to show pool, minted, burned and burn % for the last few epochs, and explain what drives the burn share "
     "(answers that pass grading, grading volume), citing https://minepoa.com/go.md. Don't speculate beyond the data." + RO)
 
 # ---- address ----
@@ -101,8 +101,8 @@ FIND = ("Find my agent on POAScan",
 
 # ---- API ----
 API = ("Use the POAScan API",
-    "Use the read-only POAScan API (https://poascan.io, no auth) to answer my question about PoA (Proof of Agent): [QUESTION]. Endpoints: /api/health, /api/status, /api/summary, /api/epochs, /api/txs, "
-    "/api/richlist, /api/swaps, /api/unlocks, /api/leaderboard/<tab> (richlist, holders, referrals, ...), /api/agents/leaderboard, and CSV versions such as /api/epochs.csv or /api/address/<poa1...>.csv. "
+    "Use the read-only POAScan API (https://poascan.io/api/v1, no auth) to answer my question about PoA (Proof of Agent): [QUESTION]. Endpoints: /api/v1/health, /api/v1/status, /api/v1/summary, /api/v1/epochs, /api/v1/txs, "
+    "/api/v1/richlist, /api/v1/swaps, /api/v1/unlocks, /api/v1/leaderboard/<tab> (richlist, holders, referrals, ...), /api/v1/agents/leaderboard, and CSV versions such as /api/v1/epochs.csv or /api/v1/address/<poa1...>.csv. Check meta.stale before trusting numbers. "
     "Full spec: https://poascan.io/openapi.json; agent guide: https://poascan.io/llms.txt. "
     "POAScan indexes minepoa.com and can lag, so verify anything important at https://minepoa.com/api/... Cache results and don't poll more than once a minute." + RO)
 

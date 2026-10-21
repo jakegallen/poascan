@@ -5,9 +5,35 @@ import json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
+API_PREFIX = "/api/v1"
+CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
+STALE_AFTER_S = 300
+_META = [0.0, None]
+
+def _iso(t): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
+
+def meta():
+    """Freshness stamp shared by the HTTP API and MCP tool results. Cached 5 s."""
+    now = time.time()
+    if now - _META[0] > 5 or _META[1] is None:
+        st, nw, h, o = A.status(), A.networks(), A.health(), A.open_epoch() or {}
+        live = h.get("live_last_ok")
+        _META[1] = dict(api_version=VERSION, network=nw.get("chain_id") or "poa-mainnet-1", source_height=nw.get("height"),
+                        checkpoint=nw.get("checkpoint_height"), epoch=o.get("epoch"), node_as_of=st.get("as_of"), fetched_at=_iso(live),
+                        stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S)
+        _META[0] = now
+    return dict(_META[1], generated_at=_iso(now))
+
+META_HEADERS = ["X-API-Version", "X-Source-Height", "X-Checkpoint", "X-Epoch", "X-Fetched-At", "X-Stale"]
+def meta_headers(m=None):
+    m = m or meta()
+    return {"X-API-Version": VERSION, "X-Source-Height": str(m["source_height"] if m["source_height"] is not None else ""),
+            "X-Checkpoint": str(m["checkpoint"] if m["checkpoint"] is not None else ""), "X-Epoch": str(m["epoch"] if m["epoch"] is not None else ""),
+            "X-Fetched-At": m["fetched_at"] or "", "X-Stale": "true" if m["stale"] else "false",
+            "Access-Control-Expose-Headers": ", ".join(META_HEADERS)}
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")  # newest first
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -231,9 +257,11 @@ def _one(m):
         if not isinstance(args, dict): return _err(i, -32602, "arguments must be an object")
         try:
             data = _clean(json.loads(json.dumps(TOOL_FN[name](args), default=str)))
+            if isinstance(data, dict): data.setdefault("meta", meta())
+            else: data = {"result": data, "meta": meta()}
             return ok({"content": [{"type": "text", "text": json.dumps(data)}], "structuredContent": data, "isError": False})
         except ToolError as e:
-            return ok({"content": [{"type": "text", "text": str(e)}], "isError": True})
+            return ok({"content": [{"type": "text", "text": str(e)}], "structuredContent": {"error": str(e), "meta": meta()}, "isError": True})
         except Exception as e:
             import logging; logging.getLogger("mcp").exception("tool %s failed", name)
             return ok({"content": [{"type": "text", "text": "internal error; the archive may still be loading"}], "isError": True})
@@ -306,13 +334,39 @@ def openapi():
                           "requestBody": {"required": True, "content": {"application/json": {"schema": ANY}}},
                           "responses": {"200": {"description": "JSON-RPC response", "content": {"application/json": {"schema": ANY}}},
                                         "202": {"description": "Notification accepted"}, "429": {"description": "Rate limited"}}}}
+    H = {k: {"$ref": "#/components/headers/" + k} for k in META_HEADERS}
+    out = {}
+    for k, v in P.items():
+        if k.startswith("/api/"):
+            op = v["get"]; op["x-alias"] = k
+            op["description"] = (op.get("description", "") + f" Also served at {k} (unversioned alias, same response).").strip()
+            for code in ("200", "404"):
+                if code in op["responses"]: op["responses"][code]["headers"] = H if code == "200" else {"X-API-Version": H["X-API-Version"]}
+            k = API_PREFIX + k[4:]
+        out[k] = v
+    P = out
+    hd = lambda d, t="string": {"description": d, "schema": {"type": t}}
     return {"openapi": "3.1.0",
             "info": {"title": "POAScan API", "version": VERSION, "summary": "Read-only explorer API for Proof of Agent (poa-mainnet-1)",
                      "description": "No auth, no keys, GET only (plus POST /mcp). Data is POAScan's archive of public minepoa.com endpoints and can lag a few minutes. "
-                                    "List endpoints also return CSV with a .csv suffix or ?format=csv. Please cache and poll at most once a minute.",
+                                    "List endpoints also return CSV with a .csv suffix or ?format=csv. Please cache and poll at most once a minute. "
+                                    f"Canonical prefix is {API_PREFIX}; every {API_PREFIX}/X path is also served at /api/X as an alias with the same response. "
+                                    "Freshness: object responses carry a meta key (schema Meta); list and CSV responses stay unchanged and carry the X- headers instead. "
+                                    "Stability: v1 only gets additive changes; breaking changes ship under /api/v2 with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md",
                      "license": {"name": "MIT", "identifier": "MIT"}, "contact": {"url": "https://github.com/jakegallen/poascan"}},
             "servers": [{"url": BASE}], "externalDocs": {"url": BASE + "/llms.txt", "description": "Agent guide"},
-            "paths": P, "components": {"schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}}}}}
+            "paths": P, "components": {
+                "schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}},
+                            "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
+                                     "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
+                                                    "checkpoint": {"type": ["integer", "null"], "description": "checkpoint height"}, "epoch": {"type": ["integer", "null"], "description": "open epoch"},
+                                                    "node_as_of": {"type": ["string", "null"], "description": "upstream status timestamp"},
+                                                    "fetched_at": {"type": ["string", "null"], "format": "date-time", "description": "last successful upstream fetch, ISO 8601 UTC"},
+                                                    "generated_at": {"type": "string", "format": "date-time", "description": "response time, ISO 8601 UTC"},
+                                                    "stale": {"type": "boolean", "description": "true when fetched_at is older than stale_after_s or upstream reports stale"},
+                                                    "stale_after_s": {"type": "integer"}}}},
+                "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
+                            "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 
 # ---------------------------------------------------------------- llms.txt, mcp.json, /api page
 def claude_cmd(): return f"claude mcp add --transport http poascan {MCP_URL}"
@@ -341,8 +395,12 @@ Tools:
 ## HTTP API
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
-- Start with {BASE}/api/summary, {BASE}/api/epochs, {BASE}/api/address/<poa1...>, {BASE}/api/tx/<hash>, {BASE}/api/leaderboard/<tab>
+- Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
+- Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s}}. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}).
+- List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
+- Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 
 ## Pages
 - {BASE}/ live epoch, stats, feed
@@ -380,7 +438,8 @@ def server_card():
             "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent explorer: epochs, rewards, holders, swaps and agent census. No auth.",
             "websiteUrl": BASE, "repository": {"url": "https://github.com/jakegallen/poascan", "source": "github"},
             "icons": [{"src": BASE + "/static/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"]}],
-            "remotes": [{"type": "streamable-http", "url": MCP_URL}]}
+            "remotes": [{"type": "streamable-http", "url": MCP_URL}],
+            "_meta": {"io.poascan/api": {"apiVersion": VERSION, "baseUrl": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "changelog": CHANGELOG_URL}}}
 
 INDEXNOW_KEY = "90354056b13ed723e3724008f1e8f063"  # public by design (IndexNow spec); served at /90354056b13ed723e3724008f1e8f063.txt
 
@@ -401,7 +460,7 @@ def agent_card():
                 sk("swaps", "Swaps", "Open swap offers and fills on the network's own swap flow.", ["swaps", "market"], ["List open swap offers."]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],
-            "links": {"mcp": MCP_URL, "openapi": BASE + "/openapi.json", "llms": BASE + "/llms.txt", "serverCard": BASE + "/mcp/server-card", "repository": "https://github.com/jakegallen/poascan"}}
+            "links": {"mcp": MCP_URL, "api": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "changelog": CHANGELOG_URL, "llms": BASE + "/llms.txt", "serverCard": BASE + "/mcp/server-card", "repository": "https://github.com/jakegallen/poascan"}}
 
 def ai_catalog():
     return {"entries": [{"identifier": "urn:air:poascan.io:mcp:poascan", "type": "application/mcp-server-card+json", "url": BASE + "/mcp/server-card"},
@@ -440,7 +499,7 @@ def mcp_manifest():
     return {"name": "poascan", "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent block explorer (poa-mainnet-1).",
             "url": MCP_URL, "transport": {"type": "streamable-http", "url": MCP_URL}, "endpoints": {"streamable-http": MCP_URL},
             "protocolVersions": list(PROTOCOLS), "authentication": {"required": False}, "capabilities": {"tools": {"listChanged": False}},
-            "tools": [t[0] for t in TOOLS], "documentation": BASE + "/llms.txt", "openapi": BASE + "/openapi.json", "repository": "https://github.com/jakegallen/poascan"}
+            "tools": [t[0] for t in TOOLS], "documentation": BASE + "/llms.txt", "api": BASE + API_PREFIX, "openapi": BASE + "/openapi.json", "repository": "https://github.com/jakegallen/poascan"}
 
 def agents_html():
     """Short 'For agents' block, shared by /api and /about."""
