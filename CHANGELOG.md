@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.5.0] - 2026-10-21
+
+### Added
+
+- Answer receipts. `/tx` for an answer shows a Receipt card and `/address` a compact Answers list: accepted, seed, age, seals vs quorum, status, the close it settled at, address credit at that close, and a vanished flag. Pending and awaiting close stay neutral; failed is the only red state. Fields the public records cannot show read Unknown (null in the API); the reward earned by one answer is never published, so `reward_attributable` is always null.
+- API: `/api/v1/receipt/{hash}` (schema Receipt) and `/api/v1/receipts?address=` (list, CSV). MCP tool `get_answer_receipt` (by hash or address). Method at `/about#receipts`.
+
 ## [1.4.0] - 2026-10-21
 
 ### Added
@@ -168,6 +175,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.5.0]: https://github.com/jakegallen/poascan/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jakegallen/poascan/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/jakegallen/poascan/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jakegallen/poascan/compare/v1.1.0...v1.2.0

@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -42,6 +42,15 @@ def api(path, qs):
         a = m.group(1); p = G.profile(a); d, err = V.fetch_address(a)
         return dict(address=a, balance=(d or {}).get("balance"), rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+    m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
+    if m:
+        r = RC.receipt(m.group(1), fetch=True)
+        if not r: raise KeyError(path)
+        return r, False
+    if path == "/api/receipts":
+        a = qs.get("address", [""])[0]
+        if not V.ADDR_RX.match(a): return {"error": "address must be a poa1 address"}, False
+        return RC.for_address(a, min(200, int(qs.get("limit", ["50"])[0] or 50))), True
     if path == "/api/epochs": return A.epoch_rows(), True
     if path == "/api/swaps": return V2.swaps_all(), True
     if path == "/api/swaps/status": return V2.swap_status_api(), False

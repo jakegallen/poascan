@@ -71,7 +71,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 19 and {"get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 20 and {"get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -247,6 +247,35 @@ def og_images(base, check):
     check("og:image falls back to og-card.png elsewhere", 'og:image" content="https://poascan.io/static/og-card.png' in home and "og-card.png" in nf and not re.search(r'class="[^"]*share|navigator\.share|>Share<', req(base + "/epoch/5")[1].decode()))
     check("og route rejects junk", raw(base, "/og/tx/nothex.png")[0] in (200, 404) and raw(base, "/og/zzz/1.png")[0] == 404)
 
+def receipts(base, check):
+    """Answer receipts on /tx, /address, the API and MCP. Pending stays neutral; unknown is never a guess."""
+    RP, RN, RV, RW = ("c1" * 32, "c2" * 32, "c3" * 32, "c4" * 32); a1 = "poa1" + "A" * 40
+    j = {t: json.loads(req(base + "/api/v1/receipt/" + t)[1]) for t in (RP, RN, RV, RW)}
+    p, n, v, w = j[RP], j[RN], j[RV], j[RW]
+    check("receipt passed: seed, exact seals vs quorum, settled close, address credit, per-answer reward unknown",
+          p["status"] == "passed" and p["seed"] == "61ada059" and p["seals"] == 4 and p["seals_exact"] and p["quorum"] == 3 and p["settled_close"] == 10
+          and p["paid_close"] == 10 and p["address_credited"] is True and p["reward_attributable"] is None and "meta" in p)
+    check("receipt pending: neutral, unknown seed and seals, age in closes, not paid",
+          n["status"] == "pending" and n["seed"] is None and n["seals"] is None and n["closes_waited"] == 1 and n["passed"] is None and n["address_credited"] is None and n["panel"] == 1)
+    check("receipt vanished and awaiting close", v["status"] == "vanished" and v["vanished"] is True and w["status"] == "awaiting_close" and not w["vanished"])
+    check("receipt 404 for non-answers", req(base + "/api/v1/receipt/" + "ab" * 32)[0] == 404)
+    lst = json.loads(req(base + "/api/v1/receipts?address=" + a1)[1]); csv_ = req(base + "/api/v1/receipts.csv?address=" + a1)
+    check("receipts list for an address (+ CSV)", len(lst) == 4 and {r["status"] for r in lst} == {"passed", "pending", "vanished", "awaiting_close"} and csv_[0] == 200)
+    tn, tp, tv = (req(base + "/tx/" + t)[1].decode() for t in (RN, RP, RV))
+    check("/tx receipt: Pending neutral, Passed green, Vanished amber, unknown shown as Unknown",
+          '<span class="tag ">Pending</span>' in tn and "Unknown" in tn and ">Receipt<" in tn and '<span class="tag ok">Passed · E10</span>' in tp
+          and "61ada059" in tp and '<span class="tag warn">Vanished · E8</span>' in tv and "\u2014" not in tn)
+    ad = req(base + "/address/" + a1)[1].decode()
+    check("/address compact receipt list", "Answers · 4" in ad and ad.count('class="rcpt"') == 1)
+    spec = json.loads(req(base + "/openapi.json")[1])
+    tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_answer_receipt", "arguments": {"hash": RN}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    check("receipt in OpenAPI, llms.txt and MCP", "/api/v1/receipt/{hash}" in spec["paths"] and "/api/v1/receipts" in spec["paths"] and "Receipt" in spec["components"]["schemas"]
+          and b"/receipt/" in req(base + "/llms.txt")[1] and any(t["name"] == "get_answer_receipt" for t in tl["result"]["tools"]) and sc.get("status") == "pending")
+    check("/about explains receipts", b'id="receipts"' in req(base + "/about")[1])
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -270,6 +299,7 @@ def fixture_pages(check):
         check("fixture: /network, /community, /agents/operators have their own h1", b"<h1" in req(base + "/network")[1] and b"<h1" in req(base + "/forum")[1]
               and b'<h1 class="sr-only">Operators</h1>' in op)
         headers(base, check)
+        receipts(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
