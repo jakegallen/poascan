@@ -14,6 +14,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed (swaps coming soon)
 
 - Every option button and install row (chat apps, More, MCP clients, Other clients, the Ask your agent dialog, /start, /swaps, /api) shows the product's logo left of its name, 16px like the network logos. Marks are self-hosted in static/brands, with sources and licenses in static/brands/SOURCES.md.
+- MCP install, on /start and /api: four one-click Add buttons up front (Cursor, VS Code, LM Studio, Goose), and one collapsed Other clients list with the rest: VS Code Insiders, Kiro, Trae and Cherry Studio, then the copy rows for Claude Code, Codex, Gemini CLI, Claude connector, Windsurf, Cline and Zed. Button grids run 4 across on desktop and 2 on mobile.
 - Prompt boxes: Copy now sits in a slim fixed strip across the top of the box, and the prompt scrolls below it, never beside the button.
 - Ask your agent dialog: with several prompts, the selected chip names the prompt and the title is screen-reader only, so the label shows once.
 - Indexer: the live tx feed is read first and no longer waits on /api/status or /api/networks, which get a 20 second timeout and their own backoff. A slow /api/networks had been holding the header pill on Stale.
