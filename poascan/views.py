@@ -228,10 +228,11 @@ def tx(tid):
     if sw:
         rows[6:8] = [r for r in sw if r[0] in ("To", "Amount")] or rows[6:8]
         rows += [r for r in sw if r[0] not in ("To", "Amount")]; skip += ("offer", "proof")
+    rc = RC.receipt(tid, row={"id": d["id"], "type": d.get("type"), "from_addr": d.get("from_addr"), "epoch": d.get("epoch"), "ts": d.get("ts"), "final": d.get("final")}) if d.get("type") == "challenge" else None
+    if rc and rc.get("seed"): skip += ("seed",)   # the Receipt card carries it
     extra = {k: v for k, v in b.items() if k not in skip}
     if extra: rows.append(("Fields", raw_fields(extra)))
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
-    rc = RC.receipt(tid, row={"id": d["id"], "type": d.get("type"), "from_addr": d.get("from_addr"), "epoch": d.get("epoch"), "ts": d.get("ts"), "final": d.get("final")}) if d.get("type") == "challenge" else None
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
     return page("Tx " + short(tid), card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>') + rch, "/txs")
 
