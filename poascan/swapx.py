@@ -169,7 +169,7 @@ def usd_of(amount):
     if not p["shown"] or amount is None: return ""
     try: v = float(amount) * p["usd_per_poa"]
     except (TypeError, ValueError): return ""
-    return f' <span class="usd">≈{money(v, p["sig_figs"])}</span>'
+    return f'<span class="usd">≈{money(v, p["sig_figs"])}</span>'
 
 def usd_src():
     """One label per page that shows ≈$: links to the method on /about. "" when no price is shown."""

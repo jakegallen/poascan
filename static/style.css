@@ -722,7 +722,7 @@ i.blogo.mono{display:grid;place-items:center;border-radius:4px;background:var(--
 @media (max-width:480px){.upg{grid-template-columns:1fr;gap:2px 0}.upg dd{margin-bottom:8px}.upc .ch{flex-wrap:wrap}}
 
 /* Batch 1: guarded USD, one source label, home upgrade strip, empty states, tap targets */
-.usd{font:500 max(12px,.62em) var(--mono);color:var(--mute);letter-spacing:0;margin-left:.35em;white-space:nowrap;vertical-align:.12em}
+.usd{font:500 max(12px,.62em) var(--mono);color:var(--mute);letter-spacing:0;margin-left:6px;white-space:nowrap;vertical-align:.12em}
 .hero .sv .usd{font-size:max(12px,.5em)}
 .usdsrc{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid var(--line2);border-radius:999px;font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--dim);white-space:nowrap}
 .usdsrc:hover{color:var(--hi);text-decoration:none;border-color:#6B5420}.usdsrc.thin{color:var(--amber);border-color:rgba(255,176,0,.35)}

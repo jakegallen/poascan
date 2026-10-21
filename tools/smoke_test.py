@@ -577,7 +577,7 @@ def fixture_pages(check):
         check(f"price: asks alone show nothing; a fill older than 7 days hides USD {r.stderr[-300:]}", n_.get("shown") is False and n_.get("usd_per_poa") is None and st_.get("shown") is False and n_.get("asks_used") is False)
         check(f"price: one small fill is thin, last_fill basis, 2 significant figures ({th_.get('usd_per_poa')}, {pr.get('usd_of')})",
               th_.get("thin") is True and th_.get("basis") == "last_fill" and th_.get("sig_figs") == 2 and th_.get("usd_per_poa") == 1e-05
-              and "≈$43<" in (pr.get("usd_of") or "") and "USD · thin" in (pr.get("src") or "") and 'href="/about#market"' in (pr.get("src") or ""))
+              and ">≈$43<" in (pr.get("usd_of") or "") and "USD · thin" in (pr.get("src") or "") and 'href="/about#market"' in (pr.get("src") or ""))
         check(f"price: 5+ fills in 7 days use the median of the last 5; over $100 volume is not thin ({dp_.get('basis')}, {dp_.get('thin')}, {dp_.get('usd_per_poa')})",
               dp_.get("basis") == "median_last_5_fills" and dp_.get("thin") is False and dp_.get("sig_figs") == 3 and dp_.get("usd_per_poa") == 0.4)
         js = json.loads(req(base + "/api/v1/price")[1])
