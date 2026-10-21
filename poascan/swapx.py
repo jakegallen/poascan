@@ -1,6 +1,6 @@
 """/swaps as a swap panel: pair, Buy/Sell, amount in, estimate out from the live open offers.
 POAScan never signs or holds anything: Connect and Swap hand a prefilled prompt to the visitor's agent."""
-import json, time
+import json, time, statistics
 from html import escape as E
 from . import views2 as V2, db, analytics as A
 from .ui import card, table, poa, utc, rel, addr_link, line, plain
@@ -122,6 +122,62 @@ def panel():
 <details class="xho" id="xh" hidden><summary>Swap prompt</summary><div class="xhob" data-pcard>{swap_box}<span class="lbl jm-l">One click</span>{apps2}</div></details>
 </section>'''
 
+# ---------------- price: the one POA/USD reference. The swap module owns it; the explorer only reads it. ----------------
+PRICE_WINDOW_S = 7 * 86400          # no fill in this window: no USD anywhere
+THIN_FILLS, THIN_USD = 5, 100.0     # fewer fills, or less volume, in the window: thin (2 significant figures)
+MEDIAN_N = 5                        # with this many fills in the window, the median of the last 5 replaces the last fill
+
+def _ref(r):
+    """USD per unit of the asset a fill paid in: USDC at 1, else the reference recorded at fill time, else the current one."""
+    a = (r.get("asset") or "").upper()
+    if a == "USDC": return 1.0
+    return r.get("fill_usd") or V2.fx().get(a) or None
+
+def sig(v, n):
+    return float(f"{v:.{n}g}") if v else v
+
+@A.cached("swap_price", 30)
+def price():
+    """POA in USD from filled swaps only; open offers (asks) are never used. See /about#market."""
+    now = time.time(); fx = V2.fx()
+    fl = sorted((r for r in V2.swaps_all() if r["status"] == "filled" and r["fill_ts"] and r["poa"] and r["want"]), key=lambda r: -r["fill_ts"])
+    pts = [(r, r["want"] / r["poa"] * u, r["want"] * u) for r in fl for u in [_ref(r)] if u]
+    win = [p for p in pts if p[0]["fill_ts"] >= now - PRICE_WINDOW_S]
+    vol = sum(p[2] for p in win); last = int(fl[0]["fill_ts"]) if fl else None
+    out = dict(usd_per_poa=None, usd_per_1m_poa=None, shown=False, thin=None, basis=None, sig_figs=None,
+               fills_7d=len(win), volume_7d_usd=round(vol, 2), last_fill_ts=last, last_fill_age_s=int(now - last) if last else None,
+               window_s=PRICE_WINDOW_S, thin_below=dict(fills=THIN_FILLS, volume_usd=THIN_USD), median_of=MEDIAN_N,
+               asks_used=False, usd_ref=fx.get("src") or "CoinGecko", method="https://poascan.io/about#market")
+    if not win: return out
+    thin = len(win) < THIN_FILLS or vol < THIN_USD
+    if len(win) >= MEDIAN_N: px, basis = statistics.median(p[1] for p in win[:MEDIAN_N]), "median_last_5_fills"
+    else: px, basis = win[0][1], "last_fill"
+    n = 2 if thin else 3
+    return dict(out, usd_per_poa=sig(px, n), usd_per_1m_poa=sig(px * 1e6, n), shown=True, thin=thin, basis=basis, sig_figs=n)
+
+def money(v, n=3):
+    """$ with n significant figures: $13K, $710, $0.11."""
+    if v is None: return None
+    v = sig(v, n)
+    for d, u in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if abs(v) >= d: return f"${plain(v / d, n)}{u}"
+    return f"${plain(v, n)}"
+
+def usd_of(amount):
+    """Muted ≈$ beside a POA amount, or "" when no price is shown. Same figure rounding as the price itself."""
+    p = price()
+    if not p["shown"] or amount is None: return ""
+    try: v = float(amount) * p["usd_per_poa"]
+    except (TypeError, ValueError): return ""
+    return f' <span class="usd">≈{money(v, p["sig_figs"])}</span>'
+
+def usd_src():
+    """One label per page that shows ≈$: links to the method on /about. "" when no price is shown."""
+    p = price()
+    if not p["shown"]: return ""
+    t = "thin" if p["thin"] else "ref"
+    return f'<a class="usdsrc{" thin" if p["thin"] else ""}" href="/about#market">USD · {t}</a>'
+
 NA = '<span class="na">-</span>'   # plain hyphen: no price yet
 def _usd(v):
     if v is None: return NA
@@ -134,13 +190,15 @@ def stats_html():
     m = V2.swap_market()
     tr, vo = (("Trades", m["trades_all_time"]), ("Volume", m["volume_all_time_usd"])) if V2.STATS_WINDOW == "all" else \
              (("24h Trades", m["trades_24h"]), ("24h Volume", m["volume_24h_usd"]))
-    items = [("Market Cap", _usd(m["market_cap_usd"])), ("FDV", _usd(m["fdv_usd"])), (tr[0], f'{tr[1]:,}'), (vo[0], _usd(vo[1]))]
-    return '<div class="xstats" role="group" aria-label="Market">' + "".join(f'<div class="xst"><span class="lbl">{l}</span><b class="num">{v}</b></div>' for l, v in items) + "</div>"
+    p = price(); fmt = lambda v: NA if v is None else (money(v, p["sig_figs"]) if p["shown"] else _usd(v))
+    items = [("Market Cap", fmt(m["market_cap_usd"])), ("FDV", fmt(m["fdv_usd"])), (tr[0], f'{tr[1]:,}'), (vo[0], _usd(vo[1]))]
+    return ('<div class="xstats" role="group" aria-label="Market">' + "".join(f'<div class="xst"><span class="lbl">{l}</span><b class="num">{v}</b></div>' for l, v in items)
+            + "</div>")
 
 def page():
     op, fl = _rows()
     side = (stats_html() + card(V2.ICON_SWAP + 'Order book', f'<div id="swapsopen">{book_html()}</div>', f'<span class="dim small">{len(op)} open</span>', cls="xcard")
-            + card(V2.ICON_SWAP + "Price", chart_html(), cls="xcard")
+            + card(V2.ICON_SWAP + "Price", chart_html(), usd_src(), cls="xcard")
             + card("Recent fills", fills_html(), f'<span class="dim small">{len(fl)}</span>', cls="xcard"))
     body = ('<h1 class="sr-only">Swap POA</h1>'
             f'<div class="xgrid"><div class="xl">{panel()}</div><div class="xr">{side}</div></div>'

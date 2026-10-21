@@ -94,8 +94,19 @@ def _epoch(n):
 
 ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
 
+def _upgrade():
+    from . import maint as M
+    lead = M.strip_text()[0]
+    return ("Network upgrade", lead, ["Rewards paying · epochs closing"],
+            [("Joining", "Open" if M.join_open() else "Paused"), ("Self-custody", "Working"), ("Checkpoint", "Parked")])
+
 def render(path):
     """Returns (png bytes, max-age) or None for a path that is not an OG route."""
+    if path == "/og/upgrade.png":
+        now = time.time(); hit = _CACHE.get(path)
+        if hit and now < hit[0]: return hit[1], hit[2]
+        with _LOCK: png = card(*_upgrade())
+        _CACHE[path] = (now + 600, png, 600); return png, 600
     m = ROUTE.match(path)
     if not m: return None
     kind, key = m.groups()
@@ -115,5 +126,6 @@ def render(path):
 def url_for(path):
     """og:image for a detail page, or None to keep the generic card."""
     if not available(): return None
+    if path == "/upgrade": return "og/upgrade.png"
     m = re.match(r"^/(tx|address|epoch)/([^/]+)$", path or "")
     return f"og/{m.group(1)}/{m.group(2)}.png" if m else None

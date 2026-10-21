@@ -60,6 +60,9 @@ def init():
         conn().executescript(SCHEMA)
         if "fill_usd" not in {r[1] for r in conn().execute("PRAGMA table_info(swaps)")}:
             conn().execute("ALTER TABLE swaps ADD COLUMN fill_usd REAL")  # USD per unit of the paid asset, recorded when the fill is indexed
+        for t in ("forum_posts", "forum_comments"):   # LabLeak author edits set edited_at (shown publicly as an edit)
+            if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
+                conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
         conn().commit()
 
 def write(sql, args=(), many=False):

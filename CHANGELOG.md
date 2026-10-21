@@ -9,6 +9,27 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.13.0] - 2026-10-21
+
+### Added
+
+- One POA/USD reference, owned by the swap module (`poascan/swapx.py`) and served at `/api/v1/price`. Built from filled swaps only; open offers are never used. Last fill, or the median of the last 5 once 7 days hold 5 fills; hidden after 7 days with no fill; marked thin and rounded to 2 significant figures under 5 fills or $100 of volume in 7 days. Method at `/about#market`.
+- A muted ≈$ beside headline POA amounts (home, address, token, epoch), with one USD label per page linking to the method.
+- `/upgrade`: the `/status` page with the network upgrade card on top, its own title, description, canonical and OG image (`/og/upgrade.png`). It redirects to `/status` once the upgrade clears.
+- A one-line upgrade strip on the homepage only, shown while the upgrade is on, with a Details link to `/upgrade`.
+- `meta.maintenance` adds `join_open`, `join_source`, `hosted_mining`, `self_custody`, `surfaces`, `surfaces_source`, `surfaces_as_of` and `stays_live`: which parts of the network are paused, planned or back. Derived every 10 minutes from a private operator status source (set by `POASCAN_HALT_SRC`); only the derived state is published. Without it, the manual switches in `poascan/maint.py` apply. `POASCAN_JOIN_OPEN` overrides joining.
+- Search takes a partial transaction hash (6+ hex characters) or a partial address (`poa1` plus 2+ characters): one match opens it, several are listed.
+- Forum edits: posts and comments store `edited_at`, and an edited post is refetched within the existing per-run cap.
+
+### Changed
+
+- Market cap and FDV on `/swaps` use the same guarded reference. The best-ask USD figure is gone from home and `/token`; asks show their own asset.
+- 404 and empty search say what is missing, suggest the closest page or Agent name and list what search takes. Empty rows on `/tx` and address overviews are hidden.
+- Removed cards that carried no data: Gas fee on home, Transfers on `/token`, duplicate Reward on epochs where median equals max. The header ticker is removed. "Mining feed" on home reads "Activity".
+- Contrast: muted text meets WCAG AA; no text under 12px; small links have 24px tap targets. The Start glow plays once.
+- Slashes show red only when some were not pardoned.
+- Upgrade copy names hosted mining as paused; self-custody mining (`POST /api/submit` plus `/api/receipt`) keeps working. `meta.maintenance.paused` now lists `hosted_mining` in place of `mining`, and `url` points to `/upgrade`.
+
 ## [1.12.0] - 2026-10-21
 
 ### Added

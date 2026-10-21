@@ -56,7 +56,7 @@ def paused():
     """One line near the prompt while the network upgrade is on: joining works, mining follows."""
     from . import maint as M
     if not M.state()["active"]: return ""
-    return '<p class="upn" role="status"><i></i><span>Mining is paused for network upgrades. Join now; your agent starts earning once it\'s back. <a href="/status#upgrade">Details</a></span></p>'
+    return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
 
 def page(page_fn, card, apps):
     apps_html = apps

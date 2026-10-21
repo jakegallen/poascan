@@ -12,7 +12,7 @@ ICON_ASK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h
 
 # Prompts that act on mining or grading get a pause guard while the network upgrade is on (maint.py).
 PAUSABLE = {"Answer this epoch's challenge", "Grade submissions"}
-PAUSE = ("Mining and grading may be paused for a network upgrade (https://poascan.io/status#upgrade). If the endpoint answers with a halted or maintenance status, "
+PAUSE = ("Hosted mining and grading may be paused for a network upgrade (https://poascan.io/upgrade). If the endpoint answers with a halted or maintenance status, "
          "stop there, don't loop, and check again at most once an hour at a random minute. ")
 
 def ask(items, label="Ask agent"):
@@ -104,7 +104,7 @@ BACKOFF = ("Retry with backoff when minepoa.com is slow",
     "If a submit returns 502, check https://minepoa.com/api/receipt/TXID before re-sending it; for other writes (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
 
 UPGRADE = ("Behave during the network upgrade",
-    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: mining and grading are mostly paused for roughly 24 to 72 hours, and endpoints come back one at a time. Until they do, for my agent:\n"
+    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: hosted mining and grading are mostly paused for roughly 24 to 72 hours (self-custody mining via POST /api/submit plus /api/receipt keeps working), and endpoints come back one at a time. Until they do, for my agent:\n"
     "1. Check the mining path (https://minepoa.com/api/hosted/challenge?key=MY_KEY) at most once an hour, at one fixed random minute (for example my address hash mod 60), never on the hour.\n"
     "2. A halted endpoint answers at once with a short status: read it and stop. If a call fails, back off 30s, then 2 min, then 10 min, then wait for the next hourly check.\n"
     "3. If a submit returns 502, check https://minepoa.com/api/receipt/TXID before sending it again. Never resubmit blind.\n"

@@ -185,19 +185,23 @@ def job_agents():
 def job_forum():
     B = "/lableak/api"
     comms = fetch(B + "/communities"); db.put_blob("communities", comms)
-    known = {r["id"]: r["comment_count"] for r in db.q("SELECT id, comment_count FROM forum_posts")}
+    known = {r["id"]: (r["comment_count"], r["edited_at"]) for r in db.q("SELECT id, comment_count, edited_at FROM forum_posts")}
     changed = []
     for c in comms:
         time.sleep(1)
         ps = fetch(f"{B}/posts?sort=new&community={c['slug']}&limit=1000", endpoint=B + "/posts")
         for p in ps:
-            pid = int(p["id"]); cc = int(p.get("comment_count") or 0)
-            db.write("""INSERT INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched)
-              VALUES(?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT fetched FROM forum_posts WHERE id=?),0))
-              ON CONFLICT(id) DO UPDATE SET score=excluded.score, title=excluded.title, deleted=excluded.deleted, pinned=excluded.pinned""",
+            pid = int(p["id"]); cc = int(p.get("comment_count") or 0); ed = p.get("edited_at") or None
+            # The list carries body (and edited_at once a post is edited): edited bodies refresh here at no extra request.
+            db.write("""INSERT INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched,body,edited_at)
+              VALUES(?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT fetched FROM forum_posts WHERE id=?),0),?,?)
+              ON CONFLICT(id) DO UPDATE SET score=excluded.score, title=excluded.title, deleted=excluded.deleted, pinned=excluded.pinned,
+              body=COALESCE(excluded.body, forum_posts.body), edited_at=COALESCE(excluded.edited_at, forum_posts.edited_at)""",
                      (pid, p.get("community"), p.get("title"), p.get("author"), p.get("author_public_id"), p.get("created_at"),
-                      int(p.get("score") or 0), known.get(pid, -1), int(p.get("deleted") or 0), int(p.get("pinned") or 0), pid))
-            if known.get(pid) != cc: changed.append(pid)
+                      int(p.get("score") or 0), known.get(pid, (-1, None))[0], int(p.get("deleted") or 0), int(p.get("pinned") or 0), pid,
+                      p.get("body"), ed))
+            k = known.get(pid)
+            if not k or k[0] != cc or (ed and ed != k[1]): changed.append(pid)   # new comments, or an edit (its comments may have changed too)
     for pid in changed[:120]:   # cap detail calls per run; the rest catch up next run
         time.sleep(0.8)
         try: ingest_post(fetch(f"{B}/posts/{pid}", endpoint=B + "/posts/:id"))
@@ -205,14 +209,14 @@ def job_forum():
 
 def ingest_post(p):
     pid = int(p["id"]); cs = p.get("comments", [])
-    db.write("""INSERT INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched,body)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET comment_count=excluded.comment_count, score=excluded.score,
-      fetched=excluded.fetched, body=excluded.body""",
+    db.write("""INSERT INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched,body,edited_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET comment_count=excluded.comment_count, score=excluded.score,
+      fetched=excluded.fetched, body=excluded.body, title=excluded.title, edited_at=COALESCE(excluded.edited_at, forum_posts.edited_at)""",
              (pid, p.get("community"), p.get("title"), p.get("author"), p.get("author_public_id"), p.get("created_at"),
-              int(p.get("score") or 0), len(cs), int(p.get("deleted") or 0), int(p.get("pinned") or 0), int(time.time()), p.get("body")))
-    db.write("INSERT OR REPLACE INTO forum_comments VALUES(?,?,?,?,?,?,?,?)",
+              int(p.get("score") or 0), len(cs), int(p.get("deleted") or 0), int(p.get("pinned") or 0), int(time.time()), p.get("body"), p.get("edited_at") or None))
+    db.write("INSERT OR REPLACE INTO forum_comments(id,post_id,parent_id,author,author_public_id,created_at,score,body,edited_at) VALUES(?,?,?,?,?,?,?,?,?)",
              [(int(c["id"]), pid, (int(c["parent_id"]) if c.get("parent_id") not in (None, "None", "") else None), c.get("author"),
-               c.get("author_public_id"), c.get("created_at"), int(c.get("score") or 0), c.get("body")) for c in cs], many=True)
+               c.get("author_public_id"), c.get("created_at"), int(c.get("score") or 0), c.get("body"), c.get("edited_at") or None) for c in cs], many=True)
 
 # ---------------- swaps (on-ledger escrow offers, fills, cancels) ----------------
 REF_KEYS = ("ref", "ext_ref", "external_ref", "proof_ref", "tx_ref", "payment_ref", "broadcast_sig", "ext_sig")
@@ -421,6 +425,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("forum", job_forum, 1800, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
+    ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
 ]
 
 def run_forever(stop=None):

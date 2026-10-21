@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.12.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.13.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -510,6 +510,8 @@ def openapi():
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
+        "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
+                          desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -627,6 +629,11 @@ def openapi():
                                                            "expected_window_h": {"type": "array", "items": {"type": "integer"}, "description": "expected mining downtime, low and high, in hours"},
                                                            "paused": {"type": "array", "items": {"type": "string"}}, "working": {"type": "array", "items": {"type": "string"}},
                                                            "pending_ttl_epochs": {"type": "integer", "description": "pending grades expire after this many closes"},
+                                                           "join_open": {"type": "boolean", "description": "joining (register, join, link, adopt) works"}, "join_source": {"type": "string", "enum": ["manual", "tracker", "default"]},
+                                                           "hosted_mining": {"type": "string", "enum": ["paused", "planned", "back"], "description": "hosted mining paths; self-custody mining (POST /api/submit plus /api/receipt) keeps working"},
+                                                           "surfaces": {"type": ["object", "null"], "additionalProperties": {"type": "string", "enum": ["paused", "planned", "back", "live"]}, "description": "state per public surface group (Answers, Grading, Challenges, Agent profile, Hosted mining, Joining, Assignments, Path actions, MCP mining tools); null when only the manual switches apply"},
+                                                           "surfaces_source": {"type": "string", "enum": ["tracker", "manual"]}, "surfaces_as_of": {"type": ["string", "null"], "format": "date-time"},
+                                                           "stays_live": {"type": ["array", "null"], "items": {"type": "string"}}, "self_custody": {"type": "string"},
                                                            "parked_checkpoint": {"type": "integer"}, "checkpoint": {"type": ["integer", "null"], "description": "current checkpoint height from /api/status"},
                                                            "auto_clear": {"type": "string"}, "halted_list_public": {"type": "boolean", "description": "false: minepoa.com publishes no unauthenticated list of halted endpoints"},
                                                            "url": {"type": "string"}}}},
@@ -675,7 +682,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
-- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true during staged network maintenance (mining and grading paused, checkpoint parked; see {BASE}/status#upgrade). Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true during staged network maintenance (hosted mining and grading paused, self-custody mining via POST /api/submit keeps working, checkpoint parked; see {BASE}/upgrade). maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned or back per surface group. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
 - Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 

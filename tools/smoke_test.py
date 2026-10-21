@@ -2,6 +2,11 @@
 key pages, the API, openapi.json, llms.txt and the MCP server. Usage: python3 tools/smoke_test.py"""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
+def db_first_tx(path):
+    import sqlite3
+    try: return (sqlite3.connect(path).execute("SELECT id FROM txs ORDER BY id LIMIT 1").fetchone() or [None])[0]
+    except Exception: return None
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
@@ -454,6 +459,34 @@ s0 = A.status; A.status = lambda: dict(s0(), checkpoint_height=M.PARKED + 1); ou
 print(json.dumps(out))
 """
 
+JOIN_CHECK = r"""
+import json, os, tempfile
+from poascan import db, maint as M, views2 as V2
+db.init()
+card = V2.upgrade_card()
+w = card[card.index("<dt>Working</dt>"):]; w = w[:w.index("</dd>")]
+print(json.dumps(dict(strip=M.strip_text()[0], og=M.og_desc(), start=M.join_line(), paused=M.paused(), card_joining="Joining" in w)))
+"""
+
+PRICE_CHECK = r"""
+import json, time
+from poascan import db, analytics as A, swapx as X
+db.init(); db.put_blob("fx", {"SOL": 100.0, "ETH": 3000.0, "src": "CoinGecko"}); now = int(time.time())
+def fill(i, age, poa, want, asset="SOL"):
+    db.write("INSERT OR REPLACE INTO swaps(offer_id,maker,poa,chain,asset,want,status,fill_ts,fill_txid) VALUES(?,?,?,?,?,?,?,?,?)",
+             (f"o{i}", "poa1" + "A" * 40, poa, "solana", asset, want, "filled", now - age, f"t{i}"))
+def run(): A._cache.clear(); return X.price()
+out = {}
+db.write("INSERT INTO swaps(offer_id,maker,poa,chain,asset,want,status) VALUES('ask','m',1000000,'solana','SOL',100,'open')")
+out["none"] = run()
+fill(0, 8 * 86400, 10000, 0.001); out["stale"] = run()
+fill(1, 3600, 10000, 0.001); out["thin"] = run()
+out["usd_of"] = X.usd_of(4_280_000); out["src"] = X.usd_src()
+for i, sol in enumerate((1.0, 2.0, 3.0, 4.0, 5.0, 9.0), 2): fill(i, 600 - i * 10, 1000, sol)   # newest five: 2..9 SOL per 1000 POA, median 4
+out["deep"] = run()
+print(json.dumps(out))
+"""
+
 def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /status#upgrade, one card there, one line on /start, meta and MCP carry it.
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
@@ -467,7 +500,7 @@ def maintenance(base, root, env, check):
           and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" in card and "24,371" in card
           and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
     check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
-          st.count('class="upn"') == 1 and "Join now" in st and 'href="/status#upgrade"' in st and st.count('class="pbox"') == 1
+          st.count('class="upn"') == 1 and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
           and "once an hour at a random minute" in st and "30s, then 2 min, then 10 min" in st and "api/receipt/TXID" in st)
     m = json.loads(req(base + "/api/v1/status")[1]).get("meta", {}).get("maintenance") or {}
     sm = json.loads(req(base + "/api/v1/summary")[1])
@@ -475,9 +508,25 @@ def maintenance(base, root, env, check):
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
     check("maintenance: meta.maintenance, summary pill and MCP get_indexer_status carry it",
-          m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["mining", "grading"]
+          m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["hosted_mining", "grading"] and m.get("join_open") is True
+          and "self_custody_mining" in m.get("working", []) and m.get("surfaces_source") == "manual" and "surfaces" in m
           and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/status#upgrade"
           and (sc.get("maintenance") or {}).get("active") is True and "answers" in (sc["maintenance"].get("seen_last_hour") or {}) and sc.get("pill", {}).get("label") == "Upgrading")
+    hm = req(base + "/")[1].decode(); hm_main = hm[hm.index("<main"):hm.index("</main>")]
+    check("maintenance: home strip, once, quiet, steel, links /upgrade, no em dash",
+          hm.count('class="upstrip"') == 1 and '<a href="/upgrade">Details</a>' in hm and "Hosted mining paused" in hm and "Joining works." in hm and "\u2014" not in hm_main)
+    for u in ("/network", "/status", "/swaps"):
+        if 'class="upstrip"' in req(base + u)[1].decode(): check(f"maintenance: strip is home only ({u} has it)", False)
+    c, up = req(base + "/upgrade"); up = up.decode()
+    check("maintenance: /upgrade serves the card with its own title, description, canonical and OG image",
+          c == 200 and "<title>Network upgrade · POAScan</title>" in up and 'id="upgrade"' in up and '<link rel="canonical" href="https://poascan.io/upgrade">' in up
+          and 'property="og:title" content="Network upgrade · POAScan"' in up and "Hosted mining paused for network upgrades, joining open, rewards paying" in up
+          and 'og:image" content="https://poascan.io/og/upgrade.png"' in up and 'name="twitter:title" content="Network upgrade · POAScan"' in up)
+    c, png = req(base + "/og/upgrade.png"); check("maintenance: /og/upgrade.png is a PNG", c == 200 and png[:4] == b"\x89PNG")
+    r = subprocess.run([sys.executable, "-c", JOIN_CHECK], cwd=root, env=dict(env, POASCAN_JOIN_OPEN="0"), capture_output=True, text=True)
+    o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
+    check(f"maintenance: JOIN_OPEN off changes every join line {o}", o.get("strip") == "Hosted mining and joining paused" and "joining paused" in (o.get("og") or "")
+          and o.get("start") == "Joining pauses during the upgrade too." and "onboarding" in (o.get("paused") or []) and o.get("card_joining") is False)
     ask = req(base + "/live")[1].decode()
     check("maintenance: answer and grade prompts carry the pause guard", "paused for a network upgrade" in ask.replace("&#x27;", "'"))
     r = subprocess.run([sys.executable, "-c", MAINT_CHECK], cwd=root, env=env, capture_output=True, text=True)
@@ -518,6 +567,28 @@ def fixture_pages(check):
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)
+        r = subprocess.run([sys.executable, "-c", PRICE_CHECK], cwd=root, env=dict(env, POASCAN_DB=os.path.join(tmp, "price.db")), capture_output=True, text=True)
+        pr = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
+        n_, st_, th_, dp_ = (pr.get(k) or {} for k in ("none", "stale", "thin", "deep"))
+        check(f"price: asks alone show nothing; a fill older than 7 days hides USD {r.stderr[-300:]}", n_.get("shown") is False and n_.get("usd_per_poa") is None and st_.get("shown") is False and n_.get("asks_used") is False)
+        check(f"price: one small fill is thin, last_fill basis, 2 significant figures ({th_.get('usd_per_poa')}, {pr.get('usd_of')})",
+              th_.get("thin") is True and th_.get("basis") == "last_fill" and th_.get("sig_figs") == 2 and th_.get("usd_per_poa") == 1e-05
+              and "≈$43<" in (pr.get("usd_of") or "") and "USD · thin" in (pr.get("src") or "") and 'href="/about#market"' in (pr.get("src") or ""))
+        check(f"price: 5+ fills in 7 days use the median of the last 5; over $100 volume is not thin ({dp_.get('basis')}, {dp_.get('thin')}, {dp_.get('usd_per_poa')})",
+              dp_.get("basis") == "median_last_5_fills" and dp_.get("thin") is False and dp_.get("sig_figs") == 3 and dp_.get("usd_per_poa") == 0.4)
+        js = json.loads(req(base + "/api/v1/price")[1])
+        check("price: /api/v1/price is served with the guard fields and meta", {"usd_per_poa", "thin", "basis", "fills_7d", "volume_7d_usd", "asks_used", "shown"} <= set(js) and "meta" in js)
+        hm = req(base + "/")[1].decode(); tk = req(base + "/token")[1].decode()
+        check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
+        check("token: no Transfers card", ">Transfers<" not in tk)
+        c, nf = req(base + "/epoch"); nf = nf.decode()
+        check("404: says what is missing and suggests the closest page, no stock label", c == 404 and "No page at this link." in nf and 'href="/epochs"' in nf and "Not measurable" not in nf)
+        c, sr = req(base + "/search?q=zzzzqq"); sr = sr.decode()
+        check("search: no match lists what search takes", c == 404 and "No match for" in sr and "Not measurable" not in sr)
+        tid = db_first_tx(env["POASCAN_DB"])
+        if tid:
+            c2, b2 = req(base + "/search?q=" + tid[:10])
+            check(f"search: a partial tx hash opens the transaction ({c2})", c2 == 200 and tid in b2.decode() and "No match for" not in b2.decode())
         _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/epochs", "/txs", "/api", "/network", "/growth")}
         check(f"one Ask agent button per page {_asks}", set(_asks.values()) == {1})
         from poascan import prompts as _PR

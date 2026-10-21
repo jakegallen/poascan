@@ -193,6 +193,9 @@ def canonical():
 
 def describe(title):
     p = CANON.get(req_path(), req_path())
+    if p == "/upgrade":
+        from . import maint as _M
+        return _M.og_desc()
     if p in DESCS: return DESCS[p]
     m = re.match(r"^/epoch/(\d+)$", p)
     if m: return f"Proof of Agent epoch {m.group(1)}: pool, minted, burned, paid agents, grading and top rewards."
@@ -312,7 +315,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=65"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=66"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -321,7 +324,7 @@ def layout(title, body, active="/", live=None):
 <a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
-</div><div class="ticker" id="ticker" aria-label="Latest epochs and transactions">{TICKER_FN() if TICKER_FN else ""}</div></header>
+</div></header>
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
@@ -343,7 +346,7 @@ def table(headers, rows, cls=""):
 
 def note(t): return ""  # caveat notes removed site-wide; methodology lives on /about
 
-def na(why): return f'<div class="naBox"><b>Not measurable</b> {why}</div>'
+def na(why): return f'<div class="naBox">{why}</div>'   # empty and error states: say what is missing, no stock label
 
 # ---------- SVG charts ----------
 def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):

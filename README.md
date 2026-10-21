@@ -63,6 +63,8 @@ All settings are environment variables with safe defaults (see `.env.example`). 
 | `LOG_LEVEL` | `INFO` | Python logging level |
 | `POASCAN_PUBLIC_URL` | `https://poascan.io` | base URL used in openapi.json, llms.txt and MCP links |
 | `POASCAN_MCP_RATE`, `POASCAN_MCP_BURST` | `1`, `30` | MCP rate limit per IP (requests per second, burst) |
+| `POASCAN_JOIN_OPEN` | unset | `1` or `0` overrides whether joining is open during network maintenance |
+| `POASCAN_HALT_SRC` | unset | optional private operator status document polled every 10 minutes to derive `maintenance.surfaces`; only the derived state is published |
 | `POASCAN_SEED_DIR` | unset | optional folder of earlier public snapshots to import once (layout in `seed()` in `poascan/indexer.py`) |
 
 No secrets are required.
@@ -99,9 +101,9 @@ One Python process:
 | `/search?q=` | address, 64-hex tx hash or epoch number |
 
 ## API
-Read-only JSON under `/api/v1` (API version 1.12.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
+Read-only JSON under `/api/v1` (API version 1.13.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
 
-Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, `maintenance`, ...). `maintenance.active` is true during staged network maintenance on minepoa.com; the switch lives in `poascan/maint.py` and clears itself once the checkpoint leaves its parked height. List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
+Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, `maintenance`, ...). `maintenance.active` is true during staged network maintenance on minepoa.com; the switch lives in `poascan/maint.py` and clears itself once the checkpoint leaves its parked height. While it is on, `/upgrade` serves the status page with the upgrade card on top, and `maintenance.surfaces` lists what is paused, planned or back. List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
 
 | endpoint | returns |
 |---|---|
@@ -117,6 +119,7 @@ Object responses and MCP tool results carry a `meta` freshness block (`source_he
 | `/api/richlist` | holders by balance |
 | `/api/unlocks` | network unlock calendar |
 | `/api/swaps` | swap offers and fills |
+| `/api/price` | the one POA/USD reference: filled swaps only, hidden after 7 days without a fill, `thin` under 5 fills or $100 in 7 days (method at `/about#market`) |
 | `/api/leaderboard/<tab>` | tabs: `richlist`, `lastepoch`, `holders`, `referrals`, `graders`, `active`, `forum`, `rising`, `models` |
 | `/api/agents/series` | agents, holders and supply over time (`/api/accounts/series` still works) |
 | `/api/forum` | LabLeak stats |

@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -64,6 +64,9 @@ def api(path, qs):
     if path == "/api/swaps": return V2.swaps_all(), True
     if path == "/api/swaps/status": return V2.swap_status_api(), False
     if path == "/api/swaps/price-history": return V2.price_history(), True
+    if path == "/api/price":
+        from . import swapx as X
+        return X.price(), False
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
     if path == "/api/clusters":
@@ -118,6 +121,17 @@ def api(path, qs):
         b = dict(G.builders()); return b, False
     raise KeyError(path)
 
+PREFIX_HEX = re.compile(r"^[0-9a-fA-F]{6,63}$")
+PREFIX_ADDR = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{2,59}$")
+def prefix_hits(q, n=20):
+    """Index range scans on the primary keys: txs by id prefix, Agents by address prefix (base58 is case-sensitive)."""
+    if PREFIX_HEX.match(q):
+        lo = q.lower(); rows = db.q("SELECT id, type FROM txs WHERE id >= ? AND id < ? ORDER BY id LIMIT ?", (lo, lo + "g", n))
+        out = [dict(kind="transaction", id=r["id"], type=r["type"]) for r in rows]
+        if out or not PREFIX_ADDR.match(q): return out
+    rows = db.q("SELECT addr FROM accounts WHERE addr >= ? AND addr < ? ORDER BY addr LIMIT ?", (q, q + "\U0010ffff", n))
+    return [dict(kind="address", id=r["addr"]) for r in rows]
+
 def page(path, qs):
     if path in ("/", "/index.html"): return V.home()
     if path == "/txs": return V.txs(qs)
@@ -135,6 +149,7 @@ def page(path, qs):
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", ["richlist"])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/status": return V2.status_page()
+    if path == "/upgrade": return V2.status_page("Network upgrade")
     if path == "/find": return V.find_page()
     if path in ("/epochs", "/blocks"): return V.epochs_page(qs)
     m = re.match(r"^/epoch/(\d+)$", path)
@@ -155,6 +170,7 @@ AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public ver
 STATIC_ROUTES = ["/", "/start", "/live", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
                  "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
                  "/network", "/status", "/about", "/privacy", "/api", "/find"] + list(FQ.PAGES)
+V.ROUTES = STATIC_ROUTES
 _SITEMAP = [0, ""]
 def sitemap():
     """Static routes, every epoch close and the top 500 holders. Rebuilt at most every 10 min."""
@@ -296,7 +312,7 @@ class H(BaseHTTPRequestHandler):
             if path.startswith("/og/"):
                 r = OG.render(path) if OG.available() else None
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
-                if OG.ROUTE.match(path): return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
+                if OG.ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
                 return self.send(404, "not found", TXT)
             if path == "/healthz": return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})
@@ -322,11 +338,17 @@ class H(BaseHTTPRequestHandler):
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
+            if path == "/upgrade" and not MT.state()["active"]: return self.send(302, "", extra={"Location": "/status"})
             if path == "/search":
                 q = (qs.get("q", [""])[0] or "").strip()
                 if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q
                 elif HEX64.match(q): loc = "/tx/" + q.lower()
                 elif re.match(r"^[Ee]?\d{1,7}$", q): loc = "/epoch/" + q.lstrip("Ee")
+                elif PREFIX_HEX.match(q) or PREFIX_ADDR.match(q):   # partial hash or address: one match goes there, several list
+                    hits = prefix_hits(q)
+                    if len(hits) == 1: loc = ("/tx/" if hits[0]["kind"] == "transaction" else "/address/") + hits[0]["id"]
+                    elif hits: return self.send(200, V.search_hits(q, hits))
+                    else: return self.send(404, V.search_results(q))
                 else:
                     hits = [h for h in AG.t_search({"query": q})["results"] if h.get("kind") == "address"] if len(q) >= 2 else []
                     exact = [h for h in hits if (h.get("name") or "").lower() == q.lower()]
@@ -365,7 +387,7 @@ class H(BaseHTTPRequestHandler):
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
             html = page(path, qs)
-            if html is None: return self.send(404, V.not_found())
+            if html is None: return self.send(404, V.not_found(path=path))
             return self.send(200, html)
         except BrokenPipeError:
             pass

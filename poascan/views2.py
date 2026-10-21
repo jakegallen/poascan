@@ -81,7 +81,9 @@ def swap_market():
     now = time.time(); f = fx(); usd = lambda a: 1.0 if (a or "").upper() == "USDC" else (f.get((a or "").upper()) or None)
     fl = sorted([r for r in swaps_all() if r["status"] == "filled" and r["fill_ts"] and r["poa"] and r["want"]], key=lambda r: -r["fill_ts"])
     last = fl[0] if fl else None
-    px = (last["want"] / last["poa"] * usd(last["asset"])) if last and usd(last["asset"]) else None   # USD per POA, last fill
+    px = (last["want"] / last["poa"] * usd(last["asset"])) if last and usd(last["asset"]) else None   # USD per POA, last fill (raw)
+    from .swapx import price as _price_ref
+    pr = _price_ref(); gp = pr["usd_per_poa"]   # guarded reference for Market Cap and FDV: hidden after 7 days without a fill
     st = A.status(); circ = A.supply_split().get("spendable"); mined = float(st.get("supply") or 0) or None
     day = [r for r in fl if r["fill_ts"] >= now - 86400]
     vol = [r["want"] * usd(r["asset"]) for r in day if usd(r["asset"])]
@@ -90,11 +92,11 @@ def swap_market():
     at = lambda r: r.get("fill_usd") or usd(r["asset"])   # USD at fill time when recorded, else the current reference
     vall = [r["want"] * at(r) for r in done if at(r)]
     return dict(last_fill_usd_per_poa=float(f"{px:.6g}") if px else px, last_fill_ts=int(last["fill_ts"]) if last else None,
-                market_cap_usd=round(px * circ, 2) if px and circ else None, fdv_usd=round(px * mined, 2) if px and mined else None,
+                market_cap_usd=round(gp * circ, 2) if gp and circ else None, fdv_usd=round(gp * mined, 2) if gp and mined else None,
                 circulating_supply=circ, mined_supply=mined, trades_24h=len(day),
                 volume_24h_usd=round(sum(vol), 2) if vol else (None if day else 0.0),
                 trades_all_time=len(done), volume_all_time_usd=round(sum(vall), 2) if vall else (None if done else 0.0),
-                usd_ref=f.get("src") or "CoinGecko")
+                usd_ref=f.get("src") or "CoinGecko", price=pr)
 
 def swap_status_api():
     h = swap_health(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
@@ -125,9 +127,12 @@ def swap_stats():
                 last=(lp, last["asset"]) if last else None, best=best)
 
 def price_stats_html():
-    s = swap_stats()
-    last = _pfmt(s["last"][0][0], s["last"][0][1], s["last"][1]) if s["last"] else '<span class="na">···</span>'
-    ask = _pfmt(s["best"][1], s["best"][0], s["best"][2]["asset"]) if s["best"] else '<span class="na">···</span>'
+    """Last trade with the guarded ≈$ per 1M POA; best ask in its own asset only (asks are never a USD price)."""
+    from .swapx import price as _pr, money
+    s = swap_stats(); p = _pr()
+    u = f' <span class="usd">≈{money(p["usd_per_1m_poa"], p["sig_figs"])}</span>' if p["shown"] else ""
+    last = (_pfmt(s["last"][0][0], None, s["last"][1]) + u) if s["last"] else '<span class="na">···</span>'
+    ask = _pfmt(s["best"][1], None, s["best"][2]["asset"]) if s["best"] else '<span class="na">···</span>'
     return (stat("Last trade · 1M POA", last, "", ICON_SWAP, "swap_last") + stat("Best ask · 1M POA", ask, "", ICON_SWAP, "swap_ask"))
 
 NOPAY = '<span class="nopay" title="Never send payment to this address directly. It skips escrow; the funds are gone. Take via the network\'s swap flow.">⚠ pay via network only</span>'
@@ -338,9 +343,16 @@ def upgrade_card():
     m = M.state()
     if not m["active"]: return ""
     sn = M.seen(); lo, hi = m["expected_window_h"]
-    rows = [("Paused", f"Mining and grading, for about {lo} to {hi} hours. Surfaces return one by one."),
-            ("Working", 'Joining, epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
-            ("Safe", f'Pending grades keep {m["pending_ttl_epochs"]} epochs (about 4 days). Checkpoint {m["parked_checkpoint"]:,} is parked by design.'),
+    from . import halts as H
+    hs = H.current(); sf = (hs or {}).get("groups") or {}; jo = M.join_open()
+    if sf:   # tracker-derived: one row per state, groups in a fixed order
+        rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k)) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
+        rows = [r for r in rows if r[1]]
+    else:
+        rows = [("Paused", "Hosted mining, grading" + ("" if jo else ", joining") + ".")]
+    jw = jo and "Joining" not in sf
+    rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
+            ("Safe", f'About {lo} to {hi} hours. Pending grades keep {m["pending_ttl_epochs"]} epochs. Checkpoint {m["parked_checkpoint"]:,} is parked by design.'),
             ("Agents", "Check hourly at a random minute. Back off 30s, 2m, 10m. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>."),
             ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')]
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
@@ -350,7 +362,8 @@ def upgrade_card():
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
                 f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener">Official post ↗</a>', cls="upc", id="upgrade")
 
-def status_page():
+def status_page(title="Status"):
+    """/status; /upgrade serves the same page under its own title and preview while the upgrade is on."""
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
     s1 = [e["s1"] for e in core if e["s1"] is not None]
@@ -378,7 +391,7 @@ def status_page():
     up = upgrade_card()
     body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div>{up}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
-    return page("Status", body, "/status")
+    return page(title, body, "/status")
 
 def _okpct(v):
     if v is None: return '<span class="na">···</span>'
