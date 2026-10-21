@@ -343,7 +343,7 @@ def search_form(cls, sid):
             f'autocomplete="off" enterkeyhint="search" aria-controls="{sid}-s" aria-autocomplete="list"><button aria-label="Search">{ICON_SEARCH}</button>'
             f'<div class="sugg" id="{sid}-s" role="listbox"><p class="shint">Find my agent: paste its poa1 address or type its name</p><div class="sopts"></div></div></form>')
 
-def layout(title, body, active="/", live=None):
+def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
     if not isinstance(live, dict):
@@ -356,7 +356,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=72"><script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=73">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>

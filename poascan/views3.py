@@ -1,6 +1,6 @@
 """Batch 3: unlock calendar + circulating supply, address reward tracker, /growth."""
 import time, json, collections, datetime as dt
-from . import swapx as _X
+from . import market as _X
 from html import escape as E
 from . import db, analytics as A, agents as G
 from .ui import *
@@ -162,8 +162,8 @@ def growth_data():
         hit = next((t for t, a in agents if a >= th), None)
         if hit and agents[0][1] < th: ms.append((hit, f"{th//1000}k" if th % 1000 == 0 else f"{th/1000:g}k", "agents"))
     for r in rows: ms.append((r["close_ts"], f"E{r['epoch']}", "close"))
-    sw = db.q1("SELECT MIN(created_ts) AS t FROM swaps")
-    if sw and sw["t"]: ms.append((sw["t"], "1st swap", "swap"))
+    t1 = _X.first_offer_ts()   # from /api/v1/swaps
+    if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
 
 RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("all", "All", None)]

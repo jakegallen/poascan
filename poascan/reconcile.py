@@ -61,7 +61,7 @@ def reconcile():
     why_mint = ("the node has closed an epoch whose record POAScan has not read yet" if lagging else
                 "the node's status read predates the latest close" if behind else "not explained by the public reads")
     held = sum((_d(r["balance_s"]) or D(0)) for r in db.q("SELECT balance_s FROM accounts WHERE balance_s IS NOT NULL"))
-    esc = sum((_d(r["poa"]) or D(0)) for r in db.q("SELECT poa FROM swaps WHERE status='open'"))
+    esc = sum((_d(v) or D(0)) for v in __import__("poascan.market", fromlist=["x"]).open_escrow())   # open offers, via /api/v1/swaps
     listed = {r["addr"] for r in db.q("SELECT addr FROM accounts")}
     unl = collections.defaultdict(D)
     for e in E:

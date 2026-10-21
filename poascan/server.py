@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -61,12 +61,7 @@ def api(path, qs):
         if not V.ADDR_RX.match(a): return {"error": "address must be a poa1 address"}, False
         return RC.for_address(a, min(200, int(qs.get("limit", ["50"])[0] or 50))), True
     if path == "/api/epochs": return A.epoch_rows(), True
-    if path == "/api/swaps": return V2.swaps_all(), True
-    if path == "/api/swaps/status": return V2.swap_status_api(), False
-    if path == "/api/swaps/price-history": return V2.price_history(), True
-    if path == "/api/price":
-        from . import swapx as X
-        return X.price(), False
+    if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
     if path == "/api/clusters":
@@ -140,7 +135,7 @@ def page(path, qs):
     m = re.match(r"^/address/(poa1\w+)$", path)
     if m: return V.address(m.group(1))
     if path == "/token": return V.token()
-    if path == "/swaps": return V2.swaps_page(None)
+    if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps(cls="oc"))
     if path == "/agents/graders": return V.graders_page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
@@ -305,9 +300,12 @@ class H(BaseHTTPRequestHandler):
             if path in ("/api/summary", "/api/live"):
                 m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
                 if isinstance(d, dict):
-                    if path == "/api/summary": d["swaps"] = V2.swap_status_api(); d["concentration"] = A.concentration()
+                    if path == "/api/summary": d["swaps"] = SC.status(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **{"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}))
+            if path in SW.STATIC:   # the swap module's own assets, same URLs as before
+                f, ct = SW.STATIC[path]
+                return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")

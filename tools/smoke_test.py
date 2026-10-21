@@ -156,18 +156,20 @@ def main():
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
         from poascan import agentapi as _AG, indexer as _IX
-        from poascan.swapx import _usd as _U
+        from poascan.swap.pages import _usd as _U
+        from poascan.swap import indexer as _SIX
         check("no scientific notation: JSON numbers, USD stats, fill payment ref under proof",
               _AG.plainjson('{"a": 1.059e-05, "s": "1e-05"}') == '{"a": 0.00001059, "s": "1e-05"}'
               and not _re.search(r"\d[eE][-+]\d", req(base + "/api/v1/swaps/status")[1].decode().split('"meta"')[0])
               and [_U(v) for v in (327.56, 10388.08, 0.11, 0.00001059)] == ["$327.56", "$10,388", "$0.11", "$0.000011"]
-              and _IX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
+              and _SIX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
         _mk = json.loads(req(base + "/api/v1/swaps/status")[1])["market"]; _sw = req(base + "/swaps")[1].decode()
         check("swaps market: all-time fields added, 24h kept; /swaps row says Trades and Volume once",
               {"trades_all_time", "volume_all_time_usd", "trades_24h", "volume_24h_usd"} <= set(_mk) and isinstance(_mk["trades_all_time"], int)
               and _sw.count('<span class="lbl">Trades</span>') == 1 and _sw.count('<span class="lbl">Volume</span>') == 1 and "24h Trades" not in _sw
               and "trades_all_time" in spec["components"]["schemas"]["SwapStatus"]["properties"]["market"]["properties"])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
+        swap_module(base, spec, check)
         c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
               and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
         import base64 as _b64, json as _js, re as _re
@@ -504,7 +506,7 @@ print(json.dumps(dict(strip=M.strip_text()[0], og=M.og_desc(), start=M.join_line
 
 PRICE_CHECK = r"""
 import json, time
-from poascan import db, analytics as A, swapx as X
+from poascan import db, analytics as A, market as X   # the explorer side: reads /api/v1/price through swapclient
 db.init(); db.put_blob("fx", {"SOL": 100.0, "ETH": 3000.0, "src": "CoinGecko"}); now = int(time.time())
 def fill(i, age, poa, want, asset="SOL"):
     db.write("INSERT OR REPLACE INTO swaps(offer_id,maker,poa,chain,asset,want,status,fill_ts,fill_txid) VALUES(?,?,?,?,?,?,?,?,?)",
@@ -520,6 +522,45 @@ for i, sol in enumerate((1.0, 2.0, 3.0, 4.0, 5.0, 9.0), 2): fill(i, 600 - i * 10
 out["deep"] = run()
 print(json.dumps(out))
 """
+
+def swap_module(base, spec, check):
+    """Batch 5: the swap module is one package (poascan/swap) and the explorer reads it only through its API."""
+    import glob, re as _re, subprocess as _sp, sys as _sys
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    bad = []
+    for f in glob.glob(os.path.join(root, "poascan", "*.py")):
+        n = os.path.basename(f); t = open(f).read()
+        if n in ("swapclient.py", "server.py", "db.py", "indexer.py", "faq.py", "views.py"): pass   # the five wiring points plus the client
+        elif _re.search(r"from \.swap\b|poascan\.swap\b|import swap\b", t): bad.append(n)
+        if n != "db.py" and _re.search(r"\b(FROM|JOIN|INTO|UPDATE)\s+swap(s|_events)\b", t): bad.append(n + " (swap tables)")
+    for f in glob.glob(os.path.join(root, "poascan", "swap", "*.py")):
+        t = open(f).read()
+        if os.path.basename(f) != "host.py" and _re.search(r"from \.\.|import poascan", t): bad.append("swap/" + os.path.basename(f) + " (host import outside host.py)")
+    check(f"swap boundary: explorer reads swaps via the API, the module enters POAScan only via host.py {bad}", not bad
+          and not os.path.exists(os.path.join(root, "poascan", "swapx.py")) and not os.path.exists(os.path.join(root, "static", "swap.js"))
+          and os.path.isfile(os.path.join(root, "poascan", "swap", "LIFTING.md")))
+    c, b = req(base + "/swaps"); c2, css = req(base + "/static/swap.css"); c3, _ = req(base + "/static/swap.js")
+    check("swap assets served from the package at the same URLs; /swaps links swap.css",
+          c == 200 and c2 == 200 and c3 == 200 and b'/static/swap.css?v=' in b and b".xgrid{" in css and b".xgrid{" not in req(base + "/static/style.css")[1])
+    st = json.loads(req(base + "/api/v1/swaps/status")[1]); oid = (json.loads(req(base + "/api/v1/swaps")[1]) or [{}])[0].get("offer_id")
+    m = st["market"]
+    check("status market carries what the explorer tiles need (last_trade, best_ask, poa_on_offer, fills)",
+          {"last_trade", "best_ask", "poa_on_offer", "fills"} <= set(m) and "/api/v1/swaps/{offer_id}" in spec["paths"])
+    if oid:
+        d = json.loads(req(base + "/api/v1/swaps/" + oid)[1])
+        check("/api/v1/swaps/<offer_id>: offer + events; unknown -> 404", d["offer"]["offer_id"] == oid and isinstance(d["events"], list)
+              and req(base + "/api/v1/swaps/nope-not-an-offer")[0] == 404)
+    sb = b.decode()
+    check("swaps rules kept: Coming soon, fee once, never send payment outside, Add Wallet with Emblem logo, Market Cap/FDV/Trades/Volume",
+          sb.count(">Coming soon<") == 1 and len(_re.findall(r">1%<", sb)) == 1 and "Never send payment outside the network" in sb
+          and "embl" in sb and all(sb.count(f'<span class="lbl">{k}</span>') == 1 for k in ("Market Cap", "FDV", "Trades", "Volume")))
+    env = dict(os.environ, SWAP_BRAND="SwapSite", SWAP_BASE_URL="https://swap.example.com", SWAP_PAGE_PATH="/", SWAP_METHOD_URL="https://swap.example.com/method",
+               PYTHONPATH=root, POASCAN_INDEXER="0")
+    out = _sp.run([_sys.executable, "-c", "from poascan.swap import config as C, prompts as P, faq as F, pages as G; "
+                   "print(C.PAGE_URL, C.STATUS_URL, C.link(C.METHOD_URL), C.link(C.START_URL), 'swap.example.com/api/v1/swaps/status' in P._CHECK_SOON)"],
+                  capture_output=True, text=True, env=env, timeout=60).stdout.split()
+    check(f"swap config: base URL, page path and method link move with the env (swap.example.com) {out}",
+          out[:5] == ["https://swap.example.com/", "https://swap.example.com/api/v1/swaps/status", "/method", "https://poascan.io/start", "True"])
 
 def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.

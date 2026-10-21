@@ -4,7 +4,7 @@ from html import escape as E
 from . import db, analytics as A, agents as G
 from .ui import *
 from . import prompts as PR
-from . import swapx as X   # POA | USD toggle; the price stays in the swap module
+from . import market as X   # POA | USD toggle; the price comes from the swap module's /api/v1/price
 
 ALIAS = {"earners": "richlist"}  # old tab key (pre 2026-10-20) keeps working
 PAGE_ALIAS = {"models": "ai"}     # the page's AI models tab shows the models table plus the AI leaderboard (was /agents/leaderboard)

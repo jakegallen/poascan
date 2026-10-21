@@ -1,0 +1,130 @@
+/* Swap module styles (poascan/swap): the /swaps panel, book, pair selector, Add Wallet pill and safety row.
+   Loaded after the host stylesheet (style.css), whose base tokens, cards and stats it uses. */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.xgrid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
+.xgrid .card{margin:0}
+.xr{display:grid;gap:16px;min-width:0}
+.xp{padding:16px;position:sticky;top:84px;isolation:isolate}
+.xp::after{content:"";position:absolute;z-index:-1;pointer-events:none;right:14px;bottom:12px;width:96px;aspect-ratio:248/64;background:url(/static/wm.svg) no-repeat center/contain;opacity:.06}
+.xhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.xtabs{display:inline-flex;padding:3px;border:1px solid var(--line2);border-radius:10px;background:var(--inset)}
+.xtabs button{border:0;background:none;color:var(--dim);font:600 var(--t14)/1 var(--ui);padding:9px 18px;border-radius:7px;cursor:pointer}
+.xtabs button.on{background:var(--card2);color:var(--hi);box-shadow:inset 0 0 0 1px var(--line2)}
+.xp[data-side="sell"] .xtabs button.on{color:var(--red)}
+.xp:not([data-side="sell"]) .xtabs button.on{color:var(--green)}
+.xpair select{appearance:none;-webkit-appearance:none;background:var(--card2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A59C8A' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 10px center/10px;border:1px solid var(--line2);border-radius:10px;color:var(--hi);font:600 var(--t14)/1 var(--ui);padding:10px 30px 10px 12px;cursor:pointer}
+.xin{display:flex;align-items:center;gap:10px;margin-top:4px}
+.xin input,.xin output{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--hi);font:600 var(--t28)/1.2 var(--mono);padding:0}
+.xin output{color:var(--txt)}
+.xin input::placeholder{color:var(--mute)}
+.xu{font:700 var(--t14)/1 var(--ui);color:var(--amber);border:1px solid var(--line2);border-radius:999px;padding:6px 10px;background:var(--card2)}
+.xarr{display:flex;justify-content:center;margin:-8px 0;position:relative;z-index:1}
+.xarr svg{width:30px;height:30px;padding:6px;border:1px solid var(--line2);border-radius:9px;background:var(--card);color:var(--dim)}
+.xd{margin:14px 0;display:grid;gap:6px;font-size:var(--t14)}
+.xd div{display:flex;justify-content:space-between;gap:10px}
+.xd dt{color:var(--dim)}
+.xd dd{margin:0;color:var(--txt);font-family:var(--mono);text-align:right}
+.xvia{display:inline-flex;align-items:center;gap:4px;color:var(--mute);font:400 var(--t12)/1 var(--ui)}
+.xvia svg{width:12px;height:12px}
+.xbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:52px;border:0;border-radius:12px;background:var(--gold);color:#1A1205;font:700 var(--t16)/1 var(--ui);letter-spacing:.02em;cursor:pointer;box-shadow:0 8px 28px -10px rgba(255,176,0,.7)}
+.xbtn:hover{filter:brightness(1.07)}
+.xbtn.up{background:rgba(255,176,0,.06);color:var(--amber);border:1px solid rgba(255,176,0,.4);box-shadow:none;cursor:default;border-radius:999px;font-size:var(--t14)}
+.xbtn.up i{width:8px;height:8px;border-radius:50%;background:currentColor;animation:breathe 2.8s ease-in-out infinite}
+.xsafe{display:flex;align-items:center;gap:6px;margin:10px 0 0;color:var(--dim);font-size:var(--t12)}
+.xsafe svg{width:14px;height:14px;flex:none;color:var(--mute)}
+.xho{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.xho .pc-text{max-height:120px;overflow:auto;margin:0;font-size:var(--t12)}
+.xho .apps.oc{grid-template-columns:repeat(2,minmax(0,1fr))}
+.xho .apps.oc .app.cpy{min-height:36px;font-size:var(--t13)}
+.xho .jm-copy.sec{display:inline-block;width:auto;height:36px;padding:0 16px;margin:0;background:transparent;color:var(--amber);border:1px solid var(--line2);box-shadow:none;font-size:var(--t14)}
+.xho .jm-l{display:block;margin:12px 0 8px}
+.xbt{width:100%;font-size:var(--t13)}
+.xbt th,.xbt td{padding:6px 10px;text-align:right}
+.xbt th:first-child,.xbt td:first-child{text-align:left}
+.xbt tr.ask td:first-child{color:var(--red)}
+.xbt tr.ask{cursor:pointer}
+.xbt tr.ask:hover td{background:rgba(255,90,78,.05)}
+.xbt tr.mid td{text-align:left;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:var(--t14)}
+.xcard .cb{padding:6px 8px}
+.xft td,.xft th{padding:6px 10px}
+@media(max-width:900px){.xgrid{grid-template-columns:minmax(0,1fr)}
+.xp{position:static}}
+@media(max-width:640px){.xin input,.xin output{font-size:var(--t20)}
+.xbt th:nth-child(4),.xbt td:nth-child(4){display:none}}
+.pgrid:has(>[data-asset]:not([hidden]):only-of-type),.xcard .pgrid{grid-template-columns:minmax(0,1fr)}
+.xbk[hidden],.pgrid>[hidden]{display:none}
+.xhint{margin:8px 2px 0;font-size:var(--t12);color:var(--amber)}
+.xhint button{background:none;border:0;padding:0;color:var(--amber);font:600 var(--t12)/1 var(--mono);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.xemb,.xho{margin-top:10px}
+.xemb>summary,.xho>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:var(--t12)}
+.xemb>summary::-webkit-details-marker,.xho>summary::-webkit-details-marker{display:none}
+.xemb>summary::after,.xho>summary::after{content:"+";color:var(--mute)}
+.xemb[open]>summary::after,.xho[open]>summary::after{content:"−"}
+.xemb>summary:hover,.xho>summary:hover{color:var(--amber)}
+.xembb,.xhob{margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+.xembb .pc-text,.xhob .pc-text{max-height:120px;overflow:auto;margin:0;font-size:var(--t12)}
+.xembb .apps.oc,.xhob .apps.oc{grid-template-columns:repeat(2,minmax(0,1fr))}
+.xembb .apps.oc .app.cpy,.xhob .apps.oc .app.cpy{min-height:36px;font-size:var(--t13)}
+.xembb .jm-copy.sec,.xhob .jm-copy.sec{display:inline-block;width:auto;height:36px;padding:0 16px;margin:0;background:transparent;color:var(--amber);border:1px solid var(--line2);box-shadow:none;font-size:var(--t14)}
+.xembb .jm-l,.xhob .jm-l{display:block;margin:12px 0 8px}
+.xho[hidden]{display:none}
+.xnote{margin:0 0 10px;padding:8px 12px;border:1px solid rgba(255,176,0,.3);border-radius:10px;background:rgba(255,176,0,.05);color:var(--amber);font-size:var(--t12)}
+.xpair{position:relative}
+.xselb{display:inline-flex;align-items:center;gap:0;background:var(--card2);border:1px solid var(--line2);border-radius:10px;color:var(--hi);font:600 var(--t14)/1 var(--ui);padding:9px 30px 9px 10px;cursor:pointer;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A59C8A' stroke-width='1.4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:10px}
+.xselb #xsell{display:inline-flex}
+.xopts{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:220px;margin:0;padding:6px;list-style:none;background:var(--card);border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 40px -12px rgba(0,0,0,.7)}
+.xopts li{display:flex;align-items:center;gap:0;padding:10px;border-radius:8px;cursor:pointer;color:var(--txt);font-size:var(--t14);outline:0}
+.xopts li b{font-weight:600}
+.xopts li .xoc{margin-left:auto;padding-left:14px;color:var(--mute);font-size:var(--t12)}
+.xopts li:hover,.xopts li:focus{background:var(--row)}
+.xopts li[aria-selected="true"]{color:var(--amber)}
+.xbtn.off{background:var(--card2);color:var(--mute);box-shadow:none;border:1px solid var(--line2);cursor:default}
+.xhint button[data-goside]{text-decoration:underline}
+.xstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:8px 4px;position:relative;isolation:isolate}
+.xstats::after{content:"";position:absolute;z-index:-1;pointer-events:none;background:url(/static/wm.svg) no-repeat center/contain;aspect-ratio:248/64;right:10px;bottom:6px;width:min(72px,20%);opacity:.07}
+.xst{display:flex;flex-direction:column;gap:2px;padding:0 12px;min-width:0;border-left:1px solid var(--line)}
+.xst:first-child{border-left:0}
+.xst .lbl{font-size:12px;color:var(--mute);white-space:nowrap}
+.xst b{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:520px){.xstats{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:8px}
+.xst:nth-child(3){border-left:0}}
+/* Add Emblem Wallet: quiet gold pill with a slow shimmer */
+.xemb>summary{position:relative;overflow:hidden;isolation:isolate;white-space:nowrap;gap:8px;padding:6px 12px 6px 10px;border-radius:999px;
+ border:1px solid rgba(255,176,0,.28);background:linear-gradient(180deg,rgba(255,176,0,.07),rgba(255,176,0,.02));color:var(--txt);
+ box-shadow:0 0 0 0 rgba(255,176,0,0),0 0 14px rgba(255,176,0,.06);transition:border-color var(--fast),box-shadow var(--fast),color var(--fast)}
+.xemb>summary::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:-40%;width:36%;pointer-events:none;
+ background:linear-gradient(100deg,transparent,rgba(255,214,120,.16),transparent);transform:skewX(-18deg);animation:embsh 6s ease-in-out 1.5s infinite}
+.xemb>summary:hover,.xemb>summary:focus-visible,.xemb[open]>summary{color:var(--hi);border-color:rgba(255,176,0,.6);box-shadow:0 0 0 1px rgba(255,176,0,.12),0 0 18px rgba(255,176,0,.16)}
+.xemb>summary:focus-visible{outline:2px solid rgba(255,176,0,.55);outline-offset:2px}
+.xemb>summary::after{margin-left:2px}
+.xemb .embl{margin-right:0;border-radius:0;vertical-align:middle}
+.xemb picture{display:inline-flex;flex:none}
+@media (prefers-reduced-motion:reduce){.xemb>summary::before{animation:none;display:none}
+.xemb>summary{transition:none}}
+/* /swaps before launch: one greyed "Coming soon" button with a slow gold sweep */
+.xbtn.soon{position:relative;overflow:hidden;isolation:isolate;background:var(--card2);color:var(--dim);border:1px solid var(--line2);box-shadow:none;cursor:default;filter:none}
+.xbtn.soon::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgba(255,176,0,.16) 50%,transparent 65%);transform:translateX(-100%);animation:soonsweep 4.5s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.xbtn.soon::after{animation:none;opacity:0}}
+/* /swaps: one-line safety notice; Emblem pill and Self-custody share a row */
+.xsafe{white-space:nowrap}
+.xembr{position:relative;margin-top:10px}
+.xembr .xemb{margin-top:0}
+.xemb>summary{min-height:32px;box-sizing:border-box}
+.xembb .moreb,.xhob .moreb{display:flex}
+.xembb .pbox,.xhob .pbox{margin-bottom:0}
+/* /swaps: safety notice left, compact Add Wallet pill right, one row; the wallet panel opens below */
+.xembr .xsafe{position:absolute;left:0;top:0;height:32px;margin:0}
+.xembr .xemb>summary{display:flex;width:max-content;margin-left:auto;gap:6px;padding:5px 10px 5px 8px}
+.xembr .xemb>summary::after{display:none}
+@media (max-width:420px){.xembr .xsafe{font-size:12px}
+.xembr .xsafe svg{display:none}
+.xembr .xemb>summary{font-size:12px;gap:5px;padding:4px 9px 4px 7px}}
+@media (max-width:380px){.xp{padding-left:12px;padding-right:12px}
+.xembr .xsafe{font-size:12px;letter-spacing:-.005em}
+.xembr .xemb>summary{gap:4px;padding:4px 8px 4px 6px}
+.xembr .xemb .embl{width:14px;height:14px}}
+@media (max-width:640px){.xbt th:nth-child(3),.xbt td:nth-child(3){display:none}}
+@media (max-width:460px){.xembr .xsafe{white-space:normal;max-width:calc(100% - 132px);line-height:1.25;height:32px;align-items:center}}
+@keyframes embsh{0%{left:-40%}22%,100%{left:120%}}
+@keyframes soonsweep{0%{transform:translateX(-100%)}55%,100%{transform:translateX(100%)}}

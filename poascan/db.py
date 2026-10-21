@@ -36,10 +36,6 @@ CREATE TABLE IF NOT EXISTS probes(ts INTEGER, endpoint TEXT, ok INTEGER, ms INTE
 CREATE INDEX IF NOT EXISTS probes_ep ON probes(endpoint, ts);
 CREATE INDEX IF NOT EXISTS probes_ts ON probes(ts);
 CREATE TABLE IF NOT EXISTS uptime_daily(day INTEGER, endpoint TEXT, n INTEGER, ok INTEGER, ms INTEGER, PRIMARY KEY(day, endpoint));
-CREATE TABLE IF NOT EXISTS swaps(offer_id TEXT PRIMARY KEY, maker TEXT, poa REAL, chain TEXT, asset TEXT, want REAL, pay_to TEXT,
-  expires_ts INTEGER, created_ts INTEGER, status TEXT, taker TEXT, fill_txid TEXT, fill_ts INTEGER, ext_ref TEXT,
-  cancel_txid TEXT, cancel_ts INTEGER, fee_bp INTEGER, memo TEXT, last_open_seen INTEGER, updated INTEGER);
-CREATE TABLE IF NOT EXISTS swap_events(txid TEXT PRIMARY KEY, offer_id TEXT, kind TEXT, addr TEXT, ts INTEGER, json TEXT);
 CREATE TABLE IF NOT EXISTS fetch_log(endpoint TEXT PRIMARY KEY, last_ok INTEGER, last_err INTEGER, err TEXT,
   fails INTEGER, next_at INTEGER, bytes INTEGER);
 """
@@ -58,8 +54,8 @@ def conn():
 def init():
     with _wlock:
         conn().executescript(SCHEMA)
-        if "fill_usd" not in {r[1] for r in conn().execute("PRAGMA table_info(swaps)")}:
-            conn().execute("ALTER TABLE swaps ADD COLUMN fill_usd REAL")  # USD per unit of the paid asset, recorded when the fill is indexed
+        from .swap import store as _swap_store   # the swap module owns and migrates its own tables
+        _swap_store.init(conn())
         for t in ("forum_posts", "forum_comments"):   # LabLeak author edits set edited_at (shown publicly as an edit)
             if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")

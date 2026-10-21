@@ -9,6 +9,24 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.17.0] - 2026-10-21
+
+### Added
+
+- `GET /api/v1/swaps/{offer_id}`: one offer with its fill and cancel events (the same data as the `get_swap_offer` MCP tool).
+- `/api/v1/swaps/status` `market` gains `last_trade` and `best_ask` (price per 1M POA in the paid asset), `poa_on_offer` and `fills`.
+
+### Changed
+
+- Swaps are one self-contained module, `poascan/swap/`: config, tables, indexer jobs, market and price, page, agent prompts, FAQ, `swap.css` and `swap.js`, and its API routes including `/api/v1/price`. It reaches POAScan only through `poascan/swap/host.py`.
+- The explorer reads swap data only through `/api/v1/price` and `/api/v1/swaps*` (`poascan/swapclient.py`): the home Market tile, price stats on `/token`, every ≈$, swap rows on `/tx`, reconciliation and the MCP swap tools. Setting `POASCAN_SWAP_API` points it at a remote swap site.
+- The swap page takes its base URL, page path and brand from config (`SWAP_BASE_URL`, `SWAP_PAGE_PATH`, `SWAP_BRAND`), so the same module can render at poascan.io/swaps or on its own site. `poascan/swap/LIFTING.md` lists the spin-out steps.
+- No visible change: same URLs, same pages, same responses apart from the additions above. Swaps stay "Coming soon".
+
+### Removed
+
+- Unused earlier versions of the swap page code and their styles.
+
 ## [1.16.0] - 2026-10-21
 
 ### Changed
@@ -69,7 +87,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- One POA/USD reference, owned by the swap module (`poascan/swapx.py`) and served at `/api/v1/price`. Built from filled swaps only; open offers are never used. Last fill, or the median of the last 5 once 7 days hold 5 fills; hidden after 7 days with no fill; marked thin and rounded to 2 significant figures under 5 fills or $100 of volume in 7 days. Method at `/about#market`.
+- One POA/USD reference, owned by the swap module (`poascan/swapx.py`, now `poascan/swap/market.py`) and served at `/api/v1/price`. Built from filled swaps only; open offers are never used. Last fill, or the median of the last 5 once 7 days hold 5 fills; hidden after 7 days with no fill; marked thin and rounded to 2 significant figures under 5 fills or $100 of volume in 7 days. Method at `/about#market`.
 - A muted ≈$ beside headline POA amounts (home, address, token, epoch), with one USD label per page linking to the method.
 - `/upgrade`: the `/status` page with the network upgrade card on top, its own title, description, canonical and OG image (`/og/upgrade.png`). It redirects to `/status` once the upgrade clears.
 - A one-line upgrade strip on the homepage only, shown while the upgrade is on, with a Details link to `/upgrade`.

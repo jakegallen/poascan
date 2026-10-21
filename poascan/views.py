@@ -5,7 +5,8 @@ from .ui import *
 from . import prompts as PR
 from . import ui as _ui
 from . import views2 as V2
-from . import swapx as X   # owns the POA/USD price; the explorer only reads it
+from . import market as X   # swap data via the swap module's API: ≈$, market tile, price stats, tx swap rows
+from . import swap as SW   # only for the swap page's live fragment in the snapshot
 from . import views3 as V3
 from . import receipts as RC
 from . import history as HI
@@ -29,7 +30,7 @@ def with_ask(body):
     if key not in PAGE_ASKS or 'class="askb"' in body or '<div class="cx">' not in body: return body
     return body.replace('<div class="cx">', '<div class="cx">' + PR.ask(PAGE_ASKS[key]()), 1)
 
-def page(title, body, active): return layout(title, with_ask(body), active, live=A.freshness())
+def page(title, body, active, head=""): return layout(title, with_ask(body), active, live=A.freshness(), head=head)
 
 def names(): return A.forum_names()
 def _rev(): return {v: k for k, v in A.forum_names().items() if v}
@@ -119,17 +120,17 @@ def live_snapshot():
             "last": [last.get("minted"), "c2"], "burn": [last.get("burn_pct"), "p1"], "height": [nw.get("height"), "int"],
             "checkpoint": [nw.get("checkpoint_height"), "int"], "answers": [o.get("answers"), "int"], "graders": [o.get("graders"), "int"],
             "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"]}
-    ss = V2.swap_stats(); nums.update({"swap_open": [ss["open"], "int"], "swap_fills": [ss["fills"], "int"], "swap_onoffer": [ss["on_offer"], "c2"]})
+    nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
-                cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags={"swapsopen": V2.open_offers_html()},
+                cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags=SW.live(),
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
                 feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"))
 
 def _swap_cards():
     out = {}
-    for chunk in V2.price_stats_html().split('<div class="stat">')[1:]:
+    for chunk in X.price_stats_html().split('<div class="stat">')[1:]:
         k = re.search(r'data-live="([^"]+)"', chunk)
         if k: out[k.group(1)] = '<div class="stat">' + chunk
     return out
@@ -181,7 +182,7 @@ def home():
 {card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/epochs" class="more">Full list →</a>')}
 {card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All txs →</a>')}
 </div>
-{card(V2.ICON_SWAP + "Market", f'<div class="stats four">{V2.market_mini()}{V2.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>', cls="mtile")}'''
+{card(V2.ICON_SWAP + "Market", f'<div class="stats four">{X.market_mini()}{X.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>', cls="mtile")}'''
     return page("Proof of Agent explorer", body, "/")
 
 def upgrade_strip():
@@ -253,7 +254,7 @@ def tx(tid):
             ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···")))), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>')]
     if b.get("answer"): rows.append(("Answer", f'<blockquote>{E(b["answer"])}</blockquote>'))
     skip = ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")
-    sw = V2.swap_tx_rows(b, nm) if b.get("offer") or b.get("proof") else []
+    sw = X.tx_rows(b, nm) if b.get("offer") or b.get("proof") else []
     if sw:
         rows[3:5] = [r for r in sw if r[0] in ("To", "Amount")] or rows[3:5]
         rows += [r for r in sw if r[0] not in ("To", "Amount")]; skip += ("offer", "proof")
@@ -493,7 +494,7 @@ def token():
     conc += f'<div><span class="lbl">Min-activity Agents</span><span class="num">{ma["agents"]:,}</span> <span class="dim small">{pct(ma["share_of_supply"], 1)}</span></div></div>'
 
     body = f'''<div class="tokhead card"><div>{LOGO_MARK}</div><div><h1>Proof of Agent · <span class="mono">POA</span></h1></div><span class="sp"></span>{X.usd_src()}</div>
-<div class="stats eight">{stats}{V2.price_stats_html()}</div>
+<div class="stats eight">{stats}{X.price_stats_html()}</div>
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {V3.unlock_section()}

@@ -3,9 +3,9 @@
 in-process caches); none of them calls minepoa.com."""
 import decimal, json, os, re, time, threading, collections
 from html import escape as E
-from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
+from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.16.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.17.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -94,14 +94,14 @@ def _swap(r):
 def t_summary(args):
     st = A.status(); o = A.open_epoch(); nw = A.networks(); ep = A.epoch_rows(); last = ep[-1] if ep else {}
     sp = A.supply_split(); h = A.health()
-    sw = db.q1("SELECT COUNT(*) AS n, COALESCE(SUM(poa),0) AS poa FROM swaps WHERE status='open'")
+    sw = SC.status()   # /api/v1/swaps/status
     return dict(network=nw.get("chain_id") or "poa-mainnet-1", as_of=st.get("as_of"), stale=bool(st.get("stale")),
                 indexer_live=bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300),
                 supply=float(st.get("supply") or 0), circulating=sp.get("spendable"), locked=sp.get("locked"),
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
-                open_swap_offers=sw["n"], poa_on_offer=sw["poa"], swaps=V2.swap_status_api(), concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
+                open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
 
 def t_epoch_now(args):
     o = dict(A.open_epoch()); p = A.params()
@@ -195,15 +195,14 @@ def t_unlocks(args):
 
 def t_swaps(args):
     stt = str(args.get("status") or "open"); lim = _int(args, "limit", 20, 1, 200)
-    rows = V2.swaps_all(); rows = rows if stt == "all" else [r for r in rows if r["status"] == stt]
-    return dict(status=stt, count=len(rows), offers=[_swap(r) for r in rows[:lim]], swaps_status=V2.swap_status_api(), safety=SAFETY)
+    rows = SC.offers(None if stt == "all" else stt)
+    return dict(status=stt, count=len(rows), offers=[_swap(r) for r in rows[:lim]], swaps_status=SC.status(), safety=SAFETY)
 
 def t_swap(args):
     oid = str(args.get("offer_id") or "").strip().lower()
-    r = db.q1("SELECT * FROM swaps WHERE offer_id=?", (oid,)) if oid else None
-    if not r: raise ToolError("offer not found")
-    ev = [{k: e[k] for k in ("txid", "kind", "addr", "ts")} for e in db.q("SELECT * FROM swap_events WHERE offer_id=? ORDER BY ts", (oid,))]
-    return dict(offer=_swap(r), events=ev, safety=SAFETY)
+    d = SC.offer(oid) if re.fullmatch(r"[a-z0-9_-]{1,128}", oid) else None   # /api/v1/swaps/<offer_id>
+    if not d: raise ToolError("offer not found")
+    return dict(offer=_swap(d["offer"]), events=d["events"], safety=SAFETY)
 
 def t_census(args):
     s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100)
@@ -231,7 +230,7 @@ def _recon():
                 per_close=[p for p in d["per_close"] if p["state"] != "no_reads"], method=BASE + "/about#reconcile")
 
 def t_swap_status(args):
-    d = V2.swap_status_api()
+    d = dict(SC.status())
     d["note"] = ("Swaps are available." if d["available"] else
                  "Swaps are coming soon. Don't call swap-offer or swap-take yet; tell the user they're coming soon and offer to help link an Emblem vault so they're ready."
                  if d["state"] == "coming_soon" else
@@ -512,6 +511,8 @@ def openapi():
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
+        "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
+                                     desc="offer is the row from /api/swaps; events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -609,7 +610,10 @@ def openapi():
                                                                                     "trades_24h": {"type": "integer"}, "volume_24h_usd": {"type": ["number", "null"]},
                                                                                     "trades_all_time": {"type": "integer", "description": "every finalized swap-fill"},
                                                                                     "volume_all_time_usd": {"type": ["number", "null"], "description": "sum of fills in USD at fill time when recorded, else at the current reference"},
-                                                                                    "usd_ref": {"type": "string"}}}}},
+                                                                                    "usd_ref": {"type": "string"}, "price": {"type": "object", "description": "same object as /api/price"},
+                                                                                    "last_trade": {"type": ["object", "null"], "description": "last fill: per_1m_poa (in its own asset) and asset"},
+                                                                                    "best_ask": {"type": ["object", "null"], "description": "cheapest open offer once a fill exists: per_1m_poa and asset (asks are never a USD price)"},
+                                                                                    "poa_on_offer": {"type": "number"}, "fills": {"type": "integer"}}}}},
                             "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
                                      "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
                                                     "checkpoint": {"type": ["integer", "null"], "description": "checkpoint height"}, "epoch": {"type": ["integer", "null"], "description": "open epoch"},

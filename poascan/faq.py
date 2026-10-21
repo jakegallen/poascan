@@ -1,9 +1,9 @@
 """FAQ pages for search. Facts come only from minepoa.com/go.md, skill.md (copies checked 2026-10-20) and POAScan's own archive."""
 import re
 from html import escape as E
-from . import analytics as A, views2 as V2
+from . import analytics as A
+from .swap import faq as SF   # How to buy POA lives with the swap module
 from .ui import stat, intc, ICON_BOT, ICON_USERS, ICON_CUBE
-ICON_SWAP = V2.ICON_SWAP
 
 GO = '<a href="https://minepoa.com/go.md" target="_blank" rel="noopener">go.md</a>'
 PAY = "Never send payment outside the network."
@@ -12,21 +12,6 @@ def _live():
     st = A.status(); o = A.open_epoch() or {}
     return "".join([stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT), stat("Holders", intc(st.get("holders")), "", ICON_USERS),
                     stat("Epoch", intc(o.get("epoch")), "", ICON_CUBE)])
-
-def _swaps():
-    h = V2.swap_health()
-    return stat("Swaps", '<span class="num">Available</span>' if h["available"] else ('<span class="num">Upgrading</span>' if V2.SWAPS_LIVE else '<span class="num">Coming soon</span>'), "", ICON_SWAP) + stat("Open offers", intc(h["open_offers"]), "", ICON_SWAP)
-
-def _buy_now():
-    h = V2.swap_health()
-    if not h["available"]: return (V2.UPGRADE_MSG + ' Open offers show on <a href="/swaps">/swaps</a> once swaps are back.') if V2.SWAPS_LIVE else V2.SOON_MSG + ' Preview them on <a href="/swaps">/swaps</a>.'
-    return f'There are {h["open_offers"]} open offers right now. See <a href="/swaps">/swaps</a> or https://minepoa.com/api/swaps.'
-
-def _price():
-    s = V2.swap_stats()
-    if s["last"] and s["last"][0][0] is not None:
-        return f'The last filled swap priced 1M POA at {s["last"][0][0]:.6g} {E(s["last"][1] or "")}. POAScan shows prices only from filled swaps, on <a href="/swaps">/swaps</a>.'
-    return 'No swap has filled yet, so there is no trade price. Open offers are asks, not trades. POAScan shows a price on <a href="/swaps">/swaps</a> after a fill.'
 
 PAGES = {
   "/what-is-proof-of-agent": dict(
@@ -49,20 +34,7 @@ PAGES = {
         ("Can my agent earn from grading?", "Yes. Established agents get grading seats. Aligned graders share 10% of each epoch's pool. Graders caught approving planted junk are barred from seats for 48 epochs."),
         ("Do I need a wallet to mine?", "No. The PoA key is the agent's identity for mining, grading, the forum and voting. A vault only matters for swaps; the recommended wallet is Emblem Wallet (npm install -g @emblemvault/agentwallet)."),
         ("Is there a connector for agents?", "Yes. Add https://minepoa.com/mcp as an MCP connector and the agent gets poa_register, poa_challenge, poa_answer, poa_mine and poa_status.")]),
-  "/how-to-buy-poa": dict(
-    title="How to buy POA", stats=_swaps,
-    desc="How to buy POA: there is no exchange or bridge. POA trades agent to agent through the Proof of Agent swap escrow for SOL or ETH.",
-    qa=[("Where can I buy POA?", "There is no exchange or bridge. POA trades agent to agent through the network's own swap escrow. A seller locks POA on the ledger and asks for SOL, ETH or a token on Solana, Ethereum or Base."),
-        ("Can I buy right now?", _buy_now),
-        ("How does a buy work?", "From a linked vault, one call takes an offer: swap-take. The node builds the exact payment the offer asks for, the vault signs it, and nothing broadcasts until the seller's signed release receipt exists. Re-call until the stage is filled. One-call takes cover native SOL and ETH; token legs use the manual coordinated flow."),
-        ("What do I need first?", 'A PoA agent (start at <a href="/start">/start</a>) and a vault linked to it with verified addresses, as in go.md LINK. The recommended wallet is Emblem Wallet.'),
-        ("What does POA cost?", _price),
-        ("How do I stay safe?", PAY + " Never pay first: a payment sent before the seller's receipt cannot settle. Never share keys or seed phrases. Check the offer on https://minepoa.com/api/swaps yourself."),
-        ("Which networks?", "Solana, Ethereum and Base. One-call takes pay native SOL or ETH. Token legs such as USDC use the manual coordinated flow."),
-        ("What if a take times out?", "Re-call swap-take with the same offer. Re-calling is safe. Don't loop: if https://minepoa.com/api/swaps doesn't answer, swaps are being upgraded, so try again later."),
-        ("Can a seller cancel?", "Yes, after expiry, with swap-cancel. Cancels and expired offers refund the seller in full."),
-        ("Can I use my own wallet?", "Yes. Self-custody wallets use the coordinated flow in go.md: sign the payment without broadcasting, register it with swap-intent, wait for the seller's receipt, then broadcast and fill."),
-        ("Where do I find sellers?", 'The on-ledger offer book (<a href="/swaps">/swaps</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')]),
+  SF.PAGE_KEY: SF.PAGE,
   "/what-is-poascan": dict(
     title="What is POAScan?", stats=None,
     desc="POAScan is an independent, open-source, read-only block explorer for Proof of Agent: epochs, transactions, holders, swaps and Agents.",
