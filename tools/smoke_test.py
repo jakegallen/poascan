@@ -71,7 +71,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 20 and {"get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 21 and {"get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -299,6 +299,38 @@ def backlog(base, check):
     check("backlog in OpenAPI, llms.txt, MCP and /about", "PendingByEpoch" in spec["components"]["schemas"] and "settlement origin" in llms
           and (sc.get("last_close") or {}).get("grew") == 3 and "seals_total" in sc and b"<b>Dropped</b>" in req(base + "/about")[1])
 
+def records(base, check):
+    """Close record mirror: canonical body, sha256 = ETag, 304, immutable, from= paging, 404 for open or unknown epochs."""
+    import hashlib
+    def get(u, inm=None):
+        r = urllib.request.Request(base + u, headers={"If-None-Match": inm} if inm else {})
+        try:
+            with urllib.request.urlopen(r, timeout=20) as f: return f.status, dict(f.headers), f.read()
+        except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read()
+    c1, h1, b1 = get("/api/v1/epoch/5/record"); c2, h2, b2 = get("/api/epoch/5/record")
+    sha = hashlib.sha256(b1).hexdigest(); rec = json.loads(b1)
+    check("record: canonical body, sha256 = ETag = X-Record-SHA256, stable across reads and the alias",
+          c1 == 200 and b1 == b2 and h1.get("ETag") == f'"{sha}"' and h1.get("X-Record-SHA256") == sha and h1.get("X-Record-Bytes") == str(len(b1))
+          and json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() == b1 and rec.get("epoch") == 5 and "meta" not in rec)
+    c3, h3, b3 = get("/api/v1/epoch/5/record", h1.get("ETag")); c4, _, _ = get("/api/v1/epoch/5/record", "W/" + h1.get("ETag", "") + ', "x"')
+    check("record: If-None-Match gives 304 (strong or weak form), immutable caching", c3 == 304 and b3 == b"" and h3.get("ETag") == h1.get("ETag") and c4 == 304
+          and "immutable" in h1.get("Cache-Control", ""))
+    check("record: 404 for the open epoch and unknown ones", get("/api/v1/epoch/12/record")[0] == 404 and get("/api/v1/epoch/999/record")[0] == 404)
+    ci, hi, bi = get("/api/v1/epoch-records"); ix = json.loads(bi)
+    check("record index: every close with hash and size", ci == 200 and len(ix) == 12 and ix[5]["sha256"] == sha and ix[5]["bytes"] == len(b1)
+          and ix[5]["url"].endswith("/api/v1/epoch/5/record") and get("/api/v1/epoch-records.csv")[0] == 200 and get("/api/v1/epoch-records", hi.get("ETag"))[0] == 304)
+    cf, hf, bf = get("/api/v1/epoch-records?from=4"); f = json.loads(bf); cl, hl, bl = get("/api/v1/epoch-records?from=11&limit=9"); l = json.loads(bl)
+    check("record from=: 3 per page, next_from, hashes match, last page ends",
+          cf == 200 and [r["epoch"] for r in f["records"]] == [4, 5, 6] and f["next_from"] == 7 and hf.get("X-Next-From") == "7" and f["records"][1]["sha256"] == sha
+          and f["records"][1]["record"] == rec and [r["epoch"] for r in l["records"]] == [11] and l["next_from"] is None and get("/api/v1/epoch-records?from=x")[0] == 400
+          and json.loads(get("/api/v1/epoch-records?from=50")[2])["records"] == [])
+    spec = json.loads(req(base + "/openapi.json")[1])
+    call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "get_epoch_record", "arguments": {"epoch": 5}}}).encode(),
+                          {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
+    sc = (call.get("result") or {}).get("structuredContent") or {}
+    check("record in OpenAPI, llms.txt, MCP (hash, no blob) and /about", "/api/v1/epoch/{n}/record" in spec["paths"] and "/api/v1/epoch-records" in spec["paths"]
+          and b"/record" in req(base + "/llms.txt")[1] and sc.get("sha256") == sha and "pending" in sc and "basis" not in sc and b'id="records"' in req(base + "/about")[1])
+
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
@@ -324,6 +356,7 @@ def fixture_pages(check):
         headers(base, check)
         receipts(base, check)
         backlog(base, check)
+        records(base, check)
         _et = subprocess.run([sys.executable, "tools/established_test.py"], cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), capture_output=True, text=True)
         check("established_test: carried standing, drops, restores, trusted graders", _et.returncode == 0)
         og_images(base, check)

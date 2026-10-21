@@ -9,6 +9,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.7.0] - 2026-10-21
+
+### Added
+
+- Close record mirror: `/api/v1/epoch/{n}/record` serves one close record as ingested from `/api/epochs`, in canonical form (RFC 8785 JCS: sorted keys, no whitespace, UTF-8). The ETag is the quoted sha256 of the body, also in `X-Record-SHA256`, with the size in `X-Record-Bytes`. If-None-Match returns 304; closed records are cached immutable; open or unknown epochs are 404.
+- `/api/v1/epoch-records`: index of every close (epoch, close_ts, sha256, bytes, url; CSV too), and `?from=N` for the records themselves, 3 per response with `next_from`.
+- MCP tool `get_epoch_record`: hash, size and headline counts for one close, not the blob. Method at `/about#records`.
+
 ## [1.6.0] - 2026-10-21
 
 ### Added
@@ -186,6 +194,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Epochs, transactions, addresses, rich list, unlocks, swaps, leaderboards, agent census, LabLeak forum stats.
 - HTTP API with CSV export, OpenAPI 3.1, read-only MCP server at `/mcp`.
 
+[1.7.0]: https://github.com/jakegallen/poascan/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/jakegallen/poascan/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/jakegallen/poascan/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jakegallen/poascan/compare/v1.3.0...v1.4.0

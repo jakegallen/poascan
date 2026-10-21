@@ -3,9 +3,9 @@
 in-process caches); none of them calls minepoa.com."""
 import decimal, json, os, re, time, threading, collections
 from html import escape as E
-from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4
+from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.6.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.7.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -103,6 +103,13 @@ def t_epoch_now(args):
     o.update(vesting_epochs=int(p.get("vesting_epochs") or 100), halving_epochs=p.get("halving_epochs"), now=int(time.time()),
              seconds_to_close=(o["est_close"] - int(time.time())) if o.get("est_close") else None, url=BASE + "/")
     return o
+
+def t_epoch_record(args):
+    ix = RR.index()
+    if not ix: raise ToolError("no close records indexed yet")
+    n = _int(args, "epoch", ix[-1]["epoch"], 0, 10**7); r = RR.summary(n)
+    if not r: raise ToolError(f"epoch {n} has no published close record (closed: {ix[0]['epoch']}..{ix[-1]['epoch']})")
+    return dict(r, url=f"{BASE}{API_PREFIX}/epoch/{n}/record", canonicalization=RR.CANON, method=BASE + "/about#records")
 
 def t_epoch(args):
     rows = A.epoch_rows()
@@ -252,6 +259,8 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_current_epoch", "Current epoch", "The open epoch: number, start, estimated close time, seconds to close, pool, answers and graders so far.", S(), t_epoch_now),
     ("get_epoch", "Epoch close", "One closed epoch: pool, minted, burned, paid agents, grading stats and its top rewards. Omit epoch for the latest close.",
      S(epoch={"type": "integer", "minimum": 0}, top_rewards=LIM(10, 200)), t_epoch),
+    ("get_epoch_record", "Close record hash", "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. Omit epoch for the latest close. Pin the hash to check a later read.",
+     S(epoch={"type": "integer", "minimum": 0}), t_epoch_record),
     ("get_address", "Address", "One poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable/locked, streak, forum name, self-reported model, invites and recent transactions.",
      dict(S(address={"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}, tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20}), required=["address"]), t_address),
     ("get_transaction", "Transaction", "One transaction by its 64-hex id, from the POAScan archive.", dict(S(hash={"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}), required=["hash"]), t_tx),
@@ -386,6 +395,12 @@ def openapi():
         "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "max 200", {"type": "integer", "default": 50, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
         "/api/epochs": _op("Every epoch close: pool, minted, burned, grading", ROWS, csv=True, oid="listEpochs"),
         "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number", {"type": "integer"})], oid="getEpoch"),
+        "/api/epoch/{n}/record": _op("One close record exactly as minepoa.com published it, in canonical form", ANY, [_p("n", "closed epoch number", {"type": "integer", "minimum": 0})], oid="getEpochRecord",
+                                     desc="Body: the close record from /api/epochs, serialized per RFC 8785 (JCS): keys sorted, no whitespace, UTF-8. ETag is the quoted sha256 of the decoded body (also in X-Record-SHA256; size in X-Record-Bytes); send If-None-Match for a 304. Closed records are cached immutable. 404 for an open or unknown epoch. Method: https://poascan.io/about#records"),
+        "/api/epoch-records": _op("Close record index (epoch, close_ts, sha256, bytes, url), or the records themselves from ?from=N", ROWS,
+                                  [_p("from", "return full records from this closed epoch on, at most 3 per response; follow next_from (also X-Next-From)", {"type": "integer", "minimum": 0}, "query", False),
+                                   _p("limit", "records per response with from (1 to 3)", {"type": "integer", "minimum": 1, "maximum": 3}, "query", False)], csv=True, oid="listEpochRecords",
+                                  desc="Without from: the index as a list (CSV too). With from: {from, next_from, records: [{bytes, epoch, record, sha256}]}, itself canonical. ETag is the sha256 of the body; If-None-Match gives a 304."),
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
@@ -536,6 +551,7 @@ Tools ({len(TOOLS)}):
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
+- Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
