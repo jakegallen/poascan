@@ -20,6 +20,14 @@ def req(url, data=None, headers=None):
         with urllib.request.urlopen(r, timeout=20) as f: return f.status, f.read()
     except urllib.error.HTTPError as e: return e.code, e.read()
 
+class _NoRedir(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None
+def req0(url):
+    """One request, redirects not followed: (status, Location)."""
+    try:
+        with urllib.request.build_opener(_NoRedir).open(url, timeout=20) as f: return f.status, f.headers.get("Location")
+    except urllib.error.HTTPError as e: return e.code, e.headers.get("Location")
+
 def reqh(url):
     try:
         with urllib.request.urlopen(url, timeout=20) as f: return f.status, dict(f.headers), f.read()
@@ -99,7 +107,7 @@ def main():
         c, b = req(base + "/robots.txt"); check("robots.txt allows AI bots + sitemap", c == 200 and b"GPTBot" in b and b"Sitemap: https://poascan.io/sitemap.xml" in b)
         c, b = req(base + "/sitemap.xml"); check("sitemap.xml", c == 200 and b"<urlset" in b and b"https://poascan.io/about" in b)
         c, b = req(base + "/blocks"); check("canonical /blocks -> /epochs", b'rel="canonical" href="https://poascan.io/epochs"' in b and b'og:url" content="https://poascan.io/epochs"' in b)
-        c, b = req(base + "/"); check("home JSON-LD + h1", b"application/ld+json" in b and b'<h1 class="sr-only">Proof of Agent explorer</h1>' in b and b'href="/find"' in b and b"homehead" not in b)
+        c, b = req(base + "/"); check("home JSON-LD + h1", b"application/ld+json" in b and b'<h1 class="sr-only">Proof of Agent explorer</h1>' in b and b'class="hsearch"' in b and b"Find my agent" in b and b'<body class="home">' in b and b"homehead" not in b)
         c, b = req(base + "/llms.txt"); check("llms.txt Join section", b"## Join PoA" in b and b"https://minepoa.com/mcp" in b and b"invite or referral" in b)
         c, b = req(base + "/llms-full.txt"); check(f"llms-full.txt -> {c}", c == 200 and b"## MCP tools" in b and b"## Endpoints" in b)
         for u in ["/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"]:
@@ -140,8 +148,10 @@ def main():
         except urllib.error.HTTPError as e: _c = e.code
         check(f"agents/view ETag -> 304 ({_c})", bool(_et) and _c == 304)
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
-        c, b = req(base + "/live"); check(f"/live -> {c}", c == 200 and b'id="feed"' in b and b'data-live="answers"' in b and b'livehero' in b)
-        check("/live in sitemap + llms + home link", b"/live</loc>" in req(base + "/sitemap.xml")[1] and b"/live" in req(base + "/llms.txt")[1] and b'href="/live"' in req(base + "/")[1])
+        c, b = req(base + "/epochs"); check(f"/epochs: open epoch hero on top, then Closed | Pending | Grading tabs -> {c}", c == 200 and b'data-live="answers"' in b and b'livehero' in b
+              and b.index(b"livehero") < b.index(b'class="chips atabs scroll"') and b'href="/epochs?tab=pending"' in b and b'href="/epochs?tab=grading"' in b)
+        check("/epochs in sitemap + llms, home links the hero", b"/epochs</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
+              and b"/epochs the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive" href="/epochs"' in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
@@ -202,10 +212,19 @@ def main():
         check("Start button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Start</a>' in b)
         c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
         check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
+        ab = req(base + "/about")[1]
         for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan"]:
-            c, b = req(base + u)
-            check(f"FAQ {u}", c == 200 and b'"FAQPage"' in b and f'rel="canonical" href="https://poascan.io{u}"'.encode() in b and b'og:title' in b
-                  and f'href="{u}"'.encode() in req(base + "/about")[1] and f"https://poascan.io{u}".encode() in req(base + "/sitemap.xml")[1] and f"https://poascan.io{u}".encode() in req(base + "/llms.txt")[1])
+            c, loc = req0(base + u)
+            check(f"FAQ {u} -> 301 /about#{u[1:]}, section keeps its title", c == 301 and loc == "/about#" + u[1:] and f'id="{u[1:]}"'.encode() in ab and b'"FAQPage"' in ab
+                  and f"https://poascan.io{u}<".encode() not in req(base + "/sitemap.xml")[1] and f"#{u[1:]}".encode() in req(base + "/llms.txt")[1])
+        moved = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health", "/find": "/#find",
+                 "/find?q=Jade": "/search?q=Jade", "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
+                 "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers", "/agents/leaderboard": "/agents/top?tab=ai",
+                 "/agents/journey": "/agents/census?tab=journey"}
+        bad = [(u, r) for u, to in moved.items() for r in [req0(base + u)] if r != (301, to)]
+        check(f"old URLs 301 to their new tabs ({len(moved)}), failures {bad[:3]}", not bad)
+        bad = [t for t in set(moved.values()) if not t.startswith("/search") and req(base + t)[0] != 200]
+        check(f"every redirect target renders, failures {bad[:3]}", not bad)
         for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
@@ -213,7 +232,7 @@ def main():
         sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">Trades<", b">Volume<")) and sb.count(b"Trades") == 1 and sb.count(b"Volume") == 1)
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
-        lv = req(base + "/live")[1]; check("live pending panel", b"Pending</h2>" in lv and b"\xe2\x80\x94" not in lv)
+        lv = req(base + "/epochs?tab=pending")[1]; check("Pending tab: the queue", b"Queue</h2>" in lv and b"\xe2\x80\x94" not in lv and b'class="chip on">Pending' in lv)
         check("emblem toggle logo", b"/static/emblem-32.png" in sb and b"<span>Add Wallet</span>" in sb and b"\xc2\xb7\xc2\xb7\xc2\xb7</span></b>" not in sb.split(b'class="xstats"')[1][:900])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
@@ -496,14 +515,14 @@ print(json.dumps(out))
 """
 
 def maintenance(base, root, env, check):
-    """Network upgrade: Upgrading pill (not Lagging) linking to /status#upgrade, one card there, one line on /start, meta and MCP carry it.
+    """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
     n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); st = st[st.index("<main"):st.index("</main>")]
-    check("maintenance: pill reads Upgrading, links to /status#upgrade, one live indicator, checkpoint Parked not Stalled",
-          'class="pill up" id="livepill" href="/status#upgrade"' in n and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
+    check("maintenance: pill reads Upgrading, links to /upgrade, one live indicator, checkpoint Parked not Stalled",
+          'class="pill up" id="livepill" href="/upgrade"' in n and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'asof steel">Parked<' in n and ">Stalled<" not in n)
     card = s[s.index('id="upgrade"'):]; card = card[:card.index("</section>")]
-    check("maintenance: /status#upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
+    check("maintenance: Network → Health upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
           s.index('id="upgrade"') < s.index('class="stats eight"') and all(f"<dt>{k}</dt>" in card for k in ("Paused", "Working", "Safe", "Agents", "Last hour"))
           and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" in card and "24,371" in card
           and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
@@ -518,7 +537,7 @@ def maintenance(base, root, env, check):
     check("maintenance: meta.maintenance, summary pill and MCP get_indexer_status carry it",
           m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["hosted_mining", "grading"] and m.get("join_open") is True
           and "self_custody_mining" in m.get("working", []) and m.get("surfaces_source") == "manual" and "surfaces" in m
-          and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/status#upgrade"
+          and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/upgrade"
           and (sc.get("maintenance") or {}).get("active") is True and "answers" in (sc["maintenance"].get("seen_last_hour") or {}) and sc.get("pill", {}).get("label") == "Upgrading")
     hm = req(base + "/")[1].decode(); hm_main = hm[hm.index("<main"):hm.index("</main>")]
     check("maintenance: home strip, once, quiet, steel, links /upgrade, no em dash",
@@ -558,7 +577,7 @@ def fixture_pages(check):
         site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
         paths = sorted(set(nav + site))
         bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
-        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) >= 10 and len(paths) > 30 and not bad)
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 7 and len(paths) > 30 and not bad)
         g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
         op = req(base + "/agents/operators")[1]
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))
@@ -599,12 +618,12 @@ def fixture_pages(check):
         tx_ = req(base + "/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)
-        gr = req(base + "/grading")[1].decode()
-        check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Decided per close" in gr)
+        gr = req(base + "/epochs?tab=grading")[1].decode()
+        check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Per close</h2>" in gr)
         hm2 = req(base + "/")[1].decode()
         check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
               not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
-              and ">Finalized height<" in hm2 and ">Checkpoint<" not in hm2)
+              and ">Finalized height<" in req(base + "/network")[1].decode() and ">Checkpoint<" not in hm2)
         hm = req(base + "/")[1].decode(); tk = req(base + "/token")[1].decode()
         check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
         check("token: no Transfers card", ">Transfers<" not in tk)
@@ -641,7 +660,7 @@ def fixture_pages(check):
               and _IX.uptime_name("/api/status") == "probe /api/status" and _IX.uptime_name("/api/params") == "/api/params")
         _st = req(base + "/status")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
         check("uptime: derived /api/status folds into one continuous series", ",/api/status,probe,25,25," in _csv and ",/api/status,fetch" not in _csv)
-        check("fixture: /grading has an h1", b"<h1" in g and b">Grading</h1>" in g)
+        check("fixture: Epochs → Grading has an h1", b"<h1" in g and b">Epochs</h1>" in g)
         check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])
     finally:
         p.terminate(); p.wait(10)

@@ -165,8 +165,7 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/", "Home"), ("/txs", "Transactions"), ("/epochs", "Epochs"), ("/token", "Token"), ("/swaps", "Swap"), ("/agents", "Agents"), ("/growth", "Growth"),
-       ("/grading", "Grading"), ("/forum", "Community"), ("/network", "Network"), ("/about", "About")]
+NAV = [("/epochs", "Epochs"), ("/txs", "Transactions"), ("/agents", "Agents"), ("/token", "Token"), ("/swaps", "Swap"), ("/network", "Network"), ("/about", "About")]   # Home is the logo; Source is in the footer
 
 SITE_URL = "https://poascan.io/"
 SITE_TITLE = "POAScan · Proof of Agent Explorer"
@@ -184,13 +183,13 @@ DESCS = {
     "/live": "The current Proof of Agent epoch in real time: countdown, answers, graders, pool and the live activity feed.",
     "/start": "Start mining Proof of Agent: one copy-ready prompt for your AI agent, plus the steps from the official minepoa.com guide.",
     "/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
-    "/epochs": "Every Proof of Agent epoch close: pool, minted, burned, burn share, answer cohorts and Gate A, with CSV.",
+    "/epochs": "Proof of Agent epochs: the open epoch live, every close (pool, minted, burned, cohorts), the pending queue and grading, with CSV.",
     "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
     "/unlocks": "Network-wide POA unlock calendar: how much vests at each upcoming epoch close.",
     "/swaps": "POA swap offers and fills on Proof of Agent, with the network's own escrow flow.",
     "/growth": "Proof of Agent growth: agents, holders, supply and activity over time.",
     "/agents": "The agents on Proof of Agent: models and harnesses, census, journey, operators and graders.",
-    "/agents/top": "Proof of Agent leaderboards: rich list, last epoch, holders, graders, most active and rising agents.",
+    "/agents/top": "Proof of Agent rankings: rich list, lifetime and last-epoch earners, streaks, graders, referrals and AI models.",
     "/agents/leaderboard": "AI leaderboard for Proof of Agent: pass rates and earnings by self-reported model and harness.",
     "/agents/census": "Which AI models and harnesses Proof of Agent agents self-report, over time.",
     "/agents/journey": "Proof of Agent funnel: join, answer, pass and earn, with retention by cohort.",
@@ -201,7 +200,8 @@ DESCS = {
     "/agents/social": "LabLeak social graph: who replies to whom among Proof of Agent agents.",
     "/grading": "Proof of Agent grading: backlog, settlements, pass rate and slashing per epoch.",
     "/forum": "LabLeak, the Proof of Agent forum: communities, top threads and authors.",
-    "/network": "Proof of Agent network: anchors, releases, operator dependency and indexer health.",
+    "/network": "Proof of Agent network: anchors, releases, operator dependency, upstream health and growth charts.",
+    "/agents/community": "Proof of Agent community: LabLeak forum activity, the social graph, builders and the answer sample.",
     "/status": "Proof of Agent and POAScan status: upstream endpoint health, incidents and anchors.",
     "/privacy": "POAScan privacy: read-only, no accounts, no cookies or tracking; server logs only.",
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
@@ -215,8 +215,9 @@ def req_path():
 
 def canonical():
     p = req_path(); p = CANON.get(p, p); qs = getattr(REQ, "qs", None) or {}
-    tab = (qs.get("tab") or ["richlist"])[0]
-    if p == "/agents/top" and tab not in ("", "richlist") and re.match(r"^[a-z]+$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
+    tab = (qs.get("tab") or [""])[0]   # tabbed pages: each tab is its own canonical URL; the default tab is the bare path
+    dflt = {"/agents/top": "holders", "/epochs": "closed", "/network": "overview", "/agents/census": "models", "/agents/community": "forum"}
+    if p in dflt and tab not in ("", dflt[p]) and re.match(r"^[a-z]+$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
     return SITE_URL.rstrip("/") + p
 
 def describe(title):
@@ -311,8 +312,9 @@ def head_meta(full_title, title=""):
 from . import join as _join
 TICKER_FN = None  # set by views (latest epochs + txs strip)
 
-FOOT = [("/what-is-proof-of-agent", "What is Proof of Agent"), ("/how-to-mine-poa", "How to mine POA"), ("/how-to-buy-poa", "How to buy POA"), ("/what-is-poascan", "What is POAScan"),
-        (SRC_URL, "Source"), ("/status", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"), ("/find", "Find my agent"), ("/privacy", "Privacy"), ("/api/health", "API")]
+FOOT = [("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
+        ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
+        ("/privacy", "Privacy"), ("/api/health", "API")]
 def _footer():
     """One row of small links. Skips the page you are on (its title already says it); home and About live in the header."""
     cur = req_path(); ext = lambda h: h.startswith("http")
@@ -330,6 +332,12 @@ def _quiet_h1(body, active):
         body = body[:m.start()] + f'<h1 class="sr-only">{m.group(1)}</h1>' + body[m.end():]
     return body
 
+def search_form(cls, sid):
+    """Header search (and the home hero search, which replaces it on /). The hint and name suggestions replace the old /find page."""
+    return (f'<form class="{cls}" action="/search" method="get" role="search"><input name="q" placeholder="Address / agent / tx / epoch" aria-label="Search" '
+            f'autocomplete="off" enterkeyhint="search" aria-controls="{sid}-s" aria-autocomplete="list"><button aria-label="Search">{ICON_SEARCH}</button>'
+            f'<div class="sugg" id="{sid}-s" role="listbox"><p class="shint">Find my agent: paste its poa1 address or type its name</p><div class="sopts"></div></div></form>')
+
 def layout(title, body, active="/", live=None):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
@@ -343,12 +351,12 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=69"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=70"><script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
-<nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
-<form class="search" action="/search" method="get" role="search"><input name="q" placeholder="Address / agent / tx / epoch" aria-label="Search" autocomplete="off" enterkeyhint="search"><button aria-label="Search">{ICON_SEARCH}</button></form>
-<a class="pill {live_cls}" id="livepill" href="{live.get("href", "/status")}" title="{E(live_why)}"><i></i><span>{live_txt}</span></a>
+<nav class="nav" id="nav">{nav}</nav>
+{search_form("search", "hdr")}
+<a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"><i></i><span>{live_txt}</span></a>
 <a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
@@ -356,7 +364,7 @@ def layout(title, body, active="/", live=None):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=24" defer></script></body></html>'''
+<script src="/static/app.js?v=25" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -388,6 +396,21 @@ def stat(label, value, sub="", icon="", key=None, asof=None, tip=None):
         ku = " ku" if 'class="unit"' in value and not re.search(r'<span class="unit">POA</span>', value) else ""   # keep SOL/ETH units
         return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
+
+def spark(points, n=40):
+    """Tiny trend line (no axes): the last n points, scaled to their own range."""
+    pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
+    if len(pts) < 2: return ""
+    if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
+    t0, t1 = pts[0][0], pts[-1][0]; lo = min(v for _, v in pts); hi = max(v for _, v in pts)
+    xs = lambda t: 100 * (t - t0) / ((t1 - t0) or 1); ys = lambda v: 22 - 20 * (v - lo) / ((hi - lo) or 1)
+    d = " ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in pts)
+    return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="{d}" vector-effect="non-scaling-stroke"/></svg>'
+
+def spark_in(stat_html, points):
+    """Put a sparkline under a stat card's value."""
+    sv = spark(points)
+    return stat_html[:-len("</div>")] + sv + "</div>" if sv and stat_html.endswith("</div>") else stat_html
 
 def _fit(value):
     """Inline sizing hints: --nc number characters, --fx px taken by unit, ≈$ and gaps (12px mono is ~7.2px a character)."""

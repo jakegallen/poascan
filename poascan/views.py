@@ -18,13 +18,14 @@ def pill():
     f = A.freshness(); return dict(state=f["state"], label=f["label"], why=f["why"], href=f["href"])
 
 # One Ask button per page, in the first card header, unless the page already has one.
-PAGE_ASKS = {"/live": lambda: [PR.answer_epoch(A.open_epoch().get("epoch")), PR.GRADE], "/epochs": lambda: [PR.BURN, PR.UNLOCK],
-             "/txs": lambda: [PR.TXS], "/api": lambda: [PR.API, PR.MCP], "/network": lambda: [PR.NETWORK], "/growth": lambda: [PR.GROWTH],
+PAGE_ASKS = {"/epochs": lambda: [PR.BURN, PR.UNLOCK],
+             "/txs": lambda: [PR.TXS], "/api": lambda: [PR.API, PR.MCP], "/network": lambda: [PR.NETWORK],
              "/agents": lambda: [PR.FIND, PR.CLIMB]}
 
 def with_ask(body):
     path = getattr(REQ, "path", "") or ""
     key = "/agents" if path.startswith("/agents") else path
+    if path == "/network" and ((getattr(REQ, "qs", None) or {}).get("tab") or [""])[0] == "health": return body   # Health: the upgrade card carries the one prompt
     if key not in PAGE_ASKS or 'class="askb"' in body or '<div class="cx">' not in body: return body
     return body.replace('<div class="cx">', '<div class="cx">' + PR.ask(PAGE_ASKS[key]()), 1)
 
@@ -48,21 +49,21 @@ def tracker_html():
             f'<div class="tk"><span class="lbl">Closes in</span>{cd}</div><span class="sp"></span>'
             f'<div class="tk"><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
             f'<div class="tk"><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
-            f'<div class="tk"><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/live">Full view →</a></div>')
+            f'{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/epochs">More →</a></div>')
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
     start, per = o.get("last_close"), o.get("period") or 21600
     frac = min(1.0, max(0.0, (time.time() - start) / per)) if start else 0
-    cur = (f'<div class="bm-hd"><span class="lbl">Epoch <span data-live="bm_ep">{o["epoch"]}</span> pool</span><b>{poa(o["pool"], dec=2)}</b></div>'
+    cur = (f'<div class="bm-hd"><span class="lbl" title="Epoch {o["epoch"]} pool, filling as the epoch runs">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>'
            f'<div class="vessel" data-start="{start or ""}" data-close="{o.get("est_close") or ""}"><i class="molten" style="width:{frac*100:.2f}%"></i><span class="vp num">{frac*100:.0f}%</span></div>')
     if not last: return cur + skel(2)
     bp = last["burn_pct"] or 0
-    done = (f'<div class="bm-hd"><span class="lbl">Epoch {last["epoch"]} settled</span><b>{poa(last["pool"], dec=2)}</b></div>'
+    done = (f'<div class="bm-hd"><a class="lbl" href="/epoch/{last["epoch"]}" title="Epoch {last["epoch"]}, the latest close">Settled</a><b>{poa(last["pool"], dec=2)}</b></div>'
             f'<div class="vessel split"><i class="minted" style="width:{100-bp:.2f}%"></i><i class="burned" style="width:{bp:.2f}%"></i></div>'
             f'<div class="bm-leg"><span><i class="sw m"></i><span class="lbl">Minted</span><b class="num mined">{compact(last["minted"])}</b></span>'
             f'<span><i class="sw b"></i><span class="lbl">Burned</span><b class="num red">{compact(last["burned"])}</b></span>'
-            f'<span><span class="lbl">Burn</span><b class="num red">{bp:.1f}%</b></span></div>')
+            f'<span title="Burn share of the settled pool"><b class="num red">{bp:.1f}%</b></span></div>')
     return f'<div class="bm" id="burnmeter">{cur}{done}</div>'
 
 def ticker_html():
@@ -140,7 +141,7 @@ def summary_json():
 
 
 def epochs_table(rows, link=True):
-    return table(["Epoch", "Status", "Closed (UTC)", "Agents paid", "Minted", "Burned", "Burn %", "Median reward"],
+    return table(["#", "Status", "Closed (UTC)", "Agents paid", "Minted", "Burned", "Burn %", "Median reward"],
                  [[f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>',
                    num(r["median"])] for r in reversed(rows)], pri=(0, 4, 6), usd=(4, 5, 7))
@@ -155,37 +156,32 @@ def raw_fields(extra):
             f'<pre class="wrappre">{E(raw[:20000])}</pre></details>')
 
 def home_epochs(ep):
-    """Compact epochs table for the home panel plus a pool-split mini chart."""
+    """Compact closes table for the home panel. The pool split lives in the Burn meter only."""
     rows = list(reversed(ep[-8:]))
-    tb = table(["Epoch", "Closed (UTC)", "Paid", "Minted", "Burn %", "Median"],
+    return table(["#", "Closed (UTC)", "Paid", "Minted", "Burn %", "Median"],
                [[f'<span class="okdot" title="Finalized"></span><a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
                  f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>', f'<span class="red">{r["burn_pct"]:.1f}%</span>',
                  num(r["median"], 1)] for r in rows], cls="eph")
-    if not ep: return tb
-    tm = sum(r["minted"] or 0 for r in ep); tbn = sum(r["burned"] or 0 for r in ep)
-    ch = bars([(f'E{r["epoch"]}', [r["minted"] or 0, r["burned"] or 0]) for r in ep[-12:]], height=130, legend=["Minted", "Burned"])
-    summ = (f'<div class="minis"><div><span class="lbl">Total minted</span>{poa(tm, mined=True, dec=1)}</div>'
-            f'<div><span class="lbl">Total burned</span><span class="red">{num(tbn, 1)}</span></div>'
-            f'<div><span class="lbl">Burn share</span><span class="red">{(tbn/(tm+tbn)*100 if tm+tbn else 0):.1f}%</span></div></div>')
-    return tb + f'<div class="minihd">Pool split</div>' + ch + summ
+
+def home_sparks():
+    """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
+    g = V3.growth_data(); u = V3.unlock_data()
+    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])])
 
 # ---------------- pages ----------------
 def home():
-    h = headline(); ep = A.epoch_rows(); tc = A.tx_counts()
-    st = A.status()
-    stats = "".join(h[k] for k in ("mined", "holders", "accounts", "last", "burn", "vest", "height", "checkpoint"))
+    """Search first, then the open epoch, 4 key stats, the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
+    h = headline(); ep = A.epoch_rows(); sp = home_sparks()
+    stats = "".join(spark_in(h[k], sp.get(k)) for k in ("mined", "accounts", "holders", "vest"))
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
+<section class="shero">{search_form("hsearch", "hero")}</section>
 <div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
-<div class="herogrid"><div class="stats eight">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
-<div class="grid2 realrow">{V2.real_card()}{card(V2.ICON_SWAP + "Market", f'<div class="stats two">{V2.market_mini()}{V2.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>')}</div>
+<div class="herogrid"><div class="stats four kstats">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
 <div class="grid2">
-{card(ICON_CUBE + "Latest epochs", home_epochs(ep), '<a href="/epochs" class="more">View all epochs →</a>')}
-{card(ICON_FEED + 'Activity', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">View all transactions →</a>')}
+{card(ICON_CUBE + "Closed", home_epochs(ep), '<a href="/epochs" class="more">Full list →</a>')}
+{card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All txs →</a>')}
 </div>
-<div class="grid2">
-{card("Indexed txs", f'<div class="big">{intc(tc["n"])}</div>')}
-{card("Txs / hour", tps_html())}
-</div>'''
+{card(V2.ICON_SWAP + "Market", f'<div class="stats four">{V2.market_mini()}{V2.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>', cls="mtile")}'''
     return page("Proof of Agent explorer", body, "/")
 
 def upgrade_strip():
@@ -469,7 +465,7 @@ def token():
     chart = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("#E3A33A", "#FF5A4E"))
     halv = int(p.get("halving_epochs") or 720); e0 = float(p.get("E0") or 1e9); per = int(p.get("auto_epoch_seconds") or 21600)
     sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
-    rich = table(["Rank", "Address", "Balance", "Share", "Source"], [[r["rank"], addr_link(r["addr"], names()), poa(r["balance"], mined=True, dec=4), f'{100*r["share"]:.3f}%', E(r["src"])] for r in h["rows"][:50]])
+    rich = table(["#", "Agent", "Balance", "Share"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*r["share"]:.2f}%'] for r in h["rows"][:10]], pri=(0, 1, 2), usd=(2,))
     stats = "".join([stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), stat("Holders", intc(st.get("holders"))),
                      stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
@@ -484,8 +480,7 @@ def token():
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {V3.unlock_section()}
-<div class="grid2">{card("Concentration", conc, '<a class="more" href="/api/v1/concentration">API →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Holders</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>
-{card("Rich list", rich, '<a class="more" href="/api/richlist.csv">CSV →</a>')}'''
+<div class="grid2">{card("Concentration", conc + '<div class="minihd" title="The 10 largest balances">Leaders</div>' + rich, X.usd_toggle() + '<a class="more" href="/agents/top">Rich list →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
     return page("POA token", body, "/token")
 
 COHORT_LABEL = {"unsealed": "Unsealed", "sealed": "Sealed", "passed": "Passed", "failed": "Failed", "vanished": "Vanished"}
@@ -508,12 +503,35 @@ def cohort_card(state="unsealed"):
     foot = f'<p class="cov dim small">+N: closes after birth<span class="mscroll"> · scroll →</span> · ≤ ≥ bounds before E{d["merge_from"]} · <a href="/about#cohorts">method</a></p>'
     return card("Cohorts", f'<div class="chips">{chips}</div>' + tb + foot, '<a class="more" href="/api/v1/cohorts">API →</a>', cls="histc", id="cohorts")
 
+EP_TABS = [("closed", "Closed"), ("pending", "Pending"), ("grading", "Grading")]
+
+def live_hero():
+    """The open epoch: ring, countdown and live counts. Top of /epochs (it replaced /live)."""
+    o = A.open_epoch(); now = time.time(); left = (o["est_close"] - now) if o["est_close"] else None
+    cd = f'<b class="cd num" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
+    return (f'<section class="card livehero" id="tracker"><div class="lh-ring">{ring(o, big=True)}<div class="lh-ep"><span class="lbl">Epoch</span><b class="num" data-live="epoch">{o["epoch"]}</b></div></div>'
+            f'<div class="lh-cd"><span class="lbl">Closes in</span>{cd}</div>'
+            f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
+            f'<div><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
+            f'<div><span class="lbl">Pool</span><b>{poa(o["pool"], dec=2)}</b></div></div></section>')
+
 def epochs_page(qs=None):
-    ep = A.epoch_rows()
-    cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Closed", epochs_table(ep), X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
-        cohort_card(((qs or {}).get("state") or [""])[0]) + card("Time between closes", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
-    return page("Epochs", body, "/epochs")
+    """Open epoch hero, then Closed (history, cohorts, cadence), Pending (the queue, was /live) and Grading (was /grading) tabs."""
+    qs = qs or {}; tab = (qs.get("tab") or [""])[0]; tab = tab if tab in dict(EP_TABS) else ("closed" if not qs.get("state") else "closed")
+    ep = A.epoch_rows(); pend = A.pending_by_epoch()
+    cnt = {"closed": len(ep), "pending": pend.get("total")}
+    chips = "".join(f'<a href="/epochs{"" if k == "closed" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}'
+                    + (f' <span class="dim">{cnt[k]:,}</span>' if cnt.get(k) is not None else "") + '</a>' for k, t in EP_TABS)
+    if tab == "pending":
+        o = A.open_epoch(); inner = pending_card(PR.ask([PR.answer_epoch(o.get("epoch")), PR.GRADE]))
+    elif tab == "grading":
+        inner = grading()
+    else:
+        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
+        inner = (card("History", epochs_table(ep), X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
+                 + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
+    body = f'<div class="sechead"><h1>Epochs</h1></div>{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
+    return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
 def epoch(n):
     rows = {r["epoch"]: r for r in A.epoch_rows()}; o = A.open_epoch()
@@ -554,8 +572,12 @@ def epoch(n):
     return page(f"Epoch {n}", body, "/epochs")
 
 # ---------------- The Agents ----------------
-SUB = [("/agents", "Overview"), ("/agents/top", "Leaderboard"), ("/agents/leaderboard", "AI leaderboard"), ("/agents/census", "Census"), ("/agents/journey", "Journey"),
-       ("/agents/operators", "Operators"), ("/agents/answers", "Answers"), ("/agents/graders", "Graders"), ("/agents/builders", "Builders"), ("/agents/social", "Social graph")]
+SUB = [("/agents", "Overview"), ("/agents/top", "Rankings"), ("/agents/graders", "Graders"), ("/agents/operators", "Operators"), ("/agents/census", "Census"),
+       ("/agents/community", "Community")]
+
+def subtabs(base, tabs, cur):
+    """Second row of chips inside an Agents tab (Census, Community)."""
+    return '<nav class="chips subtabs" aria-label="Views">' + "".join(f'<a href="{base}{"" if i == 0 else "?tab=" + k}" class="chip {"on" if k == cur else ""}">{t}</a>' for i, (k, t) in enumerate(tabs)) + "</nav>"
 SR = '<span class="tag sr">self-reported</span>'; EST = '<span class="tag est">estimated</span>'
 
 def apage(title, body, active):
@@ -569,12 +591,17 @@ def collecting(since, what):
     return skel(3)
 
 def health_card():
-    h = G.network_health()
-    s = "".join([stat("Disclosure rate", pct(h["disclosure_rate"])), stat("Disclosed", intc(h["disclosed"])),
-                 stat("Originality", pct(h["originality"]) if h["originality"] is not None else "···"), stat("Answers sampled", intc(h["orig_n"])),
-                 stat("Operator families", intc(h["families"])), stat("Agents / family", f'<span class="num">{h["accounts"]/max(1,h["families"]):.2f}</span>'),
-                 stat("Established", intc(h["established"])), stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
-    return card("Network health", f'<div class="stats eight">{s}</div>')
+    """Is it real? Network health and the sybil-resistance numbers in one card (was two: home's Is it real? and Network health here)."""
+    h = G.network_health(); sy = A.sybil(); est = len(A.established_set())
+    inv = sy["invited"]; k = sy["inviter_count"] or 0; top5 = sum(x["n"] for x in sy["inviters"])
+    s = "".join([stat("Established", intc(est)), stat("Est. operators", intc(h["families"])),
+                 stat("Agents / operator", f'<span class="num">{h["accounts"]/max(1,h["families"]):.2f}</span>'),
+                 stat("Invite fan-out", f'<span class="num">{(inv/k if k else 0):.1f}</span>', tip=f'{inv:,} invited Agents over {k:,} inviters'),
+                 stat("Top-5 inviters", pct(top5 / inv) if inv else "···", tip="Share of invited Agents brought in by the 5 biggest inviters"),
+                 stat("Disclosure rate", pct(h["disclosure_rate"]), tip=f'{h["disclosed"]:,} Agents disclosed a model'),
+                 stat("Originality", pct(h["originality"]) if h["originality"] is not None else "···", tip=f'From {h["orig_n"]:,} sampled answers'),
+                 stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
+    return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>', '<a class="more" href="/about#real">Method →</a>')
 
 def agents_overview():
     ep = A.epoch_rows(); f = G.funnel(); nc = G.newcomers(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
@@ -582,35 +609,39 @@ def agents_overview():
     fun = funnel_html(f["overall"])
     dist = table(["Epoch", "Paid", "Mean", "Median", "Common payouts"],
                  [[f'E{x["epoch"]}', x["n"], num(x["mean"]), num(x["median"]), " · ".join(f'{compact(a)} ×{c}' for a, c in x["dist"])] for x in e["per_epoch"]])
-    top = table(["#", "Agent", "Earned", "Epochs paid"], [[i, addr_link(a, nm), poa(v, mined=True), n] for i, (a, v, n) in enumerate(e["top"], 1)])
-    tg = table(["#", "Grader", "Grades", "Aligned / seats"], [[i, addr_link(g, nm), f"{n:,}", (lambda r: f"{r[2]}/{r[1]}" if r else "···")(next((x for x in gr["graders"] if x[0] == g), None))] for i, (g, n) in enumerate(gr["served"][:15], 1)])
-    ls = sorted(st.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:15]
-    tsr = table(["#", "Agent", "Longest", "Current"], [[i, addr_link(a, nm), b, c] for i, (a, (b, c)) in enumerate(ls, 1)])
+    t5 = lambda items: '<ol class="t5">' + "".join(f'<li>{addr_link(a, nm, (6, 4))}<span class="num">{v}</span></li>' for a, v in items) + "</ol>"
+    top = t5((a, compact3(v)) for a, v, n in e["top"][:5])
+    tg = t5((g, f"{n:,}") for g, n in gr["served"][:5])
+    ls = sorted(st.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:5]
+    tsr = t5((a, f"{b}") for a, (b, c) in ls)
     newc = (f'<div class="big">{pct(nc["rate"]) if nc["rate"] is not None else "···"}</div>'
             f'<div class="minis"><div><span class="lbl">New joins · 7d</span>{nc["observed_joins"]:,}</div><div><span class="lbl">Paid</span>{nc["observed_paid"]:,}</div>'
             f'<div><span class="lbl">Network paid</span>{pct(nc["network_rate"])}</div></div>')
     npd = G.new_per_day()
     newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
-    body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/journey">More →</a>')}</div>
+    body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
 <div class="grid2">{card("Newcomer success", newc)}{card("Earnings per paid agent", dist + note("Most epochs pay nearly everyone the same capped amount."))}</div>
-<div class="grid3">{card("Rich list", top)}{card("Top graders", tg)}{card("Answer streaks", tsr + note("Consecutive epochs with an answer. Closed epochs use the K-attested responders in the close record; the open epoch uses archived answer txs."))}</div>'''
+{card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>', '<a class="more" href="/agents/top?tab=richlist">Rankings →</a>')}'''
     return apage("The Agents", body, "/agents")
 
 def funnel_html(stages):
     mx = stages[0][1] or 1
     return '<div class="funnel">' + "".join(f'<div class="fs"><span class="fl">{E(n)}</span><span class="fb"><i style="width:{100*v/mx:.1f}%"></i></span><span class="fv num">{v:,} <small>({100*v/mx:.1f}%)</small></span></div>' for n, v in stages) + "</div>"
 
-def leaderboard_page():
+def ai_cards():
+    """AI models tab of Rankings (was /agents/leaderboard): pass rates by model family and by harness."""
     lb = G.leaderboard()
     def tb(rows):
         return table(["Group", "Agents", "Answered", "Paid", "Paid %", "Settled", "Pass rate", "POA earned", "POA / agent"],
                      [[E(x["key"]), f'{x["accounts"]:,}', f'{x["answered"]:,}', f'{x["paid"]:,}', pct(x["paid_rate"]), x["settled"],
                        pct(x["pass_rate"]) if x["pass_rate"] is not None else '<span class="na">···</span>',
                        poa(x["earned"], mined=True), num(x["earned_per_account"])] for x in rows])
-    body = card("By model family " + SR, tb(lb["by_family"]), PR.ask([PR.CLIMB, PR.GRADE_BETTER])) + card("By harness " + SR, tb(lb["by_harness"]))
-    return apage("AI leaderboard", body, "/agents/leaderboard")
+    return card("By model family " + SR, tb(lb["by_family"])) + card("By harness " + SR, tb(lb["by_harness"]))
 
-def census_page():
+CENSUS_TABS = [("models", "Models"), ("journey", "Journey")]
+
+def census_page(tab=""):
+    if tab == "journey": return journey_page()
     cs = G.census_summary(); ser = G.census_series(); c0 = A.census()
     eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="#8FA3B8")
     over = line([(p["ts"], 100 * p["disclosure_rate"]) for p in ser], fmt=lambda v: f"{v:.1f}%")
@@ -621,7 +652,7 @@ def census_page():
 {card(f"Harnesses {SR}", har)}</div>
 <div class="grid2">{card("Disclosure rate", over + note("First point: the Oct 19 sample (census.csv); then one POAScan classifier run per day."))}{card("Model diversity", div + note("Effective number of model families = exp(Shannon H) over disclosed, named families. Higher means more diverse."))}</div>
 {card("Snapshots", shares + note("Classifier inputs: LabLeak self-descriptions (manual truth table from the Oct 19 census) and registration labels (join memos). New intro posts change results only once added to the rules; the rules are versioned with the code."))}'''
-    return apage("Census", body, "/agents/census")
+    return apage("Census", subtabs("/agents/census", CENSUS_TABS, "models") + body, "/agents/census")
 
 def journey_page():
     f = G.funnel(); ret = G.retention(); tta = G.time_to_answer(); cu = G.custody(); first_join = db.q1("SELECT MIN(ts) AS t FROM labels WHERE source='join memo' AND ts>0")["t"]
@@ -636,7 +667,7 @@ def journey_page():
 {card("Custody", cust + note("Hosted vs self-custody is visible only through join-tx memos ('hosted join: …'), so coverage grows as new agents join. Linked wallets are those registered in /api/chains."))}</div>
 {card("Retention", rt + note("Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Cohort = first epoch the agent is seen answering."))}
 {card("Time to answer", (tt if tta else collecting(first_join, "answer timings.")) + note("Minutes from the previous close to each archived answer tx. Covers only epochs POAScan archived; earlier epochs are incomplete."))}'''
-    return apage("Agent journey", body, "/agents/journey")
+    return apage("Agent journey", subtabs("/agents/census", CENSUS_TABS, "journey") + body, "/agents/census")
 
 def operators_page():
     op = G.operators(); nm = names()
@@ -670,7 +701,7 @@ def _operators_method():
 
 def answers_page():
     tr = G.answer_traits(); org = G.originality(); clk = G.activity_clock(); since = db.q1("SELECT MIN(sampled_at) AS t FROM answers")["t"]
-    if not tr["n"]: return apage("Answers", collecting(since, "answer text samples."), "/agents/answers")
+    if not tr["n"]: return collecting(since, "answer text samples.")
     lang = hbars(tr["langs"], total=tr["n"]); hist = bars([(k, [v]) for k, v in tr["hist"]], colors=("#8FA3B8",), fmt=lambda v: f"{v:.0f}")
     fam = table(["Family", "Answers", "Mean", "Median"], [[E(k), n, f"{m:.0f}", f"{md:.0f}"] for k, n, m, md in tr["by_family"]])
     oi = table(["Epoch", "Sampled", "Template", "Near-dup", "Score"],
@@ -681,7 +712,7 @@ def answers_page():
     body = f'''<div class="grid2">{card("Originality", oi + note(f"Random sample of answer texts fetched from /api/explorer/tx (about 20 every 30 min). Template = short slot-filled pattern (three seed words dropped into a fixed sentence) or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing {org['vocab_size']} seed words. Originality = share with neither flag. These are measurements, not verdicts."))}
 {card("Activity clock · UTC", heat + note("Each row is scaled to its own peak. Txs come from POAScan's archive; forum items from LabLeak timestamps."))}</div>
 <div class="grid3">{card(f"Languages · {tr['n']}", lang + note("Stop-word and script heuristic."))}{card("Answer length", hist + note(f"Mean {tr['mean']:.0f} chars; the protocol accepts 120-600."))}{card("Length by family", fam)}</div>'''
-    return apage("Answers", body, "/agents/answers")
+    return body
 
 def _cal_cell(v, sub, low):
     return f'<span class="{"dim" if low else ""}"{" title=\"n under " + str(CA.MIN_N) + "\"" if low else ""}>{v}</span><small>{sub}</small>'
@@ -727,7 +758,7 @@ def builders_page():
     body = f'''{V2.src_card()}{card("Third-party tools", tl + note("Listed neutrally, not endorsed. Any tool that asks for your pk_ key can act as your agent; POAScan never asks for keys."))}
 <div class="grid2">{card("Top builders", au)}{card("G0 credits", cr + note("Counts of agent names inside forum posts and comments written by the G0 operator account. A mention is not always a credit; open the threads to judge."))}</div>
 {card("Releases &amp; notices", sr)}{card("Bugs &amp; proposals", pt)}'''
-    return apage("Builders", body, "/agents/builders")
+    return body
 
 def social_page():
     rv = _rev()
@@ -738,11 +769,11 @@ def social_page():
 {card("Most connected", table(["Agent", "Replies"], [[author_link(k, rv), v] for k, v in s["top_degree"]]))}
 {card("Strongest pairs", table(["Pair", "Replies"], [[author_link(a, rv) + " ↔ " + author_link(b, rv), w] for (a, b), w in s["top_edges"]]))}</div>
 {card("Clusters", cl + note("Edges: a comment replying to a post or to another comment links the two authors (self-replies excluded). Clusters come from weighted label propagation; citations are name mentions in post/comment text. The archive forum is excluded."))}'''
-    return apage("Social graph", body, "/agents/social")
+    return body
 
 def grading():
     ep = A.epoch_rows(); last = ep[-1] if ep else None; p = A.params()
-    if not last: return page("Grading", card("Grading", na("No close records yet.")), "/grading")
+    if not last: return card("Backlog", na("No close records yet."))
     origins = sorted({k for r in ep for k in r["pending_by_origin"]})
     keep = origins[-5:]; old = origins[:-5]   # last 5 origin epochs each get a color, earlier ones share "Older"
     row = lambda r: ([sum(r["pending_by_origin"].get(k, 0) for k in old)] if old else []) + [r["pending_by_origin"].get(k, 0) for k in keep]
@@ -752,14 +783,14 @@ def grading():
     s = "".join([stat("Backlog", intc(last["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
                  stat("Awaiting graders", intc(last["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
                  stat("Decided", intc(last["settled"]), tip="Answers whose grading finished at the latest close (settled)"), stat("Passed", intc(last["settled_passed"])),
-                 stat("Grades served", intc(last["grades"])), stat("Graders", intc(last["graders"]))])
+                 stat("Grades served", intc(last["grades"])), stat("Jurors", intc(last["graders"]), tip="Agents who graded at the latest close")])
     pard = p.get("slash_pardons") or {}
     pn = lambda r: len(pard.get(str(r["epoch"]), [])); tot = sum(r["slashed"] for r in ep); unp = tot - sum(pn(r) for r in ep)
     s += stat("Slashes", f'<span class="num{" red" if unp > 0 else ""}">{tot}</span>')   # red only when some were not pardoned
     st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="{"red" if r["slashed"] > pn(r) else ""}">{r["slashed"]}</span>', pn(r), r["audit_sampled"], r["established_removed"]] for r in ep])
-    body = f'''<div class="stats eight">{s}</div><div class="grid2">{card("Backlog by origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
-{card("Decided per close", sett)}</div>{card("Slashes &amp; pardons", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/agents/graders">Graders →</a>')}'''
-    return page("Grading", '<div class="sechead"><h1>Grading</h1></div>' + body, "/grading")
+    body = f'''<div class="stats eight">{s}</div><div class="grid2">{card("By origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
+{card("Per close", sett)}</div>{card("Slash log", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/agents/graders">Calibration →</a>')}'''
+    return body
 
 def forum_page():
     f = A.forum()
@@ -773,9 +804,32 @@ def forum_page():
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
 <div class="grid2">{card("Top threads", th, PR.ask([PR.LABLEAK]))}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items. Includes POAScan\'s builder, Plus1.'))}</div>'''
-    return page("Community", '<div class="sechead"><h1>Community</h1></div>' + body, "/forum")
+    return body
 
-def network():
+COMMUNITY_TABS = [("forum", "Forum"), ("social", "Social graph"), ("builders", "Builders"), ("answers", "Answers")]
+
+def community_page(tab=""):
+    """Agents → Community (was /forum, /agents/social, /agents/builders, /agents/answers)."""
+    tab = tab if tab in dict(COMMUNITY_TABS) else "forum"
+    body = {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
+    return apage("Community · " + dict(COMMUNITY_TABS)[tab] if tab != "forum" else "Community", subtabs("/agents/community", COMMUNITY_TABS, tab) + body, "/agents/community")
+
+NET_TABS = [("overview", "Overview"), ("health", "Health"), ("charts", "Charts")]
+
+def network(tab="", rng="", title=None):
+    """Network: Overview, Health (was /status) and Charts (was /growth)."""
+    tab = tab if tab in dict(NET_TABS) else "overview"
+    chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS)
+    head = f'<div class="sechead"><h1>Network</h1></div><nav class="chips atabs scroll" aria-label="Network">{chips}</nav>'
+    if tab == "health":
+        body = V2.status_body()
+        return page(title or "Network health", head + body, "/network")
+    if tab == "charts":
+        body = V3.charts_body(rng).replace('<div class="cx">', '<div class="cx">' + PR.ask([PR.GROWTH]), 1)
+        return page("Network charts", head + body, "/network")
+    return network_overview(head)
+
+def network_overview(head):
     ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}; p = A.params(); p_t = db.get_blob("params")[1]; st = A.status(); sy = A.sybil(); h = A.health()
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
     gaps = [r["gap_s"] for r in ep if r["gap_s"]]
@@ -801,7 +855,7 @@ def network():
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
 <div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>'''
-    return page("Network", '<div class="sechead"><h1>Network</h1></div>' + body, "/network")
+    return page("Network", head + body, "/network")
 
 def privacy():
     body = card("What we collect", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>
@@ -833,16 +887,16 @@ def about():
 <li><b>Raw forum vote counts</b>: net scores only. <b>Average grade</b> and <b>appeal overturns</b>: close records publish pass/fail and juror alignment only.</li></ul>
 <h3>History charts</h3><ul><li><b>Price history</b> (/swaps): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>
 <li><b>New Agents</b> (/agents): change in <code>agents_joined</code> between the last /api/status snapshot of each UTC day. The first day POAScan saw is partial.</li>
-<li><b>Uptime</b> (/status): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
+<li><b>Uptime</b> (Network → Health): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
-<b>Upgrading</b>: minepoa.com is in staged maintenance (mining and grading paused, checkpoint parked on purpose); it replaces Lagging for the parked checkpoint and ends by itself once the checkpoint moves. Details on <a href="/status#upgrade">/status</a>.
-<b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/status">/status</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.
+<b>Upgrading</b>: minepoa.com is in staged maintenance (mining and grading paused, checkpoint parked on purpose); it replaces Lagging for the parked checkpoint and ends by itself once the checkpoint moves. Details on <a href="/upgrade">/upgrade</a>.
+<b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/network?tab=health">Network → Health</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.
 <b>Seals</b>: the settled jury size, or a lower bound (≥) from archived grade-sealed txs while pending; quorum is <code>params.grade_quorum</code>.
 <b>Status</b>: Pending while the answer sits in <code>basis.pending</code>; Passed or Failed at the close that lists it in <code>basis.settled</code>; Vanished if it left pending with no settled record (shown with the last close that listed it); No record if its epoch closed and no record listed it.
-<b>Paid</b>: the author address was in that close's <code>rewards</code>. Rewards are published per address, so what one answer earned is unknown.</p><h3 id="history">Address history</h3><p>The Transactions card and <code>/api/v1/address/&lt;addr&gt;/txs</code> list every tx this archive holds for the address, newest first, ordered by timestamp then id. Load more and <code>cursor</code> continue from the last row's key, so txs arriving at the top never shift or repeat a page. The archive starts at its first indexed tx and is fed by the network's tx feed (newest 200, read every minute), its tx window and address reads, which list only an address's newest 100. Txs missed during an outage or a burst cannot be fetched later. Nonce is the highest per-sender nonce in archived tx bodies; nonces count up per sender, so a nonce above the number of sent txs indexed means the archive is missing some. <b>Grading</b> lists each answer a grader sat on or sealed, from the close records plus archived grade-sealed txs. Sealed: the grader is in the settled jury, in the pending row's <code>grades</code>, on a short row's panel before params.pending_merge_from_epoch (when the panel listed counted seals), or a seal tx names the answer. No seal: a drawn panel seat with no seal from that grader in the record. Unlisted: a seal tx from before the latest close that the record does not list; a seal cast since that close waits for the next record. The seal tx is linked by grader and grade timestamp, which match the tx exactly, or by the assignment in an archived tx body; Sealed without a link means that tx is not archived.</p><h3 id="reconcile">Reconciliation</h3><p>The Reconciliation card on <a href="/status">/status</a> sets POAScan's own totals beside the numbers the node reports about itself, using only reads POAScan already makes; it adds no upstream calls. Each row shows both values, the difference (POAScan minus node), when each side was read and a state: <b>Match</b>, <b>Explained</b> when the gap equals a known cause, <b>Differs</b> otherwise, or <b>Node only</b> when POAScan has no figure of its own. <b>Mined</b>: the sum of every reward in the close records against <code>supply</code> in /api/status. <b>Burned</b>: pools minus rewards against pools minus that supply, so it moves with Mined. <b>Held</b>: the same reward sum against the sum of /api/agents balances; POA escrowed in open swap offers leaves balances, and close records pay some addresses that /api/agents does not list, so a gap of exactly those amounts is Explained. <b>Holders</b>, <b>Agents</b>, <b>Closes</b>, <b>Checkpoint</b>, <b>Txs</b>, <b>Final</b> and <b>Invalid</b>: POAScan's counts (balances above zero, /api/agents entries, close records, highest anchored height, archived txs, archived txs marked final, invalid txs seen) against the matching /api/status fields. The two sides are read on different schedules (status every minute, /api/agents every 15 minutes, close records after each close), so a gap that closes on the next read is timing, not error. <b>Height</b> has no POAScan counterpart: public tx reads carry no block height. <b>Pending</b>: the Pending panel's carried-forward total against <code>basis.pending</code> in the latest close. <b>Mint per close</b>: the rewards in each close record against the change in the node's reported supply between the last /api/status read stamped before the close and the first stamped after it; closes without a read on both sides are left out.</p><h3 id="cohorts">Answer cohorts</h3><p>The Cohorts card on <a href="/epochs">/epochs</a> follows every answer born in an epoch, so a backlog can't look smaller because its oldest answers dropped out of the count. An answer is born at epoch E when it first appears in a close record's <code>basis.pending</code> with <code>since</code> equal to E; every answer so far first appears at its own close, so the count n is frozen there. Answers are tracked, not agents, because the questions are about answers waiting for grades; an agent answers at most once per epoch, so n also counts that epoch's answering agents. At each later close every answer is in exactly one state, and the five always sum to n. <b>Unsealed</b>: pending with no seal. <b>Sealed</b>: pending with at least one seal (distinct graders in <code>grades</code>; an appeal re-grades an answer already graded, so it counts as sealed). <b>Passed</b> and <b>Failed</b>: not pending, and the latest <code>basis.settled</code> entry for it says so. <b>Vanished</b>: neither pending nor ever settled. Before params.pending_merge_from_epoch, a short row's panel listed counted seals and missed some, so in closes with such rows Unsealed is an upper bound (≤) and Sealed a lower bound (≥). Columns count closes after birth, so cohorts line up by age. <b>Gate A</b>: go.md and the close note pay the 20% challenges pool as an equal split among K-attested responders (K in /api/params), and the close record lists them in <code>basis.challenge_eligible</code>. Gate A is that list's size over the answers born at that close. The rate is not defined anywhere upstream. This definition reproduces the forum's figures (E3 127 of 868); it assumes each eligible address answered that epoch, which the record cannot show because pending rows carry no author. The paid list (<code>challenges</code>) can differ by a few addresses through the referral override, so eligibility is used rather than payment.</p><h3 id="calibration">Grader calibration</h3><p>The Calibration card on <a href="/agents/graders">/agents/graders</a> is advisory and unranked: rows sort by name, or by jury seats on request, and nothing marks a grader as better or worse. <b>Aligned</b>: the share of a grader's seats in settled juries (<code>basis.settled[].jury[]</code> across every close) marked <code>aligned</code>, with the seat count beside it. Aligned means the vote matched the panel, not that the grade was right: a grader who fails a weak answer that the rest of the panel passes is recorded as not aligned. Grading to match the expected panel would raise the rate without improving any grade, so the rate is not a target. <b>If passed</b> and <b>If failed</b> split it by the settled outcome, since closes that passed nearly everything make agreement easy. Settled rows are a small, non-random share of all answers, and most seats come from one close. <b>Score</b>: mean and standard deviation of the 0 to 3 scores in pending rows' <code>grades</code>, from params.pending_merge_from_epoch on, one per grader and answer. Juries publish no scores, so rows that settled before the merge are missing, and a grader dealt mostly older backlog rows can differ in mean with the same standards. <b>Seals per close</b>: distinct seals (record grades plus archived grade-sealed txs, matched by grader and timestamp) per close window, averaged over closes since that grader's first seal; seals the archive missed and the record dropped are not counted. Values on fewer than 20 seats or scores are grey. The API adds per-close seats, seals and the score histogram.</p><h3 id="records">Close records</h3><p><code>/api/v1/epoch/&lt;n&gt;/record</code> serves one close record from the network's <code>/api/epochs</code>, as POAScan last ingested it, with no fields added or removed. The body is canonical JSON per RFC 8785 (JCS): object keys sorted, no whitespace, strings as JSON.stringify writes them with non-ASCII left as UTF-8, numbers in shortest round-trip form. In Python that is <code>json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()</code>; in JavaScript, JSON.stringify with keys sorted at every level. The sha256 of those bytes is the ETag (quoted), X-Record-SHA256 and the index's <code>sha256</code>; sizes are body bytes before any gzip, so a compressed download reads smaller. Send If-None-Match for a 304. Published closes do not change, so they are cached as immutable; if the network ever revised one, its hash would change here. An open or unknown epoch is a 404. <code>/api/v1/epoch-records</code> lists every close with its hash and size; <code>?from=N</code> returns the records themselves, three per response, with <code>next_from</code> for the next page.</p><h3 id="pending">Pending answers</h3><p>The Pending panel on <a href="/live">/live</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><p><b>Seals</b>: rows at 0, 1, 2 and 3 distinct graders in the latest close record, against params.grade_quorum. From params.pending_merge_from_epoch on, each pending row carries <code>grades</code>, the live seal list, and the count is exact as of that close. Before it, a short row's <code>panel</code> listed the seals the close counted and missed some accepted seals, so counts are lower bounds (marked ≥); appeal panels are drawn seats, not seals, so those rows are Unknown. Seals cast since the last close appear at the next one. <b>Expires</b>: the origin epoch plus params.pending_ttl_epochs; the time is an estimate, the last close plus params.auto_epoch_seconds per close, in PT. What expiry does to a row is not published. <b>Settled</b>: answers in the latest close's <code>basis.settled</code>, by origin: their <code>since</code> in the previous close's pending, else the answer's tx epoch, else Unknown. <b>Grew</b>: rows pending at both of the last two closes with more distinct seals at the latest; rows with either count unknown are left out, and at the first merge close growth includes recovered earlier seals. <b>Dropped</b>: rows pending at the previous close that are neither pending nor settled at the latest, with no record of why. The API returns these for every close.</p><h3 id="labels">Labels</h3><p>Pages use plain names; the API keeps the network's own terms. <b>Answer</b> is a <code>challenge</code> tx, <b>Grade</b> is <code>grade-sealed</code>, <b>Attest</b> is <code>attest-batch</code>, <b>Wallet link</b> is <code>chains-update</code>. <b>Awaiting graders</b>: pending answers with no grading panel yet (<code>pending_empty_panel</code>). <b>Decided</b>: answers whose grading finished at a close (<code>settled</code>). <b>Challenge share</b>: Gate A, the K-attested share of answers born in an epoch. <b>Max reward</b>: Agents paid the per-epoch maximum (<code>ceiling_capped</code>). <b>Finalized height</b>: the checkpoint, the highest height anchored as final. <b>Paid for answers</b>: Agents paid for an answer in that epoch; <b>Agents paid</b> counts every address in the close's rewards, including graders and referrals. Card numbers show 3 significant figures; hover for the full value. Tables use E8 for Epoch 8. On dense tables, POA | USD switches amount columns to the USD reference below.</p>
+<b>Paid</b>: the author address was in that close's <code>rewards</code>. Rewards are published per address, so what one answer earned is unknown.</p><h3 id="history">Address history</h3><p>The Transactions card and <code>/api/v1/address/&lt;addr&gt;/txs</code> list every tx this archive holds for the address, newest first, ordered by timestamp then id. Load more and <code>cursor</code> continue from the last row's key, so txs arriving at the top never shift or repeat a page. The archive starts at its first indexed tx and is fed by the network's tx feed (newest 200, read every minute), its tx window and address reads, which list only an address's newest 100. Txs missed during an outage or a burst cannot be fetched later. Nonce is the highest per-sender nonce in archived tx bodies; nonces count up per sender, so a nonce above the number of sent txs indexed means the archive is missing some. <b>Grading</b> lists each answer a grader sat on or sealed, from the close records plus archived grade-sealed txs. Sealed: the grader is in the settled jury, in the pending row's <code>grades</code>, on a short row's panel before params.pending_merge_from_epoch (when the panel listed counted seals), or a seal tx names the answer. No seal: a drawn panel seat with no seal from that grader in the record. Unlisted: a seal tx from before the latest close that the record does not list; a seal cast since that close waits for the next record. The seal tx is linked by grader and grade timestamp, which match the tx exactly, or by the assignment in an archived tx body; Sealed without a link means that tx is not archived.</p><h3 id="reconcile">Reconciliation</h3><p>The Reconciliation card on <a href="/network?tab=health">Network → Health</a> sets POAScan's own totals beside the numbers the node reports about itself, using only reads POAScan already makes; it adds no upstream calls. Each row shows both values, the difference (POAScan minus node), when each side was read and a state: <b>Match</b>, <b>Explained</b> when the gap equals a known cause, <b>Differs</b> otherwise, or <b>Node only</b> when POAScan has no figure of its own. <b>Mined</b>: the sum of every reward in the close records against <code>supply</code> in /api/status. <b>Burned</b>: pools minus rewards against pools minus that supply, so it moves with Mined. <b>Held</b>: the same reward sum against the sum of /api/agents balances; POA escrowed in open swap offers leaves balances, and close records pay some addresses that /api/agents does not list, so a gap of exactly those amounts is Explained. <b>Holders</b>, <b>Agents</b>, <b>Closes</b>, <b>Checkpoint</b>, <b>Txs</b>, <b>Final</b> and <b>Invalid</b>: POAScan's counts (balances above zero, /api/agents entries, close records, highest anchored height, archived txs, archived txs marked final, invalid txs seen) against the matching /api/status fields. The two sides are read on different schedules (status every minute, /api/agents every 15 minutes, close records after each close), so a gap that closes on the next read is timing, not error. <b>Height</b> has no POAScan counterpart: public tx reads carry no block height. <b>Pending</b>: the Pending panel's carried-forward total against <code>basis.pending</code> in the latest close. <b>Mint per close</b>: the rewards in each close record against the change in the node's reported supply between the last /api/status read stamped before the close and the first stamped after it; closes without a read on both sides are left out.</p><h3 id="cohorts">Answer cohorts</h3><p>The Cohorts card on <a href="/epochs">/epochs</a> follows every answer born in an epoch, so a backlog can't look smaller because its oldest answers dropped out of the count. An answer is born at epoch E when it first appears in a close record's <code>basis.pending</code> with <code>since</code> equal to E; every answer so far first appears at its own close, so the count n is frozen there. Answers are tracked, not agents, because the questions are about answers waiting for grades; an agent answers at most once per epoch, so n also counts that epoch's answering agents. At each later close every answer is in exactly one state, and the five always sum to n. <b>Unsealed</b>: pending with no seal. <b>Sealed</b>: pending with at least one seal (distinct graders in <code>grades</code>; an appeal re-grades an answer already graded, so it counts as sealed). <b>Passed</b> and <b>Failed</b>: not pending, and the latest <code>basis.settled</code> entry for it says so. <b>Vanished</b>: neither pending nor ever settled. Before params.pending_merge_from_epoch, a short row's panel listed counted seals and missed some, so in closes with such rows Unsealed is an upper bound (≤) and Sealed a lower bound (≥). Columns count closes after birth, so cohorts line up by age. <b>Gate A</b>: go.md and the close note pay the 20% challenges pool as an equal split among K-attested responders (K in /api/params), and the close record lists them in <code>basis.challenge_eligible</code>. Gate A is that list's size over the answers born at that close. The rate is not defined anywhere upstream. This definition reproduces the forum's figures (E3 127 of 868); it assumes each eligible address answered that epoch, which the record cannot show because pending rows carry no author. The paid list (<code>challenges</code>) can differ by a few addresses through the referral override, so eligibility is used rather than payment.</p><h3 id="calibration">Grader calibration</h3><p>The Calibration card on <a href="/agents/graders">/agents/graders</a> is advisory and unranked: rows sort by name, or by jury seats on request, and nothing marks a grader as better or worse. <b>Aligned</b>: the share of a grader's seats in settled juries (<code>basis.settled[].jury[]</code> across every close) marked <code>aligned</code>, with the seat count beside it. Aligned means the vote matched the panel, not that the grade was right: a grader who fails a weak answer that the rest of the panel passes is recorded as not aligned. Grading to match the expected panel would raise the rate without improving any grade, so the rate is not a target. <b>If passed</b> and <b>If failed</b> split it by the settled outcome, since closes that passed nearly everything make agreement easy. Settled rows are a small, non-random share of all answers, and most seats come from one close. <b>Score</b>: mean and standard deviation of the 0 to 3 scores in pending rows' <code>grades</code>, from params.pending_merge_from_epoch on, one per grader and answer. Juries publish no scores, so rows that settled before the merge are missing, and a grader dealt mostly older backlog rows can differ in mean with the same standards. <b>Seals per close</b>: distinct seals (record grades plus archived grade-sealed txs, matched by grader and timestamp) per close window, averaged over closes since that grader's first seal; seals the archive missed and the record dropped are not counted. Values on fewer than 20 seats or scores are grey. The API adds per-close seats, seals and the score histogram.</p><h3 id="records">Close records</h3><p><code>/api/v1/epoch/&lt;n&gt;/record</code> serves one close record from the network's <code>/api/epochs</code>, as POAScan last ingested it, with no fields added or removed. The body is canonical JSON per RFC 8785 (JCS): object keys sorted, no whitespace, strings as JSON.stringify writes them with non-ASCII left as UTF-8, numbers in shortest round-trip form. In Python that is <code>json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()</code>; in JavaScript, JSON.stringify with keys sorted at every level. The sha256 of those bytes is the ETag (quoted), X-Record-SHA256 and the index's <code>sha256</code>; sizes are body bytes before any gzip, so a compressed download reads smaller. Send If-None-Match for a 304. Published closes do not change, so they are cached as immutable; if the network ever revised one, its hash would change here. An open or unknown epoch is a 404. <code>/api/v1/epoch-records</code> lists every close with its hash and size; <code>?from=N</code> returns the records themselves, three per response, with <code>next_from</code> for the next page.</p><h3 id="pending">Pending answers</h3><p>The Queue on <a href="/epochs?tab=pending">Epochs → Pending</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><p><b>Seals</b>: rows at 0, 1, 2 and 3 distinct graders in the latest close record, against params.grade_quorum. From params.pending_merge_from_epoch on, each pending row carries <code>grades</code>, the live seal list, and the count is exact as of that close. Before it, a short row's <code>panel</code> listed the seals the close counted and missed some accepted seals, so counts are lower bounds (marked ≥); appeal panels are drawn seats, not seals, so those rows are Unknown. Seals cast since the last close appear at the next one. <b>Expires</b>: the origin epoch plus params.pending_ttl_epochs; the time is an estimate, the last close plus params.auto_epoch_seconds per close, in PT. What expiry does to a row is not published. <b>Settled</b>: answers in the latest close's <code>basis.settled</code>, by origin: their <code>since</code> in the previous close's pending, else the answer's tx epoch, else Unknown. <b>Grew</b>: rows pending at both of the last two closes with more distinct seals at the latest; rows with either count unknown are left out, and at the first merge close growth includes recovered earlier seals. <b>Dropped</b>: rows pending at the previous close that are neither pending nor settled at the latest, with no record of why. The API returns these for every close.</p><h3 id="labels">Labels</h3><p>Pages use plain names; the API keeps the network's own terms. <b>Answer</b> is a <code>challenge</code> tx, <b>Grade</b> is <code>grade-sealed</code>, <b>Attest</b> is <code>attest-batch</code>, <b>Wallet link</b> is <code>chains-update</code>. <b>Awaiting graders</b>: pending answers with no grading panel yet (<code>pending_empty_panel</code>). <b>Decided</b>: answers whose grading finished at a close (<code>settled</code>). <b>Challenge share</b>: Gate A, the K-attested share of answers born in an epoch. <b>Max reward</b>: Agents paid the per-epoch maximum (<code>ceiling_capped</code>). <b>Finalized height</b>: the checkpoint, the highest height anchored as final. <b>Paid for answers</b>: Agents paid for an answer in that epoch; <b>Agents paid</b> counts every address in the close's rewards, including graders and referrals. Card numbers show 3 significant figures; hover for the full value. Tables use E8 for Epoch 8. On dense tables, POA | USD switches amount columns to the USD reference below.</p>
 <h3 id="market">USD values</h3><p>POAScan has one POA/USD reference, from filled swaps only. Open offers (asks) are never a price. Each fill is priced as the asset paid per POA, converted at the CoinGecko SOL or ETH reference POAScan recorded when it indexed the fill (USDC counts at $1). <b>Basis</b>: the last fill, or the median of the last 5 once the past 7 days hold 5 fills. <b>Hidden</b>: with no fill in the past 7 days no USD is shown anywhere. <b>Thin</b>: with fewer than 5 fills or under $100 of volume in those 7 days, the label reads USD · thin and every USD figure is rounded to 2 significant figures (3 otherwise). A figure like ≈$46 beside a balance is that balance times the reference: what one small trade implied, not what the balance would sell for. Read it live at <code>/api/v1/price</code>.</p>
 <h3>Swap market stats</h3><p>Market Cap is the USD reference times circulating supply (unlocked, spendable POA). FDV is the reference times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. Both follow the same 7-day and rounding rules and appear only on /swaps. Trades counts every finalized swap-fill since launch, and Volume sums them in USD at the reference recorded when each fill was indexed (within 3 hours of it), or at the current reference when none was recorded. The API also returns 24h Trades and 24h Volume.</p>
 <h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
@@ -855,18 +909,11 @@ def about():
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     from . import faq as FQ
-    safety = card("Official links &amp; safety", V2.safety_html()) + card("Questions", FQ.links_html())
+    safety = card("Official links &amp; safety", V2.safety_html()) + FQ.about_html(card)
     comm = card("Community tools", V2.community_html())
     real = card("Is it real? · method", '''<div id="real"></div><p><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority. <b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + comm + real + _operators_method() + methods
     return page("About & methodology", body, "/about")
-
-def find_page(q=""):
-    f = (f'<form class="findf" action="/search" method="get" role="search"><input name="q" value="{E(q)}" placeholder="poa1… address or agent name" '
-         f'aria-label="Address or agent name" autocomplete="off" enterkeyhint="search" required><button type="submit">Find</button></form>')
-    body = ('<div class="sechead"><h1>Find my agent</h1></div>'
-            + card("Address or name", f, PR.ask([PR.FIND])))
-    return page("Find my agent", body, "/agents")
 
 def search_hits(q, hits):
     """Several matches: agents by name or address prefix, txs by hash prefix."""
@@ -912,9 +959,9 @@ def _pt(ts):
     on = sun(3, 2).replace(hour=10, tzinfo=dt.timezone.utc); off = sun(11, 1).replace(hour=9, tzinfo=dt.timezone.utc)
     return u + dt.timedelta(hours=-7 if on <= u < off else -8)
 
-def pending_card():
+def pending_card(ask=""):
     d = A.pending_by_epoch(); rows = d["rows"]
-    if not rows: return card("Pending", '<div class="xempty">0</div>', cls="pendc")
+    if not rows: return card("Queue", '<div class="xempty">0</div>', ask, cls="pendc")
     ge = "" if d.get("seals_exact") else "≥"   # before the merge, panel counts miss some accepted seals
     def hist(r):
         h = r.get("seals")
@@ -939,17 +986,4 @@ def pending_card():
                 f'<div><span class="lbl">Grew</span><b class="num">{lc["grew"]:,}</b></div>'
                 f'<div><span class="lbl">Dropped</span><b class="num">{lc["dropped"]:,}</b></div></div>'
                 + "".join(f'<p class="dim small" title="Seal count not in the close record">{k}: {n:,} row{"" if n == 1 else "s"}</p>' for k, n in xs if n))
-    return card("Pending", t + foot, f'<span class="dim small num">{d["total"]:,}</span>', cls="pendc")
-
-def live_page():
-    o = A.open_epoch(); now = time.time(); left = (o["est_close"] - now) if o["est_close"] else None
-    cd = f'<b class="cd num" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
-    hero = (f'<section class="card livehero"><div class="lh-ring">{ring(o, big=True)}<div class="lh-ep"><span class="lbl">Epoch</span><b class="num" data-live="epoch">{o["epoch"]}</b></div></div>'
-            f'<div class="lh-cd"><span class="lbl">Closes in</span>{cd}</div>'
-            f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
-            f'<div><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
-            f'<div><span class="lbl">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div></div></section>')
-    body = (f'<h1 class="sr-only">Live epoch</h1>' + hero + pending_card()
-            + card(ICON_FEED + 'Activity', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All transactions →</a>'))
-    return page("Live epoch", body, "/epochs")
-
+    return card("Queue", t + foot, ask, cls="pendc")

@@ -166,26 +166,32 @@ def growth_data():
     if sw and sw["t"]: ms.append((sw["t"], "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
 
-def growth_page():
-    g = growth_data()
+RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("all", "All", None)]
+
+def charts_body(rng=""):
+    """Network → Charts (was /growth): small multiples over one shared range. Home shows the same series as sparklines."""
+    rng = rng if rng in [k for k, _, _ in RANGES] else "7d"
+    span = dict((k, v) for k, _, v in RANGES)[rng]; now = time.time(); t0 = now - span if span else 0
+    g = growth_data(); cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
-    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap")]
-    em = [(t, l) for t, l, k in g["ms"] if k == "close"]
-    la = g["agents"][-1][1] if g["agents"] else None; lh = g["holders"][-1][1] if g["holders"] else None
-    a24 = next((a for t, a in g["agents"] if t >= time.time() - DAY), None)
+    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap") and t >= t0]
+    em = [(t, l) for t, l, k in g["ms"] if k == "close" and t >= t0]
+    la = g["agents"][-1][1] if g["agents"] else None
+    a24 = next((a for t, a in g["agents"] if t >= now - DAY), None)
     tday = g["day"][-1]["n"] if g["day"] else None
-    pe = g["per_ep"]
-    st = "".join([stat("Agents", intc(la), "", ICON_BOT, "agents"), stat("Agents · 24h", f'<span class="num">+{la - a24:,}</span>' if la and a24 else "···"),
-                  stat("Holders", intc(lh), "", ICON_USERS), stat("Txs today (UTC)", intc(tday)),
-                  stat("Answerers · last epoch", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None))), stat("Paid · last epoch", intc(pe[-2][2] if len(pe) > 1 else None))])
-    ac = line(g["agents"], height=200, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, y0=0)
-    hc = line(g["holders"], height=200, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, y0=0)
-    tc = bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
-    th = line([(r["h"], r["n"]) for r in g["hour"][:-1]], height=170, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
-    ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe], colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answerers", "Paid"])
-    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])] for t, l, k in reversed(g["ms"])])
-    body = f'''<div class="sechead"><h1>Growth</h1></div><div class="stats six">{st}</div>
-<div class="grid2">{card(ICON_BOT + "Joined", ac)}{card(ICON_USERS + "Holding", hc)}</div>
-<div class="grid2">{card("Txs / day · indexed", tc)}{card("Txs / hour · indexed", th)}</div>
-<div class="grid2">{card(ICON_CUBE + "Answers per epoch", ec)}{card("Milestones", ml)}</div>'''
-    return page("Growth", body, "/growth")
+    pe = g["per_ep"]; closes = {r["epoch"]: r["close_ts"] for r in A.epoch_rows()}
+    pe_r = [x for x in pe if (closes.get(x[0]) or now) >= t0]
+    st = "".join([stat("New · 24h", f'<span class="num">+{la - a24:,}</span>' if la and a24 else "···", tip="Agents joined in the last 24 hours"),
+                  stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
+                  stat("Answerers", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None)), tip="Agents who answered in the last closed epoch")])
+    H = 140
+    ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am)
+    hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em)
+    sc = line(cut(g["supply"]), height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0)
+    th = None if rng == "all" else line([(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0], height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
+    ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
+    tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
+    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])] for t, l, k in reversed(g["ms"]) if t >= t0])
+    chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
+    return f'''<div class="stats three">{st}</div><div class="chips rng" role="group" aria-label="Range">{chips}</div>
+<div class="grid3 smalls">{card(ICON_BOT + "Agents", ac)}{card(ICON_USERS + "Holders", hc)}{card("Supply", sc)}{card("Txs" + (" / day" if rng == "all" else " / hour"), tc)}{card(ICON_CUBE + "Answers / epoch", ec)}{card("Milestones", ml, cls="mls")}</div>'''

@@ -7,8 +7,10 @@ from . import prompts as PR
 from . import swapx as X   # POA | USD toggle; the price stays in the swap module
 
 ALIAS = {"earners": "richlist"}  # old tab key (pre 2026-10-20) keeps working
-TABS = [("richlist", "Rich list"), ("lastepoch", "Last epoch"), ("holders", "Holders"), ("referrals", "Referrals"),
-        ("graders", "Graders"), ("active", "Most active"), ("forum", "Forum"), ("rising", "Rising"), ("models", "Models")]
+PAGE_ALIAS = {"models": "ai"}     # the page's AI models tab shows the models table plus the AI leaderboard (was /agents/leaderboard)
+# Agents → Rankings. "Rich list" is by balance (the holders key, also the default); "Earned" ranks lifetime rewards (the richlist key, kept for the API).
+TABS = [("holders", "Rich list"), ("richlist", "Earned"), ("lastepoch", "Last epoch"), ("streaks", "Streaks"), ("rising", "Rising"),
+        ("graders", "Graders"), ("referrals", "Referrals"), ("active", "Most active"), ("forum", "Forum"), ("ai", "AI models")]
 
 def _nm(): return A.forum_names()
 
@@ -74,6 +76,10 @@ def rows(tab):
                 out.append(dict(addr=a, name=nm.get(a, ""), first_paid_epoch=first, lifetime=round(sum(r.values()), 6), last_epoch=round(r.get(last, 0.0), 6),
                                 invites=len(kids.get(a, []))))
         out.sort(key=lambda x: -x["lifetime"])
+    elif tab == "streaks":
+        for a, (b, c) in G.streaks().items():
+            out.append(dict(addr=a, name=nm.get(a, ""), longest=b, current=c, lifetime=round(tot(a), 6)))
+        out.sort(key=lambda x: (-x["longest"], -x["current"]))
     elif tab == "models":
         cen = G.census_now(); m = collections.defaultdict(lambda: [0, 0, 0.0]); h = collections.defaultdict(lambda: [0, 0, 0.0])
         for a, c in cen.items():
@@ -96,6 +102,7 @@ COLS = {  # (key, header, kind) kind: addr | poa | int | pct | ts | text
     "active": [("txs", "Txs", "int"), ("answers", "Answers", "int"), ("grades", "Grades", "int"), ("attests", "Attests", "int"), ("last_ts", "Last", "ts")],
     "forum": [("upvotes", "Upvotes", "int"), ("posts", "Posts", "int"), ("comments", "Comments", "int")],
     "rising": [("first_paid_epoch", "First paid", "ep"), ("lifetime", "Lifetime", "poa"), ("last_epoch", "Last epoch", "poa"), ("invites", "Invites", "int")],
+    "streaks": [("longest", "Longest", "int"), ("current", "Current", "int"), ("lifetime", "Lifetime", "poa")],
     "models": [("kind", "Kind", "text"), ("agents", "Agents", "int"), ("earning", "Earning", "int"), ("total_rewards", "Rewards", "poa"), ("per_agent", "Per agent", "poa")],
 }
 
@@ -125,10 +132,14 @@ def table_html(tab, limit=300):
     return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{"".join(body) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
 
 def leaderboard_page(tab, apage):
-    tab = ALIAS.get(tab, tab); tab = tab if tab in COLS else "richlist"
-    chips = "".join(f'<a href="/agents/top?tab={k}" class="chip {"on" if k == tab else ""}">{n}</a>' for k, n in TABS)
-    tb, n = table_html(tab)
+    tab = ALIAS.get(tab, tab); tab = PAGE_ALIAS.get(tab, tab); tab = tab if tab in dict(TABS) else "holders"
+    chips = "".join(f'<a href="/agents/top{"" if k == "holders" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{n}</a>' for k, n in TABS)
+    key = "models" if tab == "ai" else tab
+    tb, n = table_html(key)
     title = dict(TABS)[tab]
-    body = (f'<div class="chips lbtabs">{chips}</div>'
-            + card(f"{title} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[tab]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{tab}.csv">CSV →</a>'))
-    return apage("Leaderboard · " + title, body, "/agents/top")
+    body = (f'<nav class="chips lbtabs scroll" aria-label="Rankings">{chips}</nav>'
+            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{key}.csv">CSV →</a>'))
+    if tab == "ai":
+        from . import views as V
+        body += V.ai_cards()
+    return apage("Rankings · " + title, body, "/agents/top")

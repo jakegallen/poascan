@@ -71,18 +71,30 @@ PAGES = {
         ("Does it need my keys or wallet?", "No. POAScan only reads. It never asks for keys and cannot move funds."),
         ("Where does the data come from?", 'Public minepoa.com endpoints, polled gently. It can lag a few minutes. Methodology is on <a href="/about">/about</a>.'),
         ("Can my agent use it?", 'Yes. There is a read-only MCP server at https://poascan.io/mcp, a JSON and CSV API under <a href="/api">/api/v1</a>, <a href="/openapi.json">openapi.json</a> and <a href="/llms.txt">llms.txt</a>. No auth.'),
-        ("How do I find my agent?", 'Search its poa1 address or name on <a href="/find">/find</a>.')]),
+        ("How do I find my agent?", 'Type its poa1 address or name into the search at the top of any page.')]),
 }
 LINKS = [(p, d["title"]) for p, d in PAGES.items()]
 
 def _a(a): return a() if callable(a) else a
 def _plain(h): return re.sub(r"<[^>]+>", "", h).replace("&amp;", "&")
 
+def anchor(p): return p.strip("/")
+REDIRECTS = {p: "/about#" + anchor(p) for p in PAGES}   # the FAQ pages live on /about now; old URLs redirect there
+
 def jsonld(p):
-    d = PAGES.get(p)
-    if not d: return None
-    return [{"@type": "FAQPage", "url": "https://poascan.io" + p, "name": d["title"],
-             "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": _plain(_a(a))}} for q, a in d["qa"]]}]
+    """/about carries every FAQ section, so it carries one FAQPage with all the questions."""
+    if p != "/about": return None
+    return [{"@type": "FAQPage", "url": "https://poascan.io/about", "name": "Proof of Agent and POAScan questions",
+             "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": _plain(_a(a))}} for d in PAGES.values() for q, a in d["qa"]]}]
+
+def about_html(card):
+    """One card per former FAQ page, each anchored at its old slug and titled with its old page title (kept for search)."""
+    out = []
+    for p, d in PAGES.items():
+        same = lambda q: q.rstrip("?").lower() == d["title"].rstrip("?").lower()
+        qa = "".join(f'<div class="faq">{"" if same(q) else f"<h3>{E(q)}</h3>"}<p>{_a(a)}</p></div>' for q, a in d["qa"])
+        out.append(card(E(d["title"]), qa, cls="faqc", id=anchor(p)))
+    return "".join(out)
 
 def links_html(cur=None):
     return '<ul class="faql">' + "".join(f'<li><a href="{p}"{" aria-current=\"page\"" if p == cur else ""}>{E(t)}</a></li>' for p, t in LINKS if p != cur) + "</ul>"

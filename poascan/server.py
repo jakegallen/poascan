@@ -140,23 +140,20 @@ def page(path, qs):
     m = re.match(r"^/address/(poa1\w+)$", path)
     if m: return V.address(m.group(1))
     if path == "/token": return V.token()
-    if path == "/live": return V.live_page()
     if path == "/swaps": return V2.swaps_page(None)
-    if path in FQ.PAGES: return FQ.page(path, V.page, V.card)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps(cls="oc"))
-    if path == "/growth": return V3.growth_page()
     if path == "/agents/graders": return V.graders_page(qs)
-    if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", ["richlist"])[0], V.apage)
+    if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
-    if path == "/status": return V2.status_page()
     if path == "/upgrade": return V2.status_page("Network upgrade")
-    if path == "/find": return V.find_page()
     if path in ("/epochs", "/blocks"): return V.epochs_page(qs)
     m = re.match(r"^/epoch/(\d+)$", path)
     if m: return V.epoch(int(m.group(1)))
-    routes = {"/agents": V.agents_overview, "/agents/leaderboard": V.leaderboard_page, "/agents/census": V.census_page, "/agents/journey": V.journey_page,
-              "/agents/operators": V.operators_page, "/agents/answers": V.answers_page, "/agents/graders": V.graders_page, "/agents/builders": V.builders_page,
-              "/agents/social": V.social_page, "/grading": V.grading, "/forum": V.forum_page, "/community": V.forum_page, "/network": V.network, "/about": V.about, "/privacy": V.privacy}
+    tab = (qs.get("tab") or [""])[0]
+    if path == "/agents/census": return V.census_page(tab)
+    if path == "/agents/community": return V.community_page(tab)
+    if path == "/network": return V.network(tab, (qs.get("range") or [""])[0])
+    routes = {"/agents": V.agents_overview, "/agents/operators": V.operators_page, "/about": V.about, "/privacy": V.privacy}
     if path in routes: return routes[path]()
     return None
 
@@ -167,9 +164,19 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/live", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/growth", "/agents", "/agents/top", "/agents/leaderboard", "/agents/census",
-                 "/agents/journey", "/agents/operators", "/agents/answers", "/agents/graders", "/agents/builders", "/agents/social", "/grading", "/forum",
-                 "/network", "/status", "/about", "/privacy", "/api", "/find"] + list(FQ.PAGES)
+STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+                 "/agents/operators", "/agents/graders", "/agents/community", "/network", "/about", "/privacy", "/api"]
+
+# Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
+MOVED = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
+         "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
+         "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
+         "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", **FQ.REDIRECTS}
+def moved(path, qs):
+    if path == "/find":
+        q = (qs.get("q", [""])[0] or "").strip()
+        return "/search?" + urllib.parse.urlencode({"q": q}) if q else "/#find"
+    return MOVED.get(path)
 V.ROUTES = STATIC_ROUTES
 _SITEMAP = [0, ""]
 def sitemap():
@@ -338,7 +345,9 @@ class H(BaseHTTPRequestHandler):
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
-            if path == "/upgrade" and not MT.state()["active"]: return self.send(302, "", extra={"Location": "/status"})
+            if path == "/upgrade" and not MT.state()["active"]: return self.send(302, "", extra={"Location": "/network?tab=health"})
+            loc = moved(path, qs)
+            if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":
                 q = (qs.get("q", [""])[0] or "").strip()
                 if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q
@@ -359,6 +368,12 @@ class H(BaseHTTPRequestHandler):
             if path == "/fragment/addr":
                 try: return self.send(200, json.dumps(V.addr_fragment(qs)), "application/json", {"Cache-Control": "no-store"})
                 except ValueError: return self.send(400, json.dumps({"error": "bad cursor or address"}), "application/json")
+            if path == "/fragment/suggest":   # header search typeahead: agent names from the local archive only (no upstream call)
+                q = (qs.get("q", [""])[0] or "").strip().lower()[:40]; out = []
+                if len(q) >= 2:
+                    nm = A.forum_names(); hits = [(n.lower().find(q), len(n), a, n) for a, n in nm.items() if n and q in n.lower()]
+                    out = [dict(id=a, name=n) for _, _, a, n in sorted(hits)[:6]]
+                return self.send(200, json.dumps(out), "application/json", {"Cache-Control": "public, max-age=60"})
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]

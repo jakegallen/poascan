@@ -284,7 +284,7 @@ def freshness():
     elif cp_lag: state, why = "lag", f"Finalized height unchanged {cp_age // 3600}h"
     else: state, why = "live", "Live"
     return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
-                href="/status#upgrade" if state == "up" else "/status", maintenance=up,
+                href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
                 fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up)
 
 def anchors_latest(n=20):

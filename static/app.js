@@ -152,6 +152,15 @@ var sf=$(".search");if(sf){var si=$("input",sf),sb=$("button",sf);
  si.addEventListener("blur",function(){setTimeout(function(){if(!sf.contains(D.activeElement)&&!si.value.trim())sf.classList.remove("open")},120)});
  si.addEventListener("keydown",function(e){if(e.key==="Escape"){si.value="";sf.classList.remove("open");sb.focus()}})}
 
+/* search typeahead: the "Find my agent" hint plus agent names (replaces /find) */
+$$("form[role=search]").forEach(function(f){var inp=$("input",f),box=$(".sopts",f);if(!inp||!box)return;var t=null,seq=0,sel=-1;
+ function pick(i){var a=$$("a",box);sel=Math.max(-1,Math.min(a.length-1,i));a.forEach(function(x,j){x.classList.toggle("on",j===sel);x.setAttribute("aria-selected",j===sel?"true":"false")})}
+ inp.addEventListener("input",function(){clearTimeout(t);var q=inp.value.trim();if(q.length<2||/^(poa1|[0-9a-fA-F]{6,}$|[Ee]?\d+$)/.test(q)){box.innerHTML="";sel=-1;return}
+  t=setTimeout(function(){var n=++seq;fetch("/fragment/suggest?q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(xs){if(n!==seq)return;sel=-1;
+   box.innerHTML=xs.map(function(x){return '<a role="option" href="/address/'+x.id+'"><span class="idn" data-a="'+x.id+'"></span>'+x.name.replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})+'<small>'+x.id.slice(0,6)+'…'+x.id.slice(-4)+'</small></a>'}).join("");paintIds(box)}).catch(function(){})},180)});
+ inp.addEventListener("keydown",function(e){var a=$$("a",box);if(!a.length)return;if(e.key==="ArrowDown"){e.preventDefault();pick(sel+1)}else if(e.key==="ArrowUp"){e.preventDefault();pick(sel-1)}else if(e.key==="Enter"&&sel>=0){e.preventDefault();location.href=a[sel].href}})});
+if(location.hash==="#find"){var fi=$(".hsearch input")||$(".search input");if(fi){var fs=fi.closest("form");if(fs&&fs.classList.contains("search"))fs.classList.add("open");fi.focus()}}
+
 /* ask your agent: shared prompt dialog */
 var am=$("#askmodal");
 if(am){var amP=$("#am-p",am),amT=$("#am-t",am),amC=$(".am-c",am),cur=[];

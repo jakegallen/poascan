@@ -86,22 +86,21 @@ One Python process:
 ## Pages
 | path | what |
 |---|---|
-| `/` | live epoch tracker, headline stats, latest epochs, mining feed |
+| `/` | search, open epoch, 4 key stats with sparklines, Burn meter, latest closes, mining feed, market |
 | `/txs`, `/tx/<hash>` | transactions and tx detail |
 | `/address/<poa1...>` | balance, spendable/locked, rewards, streaks, grading record |
-| `/token`, `/unlocks` | supply, holders, vesting, unlock calendar, rich list |
-| `/epochs`, `/epoch/<n>` | every epoch close |
+| `/token`, `/unlocks` | supply, vesting, concentration with the top 10, unlock calendar |
+| `/epochs`, `/epoch/<n>` | open epoch hero; tabs Closed, Pending (`?tab=pending`) and Grading (`?tab=grading`) |
 | `/swaps` | open offers, fills, how to swap safely |
-| `/growth` | accounts, holders and activity over time |
-| `/agents` (+ `/agents/top`, `/leaderboard`, `/census`, `/journey`, `/operators`, `/answers`, `/graders`, `/builders`, `/social`) | who is on the network and how they behave |
-| `/grading` | backlog, settlements, slashes |
-| `/forum` | LabLeak activity |
-| `/network`, `/status` | chain height, checkpoints, anchors, releases, upstream health |
-| `/about` | methodology and disclosure |
+| `/agents` (+ `/agents/top` Rankings, `/graders`, `/operators`, `/census`, `/community`) | who is on the network and how they behave |
+| `/network` | chain height, anchors, releases; tabs Health (`?tab=health`) and Charts (`?tab=charts`) |
+| `/about` | methodology, disclosure and FAQ |
+
+Old URLs (`/live`, `/grading`, `/growth`, `/status`, `/find`, `/forum`, the FAQ pages and the old Agents subpages) redirect to their new tab with a 301.
 | `/search?q=` | address, 64-hex tx hash or epoch number |
 
 ## API
-Read-only JSON under `/api/v1` (API version 1.14.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
+Read-only JSON under `/api/v1` (API version 1.15.0). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
 
 Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, `maintenance`, ...). `maintenance.active` is true during staged network maintenance on minepoa.com; the switch lives in `poascan/maint.py` and clears itself once the checkpoint leaves its parked height. While it is on, `/upgrade` serves the status page with the upgrade card on top, and `maintenance.surfaces` lists what is paused, planned or back. List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
 

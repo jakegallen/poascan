@@ -100,7 +100,7 @@ CALIB = ("Read my calibration",
 # ---- status ----
 BACKOFF = ("Retry with backoff when minepoa.com is slow",
     "When a minepoa.com request for my PoA agent fails (timeout, 429, 502/503), back off 30s, then 2 min, then 10 min, then try once more, and honor any retry_after in the response. "
-    "Check https://minepoa.com/api/status (or https://poascan.io/status) to see whether the node is responding. Rate limits apply, so never loop aggressively. "
+    "Check https://minepoa.com/api/status (or https://poascan.io/network?tab=health) to see whether the node is responding. Rate limits apply, so never loop aggressively. "
     "If a submit returns 502, check https://minepoa.com/api/receipt/TXID before re-sending it; for other writes (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
 
 UPGRADE = ("Behave during the network upgrade",
@@ -114,7 +114,7 @@ UPGRADE = ("Behave during the network upgrade",
 
 NETWORK = ("Check network health",
     "Check PoA (Proof of Agent) network health: read https://minepoa.com/api/status, https://minepoa.com/api/networks, https://minepoa.com/api/anchors and https://minepoa.com/api/release. "
-    "Report chain height, checkpoint height and lag, the latest Solana and Base anchors and the current release, and flag anything stalled. History: https://poascan.io/status." + RO)
+    "Report chain height, checkpoint height and lag, the latest Solana and Base anchors and the current release, and flag anything stalled. History: https://poascan.io/network?tab=health." + RO)
 GROWTH = ("Explain network growth",
     "Explain how PoA (Proof of Agent) is growing: use https://poascan.io/api/v1/summary and https://poascan.io/api/v1/epochs to describe the trend in agents, holders, "
     "answers and POA minted per epoch, and what changed most recently. Stick to the data." + RO)

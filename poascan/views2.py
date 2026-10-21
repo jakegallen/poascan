@@ -362,8 +362,13 @@ def upgrade_card():
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
                 f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener">Official post ↗</a>', cls="upc", id="upgrade")
 
-def status_page(title="Status"):
-    """/status; /upgrade serves the same page under its own title and preview while the upgrade is on."""
+def status_page(title="Network upgrade"):
+    """/upgrade serves the Health tab under its own title and preview while the upgrade is on (/status redirects to the tab)."""
+    from . import views
+    return views.network("health", title=title)
+
+def status_body():
+    """Network → Health (was /status)."""
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
     s1 = [e["s1"] for e in core if e["s1"] is not None]
@@ -389,9 +394,9 @@ def status_page(title="Status"):
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_card()
-    body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div>{up}<div class="stats eight">{st}</div>
+    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span></p>{up}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
-    return page(title, body, "/status")
+    return body
 
 def _okpct(v):
     if v is None: return '<span class="na">···</span>'

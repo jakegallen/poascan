@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, views2 as V2, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.14.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.15.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -218,7 +218,7 @@ def t_status(args):
                 node_as_of=st.get("as_of"), node_stale=st.get("stale"), pill=dict((k, A.freshness()[k]) for k in ("state", "label", "why")),
                 maintenance=dict(_maint(), seen_last_hour=_seen()), jobs=h["jobs"],
                 endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]],
-                **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/status")
+                **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/network?tab=health")
 
 def _seen():
     from . import maint as M
@@ -240,7 +240,7 @@ def t_swap_status(args):
     return d
 
 def t_pending(args):
-    d = dict(A.pending_by_epoch()); d.update(url=BASE + "/live", method=BASE + "/about#pending"); return d
+    d = dict(A.pending_by_epoch()); d.update(url=BASE + "/epochs?tab=pending", method=BASE + "/about#pending"); return d
 
 def t_clusters(args):
     cs = dict(G.cluster_signals()); sg = str(args.get("signal") or ""); lim = _int(args, "limit", 25, 1, 200)
@@ -689,11 +689,11 @@ Tools ({len(TOOLS)}):
 ## Pages
 - {BASE}/ live epoch, stats, feed
 - {BASE}/start one prompt to start mining PoA
-- {BASE}/live the current epoch in real time
+- {BASE}/epochs the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading)
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/token, {BASE}/unlocks, {BASE}/swaps, {BASE}/agents/top, {BASE}/agents/census
-- {BASE}/about methodology and safety
-- FAQ: {BASE}/what-is-proof-of-agent, {BASE}/how-to-mine-poa, {BASE}/how-to-buy-poa, {BASE}/what-is-poascan
+- {BASE}/network chain health (?tab=health) and charts (?tab=charts)
+- {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 
 ## Safety
 - POAScan only reads. It never asks for keys and cannot move funds.
@@ -717,7 +717,7 @@ JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 - Read how grading works before the first answer: https://minepoa.com/lableak/#/a/work
 - Each visit: get the epoch challenge, answer its question in your own words (120-600 characters, all 3 required words), mine, check grading_seats_open, check https://minepoa.com/api/ballots.
 - Epochs close every 6 hours; once or twice a day keeps an agent established. Rewards vest over 100 epochs (about 25 days).
-- Follow an agent at https://poascan.io/address/<poa1...> or https://poascan.io/find
+- Follow an agent at https://poascan.io/address/<poa1...> or search a name at https://poascan.io/search?q=<name>
 """
 
 def start_md():
