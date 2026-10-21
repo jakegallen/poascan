@@ -15,6 +15,27 @@ def compact(v, dec=2):
         if a >= div: return f"{v/div:.{dec}f}{suf}"
     return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.2f}"
 
+def compact3(v):
+    """Card format: 3 significant figures with K/M/B (977M, 22.8M, 1.22B, 419K); the full value lives in the title."""
+    if v is None: return "···"
+    units = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
+    for i, (div, suf) in enumerate(units):
+        if abs(v) >= div or (i < 2 and abs(v) >= div * 0.9995):
+            x = v / div
+            d = 2 if abs(x) < 9.995 else 1 if abs(x) < 99.95 else 0
+            if abs(round(x, d)) >= 1000 and i > 0: x, suf, d = v / units[i - 1][0], units[i - 1][1], 2
+            return f"{x:.{d}f}{suf}"
+    return compact(v)
+
+def sig3_pct(t):
+    """'97.72%' -> '97.7%', '4.8%' stays, '100.0%' -> '100%' (3 significant figures, no padded zeros)."""
+    try: v = float(t[:-1])
+    except ValueError: return t
+    if v == 0: return "0%"
+    d = max(0, 2 - math.floor(math.log10(abs(v))))
+    t = f"{v:.{d}f}"
+    return (t.rstrip("0").rstrip(".") if "." in t else t) + "%"
+
 def plain(v, sig=4, comma=True):
     """Up to `sig` significant digits, never scientific notation: 0.00001059, 10.59, 12,345."""
     if v is None: return "···"
@@ -113,10 +134,17 @@ def skel(lines=3):
 
 TYPE_CLS = {"challenge": "b-answer", "grade-sealed": "b-grade", "attest-batch": "b-attest", "join": "b-join", "send": "b-send",
             "vote": "b-vote", "release": "b-sys", "notice": "b-sys", "identity-link": "b-join", "swap-offer": "b-send", "swap-fill": "b-send"}
-TYPE_LABEL = {"challenge": "ANSWER", "grade-sealed": "GRADE", "attest-batch": "ATTEST", "join": "JOIN"}
+TYPE_LABEL = {"challenge": "ANSWER", "grade-sealed": "GRADE", "attest-batch": "ATTEST", "join": "JOIN", "chains-update": "WALLET LINK"}
+TYPE_TIP = {"challenge": "An Agent's answer to the epoch challenge", "grade-sealed": "A sealed grade on another Agent's answer",
+            "attest-batch": "Attestations confirming a batch of transactions", "join": "A new Agent joining the network",
+            "chains-update": "Links or updates an external wallet for swaps"}
+
+def type_name(t):
+    """Plain UI name for a tx type (API keeps the raw type): Answer, Grade, Attest, Wallet link."""
+    return TYPE_LABEL.get(t, (t or "?").replace("-", " ").upper()).capitalize()
 
 def badge(t):
-    return f'<span class="badge {TYPE_CLS.get(t, "b-other")}" title="tx type: {E(t or "")}">{E(TYPE_LABEL.get(t, (t or "?").upper()))}</span>'
+    return f'<span class="badge {TYPE_CLS.get(t, "b-other")}" title="{E(TYPE_TIP.get(t, ""))} ({E(t or "")})">{E(TYPE_LABEL.get(t, (t or "?").upper()))}</span>'
 
 def dots(atts, k=5):
     a = int(atts or 0); f = min(a, k)
@@ -315,7 +343,7 @@ def layout(title, body, active="/", live=None):
 <title>{E(full)}</title>{meta}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=68"><script>document.documentElement.className="js"</script></head><body>
+<link rel="stylesheet" href="/static/style.css?v=69"><script>document.documentElement.className="js"</script></head><body>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}<a class="navsrc" href="{SRC_URL}" target="_blank" rel="noopener">{ICON_GH}Source</a></nav>
@@ -328,13 +356,31 @@ def layout(title, body, active="/", live=None):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=23" defer></script></body></html>'''
+<script src="/static/app.js?v=24" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
 
-def stat(label, value, sub="", icon="", key=None, asof=None):
-    """Terse stat card: label + value. `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read."""
+NUM_RX = re.compile(r'(<span class="num[^"]*"(?: title="([^"]*)")?>)([^<]*)(</span>)')
+
+def _sig3(value):
+    """Cards show 3 significant figures: the first compact (K/M/B) or decimal-% number is rewritten; its title keeps the full value."""
+    m = NUM_RX.search(value)
+    if not m: return value
+    t = m.group(3)
+    if re.fullmatch(r"-?\d+(\.\d+)?[KMB]", t) and m.group(2):
+        try: v = float(re.sub(r"[^0-9.\-]", "", m.group(2).split(" ")[0]))
+        except ValueError: return value
+        new = compact3(v)
+    elif re.fullmatch(r"-?\d+\.\d+%", t): new = sig3_pct(t)
+    else: return value
+    return value[:m.start(3)] + new + value[m.end(3):]
+
+def stat(label, value, sub="", icon="", key=None, asof=None, tip=None):
+    """Terse stat card: label + value (3 significant figures). `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read.
+    `tip`: the definition, shown on hover (methodology stays on /about)."""
+    value = _sig3(value)
+    if tip: label = f'<span title="{E(tip)}">{label}</span>'
     k = f' data-live="{key}"' if key else ""
     a = f'<div class="asof">as of {rel(asof)}</div>' if asof else ""
     if 'class="usd"' in value:   # number, unit and ≈$ share one line; the number shrinks to fit (style.css .sv.fit)
@@ -351,10 +397,16 @@ def _fit(value):
     fx = fxn + (len(txt("unit")) * 7.4 + 6 if 'class="unit"' in value else 0)
     return f' style="--nc:{nc};--fx:{fx:.0f}px;--fxn:{fxn:.0f}px"'
 
-def table(headers, rows, cls=""):
-    th = "".join(f"<th>{h}</th>" for h in headers)
-    tr = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows) or f'<tr><td colspan="{len(headers)}" class="na">No rows yet.</td></tr>'
-    return f'<div class="tw"><table class="{cls}"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table></div>'
+def table(headers, rows, cls="", pri=None, usd=None):
+    """pri: column indexes that stay visible at 390px (the rest open on tap). usd: POA amount columns the POA | USD toggle converts."""
+    pri, usd = set(pri or ()), set(usd or ())
+    def c(i, base=""):
+        k = " ".join(x for x in (base, "p" if i in pri else "", "pc" if i in usd else "") if x)
+        return f' class="{k}"' if k else ""
+    th = "".join(f"<th{c(i)}>{h}</th>" for i, h in enumerate(headers))
+    tr = "".join("<tr>" + "".join(f"<td{c(i)}>{x}</td>" for i, x in enumerate(r)) + "</tr>" for r in rows) or f'<tr><td colspan="{len(headers)}" class="na p">No rows yet.</td></tr>'
+    cl = " ".join(x for x in (cls, "pri" if pri else "") if x)
+    return f'<div class="tw"><table class="{cl}"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table></div>'
 
 def note(t): return ""  # caveat notes removed site-wide; methodology lives on /about
 

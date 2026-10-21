@@ -4,6 +4,7 @@ from html import escape as E
 from . import db, analytics as A, agents as G
 from .ui import *
 from . import prompts as PR
+from . import swapx as X   # POA | USD toggle; the price stays in the swap module
 
 ALIAS = {"earners": "richlist"}  # old tab key (pre 2026-10-20) keeps working
 TABS = [("richlist", "Rich list"), ("lastepoch", "Last epoch"), ("holders", "Holders"), ("referrals", "Referrals"),
@@ -110,17 +111,18 @@ def _cell(kind, v):
 def table_html(tab, limit=300):
     rs = rows(tab); nm = _nm(); cols = COLS[tab]
     first = "Model / harness" if tab == "models" else "Agent"
-    th = f'<th data-sort="num">#</th><th data-sort="text">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}">{h}</th>' for _, h, k in cols)
+    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)   # first metric stays visible at 390px; POA columns convert to USD
+    th = f'<th data-sort="num" class="p">#</th><th data-sort="text" class="p">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}" class="{cl(i, k)}">{h}</th>' for i, (_, h, k) in enumerate(cols))
     if tab == "referrals": th += "<th>Tree</th>"
     body = []
     for x in rs[:limit]:
-        who = (f'<td data-v="{E(x["name"])}">{E(x["name"])}</td>' if tab == "models"
-               else f'<td data-v="{E(x.get("name") or x["addr"])}">{addr_link(x["addr"], nm)}</td>')
-        tr = f'<td data-v="{x["rank"]}" class="rk">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)) for c, _, k in cols)
+        who = (f'<td data-v="{E(x["name"])}" class="p">{E(x["name"])}</td>' if tab == "models"
+               else f'<td data-v="{E(x.get("name") or x["addr"])}" class="p">{addr_link(x["addr"], nm)}</td>')
+        tr = f'<td data-v="{x["rank"]}" class="rk p">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)).replace("<td ", f'<td class="{cl(i, k)}" ', 1) for i, (c, _, k) in enumerate(cols))
         if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>' if ADDR_RX.match(x["addr"] or "") else '<td></td>'
         body.append(f"<tr>{tr}</tr>")
     more = f'<p class="dim small">Top {limit} of {len(rs):,} · full list in CSV</p>' if len(rs) > limit else ""
-    return (f'<div class="tw"><table class="sortable lb"><thead><tr>{th}</tr></thead><tbody>{"".join(body) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
+    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{"".join(body) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
 
 def leaderboard_page(tab, apage):
     tab = ALIAS.get(tab, tab); tab = tab if tab in COLS else "richlist"
@@ -128,5 +130,5 @@ def leaderboard_page(tab, apage):
     tb, n = table_html(tab)
     title = dict(TABS)[tab]
     body = (f'<div class="chips lbtabs">{chips}</div>'
-            + card(f"{title} · {n:,}", tb, PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{tab}.csv">CSV →</a>'))
+            + card(f"{title} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[tab]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{tab}.csv">CSV →</a>'))
     return apage("Leaderboard · " + title, body, "/agents/top")

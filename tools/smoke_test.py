@@ -360,11 +360,15 @@ def history(base, check):
           and by[RV]["sealed"] is True and by[RV]["evidence"] == "tx" and by[RV]["in_record"] is False and by[RV]["seal_tx"] == "4a" * 32 and g["not_in_record"] >= 1)
     p1 = json.loads(req(base + f"/api/v1/address/{a2}/assignments?limit=3")[1]); p2 = json.loads(req(base + f"/api/v1/address/{a2}/assignments?limit=3&cursor={p1['next_cursor']}")[1])
     check("grading pages continue without repeats", p1["next_cursor"] and not {r["answer"] for r in p1["rows"]} & {r["answer"] for r in p2["rows"]} and [r["answer"] for r in p1["rows"] + p2["rows"]] == [r["answer"] for r in g["rows"][:6]])
-    ad = req(base + f"/address/{a2}")[1].decode()
+    ov = req(base + f"/address/{a2}")[1].decode(); ad = req(base + f"/address/{a2}?tab=txs")[1].decode(); gd = req(base + f"/address/{a2}?tab=grading")[1].decode()
     fr = json.loads(req(base + "/fragment/addr?a=" + a2 + "&k=txs&cursor=" + first["next_cursor"])[1])
-    check("/address: Transactions + Grading cards, Load more, chips, coverage note; fragment pages",
-          'id="txs"' in ad and 'id="grading"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "Unlisted" in ad and ">No seal<" in ad and "nonce 90" in ad
-          and 'href="/about#history"' in ad and fr["html"].count("<tr>") == 25 and fr["next"] and "\u2014" not in ad)
+    check("/address: tabs Overview, Rewards, Transactions, Grading; Transactions tab has Load more, chips, coverage; Grading tab has seals; fragment pages",
+          ov.count('class="chips atabs scroll"') == 1 and all(f">{t}" in ov for t in ("Overview", "Rewards", "Transactions", "Grading")) and 'id="txs"' not in ov
+          and 'id="txs"' in ad and ad.count('class="btn ghost more-btn"') == 1 and "nonce 90" in ad and 'href="/about#history"' in ad and "tab=txs&amp;type=" in ad
+          and 'id="grading"' in gd and "Unlisted" in gd and ">No seal<" in gd
+          and fr["html"].count("<tr>") == 25 and fr["next"] and not any("\u2014" in x for x in (ov, ad, gd)))
+    check("/address: header carries name or address once, meta line; overview rows do not repeat the header",
+          'class="ameta"' in ov and "First seen" in ov and ">Balance<" not in ov.split('class="chips atabs scroll"')[1] and "Spendable / Locked" not in ov)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": a2, "tx_limit": 25, "grading": True, "grading_limit": 2}}}).encode(),
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
@@ -416,7 +420,7 @@ def cohorts(base, check):
     pg = req(base + "/epochs")[1].decode(); p2 = req(base + "/epochs?state=passed")[1].decode(); p3 = req(base + "/epochs?state=nope")
     card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
     check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
-          ">Gate A<" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200
+          ">Challenge share<" in card and "Gate A" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200
           and 'href="/about#cohorts"' in card and "\u2014" not in pg and b'id="cohorts"' in req(base + "/about")[1])
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "get_epoch", "arguments": {"epoch": 7, "top_rewards": 1}}}).encode(),
@@ -582,6 +586,25 @@ def fixture_pages(check):
               dp_.get("basis") == "median_last_5_fills" and dp_.get("thin") is False and dp_.get("sig_figs") == 3 and dp_.get("usd_per_poa") == 0.4)
         js = json.loads(req(base + "/api/v1/price")[1])
         check("price: /api/v1/price is served with the guard fields and meta", {"usd_per_poa", "thin", "basis", "fills_7d", "volume_7d_usd", "asks_used", "shown"} <= set(js) and "meta" in js)
+        t1 = "ab" * 32
+        if t1:
+            tp = req(base + "/tx/" + t1)[1].decode()
+            check("tx: one summary line says who did what, epoch, status and attestations; those rows are not repeated",
+                  tp.count('<h1 class="txsum">') == 1 and " of 5 attestations" in tp and "<span>Status</span>" not in tp and "<span>Attestations</span>" not in tp and "\u2014" not in tp)
+        ep7 = req(base + "/epoch/7")[1].decode()
+        check("epoch: header line (closed PT, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
+              '<h1 class="ephd">Epoch 7 · ' in ep7 and " PT</span>" in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
+              and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided / passed<" in ep7
+              and '<th class="pc">Reward</th>' in ep7)
+        tx_ = req(base + "/txs")[1].decode()
+        check("txs: one scrollable chip row with plain type names, priority columns at 390px",
+              'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)
+        gr = req(base + "/grading")[1].decode()
+        check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Decided per close" in gr)
+        hm2 = req(base + "/")[1].decode()
+        check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
+              not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
+              and ">Finalized height<" in hm2 and ">Checkpoint<" not in hm2)
         hm = req(base + "/")[1].decode(); tk = req(base + "/token")[1].decode()
         check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
         check("token: no Transfers card", ">Transfers<" not in tk)
@@ -599,7 +622,7 @@ def fixture_pages(check):
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "MY_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
         _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
-              'class="pill lag" id="livepill"' in _n and "Checkpoint unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
+              'class="pill lag" id="livepill"' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
         check("/network: as-of on Version and K, checkpoint flagged", _n.count('<div class="asof">as of') == 2 and 'asof amber">Stalled<' in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)

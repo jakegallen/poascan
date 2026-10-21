@@ -311,7 +311,7 @@ def cp_stat():
     """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
     f = A.freshness()
     flag = ('<div class="asof steel">Parked</div>' if f["maintenance"] else f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else "")
-    return f'<div class="stat"><div class="sl">Checkpoint moved</div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
+    return f'<div class="stat"><div class="sl"><span title="When the finalized height (checkpoint) last moved">Finality moved</span></div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
 
 RECON_TAG = {"match": ("ok", "Match"), "explained": ("", "Explained"), "differs": ("bad", "Differs"), "node_only": ("", "Node only"), "poascan_only": ("", "Ours only")}
 
@@ -352,7 +352,7 @@ def upgrade_card():
         rows = [("Paused", "Hosted mining, grading" + ("" if jo else ", joining") + ".")]
     jw = jo and "Joining" not in sf
     rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
-            ("Safe", f'About {lo} to {hi} hours. Pending grades keep {m["pending_ttl_epochs"]} epochs. Checkpoint {m["parked_checkpoint"]:,} is parked by design.'),
+            ("Safe", f'About {lo} to {hi} hours. Pending grades keep {m["pending_ttl_epochs"]} epochs. Finalized height {m["parked_checkpoint"]:,} is parked by design.'),
             ("Agents", "Check hourly at a random minute. Back off 30s, 2m, 10m. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>."),
             ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')]
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
@@ -378,7 +378,7 @@ def status_page(title="Status"):
     p50 = _pctl([e["p50"] for e in core if e["p50"]], .5)
     st = "".join([stat("Upstream", state), stat("Success · 1h", pct(sum(s1) / len(s1)) if s1 else "···"), stat("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else "···"),
                   stat("Open incidents", f'<span class="num {"red" if ongoing else ""}">{len(ongoing)}</span>'),
-                  stat("Checkpoint lag", intc(lagv), "blocks"), cp_stat(), stat("Anchor · Solana", anc_age("sol")), stat("Anchor · Base", anc_age("base"))])
+                  stat("Finality lag", intc(lagv), "blocks", tip="Blocks between the chain height and the finalized height"), cp_stat(), stat("Anchor · Solana", anc_age("sol")), stat("Anchor · Base", anc_age("base"))])
     tb = table(["Endpoint", "1h", "24h", "p50", "p95", "Last error"],
                [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
                  _okpct(e["s1"]), _okpct(e["s24"]), f'{e["p50"]:,} ms' if e["p50"] else "···", f'{e["p95"]:,} ms' if e["p95"] else "···",
@@ -390,7 +390,7 @@ def status_page(title="Status"):
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_card()
     body = f'''<div class="sechead"><h1>Status</h1><span class="tag">minepoa.com · our probes</span></div>{up}<div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Checkpoint lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return page(title, body, "/status")
 
 def _okpct(v):

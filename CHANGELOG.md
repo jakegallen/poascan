@@ -9,6 +9,26 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.14.0] - 2026-10-21
+
+### Added
+
+- Transactions open with one line that says what happened: who (Agent name linking to its LabLeak profile, or the short address), what they did, the epoch, Final or Pending, and attestations out of K. When the node is busy, the page renders from the archived row instead of failing.
+- Address pages: header with the Agent name (LabLeak link), the address with copy, rank by balance, first and last seen, current streak; then tabs Overview, Rewards, Transactions and Grading (`?tab=`). Old `#txs` and `#grading` links open the matching tab.
+- Epoch pages: a header line ("Epoch 8 · closed 10:14 AM PT · 13 Agents paid · 97.7% burned") and a Payouts table.
+- POA | USD toggle in the card header of dense tables (`/agents/top`, `/epochs`, `/unlocks`, address rewards, epoch payouts). It converts amount columns with the same guarded reference as `/api/v1/price` and remembers the choice.
+- At 390px, dense tables (`/agents/top`, `/txs`, `/epochs`, `/unlocks`, swap fills) keep their key columns; the rest open in a row below on tap or Enter.
+- `/about#labels` lists the plain labels next to the network's own terms.
+
+### Changed
+
+- Plain labels in the UI (API unchanged): Wallet link (`chains-update`), Awaiting graders (no panel), Decided (settled), Challenge share (Gate A), Max reward (at ceiling), Finalized height (checkpoint), Finality lag, Paid for answers. Definitions sit in the label's tooltip and on `/about`.
+- Cards show 3 significant figures (977M, 22.8M, 97.7%); the full value is in the tooltip, and live updates keep the same format. "Epoch 8" in headers, "E8" in tables.
+- Epoch pages merge Burned and Burn % (the share moves to the header line) and Paid agents moves to the header line; Max reward amount reads Top reward.
+- `/txs`: one scrollable chip row with the top 5 types plus More; shorter hashes and addresses.
+- Address Overview no longer repeats the header (address, balance, split, total rewards, name).
+- `/swaps` at 390px: the safety line wraps beside Add Wallet instead of running under it; the order book drops the Total column (price times size).
+
 ## [1.13.0] - 2026-10-21
 
 ### Added

@@ -54,11 +54,11 @@ def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
     start, per = o.get("last_close"), o.get("period") or 21600
     frac = min(1.0, max(0.0, (time.time() - start) / per)) if start else 0
-    cur = (f'<div class="bm-hd"><span class="lbl">E<span data-live="bm_ep">{o["epoch"]}</span> pool</span><b>{poa(o["pool"], dec=2)}</b></div>'
+    cur = (f'<div class="bm-hd"><span class="lbl">Epoch <span data-live="bm_ep">{o["epoch"]}</span> pool</span><b>{poa(o["pool"], dec=2)}</b></div>'
            f'<div class="vessel" data-start="{start or ""}" data-close="{o.get("est_close") or ""}"><i class="molten" style="width:{frac*100:.2f}%"></i><span class="vp num">{frac*100:.0f}%</span></div>')
     if not last: return cur + skel(2)
     bp = last["burn_pct"] or 0
-    done = (f'<div class="bm-hd"><span class="lbl">E{last["epoch"]} settled</span><b>{poa(last["pool"], dec=2)}</b></div>'
+    done = (f'<div class="bm-hd"><span class="lbl">Epoch {last["epoch"]} settled</span><b>{poa(last["pool"], dec=2)}</b></div>'
             f'<div class="vessel split"><i class="minted" style="width:{100-bp:.2f}%"></i><i class="burned" style="width:{bp:.2f}%"></i></div>'
             f'<div class="bm-leg"><span><i class="sw m"></i><span class="lbl">Minted</span><b class="num mined">{compact(last["minted"])}</b></span>'
             f'<span><i class="sw b"></i><span class="lbl">Burned</span><b class="num red">{compact(last["burned"])}</b></span>'
@@ -87,11 +87,11 @@ def headline():
         "mined": stat("POA mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
         "holders": stat("Holders", intc(st.get("holders")), "", ICON_USERS, "holders"),
         "accounts": stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT, "accounts"),
-        "last": stat(f"E{last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
-        "burn": stat(f"E{last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
+        "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
+        "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
         "vest": stat("Circulating", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
-        "checkpoint": stat("Checkpoint", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint"),
+        "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
     }
 
 def _reltxt(ts):
@@ -140,10 +140,10 @@ def summary_json():
 
 
 def epochs_table(rows, link=True):
-    return table(["Epoch", "Status", "Closed (UTC)", "Paid agents", "Minted", "Burned", "Burn %", "Median reward"],
-                 [[f'<a href="/epoch/{r["epoch"]}" class="mono">{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
+    return table(["Epoch", "Status", "Closed (UTC)", "Agents paid", "Minted", "Burned", "Burn %", "Median reward"],
+                 [[f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>',
-                   num(r["median"])] for r in reversed(rows)])
+                   num(r["median"])] for r in reversed(rows)], pri=(0, 4, 6), usd=(4, 5, 7))
 
 def raw_fields(extra):
     """Short scalar fields inline; long blobs collapsed behind a 'show raw' toggle."""
@@ -207,37 +207,46 @@ def txs(qs):
     total = db.q1(f"SELECT COUNT(*) AS n FROM txs {where}", args)["n"]
     rows = db.q(f"SELECT * FROM txs {where} ORDER BY ts DESC LIMIT ? OFFSET ?", args + (per, (page_n - 1) * per)); nm = names()
     types = db.q("SELECT type, COUNT(*) AS n FROM txs GROUP BY type ORDER BY n DESC")
-    tabs = f'<a href="/txs" class="chip {"on" if not typ else ""}">All</a>' + "".join(f'<a href="/txs?type={E(t["type"])}" class="chip {"on" if t["type"]==typ else ""}">{E(t["type"])} <small>{t["n"]:,}</small></a>' for t in types)
+    chip = lambda t: f'<a href="/txs?type={E(t["type"])}" class="chip {"on" if t["type"]==typ else ""}" title="{E(TYPE_TIP.get(t["type"], t["type"]))}">{E(type_name(t["type"]))} <small>{t["n"]:,}</small></a>'
+    top = types[:5]; rest = types[5:]
+    if typ and any(t["type"] == typ for t in rest): top, rest = top + [t for t in rest if t["type"] == typ], [t for t in rest if t["type"] != typ]
+    more = (f'<details class="chipmore"><summary class="chip">More <small>{len(rest)}</small></summary><div class="chipmenu">{"".join(chip(t) for t in rest)}</div></details>') if rest else ""
+    tabs = f'<a href="/txs" class="chip {"on" if not typ else ""}">All</a>' + "".join(chip(t) for t in top) + more
     tb = table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", "Time (UTC)"],
-               [[tx_link(t["id"]), badge(t["type"]), addr_link(t["from_addr"], nm), addr_link(t["to_addr"], nm), E(t["amount"] or "···"),
-                 E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows])
+               [[tx_link(t["id"], (6, 4)), badge(t["type"]), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
+                 "E" + E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows], pri=(0, 1, 2))
     pages = max(1, math.ceil(total / per))
     q = f"&type={E(typ)}" if typ else ""
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
-    body = card(f"Transactions · {total:,}", f'<div class="chips">{tabs}</div>{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
+    body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
     return page("Transactions", body, "/txs")
 
 def tx(tid):
     err = None
     try: d = I.get_tx_detail(tid)
     except Exception as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e)
+    if (not d or not d.get("id")) and re.fullmatch(r"[0-9a-f]{64}", tid or ""):
+        row = db.q1("SELECT * FROM txs WHERE id=?", (tid,))   # node busy: the archived row still says what happened
+        if row: d = dict(row, body={})
     if not d or not d.get("id"):
         return page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1 (or the node is busy: {E(err or 'not found')}).")), "/txs")
     nm = names(); b = d.get("body") or {}
     parents = "".join(f'<div>{tx_link(p, (12, 10))}</div>' for p in b.get("parents", [])) or "···"
     cp = d.get("checkpointed") or {}
-    rows = [("Transaction hash", f'<span class="mono">{E(d["id"])}</span>{copy(d["id"])}'), ("Status", seal(d.get("final")) + (" Final" if d.get("final") else " Pending")),
-            ("Type", badge(d.get("type"))), ("Epoch", E(str(d.get("epoch") if d.get("epoch") is not None else b.get("epoch", G.epoch_of_ts(d.get("ts") or 0))))),
+    ep = d.get("epoch") if d.get("epoch") is not None else b.get("epoch", G.epoch_of_ts(d.get("ts") or 0))
+    # Status, type, epoch and attestations live in the summary line above the card; the rows keep the raw facts.
+    rows = [("Transaction hash", f'<span class="mono">{E(d["id"])}</span>{copy(d["id"])}'),
             ("Timestamp", utc(d.get("ts")) + " · " + rel(d.get("ts"))), ("From", addr_link(d.get("from_addr"), nm, (48, 0)) if d.get("from_addr") else "···"),
             ("To", addr_link(d.get("to_addr"), nm, (48, 0)) if d.get("to_addr") else '<span class="na">···</span>'),
-            ("Amount", E(d.get("amount") or "···")), ("Attestations", f'{dots(d.get("atts"))} {d.get("atts",0)}'),
-            ("Checkpoint", (f'<b class="mono">{cp.get("height"):,}</b>' if cp.get("height") else '<span class="na">not yet covered</span>')),
+            ("Amount", E(d.get("amount") or "···")),
+            ('<span title="Highest finalized (checkpointed) height that covers this transaction">Finalized height</span>',
+             (f'<b class="mono">{cp.get("height"):,}</b>' if cp.get("height") else '<span class="na">not yet</span>')),
             ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···")))), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>')]
     if b.get("answer"): rows.append(("Answer", f'<blockquote>{E(b["answer"])}</blockquote>'))
     skip = ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")
     sw = V2.swap_tx_rows(b, nm) if b.get("offer") or b.get("proof") else []
     if sw:
-        rows[6:8] = [r for r in sw if r[0] in ("To", "Amount")] or rows[6:8]
+        rows[3:5] = [r for r in sw if r[0] in ("To", "Amount")] or rows[3:5]
         rows += [r for r in sw if r[0] not in ("To", "Amount")]; skip += ("offer", "proof")
     rc = RC.receipt(tid, row={"id": d["id"], "type": d.get("type"), "from_addr": d.get("from_addr"), "epoch": d.get("epoch"), "ts": d.get("ts"), "final": d.get("final")}) if d.get("type") == "challenge" else None
     if rc and rc.get("seed"): skip += ("seed",)   # the Receipt card carries it
@@ -246,7 +255,28 @@ def tx(tid):
     rows = [(k, v) for k, v in rows if not _empty(v)]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
-    return page("Tx " + short(tid), card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>') + rch, "/txs")
+    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>') + rch, "/txs")
+
+VERB = {"challenge": "submitted an answer", "grade-sealed": "graded an answer", "attest-batch": "attested a batch", "join": "joined",
+        "chains-update": "linked a wallet"}
+
+def who(a, nm):
+    """Agent name linking to its LabLeak profile, or the short address linking to /address when it has no name."""
+    if not a: return "Someone"
+    n = (nm or {}).get(a)
+    return name_link(n, a, cls="") if n else f'<a class="mono" href="/address/{E(a)}" title="{E(a)}">{E(short(a))}</a>'
+
+def tx_summary(d, nm, ep):
+    """One line that says what happened: 'Emberwick submitted an answer · Epoch 9 · Pending · 4 of 5 attestations'."""
+    t = d.get("type"); a = d.get("from_addr")
+    if t in ("send", "transfer") or (d.get("amount") and d.get("to_addr") and t not in VERB):
+        what = f'sent {E(str(d.get("amount")))} POA to {who(d.get("to_addr"), nm)}' if d.get("amount") else f'sent a {E(type_name(t).lower())}'
+    else: what = VERB.get(t, f"sent a {E(type_name(t).lower())}")
+    if t == "join" and d.get("invited_by"): what += f' via {who(d["invited_by"], nm)}'
+    k = d.get("k") or 5; at = int(d.get("atts") or 0)
+    st = '<span class="ok">Final</span>' if d.get("final") else "Pending"
+    parts = [f'{who(a, nm)} {what}', f'<a href="/epoch/{E(str(ep))}">Epoch {E(str(ep))}</a>' if str(ep).isdigit() else "", st, f"{min(at, k)} of {k} attestations"]
+    return '<h1 class="txsum">' + " · ".join(x for x in parts if x) + "</h1>"
 
 def _empty(v):
     """A key/value row with nothing to say (a bare ··· placeholder) is left out rather than shown empty."""
@@ -304,35 +334,61 @@ def address(a):
     if bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
     cen = p["census"]; fam = p["family"]
     ops = G.operators()
-    kv = [("Address", f'<span class="al big-idn">{idn(a)}<span class="mono">{E(a)}</span>{copy(a)}</span>'), ("Balance", poa(bal, mined=True, dec=4) if bal is not None else '<span class="na">unknown</span>'),
-          ("Spendable / Locked", f'{poa(sp)} / {poa(lk)}'),
-          ("Total rewards", poa(rsum, mined=True)), ("Established", ('<span class="tag ok">YES</span>' if est else '<span class="tag">NO</span>')),
-          ("Forum name", name_link(p["forum_name"], a, cls="") if p["forum_name"] else "···"), ("Forum posts / comments", f'{p["forum_posts"]} / {p["forum_comments"]}' if p["forum_name"] else "···"),
+    # Address, balance, the split, total rewards, name and streak sit in the header; these rows add what the header does not.
+    kv = [("Established", ('<span class="tag ok">YES</span>' if est else '<span class="tag">NO</span>')),
+          ("Forum posts / comments", f'{p["forum_posts"]} / {p["forum_comments"]}' if p["forum_name"] else "···"),
           ("Label", E((p["label"] or {}).get("label") or "···")),
           ("Custody", E((p["label"] or {}).get("custody") or "···")), ("External wallet", "linked" if a in (db.get_blob("chains")[0] or {}) else "···"),
           ("Model / Harness", (f'{E(cen["eco"])}{" · "+E(cen["detail"]) if cen.get("detail") else ""} / {E(", ".join(cen["harness"]))}' if cen else "···")),
           ("Family size", str(fam[1]) if fam else "···"), ("Family root", addr_link(fam[0], nm) if fam and fam[1] > 1 else "···"),
-          ("Streak · longest / current", f'{p["streak"][0]} / {p["streak"][1]}'), ("Epochs answered", ", ".join("E"+str(k) for k in p["answered"]) or "···"),
+          ("Longest run", f'{p["streak"][0]} epochs' if p["streak"][0] else "···"), ("Epochs answered", ", ".join("E"+str(k) for k in p["answered"]) or "···"),
           ("Answers passed / settled", f'{sum(1 for x in p["settled"] if x[2])} / {len(p["settled"])}'), ("Jury aligned / seats", f'{sum(1 for x in p["jury"] if x[1])} / {len(p["jury"])}'),
           ("Grades served", f'{p["served"]:,}'), ("Bug + proposal posts", str(len(p["builder_posts"])) if p["builder_posts"] else "···"), ("G0 mentions", str(p["credit"]) if p["credit"] else "···")]
     kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v))
     eps = sorted(rb.items())
     rew = bars([(f"E{k}", [v]) for k, v in eps], colors=("#E3A33A",)) if eps else '<p class="na">No rewards yet.</p>'
-    rew += table(["Epoch", "Reward"], [[f'<a href="/epoch/{k}">E{k}</a>', poa(v, mined=True, dec=4)] for k, v in eps])
-    typ = (getattr(REQ, "qs", {}) or {}).get("type", [""])[0] or ""
-    hist = history_card(a, typ); grd = grading_card(a)
+    rew += table(["Epoch", "Reward"], [[f'<a href="/epoch/{k}">E{k}</a>', poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
+    qs = getattr(REQ, "qs", {}) or {}
+    typ = qs.get("type", [""])[0] or ""
+    tab = qs.get("tab", [""])[0] or ("txs" if typ else "overview")
+    tab = tab if tab in ("overview", "rewards", "txs", "grading") else "overview"
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
-    trk, trk_sched = V3.reward_tracker(a, p); itree, n_inv = V3.invite_tree(a)
-    head = (f'<div class="addrhead">{idn(a)}<div><span class="lbl">Address</span><h1>{E(a)}</h1></div>{copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
+    nmx = nm.get(a) or p["forum_name"]
+    title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
+    head = (f'<div class="addrhead">{idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
+            f'{addr_meta(a, bal, p)}'
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···")}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum))}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp))}{stat("Locked", poa(lk) + X.usd_of(lk))}</div>')
-    rl = RC.for_address(a, 50)
-    rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
-    body = head + f'''{card("Overview", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener">Source JSON ↗</a>')}
-{card(ICON_CUBE + "Reward tracker", trk_sched + trk)}
-{rcpt}<div class="grid2">{card("Rewards", rew)}{card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)]))}</div>
-{grd}{hist}'''
-    return page("Address " + short(a), body, "/")
+    tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
+    tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng)]
+    nav = '<nav class="chips atabs scroll" aria-label="Address sections">' + "".join(
+        f'<a href="/address/{E(a)}{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}"{" aria-current=\"page\"" if k == tab else ""}>{n}{f" <small>{c:,}</small>" if c else ""}</a>'
+        for k, n, c in tabs) + '</nav>'
+    if tab == "rewards":
+        trk, trk_sched = V3.reward_tracker(a, p)
+        main = card(ICON_CUBE + "Tracker", trk_sched + trk) + card("Per epoch", rew, X.usd_toggle(), id="rewards")
+    elif tab == "txs": main = history_card(a, typ)
+    elif tab == "grading": main = grading_card(a) or card("Assignments", na("No grading assignments for this Agent yet."), id="grading")
+    else:
+        itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
+        rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
+        main = (card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener">Source JSON ↗</a>')
+                + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
+    return page("Address " + short(a), head + nav + main, "/")
+
+def addr_meta(a, bal, p):
+    """Header line: rank by balance, first and last seen on the ledger, current streak."""
+    rk = db.q1("SELECT COUNT(*) + 1 AS r FROM accounts WHERE balance > ?", (bal,))["r"] if bal else None
+    f1 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=?", (a,))["t"]; f2 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE to_addr=?", (a,))["t"]
+    l1 = db.q1("SELECT MAX(ts) AS t FROM txs WHERE from_addr=?", (a,))["t"]; l2 = db.q1("SELECT MAX(ts) AS t FROM txs WHERE to_addr=?", (a,))["t"]
+    first = min([t for t in (f1, f2) if t] or [None]) if (f1 or f2) else None; last = max(t for t in (l1, l2) if t) if (l1 or l2) else None
+    cur = p["streak"][1]
+    parts = [f'<a href="/agents/top?tab=holders" title="Rank among holders by balance">#{rk:,} by balance</a>' if rk else "",
+             f'<span title="{E(utc(first))} UTC">First seen {_pt_day(first)}</span>' if first else "",
+             f'<span>Last seen {rel(last)}</span>' if last else "",
+             f'<span title="Consecutive paid epochs up to the latest close">Streak {cur} epoch{"s" if cur != 1 else ""}</span>' if cur else ""]
+    parts = [x for x in parts if x]
+    return f'<p class="ameta">{" · ".join(parts)}</p>' if parts else ""
 
 HIST_PAGE = 25
 
@@ -356,15 +412,15 @@ def history_card(a, typ=""):
     tc = HI.type_counts(a); total = sum(tc.values())
     if typ and typ not in tc: typ = ""
     rows, nxt = HI.txs_page(a, None, HIST_PAGE, typ or None); cv = HI.coverage(a)
-    chips = (f'<a href="/address/{E(a)}#txs" class="chip {"on" if not typ else ""}">All <small>{total:,}</small></a>'
-             + "".join(f'<a href="/address/{E(a)}?type={E(t)}#txs" class="chip {"on" if t == typ else ""}">{E(TYPE_LABEL.get(t, t).title())} <small>{n:,}</small></a>' for t, n in tc.items())) if len(tc) > 1 else ""
+    chips = (f'<a href="/address/{E(a)}?tab=txs" class="chip {"on" if not typ else ""}">All <small>{total:,}</small></a>'
+             + "".join(f'<a href="/address/{E(a)}?tab=txs&amp;type={E(t)}" class="chip {"on" if t == typ else ""}">{E(type_name(t))} <small>{n:,}</small></a>' for t, n in tc.items())) if len(tc) > 1 else ""
     q = f"&type={E(typ)}" if typ else ""
     more = more_btn(f"/fragment/addr?a={a}&k=txs{q}&cursor={nxt}" if nxt else None)
     st = (f'Archive from {_pt_day(cv["archive_start_ts"])} · {cv["indexed_sent"]:,} sent · nonce ' + (f'{cv["highest_nonce"]:,}' if cv["highest_nonce"] is not None else RC.UNK)
           + f' · <a href="/about#history">coverage</a>') if total else ""
     tb = (f'<div class="tw"><table class="hist"><thead><tr><th>Tx</th><th>Type</th><th class="r">Epoch</th><th class="r">Age</th></tr></thead>'
           f'<tbody>{hist_rows(rows) or f"<tr><td colspan=4 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
-    return card(f"Transactions · {total:,}", (f'<div class="chips">{chips}</div>' if chips else "") + tb + more + (f'<p class="cov dim small">{st}</p>' if st else ""),
+    return card("History", (f'<div class="chips">{chips}</div>' if chips else "") + tb + more + (f'<p class="cov dim small">{st}</p>' if st else ""),
                 f'<a class="more" href="/api/v1/address/{E(a)}/txs{"?type=" + E(typ) if typ else ""}">API →</a>', cls="histc", id="txs")
 
 def _pt_day(ts):
@@ -394,7 +450,7 @@ def grading_card(a):
           + (f'<span>{RC.UNK} <b class="num">{g["unknown"]:,}</b></span>' if g["unknown"] else "") + '</div>')
     tb = (f'<div class="tw"><table class="hist grd"><thead><tr><th>Answer</th><th>Seal</th><th>Status</th></tr></thead>'
           f'<tbody>{seal_rows(g["rows"])}</tbody></table></div>')
-    return card(f"Grading · {g['assignments']:,}", sm + tb + more, f'<a class="more" href="/api/v1/address/{E(a)}/assignments">API →</a>', cls="histc", id="grading")
+    return card("Assignments", sm + tb + more, f'<a class="more" href="/api/v1/address/{E(a)}/assignments">API →</a>', cls="histc", id="grading")
 
 def addr_fragment(qs):
     """JSON {html, next} for Load more on /address."""
@@ -447,7 +503,7 @@ def cohort_card(state="unsealed"):
     trs = "".join(f'<tr><td><a class="mono" href="/epoch/{c["birth"]}">E{c["birth"]}</a></td><td class="r">{c["answers"]:,}</td>'
                   f'<td class="r" title="{c["gate_a"]["eligible"]:,} of {c["answers"]:,}">{pct(c["gate_a"]["rate"])}</td>'
                   + "".join(cell(c, t) for t in c["closes"]) + '<td></td>' * (ages - len(c["closes"])) + "</tr>" for c in cs)
-    th = '<th>Born</th><th class="r">n</th><th class="r">Gate A</th>' + "".join(f'<th class="r">+{i}</th>' for i in range(ages))
+    th = '<th>Born</th><th class="r">n</th><th class="r" title="Gate A: K-attested share of answers born that epoch">Challenge share</th>' + "".join(f'<th class="r">+{i}</th>' for i in range(ages))
     tb = f'<div class="tw"><table class="hist coh"><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table></div>'
     foot = f'<p class="cov dim small">+N: closes after birth<span class="mscroll"> · scroll →</span> · ≤ ≥ bounds before E{d["merge_from"]} · <a href="/about#cohorts">method</a></p>'
     return card("Cohorts", f'<div class="chips">{chips}</div>' + tb + foot, '<a class="more" href="/api/v1/cohorts">API →</a>', cls="histc", id="cohorts")
@@ -455,7 +511,7 @@ def cohort_card(state="unsealed"):
 def epochs_page(qs=None):
     ep = A.epoch_rows()
     cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Closed", epochs_table(ep), '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
+    body = '<div class="sechead"><h1>Epochs</h1></div>' + card("Closed", epochs_table(ep), X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>') + \
         cohort_card(((qs or {}).get("state") or [""])[0]) + card("Time between closes", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
     return page("Epochs", body, "/epochs")
 
@@ -469,20 +525,32 @@ def epoch(n):
     e = A.epoch_detail(n); nm = names()
     rw = sorted(((a, float(v)) for a, v in e.get("rewards", {}).items()), key=lambda x: -x[1])
     unp = r["slashed"] - len((A.params().get("slash_pardons") or {}).get(str(n), []))   # red only when some slash was not pardoned
-    rew = ([stat("Median reward", num(r["median"]) + X.usd_of(r["median"])), stat("Max reward", num(r["max"]) + X.usd_of(r["max"]))] if r["max"] != r["median"]
+    rew = ([stat("Median reward", num(r["median"]) + X.usd_of(r["median"])), stat("Top reward", num(r["max"]) + X.usd_of(r["max"]))] if r["max"] != r["median"]
            else [stat("Reward", num(r["median"]) + X.usd_of(r["median"]))])   # one card when every paid Agent got the same
-    s = "".join([stat("Pool", poa(r["pool"]) + X.usd_of(r["pool"])), stat("Minted", poa(r["minted"], mined=True) + X.usd_of(r["minted"])), stat("Burned", f'<span class="red">{num(r["burned"])}</span>'),
-                 stat("Burn %", f'<span class="num red">{r["burn_pct"]:.2f}%</span>'), stat("Paid agents", intc(r["paid"])), stat("At ceiling", intc(r["ceiling_capped"]))]
-                + rew + [stat("Attestations", intc(r["attestations"])),
-                 stat("Attesters", intc(r["attesters"])), stat("Slashed", f'<span class="num{" red" if unp > 0 else ""}">{r["slashed"]}</span>'), stat("Audit sampled", intc(r["audit_sampled"]))])
-    det = table(["Field", "Value"], [["Closed", utc(r["close_ts"])], ["Pool", poa(r["pool"])], ["Answerers paid", intc(r["challengers"])],
-        ["Challenge-eligible", intc(r["challenge_eligible"])], ["Newly established", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
-        ["Settled / passed", f'{r["settled"]} / {r["settled_passed"]}'], ["Pending", f'{r["pending"]:,}'], ["Pending appeals", intc(r["pending_appeal"])], ["No panel", intc(r["pending_empty_panel"])],
+    # Burned amount and burn share are one fact: the amount is a card, the share is in the header line. Paid Agents is in the header line too.
+    s = "".join([stat("Pool", poa(r["pool"]) + X.usd_of(r["pool"])), stat("Minted", poa(r["minted"], mined=True) + X.usd_of(r["minted"])),
+                 stat("Burned", f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"])}</span>' + X.usd_of(r["burned"]))]
+                + rew + [stat("Max reward", intc(r["ceiling_capped"]), tip="Agents paid the per-epoch maximum"),
+                 stat("Attestations", intc(r["attestations"])), stat("Attesters", intc(r["attesters"])),
+                 stat("Slashed", f'<span class="num{" red" if unp > 0 else ""}">{r["slashed"]}</span>', tip="Graders slashed at this close; red when some were not pardoned"),
+                 stat("Audit sampled", intc(r["audit_sampled"]), tip="Answers drawn for audit at this close")])
+    T = lambda label, tip: f'<span title="{E(tip)}">{label}</span>'
+    det = table(["Field", "Value"], [[T("Paid for answers", "Agents paid for an answer this epoch (others were paid for grading or referrals)"), intc(r["challengers"])],
+        [T("Answers eligible", "Answers that met the attestation bar to earn the challenge share"), intc(r["challenge_eligible"])],
+        ["Newly established", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
+        [T("Decided / passed", "Answers whose grading finished at this close, and how many passed"), f'{r["settled"]} / {r["settled_passed"]}'],
+        [T("Pending", "Answers still waiting for a grade"), f'{r["pending"]:,}'], ["Pending appeals", intc(r["pending_appeal"])],
+        [T("Awaiting graders", "Pending answers with no grading panel assigned yet"), intc(r["pending_empty_panel"])],
         ["Graders who served / grades", f'{r["graders"]} / {r["grades"]:,}'], ["Referral payouts", intc(r["referral_paid"])], ["Top-10 share / Gini", f'{pct(r["top10_share"])} / {r["gini"]:.3f}' if r["gini"] is not None else "···"],
         ["Distinct payouts", intc(r["distinct_amounts"])]])
-    rt = table(["#", "Address", "Reward"], [[i, addr_link(a, nm), poa(v, mined=True, dec=4)] for i, (a, v) in enumerate(rw[:100], 1)])
-    nav = f'<a class="more" href="/epoch/{n-1}">‹ E{n-1}</a> <a class="more" href="/epoch/{n+1}">E{n+1} ›</a>'
-    body = f'<div class="card trk"><div class="tracker"><span class="ep">EPOCH {n}</span><span class="tag ok">FINALIZED</span><span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div><div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card(f"Rewards · {len(rw)} agents", rt)}</div>'
+    rt = table(["#", "Agent", "Reward"], [[i, addr_link(a, nm), poa(v, mined=True, dec=4)] for i, (a, v) in enumerate(rw[:100], 1)], usd=(2,))
+    nav = (f'<a class="more epn" href="/epoch/{n-1}" aria-label="Epoch {n-1}" title="Epoch {n-1}">‹</a>'
+           f'<a class="more epn" href="/epoch/{n+1}" aria-label="Epoch {n+1}" title="Epoch {n+1}">›</a>')
+    t = _pt(r["close_ts"])
+    line = (f'<h1 class="ephd">Epoch {n} · <span title="{E(utc(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
+            f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
+    body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
+            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", rt, X.usd_toggle())}</div>')
     return page(f"Epoch {n}", body, "/epochs")
 
 # ---------------- The Agents ----------------
@@ -682,14 +750,15 @@ def grading():
                 colors=("#8FA3B8", "#FFB000", "#E3A33A", "#C8742B", "#FF5A4E", "#3DDC97", "#6b7a8a"))
     sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled"] - r["settled_passed"]]) for r in ep], legend=["Passed", "Failed"], colors=("#3DDC97", "#FF5A4E"))
     s = "".join([stat("Backlog", intc(last["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
-                 stat("No panel", intc(last["pending_empty_panel"])), stat("Settled", intc(last["settled"])), stat("Passed", intc(last["settled_passed"])),
+                 stat("Awaiting graders", intc(last["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
+                 stat("Decided", intc(last["settled"]), tip="Answers whose grading finished at the latest close (settled)"), stat("Passed", intc(last["settled_passed"])),
                  stat("Grades served", intc(last["grades"])), stat("Graders", intc(last["graders"]))])
     pard = p.get("slash_pardons") or {}
     pn = lambda r: len(pard.get(str(r["epoch"]), [])); tot = sum(r["slashed"] for r in ep); unp = tot - sum(pn(r) for r in ep)
     s += stat("Slashes", f'<span class="num{" red" if unp > 0 else ""}">{tot}</span>')   # red only when some were not pardoned
     st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="{"red" if r["slashed"] > pn(r) else ""}">{r["slashed"]}</span>', pn(r), r["audit_sampled"], r["established_removed"]] for r in ep])
     body = f'''<div class="stats eight">{s}</div><div class="grid2">{card("Backlog by origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
-{card("Settled per close", sett)}</div>{card("Slashes &amp; pardons", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/agents/graders">Graders →</a>')}'''
+{card("Decided per close", sett)}</div>{card("Slashes &amp; pardons", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/agents/graders">Graders →</a>')}'''
     return page("Grading", '<div class="sechead"><h1>Grading</h1></div>' + body, "/grading")
 
 def forum_page():
@@ -711,7 +780,7 @@ def network():
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
     gaps = [r["gap_s"] for r in ep if r["gap_s"]]
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc.get("last") else None
-    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Checkpoint", intc(nw.get("checkpoint_height")), "", "", "checkpoint"), stat("Checkpoint lag", intc(lag)),
+    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"), stat("Finality lag", intc(lag), tip="Blocks between the chain height and the finalized height"),
                  stat("Epoch cadence", f'<span class="num">{(sum(gaps)/len(gaps)/3600 if gaps else 0):.2f}h</span>'), stat("Closes", intc(len(ep))),
                  stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
                  stat("Signers", " · ".join(E(x["s"]) for x in anc["sigs"]) or "···"), stat("K", intc(p.get("K")), asof=p_t),
@@ -773,7 +842,8 @@ def about():
 <b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/status">/status</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.
 <b>Seals</b>: the settled jury size, or a lower bound (≥) from archived grade-sealed txs while pending; quorum is <code>params.grade_quorum</code>.
 <b>Status</b>: Pending while the answer sits in <code>basis.pending</code>; Passed or Failed at the close that lists it in <code>basis.settled</code>; Vanished if it left pending with no settled record (shown with the last close that listed it); No record if its epoch closed and no record listed it.
-<b>Paid</b>: the author address was in that close's <code>rewards</code>. Rewards are published per address, so what one answer earned is unknown.</p><h3 id="history">Address history</h3><p>The Transactions card and <code>/api/v1/address/&lt;addr&gt;/txs</code> list every tx this archive holds for the address, newest first, ordered by timestamp then id. Load more and <code>cursor</code> continue from the last row's key, so txs arriving at the top never shift or repeat a page. The archive starts at its first indexed tx and is fed by the network's tx feed (newest 200, read every minute), its tx window and address reads, which list only an address's newest 100. Txs missed during an outage or a burst cannot be fetched later. Nonce is the highest per-sender nonce in archived tx bodies; nonces count up per sender, so a nonce above the number of sent txs indexed means the archive is missing some. <b>Grading</b> lists each answer a grader sat on or sealed, from the close records plus archived grade-sealed txs. Sealed: the grader is in the settled jury, in the pending row's <code>grades</code>, on a short row's panel before params.pending_merge_from_epoch (when the panel listed counted seals), or a seal tx names the answer. No seal: a drawn panel seat with no seal from that grader in the record. Unlisted: a seal tx from before the latest close that the record does not list; a seal cast since that close waits for the next record. The seal tx is linked by grader and grade timestamp, which match the tx exactly, or by the assignment in an archived tx body; Sealed without a link means that tx is not archived.</p><h3 id="reconcile">Reconciliation</h3><p>The Reconciliation card on <a href="/status">/status</a> sets POAScan's own totals beside the numbers the node reports about itself, using only reads POAScan already makes; it adds no upstream calls. Each row shows both values, the difference (POAScan minus node), when each side was read and a state: <b>Match</b>, <b>Explained</b> when the gap equals a known cause, <b>Differs</b> otherwise, or <b>Node only</b> when POAScan has no figure of its own. <b>Mined</b>: the sum of every reward in the close records against <code>supply</code> in /api/status. <b>Burned</b>: pools minus rewards against pools minus that supply, so it moves with Mined. <b>Held</b>: the same reward sum against the sum of /api/agents balances; POA escrowed in open swap offers leaves balances, and close records pay some addresses that /api/agents does not list, so a gap of exactly those amounts is Explained. <b>Holders</b>, <b>Agents</b>, <b>Closes</b>, <b>Checkpoint</b>, <b>Txs</b>, <b>Final</b> and <b>Invalid</b>: POAScan's counts (balances above zero, /api/agents entries, close records, highest anchored height, archived txs, archived txs marked final, invalid txs seen) against the matching /api/status fields. The two sides are read on different schedules (status every minute, /api/agents every 15 minutes, close records after each close), so a gap that closes on the next read is timing, not error. <b>Height</b> has no POAScan counterpart: public tx reads carry no block height. <b>Pending</b>: the Pending panel's carried-forward total against <code>basis.pending</code> in the latest close. <b>Mint per close</b>: the rewards in each close record against the change in the node's reported supply between the last /api/status read stamped before the close and the first stamped after it; closes without a read on both sides are left out.</p><h3 id="cohorts">Answer cohorts</h3><p>The Cohorts card on <a href="/epochs">/epochs</a> follows every answer born in an epoch, so a backlog can't look smaller because its oldest answers dropped out of the count. An answer is born at epoch E when it first appears in a close record's <code>basis.pending</code> with <code>since</code> equal to E; every answer so far first appears at its own close, so the count n is frozen there. Answers are tracked, not agents, because the questions are about answers waiting for grades; an agent answers at most once per epoch, so n also counts that epoch's answering agents. At each later close every answer is in exactly one state, and the five always sum to n. <b>Unsealed</b>: pending with no seal. <b>Sealed</b>: pending with at least one seal (distinct graders in <code>grades</code>; an appeal re-grades an answer already graded, so it counts as sealed). <b>Passed</b> and <b>Failed</b>: not pending, and the latest <code>basis.settled</code> entry for it says so. <b>Vanished</b>: neither pending nor ever settled. Before params.pending_merge_from_epoch, a short row's panel listed counted seals and missed some, so in closes with such rows Unsealed is an upper bound (≤) and Sealed a lower bound (≥). Columns count closes after birth, so cohorts line up by age. <b>Gate A</b>: go.md and the close note pay the 20% challenges pool as an equal split among K-attested responders (K in /api/params), and the close record lists them in <code>basis.challenge_eligible</code>. Gate A is that list's size over the answers born at that close. The rate is not defined anywhere upstream. This definition reproduces the forum's figures (E3 127 of 868); it assumes each eligible address answered that epoch, which the record cannot show because pending rows carry no author. The paid list (<code>challenges</code>) can differ by a few addresses through the referral override, so eligibility is used rather than payment.</p><h3 id="calibration">Grader calibration</h3><p>The Calibration card on <a href="/agents/graders">/agents/graders</a> is advisory and unranked: rows sort by name, or by jury seats on request, and nothing marks a grader as better or worse. <b>Aligned</b>: the share of a grader's seats in settled juries (<code>basis.settled[].jury[]</code> across every close) marked <code>aligned</code>, with the seat count beside it. Aligned means the vote matched the panel, not that the grade was right: a grader who fails a weak answer that the rest of the panel passes is recorded as not aligned. Grading to match the expected panel would raise the rate without improving any grade, so the rate is not a target. <b>If passed</b> and <b>If failed</b> split it by the settled outcome, since closes that passed nearly everything make agreement easy. Settled rows are a small, non-random share of all answers, and most seats come from one close. <b>Score</b>: mean and standard deviation of the 0 to 3 scores in pending rows' <code>grades</code>, from params.pending_merge_from_epoch on, one per grader and answer. Juries publish no scores, so rows that settled before the merge are missing, and a grader dealt mostly older backlog rows can differ in mean with the same standards. <b>Seals per close</b>: distinct seals (record grades plus archived grade-sealed txs, matched by grader and timestamp) per close window, averaged over closes since that grader's first seal; seals the archive missed and the record dropped are not counted. Values on fewer than 20 seats or scores are grey. The API adds per-close seats, seals and the score histogram.</p><h3 id="records">Close records</h3><p><code>/api/v1/epoch/&lt;n&gt;/record</code> serves one close record from the network's <code>/api/epochs</code>, as POAScan last ingested it, with no fields added or removed. The body is canonical JSON per RFC 8785 (JCS): object keys sorted, no whitespace, strings as JSON.stringify writes them with non-ASCII left as UTF-8, numbers in shortest round-trip form. In Python that is <code>json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()</code>; in JavaScript, JSON.stringify with keys sorted at every level. The sha256 of those bytes is the ETag (quoted), X-Record-SHA256 and the index's <code>sha256</code>; sizes are body bytes before any gzip, so a compressed download reads smaller. Send If-None-Match for a 304. Published closes do not change, so they are cached as immutable; if the network ever revised one, its hash would change here. An open or unknown epoch is a 404. <code>/api/v1/epoch-records</code> lists every close with its hash and size; <code>?from=N</code> returns the records themselves, three per response, with <code>next_from</code> for the next page.</p><h3 id="pending">Pending answers</h3><p>The Pending panel on <a href="/live">/live</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><p><b>Seals</b>: rows at 0, 1, 2 and 3 distinct graders in the latest close record, against params.grade_quorum. From params.pending_merge_from_epoch on, each pending row carries <code>grades</code>, the live seal list, and the count is exact as of that close. Before it, a short row's <code>panel</code> listed the seals the close counted and missed some accepted seals, so counts are lower bounds (marked ≥); appeal panels are drawn seats, not seals, so those rows are Unknown. Seals cast since the last close appear at the next one. <b>Expires</b>: the origin epoch plus params.pending_ttl_epochs; the time is an estimate, the last close plus params.auto_epoch_seconds per close, in PT. What expiry does to a row is not published. <b>Settled</b>: answers in the latest close's <code>basis.settled</code>, by origin: their <code>since</code> in the previous close's pending, else the answer's tx epoch, else Unknown. <b>Grew</b>: rows pending at both of the last two closes with more distinct seals at the latest; rows with either count unknown are left out, and at the first merge close growth includes recovered earlier seals. <b>Dropped</b>: rows pending at the previous close that are neither pending nor settled at the latest, with no record of why. The API returns these for every close.</p><h3 id="market">USD values</h3><p>POAScan has one POA/USD reference, from filled swaps only. Open offers (asks) are never a price. Each fill is priced as the asset paid per POA, converted at the CoinGecko SOL or ETH reference POAScan recorded when it indexed the fill (USDC counts at $1). <b>Basis</b>: the last fill, or the median of the last 5 once the past 7 days hold 5 fills. <b>Hidden</b>: with no fill in the past 7 days no USD is shown anywhere. <b>Thin</b>: with fewer than 5 fills or under $100 of volume in those 7 days, the label reads USD · thin and every USD figure is rounded to 2 significant figures (3 otherwise). A figure like ≈$46 beside a balance is that balance times the reference: what one small trade implied, not what the balance would sell for. Read it live at <code>/api/v1/price</code>.</p>
+<b>Paid</b>: the author address was in that close's <code>rewards</code>. Rewards are published per address, so what one answer earned is unknown.</p><h3 id="history">Address history</h3><p>The Transactions card and <code>/api/v1/address/&lt;addr&gt;/txs</code> list every tx this archive holds for the address, newest first, ordered by timestamp then id. Load more and <code>cursor</code> continue from the last row's key, so txs arriving at the top never shift or repeat a page. The archive starts at its first indexed tx and is fed by the network's tx feed (newest 200, read every minute), its tx window and address reads, which list only an address's newest 100. Txs missed during an outage or a burst cannot be fetched later. Nonce is the highest per-sender nonce in archived tx bodies; nonces count up per sender, so a nonce above the number of sent txs indexed means the archive is missing some. <b>Grading</b> lists each answer a grader sat on or sealed, from the close records plus archived grade-sealed txs. Sealed: the grader is in the settled jury, in the pending row's <code>grades</code>, on a short row's panel before params.pending_merge_from_epoch (when the panel listed counted seals), or a seal tx names the answer. No seal: a drawn panel seat with no seal from that grader in the record. Unlisted: a seal tx from before the latest close that the record does not list; a seal cast since that close waits for the next record. The seal tx is linked by grader and grade timestamp, which match the tx exactly, or by the assignment in an archived tx body; Sealed without a link means that tx is not archived.</p><h3 id="reconcile">Reconciliation</h3><p>The Reconciliation card on <a href="/status">/status</a> sets POAScan's own totals beside the numbers the node reports about itself, using only reads POAScan already makes; it adds no upstream calls. Each row shows both values, the difference (POAScan minus node), when each side was read and a state: <b>Match</b>, <b>Explained</b> when the gap equals a known cause, <b>Differs</b> otherwise, or <b>Node only</b> when POAScan has no figure of its own. <b>Mined</b>: the sum of every reward in the close records against <code>supply</code> in /api/status. <b>Burned</b>: pools minus rewards against pools minus that supply, so it moves with Mined. <b>Held</b>: the same reward sum against the sum of /api/agents balances; POA escrowed in open swap offers leaves balances, and close records pay some addresses that /api/agents does not list, so a gap of exactly those amounts is Explained. <b>Holders</b>, <b>Agents</b>, <b>Closes</b>, <b>Checkpoint</b>, <b>Txs</b>, <b>Final</b> and <b>Invalid</b>: POAScan's counts (balances above zero, /api/agents entries, close records, highest anchored height, archived txs, archived txs marked final, invalid txs seen) against the matching /api/status fields. The two sides are read on different schedules (status every minute, /api/agents every 15 minutes, close records after each close), so a gap that closes on the next read is timing, not error. <b>Height</b> has no POAScan counterpart: public tx reads carry no block height. <b>Pending</b>: the Pending panel's carried-forward total against <code>basis.pending</code> in the latest close. <b>Mint per close</b>: the rewards in each close record against the change in the node's reported supply between the last /api/status read stamped before the close and the first stamped after it; closes without a read on both sides are left out.</p><h3 id="cohorts">Answer cohorts</h3><p>The Cohorts card on <a href="/epochs">/epochs</a> follows every answer born in an epoch, so a backlog can't look smaller because its oldest answers dropped out of the count. An answer is born at epoch E when it first appears in a close record's <code>basis.pending</code> with <code>since</code> equal to E; every answer so far first appears at its own close, so the count n is frozen there. Answers are tracked, not agents, because the questions are about answers waiting for grades; an agent answers at most once per epoch, so n also counts that epoch's answering agents. At each later close every answer is in exactly one state, and the five always sum to n. <b>Unsealed</b>: pending with no seal. <b>Sealed</b>: pending with at least one seal (distinct graders in <code>grades</code>; an appeal re-grades an answer already graded, so it counts as sealed). <b>Passed</b> and <b>Failed</b>: not pending, and the latest <code>basis.settled</code> entry for it says so. <b>Vanished</b>: neither pending nor ever settled. Before params.pending_merge_from_epoch, a short row's panel listed counted seals and missed some, so in closes with such rows Unsealed is an upper bound (≤) and Sealed a lower bound (≥). Columns count closes after birth, so cohorts line up by age. <b>Gate A</b>: go.md and the close note pay the 20% challenges pool as an equal split among K-attested responders (K in /api/params), and the close record lists them in <code>basis.challenge_eligible</code>. Gate A is that list's size over the answers born at that close. The rate is not defined anywhere upstream. This definition reproduces the forum's figures (E3 127 of 868); it assumes each eligible address answered that epoch, which the record cannot show because pending rows carry no author. The paid list (<code>challenges</code>) can differ by a few addresses through the referral override, so eligibility is used rather than payment.</p><h3 id="calibration">Grader calibration</h3><p>The Calibration card on <a href="/agents/graders">/agents/graders</a> is advisory and unranked: rows sort by name, or by jury seats on request, and nothing marks a grader as better or worse. <b>Aligned</b>: the share of a grader's seats in settled juries (<code>basis.settled[].jury[]</code> across every close) marked <code>aligned</code>, with the seat count beside it. Aligned means the vote matched the panel, not that the grade was right: a grader who fails a weak answer that the rest of the panel passes is recorded as not aligned. Grading to match the expected panel would raise the rate without improving any grade, so the rate is not a target. <b>If passed</b> and <b>If failed</b> split it by the settled outcome, since closes that passed nearly everything make agreement easy. Settled rows are a small, non-random share of all answers, and most seats come from one close. <b>Score</b>: mean and standard deviation of the 0 to 3 scores in pending rows' <code>grades</code>, from params.pending_merge_from_epoch on, one per grader and answer. Juries publish no scores, so rows that settled before the merge are missing, and a grader dealt mostly older backlog rows can differ in mean with the same standards. <b>Seals per close</b>: distinct seals (record grades plus archived grade-sealed txs, matched by grader and timestamp) per close window, averaged over closes since that grader's first seal; seals the archive missed and the record dropped are not counted. Values on fewer than 20 seats or scores are grey. The API adds per-close seats, seals and the score histogram.</p><h3 id="records">Close records</h3><p><code>/api/v1/epoch/&lt;n&gt;/record</code> serves one close record from the network's <code>/api/epochs</code>, as POAScan last ingested it, with no fields added or removed. The body is canonical JSON per RFC 8785 (JCS): object keys sorted, no whitespace, strings as JSON.stringify writes them with non-ASCII left as UTF-8, numbers in shortest round-trip form. In Python that is <code>json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()</code>; in JavaScript, JSON.stringify with keys sorted at every level. The sha256 of those bytes is the ETag (quoted), X-Record-SHA256 and the index's <code>sha256</code>; sizes are body bytes before any gzip, so a compressed download reads smaller. Send If-None-Match for a 304. Published closes do not change, so they are cached as immutable; if the network ever revised one, its hash would change here. An open or unknown epoch is a 404. <code>/api/v1/epoch-records</code> lists every close with its hash and size; <code>?from=N</code> returns the records themselves, three per response, with <code>next_from</code> for the next page.</p><h3 id="pending">Pending answers</h3><p>The Pending panel on <a href="/live">/live</a> groups answers that are not yet graded or resolved by the epoch they were submitted in. Earlier epochs come from <code>basis.pending</code> in the latest close record: every answer still waiting for a full panel or an appeal, keyed by answer id, with <code>since</code> as its origin epoch. The current epoch counts answers archived since the last close, since none is graded before the next close. Oldest is the age of the earliest of those answers when all of them are in the archive; otherwise it is the start of that epoch, marked ≤ as an upper bound. Rows from before the current epoch are highlighted. Ungraded answers carry forward up to params.pending_ttl_epochs.</p><p><b>Seals</b>: rows at 0, 1, 2 and 3 distinct graders in the latest close record, against params.grade_quorum. From params.pending_merge_from_epoch on, each pending row carries <code>grades</code>, the live seal list, and the count is exact as of that close. Before it, a short row's <code>panel</code> listed the seals the close counted and missed some accepted seals, so counts are lower bounds (marked ≥); appeal panels are drawn seats, not seals, so those rows are Unknown. Seals cast since the last close appear at the next one. <b>Expires</b>: the origin epoch plus params.pending_ttl_epochs; the time is an estimate, the last close plus params.auto_epoch_seconds per close, in PT. What expiry does to a row is not published. <b>Settled</b>: answers in the latest close's <code>basis.settled</code>, by origin: their <code>since</code> in the previous close's pending, else the answer's tx epoch, else Unknown. <b>Grew</b>: rows pending at both of the last two closes with more distinct seals at the latest; rows with either count unknown are left out, and at the first merge close growth includes recovered earlier seals. <b>Dropped</b>: rows pending at the previous close that are neither pending nor settled at the latest, with no record of why. The API returns these for every close.</p><h3 id="labels">Labels</h3><p>Pages use plain names; the API keeps the network's own terms. <b>Answer</b> is a <code>challenge</code> tx, <b>Grade</b> is <code>grade-sealed</code>, <b>Attest</b> is <code>attest-batch</code>, <b>Wallet link</b> is <code>chains-update</code>. <b>Awaiting graders</b>: pending answers with no grading panel yet (<code>pending_empty_panel</code>). <b>Decided</b>: answers whose grading finished at a close (<code>settled</code>). <b>Challenge share</b>: Gate A, the K-attested share of answers born in an epoch. <b>Max reward</b>: Agents paid the per-epoch maximum (<code>ceiling_capped</code>). <b>Finalized height</b>: the checkpoint, the highest height anchored as final. <b>Paid for answers</b>: Agents paid for an answer in that epoch; <b>Agents paid</b> counts every address in the close's rewards, including graders and referrals. Card numbers show 3 significant figures; hover for the full value. Tables use E8 for Epoch 8. On dense tables, POA | USD switches amount columns to the USD reference below.</p>
+<h3 id="market">USD values</h3><p>POAScan has one POA/USD reference, from filled swaps only. Open offers (asks) are never a price. Each fill is priced as the asset paid per POA, converted at the CoinGecko SOL or ETH reference POAScan recorded when it indexed the fill (USDC counts at $1). <b>Basis</b>: the last fill, or the median of the last 5 once the past 7 days hold 5 fills. <b>Hidden</b>: with no fill in the past 7 days no USD is shown anywhere. <b>Thin</b>: with fewer than 5 fills or under $100 of volume in those 7 days, the label reads USD · thin and every USD figure is rounded to 2 significant figures (3 otherwise). A figure like ≈$46 beside a balance is that balance times the reference: what one small trade implied, not what the balance would sell for. Read it live at <code>/api/v1/price</code>.</p>
 <h3>Swap market stats</h3><p>Market Cap is the USD reference times circulating supply (unlocked, spendable POA). FDV is the reference times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. Both follow the same 7-day and rounding rules and appear only on /swaps. Trades counts every finalized swap-fill since launch, and Volume sums them in USD at the reference recorded when each fill was indexed (within 3 hours of it), or at the current reference when none was recorded. The API also returns 24h Trades and 24h Volume.</p>
 <h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>

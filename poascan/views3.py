@@ -77,12 +77,12 @@ def unlock_chart():
 def unlock_calendar(nrows=12):
     u = unlock_data(); tot = u["total"] or 1
     rows = [[f'E{j}', utc(t, "%m-%d %H:%M"), poa(d), poa(c), pct(c / tot)] for j, t, c, d in u["fut"][:nrows]]
-    return table(["At close", "Time (UTC)", "Unlocks", "Circulating", "%"], rows)
+    return table(["At close", "Time (UTC)", "Unlocks", "Circulating", "%"], rows, pri=(0, 2, 3), usd=(2, 3))
 
 def unlock_section():
     return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), PR.ask([PR.UNLOCK, PR.SPENDABLE]), cls="")}'
             f'<div class="stats eight">{unlock_stats()}</div>'
-            f'{card("Unlock calendar", unlock_calendar(), "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>")}')
+            f'{card("Unlock calendar", unlock_calendar(), _X.usd_toggle() + "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>")}')
 
 def unlocks_api():
     u = unlock_data()

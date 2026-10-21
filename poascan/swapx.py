@@ -84,7 +84,7 @@ def fills_html():
              poa(r["poa"]), addr_link(r["taker"], nm) if r["taker"] else "···",
              V2._ext(r["chain"], r.get("ext_ref"), tx=True)] for r in fl[:10] if r["poa"] and r["want"]]
     if not rows: return '<div class="xempty na" aria-label="none">-</div>'
-    return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker", "Payment"], rows, cls="xft")
+    return table(["Time (UTC)", "Price · 1M POA", "Size", "Taker", "Payment"], rows, cls="xft", pri=(0, 1, 2))
 
 def chart_html():
     rows = [r for r in V2.price_history() if r["price_per_1m_poa"] is not None]
@@ -177,6 +177,14 @@ def usd_src():
     if not p["shown"]: return ""
     t = "thin" if p["thin"] else "ref"
     return f'<a class="usdsrc{" thin" if p["thin"] else ""}" href="/about#market">USD · {t}</a>'
+
+def usd_toggle():
+    """POA | USD switch for a dense table's card header; the browser converts columns marked .pc with this reference. "" when no price is shown."""
+    p = price()
+    if not p["shown"]: return ""
+    return (f'<span class="utog{" thin" if p["thin"] else ""}" role="group" aria-label="Amounts in" data-usd="{p["usd_per_poa"]}" data-sig="{p["sig_figs"]}">'
+            f'<button type="button" aria-pressed="true" data-u="poa">POA</button>'
+            f'<button type="button" aria-pressed="false" data-u="usd" title="Reference price{" (thin)" if p["thin"] else ""}: /about#market">USD</button></span>')
 
 NA = '<span class="na">-</span>'   # plain hyphen: no price yet
 def _usd(v):

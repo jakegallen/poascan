@@ -280,8 +280,8 @@ def freshness():
     up = M.state()["active"]
     if not live or now - live > LIVE_S: state, why = "stale", "No fresh read from minepoa.com"
     elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
-    elif up: state, why = "up", "Network upgrade: hosted mining paused, checkpoint parked on purpose"
-    elif cp_lag: state, why = "lag", f"Checkpoint unchanged {cp_age // 3600}h"
+    elif up: state, why = "up", "Network upgrade: hosted mining paused, finalized height parked on purpose"
+    elif cp_lag: state, why = "lag", f"Finalized height unchanged {cp_age // 3600}h"
     else: state, why = "live", "Live"
     return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
                 href="/status#upgrade" if state == "up" else "/status", maintenance=up,
