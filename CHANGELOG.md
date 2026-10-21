@@ -26,6 +26,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Fixed
 
+- The Ask dialog showed a single prompt's title twice (heading and a lone chip); the chip row now hides when there is one prompt.
 - `/grading` returned 500 once 8 origin epochs were pending: the backlog chart legend ran out of colors. Legend colors now wrap, and origins before the last five share one "Older" series.
 - Malformed addresses from upstream data (for example an inviter ending in "-") show as plain text instead of linking to a 404.
 - `/network` and `/community` have an h1; `/agents` subpages each have their own (Operators, Leaderboard and so on) instead of repeating "The Agents".
