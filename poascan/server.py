@@ -2,7 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -195,6 +195,32 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
     def do_HEAD(self): self.do_GET()
+    def cond(self, body, sha, cache, extra):
+        """Strong ETag = the body's sha256 (of the decoded bytes, whatever the transfer encoding); 304 on a matching If-None-Match."""
+        tag = f'"{sha}"'; hd = dict(extra, **{"ETag": tag, "Cache-Control": cache, "Access-Control-Allow-Origin": "*"})
+        hd["Access-Control-Expose-Headers"] = ", ".join(x for x in (hd.get("Access-Control-Expose-Headers"), "ETag, X-Record-SHA256, X-Record-Bytes, X-Next-From") if x)
+        inm = [t.strip().removeprefix("W/") for t in (self.headers.get("If-None-Match") or "").split(",") if t.strip()]
+        if tag in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
+        return self.send(200, body, "application/json", hd)
+    def records(self, p, qs, fmt):
+        m = AG.meta(); mh = AG.meta_headers(m)
+        def nf(msg, **k): return self.send(404, json.dumps(dict(error=msg, **k)), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"}))
+        ix = RR.index(); last = ix[-1]["epoch"] if ix else None
+        mm = re.match(r"^/api/epoch/(\d+)/record$", p)
+        if mm:
+            n = int(mm.group(1)); r = RR.record(n)
+            if not r: return nf(f"no close record for epoch {n}", last_close=last)
+            b, h = r
+            return self.cond(b, h, RR.IMMUTABLE, dict(mh, **{"X-Record-SHA256": h, "X-Record-Bytes": str(len(b)), "X-Canonical": RR.CANON}))
+        fr = qs.get("from", [None])[0]
+        rows = [dict(r, url=f"{AG.BASE}{AG.API_PREFIX}/epoch/{r['epoch']}/record") for r in ix]
+        if fr is None:
+            if fmt == "csv": return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": 'attachment; filename="api_epoch_records.csv"', "Access-Control-Allow-Origin": "*"}))
+            b = RR.canonical(rows); return self.cond(b, RR.sha256(b), "max-age=60", mh)
+        if not fr.isdigit(): return self.send(400, json.dumps({"error": "from must be a closed epoch number"}), "application/json", mh)
+        lim = qs.get("limit", [str(RR.FROM_MAX)])[0]; lim = max(1, min(RR.FROM_MAX, int(lim))) if lim.isdigit() else RR.FROM_MAX
+        b, nxt = RR.page(int(fr), lim)
+        return self.cond(b, RR.sha256(b), "max-age=60", dict(mh, **({"X-Next-From": str(nxt)} if nxt is not None else {})))
     def client_ip(self):
         return (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or self.client_address[0])
     def do_POST(self):
@@ -294,6 +320,7 @@ class H(BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
                 p = path[:-4] if path.endswith(".csv") else path
+                if p == "/api/epoch-records" or re.match(r"^/api/epoch/\d+/record$", p): return self.records(p, qs, fmt)
                 if p == "/api/agents/view":
                     try: body, etag = G.agents_view(qs.get("after", [""])[0], qs.get("limit", ["100"])[0] if qs.get("limit", ["100"])[0].isdigit() else 100)
                     except ValueError: return self.send(400, json.dumps({"error": "bad cursor"}), "application/json", {"X-API-Version": AG.VERSION})
