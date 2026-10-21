@@ -26,10 +26,13 @@ def join_open():
     if JOIN_ENV is not None: return JOIN_ENV != "0"
     return _surfaces().get("Joining") != "paused"
 
-def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "Joining" in _surfaces() else "default")
+def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "Joining" in _surfaces() else "default")   # the probe never covers joining
 
 def hosted_state():
     """paused, planned or back for hosted mining. Without tracker data the manual switch means paused."""
+    from . import halts as H
+    pr = (H.current() or {}).get("probe") or {}
+    if "Hosted mining" in pr: return pr["Hosted mining"]   # the live probe answers directly (hosted/challenge, hosted/me)
     g = _surfaces(); st = [g[k] for k in HOSTED if k in g]
     if not st: return "paused"
     return "paused" if "paused" in st else "planned" if "planned" in st else "back"

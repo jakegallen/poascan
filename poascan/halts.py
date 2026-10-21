@@ -1,4 +1,4 @@
-"""Network upgrade surfaces from a private halt tracker (URL in POASCAN_HALT_SRC, never published).
+"""Network upgrade surfaces from a private halt tracker (fallback; the live probe in pulse.py comes first) (URL in POASCAN_HALT_SRC, never published).
 Read every 10 minutes off the node (it adds no load to minepoa.com). Only the derived public state leaves this
 module: one of paused, planned or back per surface group. Nothing else from the source is stored or shown.
 Fetch or parse failures keep the last good state; with none, maint.py's manual switches decide."""
@@ -70,15 +70,25 @@ def job():
     prev = (db.get_blob(BLOB)[0] or {}).get("groups") or {}
     db.put_blob(BLOB, dict(groups=dict(prev, **d["groups"]), stays_live=d["stays_live"], ts=int(time.time())))
 
-def current():
-    """Last good derived state, or None when there is none (or it is older than MAX_AGE)."""
+def _doc():
     d = db.get_blob(BLOB)[0]
     if not d or not d.get("groups") or time.time() - (d.get("ts") or 0) > MAX_AGE: return None
     return d
+
+def current():
+    """Merged derived state: the live probe (pulse.py) is primary for the groups it covers, the doc fills the rest.
+    None when neither has a usable state. 'source' is probe, tracker or probe+tracker."""
+    from . import pulse as P
+    doc, pr = _doc(), P.current()
+    if not doc and not pr: return None
+    g = dict((doc or {}).get("groups") or {}); g.update((pr or {}).get("groups") or {})
+    src = "probe+tracker" if doc and pr else "probe" if pr else "tracker"
+    return dict(groups=g, stays_live=(doc or {}).get("stays_live") or [], ts=max((doc or {}).get("ts") or 0, (pr or {}).get("ts") or 0), source=src,
+                probe=(pr or {}).get("groups") or {})
 
 def summary():
     """Public block for meta.maintenance: surfaces by group, source, as of."""
     d = current()
     if not d: return dict(surfaces=None, surfaces_source="manual", surfaces_as_of=None, stays_live=None)
     iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(d["ts"]))
-    return dict(surfaces={g: d["groups"][g] for g in GROUPS if g in d["groups"]}, surfaces_source="tracker", surfaces_as_of=iso, stays_live=d.get("stays_live") or [])
+    return dict(surfaces={g: d["groups"][g] for g in GROUPS if g in d["groups"]}, surfaces_source=d["source"], surfaces_as_of=iso, stays_live=d.get("stays_live") or [])

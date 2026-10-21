@@ -425,6 +425,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("forum", job_forum, 1800, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
+    ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
 ]
 

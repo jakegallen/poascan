@@ -1,0 +1,7 @@
+{"as_of": "2026-10-21T21:00:00Z", "age_s": 60, "results": [
+ {"endpoint": "GET /api/status", "code": 200, "body": {}},
+ {"endpoint": "GET /api/hosted/me (cred)", "code": 503, "body": {"error": "endpoint temporarily halted - API hardening in progress"}},
+ {"endpoint": "GET /api/hosted/challenge (cred)", "code": 503, "body": {"error": "endpoint temporarily halted - API hardening in progress"}},
+ {"endpoint": "GET /api/hosted/assignments (cred)", "code": 503, "body": {"error": "endpoint temporarily halted - API hardening in progress"}},
+ {"endpoint": "GET /a/<cred>/me (path-action)", "code": 502, "body": "bad gateway"}
+]}
