@@ -595,7 +595,7 @@ def fixture_pages(check):
         check("epoch: header line (closed PT, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
               '<h1 class="ephd">Epoch 7 · ' in ep7 and " PT</span>" in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
               and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided / passed<" in ep7
-              and '<th class="pc">Reward</th>' in ep7)
+              and '<th class="pc">Reward</th>' in ep7 and 'title="&lt;' not in ep7)
         tx_ = req(base + "/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)

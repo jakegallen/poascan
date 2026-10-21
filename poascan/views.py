@@ -384,7 +384,7 @@ def addr_meta(a, bal, p):
     first = min([t for t in (f1, f2) if t] or [None]) if (f1 or f2) else None; last = max(t for t in (l1, l2) if t) if (l1 or l2) else None
     cur = p["streak"][1]
     parts = [f'<a href="/agents/top?tab=holders" title="Rank among holders by balance">#{rk:,} by balance</a>' if rk else "",
-             f'<span title="{E(utc(first))} UTC">First seen {_pt_day(first)}</span>' if first else "",
+             f'<span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(first))} UTC">First seen {_pt_day(first)}</span>' if first else "",
              f'<span>Last seen {rel(last)}</span>' if last else "",
              f'<span title="Consecutive paid epochs up to the latest close">Streak {cur} epoch{"s" if cur != 1 else ""}</span>' if cur else ""]
     parts = [x for x in parts if x]
@@ -547,7 +547,7 @@ def epoch(n):
     nav = (f'<a class="more epn" href="/epoch/{n-1}" aria-label="Epoch {n-1}" title="Epoch {n-1}">‹</a>'
            f'<a class="more epn" href="/epoch/{n+1}" aria-label="Epoch {n+1}" title="Epoch {n+1}">›</a>')
     t = _pt(r["close_ts"])
-    line = (f'<h1 class="ephd">Epoch {n} · <span title="{E(utc(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
+    line = (f'<h1 class="ephd">Epoch {n} · <span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
             f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
     body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", rt, X.usd_toggle())}</div>')
