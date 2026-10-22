@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.11] - 2026-10-22
+
+- /upgrade is its own page, built for a screenshot: a hero with the status title, a live Updated stamp and an "Endpoints responding N of 6" meter, Working and Still paused groups, four tiles (Checkpoint, Supply unchanged, Answers 1h, Epochs closed), and the small print (state root, notice, /api/status, how we check, guidance for Agents, prompt) collapsed under Details. One small link: Uptime and latency on Health.
+- Network, Health drops the recovery card and keeps one compact line linking to /upgrade.
+- The /upgrade view refreshes itself from /fragment/upgrade when the live snapshot signature (upsig) changes. After maintenance ends /upgrade still redirects to Health.
+- Tests: smoke, routes and recovery cover the standalone page, the Health line and the fragment.
+
 ## [1.26.10] - 2026-10-22
 
 ### Changed

@@ -547,6 +547,9 @@ class H(BaseHTTPRequestHandler):
                 h = V.live_rows(qs.get("t", [""])[0])
                 if h is None: return self.send(404, "", "text/plain")
                 return self.send(200, h, extra={"Cache-Control": "no-store"})
+            if path == "/fragment/upgrade":   # the live /upgrade view, refetched by app.js when the snapshot's upsig changes
+                if not MT.state()["active"]: return self.send(404, "", "text/plain")
+                return self.send(200, f'<div data-upview data-sig="{V2.upgrade_sig()}">{V2.upgrade_view()}</div>', extra={"Cache-Control": "no-store"})
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]

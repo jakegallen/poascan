@@ -150,77 +150,96 @@ def recon_card():
     foot = f'<p class="cov dim small">{d["matched"]} match · {d["explained"]} explained · {d["differs"]} differ · <a href="/about#reconcile">method</a></p>'
     return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
 
-def upgrade_card():
-    """/upgrade (and Network → Health): the staged maintenance in one card, shown only while maint.state() is active.
-    After the checkpoint moved it reads the recovery live: route states (hosted.py), checkpoint and state root, supply, status freshness, notice."""
+# ================= /upgrade: the recovery page (its own layout; Health keeps uptime and latency) =================
+ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
+CHECK = '<svg class="chk" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>'
+
+def _chip(text, cls): return f'<li class="chp {cls}">{CHECK if cls == "ok" else "<i></i>"}<span>{E(text)}</span></li>'
+
+def upgrade_sig():
+    """Changes whenever anything the /upgrade view shows changes; the live snapshot carries it and app.js refetches the view."""
     from . import maint as M
-    m = M.state()
-    if not m["active"]: return ""
-    sn = M.seen(); r = m["recovery"]
-    from . import halts as H
-    hs = H.current(); sf = (hs or {}).get("groups") or {}; jo = M.join_open(); jd = M.join_quiet()
-    agents = ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>.")
-    last = ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')
-    safe = ("Safe", f'Balances and landed answers are safe. Pending grades keep {m["pending_ttl_epochs"]} epochs.')
-    if r["moved"]:
-        rows = _recovery_rows(M, m, r) + [("Joining", E(M.join_line())),
-                ("Working", 'Self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), balances, <a href="/txs">explorer</a>.'), safe, agents, last]
-    else:
-        if jd: sf = dict(sf, Joining="paused") if sf else sf   # derived pause: no new join on the ledger for 90 minutes; clears on the next one
-        if sf:   # tracker-derived: one row per state, groups in a fixed order
-            rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k)) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
-            rows = [x for x in rows if x[1]]
-        else:
-            rows = [("Paused", "Hosted mining, grading" + ("" if jo and not jd else ", joining") + ".")]
-        jw = jo and not jd and "Joining" not in sf
-        rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
-                 ("Safe", f'Pending grades keep {m["pending_ttl_epochs"]} epochs. Finalized height {m["parked_checkpoint"]:,} is parked by design.'), agents, last]
+    r = M.recovery()
+    return str(abs(hash((M.stamp_ts(), tuple(sorted(M.route_display().items())), M.join_state(), r["checkpoint"], r["supply_intact"], M.strip_text(), M.seen()["answers"],
+                         r["epochs_closed"]))) % 10**10)
+
+def upgrade_view():
+    """Hero (status, live time, routes meter, Working and Still paused) plus four tiles. Everything here is live."""
+    from . import maint as M, hosted as R
+    m = M.state(); r = m["recovery"]; rt = R.current(); ds = M.route_display(); sn = M.seen()
+    lead, aside, tail = M.strip_text()
+    back = [k for k in rt if ds[k] in ("open", "responding")]; total = len(rt)
+    allof = m["official"]["routes"]
+    word = "back" if allof else "responding"
+    segs = "".join(f'<li class="seg" data-hroute="{k}" data-st="{ds[k]}"><i></i><span><b>{E(v["label"])}</b><em class="tag {ROUTE_TAG[ds[k]][0]}">{ROUTE_TAG[ds[k]][1]}</em></span></li>'
+                   for k, v in rt.items())
+    meter = (f'<div class="mtr"><div class="mtr-h"><span class="lbl">Endpoints {word}</span><b class="mtr-n"><span class="green">{len(back)}</span> of {total}</b></div>'
+             f'<ol class="segs" aria-label="Hosted routes">{segs}</ol></div>')
+    ok = []
+    if r["supply_intact"]: ok += ["Balances intact", "Supply unchanged"]
+    if r["checkpoint"]: ok.append(f'Checkpoint {r["checkpoint"]:,}')
+    if A.freshness()["state"] != "stale": ok.append("Explorer live")
+    if M.join_state() == "open": ok.append("Joining open")
+    ok.append("Self-custody mining")
+    ok += [f'{rt[k]["label"]} {"open" if ds[k] == "open" else "responding"}' for k in back]
+    wait = [rt[k]["label"] for k in rt if ds[k] == "paused"] + [f'{rt[k]["label"]} (checking)' for k in rt if ds[k] == "unknown"]
+    if M.join_state() == "paused": wait.append("Joining")
+    grp = (f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>'
+           + (f'<div class="grp wait" data-grp="paused"><h2><i></i>Still paused</h2><ul>{"".join(_chip(t, "wait") for t in wait)}</ul></div>' if wait else "")
+           + '</div>')
+    fr = M.back_phrase() if r["moved"] else ""
+    sub = ((fr[:1].upper() + fr[1:] + ". ") if fr else "") + tail if r["moved"] else (aside.strip() + "." if aside else "")
+    badge = f'<span class="upb"><i></i>Network upgrade</span>'
+    hero = (f'<section class="uph" aria-labelledby="uph-t"><div class="uph-top">{badge}{stamp(M.stamp_ts())}</div>'
+            f'<h1 class="uph-t" id="uph-t">{E(lead)}</h1>' + (f'<p class="uph-s">{E(sub)}</p>' if sub else "") + meter + grp + '</section>')
+    cp = (f'<span class="from">{r["previous_checkpoint"]:,} →</span> <span class="num">{r["checkpoint"]:,}</span>' if r["moved"] else intc(r["checkpoint"] or m["parked_checkpoint"]))
+    try: sv = f'<span class="num" title="{E(r["supply"])} POA">{compact3(float(r["supply"]))}</span><span class="unit">POA</span>'
+    except Exception: sv = "···"
+    tiles = "".join([stat("Checkpoint", cp), stat("Supply unchanged" if r["supply_intact"] else "Supply", sv),
+                     stat("Answers · 1h", f'<span class="num">{sn["answers"]:,}</span>'), stat("Epochs closed", intc(r["epochs_closed"]))])
+    return hero + f'<div class="stats four uptiles">{tiles}</div>'
+
+def upgrade_details():
+    """Small print under the tiles, collapsed: state root, notice, status freshness, how we check, guidance for Agents, the prompt."""
+    from . import maint as M, hosted as R
+    m = M.state(); r = m["recovery"]; n = m["notice"]; ck = R.checked_at()
+    sr = r["state_root"]
+    ts = A._ts(r["status_as_of"])
+    rows = [("State root", f'<code class="sr">{E(sr)}</code>' if sr else "···"),
+            ("Notice", "···" if n is None else f'<code>{E(n["id"] or "")}</code> {"active" if n["active"] else "no longer active"}'),
+            ("/api/status", ("Fresh" if r["status_fresh"] else "Not fresh") + (f", {stamp(ts, 'as of')}" if ts else "")
+             + (f'. Tx counters restarted at the new checkpoint: {int(r["txs"]):,} {"tx" if r["txs"] == 1 else "txs"}, {int(r["final"] or 0):,} final' if r["moved"] and isinstance(r["txs"], int) else "") + "."),
+            ("How we check", "One keyless read per hosted route every 15 minutes" + (f", last {stamp(ck, 'at')}" if ck else "")
+             + ". Responding means the route answers; Open needs the official notice or post."),
+            ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Pending grades keep "
+             f'{m["pending_ttl_epochs"]} epochs.'),
+            ("Joining", E(M.join_line()))]
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
-    return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
-                stamp(M.stamp_ts()) + f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
+    links = (f'<p class="upl small"><a href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
+             f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a></p>')
+    return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl>{box}</details>'
 
-ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
+def upgrade_body():
+    """The whole /upgrade page body, or "" when maintenance is off (the route then redirects to Health)."""
+    from . import maint as M
+    if not M.state()["active"]: return ""
+    return f'<div class="upv2"><div data-upview data-sig="{upgrade_sig()}">{upgrade_view()}</div>{upgrade_details()}</div>'
 
-def _recovery_rows(M, m, r):
-    """Live rows after the checkpoint moved. Every figure comes from our own mirror or route read; no reopen time anywhere."""
-    from . import hosted as R
-    from decimal import Decimal
-    rt = R.current(); lead, tail = M._recovery_line(); fr = M.back_phrase()
-    rest = "Operators bring endpoints back in stages while they watch system health."
-    now = f"{E(lead)}" + (f": {E(fr)}" if fr else "") + (f". {E(tail)}" if lead != "Recovery in progress" else ".") + f" {rest}"
-    dsp = M.route_display()
-    lis = "".join(f'<li data-hroute="{k}"><span>{E(v["label"])}</span><span class="tag {ROUTE_TAG[dsp[k]][0]}">{ROUTE_TAG[dsp[k]][1]}</span></li>' for k, v in rt.items())
-    ck = R.checked_at()
-    routes = (f'<ul class="hrl">{lis}</ul><p class="hrm dim small">'
-              + (f"{stamp(ck, 'Checked')} ({rel(ck)}). " if ck else "First check pending. ")
-              + "One keyless read per route every 15 minutes. Paused routes answer at once with a short status.</p>")
-    sr = r["state_root"]
-    root = f' State root <code class="sr" title="{E(sr)}">{E(sr[:12])}…{E(sr[-8:])}</code>.' if isinstance(sr, str) and len(sr) > 24 else ""
-    cp = f'<span class="num">{r["checkpoint"]:,}</span>, up from <span class="num">{r["previous_checkpoint"]:,}</span>.{root}'
-    try: sup = f'{Decimal(r["supply"]):,}'
-    except Exception: sup = None
-    if sup is None: supply = "···"
-    elif r["supply_intact"]: supply = f'<span class="num">{sup}</span> POA, unchanged across the checkpoint. Balances intact.'
-    else: supply = f'<span class="num">{sup}</span> POA (<span class="num">{Decimal(r["supply_before"]):,}</span> at {r["previous_checkpoint"]:,}).'
-    ts = A._ts(r["status_as_of"])
-    fresh = ("is fresh" if r["status_fresh"] else "is not fresh") + (f", {stamp(ts, 'as of')} ({rel(ts)})" if ts else "")
-    cnt = (f' Tx counters restarted at the new checkpoint: <span class="num">{int(r["txs"]):,}</span> {"tx" if r["txs"] == 1 else "txs"}, '
-           f'<span class="num">{int(r["final"] or 0):,}</span> final.') if isinstance(r["txs"], int) else ""
-    ob = r["open_ballots"]
-    ep = (f'<span class="num">{r["epochs_closed"]:,}</span> closed' if isinstance(r["epochs_closed"], int) else "···") + (
-        "" if ob is None else ". No open ballots." if ob == 0 else f'. <span class="num">{ob}</span> open {"ballot" if ob == 1 else "ballots"}.')
-    n = m["notice"]
-    nt = "···" if n is None else f'<code>{E(n["id"] or "")}</code> {"active" if n["active"] else "no longer active"}.'
-    return [("Now", now), ("Routes", routes), ("Checkpoint", cp), ("Supply", supply), ("Status", f"<code>/api/status</code> {fresh}.{cnt}"),
-            ("Epochs", ep), ("Notice", nt)]
+def upgrade_line():
+    """Health: one compact line to /upgrade while maintenance is on (no recovery blocks on Health itself)."""
+    from . import maint as M
+    m = M.state()
+    if not m["active"]: return ""
+    return (f'<p class="uphl"><i aria-hidden="true"></i><b>Network upgrade</b><span>{E(m["headline"])}</span>{stamp(M.stamp_ts())}'
+            f'<a href="/upgrade">Recovery details</a></p>')
 
 def status_page(title="Network upgrade"):
-    """/upgrade serves the Health tab under its own title and preview while the upgrade is on (/status redirects to the tab)."""
+    """/upgrade: its own page (no Network tab strip, no Health panels). Nav keeps Network highlighted."""
     from . import views
-    return views.network("health", title=title)
+    return views.page(title, upgrade_body(), "/network")
 
 def status_body():
     """Network → Health (was /status)."""
@@ -248,9 +267,9 @@ def status_body():
                  E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
-    up = upgrade_card()
+    up = upgrade_line()
     body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span></p>{up}<div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, "" if up else PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return body
 
 def _okpct(v):

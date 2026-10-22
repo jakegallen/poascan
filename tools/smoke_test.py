@@ -522,9 +522,9 @@ JOIN_CHECK = r"""
 import json, os, tempfile
 from poascan import db, maint as M, views2 as V2
 db.init()
-card = V2.upgrade_card()
-w = card[card.index("<dt>Working</dt>"):]; w = w[:w.index("</dd>")]
-print(json.dumps(dict(strip=M.strip_text()[0], og=M.og_desc(), start=M.join_line(), paused=M.paused(), card_joining="Joining" in w)))
+card = V2.upgrade_view()
+w = card[card.index('data-grp="working"'):]; w = w[:w.index("</ul>")]
+print(json.dumps(dict(strip=M.strip_text()[0], og=M.og_desc(), start=M.join_line(), paused=M.paused(), card_joining="Joining open" in w)))
 """
 
 PRICE_CHECK = r"""
@@ -591,11 +591,15 @@ def maintenance(base, root, env, check):
     check("maintenance: header pill hides (the home strip carries Upgrading), still one live indicator for app.js, checkpoint Parked not Stalled",
           'class="pill up" id="livepill" href="/upgrade"' in n and n[n.index('id="livepill"'):].split(">", 1)[0].endswith(" hidden") and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'asof steel">Parked<' in n and ">Stalled<" not in n)
-    card = s[s.index('id="upgrade"'):]; card = card[:card.index("</section>")]
-    check("maintenance: Network → Health upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
-          s.index('id="upgrade"') < s.index('class="stats eight"') and all(f"<dt>{k}</dt>" in card for k in ("Paused", "Working", "Safe", "Agents", "Last hour"))
-          and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" not in card and "24,371" in card
-          and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
+    u = req(base + "/upgrade")[1].decode(); um = u[u.index("<main"):u.index("</main>")]
+    check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
+          s.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in s and 'id="upgrade"' not in s and 'class="uph"' not in s and 'class="grp' not in s
+          and 'class="stats eight"' in s and s.index('class="uphl"') < s.index('class="stats eight"'))
+    check("maintenance: /upgrade is its own page: hero, routes meter, Working and Still paused, tiles, details with the post and one prompt box; no Health tab strip or panels",
+          um.count('class="uph"') == 1 and um.count('class="seg"') == 6 and 'data-grp="working"' in um and 'data-grp="paused"' in um and 'class="stats four uptiles"' in um
+          and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
+          and "lableak/#/post/1357" in um and um.count('class="pbox"') == 1 and "data-copy-prompt" in um and "24 to 72" not in um and ">Checkpoint<" in um
+          and "api/receipt/TXID" in um and "system_notice" in um and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
     check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
           st.count('class="upn"') == 1 and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
           and "once an hour at a random minute" in st and "try once more in an hour" in st and "api/receipt/TXID" in st
@@ -618,7 +622,7 @@ def maintenance(base, root, env, check):
         if 'class="upstrip"' in req(base + u)[1].decode(): check(f"maintenance: strip is home only ({u} has it)", False)
     c, up = req(base + "/upgrade"); up = up.decode()
     check("maintenance: /upgrade serves the card with its own title, description, canonical and OG image",
-          c == 200 and "<title>Network upgrade · POAScan</title>" in up and 'id="upgrade"' in up and '<link rel="canonical" href="https://poascan.io/upgrade">' in up
+          c == 200 and "<title>Network upgrade · POAScan</title>" in up and 'class="uph"' in up and '<link rel="canonical" href="https://poascan.io/upgrade">' in up
           and 'property="og:title" content="Network upgrade · POAScan"' in up and "Hosted mining paused for network upgrades, joining open, rewards paying" in up
           and ('og:image" content="https://poascan.io/og/upgrade.png"' in up or not _og_ok()) and 'name="twitter:title" content="Network upgrade · POAScan"' in up)
     c, png = req(base + "/og/upgrade.png"); check("maintenance: /og/upgrade.png is a PNG", c == 200 and png[:4] == b"\x89PNG")

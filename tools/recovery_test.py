@@ -132,27 +132,40 @@ try:
           '<span class="upm"><b>Recovering</b>. Mining still paused.</span></span><span data-upstamp><span class="upts">Updated <time data-upts="' in hm
           and _re.search(r'<span data-upstamp><span class="upts">Updated <time data-upts="\d+" datetime="[0-9T:-]+Z">\d\d:\d\dZ</time></span></span><a href="/upgrade">Details</a>', hm))
     check(f"home main: no em dash, no 'Accounts', no outside docs {clean(main)}", not clean(main))
-    c, up = get("/upgrade"); card = up[up.index('id="upgrade"'):]; card = card[:card.index("</section>")]
-    check("/upgrade: Updated stamp in the card header, Checked stamp on the routes, as of stamp on /api/status (UTC server-side)",
-          _re.search(r'<span class="upts">Updated <time data-upts="\d+"[^>]*>\d\d:\d\dZ</time></span><span class="tag">Since', card) is not None
-          and '<span class="upts">Checked <time data-upts=' in card and '<span class="upts">as of <time data-upts=' in card)
+    c, up = get("/upgrade"); card = up[up.index("<main"):up.index("</main>")]
+    hero = card[card.index('class="uph"'):card.index('class="stats four uptiles"')]
+    check("/upgrade: 200, own layout: hero first, no Network tab strip, no Health panels, one small link to Health",
+          c == 200 and card.index('class="uph"') < card.index("uptiles") < card.index('class="updet"') and "atabs" not in card and "Latency p50" not in card
+          and "Uptime · 7d" not in card and "Incidents" not in card and card.count('<a href="/network?tab=health">Uptime and latency on Health</a>') == 1)
+    check("/upgrade hero: Recovery in progress, Updated stamp, sub-line, routes meter 0 of 6 with six Paused segments",
+          '<h1 class="uph-t" id="uph-t">Recovery in progress</h1>' in hero and _re.search(r'<span class="upts">Updated <time data-upts="\d+"[^>]*>\d\d:\d\dZ</time></span>', hero)
+          and '<p class="uph-s">Mining and grading reopen in stages.</p>' in hero and '<span class="lbl">Endpoints responding</span><b class="mtr-n"><span class="green">0</span> of 6</b>' in hero
+          and all(f'<li class="seg" data-hroute="{k}" data-st="paused"><i></i><span><b>{l}</b><em class="tag warn">Paused</em></span></li>' in hero for k, l in
+                  (("mining", "Mining"), ("grading", "Grading"), ("send", "Send"), ("swap_offer", "Swap offers"), ("vote", "Voting"), ("export", "Export"))))
+    wk = hero[hero.index('data-grp="working"'):]; wk = wk[:wk.index("</ul>")]; wt = hero[hero.index('data-grp="paused"'):]; wt = wt[:wt.index("</ul>")]
+    check("/upgrade groups: Working has balances, supply, checkpoint, explorer, self-custody; Still paused has the six routes",
+          all(f"<span>{t}</span>" in wk for t in ("Balances intact", "Supply unchanged", "Checkpoint 33,463", "Explorer live", "Self-custody mining"))
+          and all(f"<span>{t}</span>" in wt for t in ("Mining", "Grading", "Send", "Swap offers", "Voting", "Export")))
+    tl = card[card.index("uptiles"):card.index('class="updet"')]
+    check("/upgrade tiles: Checkpoint 24,371 to 33,463, Supply unchanged 1.23B, Answers 1h, Epochs closed 10; no sub-lines",
+          '<span class="from">24,371 →</span> <span class="num">33,463</span>' in tl and ">Supply unchanged<" in tl and "1.23B" in tl and ">Answers · 1h<" in tl
+          and ">Epochs closed<" in tl and ">10<" in tl and 'class="asof"' not in tl)
+    dtl = card[card.index('<details class="updet"'):]
+    check("/upgrade details (collapsed): full state root, notice active, /api/status fresh with stamp and counters, how we check, Agents guidance, prompt",
+          "<details" in dtl and "<details open" not in dtl and f'<code class="sr">{ROOTHASH}</code>' in dtl and "<code>2026-10-21-hardening</code> active" in dtl
+          and 'Fresh, <span class="upts">as of <time data-upts=' in dtl and "Tx counters restarted at the new checkpoint: 1 tx, 0 final." in dtl
+          and '<span class="upts">at <time data-upts=' in dtl and "Check once an hour at a random minute. No retry loops." in dtl and "Pending grades keep 16 epochs." in dtl
+          and dtl.count('class="pbox"') == 1)
+    check("/upgrade: no reopen time, no 24 to 72, never 'reopened' while nothing is official", "24 to 72" not in card and "reopened" not in card and " hours" not in card.split('class="upa"')[0])
+    check(f"/upgrade: clean {clean(card)}", not clean(card))
     c, stp = get("/start")
     check("/start: the pause line carries the Updated stamp", '<p class="upn" role="status">' in stp and '<span class="upts">Updated <time data-upts=' in stp.split('class="upn"')[1][:900])
-    dts = ["Now", "Routes", "Checkpoint", "Supply", "Status", "Epochs", "Notice", "Joining", "Working", "Safe", "Agents", "Last hour"]
-    check("/upgrade: 200, rows in order", c == 200 and all(f"<dt>{k}</dt>" in card for k in dts) and [card.index(f"<dt>{k}</dt>") for k in dts] == sorted(card.index(f"<dt>{k}</dt>") for k in dts))
-    check("/upgrade: route list Mining, Grading, Send, Swap offers, Voting, Export, all Paused, with live hooks",
-          all(f'<li data-hroute="{k}"><span>{l}</span><span class="tag warn">Paused</span></li>' in card for k, l in
-              (("mining", "Mining"), ("grading", "Grading"), ("send", "Send"), ("swap_offer", "Swap offers"), ("vote", "Voting"), ("export", "Export"))))
-    check("/upgrade: checkpoint 33,463 up from 24,371 with the state root, supply to the decimal and intact",
-          '<span class="num">33,463</span>, up from <span class="num">24,371</span>.' in card and f'title="{ROOTHASH}">f77320b999ac…1dbccdbf</code>' in card
-          and '<span class="num">1,234,828,243.783275</span> POA, unchanged across the checkpoint. Balances intact.' in card)
-    check("/upgrade: status fresh, counters restarted, 10 epochs closed, no open ballots, notice active",
-          '<code>/api/status</code> is fresh, <span class="upts">as of <time data-upts=' in card and 'Tx counters restarted at the new checkpoint: <span class="num">1</span> tx, <span class="num">0</span> final.' in card
-          and '<span class="num">10</span> closed. No open ballots.' in card and "<code>2026-10-21-hardening</code> active." in card)
-    check("/upgrade: stages and health, hourly at a random minute, no retry loops, 16 epoch TTL; no reopen time, no 24 to 72",
-          "Recovery in progress. Operators bring endpoints back in stages while they watch system health." in card and "Check once an hour at a random minute. No retry loops." in card
-          and "Pending grades keep 16 epochs." in card and "24 to 72" not in card and "hours" not in card.split('class="upa"')[0])
-    check(f"/upgrade card: clean {clean(card)}", not clean(card))
+    c, hl = get("/network?tab=health")
+    check("Health: one compact recovery line with the headline and stamp, links /upgrade; no hero, groups or route meter",
+          hl.count('class="uphl"') == 1 and "Recovery in progress: new checkpoint 33,463, balances intact." in hl and '<a href="/upgrade">Recovery details</a>' in hl
+          and 'class="uph"' not in hl and "data-grp" not in hl and 'class="seg"' not in hl)
+    c, fr = get("/fragment/upgrade")
+    check("/fragment/upgrade serves the live view with its signature; the snapshot carries upsig", c == 200 and fr.startswith('<div data-upview data-sig="') and 'class="uph"' in fr)
     m = json.loads(get("/api/v1/status")[1] or "{}").get("meta", {}).get("maintenance") or {}
     check("API: meta.maintenance carries phase, headline, hosted_routes, notice and recovery",
           m.get("phase") == "recovery" and m.get("headline") == HL and m.get("hosted_routes", {}).get("export") == "paused"
@@ -164,7 +177,9 @@ try:
     c, hm = get("/"); c, up = get("/upgrade")
     check("probe open, not official: strip reads Mining endpoint responding (desktop and 390px), /upgrade shows Mining Responding and Grading Paused, never reopened",
           "<b>Mining endpoint responding</b><span class=\"upx\">: some endpoints are back</span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining endpoint responding</b>. Grading paused.</span>' in hm
-          and 'data-hroute="mining"' in up and ">Responding<" in up and "reopened" not in hm[hm.index("<main"):] and "reopened" not in up[up.index("<main"):])
+          and '<li class="seg" data-hroute="mining" data-st="responding">' in up and ">Responding<" in up and "<span>Mining responding</span>" in up
+          and '<h1 class="uph-t" id="uph-t">Mining endpoint responding</h1>' in up and '<p class="uph-s">Some endpoints are back. Grading still paused.</p>' in up
+          and '<span class="green">1</span> of 6' in up and "reopened" not in hm[hm.index("<main"):] and "reopened" not in up[up.index("<main"):])
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
     check("client: snapshot updates the strip line and the route tags in place; 390px shows the short line",
           'var ul=$("[data-upline]")' in js and "s.upline" in js and "s.upstamp" in js and 'timeZoneName:"short"' in js and '" \\u00b7 "' in js and "[data-hroute]" in js and ".upstrip .upd{display:none}.upstrip .upm{display:inline}" in css)

@@ -54,9 +54,9 @@ def main():
         llms = urllib.request.urlopen(base + "/llms-full.txt", timeout=20).read().decode()
         import re as _re
         upg = urllib.request.urlopen(base + "/upgrade", timeout=20).read().decode(); hl = urllib.request.urlopen(base + "/network?tab=health", timeout=20).read().decode()
-        pr = lambda h: _re.search(r"<dt>Paused</dt><dd>([^<]*)</dd>", h)
+        wt = upg[upg.index('data-grp="paused"'):]; wt = wt[:wt.index("</ul>")] if 'data-grp="paused"' in upg else ""
         ok = ("Hosted mining and joining paused" in home and "Joining is paused during the upgrade. Your agent may need to retry later." in st_html
-              and all(pr(h) and "joining" in pr(h).group(1).lower() and "<dt>Delayed</dt>" not in h for h in (upg, hl))
+              and "<span>Joining</span>" in wt and "Joining open" not in upg and 'class="uphl"' in hl and "joining paused" in hl.lower()
               and not any("delayed" in t.lower() for t in (home, st_html, upg, hl)))
         print(("ok   " if ok else "FAIL ") + "joining reads paused on home, /start, /upgrade and health; no delayed wording"); ok or fails.append("paused wording")
         bad = [x for x in ("Show me the api_key", "save it offline", "two warnings", "to save offline", "Save the key offline") for t in (st_html, home, llms) if x.lower() in t.lower()]
