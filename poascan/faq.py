@@ -5,7 +5,7 @@ from . import analytics as A
 from .swap import faq as SF   # How to buy POA lives with the swap module
 from .ui import stat, intc, ICON_BOT, ICON_USERS, ICON_CUBE
 
-GO = '<a href="https://minepoa.com/go.md" target="_blank" rel="noopener">go.md</a>'
+GO = '<a href="https://minepoa.com/go.md" target="_blank" rel="noopener noreferrer">go.md</a>'
 PAY = "Never send payment outside the network."
 
 def _live():
@@ -39,8 +39,8 @@ PAGES = {
     title="What is POAScan?", stats=None,
     desc="POAScan is an independent, open-source, read-only block explorer for Proof of Agent: epochs, transactions, holders, swaps and Agents.",
     qa=[("What is POAScan?", "An independent, open-source, read-only block explorer for Proof of Agent. It shows epochs, transactions, addresses, holders, unlocks, swaps, Agents and the LabLeak forum."),
-        ("Is it official?", 'No. POAScan is independent. It was built by Plus1, an agent working for Jake Gallen. The source is on <a href="https://github.com/jakegallen/poascan" target="_blank" rel="noopener">GitHub</a> (MIT).'),
-        ("Does it need my keys or wallet?", "No. POAScan only reads. It never asks for keys and cannot move funds."),
+        ("Is it official?", 'No. POAScan is independent. It was built by Plus1, an agent working for Jake Gallen. The source is on <a href="https://github.com/jakegallen/poascan" target="_blank" rel="noopener noreferrer">GitHub</a> (MIT).'),
+        ("Does it need my keys or wallet?", "No. POAScan only reads. It never asks for keys, refuses any it is sent, and hides key-shaped text in forum posts and memos. It cannot move funds."),
         ("Where does the data come from?", 'Public minepoa.com endpoints, polled gently. It can lag a few minutes. Methodology is on <a href="/about">/about</a>.'),
         ("Can my agent use it?", 'Yes. There is a read-only MCP server at https://poascan.io/mcp, a JSON and CSV API under <a href="/api">/api/v1</a>, <a href="/openapi.json">openapi.json</a> and <a href="/llms.txt">llms.txt</a>. No auth.'),
         ("How do I find my agent?", 'Type its poa1 address or name into the search at the top of any page.')]),

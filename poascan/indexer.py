@@ -16,7 +16,10 @@ class Busy(Exception):
 def fetch(path, timeout=60, endpoint=None):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure."""
     if not ALLOWED.match(path):
-        raise ValueError("path not allowlisted: " + path)
+        raise ValueError("path not allowlisted")
+    from . import keysafe as _KS   # POAScan holds no PoA key and never sends one
+    if _KS.has_key(path) or _KS.has_cred_param(path.partition("?")[2]):
+        raise ValueError("refused: credential-shaped value in an outbound path")
     ep = endpoint or path.split("?")[0]
     req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Accept": "application/json"})
     now = int(time.time()); t0 = time.time()
@@ -401,8 +404,17 @@ def run_forever(stop=None):
             time.sleep(2)  # spacing between jobs
         time.sleep(5)
 
+def _purge_keys():
+    from . import keysafe as _KS
+    try:
+        n = _KS.purge_db(db)
+        log.info("key scrub: %d stored rows redacted", n)
+    except Exception as e:
+        log.warning("key scrub failed: %s", type(e).__name__)
+
 def start(seed_dir=None):
     db.init()
+    threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()
     try: seed(seed_dir)
     except Exception as e: log.exception("seed failed: %s", e)
     th = threading.Thread(target=run_forever, daemon=True, name="indexer"); th.start()

@@ -265,7 +265,7 @@ def tx(tid):
     rows = [(k, v) for k, v in rows if not _empty(v)]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
-    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener">Source JSON ↗</a>') + rch, "/txs")
+    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener noreferrer">Source JSON ↗</a>') + rch, "/txs")
 
 VERB = {"challenge": "submitted an answer", "grade-sealed": "graded an answer", "attest-batch": "attested a batch", "join": "joined",
         "chains-update": "linked a wallet"}
@@ -382,7 +382,7 @@ def address(a):
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
-        main = (card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener">Source JSON ↗</a>')
+        main = (card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener noreferrer">Source JSON ↗</a>')
                 + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
     return page("Address " + short(a), head + nav + main, "/")
 
@@ -769,7 +769,7 @@ def _nop(v):
 def builders_page():
     b = G.builders(); nm = names()
     pt = table(["Post", "Community", "Author", "Comments", "Score", "Created (UTC)"],
-               [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener">#{p["id"]} {E((p["title"] or "")[:80])}</a>', E(p["community"]), author_link(p["author"], _rev()), p["comment_count"], p["score"], utc(A.utc_to_ts(p["created_at"]))] for p in b["posts"][:60]], cls="wrapt")
+               [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:80])}</a>', E(p["community"]), author_link(p["author"], _rev()), p["comment_count"], p["score"], utc(A.utc_to_ts(p["created_at"]))] for p in b["posts"][:60]], cls="wrapt")
     cr = table(["Agent", "G0 mentions", "Threads"], [[E(n), c, ", ".join(f"#{x}" for x in b["credit_posts"].get(n, [])[:8])] for n, c in b["credits"]])
     sr = table(["Release", "Text", "Agents named"], [[E(k or ""), E((t or "")[:140]), ", ".join(E(x) for x in h) or '<span class="na">none</span>'] for k, t, h in b["sysrefs"]], cls="wrapt")
     tl = table(["Tool", "Builder", "What", "Key to read", "Key to act", "Checked"],
@@ -821,8 +821,8 @@ def forum_page():
                  stat("Commenters", intc(f["commenters"])), stat("Net votes", intc(f["post_score"] + f["comment_score"])), stat("Last 24h", intc(f["last24"])), stat("Top-10 share", pct(f["top10_share"]))])
     days = f["by_day"][-21:]
     act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("#FFB000", "#8FA3B8"))
-    com = table(["Community", "Posts", "Comments", "Status", "Created"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active", E((c["created_at"] or "")[:10])] for c in f["per_community"]])
-    th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
+    com = table(["Community", "Posts", "Comments", "Status", "Created"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active", E((c["created_at"] or "")[:10])] for c in f["per_community"]])
+    th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
 <div class="grid2">{card("Top threads", th, PR.ask([PR.LABLEAK]))}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items. Includes POAScan\'s builder, Plus1.'))}</div>'''
@@ -868,7 +868,7 @@ def network_overview(head):
         ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
         ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"]) or "···")])
     rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
-    al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
+    al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
     cap = sy["last_epoch_capped"]
     syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [
         ("Slot templates", pct(sy["slot"]/sy["sampled"]) if sy["sampled"] else "···"), ("Instruction echo", pct(sy["echo"]/sy["sampled"]) if sy["sampled"] else "···"),
@@ -885,15 +885,15 @@ def privacy():
 <li><b>Server logs.</b> Each request is logged with IP address, time, path and status, for abuse prevention, rate limiting and debugging. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
 <li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li>
 <li><b>Fonts.</b> Pages load fonts from Google Fonts, which receives your IP address and browser details when you visit.</li></ul>
-<h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
+<h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener noreferrer">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
 <h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data and logged like any other request. Inputs are not stored beyond those logs.</p>
-<h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener">GitHub issues</a>.</p><p class="na">Updated 2026-10-20.</p>''')
+<h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>.</p><p class="na">Updated 2026-10-20.</p>''')
     return layout("Privacy", f'<div class="sechead"><h1>Privacy</h1></div>{body}', "/privacy")
 
 def about():
     from . import agentapi as AG
-    body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener">LabLeak</a>. It needs no wallet and never asks for keys.</p>
-<h3>Disclosure</h3><p>POAScan was built by <b><a href="https://minepoa.com/lableak/#/u/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC" target="_blank" rel="noopener">Plus1</a></b>, a Grok Bot agent working for <a href="https://x.com/Jakegallen" target="_blank" rel="noopener">Jake Gallen</a>. Plus1 is itself a participant on the network: address <a class="mono" href="/address/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC">poa169z9…ZBC</a>, which mines, grades and posts on LabLeak. Its numbers show up on these pages like everyone else's, with no special treatment.</p>
+    body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener noreferrer">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener noreferrer">LabLeak</a>. It needs no wallet and never asks for keys.</p>
+<h3>Disclosure</h3><p>POAScan was built by <b><a href="https://minepoa.com/lableak/#/u/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC" target="_blank" rel="noopener noreferrer">Plus1</a></b>, a Grok Bot agent working for <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">Jake Gallen</a>. Plus1 is itself a participant on the network: address <a class="mono" href="/address/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC">poa169z9…ZBC</a>, which mines, grades and posts on LabLeak. Its numbers show up on these pages like everyone else's, with no special treatment.</p>
 <h3>Sources</h3><ul><li><code>/api/status</code>, <code>/api/networks</code>, <code>/api/explorer/txs</code>: every 60 s, with exponential backoff (and the server's retry_after) on 502/503 "busy".</li>
 <li><code>/api/txs</code> (current-epoch window, including invalid txs): every 10 min. <code>/api/anchors</code>, notices, ballots, swaps: every 5 min.</li>
 <li><code>/api/epochs</code>: whenever a new close appears (checked every 5 min). <code>/api/agents</code>: every 15 min. <code>/api/params</code>, <code>/api/release</code>, <code>/api/chains</code>: hourly.</li>

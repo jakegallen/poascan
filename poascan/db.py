@@ -1,4 +1,5 @@
 """SQLite storage for POAScan. One file, WAL mode, one connection per thread."""
+from . import keysafe as _KS
 import os, sqlite3, threading, json, time
 
 DB_PATH = os.environ.get("POASCAN_DB", os.path.join(os.path.dirname(__file__), "..", "data", "poascan.db"))
@@ -61,7 +62,13 @@ def init():
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
         conn().commit()
 
+def _clean(a):
+    """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""
+    if isinstance(a, (list, tuple)): return type(a)(_clean(x) for x in a)
+    return _KS.redact(a) if isinstance(a, str) else a
+
 def write(sql, args=(), many=False):
+    args = [_clean(r) for r in args] if many else _clean(args)
     with _wlock:
         c = conn()
         if many: c.executemany(sql, args)

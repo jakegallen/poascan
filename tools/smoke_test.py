@@ -175,7 +175,7 @@ def main():
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
-        _cur = _re.search(r'href="(https://cursor\.com/install-mcp\?[^"]+)" data-mcp="cursor" target="_blank" rel="noopener" data-mcpcopy=', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
+        _cur = _re.search(r'href="(https://cursor\.com/install-mcp\?[^"]+)" data-mcp="cursor" target="_blank" rel="noopener noreferrer" data-mcpcopy=', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
         _ok = bool(_cur and _vs)
         if _ok:
             _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
@@ -203,7 +203,7 @@ def main():
               and all(f in open(_os.path.join(_bd, "SOURCES.md")).read() for f in set(_lg))
               and all(b'<span class="an"><img class="blogo"' in x for x in _pb))
         _mc = _m[_m.index('apps mcpa'):]; _oc = _mc.index('>Other clients<')
-        check("/start Mine: every Add button also copies a config", all(_re.search(f'data-mcp="{k}"(?: target="_blank" rel="noopener")? data-mcpcopy="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
+        check("/start Mine: every Add button also copies a config", all(_re.search(f'data-mcp="{k}"(?: target="_blank" rel="noopener noreferrer")? data-mcpcopy="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
         check("/start Mine: four one-click Add up front, everything else under Other clients", _mc[:_oc].count('data-mcp=') == 4
               and all(f'data-mcp="{k}"' in _mc[:_oc] for k in ("cursor", "vscode", "lmstudio", "goose")) and 'class="cmd"' not in _mc[:_oc]
               and _mc[_oc:].count('class="cmd"') == 7 and _mc[_oc:].index('data-mcp="cherry"') < _mc[_oc:].index('data-mcp="claude-code"'))

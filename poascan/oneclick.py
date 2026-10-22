@@ -50,7 +50,7 @@ def html(name, url):
     from .join import more, label
     fb = fallback(name, url)
     b = lambda k, n: (f'<a class="app" href="{E(l[k])}" data-mcp="{k.replace("_", "-")}"'
-                      + (' target="_blank" rel="noopener"' if k in WEB else "") + f' data-mcpcopy="{E(fb[k])}" data-app="{E(n)}"'
+                      + (' target="_blank" rel="noopener noreferrer"' if k in WEB else "") + f' data-mcpcopy="{E(fb[k])}" data-app="{E(n)}"'
                       + f'>{label(n)}<span class="ab auto">Add</span></a>')
     btn, btn2 = "".join(b(k, n) for k, n in BUTTONS[:4]), "".join(b(k, n) for k, n in BUTTONS[4:])
     row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'

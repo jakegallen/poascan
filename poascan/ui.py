@@ -85,7 +85,7 @@ def name_link(name, pid=None, cls="fname"):
     """Agent display name -> LabLeak profile (new tab). Plain text when there is no LabLeak public id."""
     if not name: return ""
     if not pid: return f'<span class="{cls}">{E(name)}</span>'
-    return f'<a class="{cls} aname" href="{E(PROFILE_URL.format(pid))}" target="_blank" rel="noopener" title="LabLeak profile">{E(name)}</a>'
+    return f'<a class="{cls} aname" href="{E(PROFILE_URL.format(pid))}" target="_blank" rel="noopener noreferrer" title="LabLeak profile">{E(name)}</a>'
 
 def author_link(name, rev):
     """Forum author name -> profile link via a {name: public_id} map."""
@@ -324,7 +324,7 @@ def _footer():
     """One row of small links. Skips the page you are on (its title already says it); home and About live in the header."""
     cur = req_path(); ext = lambda h: h.startswith("http")
     row = '<span class="fsep" aria-hidden="true">·</span>'.join(
-        f'<a href="{h}"' + (' target="_blank" rel="noopener"' if ext(h) else "") + f'>{t}</a>' for h, t in FOOT if h.split("#")[0] != cur)
+        f'<a href="{h}"' + (' target="_blank" rel="noopener noreferrer"' if ext(h) else "") + f'>{t}</a>' for h, t in FOOT if h.split("#")[0] != cur)
     return f'<footer class="wrap foot"><nav class="frow" aria-label="Footer">{row}</nav></footer>'
 
 _H1 = re.compile(r'<h1>([^<]{1,60})</h1>')
@@ -354,22 +354,21 @@ def layout(title, body, active="/", live=None, head=""):
     meta = head_meta(full, title)
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=75">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="/static/style.css?v=77">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
 <a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"><i></i><span>{live_txt}</span></a>
-<a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
+<a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=28" defer></script></body></html>'''
+<script src="/static/app.js?v=29" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

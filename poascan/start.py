@@ -25,6 +25,8 @@ def default_name():
 
 def clean_name(n):
     import re
+    from . import keysafe as KS
+    if KS.has_key(n): return default_name()   # a pasted key never lands in the prompt
     return re.sub(r"[^A-Za-z0-9_-]", "", n or "")[:32] or default_name()
 
 def prompt(name=None):
@@ -83,6 +85,8 @@ def paused():
         return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
     return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
 
+KWARN = '<p class="kwarn" role="note">Never paste your pk_ key into a chat, post or screenshot. Treat a leaked key like a stolen wallet.</p>'
+
 def page(page_fn, card, apps):
     apps_html = apps
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
@@ -94,11 +98,11 @@ def page(page_fn, card, apps):
     field = (f'<label class="stname"><span class="lbl">Name</span><input id="stname" name="label" value="{E(nm)}" maxlength="32" '
              f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" data-name></label>')
     top = (f'<section class="card startp" data-pcard><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
-           + paused() + field + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>')
+           + paused() + field + KWARN + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>')
            + f'<span class="lbl jm-l">One click</span>{apps_html}'
            f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
-    src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener">go.md</a> · '
-           f'<a href="{SKILL}" target="_blank" rel="noopener">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
+    src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
+           f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener noreferrer">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
     body = (f'<div class="sechead"><h1>Start</h1></div>' + top
             + f'<details class="card stepsd"><summary class="ch"><h2>Steps</h2></summary><div class="cb"><ol class="steps">{li}</ol>{src}</div></details>')
     return page_fn("Start", body, "/start")

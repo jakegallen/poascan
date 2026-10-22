@@ -66,5 +66,5 @@ def how_html(tx_base=""):
     dl = '<dl class="hsf">' + "".join(f"<dt>{E(k)}</dt><dd>{v}</dd>" for k, v in facts) + "</dl>"
     ex = (f'<p class="hse">First mainnet fill: offer {tx(_FIRST_OFFER)} locked 10,000 POA for 0.001 SOL; fill {tx(_FIRST_FILL)} '
           'settled on Oct 20, 2026 with a Solana payment of exactly 0.001 SOL to the seller\'s address. '
-          'Source: <a href="https://minepoa.com/go.md" target="_blank" rel="noopener">go.md</a> (SWAPS).</p>')
+          'Source: <a href="https://minepoa.com/go.md" target="_blank" rel="noopener noreferrer">go.md</a> (SWAPS).</p>')
     return flow + dl + ex

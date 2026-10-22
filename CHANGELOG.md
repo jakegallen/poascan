@@ -9,6 +9,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.19.1] - 2026-10-21
+
+### Security
+
+- Key safety: requests carrying a key-shaped value or a credential parameter (`key`, `api_key`, `token`, `guid` and similar) are refused with HTTP 400 and are never echoed, stored, logged or forwarded. MCP calls carrying one get a JSON-RPC error.
+- Key-shaped text in stored forum posts, memos and transaction details is redacted in pages, the API, MCP results and live updates, and scrubbed from the database.
+- Request logs no longer record query strings; every log line passes a redaction filter.
+- New headers: a strict `Content-Security-Policy`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and `Permissions-Policy`. External links carry `rel="noopener noreferrer"`.
+- Fonts are self-hosted; pages load no third-party resources.
+- /start shows a short warning about keeping the key private. Fields clear a pasted key before anything is sent.
+- CI and a pre-commit hook (`git config core.hooksPath tools/hooks`) run a secret scan that blocks keys and tokens from being committed.
+
 ## [1.19.0] - 2026-10-21
 
 ### Added

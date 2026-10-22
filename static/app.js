@@ -141,6 +141,14 @@ function toast(m,big){if(!toastEl)return;var am0=D.getElementById("askmodal"),ho
 function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(jm&&jm.open?jm:D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb()});return Promise.resolve(fb())}
 D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
+/* Key guard: a PoA key pasted into any field is cleared before anything sees it (search suggest, submit, the prompt) */
+(function(){var KR=/(^|[^A-Za-z0-9])(p?sk|pk)_[A-Za-z0-9_\-]{12,}/,MSG="That looks like a PoA key. POAScan never takes keys and sent nothing. Never paste it anywhere.";
+ function hit(v){return typeof v==="string"&&KR.test(v)}
+ function say(){if(typeof toast==="function")toast(MSG,1);else alert(MSG)}
+ D.addEventListener("paste",function(e){var t=e.target,c=e.clipboardData&&e.clipboardData.getData("text");if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")&&hit(c)){e.preventDefault();e.stopImmediatePropagation();say()}},true);
+ D.addEventListener("input",function(e){var t=e.target;if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")&&hit(t.value)){t.value="";e.stopImmediatePropagation();say()}},true);
+ D.addEventListener("submit",function(e){var f=e.target,bad=0;$$("input,textarea",f).forEach(function(i){if(hit(i.value)){i.value="";bad=1}});if(bad){e.preventDefault();e.stopImmediatePropagation();say()}},true);
+})();
 /* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
  R=function(a){return a[Math.floor(Math.random()*a.length)]},nm=R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900)),RX=/(register\?label=)[^\s]*/;
@@ -164,7 +172,7 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
   if(!inCard&&(t===jm||t.closest("[data-jmclose]"))){jmClose();return}
   var P=PF(t);
   var cb=t.closest("[data-copy-prompt]");if(cb){copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
-  var co=t.closest("[data-cpopen]");if(co){var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P);if(pre)u=pre+encodeURIComponent(P);if(u)W.open(u,"_blank","noopener");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
+  var co=t.closest("[data-cpopen]");if(co){var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P);if(pre)u=pre+encodeURIComponent(P);if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
   var au=t.closest("a.app[data-pre]");if(au){copyText(P);toast("Opening "+au.dataset.app+" · prompt also copied");return}
  },true);
 }

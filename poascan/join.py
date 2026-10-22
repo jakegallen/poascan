@@ -70,7 +70,7 @@ def label(n):
 
 def _app(n, kind, base, pre):
     if kind == "auto":
-        return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener">{label(n)}{_badge(kind)}</a>'
+        return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener noreferrer">{label(n)}{_badge(kind)}</a>'
     return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{label(n)}{_badge(kind)}</button>'
 
 _N = [0]
@@ -95,7 +95,7 @@ def modal():
 {_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(_S.prompt())}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
-<p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
+<p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
 </div></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>'''
 
 def ask_modal():
@@ -105,5 +105,5 @@ def ask_modal():
 <div class="chips am-c" hidden></div>
 {pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
-<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a>. MY_KEY stays in your agent's secret store and is never shown.</p>
+<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a>. MY_KEY stays in your agent's secret store and is never shown.</p>
 </div></dialog>'''

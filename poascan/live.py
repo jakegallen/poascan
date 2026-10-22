@@ -38,6 +38,8 @@ class Hub:
     def _refresh(self):
         data = self.snapshot_fn()
         js = json.dumps(dict(data, t="snap"), separators=(",", ":"), default=str)
+        from . import keysafe as _KS
+        js = _KS.redact(js)   # live pushes carry other people's memos: no key-shaped token goes out
         changed = js != self.last_json
         self.last_json = js; self.last_at = time.time()
         if changed: self.last_frame = frame(js)

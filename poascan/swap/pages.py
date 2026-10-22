@@ -33,7 +33,7 @@ def _ext(chain, addr, tx=False):
     if not addr: return '<span class="na">···</span>'
     e = EXPL.get((chain or "").lower())
     if not e: return f'<span class="mono">{E(short(addr, 6, 4))}</span>'
-    return f'<a class="mono" href="{e[1 if tx else 0]}{E(addr)}" target="_blank" rel="noopener">{E(short(addr, 6, 4))} ↗</a>'
+    return f'<a class="mono" href="{e[1 if tx else 0]}{E(addr)}" target="_blank" rel="noopener noreferrer">{E(short(addr, 6, 4))} ↗</a>'
 
 
 def money(v, n=3):

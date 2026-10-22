@@ -3,6 +3,7 @@ import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
+from . import keysafe as KS
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -207,15 +208,19 @@ HSTS = "max-age=31536000"
 MPID = re.compile(rb'"mp\d+"')
 IMMUTABLE = "public, max-age=31536000, immutable"
 
+QS_RX = re.compile(r"\?[^\s\"]*")
+
 class BadRequest(Exception): pass
 
 class H(BaseHTTPRequestHandler):
     timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
     server_version = "POASCAN/1.0"
-    def log_message(self, fmt, *a): log.info("%s %s", self.address_string(), fmt % a)
+    def log_message(self, fmt, *a):   # query strings are never logged; paths pass through the redaction filter
+        log.info("%s %s", self.address_string(), QS_RX.sub("", fmt % a))
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
         if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
         if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
+        if isinstance(body, str): body = KS.redact(body)   # no key-shaped token in any text response (forum text, memos, errors)
         b = body.encode() if isinstance(body, str) else body
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))
@@ -228,8 +233,9 @@ class H(BaseHTTPRequestHandler):
         if gz: b = gzip.compress(b, 5)
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
         if gz: self.send_header("Content-Encoding", "gzip"); self.send_header("Vary", "Accept-Encoding")
-        self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "same-origin"); self.send_header("Strict-Transport-Security", HSTS)
-        for k, v in hdr.items(): self.send_header(k, v)
+        self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("Strict-Transport-Security", HSTS)
+        self.send_header("Content-Security-Policy", CSP); self.send_header("X-Frame-Options", "DENY"); self.send_header("Permissions-Policy", PERMS)
+        for k, v in hdr.items(): self.send_header(k, KS.redact(str(v)))
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
     def do_HEAD(self): self.do_GET()
@@ -272,7 +278,11 @@ class H(BaseHTTPRequestHandler):
             if n > 65536: return self.send(413, json.dumps(AG._err(None, -32600, "request too large")), "application/json", MCP_HDRS)
             pv = self.headers.get("MCP-Protocol-Version")
             if pv and pv not in AG.PROTOCOLS: return self.send(400, json.dumps(AG._err(None, -32600, "unsupported MCP-Protocol-Version")), "application/json", MCP_HDRS)
-            code, out = AG.handle_mcp(self.rfile.read(n))
+            raw = self.rfile.read(n)
+            if KS.has_key(raw):   # MCP tools never take keys; refuse without echoing the request
+                log.warning("refused an MCP call with a key-shaped value (not logged)")
+                return self.send(400, json.dumps(AG._err(None, -32602, KS.WARN)), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
+            code, out = AG.handle_mcp(raw)
             if out is None: return self.send(202, b"", "application/json", MCP_HDRS)
             return self.send(code, json.dumps(out, default=str), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
         except BrokenPipeError: pass
@@ -290,7 +300,15 @@ class H(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").lower()
         if not host.startswith("www."): return False
         self.send(301, "", TXT, {"Location": "https://" + host[4:].split(":")[0] + self.path, "Cache-Control": "public, max-age=86400"}); return True
+    def key_guard(self):
+        """Anything key-shaped in the path or query, or a credential parameter, is refused before routing:
+        never fetched upstream, never logged, stored, cached, echoed or redirected."""
+        raw = self.path or ""; q = raw.partition("?")[2]
+        if not (KS.has_key(raw) or KS.has_cred_param(q)): return False
+        log.warning("refused a request with a key-shaped value (not logged)")
+        self.send(400, KS.WARN + "\n", TXT, {"Cache-Control": "no-store"}); return True
     def do_GET(self):
+        if self.key_guard(): return
         if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
@@ -311,7 +329,7 @@ class H(BaseHTTPRequestHandler):
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")
-                ct = {".ico": "image/x-icon", ".webmanifest": "application/manifest+json"}.get(os.path.splitext(f)[1]) or mimetypes.guess_type(f)[0] or "application/octet-stream"
+                ct = {".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2"}.get(os.path.splitext(f)[1]) or mimetypes.guess_type(f)[0] or "application/octet-stream"
                 return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path in ROOT_FILES:
                 fn, ct = ROOT_FILES[path]
@@ -415,9 +433,14 @@ class H(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
         except Exception as e:
-            log.error("error on %s: %s\n%s", self.path, e, traceback.format_exc())
+            log.error("error on %s: %s\n%s", self.path.split("?", 1)[0], e, traceback.format_exc())
             try: self.send(500, V.page("Error", V.card("Something went wrong", V.na("This page failed to render. The indexer may still be loading data.")), "/") if not path.startswith("/api/") else json.dumps({"error": "internal"}), "text/html; charset=utf-8" if not path.startswith("/api/") else "application/json")
             except Exception: pass
+
+# Strict CSP: own scripts plus the one inline class toggle (by hash), own fonts and images, same-origin fetch and WebSocket.
+CSP = ("default-src 'self'; script-src 'self' 'sha256-cvlem2Rlcb+inScVb7910PMAU98gRDEfAIUVUKXOWd4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
+       "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+PERMS = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), clipboard-read=()"
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
@@ -438,6 +461,7 @@ class Server(ThreadingHTTPServer):
 
 def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
     if os.environ.get("POASCAN_INDEXER", "1") == "1":
         I.start(os.environ.get("POASCAN_SEED_DIR"))

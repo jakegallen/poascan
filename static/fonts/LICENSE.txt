@@ -1,0 +1,2 @@
+Space Grotesk (Florian Karsten) and JetBrains Mono (JetBrains), latin and latin-ext subsets, self-hosted so pages load no third-party resources.
+Both are licensed under the SIL Open Font License 1.1: https://openfontlicense.org

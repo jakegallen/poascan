@@ -173,7 +173,7 @@ def upgrade_card():
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
-                f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener">Official post ↗</a>', cls="upc", id="upgrade")
+                f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
 
 def status_page(title="Network upgrade"):
     """/upgrade serves the Health tab under its own title and preview while the upgrade is on (/status redirects to the tab)."""
@@ -234,8 +234,8 @@ WARN = ["No official X account", "No token contract", "Never pay first", "Keys n
 COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
 
 def safety_html():
-    off = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener">{E(n)} ↗</a>' for n, u in OFFICIAL)
-    team = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener">{E(n)} <span class="dim">{E(h)}</span></a>' for n, u, h in TEAM)
+    off = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer">{E(n)} ↗</a>' for n, u in OFFICIAL)
+    team = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer">{E(n)} <span class="dim">{E(h)}</span></a>' for n, u, h in TEAM)
     warn = "".join(f'<li>{E(w)}</li>' for w in WARN)
     return f'''<div class="safety" id="safety"><div><span class="lbl">Official</span><div class="lks">{off}</div></div>
 <div><span class="lbl">Team voices</span><div class="lks">{team}</div></div>
@@ -243,10 +243,10 @@ def safety_html():
 
 def src_card():
     return f'''<div class="srccard"><div class="srcl">{ICON_GH}<div><b>ProofOfAgent Ledger</b> <span class="tag gold">Official</span><div class="dim small">EmblemCompany · poa-mainnet-1</div></div></div>
-<div class="srcb"><a class="srcbtn" href="{SRC_URL}" target="_blank" rel="noopener">Build on this ↗</a></div></div>'''
+<div class="srcb"><a class="srcbtn" href="{SRC_URL}" target="_blank" rel="noopener noreferrer">Build on this ↗</a></div></div>'''
 
 def community_html():
-    return src_card() + '<div class="lks">' + "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener nofollow">{E(n)} ↗</a>' for n, u in COMMUNITY) + '</div><p class="dim small">Independent. Listed, not endorsed.</p>'
+    return src_card() + '<div class="lks">' + "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer nofollow">{E(n)} ↗</a>' for n, u in COMMUNITY) + '</div><p class="dim small">Independent. Listed, not endorsed.</p>'
 
 from . import join as _J
 def _apps(auto_first=False, cls=""):   # the "Open in" app set on /start

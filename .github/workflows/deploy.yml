@@ -18,6 +18,8 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -25,12 +27,20 @@ jobs:
         run: |
           python -m compileall -q poascan tools
           python -c "import poascan.server, poascan.agentapi"
+      - name: Secret scan (tree and pushed commits)
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          python tools/secret_scan.py
+          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE" 2>/dev/null; then python tools/secret_scan.py --range "$BEFORE..$GITHUB_SHA"; fi
       - name: Smoke test (empty DB, indexer off, no upstream calls)
         run: python tools/smoke_test.py
       - name: Joining state (open, delayed, paused)
         run: python tools/join_state_test.py
       - name: Every main route renders with maintenance on, joining delayed and swap rows present
         run: python tools/routes_test.py
+      - name: Keys are never echoed, stored, logged or forwarded; security headers present
+        run: python tools/keysafe_test.py
 
   deploy:
     needs: test
