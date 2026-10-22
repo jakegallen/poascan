@@ -19,3 +19,5 @@ fly.toml
 run.sh
 shots/
 tools/
+!tools/geoip_fetch.py
+**/*.mmdb
