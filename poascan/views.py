@@ -186,12 +186,13 @@ def home():
     return page("Proof of Agent explorer", body, "/")
 
 def upgrade_strip():
-    """Home only, while the network upgrade is on (maint.py): one quiet steel line to /upgrade. No motion."""
+    """Home only, while the network upgrade is on (maint.py): one quiet steel line to /upgrade. It carries the Upgrading status
+    (the header pill hides while maintenance is on) next to the hosted mining and joining line."""
     from . import maint as M
     if not M.state()["active"]: return ""
     lead, aside, tail = M.strip_text()
     t = f" {E(tail)}" if tail else ""
-    return f'<p class="upstrip" role="note"><i aria-hidden="true"></i><span><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><a href="/upgrade">Details</a></p>'
+    return f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><a href="/upgrade">Details</a></p>'
 
 def tps_html():
     now = time.time()
@@ -922,7 +923,7 @@ def about():
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
-<b>Upgrading</b>: minepoa.com is in staged maintenance (mining and grading paused, checkpoint parked on purpose); it replaces Lagging for the parked checkpoint and ends by itself once the checkpoint moves. Details on <a href="/upgrade">/upgrade</a>.
+<b>Upgrading</b>: minepoa.com is in staged maintenance (mining and grading paused, checkpoint parked on purpose); it replaces Lagging for the parked checkpoint and ends by itself once the checkpoint moves. While it is on, the header pill steps aside and the home status line shows it. Details on <a href="/upgrade">/upgrade</a>.
 <b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/network?tab=health">Network → Health</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.
 <b>Seals</b>: the settled jury size, or a lower bound (≥) from archived grade-sealed txs while pending; quorum is <code>params.grade_quorum</code>.
 <b>Status</b>: Pending while the answer sits in <code>basis.pending</code>; Passed or Failed at the close that lists it in <code>basis.settled</code>; Vanished if it left pending with no settled record (shown with the last close that listed it); No record if its epoch closed and no record listed it.

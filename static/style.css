@@ -482,10 +482,7 @@ a.pill:hover{text-decoration:none;filter:brightness(1.15)}
 .srcl b{font:700 var(--t16) var(--ui);color:var(--hi)}.srcl .tag{margin-left:6px}
 .srcbtn{display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:999px;background:linear-gradient(180deg,#F4C25B,#E3A33A);color:#1A1206;font:700 var(--t14) var(--ui)}
 .srcbtn:hover{text-decoration:none;filter:brightness(1.08)}
-.ghlink{display:none;place-items:center;width:36px;height:36px;border-radius:10px;color:var(--steel);flex:none}
-.ghlink:hover{color:var(--amber);background:var(--card2)}.ghlink svg{width:20px;height:20px}
 .navsrc{display:none!important}.navsrc svg{width:16px;height:16px;margin-right:8px;vertical-align:-3px}
-@media (min-width:1101px){.ghlink{display:grid}}
 @media (max-width:1100px){.navsrc{display:flex!important;align-items:center}}
 .tag.gold{color:#1A1206;background:linear-gradient(180deg,#F4C25B,#E3A33A);border-color:#E3A33A}
 /* join: per-app badge */
@@ -878,3 +875,24 @@ td a.mono{display:inline-block;min-width:24px}
 .stname{display:flex;align-items:center;gap:10px;margin:0 0 10px}.stname .lbl{flex:none}
 .stname input{flex:1;min-width:0;height:40px;padding:0 12px;border:1px solid var(--line2);border-radius:10px;background:var(--inset);color:var(--txt);font:inherit;font-family:var(--mono,ui-monospace,monospace);font-size:14px}
 .stname input:focus{outline:none;border-color:var(--amber)}
+/* POASwap pill: the mirror of POASwap's POAScan pill, in POASwap's own mark and teal (#35C9D0, #8EEAEA, #1F9AA3 from poaswap.io), quiet until hover or focus */
+.pill[hidden]{display:none}
+.swaplink{display:inline-flex;align-items:center;box-sizing:border-box;gap:8px;height:36px;padding:0 12px 0 9px;border:1px solid rgba(53,201,208,.22);border-radius:10px;background:transparent;color:var(--dim);
+ font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;white-space:nowrap;flex:none;text-decoration:none;
+ transition:color .18s ease,border-color .18s ease,background-color .18s ease,box-shadow .18s ease}
+.swaplink .swmark{width:18px;height:18px;flex:none;opacity:.78;transition:opacity .18s ease,filter .18s ease}
+.swaplink:hover,.swaplink:focus-visible{color:#8EEAEA;border-color:#35C9D0;background:rgba(53,201,208,.08);box-shadow:0 0 0 1px rgba(53,201,208,.18),0 0 18px -4px rgba(53,201,208,.45);text-decoration:none}
+.swaplink:hover .swmark,.swaplink:focus-visible .swmark{opacity:1;filter:drop-shadow(0 0 4px rgba(53,201,208,.45))}
+.swaplink:focus-visible{outline:2px solid rgba(53,201,208,.7);outline-offset:2px}
+@media (min-width:1101px) and (max-width:1240px){.swaplink{width:38px;padding:0;justify-content:center}.swaplink span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+@media (max-width:1100px){.swaplink{order:2;width:40px;height:40px;padding:0;justify-content:center;border-radius:12px}
+ .swaplink span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .pill{order:1}.pill[hidden]~.swaplink{margin-left:auto}}
+@media (prefers-reduced-motion:reduce){.swaplink,.swaplink .swmark{transition:none}}
+/* home strip: the network upgrade status (was the header Upgrading pill) folded into the Hosted mining line */
+.upstrip .ups{flex:none;display:inline-flex;align-items:center;gap:7px;color:var(--steel);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase}
+.upstrip .ups b{color:inherit;font-weight:600}
+.upstrip .ups i{width:9px;height:9px;border-radius:50%;background:transparent;border:2px solid currentColor;border-right-color:transparent;animation:spin 2.4s linear infinite}
+.upstrip .ups+span{padding-left:9px;border-left:1px solid rgba(143,163,184,.3)}
+@media (max-width:520px){.upstrip .ups b{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.upstrip .ups+span{padding-left:0;border-left:0}}
+@media (prefers-reduced-motion:reduce){.upstrip .ups i{animation:none}}

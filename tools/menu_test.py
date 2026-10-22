@@ -8,7 +8,10 @@ CHECK = """() => {
  const burger = q('.burger'), nav = q('#nav'), hdr = q('.hdr');
  const bv = getComputedStyle(burger).display !== 'none';
  const ns = getComputedStyle(nav); const links = [...nav.querySelectorAll('a')];
- const out = {burger: bv, overflowX: document.documentElement.scrollWidth - innerWidth, navVisibility: ns.visibility, navPos: ns.position};
+ const sw = q('.swaplink'), pill = q('#livepill');
+ const out = {burger: bv, overflowX: document.documentElement.scrollWidth - innerWidth, navVisibility: ns.visibility, navPos: ns.position,
+   swapTab: links.some(a => (a.getAttribute('href') || '').startsWith('/swaps')), swapBtn: !!sw && r(sw).width > 0 && r(sw).right <= innerWidth,
+   pillShown: !!pill && getComputedStyle(pill).display !== 'none'};
  if (bv) {
    const nr = r(nav); out.nav = {top: Math.round(nr.top), bottom: Math.round(nr.bottom), w: Math.round(nr.width), hdrBottom: Math.round(r(hdr).bottom)};
    out.linksHitOk = links.every(a => { const b = r(a); if (b.bottom > innerHeight) return true; const el = document.elementFromPoint(b.left + b.width/2, b.top + b.height/2); return el && (el === a || a.contains(el)); });
@@ -16,7 +19,7 @@ CHECK = """() => {
    out.bodyLocked = getComputedStyle(document.documentElement).overflow;
  } else {
    // desktop row: nothing in the header row may overlap
-   const items = [q('.brand'), nav, q('.search'), q('#livepill'), q('.joinbtn')].filter(Boolean).map(r);
+   const items = [q('.brand'), nav, q('.search'), q('#livepill'), q('.swaplink'), q('.joinbtn')].filter(Boolean).map(r);
    let ov = 0; for (let i = 0; i < items.length; i++) for (let j = i+1; j < items.length; j++) { const a = items[i], b = items[j];
      if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) ov++; }
    out.overlaps = ov; out.hdrH = Math.round(r(hdr).height);

@@ -184,7 +184,14 @@ def main():
         check("/start: Copy before One click, Mine deeplinks decode", _ok and _m.index("data-copy-prompt") < _m.index("One click") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("pill: Stale (red) when our own fetch has nothing", b'class="pill stale" id="livepill"' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
-        check("nav says Swap; page H1 kept but visually hidden", b'href="/swaps" class="on">Swap</a>' in req(base + "/swaps")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
+        _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
+        _sw, _hm = req(base + "/swaps"), req(base + "/")
+        check("no Swap tab in the nav (swaps live on POASwap); /swaps still serves", _sw[0] == 200 and all(b"/swaps" not in _nv(h) and b">Swap<" not in _nv(h) for h in (_sw[1], _hm[1])))
+        _sb = b'<a class="swaplink" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"'
+        _mk = req(base + "/static/poaswap-mark.svg?v=1")
+        check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
+              for u in ("/", "/swaps", "/epochs", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
+        check("page H1 kept but visually hidden", b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
         _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: More toggles closed, extra MCP deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 2 and '>More<' in _m and '>Other clients<' in _m
               and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
@@ -565,8 +572,8 @@ def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
     n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); st = st[st.index("<main"):st.index("</main>")]
-    check("maintenance: pill reads Upgrading, links to /upgrade, one live indicator, checkpoint Parked not Stalled",
-          'class="pill up" id="livepill" href="/upgrade"' in n and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
+    check("maintenance: header pill hides (the home strip carries Upgrading), still one live indicator for app.js, checkpoint Parked not Stalled",
+          'class="pill up" id="livepill" href="/upgrade"' in n and n[n.index('id="livepill"'):].split(">", 1)[0].endswith(" hidden") and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'asof steel">Parked<' in n and ">Stalled<" not in n)
     card = s[s.index('id="upgrade"'):]; card = card[:card.index("</section>")]
     check("maintenance: Network → Health upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
@@ -589,8 +596,8 @@ def maintenance(base, root, env, check):
           and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/upgrade"
           and (sc.get("maintenance") or {}).get("active") is True and "answers" in (sc["maintenance"].get("seen_last_hour") or {}) and sc.get("pill", {}).get("label") == "Upgrading")
     hm = req(base + "/")[1].decode(); hm_main = hm[hm.index("<main"):hm.index("</main>")]
-    check("maintenance: home strip, once, quiet, steel, links /upgrade, no em dash",
-          hm.count('class="upstrip"') == 1 and '<a href="/upgrade">Details</a>' in hm and "Hosted mining paused" in hm and "Joining works." in hm and "\u2014" not in hm_main)
+    check("maintenance: home strip, once, quiet, steel, carries the Upgrading status, links /upgrade, no em dash",
+          hm.count('class="upstrip"') == 1 and '<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span>' in hm and '<a href="/upgrade">Details</a>' in hm and "Hosted mining paused" in hm and "Joining works." in hm and "\u2014" not in hm_main)
     for u in ("/network", "/status", "/swaps"):
         if 'class="upstrip"' in req(base + u)[1].decode(): check(f"maintenance: strip is home only ({u} has it)", False)
     c, up = req(base + "/upgrade"); up = up.decode()
@@ -626,7 +633,7 @@ def fixture_pages(check):
         site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
         paths = sorted(set(nav + site))
         bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
-        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 7 and len(paths) > 30 and not bad)
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 6 and len(paths) > 30 and not bad)
         g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
         op = req(base + "/agents/operators")[1]
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))

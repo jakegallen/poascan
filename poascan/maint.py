@@ -1,5 +1,5 @@
 """Staged network maintenance (minepoa.com, LabLeak post 1357). One switch, like SWAPS_LIVE.
-While on, the header pill reads Upgrading instead of Lagging for the parked checkpoint, and /status#upgrade explains.
+While on, the freshness state is Upgrading instead of Lagging for the parked checkpoint: the header pill hides and the home strip shows it; /status#upgrade explains.
 Auto-clear: minepoa.com exposes no public list of halted surfaces, so the one public signal is the checkpoint
 leaving its parked height (the team said it resumes when the anchoring fix lands). MAX_S is a safety stop."""
 import os, time

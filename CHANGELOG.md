@@ -9,6 +9,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.25.0] - 2026-10-22
+
+### Changed
+
+- Header: a POASwap button (POASwap's own mark and teal, self-hosted at `/static/poaswap-mark.svg`, opens poaswap.io in a new tab) replaces the GitHub icon. It mirrors POASwap's POAScan button: label from 1241px, icon only below. Source stays in the footer.
+- The Swap tab is gone from the header nav and the mobile menu: swaps, and DeFi beyond them, live on POASwap. `/swaps` still serves and stays in the sitemap.
+- Network upgrade: the header Upgrading pill hides while maintenance is on; the home status line now leads with an Upgrading status next to the hosted mining and joining line. Live, Lagging and Stale still show in the header. API `pill` fields are unchanged.
+
 ## [1.24.0] - 2026-10-22
 
 ### Added

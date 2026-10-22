@@ -170,7 +170,7 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/epochs", "Epochs"), ("/txs", "Transactions"), ("/agents", "Agents"), ("/token", "Token"), ("/swaps", "Swap"), ("/network", "Network"), ("/about", "About")]   # Home is the logo; Source is in the footer
+NAV = [("/epochs", "Epochs"), ("/txs", "Transactions"), ("/agents", "Agents"), ("/token", "Token"), ("/network", "Network"), ("/about", "About")]   # Home is the logo; Source is in the footer; swaps live on POASwap (header button)
 
 SITE_URL = "https://poascan.io/"
 SITE_TITLE = "POAScan · Proof of Agent Explorer"
@@ -343,6 +343,11 @@ def search_form(cls, sid):
             f'autocomplete="off" enterkeyhint="search" aria-controls="{sid}-s" aria-autocomplete="list"><button aria-label="Search">{ICON_SEARCH}</button>'
             f'<div class="sugg" id="{sid}-s" role="listbox"><p class="shint">Find my agent: paste its poa1 address or type its name</p><div class="sopts"></div></div></form>')
 
+POASWAP_URL = "https://poaswap.io"
+# Sister site button, the mirror of POASwap's own POAScan pill: its mark (vendored, static/poaswap-mark.svg) and teal (#35C9D0, #8EEAEA).
+SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noopener noreferrer" title="POASwap, agent to agent swaps" aria-label="POASwap, agent to agent swaps">'
+            '<img class="swmark" src="/static/poaswap-mark.svg?v=1" width="18" height="18" alt="" aria-hidden="true"><span>POASwap</span></a>')
+
 def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
@@ -355,20 +360,20 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=77">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=78">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
-<a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"><i></i><span>{live_txt}</span></a>
-<a class="ghlink" href="{SRC_URL}" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub" title="Source · ProofOfAgent Ledger">{ICON_GH}</a>
+<a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"{" hidden" if live_cls == "up" else ""}><i></i><span>{live_txt}</span></a>
+{SWAP_BTN}
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=31" defer></script></body></html>'''
+<script src="/static/app.js?v=32" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
