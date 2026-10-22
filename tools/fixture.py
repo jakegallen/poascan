@@ -75,8 +75,10 @@ def seed(n=12):
         db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,1)", (tid, json.dumps({"id": tid, "type": "grade-sealed", "from_addr": A2, "ts": ts, "final": True,
                  "body": {"type": "grade-sealed", "assignment": asg, "from": A2, "nonce": nonce, "ts": ts}}), now))
     # uptime history from before the probe cut: old dedicated probes and bare fetch rows, then derived rows
-    rows = [(now - 7200 + i * 60, ep, 1, 100, "200") for i in range(10) for ep in ("probe /api/status", "/api/status", "probe /explorer", "probe /", "probe /go.md")]
-    rows += [(now - 600 + i * 60, "probe /api/status", 1, 90, "200") for i in range(5)]
+    # kept inside the current UTC day so the daily rollup is one row whatever time the test runs
+    lo = max(now - 7200, now // 86400 * 86400); span = max(now - lo, 20)
+    rows = [(lo + i * span // 20, ep, 1, 100, "200") for i in range(10) for ep in ("probe /api/status", "/api/status", "probe /explorer", "probe /", "probe /go.md")]
+    rows += [(now - span // 4 + i * span // 25, "probe /api/status", 1, 90, "200") for i in range(5)]
     db.write("INSERT INTO probes VALUES(?,?,?,?,?)", rows, many=True)
     # our reads are current; the checkpoint last moved 8h ago, so the pill reads Lagging
     db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes) VALUES(?,?,0,0,100)", [("/api/explorer/txs", now), ("/api/status", now), ("/api/params", now - 3 * 3600)], many=True)

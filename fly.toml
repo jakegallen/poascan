@@ -8,6 +8,7 @@ primary_region = "sjc"
 [env]
   PORT = "8080"
   POASCAN_DB = "/data/poascan.db"
+  MALLOC_ARENA_MAX = "2"   # fewer glibc arenas: request threads stop fragmenting memory into per-thread pools
 
 [[mounts]]
   source = "poascan_data"
@@ -27,7 +28,7 @@ primary_region = "sjc"
 
   [[http_service.checks]]
     grace_period = "30s"
-    interval = "60s"
+    interval = "15s"
     method = "GET"
     path = "/healthz"
     timeout = "5s"

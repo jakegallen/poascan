@@ -1,15 +1,51 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
-import json, time, statistics, collections, csv, os, datetime as dt
+import json, time, threading, statistics, collections, csv, os, datetime as dt
 from . import db
 
-_cache = {}
+_cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
+_inflight = {}                        # key -> Event while one thread recomputes it
+_lock = threading.Lock()
+CACHE_MAX = 256
+_heavy = threading.BoundedSemaphore(int(os.environ.get("POASCAN_HEAVY_MAX", "2")))   # cold computes running at once
+_depth = threading.local()
+
 def cached(key, ttl=30):
+    """TTL cache with single-flight: one thread recomputes an expired entry while the others get the stale
+    value (or wait for the first compute). Concurrent requests never run the same heavy function at once."""
     def deco(fn):
         def wrap(*a):
-            k = (key,) + a
-            hit = _cache.get(k)
-            if hit and time.time() - hit[0] < ttl: return hit[1]
-            v = fn(*a); _cache[k] = (time.time(), v); return v
+            k = (key,) + a; own = True
+            while True:
+                with _lock:
+                    hit = _cache.get(k)
+                    if hit and time.time() - hit[0] < ttl:
+                        _cache.move_to_end(k); return hit[1]
+                    ev = _inflight.get(k)
+                    if ev is None:
+                        ev = _inflight[k] = threading.Event(); break
+                if hit: return hit[1]          # someone is already refreshing it: serve the previous value
+                if getattr(_depth, "n", 0):    # nested inside our own compute: never wait on another thread (no lock cycle)
+                    own = False; ev = threading.Event(); break
+                ev.wait(60)                    # first compute in progress: wait for it, then re-check
+                with _lock:
+                    hit = _cache.get(k)
+                if hit: return hit[1]
+            outer = not getattr(_depth, "n", 0)
+            if outer: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
+            _depth.n = getattr(_depth, "n", 0) + 1
+            try:
+                v = fn(*a)
+                with _lock:
+                    _cache[k] = (time.time(), v); _cache.move_to_end(k)
+                    while len(_cache) > CACHE_MAX: _cache.popitem(last=False)
+                return v
+            finally:
+                _depth.n -= 1
+                if outer: _heavy.release()
+                if own:
+                    with _lock: _inflight.pop(k, None)
+                    ev.set()
+        wrap.__wrapped__ = fn
         return wrap
     return deco
 
@@ -26,9 +62,19 @@ def networks():
         if c.get("chain_id") == "poa-mainnet-1": return c
     return {}
 
-@cached("epochs_raw", 60)
+_epochs = {"ts": None, "v": []}
+@cached("epochs_raw", 15)
 def epochs_raw():
-    return db.get_blob("epochs")[0] or []
+    """The epochs blob is ~11 MB of JSON (~40 MB parsed). Parse it only when the indexer stores a new copy."""
+    r = db.q1("SELECT ts FROM blobs WHERE kind='epochs'")
+    ts = r["ts"] if r else None
+    if ts != _epochs["ts"]:
+        _epochs["v"] = []; _epochs["ts"] = None          # drop the old copy before parsing the new one
+        _epochs["v"] = db.get_blob("epochs")[0] or []; _epochs["ts"] = ts
+    return _epochs["v"]
+
+def epochs_count():
+    return len(epochs_raw())
 
 @cached("epoch_rows", 60)
 def epoch_rows():

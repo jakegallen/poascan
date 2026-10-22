@@ -2,6 +2,7 @@
 import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from . import guard as GD
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -209,6 +210,7 @@ IMMUTABLE = "public, max-age=31536000, immutable"
 class BadRequest(Exception): pass
 
 class H(BaseHTTPRequestHandler):
+    timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
     server_version = "POASCAN/1.0"
     def log_message(self, fmt, *a): log.info("%s %s", self.address_string(), fmt % a)
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
@@ -319,7 +321,8 @@ class H(BaseHTTPRequestHandler):
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
                 if OG.ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
                 return self.send(404, "not found", TXT)
-            if path == "/healthz": return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
+            if path == "/healthz":   # answered by a request thread after a real DB read, so a hung server or locked DB fails it
+                db.q1("SELECT 1 AS x"); return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})
             if path == "/sitemap.xml": return self.send(200, sitemap(), "application/xml; charset=utf-8", {"Cache-Control": "public, max-age=600"})
             if path == "/mcp": return self.send(405, json.dumps(AG._err(None, -32000, "Method not allowed: POST JSON-RPC to /mcp (stateless Streamable HTTP, no SSE stream)")), "application/json", MCP_HDRS)
@@ -418,9 +421,16 @@ class H(BaseHTTPRequestHandler):
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
-    request_queue_size = 128
+    request_queue_size = 256
     def __init__(self, *a, **k):
         super().__init__(*a, **k); self.detached = set()
+    def process_request(self, request, client_address):
+        GD.slots.acquire()               # bounded: at most GD.MAX_WORKERS requests in flight, the rest wait in the backlog
+        try: super().process_request(request, client_address)
+        except Exception: GD.slots.release(); raise
+    def process_request_thread(self, request, client_address):
+        try: super().process_request_thread(request, client_address)
+        finally: GD.slots.release()
     def shutdown_request(self, request):
         if request in self.detached:      # upgraded to WebSocket: the hub owns it now
             self.detached.discard(request); return
@@ -434,6 +444,7 @@ def main():
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))
     HUB.start()
     srv = Server((host, port), H)
+    GD.start(port)
     log.info("POASCAN listening on %s:%s", host, port)
     srv.serve_forever()
 

@@ -51,7 +51,7 @@ def _held_why(gap, esc, unl, n):
 @cached("reconcile", 60)
 def reconcile():
     st, st_t = db.get_blob("status"); st = st or {}; nw = A.networks(); _, nw_t = db.get_blob("networks")
-    E = A.epochs_raw(); _, ep_t = db.get_blob("epochs"); node_at = _iso_ts(st.get("as_of")) or st_t
+    E = A.epochs_raw(); ep_t = (db.q1("SELECT ts FROM blobs WHERE kind='epochs'") or {"ts": None})["ts"]; node_at = _iso_ts(st.get("as_of")) or st_t
     acc_t = (db.q1("SELECT MAX(last_seen) AS t FROM accounts") or {}).get("t")
     tx_t = (db.q1("SELECT MAX(last_seen) AS t FROM txs") or {}).get("t")
     mint = sum((_d(v) or D(0)) for e in E for v in (e.get("rewards") or {}).values())

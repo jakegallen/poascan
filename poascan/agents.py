@@ -102,7 +102,7 @@ def census_seed_point():
 
 def census_job():
     """Daily: classify and store a snapshot (called by the indexer)."""
-    A._cache.clear()
+    with A._lock: A._cache.clear()
     s = census_summary(); s["ts"] = int(time.time()); s["source"] = "POASCAN classifier"
     db.add_snap("census", s)
 

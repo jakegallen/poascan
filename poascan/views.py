@@ -300,7 +300,7 @@ _addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
 
 def _addr_load(a):
     try:
-        d = I.fetch(f"/api/explorer/address/{a}", timeout=40, endpoint="/api/explorer/address/:addr")
+        d = I.fetch_ondemand(f"/api/explorer/address/{a}", "/api/explorer/address/:addr")
         with _addr_lock:
             _addr_cache[a] = (time.time(), d)
             if len(_addr_cache) > ADDR_MAX:
@@ -324,7 +324,7 @@ def fetch_address(a):
         if mine: threading.Thread(target=_addr_load, args=(a,), daemon=True).start()
         return hit[1], None
     if not mine:                                      # someone else is fetching this address: wait for it
-        ev.wait(45)
+        ev.wait(I.ONDEMAND_TIMEOUT + 2)
         with _addr_lock: hit2 = _addr_cache.get(a)
         if hit2 and hit2 is not hit: return hit2[1], None
         return (hit[1] if hit else None), "upstream fetch failed"

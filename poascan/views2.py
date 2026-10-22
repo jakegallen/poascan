@@ -46,33 +46,46 @@ def _pctl(v, q):
 
 @cached("status_page", 30)
 def status_data():
-    now = int(time.time())
-    rows = db.q("SELECT ts, endpoint, ok, ms, code FROM probes WHERE ts > ? ORDER BY ts", (now - 14 * 86400,))
-    by = collections.defaultdict(list)
-    for r in rows: by[I.uptime_name(r["endpoint"])].append(r)
+    """Aggregated in SQLite: the probes table holds ~28k rows a day (14 days kept), far too many to load into
+    Python on a 512 MB machine. Only per-endpoint totals, failing 5-minute buckets and 24 h latencies come back."""
+    now = int(time.time()); t14 = now - 14 * 86400
+    EP = "CASE WHEN endpoint IN (?,?,?) THEN 'probe ' || endpoint ELSE endpoint END"
+    D = tuple(I.DERIVED)
     eps = []
-    for ep, rs in by.items():
-        h1 = [r for r in rs if r["ts"] > now - 3600]; d1 = [r for r in rs if r["ts"] > now - 86400]
-        oks = [r for r in rs if r["ok"]]; errs = [r for r in rs if not r["ok"]]
-        eps.append(dict(ep=ep, n1=len(h1), s1=(sum(r["ok"] for r in h1) / len(h1)) if h1 else None, s24=(sum(r["ok"] for r in d1) / len(d1)) if d1 else None,
-                        p50=_pctl([r["ms"] for r in h1 if r["ok"]] or [r["ms"] for r in d1 if r["ok"]], .5), p95=_pctl([r["ms"] for r in d1 if r["ok"]], .95),
-                        last_ok=oks[-1]["ts"] if oks else None, last_err=errs[-1]["ts"] if errs else None, last_code=errs[-1]["code"] if errs else None))
+    for r in db.q(f"""SELECT {EP} AS ep,
+          SUM(ts > ?) AS n1, SUM(CASE WHEN ts > ? THEN ok END) AS ok1, SUM(ts > ?) AS n24, SUM(CASE WHEN ts > ? THEN ok END) AS ok24,
+          MAX(CASE WHEN ok=1 THEN ts END) AS last_ok, MAX(CASE WHEN ok=0 THEN ts END) AS last_err
+        FROM probes WHERE ts > ? GROUP BY 1""", D + (now - 3600, now - 3600, now - 86400, now - 86400, t14)):
+        eps.append(dict(ep=r["ep"], n1=r["n1"] or 0, s1=(r["ok1"] / r["n1"]) if r["n1"] else None, s24=(r["ok24"] / r["n24"]) if r["n24"] else None,
+                        p50=None, p95=None, last_ok=r["last_ok"], last_err=r["last_err"], last_code=None))
+    by = {e["ep"]: e for e in eps}
+    for r in db.q(f"SELECT {EP} AS ep, code, MAX(ts) AS t FROM probes WHERE ok=0 AND ts > ? GROUP BY 1", D + (t14,)):
+        if r["ep"] in by: by[r["ep"]]["last_code"] = r["code"]
+    ms1, ms24 = collections.defaultdict(list), collections.defaultdict(list); hrs = collections.defaultdict(list)
+    for r in db.q(f"SELECT {EP} AS ep, ts, ms FROM probes WHERE ok=1 AND ts > ?", D + (now - 86400,)):
+        ms24[r["ep"]].append(r["ms"]); hrs[r["ts"] // 3600 * 3600].append(r["ms"])
+        if r["ts"] > now - 3600: ms1[r["ep"]].append(r["ms"])
+    for e in eps:
+        e["p50"] = _pctl(ms1.get(e["ep"]) or ms24.get(e["ep"]) or [], .5); e["p95"] = _pctl(ms24.get(e["ep"]) or [], .95)
+    del ms1, ms24
     eps.sort(key=lambda x: (not x["ep"].startswith("probe"), x["ep"]))
     # incidents: 5-minute buckets per endpoint with >=50% failures (and >=2 fails), merged when consecutive
-    inc = []
-    for ep, rs in by.items():
-        b = collections.defaultdict(lambda: [0, 0])
-        for r in rs: b[r["ts"] // 300][0] += 1; b[r["ts"] // 300][1] += 1 - r["ok"]
-        bad = sorted(k for k, (n, f) in b.items() if f >= 2 and f / n >= .5)
+    inc = []; bad = collections.defaultdict(list)
+    for r in db.q(f"""SELECT {EP} AS ep, ts / 300 AS b, COUNT(*) AS n, SUM(1 - ok) AS f FROM probes WHERE ts > ?
+                      GROUP BY 1, 2 HAVING f >= 2 AND f * 2 >= n ORDER BY 1, 2""", D + (t14,)):
+        bad[r["ep"]].append((r["b"], r["f"]))
+    for ep, ks in bad.items():
         cur = None
-        for k in bad:
-            if cur and k - cur[1] <= 1: cur[1] = k; cur[2] += b[k][1]
+        for k, f in ks:
+            if cur and k - cur[1] <= 1: cur[1] = k; cur[2] += f
             else:
                 if cur: inc.append((cur[0] * 300, cur[1] * 300 + 300, ep, cur[2]))
-                cur = [k, k, b[k][1]]
+                cur = [k, k, f]
         if cur: inc.append((cur[0] * 300, cur[1] * 300 + 300, ep, cur[2]))
-    # checkpoint stalls from our own height snapshots
-    hs = [(r["ts"], json.loads(r["json"])) for r in db.q("SELECT ts, json FROM snaps WHERE kind IN ('height','status') AND ts > ? ORDER BY ts", (now - 14 * 86400,))]
+    # checkpoint stalls from our own height snapshots (two numbers per snapshot, not the whole JSON)
+    hs = [(r["ts"], {"height": r["h"], "checkpoint_height": r["cp"]}) for r in db.q(
+        "SELECT ts, json_extract(json, '$.height') AS h, json_extract(json, '$.checkpoint_height') AS cp FROM snaps "
+        "WHERE kind IN ('height','status') AND ts > ? ORDER BY ts", (t14,))]
     lag = [(t, (d.get("height") or 0) - (d.get("checkpoint_height") or 0)) for t, d in hs if d.get("height") and d.get("checkpoint_height")]
     last_cp_change = None; start = None; prev = None
     STALL = 3 * 3600  # observed cadence ~1.5-2h
@@ -85,9 +98,6 @@ def status_data():
     if start and hs and hs[-1][0] - start >= STALL: inc.append((start, None, "no checkpoint > 3h", None))
     inc.sort(key=lambda x: -x[0])
     anc = db.q("SELECT chain, MAX(anchored_at) AS t, MAX(height) AS h FROM anchors GROUP BY chain")
-    hrs = collections.defaultdict(list)
-    for r in rows:
-        if r["ts"] > now - 86400 and r["ok"]: hrs[r["ts"] // 3600 * 3600].append(r["ms"])
     return dict(eps=eps, inc=inc, lag=lag, last_cp_change=last_cp_change, anchors=anc,
                 lat=[(h, statistics.median(v)) for h, v in sorted(hrs.items())])
 

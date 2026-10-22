@@ -163,8 +163,8 @@ def job_hourly_meta():
         time.sleep(1)
 
 def job_epochs(force=False):
-    st, _ = db.get_blob("status"); ep, _ = db.get_blob("epochs")
-    have = len(ep) if ep else 0
+    from . import analytics as A   # shared parsed copy; re-parsing the ~11 MB blob here every 5 min cost ~50 MB each run
+    st, _ = db.get_blob("status"); have = A.epochs_count(); ep = have
     need = (st or {}).get("epochs_closed", 0)
     if not force and ep and have >= need: return False
     d = fetch("/api/epochs", timeout=180)
@@ -247,13 +247,40 @@ def lang(t):
     best = max(sc, key=sc.get)
     return best if sc[best] >= 2 else "unknown"
 
+# On-demand upstream reads made while serving a page (tx detail, address balance). They must never pile up
+# behind a slow or down upstream: short timeout, at most ONDEMAND_MAX at once, one fetch per id, and the
+# endpoint's backoff is honoured, so during maintenance pages answer from what is stored instead of waiting.
+ONDEMAND_MAX = int(os.environ.get("POASCAN_ONDEMAND_MAX", "3"))
+ONDEMAND_TIMEOUT = float(os.environ.get("POASCAN_ONDEMAND_TIMEOUT", "8"))
+_ondemand = threading.BoundedSemaphore(ONDEMAND_MAX)
+_tx_lock = threading.Lock(); _tx_inflight = {}
+
+def fetch_ondemand(path, endpoint):
+    if not can_fetch(endpoint): raise Busy("upstream backing off")
+    if not _ondemand.acquire(timeout=0.5): raise Busy("upstream busy")
+    try: return fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint)
+    finally: _ondemand.release()
+
 def get_tx_detail(tid, allow_fetch=True):
     r = db.q1("SELECT json, fetched, final FROM tx_detail WHERE id=?", (tid,))
     if r and (r["final"] or time.time() - r["fetched"] < 120):
         return json.loads(r["json"])
     if not allow_fetch:
         return json.loads(r["json"]) if r else None
-    d = fetch(f"/api/explorer/tx/{tid}", timeout=40, endpoint="/api/explorer/tx/:id")
+    with _tx_lock:
+        ev = _tx_inflight.get(tid); mine = ev is None
+        if mine: ev = _tx_inflight[tid] = threading.Event()
+    if not mine:                        # another request is fetching this tx: wait briefly, then use what is stored
+        ev.wait(ONDEMAND_TIMEOUT + 2)
+        return get_tx_detail(tid, allow_fetch=False)
+    try:
+        d = fetch_ondemand(f"/api/explorer/tx/{tid}", "/api/explorer/tx/:id")
+    except Busy:
+        if r: return json.loads(r["json"])
+        raise
+    finally:
+        with _tx_lock: _tx_inflight.pop(tid, None)
+        ev.set()
     if isinstance(d, dict) and d.get("id"):
         db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
         upsert_txs([d], "explorer/tx")
