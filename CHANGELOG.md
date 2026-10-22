@@ -9,6 +9,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.6] - 2026-10-22
+
+### Fixed
+
+- Network upgrade: when `/api/status` answers without `checkpoint_height`, `state_root` or `as_of`, the recovery state takes them from POAScan's newest status snapshot that had them (checkpoint falls back to `/api/networks`), so the strip and `/upgrade` no longer drop back to the parked wording for a read.
+
 ## [1.26.5] - 2026-10-22
 
 ### Changed

@@ -69,6 +69,13 @@ seed({"mining": "open", "grading": "open"}); check("both open: Mining and gradin
 seed({"mining": "open"}, notice=False); s = M.state()
 check("mining open and the notice gone: maintenance clears itself (cleared_by mining_back)", s["active"] is False and s["cleared_by"] == "mining_back")
 seed({}, notice=False); check("notice gone but mining still paused: stays on", M.state()["active"] is True)
+# /api/status answering without checkpoint_height, state_root and as_of: the newest snapshot that had them carries on
+seed({})
+db.add_snap("status", {"checkpoint_height": 33463, "state_root": ROOTHASH, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))})
+db.put_blob("status", {"supply": "1234828243.783275", "txs": 1, "final": 0, "epochs_closed": 10})
+r = M.recovery()
+check("lean /api/status answer: checkpoint, state root and as_of come from our newest snapshot, the headline holds",
+      r["moved"] and r["checkpoint"] == 33463 and r["state_root"] == ROOTHASH and r["status_fresh"] and M.strip_text()[0] == "Recovery in progress")
 BAD = ("\u2014", "emblem.build", "Accounts", "vulnerab")
 def clean(t): return [b for b in BAD if b in t]
 

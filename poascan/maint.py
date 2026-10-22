@@ -146,11 +146,23 @@ def open_ballots():
     done = ("closed", "final", "finalized", "passed", "failed", "ended", "tallied", "rejected", "adopted")
     return sum(1 for b in d["ballots"] if isinstance(b, dict) and str(b.get("status", "")).lower() not in done)
 
+def _last_status(field, window=86400):
+    """Newest value of one /api/status field in our own status snapshots (last day), or None."""
+    try:
+        r = db.q1(f"SELECT json_extract(json, '$.{field}') AS v FROM snaps WHERE kind='status' AND ts > ? AND json_extract(json, '$.{field}') IS NOT NULL "
+                  "ORDER BY ts DESC LIMIT 1", (int(time.time()) - window,))
+        return r["v"] if r else None
+    except Exception: return None
+
 STATUS_FRESH_S = 600   # /api/status as_of within this many seconds, without minepoa's own stale flag, reads as fresh
 
 def recovery():
     """Public recovery facts from our own mirror: checkpoint moved, new state root, supply carried over, status freshness, counters."""
-    st = A.status(); cp = st.get("checkpoint_height"); sup = _num(st.get("supply")); pre = _num(PRE_SUPPLY)
+    st = dict(A.status()); sup = _num(st.get("supply")); pre = _num(PRE_SUPPLY)
+    for k in ("checkpoint_height", "state_root", "as_of"):   # /api/status now and then answers without these: use our newest read that had them
+        if st.get(k) is None: st[k] = _last_status(k)
+    cp = st.get("checkpoint_height")
+    if cp is None: cp = A.networks().get("checkpoint_height")
     t = A._ts(st.get("as_of")); age = int(time.time() - t) if t else None
     return dict(moved=cp is not None and int(cp) > PARKED, checkpoint=int(cp) if cp is not None else None, previous_checkpoint=PARKED,
                 state_root=st.get("state_root"), supply=str(st.get("supply")) if st.get("supply") is not None else None, supply_before=PRE_SUPPLY,
