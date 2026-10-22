@@ -1,8 +1,9 @@
 """POASCAN HTTP server: pages, read-only JSON/CSV API, static files. Python stdlib only."""
-import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, traceback, urllib.parse
+import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, signal, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
+from . import visits as VS
 from . import keysafe as KS
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
@@ -161,6 +162,7 @@ def page(path, qs):
 
 AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Perplexity-User",
            "Google-Extended", "Applebot-Extended", "CCBot"]
+VS.BOT_NAMES = AI_BOTS
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
           + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
@@ -224,6 +226,8 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):   # query strings are never logged; paths pass through the redaction filter
         log.info("%s %s", self.address_string(), QS_RX.sub("", fmt % a))
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
+        try: VS.COUNTER.hit(self.command, code, self.path, self.headers.get("User-Agent"), self.headers.get("Referer"), self.client_ip)
+        except Exception: pass   # counting never breaks a response
         if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
         if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
         if isinstance(body, str): body = KS.redact(body)   # no key-shaped token in any text response (forum text, memos, errors)
@@ -313,6 +317,20 @@ class H(BaseHTTPRequestHandler):
         if not (KS.has_key(raw) or KS.has_cred_param(q)): return False
         log.warning("refused a request with a key-shaped value (not logged)")
         self.send(400, KS.WARN + "\n", TXT, {"Cache-Control": "no-store"}); return True
+    def ops_visits(self, path, qs):
+        """Private daily visit totals. Without POASCAN_STATS_TOKEN set, or without the right Bearer token, this is the
+        normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled."""
+        ok, wait = AG.LIMIT.allow(self.client_ip())
+        good = VS.token_ok(self.headers.get("Authorization"))
+        if not good: return self.send(404, V.not_found(path=path))
+        hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
+        if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait)}))
+        try: fr, to = VS.parse_range(qs)
+        except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", hd)
+        try: VS.COUNTER.flush(); out = json.dumps(VS.report(fr, to))
+        except Exception as e:
+            log.error("ops visits: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
     def do_GET(self):
         if self.key_guard(): return
         if self.www(): return
@@ -320,6 +338,7 @@ class H(BaseHTTPRequestHandler):
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         V.REQ.path, V.REQ.qs = path, qs
+        if path == "/ops/visits": return self.ops_visits(path, qs)
         try:
             if path == "/ws":
                 return HUB.accept(self)
@@ -470,6 +489,12 @@ def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
+    VS.COUNTER.start()
+    def _term(*_):   # flush the visit counts, then exit as before
+        try: VS.COUNTER.flush()
+        except Exception: pass
+        logging.shutdown(); os._exit(0)
+    signal.signal(signal.SIGTERM, _term)
     if os.environ.get("POASCAN_INDEXER", "1") == "1":
         I.start(os.environ.get("POASCAN_SEED_DIR"))
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))

@@ -9,6 +9,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.21.0] - 2026-10-22
+
+### Added
+
+- Private daily visit totals: cookieless, aggregate counts kept by the server for the operator. No client script, no cookie, and no IP address, browser detail, full URL or visitor ID is stored. Not part of the public API or the MCP server.
+
+### Changed
+
+- The privacy page describes the daily visit totals, the two settings kept in browser local storage and who sees the totals. Fonts are self-hosted, so the Google Fonts note is gone.
+
 ## [1.20.0] - 2026-10-22
 
 ### Added

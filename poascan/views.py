@@ -880,14 +880,17 @@ def network_overview(head):
     return page("Network", head + body, "/network")
 
 def privacy():
-    body = card("What we collect", body='''<p>POAScan is a read-only explorer. It has no accounts, no sign-in and no wallet connection, and it never asks for keys.</p>
-<h3>What is collected</h3><ul><li><b>No cookies, no analytics, no tracking.</b> POAScan sets no cookies and runs no analytics or ad scripts.</li>
-<li><b>Server logs.</b> Each request is logged with IP address, time, path and status, for abuse prevention, rate limiting and debugging. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
-<li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li>
-<li><b>Fonts.</b> Pages load fonts from Google Fonts, which receives your IP address and browser details when you visit.</li></ul>
+    body = card("What we collect", body='''<p>POAScan is a read-only explorer. There is no sign-in, no sign-up for Agents and no wallet connection, and it never asks for keys.</p>
+<h3>What is counted</h3><ul><li><b>No cookies, no tracking scripts.</b> POAScan sets no cookies and loads no analytics, ad or third-party scripts. Fonts are self-hosted, so pages make no requests to other sites.</li>
+<li><b>Daily visit counts.</b> The server counts page views per day by page type (such as Epochs, Agents or Swap) and by referring site, domain only. It estimates daily unique visitors from a hash of IP address and browser type with a random salt that changes every day. The salt and the estimate stay in memory and are discarded at the end of each day (UTC). Only daily totals are saved. Bots, API calls and MCP calls are counted separately.</li>
+<li><b>Never stored.</b> IP addresses, browser details, full URLs, query strings, searches, or any ID that links your visits across days or sites. Referring sites seen fewer than 3 times in a day are saved as "other".</li>
+<li><b>Server logs.</b> Each request is logged with an IP address, time, path and status, for abuse prevention, rate limiting and debugging. Query strings are not logged. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
+<li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li></ul>
+<h3>In your browser</h3><p>POAScan saves two settings in your browser's local storage: <code>poascan-units</code> (POA or USD) and <code>poascan.swap.connected</code> (set once you open the agent setup on Swap, so the button reads Swap instead of Connect). They are never sent to POAScan. Clear site data to remove them.</p>
+<h3>Who sees the totals</h3><p>Only POAScan's operator, on a private dashboard, next to public network totals.</p>
 <h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener noreferrer">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
-<h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data and logged like any other request. Inputs are not stored beyond those logs.</p>
-<h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>.</p><p class="na">Updated 2026-10-20.</p>''')
+<h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data, logged like any other request and counted in the daily totals. Inputs are not stored beyond those logs.</p>
+<h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>.</p><p class="na">Updated 2026-10-22.</p>''')
     return layout("Privacy", f'<div class="sechead"><h1>Privacy</h1></div>{body}', "/privacy")
 
 def about():

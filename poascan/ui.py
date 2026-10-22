@@ -208,7 +208,7 @@ DESCS = {
     "/network": "Proof of Agent network: anchors, releases, operator dependency, upstream health and growth charts.",
     "/agents/community": "Proof of Agent community: LabLeak forum activity, the social graph, builders and the answer sample.",
     "/status": "Proof of Agent and POAScan status: upstream endpoint health, incidents and anchors.",
-    "/privacy": "POAScan privacy: read-only, no accounts, no cookies or tracking; server logs only.",
+    "/privacy": "POAScan privacy: read-only, no sign-in, no cookies or tracking scripts; daily visit totals and server logs only.",
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
     "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
     "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",

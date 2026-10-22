@@ -39,6 +39,13 @@ CREATE INDEX IF NOT EXISTS probes_ts ON probes(ts);
 CREATE TABLE IF NOT EXISTS uptime_daily(day INTEGER, endpoint TEXT, n INTEGER, ok INTEGER, ms INTEGER, PRIMARY KEY(day, endpoint));
 CREATE TABLE IF NOT EXISTS fetch_log(endpoint TEXT PRIMARY KEY, last_ok INTEGER, last_err INTEGER, err TEXT,
   fails INTEGER, next_at INTEGER, bytes INTEGER);
+-- aggregate visit counts (poascan/visits.py): daily totals only; no column can hold an IP, user agent, hash, path or URL
+CREATE TABLE IF NOT EXISTS visit_views(day TEXT NOT NULL, grp TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('human','bot','agent')),
+  views INTEGER NOT NULL DEFAULT 0 CHECK (views >= 0), PRIMARY KEY (day, grp, kind)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS visit_referrers(day TEXT NOT NULL, domain TEXT NOT NULL CHECK (length(domain) <= 64),
+  views INTEGER NOT NULL DEFAULT 0 CHECK (views >= 0), PRIMARY KEY (day, domain)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS visit_uniques(day TEXT PRIMARY KEY, uniques INTEGER NOT NULL DEFAULT 0,
+  segments INTEGER NOT NULL DEFAULT 1) WITHOUT ROWID;
 """
 
 def conn():
@@ -74,6 +81,19 @@ def write(sql, args=(), many=False):
         if many: c.executemany(sql, args)
         else: c.execute(sql, args)
         c.commit()
+
+def write_tx(stmts):
+    """Several statements in one transaction under the write lock: [(sql, args, many), ...]."""
+    with _wlock:
+        c = conn()
+        try:
+            for sql, args, many in stmts:
+                if many:
+                    if args: c.executemany(sql, [_clean(r) for r in args])
+                else: c.execute(sql, _clean(args))
+            c.commit()
+        except Exception:
+            c.rollback(); raise
 
 def q(sql, args=()):
     return [dict(r) for r in conn().execute(sql, args).fetchall()]
