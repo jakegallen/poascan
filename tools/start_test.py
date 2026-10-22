@@ -21,15 +21,22 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("registry step anchors still exist in the template", ("\n\n" + OP.REG_STEP["before"]) in OP.TEMPLATE and "step 6" in OP.REG_STEP["lead"]
-      and RC.fill(S.prompt("a"), OP.REG_STEP["lead"], OP.REG_STEP["before"], "s_" + "a" * 16) != S.prompt("a"))
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2" and not hasattr(OP, "REG_STEP")
+      and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
+      and "poaswap" not in OP.TEMPLATE.lower() and "guid=" not in OP.TEMPLATE)
+check("v2 key rule: never shown, confirmed only as the last 4 characters plus the store; never sent to POAScan; no em or en dashes",
+      "Never show it." in OP.TEMPLATE and "Confirm it to me only as the last 4 characters plus the store's name." in OP.TEMPLATE
+      and "never send it to POAScan" in OP.TEMPLATE and "curl -K -" in OP.TEMPLATE and not any(c in OP.TEMPLATE for c in "\u2014\u2013")
+      and "https://poascan.io/address/YOUR_POA1_ADDRESS" in OP.TEMPLATE and "reopened" not in OP.TEMPLATE.lower())
 for nm in ("test-agent-7", "YOUR_NAME", "x" * 32):
     b = OP.blocks(S.prompt(nm))
     check(f"blocks for {nm[:12]}: join back to the full text, in order, ids unique", "".join(t for _, t in b) == S.prompt(nm) and [i for i, _ in b] == [i for i, _ in OP.BLOCKS] and all(t for _, t in b))
 bl = dict(OP.blocks(S.prompt("n")))
-check("blocks: registration has the link, key_safety the key rule, wallet Emblem Wallet; closing the payment rule",
-      bl["registration"].startswith("Open this exact link") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("1. Key:")
-      and "Emblem Wallet" in bl["wallet"] and "Never send payment outside the network." in bl["closing"])
+check("blocks: registration has the link, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
+      bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
+      and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
+      and bl["expectations"].startswith("The network is coming back") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
+      and list(bl) == ["registration", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "fallback", "closing", "follow"])
 NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
       ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
       ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32)."),
@@ -54,9 +61,42 @@ check("client order lives in one constant: Claude, ChatGPT, Grok, Muse; Grok Bot
 check("every chat app is offered once; Cursor's prompt deeplink is under More", len(top) + len(rest) == len(J.APPS) + 1 and len({x[0] for x in top + rest}) == len(top) + len(rest)
       and ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=") in rest)
 from urllib.parse import quote
-check("Cursor deeplink stays under its 10,000 character limit with the longest name and the registry step",
-      len(S.CURSOR[3] + quote(RC.fill(S.prompt("x" * 32), OP.REG_STEP["lead"], OP.REG_STEP["before"], "s_" + "a" * 16), safe="")) < 10000)
+check("Cursor deeplink stays under its 10,000 character limit with the longest name", len(S.CURSOR[3] + quote(S.prompt("x" * 32), safe="")) < 10000)
+check("every prefill URL fits its limit with the longest name, so no client falls back to copy only", all(S.fits(n, p) for n, k, b, p in top + rest if p)
+      and [x[:2] for x in top + rest] == [(n, k) for n, k, b, p in top + rest] and dict((x[0], x[1]) for x in top + rest)["Claude"] == "auto")
+_old = S.URL_MAX; S.URL_MAX = 100; t2, r2 = S.chats(); S.URL_MAX = _old
+check("a prefill URL over the limit falls back to copy and open (paste kind, no prefill), Cursor keeps its own limit",
+      dict((x[0], x[1:]) for x in t2)["Claude"] == ("paste", "https://claude.ai/new", "") and dict((x[0], x[1]) for x in r2)["Cursor"] == "auto")
+import poascan.join as _J
+check("Coding agents one-liner carries key rules 1 to 4 in short form, no double quotes", all(x in _J.LINE for x in ("OS secret store", "never show it", "last 4 characters",
+      "never put it on a command line", "send it only to minepoa.com, never to POAScan")) and '"' not in _J.LINE and "$" not in _J.LINE)
 check("beacon ids used by /start are on the /ops/e allowlist", all(i in PR.ids() for i in ("start.app", "start.appreg", "start.copy", "start.copyreg", "start.regshow", "mcp-poa.add")))
+
+# ---- the join modal banner: live state only, never 'reopened'
+from poascan import maint as M, hosted as HR
+_sv = (M._feed_fresh, M.join_state, M.hosted_state, HR.state)
+def banner(fresh=True, join="open", hosted="paused", grading="closed", mining="open", joins=True, answers=True):
+    now = int(time.time())
+    with db.conn() as cx:
+        cx.execute("DELETE FROM txs WHERE id LIKE 'bn%'")
+        if joins: cx.execute("INSERT INTO txs(id, type, ts) VALUES('bn1', 'join', ?)", (now - 60,))
+        if answers: cx.execute("INSERT INTO txs(id, type, ts) VALUES('bn2', 'challenge', ?)", (now - 60,))
+    M._feed_fresh = lambda: fresh; M.join_state = lambda: join; M.hosted_state = lambda: hosted
+    HR.state = lambda rid: {"grading": grading, "mining": mining}.get(rid, "unknown")
+    try: return S.banner_line()
+    finally: M._feed_fresh, M.join_state, M.hosted_state, HR.state = _sv
+B = {"landing": banner(), "stale feed": banner(fresh=False), "no answers": banner(answers=False), "answers only, joining paused": banner(join="paused", joins=False),
+     "mining closed, nothing landing": banner(joins=False, answers=False, mining="closed"), "grading responding": banner(grading="open"),
+     "official back": banner(hosted="back", grading="open")}
+for k, v in B.items(): print("     banner", k, "->", v)
+check("banner: joining and answers landing while grading is paused", B["landing"] == "Joining and answers are landing. Grading is still paused, so new answers wait to be graded.")
+check("banner: claims only what live state supports (stale feed or no recent tx: no 'landing')", B["stale feed"] == "Joining works. Mining endpoint responding. Grading is paused."
+      and B["no answers"] == "New Agents are joining. Mining endpoint responding. Grading is paused." and B["answers only, joining paused"] == "Answers are landing. Joining is paused. Grading is still paused, so new answers wait to be graded."
+      and B["mining closed, nothing landing"] == "Joining works. Hosted mining is paused. Grading is paused.")
+check("banner: a responding grading route is only 'responding'; 'back' only on the official signal; never 'reopened' or the old wording",
+      B["grading responding"] == "Joining and answers are landing. Grading endpoint responding." and B["official back"] == "Joining and answers are landing. Hosted mining is back."
+      and not any("reopened" in v.lower() or "Join now" in v or "paused for network upgrades" in v or "\u2014" in v for v in B.values()))
+with db.conn() as cx: cx.execute("DELETE FROM txs WHERE id LIKE 'bn%'")
 
 # ---- agent names: POAScan's archive only
 from poascan import names as NM
@@ -118,7 +158,7 @@ try:
     view = m[m.index('<details class="stview">'):]
     check("/start: the prompt sits collapsed behind View prompt, with its Copy, and is the template text", '<details class="stview"><summary>View prompt</summary>' in m
           and "<details class=\"stview\" open" not in m and m.count("data-copy-prompt") == 1 and m.index("data-go") < m.index("stview") < m.index("data-copy-prompt")
-          and unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0" data-reg="[^"]*" data-reg-at="[^"]*">(.*?)</pre>', view, re.S).group(1)).startswith("Open this exact link"))
+          and unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', view, re.S).group(1)).startswith("Join Proof of Agent for me"))
     check("/start: one short key line, no red warning and no repeat outside the prompt", m.count(S.KEYLINE) == 1 and 'class="kwarn"' not in m
           and "Treat a leaked key" not in m and "Never paste your pk_" not in m)
     check("/start: live status strip with the Updated stamp and responding wording, never reopened", m.count('<p class="upstrip stup" role="status" data-live>') == 1
@@ -126,7 +166,11 @@ try:
     st = m[m.index('<details class="card stepsd">'):]
     check("/start: Emblem Wallet and the payment rule tucked in the collapsed All steps", "<details class=\"card stepsd\" open" not in m and "Install Emblem Wallet" in st
           and "Never send payment outside the network." in st and "Emblem Wallet" not in m[:m.index('class="stview"')].split('class="morep')[0])
-    check("/start: setup-code flow kept (data-reg on the prompt), keys never asked", 'data-reg="' in view and "{SETUP_CODE}" in unescape(view) and "api_key" not in m[:m.index("stview")]
+    go3 = m[m.index('data-go '):m.index('<details class="stview">')]
+    check("/start: Add a wallet, low key, under the main and Copy buttons, to the /swaps Add Emblem Wallet prompt (it keeps the setup code there)",
+          go3.index("data-gocopy") < go3.index('<p class="stwal"><a href="/swaps#xemb" data-wallet>Add a wallet</a>') < go3.index('class="stkey"') and m.count("data-wallet") == 1
+          and 'W.location.hash!=="#xemb"' in open(os.path.join(ROOT, "static", "app.js")).read())
+    check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
     blk = js[js.index("/* /start: step 2"):js.index("/* /start close")]

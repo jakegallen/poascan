@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.15"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.16"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -531,7 +531,7 @@ def openapi():
         "/api/prompts/join": _op("The /start onboarding prompt as data: version, updated_ts, full text and its blocks", {"$ref": "#/components/schemas/JoinPrompt"},
                                  [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
-                                 desc="Byte-identical to the prompt /start shows, with the name in the register link. blocks (registration, about, steps_intro, key_safety, grading, mining, wallet, check_in, receipts, follow, closing) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
+                                 desc="Byte-identical to the prompt /start shows, with the name in the register link. blocks (v2: registration, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, fallback, closing, follow; no wallet block since v2, /start is mining only) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
@@ -721,7 +721,7 @@ Tools ({len(TOOLS)}):
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
 - Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
-- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, wallet and more; joined in order they give text). Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
+- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).

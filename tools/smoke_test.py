@@ -95,7 +95,7 @@ def main():
         c, b = rpc("tools/call", {"name": "get_swap_status", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
         check("get_swap_status fields", {"available", "state", "last_good_read", "open_offers"} <= set(sc))
         c, b = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
-        check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "npm install -g @emblemvault/agentwallet" in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
+        check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "Never show it." in sc.get("prompt", "") and "npm install" not in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
         for t in tools:
             args = {"address": "poa1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} if t == "get_address" else {"hash": "0" * 64} if t == "get_transaction" else \
                    {"offer_id": "x"} if t == "get_swap_offer" else {"query": "plus1"} if t == "search" else {}
@@ -195,9 +195,9 @@ def main():
         _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
         check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
               and b'<a class="more mswap" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
-        check("/about price history points to POASwap; /privacy setup code points to /start, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
+        check("/about price history points to POASwap; /privacy setup code points to the /swaps Add Emblem Wallet prompt and Start, no bare /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
-              and b'such as step 8 on <a href="/start">Start</a>' in _pv and b'<a href="/swaps">Swap</a>' not in _pv and b"not sold" not in _pv.lower())
+              and b'such as Add Emblem Wallet on <a href="/swaps#xemb">Swaps</a> (the Add a wallet link on <a href="/start">Start</a>)' in _pv and b'<a href="/swaps">Swap</a>' not in _pv and b"not sold" not in _pv.lower())
         check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
               and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/swaps", "/about", "/privacy")))
         check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
@@ -601,7 +601,7 @@ def maintenance(base, root, env, check):
           and "api/receipt/TXID" in um and "system_notice" in um and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
     check("maintenance: /start keeps the prompt and the live status strip carries the state (no repeat under the button); the prompt backs off and checks hourly at a random minute",
           st.count('<p class="upstrip stup" role="status" data-live>') == 1 and 'stjl' not in st and 'class="upn"' not in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
-          and "once an hour at a random minute" in st and "try once more in an hour" in st and "api/receipt/TXID" in st
+          and "at most once an hour at one random minute" in st and "wait an hour and try the same link once more" in st and "api/receipt/TXID" in st
           and "minepoa.com/api/hosted/register?label=" in st and "invited_by" not in st and 'data-name' in st
           and st.index("register?label=") < st.index("go.md"))
     m = json.loads(req(base + "/api/v1/status")[1]).get("meta", {}).get("maintenance") or {}

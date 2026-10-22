@@ -38,7 +38,9 @@ def unit():
     check("codes match ^s_[a-z2-7]{16}$", all(rx.match(c) for c in codes) and len(set(codes)) == len(codes))
     seen = set("".join(c[2:] for c in codes)); check("mapping reaches every alphabet char", seen == set(RC.ALPHABET))
     code = codes[0]
-    for name, base, reg in (("wallet", P.WALLET_PROMPT, P.WALLET_REG), ("start", ST.prompt("amber-otter-123"), ST.REG_STEP)):
+    check("start prompt v2 carries no setup code step (mining only; wallets via /swaps)", not hasattr(ST, "REG_STEP") and not hasattr(ST, "reg_attrs")
+          and "{SETUP_CODE}" not in ST.prompt("amber-otter-123") and "poaswap" not in ST.prompt("amber-otter-123").lower() and ST.WALLET_HREF == "/swaps#xemb")
+    for name, base, reg in (("wallet", P.WALLET_PROMPT, P.WALLET_REG),):
         f = RC.fill(base, reg["lead"], reg["before"], code)
         lines = f.split("\n"); nums = [l for l in lines if re.match(r"^\d+\. ", l)]
         check(f"{name}: step inserted once, as the last numbered step", f.count(code) == 1 and nums[-1].startswith(reg["lead"]) and code in nums[-1])
@@ -106,13 +108,14 @@ def live():
         pre = re.search(r'<pre class="pc-text" tabindex="0" data-reg="([^"]*)" data-reg-at="([^"]*)">([^<]*)</pre>', sw)
         check("/swaps Add Wallet prompt carries the template slot", bool(pre) and "{SETUP_CODE}" in unescape(pre.group(1)) and unescape(pre.group(1)).startswith("4. Optional: "))
         check("/swaps no-JS prompt text has no registry step", bool(pre) and "poaswap" not in pre.group(3) and "Never paste or show passwords" in unescape(pre.group(3)))
-        sp = re.search(r'<pre class="pc-text jm-p" tabindex="0" data-reg="([^"]*)" data-reg-at="([^"]*)">([^<]*)</pre>', stt)
-        check("/start prompt carries the template slot, no-JS text has no step", bool(sp) and "{SETUP_CODE}" in unescape(sp.group(1)) and "poaswap" not in sp.group(3))
-        check("Start dialog on every page carries the slot", all('id="jm-prompt" tabindex="0" data-reg="' in pages[r][2] for r in ("/", "/swaps", "/privacy")))
+        sp = re.search(r'<pre class="pc-text jm-p" tabindex="0">([^<]*)</pre>', stt)
+        check("/start prompt has no setup code slot (v2, mining only) and links Add a wallet to the /swaps prompt", bool(sp) and "data-reg" not in stt
+              and "SETUP_CODE" not in stt and 'href="/swaps#xemb" data-wallet>Add a wallet</a>' in stt and 'id="xemb"' in sw)
+        check("Start dialog on every page has no setup code slot", all('id="jm-prompt" tabindex="0">' in pages[r][2] for r in ("/", "/swaps", "/privacy")))
         check("llms.txt prompt has no registry step", "poaswap" not in pages["/llms-full.txt"][2] and "poaswap" not in pages["/llms.txt"][2])
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
         check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-22", bool(sec) and "Updated 2026-10-22." in pv
-              and 'href="/swaps"' not in sec.group(1) and 'step 8 on <a href="/start">Start</a>' in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
+              and 'href="/swaps"' not in sec.group(1) and 'Add Emblem Wallet on <a href="/swaps#xemb">Swaps</a>' in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
         check("no em dashes in the pages", not any("\u2014" in h for r, (_, _, h) in pages.items() if r in ("/swaps", "/start", "/privacy")))
         time.sleep(1)
         bad = [h for h in px.hosts if "poaswap" in h.lower()]

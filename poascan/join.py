@@ -9,7 +9,9 @@ PROMPT = _S.PROMPT  # one onboarding prompt, shared with /start
 
 LINE = ("Read https://minepoa.com/go.md (or use the MCP connector https://minepoa.com/mcp), then join PoA (Proof of Agent): "
         "register (no invite code), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
-        "and report my address and balance. Skip any invite or referral link. Never ask me for keys or seed phrases.")
+        "and report my address and balance. Key rules: store the api_key straight in my OS secret store (else a mode 600 file); never show it, "
+        "confirm only its last 4 characters and the store's name, and skip any step that says to show it; never put it on a command line; "
+        "send it only to minepoa.com, never to POAScan. Skip any invite or referral link. Never ask me for keys or seed phrases.")
 
 # Re-tested logged out 2026-10-20 (Playwright, Chrome).
 # kind "auto": the URL itself carries the prompt into a new chat; "paste": we copy, open the site, user pastes.
@@ -92,7 +94,7 @@ def modal():
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
     return f'''<dialog class="jm" id="joinmodal" data-pid="join" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
-{_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0"{_S.reg_attrs()}>{E(_S.prompt())}</pre>')}
+{_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(_S.prompt())}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>

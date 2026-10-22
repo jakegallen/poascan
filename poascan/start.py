@@ -36,12 +36,10 @@ def prompt(name=None):
     from . import onboarding_prompt as OP
     return OP.TEMPLATE.replace(OP.SLOT, clean_name(name))
 
-# Step 6 sets up a wallet, so app.js adds the optional registry step 8 with a browser-made code (poascan/regcode.py).
-# Server-side text (PROMPT, llms.txt, MCP) never carries it.
-from .onboarding_prompt import REG_STEP   # lives with the template so a new prompt version is one file
-def reg_attrs():
-    from . import regcode as RC
-    return RC.attrs(**REG_STEP)
+# Prompt v2 is mining only: no wallet setup, so no wallet registry setup code goes into this prompt (no data-reg on its <pre>).
+# Wallet users get that code on /swaps (Add Emblem Wallet), linked as "Add a wallet" under step 3.
+WALLET_HREF = "/swaps#xemb"
+WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" data-wallet>Add a wallet</a> <span>for swaps, set up separately</span></p>'
 
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
@@ -73,7 +71,26 @@ def paused():
     if not M.state()["active"]: return ""
     if M.join_quiet():   # only this line while the derived pause is on
         return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
-    return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
+    return f'<p class="upn" role="status"><i></i><span>{E(banner_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
+
+LANDING_S = 90 * 60   # a join or an answer on our ledger this recent, with our feed current, reads as landing
+def banner_line():
+    """The join modal line while the upgrade is on, from live state only, worded like the strip. 'Back' only on the official
+    signal (maint.hosted_state()); joining and answers are 'landing' only when our current ledger saw one recently."""
+    import time
+    from . import db, maint as M, hosted as R
+    now = time.time(); fresh = M._feed_fresh()
+    seen = lambda typ: (lambda r: bool(fresh and r and r["t"] and now - r["t"] < LANDING_S))(db.q1("SELECT MAX(ts) AS t FROM txs WHERE type=?", (typ,)))
+    joins = M.join_state() == "open" and seen("join"); answers = seen("challenge")
+    h = M.hosted_state(); grading_paused = R.state("grading") != "open"
+    if joins and answers: lead = "Joining and answers are landing."
+    elif answers: lead = "Answers are landing." + ("" if M.join_state() == "open" else " Joining is paused.")
+    elif joins: lead = "New Agents are joining."
+    else: lead = ("Joining works." if M.join_state() == "open" else "Joining is paused.")
+    if h == "back": return lead + (" Hosted mining is back." if not grading_paused else " Hosted mining is back. Grading is still paused, so new answers wait to be graded.")
+    if not answers: lead += " Mining endpoint responding." if R.state("mining") == "open" else " Hosted mining is paused."
+    if grading_paused: return lead + (" Grading is still paused, so new answers wait to be graded." if answers else " Grading is paused.")
+    return lead + " Grading endpoint responding."
 
 def _stamp():
     from . import maint as M
@@ -115,11 +132,19 @@ def api_join(name=None):
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
-                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag.")
+                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request.")
+
+URL_MAX = 8000                        # a prefill URL longer than this (longest name) falls back to copy and open, no Auto pill
+URL_MAX_BY = {"Cursor": 10000}        # Cursor's prompt deeplink limit
+
+def fits(n, pre):
+    """True when the prefill URL with the longest allowed name stays within the client's limit."""
+    from urllib.parse import quote
+    return len(pre + quote(prompt("x" * 32), safe="")) <= URL_MAX_BY.get(n, URL_MAX)
 
 def chats():
     from . import join as J
-    a = [(n, k, b, p) for n, k, b, p, t in J.APPS] + [CURSOR]
+    a = [(n, k, b, p) if not p or fits(n, p) else (n, "paste" if k == "auto" else k, b, "") for n, k, b, p, t in J.APPS + [CURSOR + (1,)]]
     top = [x for n in TOP for x in a if x[0] == n]
     rest = [x for n in MORE_FIRST for x in a if x[0] == n] + sorted((x for x in a if x[0] not in TOP + MORE_FIRST), key=lambda x: x[1] != "auto")
     return top, rest
@@ -177,9 +202,9 @@ def page(page_fn, card=None, apps=None):
           '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>'
           '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
           '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
-          + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
+          + WALLET_LINK + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
           + '<details class="stview"><summary>View prompt</summary>'
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>') + '</details>')
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>') + '</details>')
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
     hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'

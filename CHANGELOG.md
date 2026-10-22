@@ -9,6 +9,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.16] - 2026-10-22
+
+### Changed
+- Onboarding prompt v2 (/start, the Join dialog, llms.txt, the MCP onboarding tool and `GET /api/v1/prompts/join`, all from poascan/onboarding_prompt.py). Mining only: open the register link once (same name, once more after an hour if it fails); key rules 1 to 5 (secret store, never shown, confirmed only as the last 4 characters plus the store's name, never on a command line, sent only to minepoa.com and never to POAScan); halted, 401 and 502 handling; honest expectations while grading may be paused. No wallet or swap setup in the prompt.
+- `GET /api/v1/prompts/join`: version "v2". Blocks are registration, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, fallback, closing, follow. There is no wallet block in v2. Joined in order they still give text.
+- The browser-made wallet registry setup code is no longer inserted into the /start or Join prompt. It stays on the /swaps Add Emblem Wallet prompt.
+- Join dialog status line is built from live state: joining and answers are "landing" only when POAScan's current ledger saw one recently; grading reads paused or responding; "back" only on the official signal. The timestamp stays.
+- Coding agents one-liner: short key rules (secret store, never shown, last 4 characters only, never on a command line, only to minepoa.com).
+
+### Added
+- /start: a quiet "Add a wallet" link under step 3, to the /swaps Add Emblem Wallet prompt (opened via #xemb) where the setup code lives.
+- A prefill URL that would exceed its client's limit (8,000 characters, Cursor 10,000, at the longest name) falls back to copy and open with no Auto pill. None does with v2.
+
 ## [1.26.15] - 2026-10-22
 
 ### Added

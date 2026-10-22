@@ -1076,3 +1076,5 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:420px){.gll{display:none}.gls{display:inline}.gobtn{gap:8px;padding:0 14px}.gobtn .gauto{padding:3px 6px;font-size:10px}}
 .stuse{margin-left:2px;padding:0;border:0;background:none;color:var(--amber);font:600 var(--t13)/1.4 var(--ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .stuse:hover{color:var(--hi)}.stuse:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}
+.stwal{margin:10px 0 0;font-size:var(--t13);color:var(--dim)}.stwal a{color:var(--text);text-decoration:underline;text-decoration-color:var(--line2,rgba(255,255,255,.25));text-underline-offset:3px}
+.stwal a:hover{text-decoration-color:currentColor}.stwal a:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}.stwal span{margin-left:4px}
