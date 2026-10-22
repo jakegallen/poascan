@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.19.0] - 2026-10-21
+
+### Added
+
+- Swap API: richer offer and fill fields on `/api/v1/swaps` rows and `/api/v1/swaps/{offer_id}` `offer`, each present only when POAScan already holds the data (no null placeholders, no new upstream reads):
+  - `timeline`: array of `{event, ts, txid}` with event `offered`, `filled`, `cancelled` (ledger swap txs) or `expired` (the offer's expiry, no txid), oldest first.
+  - `maker_chains`, `taker_chains`: chain name to verified external address, from minepoa.com `/api/chains`.
+  - On filled offers: `fee_poa` (poa x fee_bp / 10000), `fill_atts` (attestations on the swap-fill tx), `fill_final` (finalized).
+- `/api/v1/swaps/status` `market.usd_ref_rates_updated_at`: when the SOL and ETH USD reference was last written.
+- CSV exports carry a column for every field seen in any row.
+
 ## [1.18.0] - 2026-10-21
 
 ### Added

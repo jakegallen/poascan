@@ -15,7 +15,7 @@ STARTED = int(time.time())
 
 def to_csv(rows):
     if not rows: return ""
-    buf = io.StringIO(); keys = list(rows[0].keys())
+    buf = io.StringIO(); keys = list(dict.fromkeys(k for r in rows for k in r.keys()))   # union: optional fields still get a column
     w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore"); w.writeheader()
     for r in rows: w.writerow({k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k, v in r.items()})
     return buf.getvalue()

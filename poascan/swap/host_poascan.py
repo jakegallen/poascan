@@ -18,6 +18,11 @@ def names(): return _A.forum_names()                 # poa1 address -> agent nam
 def final_fill_ids():
     """swap-fill txs the ledger has finalized (core txs table): trades count only once final."""
     return {r["id"] for r in _db.q("SELECT id FROM txs WHERE type='swap-fill' AND final=1")}
+def tx_marks(ids):
+    """Attestation count and final flag per tx id, from the core txs table (the explorer feed keeps them current)."""
+    ids = [i for i in ids if i]
+    if not ids: return {}
+    return {r["id"]: (r["atts"], r["final"]) for r in _db.q(f"SELECT id, atts, final FROM txs WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))}
 def swap_tx_ids():
     """Swap txs the core indexer has archived, oldest first; the swap indexer reads each one's detail once."""
     return [r["id"] for r in _db.q("SELECT id FROM txs WHERE type LIKE 'swap-%' OR type='attest-fill' ORDER BY ts")]

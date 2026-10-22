@@ -20,3 +20,9 @@ def events(oid): return H.q("SELECT * FROM swap_events WHERE offer_id=? ORDER BY
 def open_count(): return H.q1("SELECT COUNT(*) AS n FROM swaps WHERE status='open'")["n"]
 def fx(): return H.get_blob("fx")[0] or {}   # {"SOL": usd, "ETH": usd, "src": "CoinGecko"}, written by indexer.job_fx
 def chains(): return H.get_blob("chains")[0] or {}
+def events_all():
+    """Every swap tx event, grouped by offer, oldest first."""
+    out = {}
+    for e in H.q("SELECT offer_id, txid, kind, ts FROM swap_events ORDER BY ts"): out.setdefault(e["offer_id"], []).append(e)
+    return out
+def fx_ts(): return H.get_blob("fx")[1]

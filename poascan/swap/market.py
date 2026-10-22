@@ -107,7 +107,12 @@ def swap_market():
                 trades_all_time=len(done), volume_all_time_usd=round(sum(vall), 2) if vall else (None if done else 0.0),
                 usd_ref=f.get("src") or "CoinGecko", price=pr,
                 last_trade=lt, best_ask=ba, poa_on_offer=st["on_offer"], fills=st["fills"],
-                usd_ref_rates={k: f.get(k) for k in ("SOL", "ETH")})
+                usd_ref_rates={k: f.get(k) for k in ("SOL", "ETH")}, **_rates_ts())
+
+def _rates_ts():
+    """When the USD reference rates were last written (left out when there are none yet)."""
+    t = S.fx_ts()
+    return dict(usd_ref_rates_updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))) if t else {}
 
 def swap_status_api():
     """/api/v1/swaps/status: availability plus market. The explorer reads swaps only through this, /price and /swaps."""

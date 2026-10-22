@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.18.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.19.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -506,13 +506,14 @@ def openapi():
                             desc="cohorts[].answers is the denominator, frozen at the birth close (pending rows with since equal to that epoch). Each closes[] entry splits it into unsealed, sealed, passed, failed and vanished, which always sum to answers; age is closes after birth. sealed_is_lower_bound marks closes before params.pending_merge_from_epoch with empty short panels (unsealed is then an upper bound). gate_a: basis.challenge_eligible size over answers born at that close (K-attested responders). CSV: one row per cohort and close. Method: https://poascan.io/about#cohorts"),
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
-        "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token"),
+        "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token",
+                          desc="One row per offer. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx)."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
-                                     desc="offer is the row from /api/swaps; events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
+                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final); events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -614,7 +615,8 @@ def openapi():
                                                                                     "last_trade": {"type": ["object", "null"], "description": "last fill: per_1m_poa (in its own asset) and asset"},
                                                                                     "best_ask": {"type": ["object", "null"], "description": "cheapest open offer once a fill exists: per_1m_poa and asset (asks are never a USD price)"},
                                                                                     "poa_on_offer": {"type": "number"}, "fills": {"type": "integer"},
-                                                                                    "usd_ref_rates": {"type": "object", "description": "current USD reference per paid asset (SOL, ETH), CoinGecko"}}},
+                                                                                    "usd_ref_rates": {"type": "object", "description": "current USD reference per paid asset (SOL, ETH), CoinGecko"},
+                                                                                    "usd_ref_rates_updated_at": {"type": "string", "format": "date-time", "description": "when usd_ref_rates were last written, ISO 8601 UTC; absent before the first write"}}},
                                                           "names": {"type": "object", "description": "Agent names for makers and takers in the book, by poa1 address"}}},
                             "Meta": {"type": "object", "description": "Freshness stamp on every object response and MCP tool result",
                                      "properties": {"api_version": {"type": "string"}, "network": {"type": "string"}, "source_height": {"type": ["integer", "null"], "description": "chain height"},
