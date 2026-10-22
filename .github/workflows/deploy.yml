@@ -49,6 +49,8 @@ jobs:
         run: python tools/events_test.py
       - name: Daily network aggregates come from the archive only (no upstream call), aggregate only; /ops/network is 404 without the token
         run: python tools/network_test.py
+      - name: Outage regressions (grading index is cached; guard does not restart a CPU throttled VM)
+        run: python tools/incident_test.py
 
   deploy:
     needs: test

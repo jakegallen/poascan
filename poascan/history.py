@@ -51,8 +51,11 @@ def grading_index():
     """Per answer: latest pending record (close, kind, since, panel, grades or None) and settlement (close, passed, jury).
     Per grader: the answers they sit on (panel), sealed (grades) or judged (jury)."""
     raw = A.epochs_raw()
+    # keyed on the parsed blob's identity and its stored ts; compared with == (an `is` on two int ids is never true,
+    # which made every address page rebuild this index from the whole epochs blob)
+    key = (id(raw), A._epochs.get("ts"))
     with _lock:
-        if _gx["key"] is id(raw) and _gx["v"]: return _gx["v"]
+        if _gx["key"] == key and _gx["v"]: return _gx["v"]
     rec, by = {}, {}
     for e in sorted(raw, key=lambda e: int(e.get("epoch", 0))):
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}
@@ -68,7 +71,7 @@ def grading_index():
             for g in jy: by.setdefault(g, set()).add(t)
     v = dict(rec=rec, by=by, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
              merge=A.params().get("pending_merge_from_epoch"))
-    with _lock: _gx.update(key=id(raw), v=v)
+    with _lock: _gx.update(key=key, v=v)
     return v
 
 def _one(g, t, r, ix, seal_ts, seal_as):

@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.1] - 2026-10-22
+
+### Fixed
+
+- Address pages rebuilt the grading index from the whole epochs blob on every request: its cache compared two int ids with `is`, which is never true. It now keys on the blob id and stored ts with `==`. This was about 60% of server CPU under crawl traffic and, on a shared vCPU out of burst credit, made pages take 10 s or more (502s on 2026-10-22, about 13:55 to 14:02 PT).
+- The guard no longer restarts the process when its /healthz self-check fails while the VM is CPU throttled (steal over 50% of the interval). A restart cannot add CPU; it resets the burst balance and reruns startup, which turned throttling into a restart loop. A long throttled run (40 checks, about 10 minutes) still exits.
+
+### Added
+
+- `tools/incident_test.py` (in CI): the grading index is cached across calls and rebuilt for a new blob; guard counters for plain hangs vs throttled failures; `/proc/stat` steal parsing.
+
 ## [1.26.0] - 2026-10-22
 
 ### Changed
