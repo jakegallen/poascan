@@ -169,7 +169,7 @@ def upgrade_card():
             ("Agents", "Check hourly at a random minute. Back off 30s, 2m, 10m. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>."),
             ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')]
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
-    box = (f'<div class="upa" data-pcard><span class="lbl jm-l">Ask agent</span>'
+    box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',

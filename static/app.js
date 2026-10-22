@@ -138,9 +138,13 @@ function chartTips(){
 var jm=$("#joinmodal"),toastEl=$("#toast"),toastT;
 var KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘V":"Ctrl+V";
 function toast(m,big){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(jm&&jm.open)?jm:(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
+/* Prompt button counts: a fixed id only ('<card>.<action>'), first-party POST /ops/e, no cookie and nothing about the visitor. The server takes ids from its allowlist and drops the rest. */
+function ev(id){if(!id)return;try{var b=JSON.stringify({e:id});if(navigator.sendBeacon&&navigator.sendBeacon("/ops/e",b))return;fetch("/ops/e",{method:"POST",body:b,keepalive:true,credentials:"omit"}).catch(function(){})}catch(_){}}
+function pidOf(el){var c=el&&el.closest&&el.closest("[data-pid]");return c?c.dataset.pid:""}
+function regOn(pre){return !!(pre&&pre.dataset.regOn==="1")}
 function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(jm&&jm.open?jm:D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb()});return Promise.resolve(fb())}
-D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
+D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;var pi=pidOf(a);if(pi)ev(pi+".add");copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
 /* Key guard: a PoA key pasted into any field is cleared before anything sees it (search suggest, submit, the prompt) */
 (function(){var KR=/(^|[^A-Za-z0-9])(p?sk|pk)_[A-Za-z0-9_\-]{12,}/,MSG="That looks like a PoA key. POAScan never takes keys and sent nothing. Never paste it anywhere.";
  function hit(v){return typeof v==="string"&&KR.test(v)}
@@ -150,7 +154,9 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  D.addEventListener("submit",function(e){var f=e.target,bad=0;$$("input,textarea",f).forEach(function(i){if(hit(i.value)){i.value="";bad=1}});if(bad){e.preventDefault();e.stopImmediatePropagation();say()}},true);
 })();
 /* Wallet setup prompts: one browser-made setup code per page load (s_ + 16 of a-z2-7; 256 % 32 == 0, so b&31 is unbiased), filled into the optional registry step before Copy and Open in read the text. Never sent to POAScan, never in a POAScan URL, never stored. */
-(function(){var c=W.crypto;if(!c||!c.getRandomValues)return;var A="abcdefghijklmnopqrstuvwxyz234567",b=c.getRandomValues(new Uint8Array(16)),k="s_";for(var i=0;i<16;i++)k+=A[b[i]&31];$$("pre[data-reg]").forEach(function(p){var t=p.textContent,j=t.indexOf("\n\n"+p.dataset.regAt);if(j<0)return;p.textContent=t.slice(0,j)+"\n"+p.dataset.reg.split("{SETUP_CODE}").join(k)+t.slice(j)})})();
+(function(){var c=W.crypto;if(!c||!c.getRandomValues)return;var A="abcdefghijklmnopqrstuvwxyz234567",b=c.getRandomValues(new Uint8Array(16)),k="s_";for(var i=0;i<16;i++)k+=A[b[i]&31];$$("pre[data-reg]").forEach(function(p){var t=p.textContent,j=t.indexOf("\n\n"+p.dataset.regAt);if(j<0)return;p.textContent=t.slice(0,j)+"\n"+p.dataset.reg.split("{SETUP_CODE}").join(k)+t.slice(j);p.dataset.regOn="1"});
+ var sp=$("[data-pid=start] pre[data-reg]");if(regOn(sp))ev("start.regshow");
+ D.addEventListener("toggle",function(e){var d=e.target;if(d&&d.id==="xemb"&&d.open){var wp=$("pre[data-reg]",d);if(regOn(wp))ev("wallet.regshow")}},true)})();
 /* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
  R=function(a){return a[Math.floor(Math.random()*a.length)]},nm=R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900)),RX=/(register\?label=)[^\s]*/;
@@ -164,7 +170,7 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
  function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?($(".pc-text",c).textContent||"").trim():P}
  $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});
  $$("[data-pcard] a[data-pre]").forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))});
- function jmOpen(){if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
+ function jmOpen(){ev("join.open");if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
  function jmClose(){if(jm.close)jm.close();else jm.removeAttribute("open")}
  jm.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")});
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;
@@ -172,10 +178,10 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
   var inCard=!jm.open&&t.closest("[data-pcard]");
   if(!jm.open&&!inCard)return;
   if(!inCard&&(t===jm||t.closest("[data-jmclose]"))){jmClose();return}
-  var P=PF(t);
-  var cb=t.closest("[data-copy-prompt]");if(cb){copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
-  var co=t.closest("[data-cpopen]");if(co){var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P);if(pre)u=pre+encodeURIComponent(P);if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
-  var au=t.closest("a.app[data-pre]");if(au){copyText(P);toast("Opening "+au.dataset.app+" · prompt also copied");return}
+  var P=PF(t),pc=inCard||jm,pi=pc.dataset.pid||pidOf(pc),rg=regOn(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));
+  var cb=t.closest("[data-copy-prompt]");if(cb){ev(pi&&pi+(rg?".copyreg":".copy"));copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
+  var co=t.closest("[data-cpopen]");if(co){ev(pi&&pi+(rg?".appreg":".app"));var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P);if(pre)u=pre+encodeURIComponent(P);if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
+  var au=t.closest("a.app[data-pre]");if(au){ev(pi&&pi+(rg?".appreg":".app"));copyText(P);toast("Opening "+au.dataset.app+" · prompt also copied");return}
  },true);
 }
 /* More toggles */
@@ -205,13 +211,13 @@ if(location.hash==="#find"){var fi=$$(".hsearch input,.search input").filter(fun
 /* ask your agent: shared prompt dialog */
 var am=$("#askmodal");
 if(am){var amP=$("#am-p",am),amT=$("#am-t",am),amC=$(".am-c",am),cur=[];
- function amSet(i){var x=cur[i];if(!x)return;amP.textContent=x[1];amT.textContent=x[0];amP.scrollTop=0;
+ function amSet(i){var x=cur[i];if(!x)return;amP.closest("[data-pcard]").dataset.pid=x[2]||"";amP.textContent=x[1];amT.textContent=x[0];amP.scrollTop=0;
   $$(".chip",amC).forEach(function(c,j){c.classList.toggle("on",j===i);c.setAttribute("aria-pressed",j===i?"true":"false")});
   $$("a[data-pre]",am).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(x[1])})}
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;var b=t.closest("[data-ask]");
   if(b){e.preventDefault();try{cur=JSON.parse(b.dataset.ask)}catch(_){return}
    amC.innerHTML="";cur.forEach(function(x,i){var c=D.createElement("button");c.type="button";c.className="chip";c.textContent=x[0];c.addEventListener("click",function(){amSet(i)});amC.appendChild(c)});
-   var mu=cur.length>1;amC.hidden=!mu;am.classList.toggle("multi",mu);amT.classList.toggle("sr-only",mu);amSet(0);if(am.showModal)am.showModal();else am.setAttribute("open","");D.documentElement.classList.add("jmlock");return}
+   var mu=cur.length>1;amC.hidden=!mu;am.classList.toggle("multi",mu);amT.classList.toggle("sr-only",mu);amSet(0);ev(cur[0]&&cur[0][2]&&cur[0][2]+".open");if(am.showModal)am.showModal();else am.setAttribute("open","");D.documentElement.classList.add("jmlock");return}
   if(am.open&&(t===am||t.closest("[data-amclose]"))){if(am.close)am.close();else am.removeAttribute("open")}});
  am.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")})}
 /* sortable tables */

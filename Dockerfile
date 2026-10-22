@@ -1,6 +1,11 @@
 FROM python:3.12-slim
 WORKDIR /app
 RUN pip install --no-cache-dir pillow==12.3.0
+# Offline IP to country file for the daily country count (DB-IP Lite, CC BY 4.0). GEOIP_MONTH busts the cache monthly.
+# A failed fetch leaves no file and the build goes on; the server then counts no country.
+ARG GEOIP_MONTH=unset
+COPY tools/geoip_fetch.py /tmp/geoip_fetch.py
+RUN mkdir -p data && echo "geoip month $GEOIP_MONTH" && python3 /tmp/geoip_fetch.py data/country.mmdb && rm /tmp/geoip_fetch.py
 COPY poascan/ poascan/
 COPY static/ static/
 COPY data/census.csv data/tools.json data/declared_families.json data/

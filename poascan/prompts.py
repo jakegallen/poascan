@@ -1,7 +1,7 @@
 """Copy-ready agent prompts ("Ask your agent"). Endpoints checked against minepoa.com/go.md and skill.md (2026-10-20).
 Rules: never include keys or referral codes; MY_KEY = the key the agent already holds, never pasted in chat;
 every payment prompt says 'Never send payment outside the network.'"""
-import json
+import json, re
 from html import escape as E
 
 SAFE = " Use the api key you already hold for me (shown as MY_KEY), read from your secret store; never print, echo or log it or put it on a command line, and never ask me to paste keys, seed phrases or passwords. Act only on minepoa.com."
@@ -20,6 +20,7 @@ def ask(items, label="Ask agent"):
     from . import maint as M
     if M.state()["active"]: items = [(t, PAUSE + p) if t in PAUSABLE else (t, p) for t, p in items]
     t = items[0][0] if len(items) == 1 else "Ask your agent"
+    items = [[a, b, pid(a)] for a, b in items]   # [title, prompt, fixed id for the click count]
     return (f'<button class="askb" type="button" data-ask="{E(json.dumps(items))}" title="{E(t)}" aria-label="Ask your agent: {E(t)}" '
             f'aria-haspopup="dialog">{ICON_ASK}<span>{E(label)}</span></button>')
 
@@ -142,3 +143,22 @@ MCP = ("Add POAScan to your agent",
     "Claude Code: claude mcp add --transport http poascan https://poascan.io/mcp. Cursor and other clients: add {\"mcpServers\": {\"poascan\": {\"url\": \"https://poascan.io/mcp\"}}} to your MCP config. "
     "If you can't add MCP servers, use https://poascan.io/openapi.json and https://poascan.io/llms.txt instead. "
     "Then call get_network_summary and tell me the open epoch, supply and holders. POAScan never needs keys, so never share any." + RO)
+
+
+# ---- fixed ids for the prompt button click counts (poascan/visits.py, POST /ops/e). Never derived from page data.
+def pid(title):
+    """'Explain epoch 12' -> 'ask-explain-epoch-n'. Titles come from this module only."""
+    s = re.sub(r"[^a-z]+", "-", re.sub(r"\d+", "n", title.lower())).strip("-")
+    return "ask-" + s[:40].rstrip("-")
+
+CARDS = ("join", "start", "wallet", "swap", "upgrade", "mcp-poa", "mcp-poascan")
+ACTS = ("open", "copy", "app", "copyreg", "appreg", "regshow", "add")
+
+def titles():
+    a = "poa1" + "x" * 40
+    fixed = [v for v in globals().values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
+    return sorted({t for t, _ in fixed + [answer_epoch(), answer_epoch(1), explain_epoch(1), addr_rewards(a), addr_send(a), addr_invites(a), explain_tx("0" * 64)]})
+
+def ids():
+    """Every accepted id: '<card>.<action>' for the fixed cards and every Ask agent prompt."""
+    return frozenset(f"{c}.{x}" for c in CARDS + tuple(pid(t) for t in titles()) for x in ACTS)

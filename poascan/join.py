@@ -90,7 +90,7 @@ def modal():
     # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback
     coders = "".join(f'<div class="cmd"><span class="lbl">{n}</span><code>{E(c)}</code>'
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
-    return f'''<dialog class="jm" id="joinmodal" aria-labelledby="jm-t"><div class="jm-in">
+    return f'''<dialog class="jm" id="joinmodal" data-pid="join" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
 {_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0"{_S.reg_attrs()}>{E(_S.prompt())}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}

@@ -9,6 +9,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.23.0] - 2026-10-22
+
+### Added
+
+- Daily aggregate event counts in a new `visit_counts` table, shown in the private `/ops/visits`: API calls by OpenAPI route template, MCP `tools/call` by tool name, client family for bots and agents (fixed list, else `other`), prompt button clicks by fixed id, the `/start` setup funnel (views, prompt copies, registry step shows and copies), a `ref` campaign tag (`[a-z0-9_-]{1,24}`, else `other`; tags under 3 a day fold into `other`), device class, country (offline DB-IP Lite lookup, CC BY 4.0, fetched at image build; the IP is dropped), Fly edge region, search outcome by result type (never the query), and site health per path group (404s, 5xx, server response time buckets).
+- `POST /ops/e` for prompt button clicks: `{"e": "<id>"}` with an id from a server-side allowlist, 256-byte cap, same-origin only, rate limited per IP in memory, 204 on success. No cookie, no identifier. Sent with `navigator.sendBeacon`; with JS off nothing is sent and every page works as before.
+
+### Changed
+
+- The privacy page lists the new counts.
+- Ask agent buttons carry a fixed prompt id in their `data-ask` items.
+
 ## [1.22.0] - 2026-10-22
 
 ### Added

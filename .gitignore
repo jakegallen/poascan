@@ -29,3 +29,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Offline GeoIP file, fetched at image build (tools/geoip_fetch.py)
+*.mmdb
+*.mmdb.tmp

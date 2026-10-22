@@ -104,7 +104,7 @@ def page(page_fn, card, apps):
     nm = default_name()
     field = (f'<label class="stname"><span class="lbl">Name</span><input id="stname" name="label" value="{E(nm)}" maxlength="32" '
              f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" data-name></label>')
-    top = (f'<section class="card startp" data-pcard><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
+    top = (f'<section class="card startp" data-pcard data-pid="start"><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
            + paused() + field + KWARN + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>')
            + f'<span class="lbl jm-l">One click</span>{apps_html}'
            f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')

@@ -163,6 +163,10 @@ def page(path, qs):
 AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Perplexity-User",
            "Google-Extended", "Applebot-Extended", "CCBot"]
 VS.BOT_NAMES = AI_BOTS
+from . import prompts as _PR
+VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
+AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
+EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
           + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
@@ -215,7 +219,7 @@ HSTS = "max-age=31536000"
 MPID = re.compile(rb'"mp\d+"')
 IMMUTABLE = "public, max-age=31536000, immutable"
 
-QS_RX = re.compile(r"\?[^\s\"]*")
+QS_RX = re.compile(r"\?[^\s\"']*")   # query strings (searches included) never reach the log
 
 class BadRequest(Exception): pass
 class NotFound(Exception): pass   # a known route with an unknown subject: 404 with the reason
@@ -225,8 +229,12 @@ class H(BaseHTTPRequestHandler):
     server_version = "POASCAN/1.0"
     def log_message(self, fmt, *a):   # query strings are never logged; paths pass through the redaction filter
         log.info("%s %s", self.address_string(), QS_RX.sub("", fmt % a))
+    def parse_request(self):
+        self._t0 = time.monotonic(); return super().parse_request()
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
-        try: VS.COUNTER.hit(self.command, code, self.path, self.headers.get("User-Agent"), self.headers.get("Referer"), self.client_ip)
+        try:
+            ms = (time.monotonic() - self._t0) * 1000 if getattr(self, "_t0", None) else None
+            VS.COUNTER.hit(self.command, code, self.path, self.headers.get("User-Agent"), self.headers.get("Referer"), self.client_ip, ms, self.headers.get("Fly-Region"))
         except Exception: pass   # counting never breaks a response
         if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
         if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
@@ -277,9 +285,35 @@ class H(BaseHTTPRequestHandler):
         return self.cond(b, RR.sha256(b), "max-age=60", dict(mh, **({"X-Next-From": str(nxt)} if nxt is not None else {})))
     def client_ip(self):
         return (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or self.client_address[0])
+    def ops_event(self):
+        """POST /ops/e {"e": "<id>"}: one prompt button click, by a fixed id from prompts.ids(). No cookie is read or set,
+        nothing about the sender is kept; unknown ids, other origins, big bodies and bursts are refused. 204 when counted."""
+        hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
+        ok, wait = EVENT_LIMIT.allow(self.client_ip())
+        if not ok: return self.send(429, "", TXT, dict(hd, **{"Retry-After": str(wait)}))
+        org = self.headers.get("Origin")
+        if org and org != "null":
+            oh = (urllib.parse.urlsplit(org).hostname or "").lower(); host = (self.headers.get("Host") or "").split(":")[0].lower()
+            if oh != host and oh not in VS.OWN_HOSTS: return self.send(403, "", TXT, hd)
+        n = self.headers.get("Content-Length") or ""
+        if not n.isdigit() or int(n) > 256: return self.send(413 if n.isdigit() else 411, "", TXT, hd)
+        try: e = json.loads(self.rfile.read(int(n)) or b"null")
+        except Exception: e = None
+        e = e.get("e") if isinstance(e, dict) else None
+        if not isinstance(e, str) or e not in VS.PROMPT_IDS: return self.send(400, json.dumps({"error": "unknown event"}), "application/json", hd)
+        if VS.kind("/", self.headers.get("User-Agent") or "") == "human": VS.COUNTER.event("prompt", e)
+        return self.send(204, b"", TXT, hd)
     def do_POST(self):
-        """The only write-shaped method we accept is JSON-RPC to the read-only MCP server."""
-        if (urllib.parse.urlparse(self.path).path.rstrip("/") or "/") != "/mcp": return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
+        """The only write-shaped methods we accept are JSON-RPC to the read-only MCP server and the click count."""
+        pth = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        if pth == "/ops/e":
+            try: return self.ops_event()
+            except BrokenPipeError: return
+            except Exception as e:
+                log.error("ops event: %s", type(e).__name__)
+                try: return self.send(500, "", TXT, {"Cache-Control": "no-store"})
+                except Exception: return
+        if pth != "/mcp": return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
         try:
             ok, wait = AG.LIMIT.allow(self.client_ip())
             if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
@@ -394,20 +428,22 @@ class H(BaseHTTPRequestHandler):
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":
                 q = (qs.get("q", [""])[0] or "").strip()
-                if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q
-                elif HEX64.match(q): loc = "/tx/" + q.lower()
-                elif re.match(r"^[Ee]?\d{1,7}$", q): loc = "/epoch/" + q.lstrip("Ee")
+                # counted: the outcome only (address, tx, epoch, list or none). The query is never counted, stored or logged.
+                cnt = lambda r: q and VS.COUNTER.event("search", r)
+                if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q; cnt("address")
+                elif HEX64.match(q): loc = "/tx/" + q.lower(); cnt("tx")
+                elif re.match(r"^[Ee]?\d{1,7}$", q): loc = "/epoch/" + q.lstrip("Ee"); cnt("epoch")
                 elif PREFIX_HEX.match(q) or PREFIX_ADDR.match(q):   # partial hash or address: one match goes there, several list
                     hits = prefix_hits(q)
-                    if len(hits) == 1: loc = ("/tx/" if hits[0]["kind"] == "transaction" else "/address/") + hits[0]["id"]
-                    elif hits: return self.send(200, V.search_hits(q, hits))
-                    else: return self.send(404, V.search_results(q))
+                    if len(hits) == 1: loc = ("/tx/" if hits[0]["kind"] == "transaction" else "/address/") + hits[0]["id"]; cnt("tx" if hits[0]["kind"] == "transaction" else "address")
+                    elif hits: cnt("list"); return self.send(200, V.search_hits(q, hits))
+                    else: cnt("none"); return self.send(404, V.search_results(q))
                 else:
                     hits = [h for h in AG.t_search({"query": q})["results"] if h.get("kind") == "address"] if len(q) >= 2 else []
                     exact = [h for h in hits if (h.get("name") or "").lower() == q.lower()]
-                    if len(exact) == 1 or len(hits) == 1: loc = "/address/" + (exact or hits)[0]["id"]
-                    elif hits: return self.send(200, V.search_hits(q, hits[:20]))
-                    else: return self.send(404, V.search_results(q))
+                    if len(exact) == 1 or len(hits) == 1: loc = "/address/" + (exact or hits)[0]["id"]; cnt("address")
+                    elif hits: cnt("list"); return self.send(200, V.search_hits(q, hits[:20]))
+                    else: cnt("none"); return self.send(404, V.search_results(q))
                 return self.send(302, "", extra={"Location": loc})
             if path == "/fragment/addr":
                 try: return self.send(200, json.dumps(V.addr_fragment(qs)), "application/json", {"Cache-Control": "no-store"})

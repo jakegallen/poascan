@@ -56,5 +56,6 @@ def html(name, url):
     row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
                         f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
     rows = "".join(row(k, n) for k, n in COPY)
-    return (f'<div class="apps mcpa">{btn}</div>'
-            + more("Other clients", f'<div class="apps mcpa">{btn2}</div><div class="cmds">{rows}</div>', "mcpm"))
+    pid = f' data-pid="mcp-{E(name)}"'   # fixed id for the click count (prompts.CARDS)
+    return (f'<div class="apps mcpa"{pid}>{btn}</div>'
+            + more("Other clients", f'<div class="apps mcpa"{pid}>{btn2}</div><div class="cmds">{rows}</div>', "mcpm"))

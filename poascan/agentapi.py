@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.22.0"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.23.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -71,6 +71,7 @@ class Limiter:
                 self.b[ip] = (tok, now); return False, int((1 - tok) / self.rate) + 1
             self.b[ip] = (tok - 1, now); return True, 0
 
+ON_TOOL = None   # set by server.py: counts a tools/call by tool name only (poascan/visits.py)
 LIMIT = Limiter(float(os.environ.get("POASCAN_MCP_RATE", "1")), int(os.environ.get("POASCAN_MCP_BURST", "30")))
 
 # ---------------------------------------------------------------- tools
@@ -412,6 +413,9 @@ def _one(m):
     if meth == "tools/list": return ok({"tools": tools_list()})
     if meth == "tools/call":
         name = p.get("name"); args = p.get("arguments") or {}
+        if ON_TOOL:
+            try: ON_TOOL(name if name in TOOL_FN else "other")
+            except Exception: pass
         if name not in TOOL_FN: return _err(i, -32602, f"Unknown tool: {name}")
         if not isinstance(args, dict): return _err(i, -32602, "arguments must be an object")
         try:
