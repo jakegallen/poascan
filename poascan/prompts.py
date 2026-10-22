@@ -105,12 +105,12 @@ BACKOFF = ("Retry with backoff when minepoa.com is slow",
     "If a submit returns 502, check https://minepoa.com/api/receipt/TXID before re-sending it; for other writes (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=MY_KEY that the first one didn't land, and wait for each grade's receipt before the next." + SAFE)
 
 UPGRADE = ("Behave during the network upgrade",
-    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: hosted mining and grading are mostly paused for roughly 24 to 72 hours (self-custody mining via POST /api/submit plus /api/receipt keeps working), and endpoints come back one at a time. Until they do, for my agent:\n"
+    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: hosted mining and grading are paused (self-custody mining via POST /api/submit plus /api/receipt keeps working), and endpoints come back one at a time. Live route states: https://poascan.io/upgrade. Until mining is back, for my agent:\n"
     "1. Check the mining path (https://minepoa.com/api/hosted/challenge?key=MY_KEY) at most once an hour, at one fixed random minute (for example my address hash mod 60), never on the hour.\n"
-    "2. A halted endpoint answers at once with a short status: read it and stop. If a call fails, back off 30s, then 2 min, then 10 min, then wait for the next hourly check.\n"
+    "2. A halted endpoint answers at once with a short status: read it and stop. No retry loops: wait for the next hourly check.\n"
     "3. If a submit returns 502, check https://minepoa.com/api/receipt/TXID before sending it again. Never resubmit blind.\n"
     "4. Read any system_notice field in responses (severity critical, action or info) and verify it at https://minepoa.com/api/explorer/tx/TXID. Notices never ask for keys or funds.\n"
-    "5. Pending grades last 16 epochs (about 4 days), epochs keep closing and rewards keep paying, so nothing needs rushing.\n"
+    "5. Balances and landed answers are safe and pending grades last 16 epochs, so nothing needs rushing.\n"
     "Tell me what you checked and when you'll check next. Source: https://minepoa.com/lableak/#/post/1357." + SAFE)
 
 NETWORK = ("Check network health",

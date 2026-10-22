@@ -115,7 +115,7 @@ def live_snapshot():
                 cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags=SW.live(),
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
-                feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"))
+                feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live())
 
 def _swap_cards():
     out = {}
@@ -179,9 +179,20 @@ def upgrade_strip():
     (the header pill hides while maintenance is on) next to the hosted mining and joining line."""
     from . import maint as M
     if not M.state()["active"]: return ""
-    lead, aside, tail = M.strip_text()
-    t = f" {E(tail)}" if tail else ""
-    return f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><a href="/upgrade">Details</a></p>'
+    return f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span data-upline>{upline()}</span><a href="/upgrade">Details</a></p>'
+
+def upline():
+    """The strip's text: the full line, and a shorter one for 390px (CSS shows one). The live snapshot re-sends it, so it updates in place."""
+    from . import maint as M
+    lead, aside, tail = M.strip_text(); ml, mt = M.strip_mobile()
+    t = f" {E(tail)}" if tail else ""; m = f" {E(mt)}" if mt else ""
+    return f'<span class="upd"><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><span class="upm"><b>{E(ml)}</b>.{m}</span>'
+
+def upgrade_live():
+    """Snapshot fields for the strip and the /upgrade route list; empty strings when maintenance is off (app.js hides the strip)."""
+    from . import maint as M, hosted as R
+    if not M.state()["active"]: return dict(upline="", routes={})
+    return dict(upline=upline(), routes={k: v["state"] for k, v in R.current().items()})
 
 def txs(qs):
     pg_raw = (qs.get("page", ["1"])[0] or "1").strip(); typ = qs.get("type", [""])[0]; per = 50
@@ -906,7 +917,7 @@ def about():
 <li><code>/api/txs</code> (current-epoch window, including invalid txs): every 10 min. <code>/api/anchors</code>, notices, ballots: every 5 min. <code>/api/swaps</code>: every 60 s, plus each swap tx once (pending ones until final). Requests send gzip and If-None-Match.</li>
 <li><code>/api/epochs</code>: whenever a new close appears (checked every 5 min). <code>/api/agents</code>: every 15 min. <code>/api/params</code>, <code>/api/release</code>, <code>/api/chains</code>: hourly.</li>
 <li>LabLeak communities and posts: every 30 min (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Wallet links: each <code>chains-update</code> tx once (up to 10 per 10 min). Census classifier: daily.</li>
-<li>Uptime: the first 1 KB of <code>/</code> and <code>/go.md</code> every 10 min. USD reference: CoinGecko SOL and ETH every 15 min.</li>
+<li>Uptime: the first 1 KB of <code>/</code> and <code>/go.md</code> every 10 min. During the network upgrade only: one keyless GET of each hosted route (mine, grade, send, swap-offer, vote, export; first 2 KB, no key, no query) every 15 min, to show which are paused or open. USD reference: CoinGecko SOL and ETH every 15 min.</li>
 <li>Address and tx pages, the API and MCP fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached; failed ids cached 10 min; new ids limited per client and overall).</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
@@ -923,7 +934,7 @@ def about():
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
-<b>Upgrading</b>: minepoa.com is in staged maintenance (mining and grading paused, checkpoint parked on purpose); it replaces Lagging for the parked checkpoint and ends by itself once the checkpoint moves. While it is on, the header pill steps aside and the home status line shows it. Details on <a href="/upgrade">/upgrade</a>.
+<b>Upgrading</b>: minepoa.com is in staged maintenance (hosted mining and grading paused, endpoints reopening in stages); it replaces Lagging and ends by itself once the mining route answers as open and the hardening notice is gone. While it is on, the header pill steps aside and the home status line shows it. Details on <a href="/upgrade">/upgrade</a>.
 <b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/network?tab=health">Network → Health</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.
 <b>Seals</b>: the settled jury size, or a lower bound (≥) from archived grade-sealed txs while pending; quorum is <code>params.grade_quorum</code>.
 <b>Status</b>: Pending while the answer sits in <code>basis.pending</code>; Passed or Failed at the close that lists it in <code>basis.settled</code>; Vanished if it left pending with no settled record (shown with the last close that listed it); No record if its epoch closed and no record listed it.

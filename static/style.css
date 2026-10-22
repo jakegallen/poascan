@@ -909,3 +909,13 @@ td a.mono{display:inline-block;min-width:24px}
 .more.mswap{gap:6px}.more.mswap img{flex:none;opacity:.85}.more.mswap:hover img{opacity:1}
 /* 1.26.3: footer links are at least 24 px tall (WCAG 2.5.8 target size) */
 .foot a{display:inline-block;min-height:24px;line-height:24px;padding-block:0}
+
+/* /upgrade recovery: per-route list (hosted.py) and the strip's 390px line */
+.upstrip .upm{display:none}
+@media (max-width:420px){.upstrip .upd{display:none}.upstrip .upm{display:inline}}
+.hrl{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px;max-width:520px}
+.hrl li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,rgba(143,163,184,.18))}
+.hrl li>span:first-child{color:var(--txt)}
+.hrm{margin:6px 0 0}
+.upg .sr{word-break:break-all}
+@media (max-width:480px){.hrl{grid-template-columns:repeat(2,minmax(0,1fr))}}

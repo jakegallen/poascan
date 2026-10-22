@@ -97,6 +97,12 @@ ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
 def _upgrade():
     from . import maint as M
     lead = M.strip_text()[0]; jp = M.join_state() == "paused"   # a paused join is already in the lead; no second row saying so
+    r = M.recovery()
+    if r["moved"]:
+        from . import hosted as R
+        rt = R.current(); lab = {"open": "Open", "paused": "Paused"}
+        return ("Network upgrade", lead, [f'Checkpoint {r["checkpoint"]:,}' + (" · balances intact" if r["supply_intact"] else "")],
+                [(rt[k]["label"], lab.get(rt[k]["state"], "Checking")) for k in ("mining", "grading")] + [("Self-custody", "Working")])
     return ("Network upgrade", lead, ["Rewards paying · epochs closing"],
             ([] if jp else [("Joining", "Open")]) + [("Self-custody", "Working"), ("Finalized height", "Parked")])
 

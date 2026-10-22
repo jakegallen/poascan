@@ -122,7 +122,8 @@ def freshness_html():
 def cp_stat():
     """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
     f = A.freshness()
-    flag = ('<div class="asof steel">Parked</div>' if f["maintenance"] else f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else "")
+    from . import maint as M
+    flag = ('<div class="asof steel">Parked</div>' if f["maintenance"] and not M.recovery()["moved"] else f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else "")
     return f'<div class="stat"><div class="sl"><span title="When the finalized height (checkpoint) last moved">Finality moved</span></div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
 
 RECON_TAG = {"match": ("ok", "Match"), "explained": ("", "Explained"), "differs": ("bad", "Differs"), "node_only": ("", "Node only"), "poascan_only": ("", "Ours only")}
@@ -150,30 +151,70 @@ def recon_card():
     return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
 
 def upgrade_card():
-    """/status#upgrade: the staged maintenance in one card, shown only while maint.state() is active."""
+    """/upgrade (and Network → Health): the staged maintenance in one card, shown only while maint.state() is active.
+    After the checkpoint moved it reads the recovery live: route states (hosted.py), checkpoint and state root, supply, status freshness, notice."""
     from . import maint as M
     m = M.state()
     if not m["active"]: return ""
-    sn = M.seen(); lo, hi = m["expected_window_h"]
+    sn = M.seen(); r = m["recovery"]
     from . import halts as H
     hs = H.current(); sf = (hs or {}).get("groups") or {}; jo = M.join_open(); jd = M.join_quiet()
-    if jd: sf = dict(sf, Joining="paused") if sf else sf   # derived pause: no new join on the ledger for 90 minutes; clears on the next one
-    if sf:   # tracker-derived: one row per state, groups in a fixed order
-        rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k)) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
-        rows = [r for r in rows if r[1]]
+    agents = ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>.")
+    last = ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')
+    safe = ("Safe", f'Balances and landed answers are safe. Pending grades keep {m["pending_ttl_epochs"]} epochs.')
+    if r["moved"]:
+        rows = _recovery_rows(M, m, r) + [("Joining", E(M.join_line())),
+                ("Working", 'Self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), balances, <a href="/txs">explorer</a>.'), safe, agents, last]
     else:
-        rows = [("Paused", "Hosted mining, grading" + ("" if jo and not jd else ", joining") + ".")]
-    jw = jo and not jd and "Joining" not in sf
-    rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
-            ("Safe", f'About {lo} to {hi} hours. Pending grades keep {m["pending_ttl_epochs"]} epochs. Finalized height {m["parked_checkpoint"]:,} is parked by design.'),
-            ("Agents", "Check hourly at a random minute. Back off 30s, 2m, 10m. After a 502, read the receipt before resubmitting. Watch <code>system_notice</code>."),
-            ("Last hour", f'<span class="num">{sn["answers"]:,}</span> {"answer" if sn["answers"] == 1 else "answers"} · <span class="num">{sn["seals"]:,}</span> {"seal" if sn["seals"] == 1 else "seals"} landed')]
+        if jd: sf = dict(sf, Joining="paused") if sf else sf   # derived pause: no new join on the ledger for 90 minutes; clears on the next one
+        if sf:   # tracker-derived: one row per state, groups in a fixed order
+            rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k)) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
+            rows = [x for x in rows if x[1]]
+        else:
+            rows = [("Paused", "Hosted mining, grading" + ("" if jo and not jd else ", joining") + ".")]
+        jw = jo and not jd and "Joining" not in sf
+        rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
+                 ("Safe", f'Pending grades keep {m["pending_ttl_epochs"]} epochs. Finalized height {m["parked_checkpoint"]:,} is parked by design.'), agents, last]
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
                 f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
+
+ROUTE_TAG = {"open": ("ok", "Open"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
+
+def _recovery_rows(M, m, r):
+    """Live rows after the checkpoint moved. Every figure comes from our own mirror or route read; no reopen time anywhere."""
+    from . import hosted as R
+    from decimal import Decimal
+    rt = R.current(); lead, tail = M._recovery_line()
+    rest = "Operators bring hosted endpoints back in stages while they watch system health."
+    now = f"{E(lead)}. {E(tail)} {rest}" if lead != "Recovery in progress" else f"Recovery in progress. {rest}"
+    lis = "".join(f'<li data-hroute="{k}"><span>{E(v["label"])}</span><span class="tag {ROUTE_TAG[v["state"]][0]}">{ROUTE_TAG[v["state"]][1]}</span></li>' for k, v in rt.items())
+    ck = R.checked_at()
+    routes = (f'<ul class="hrl">{lis}</ul><p class="hrm dim small">'
+              + (f"Checked {rel(ck)}. " if ck else "First check pending. ")
+              + "One keyless read per route every 15 minutes. Paused routes answer at once with a short status.</p>")
+    sr = r["state_root"]
+    root = f' State root <code class="sr" title="{E(sr)}">{E(sr[:12])}…{E(sr[-8:])}</code>.' if isinstance(sr, str) and len(sr) > 24 else ""
+    cp = f'<span class="num">{r["checkpoint"]:,}</span>, up from <span class="num">{r["previous_checkpoint"]:,}</span>.{root}'
+    try: sup = f'{Decimal(r["supply"]):,}'
+    except Exception: sup = None
+    if sup is None: supply = "···"
+    elif r["supply_intact"]: supply = f'<span class="num">{sup}</span> POA, unchanged across the checkpoint. Balances intact.'
+    else: supply = f'<span class="num">{sup}</span> POA (<span class="num">{Decimal(r["supply_before"]):,}</span> at {r["previous_checkpoint"]:,}).'
+    ts = A._ts(r["status_as_of"])
+    fresh = ("is fresh" if r["status_fresh"] else "is not fresh") + (f", as of {rel(ts)}" if ts else "")
+    cnt = (f' Tx counters restarted at the new checkpoint: <span class="num">{int(r["txs"]):,}</span> {"tx" if r["txs"] == 1 else "txs"}, '
+           f'<span class="num">{int(r["final"] or 0):,}</span> final.') if isinstance(r["txs"], int) else ""
+    ob = r["open_ballots"]
+    ep = (f'<span class="num">{r["epochs_closed"]:,}</span> closed' if isinstance(r["epochs_closed"], int) else "···") + (
+        "" if ob is None else ". No open ballots." if ob == 0 else f'. <span class="num">{ob}</span> open {"ballot" if ob == 1 else "ballots"}.')
+    n = m["notice"]
+    nt = "···" if n is None else f'<code>{E(n["id"] or "")}</code> {"active" if n["active"] else "no longer active"}.'
+    return [("Now", now), ("Routes", routes), ("Checkpoint", cp), ("Supply", supply), ("Status", f"<code>/api/status</code> {fresh}.{cnt}"),
+            ("Epochs", ep), ("Notice", nt)]
 
 def status_page(title="Network upgrade"):
     """/upgrade serves the Health tab under its own title and preview while the upgrade is on (/status redirects to the tab)."""

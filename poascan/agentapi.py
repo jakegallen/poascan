@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.4"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.5"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -647,8 +647,8 @@ def openapi():
                                                     "checkpoint_age_s": {"type": ["integer", "null"], "description": "Seconds since the checkpoint height last changed (from our own status snapshots)"},
                                                     "blocks_since_checkpoint": {"type": ["integer", "null"], "description": "Chain height minus checkpoint height"},
                                                     "maintenance": {"$ref": "#/components/schemas/Maintenance"}}},
-                            "Maintenance": {"type": "object", "description": "Staged network maintenance on minepoa.com (LabLeak post 1357). active is true while POAScan's switch is on and the checkpoint is still at parked_checkpoint; it clears itself once the checkpoint moves.",
-                                            "properties": {"active": {"type": "boolean"}, "cleared_by": {"type": ["string", "null"], "enum": [None, "switch_off", "checkpoint_moved", "expired"]},
+                            "Maintenance": {"type": "object", "description": "Staged network maintenance on minepoa.com (LabLeak post 1357). active is true while POAScan's switch is on and mining is not back: it clears itself once the mining route answers as open and the hardening notice is no longer active (cleared_by mining_back). phase is parked (checkpoint at parked_checkpoint) or recovery (it moved on; routes reopen in stages).",
+                                            "properties": {"active": {"type": "boolean"}, "cleared_by": {"type": ["string", "null"], "enum": [None, "switch_off", "mining_back", "checkpoint_moved", "expired"]},
                                                            "post_id": {"type": "integer"}, "post_url": {"type": "string"}, "started_at": {"type": "string", "format": "date-time"},
                                                            "expected_window_h": {"type": "array", "items": {"type": "integer"}, "description": "expected mining downtime, low and high, in hours"},
                                                            "paused": {"type": "array", "items": {"type": "string"}}, "working": {"type": "array", "items": {"type": "string"}},
@@ -660,7 +660,12 @@ def openapi():
                                                            "stays_live": {"type": ["array", "null"], "items": {"type": "string"}}, "self_custody": {"type": "string"},
                                                            "parked_checkpoint": {"type": "integer"}, "checkpoint": {"type": ["integer", "null"], "description": "current checkpoint height from /api/status"},
                                                            "auto_clear": {"type": "string"}, "halted_list_public": {"type": "boolean", "description": "false: minepoa.com publishes no unauthenticated list of halted endpoints"},
-                                                           "url": {"type": "string"}}}},
+                                                           "url": {"type": "string"},
+                                                           "phase": {"type": "string", "enum": ["parked", "recovery"]}, "headline": {"type": "string", "description": "the home strip line"}, "headline_short": {"type": "string", "description": "the home strip line at 390px"},
+                                                           "hosted_routes": {"type": "object", "additionalProperties": {"type": "string", "enum": ["paused", "open", "unknown"]}, "description": "mining, grading, send, swap_offer, vote, export from one keyless read per route every 15 min; unknown when no read in the last hour"},
+                                                           "hosted_routes_checked_at": {"type": ["string", "null"], "format": "date-time"},
+                                                           "notice": {"type": ["object", "null"], "description": "the hardening system notice (id, active, issued_at, expires_at) from /api/notices; null before the first read"},
+                                                           "recovery": {"type": "object", "description": "public recovery facts from POAScan's mirror: moved, checkpoint, previous_checkpoint, state_root, supply, supply_before, supply_intact, status_as_of, status_age_s, status_fresh, txs, final, epochs_closed, open_ballots"}}}},
                 "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
                             "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 
@@ -706,7 +711,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.
-- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true during staged network maintenance (hosted mining and grading paused, self-custody mining via POST /api/submit keeps working, checkpoint parked; see {BASE}/upgrade). maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned or back per surface group. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
+- Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true during staged network maintenance (hosted mining and grading paused, self-custody mining via POST /api/submit keeps working; see {BASE}/upgrade). maintenance.hosted_routes gives paused, open or unknown for mining, grading, send, swap_offer, vote and export; maintenance.recovery carries the checkpoint, state_root, supply and status freshness. maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned or back per surface group. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
 - Stability: v1 only gets additive changes. Breaking changes ship under /api/v2, with notice. Changelog: https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md
 

@@ -507,7 +507,13 @@ from poascan import analytics as A, maint as M
 def fresh(): A._cache.clear(); return A.freshness()
 out = dict(up=fresh()["state"])
 h0 = A.health; A.health = lambda: dict(h0(), live_last_ok=time.time() - 3600); out["stale"] = fresh()["state"]; A.health = h0
-s0 = A.status; A.status = lambda: dict(s0(), checkpoint_height=M.PARKED + 1); out["moved"] = fresh()["state"]; out["cleared"] = M.state()["cleared_by"]; A.status = s0
+s0 = A.status; A.status = lambda: dict(s0(), checkpoint_height=M.PARKED + 1); out["moved"] = fresh()["state"]; out["cleared"] = M.state()["cleared_by"]
+from poascan import db, hosted as R
+db.put_blob("notices", {"active": [{"id": M.NOTICE_ID, "expires_ts": time.time() + 3600}]})
+db.put_blob(R.BLOB, {"routes": {"mining": {"state": "open", "since": time.time(), "checked": time.time()}}, "ts": time.time()})
+out["open_noticed"] = M.state()["cleared_by"]
+db.put_blob("notices", {"active": []}); out["mining_back"] = M.state()["cleared_by"]; out["back_state"] = fresh()["state"]
+db.put_blob(R.BLOB, {}); db.put_blob("notices", {}); A.status = s0
 print(json.dumps(out))
 """
 
@@ -587,7 +593,7 @@ def maintenance(base, root, env, check):
     card = s[s.index('id="upgrade"'):]; card = card[:card.index("</section>")]
     check("maintenance: Network → Health upgrade card sits above the stats with paused, working, safe, agents, last hour, the post and one prompt box",
           s.index('id="upgrade"') < s.index('class="stats eight"') and all(f"<dt>{k}</dt>" in card for k in ("Paused", "Working", "Safe", "Agents", "Last hour"))
-          and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" in card and "24,371" in card
+          and "lableak/#/post/1357" in card and card.count('class="pbox"') == 1 and "data-copy-prompt" in card and "24 to 72" not in card and "24,371" in card
           and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
     check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
           st.count('class="upn"') == 1 and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
@@ -623,8 +629,9 @@ def maintenance(base, root, env, check):
     check("maintenance: answer and grade prompts carry the pause guard", "paused for a network upgrade" in ask.replace("&#x27;", "'"))
     r = subprocess.run([sys.executable, "-c", MAINT_CHECK], cwd=root, env=env, capture_output=True, text=True)
     o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
-    check(f"maintenance: Stale still wins, and moving past the parked checkpoint clears it {o}",
-          o.get("up") == "up" and o.get("stale") == "stale" and o.get("moved") in ("live", "lag") and o.get("cleared") == "checkpoint_moved")
+    check(f"maintenance: Stale still wins; a moved checkpoint keeps it on (recovery); mining open with the notice gone clears it {o}",
+          o.get("up") == "up" and o.get("stale") == "stale" and o.get("moved") == "up" and o.get("cleared") is None
+          and o.get("open_noticed") is None and o.get("mining_back") == "mining_back" and o.get("back_state") in ("live", "lag"))
 
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""

@@ -9,6 +9,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.5] - 2026-10-22
+
+### Changed
+
+- Network upgrade, recovery phase. The checkpoint moving past 24,371 no longer ends maintenance: Upgrading stays on until the mining route answers as open and the hardening notice (`2026-10-21-hardening`) is no longer active (`cleared_by: mining_back`). The week-long safety stop only applies while no fresh route read shows a pause.
+- Home strip reads live state: "Recovery in progress: new checkpoint 33,463, balances intact. Mining and grading reopen in stages." (390px: "Recovering. Mining still paused."). It switches by itself to "Mining reopened", "Grading reopened" or "Mining and grading reopened" as routes open, and the live snapshot updates it in place.
+- `/upgrade` shows the recovery from POAScan's own mirror: a per-route list (Mining, Grading, Send, Swap offers, Voting, Export: Paused or Open), checkpoint and state root, supply against the parked checkpoint, `/api/status` freshness and tx counters, epochs closed and open ballots, and whether the hardening notice is active. No reopen time anywhere; the 24 to 72 hour window is gone from the card and the agent prompt, and agents are told to check once an hour at a random minute with no retry loops.
+- Upgrade preview image and meta description follow the same state.
+
+### Added
+
+- Hosted route check (`poascan/hosted.py`): during maintenance only, one keyless GET per hosted route (mine, grade, send, swap-offer, vote, export; no query string, no key, no redirects, first 2 KB) every 15 minutes, with a 10 minute floor kept in the database so restarts never add a round. A 429 or an unexplained 5xx ends the round and skips the next. `POASCAN_ROUTE_CHECK=0` turns it off.
+- `meta.maintenance` gains `phase`, `headline`, `headline_short`, `hosted_routes`, `hosted_routes_checked_at`, `notice` and `recovery` (additive).
+- `tools/recovery_test.py` in CI.
+
 ## [1.26.4] - 2026-10-22
 
 ### Fixed
