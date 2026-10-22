@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.20.0] - 2026-10-22
+
+### Added
+
+- `GET /api/v1/agents/{agent}/addresses`: `{agent, addresses: [{chain, address, verified_at}]}`, an Agent's verified external chain addresses, sorted by chain. Addresses and the verified flag come from minepoa.com `/api/chains` (only links marked verified; one `ethereum` entry covers every EVM chain, Base included). The network publishes no verification time, so `verified_at` (ISO 8601 UTC) is the ledger time of the newest finalized `chains-update` tx in which the Agent registered that address with its proof; null when that tx is not in the archive. Empty list for a known Agent without links; 404 JSON for an unknown Agent.
+- `/api/v1/address/{address}` and the `get_address` MCP tool gain `addresses`, the same list.
+- `/api/v1/swaps` and `/api/v1/swaps/{offer_id}`: every filled row carries `fill_epoch` (integer or null), the network epoch the swap-fill tx landed in, placed by its ledger time against the archived close times. Null when it cannot be determined yet (a fill after the newest archived close before a status read confirms no later close). Unfilled rows leave it out.
+- The indexer reads each `chains-update` tx body once through the existing rate-limited tx read (at most 10 per 10 minutes).
+
 ## [1.19.2] - 2026-10-21
 
 ### Changed

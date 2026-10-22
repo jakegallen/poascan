@@ -4,7 +4,7 @@ from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
 from . import keysafe as KS
-from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC
+from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -52,7 +52,12 @@ def api(path, qs):
     if m:
         a = m.group(1); p = G.profile(a); d, err = V.fetch_address(a)
         return dict(address=a, balance=(d or {}).get("balance"), rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
-                    forum_name=p["forum_name"], established=a in A.established_set(), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+    m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a) or not LK.known(a): raise NotFound("unknown agent")
+        return dict(agent=a, addresses=LK.addresses(a)), False
     m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
     if m:
         r = RC.receipt(m.group(1), fetch=True)
@@ -211,6 +216,7 @@ IMMUTABLE = "public, max-age=31536000, immutable"
 QS_RX = re.compile(r"\?[^\s\"]*")
 
 class BadRequest(Exception): pass
+class NotFound(Exception): pass   # a known route with an unknown subject: 404 with the reason
 
 class H(BaseHTTPRequestHandler):
     timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
@@ -414,6 +420,7 @@ class H(BaseHTTPRequestHandler):
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
                 try: data, is_list = api(p, qs)
+                except NotFound as e: return self.send(404, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
                 except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION})
                 m = AG.meta(); mh = AG.meta_headers(m)

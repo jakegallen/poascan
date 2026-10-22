@@ -17,10 +17,12 @@ def _verified(chains, addr):
 def enrich(rows):
     """Additive fields on offer rows, each only where POAScan already holds the data (no extra upstream reads):
     timeline (ledger swap txs, then expiry), maker_chains and taker_chains (verified links), and on fills
-    fee_poa, fill_atts and fill_final. A field with no data is left out, never sent as null."""
+    fee_poa, fill_atts and fill_final. A field with no data is left out, never sent as null, except fill_epoch:
+    every filled row carries it, null when the host cannot place the fill in an epoch. Unfilled rows leave it out."""
     rows = [dict(r) for r in rows]
     if not rows: return rows
     ch = S.chains(); ev = S.events_all(); marks = H.tx_marks([r.get("fill_txid") for r in rows])
+    ep = getattr(H, "epoch_of_ts", None)   # optional host hook: network epoch of a ledger timestamp
     for r in rows:
         tl = [dict(event=EVENT.get(e["kind"], e["kind"]), ts=e["ts"], txid=e["txid"]) for e in ev.get(r["offer_id"], [])]
         if r.get("status") == "expired" and r.get("expires_ts"): tl.append(dict(event="expired", ts=r["expires_ts"]))
@@ -30,6 +32,7 @@ def enrich(rows):
         t = _verified(ch, r.get("taker"))
         if t: r["taker_chains"] = t
         if r.get("status") == "filled":
+            r["fill_epoch"] = ep(r.get("fill_ts")) if ep else None   # always on fills: null when the epoch is not determinable
             if r.get("fee_bp") is not None and r.get("poa"): r["fee_poa"] = round(r["poa"] * r["fee_bp"] / 10000, 6)
             mk = marks.get(r.get("fill_txid"))
             if mk:

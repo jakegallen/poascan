@@ -3,9 +3,9 @@
 in-process caches); none of them calls minepoa.com."""
 import decimal, json, os, re, time, threading, collections
 from html import escape as E
-from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR
+from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.19.2"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.20.0"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -145,7 +145,7 @@ def t_address(args):
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk,
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())}, established=a in A.established_set(),
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
-                census=p["census"], family_size=(p["family"] or [None, None])[1], invited_by=acc["invited_by"] if acc else None,
+                census=p["census"], family_size=(p["family"] or [None, None])[1], addresses=LK.addresses(a), invited_by=acc["invited_by"] if acc else None,
                 invitees=inv, recent_txs=txs, next_tx_cursor=nxt, tx_types=HI.type_counts(a), coverage=HI.coverage(a),
                 **({"grading": grd, "calibration": CA.one(a)} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
@@ -299,7 +299,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it to pin or verify a close record; it returns the hash, not the record body. For readable close stats use get_epoch.",
      S(epoch=EPOCH_P), t_epoch_record),
     ("get_address", "Address",
-     "Everything POAScan knows about one poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable and locked, streak, forum name, self-reported model, invites, "
+     "Everything POAScan knows about one poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable and locked, streak, forum name, self-reported model, invites, verified external addresses, "
      "and its full archived tx history newest first with a coverage note (the archive can miss txs; nonce_gap shows how many). Page the history with tx_cursor and filter it with tx_type. "
      "grading=true adds the address's grading assignments with the seal tx for each, plus its advisory grader calibration. Use it for any question about one Agent; use list_agents to walk every Agent and search when you only have a name.",
      dict(S(address=ADDR_P,
@@ -480,7 +480,10 @@ def openapi():
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="Served from the archive; a tx not yet archived is fetched once from minepoa.com and cached."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
-                                      desc="CSV returns the address's transactions. Balance is refreshed from minepoa.com at most once a minute per address."),
+                                      desc="CSV returns the address's transactions. Balance is refreshed from minepoa.com at most once a minute per address. addresses is the same list as /api/agents/{agent}/addresses."),
+        "/api/agents/{agent}/addresses": _op("An Agent's verified external chain addresses with the time each was verified", {"type": "object", "additionalProperties": True, "properties": {"agent": {"type": "string"}, "addresses": {"type": "array", "items": {"type": "object", "properties": {"chain": {"type": "string"}, "address": {"type": "string"}, "verified_at": {"type": ["string", "null"], "format": "date-time"}}}}}},
+                                             [_p("agent", "poa1 address of the Agent", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getAgentAddresses", tag="agents",
+                                             desc="addresses: one {chain, address, verified_at} per chain as the network lists them (today solana and ethereum; the network's one ethereum entry covers every EVM chain, Base included), sorted by chain; only links minepoa.com /api/chains marks verified:true (archived hourly). verified_at (ISO 8601 UTC) is the time of the newest finalized chains-update tx in which the Agent registered that address with its ownership proof, from POAScan's ledger archive; null when that tx is not in the archive. Empty list for a known Agent with no verified link; 404 JSON for an unknown Agent. Method: https://poascan.io/about#addresses"),
         "/api/receipt/{hash}": _op("Answer receipt for one answer (challenge) tx", {"$ref": "#/components/schemas/Receipt"}, [_p("hash", "64-hex answer tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getReceipt", tag="agents",
                                    desc="Built from the archived tx, close records (basis.pending, basis.settled, rewards) and cached grade-sealed txs. Unknown fields are null. Method: https://poascan.io/about#receipts"),
         "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "max 200", {"type": "integer", "default": 50, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
@@ -507,13 +510,13 @@ def openapi():
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token",
-                          desc="One row per offer. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx)."),
+                          desc="One row per offer. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
-                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final); events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
+                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final, fill_epoch); events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -687,6 +690,7 @@ Tools ({len(TOOLS)}):
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
+- Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Add .csv to list endpoints for CSV.

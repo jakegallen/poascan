@@ -303,6 +303,16 @@ def job_sample(n=20):
                  (r["id"], r["from_addr"], body.get("epoch", r["epoch"]), r["ts"], c["len"], c["slot_template"], c["prompt_echo"], c["prefix4"],
                   int(time.time()), body.get("answer", ""), c["lang"]))
 
+def job_links(n=10):
+    """Each chains-update tx's body (the linked chain addresses), read once through the same rate-limited tx read the
+    explorer uses, so verified_at can come from the ledger. Already-stored final txs are never read again."""
+    rows = db.q("""SELECT t.id FROM txs t LEFT JOIN tx_detail d ON d.id = t.id WHERE t.type = 'chains-update'
+                   AND (d.id IS NULL OR (d.final = 0 AND t.final = 1)) ORDER BY t.ts DESC LIMIT ?""", (n,))
+    for r in rows:
+        try: get_tx_detail(r["id"])
+        except Busy: break
+        time.sleep(1.0)
+
 # ---------------- seeding from earlier public snapshots (optional) ----------------
 def seed(seed_dir):
     """Import previously captured public snapshots (same endpoints) so a fresh box has history."""
@@ -381,6 +391,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("hourly", job_hourly_meta, 3600, None),
     ("forum", job_forum, 1800, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
+    ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
     ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
