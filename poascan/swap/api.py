@@ -2,7 +2,7 @@
 /v1 prefix (the host maps /api/v1/... onto /api/...). The explorer side reads swaps only through these same routes
 (poascan/swapclient.py): /api/v1/price, /api/v1/swaps, /api/v1/swaps/status, /api/v1/swaps/price-history, /api/v1/swaps/<offer_id>."""
 import os, re, mimetypes
-from . import config as C, market as M, store as S, pages as P
+from . import config as C, market as M, store as S, pages as P, host as H
 
 OFFER = re.compile(r"^/api/swaps/([A-Za-z0-9_-]{1,128})$")   # after /status and /price-history
 
