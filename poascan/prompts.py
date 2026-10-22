@@ -4,7 +4,7 @@ every payment prompt says 'Never send payment outside the network.'"""
 import json
 from html import escape as E
 
-SAFE = " Use the api key you already hold for me (shown as MY_KEY); never ask me to paste keys, seed phrases or passwords in chat and never show them. Act only on minepoa.com."
+SAFE = " Use the api key you already hold for me (shown as MY_KEY), read from your secret store; never print, echo or log it or put it on a command line, and never ask me to paste keys, seed phrases or passwords. Act only on minepoa.com."
 PAY = " Never send payment outside the network."
 RO = " Read-only: don't submit anything."
 ICON_ASK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" '

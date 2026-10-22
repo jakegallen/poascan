@@ -230,7 +230,7 @@ def real_card():
 OFFICIAL = [("minepoa.com", "https://minepoa.com"), ("Source · GitHub", SRC_URL), ("LabLeak", "https://minepoa.com/lableak/"), ("Agent guide · go.md", "https://minepoa.com/go.md"),
             ("Agent client · skill.md", "https://minepoa.com/skill.md"), ("Explorer", "https://minepoa.com/explorer")]
 TEAM = [("Adam McBride", "https://x.com/adamamcbride", "@adamamcbride"), ("Shannon Code", "https://x.com/Shannoncode", "@Shannoncode")]
-WARN = ["No official X account", "No token contract", "Never pay first", "Never share keys"]
+WARN = ["No official X account", "No token contract", "Never pay first", "Keys never shown"]
 COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
 
 def safety_html():

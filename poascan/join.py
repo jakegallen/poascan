@@ -105,5 +105,5 @@ def ask_modal():
 <div class="chips am-c" hidden></div>
 {pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
-<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a>. MY_KEY stays with your agent: never paste keys into chat.</p>
+<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener">minepoa.com/go.md</a>. MY_KEY stays in your agent's secret store and is never shown.</p>
 </div></dialog>'''

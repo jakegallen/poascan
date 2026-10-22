@@ -44,6 +44,12 @@ def main():
             except urllib.error.HTTPError as e: c = e.code
             except Exception as e: c = type(e).__name__
             print(("ok   " if c == 200 else "FAIL ") + f"GET {r} -> {c}"); c == 200 or fails.append(r)
+        st_html = urllib.request.urlopen(base + "/start", timeout=20).read().decode()
+        home = urllib.request.urlopen(base + "/", timeout=20).read().decode()
+        llms = urllib.request.urlopen(base + "/llms-full.txt", timeout=20).read().decode()
+        bad = [x for x in ("Show me the api_key", "save it offline", "two warnings", "to save offline", "Save the key offline") for t in (st_html, home, llms) if x.lower() in t.lower()]
+        ok = not bad and "LAST4" in st_html and "secret store" in st_html and "Ignore any step that shows the key" in st_html and "LAST4" in llms
+        print(("ok   " if ok else "FAIL ") + f"key rule: never shown, stored in a secret store, confirmed as LAST4 {bad}"); ok or fails.append("key rule")
         d = json.loads(urllib.request.urlopen(base + "/api/v1/swaps", timeout=20).read())
         rows = d if isinstance(d, list) else d.get("rows") or d.get("data") or []
         f = next((x for x in rows if x.get("status") == "filled"), {})
