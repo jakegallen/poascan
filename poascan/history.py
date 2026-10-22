@@ -1,5 +1,5 @@
 """Full address history from the archive (keyset paging) and grading assignments per grader from the close records."""
-import base64, json, threading
+import base64, collections, json, threading, time
 from . import db, analytics as A
 
 LIMIT_MAX = 200
@@ -94,9 +94,25 @@ def _one(g, t, r, ix, seal_ts, seal_as):
     return dict(answer=t, since=p[2] if p else None, status=status, close=close, seat=("panel" if on else "off_panel") if p else None,
                 sealed=sealed, evidence=ev, in_record=in_rec if sealed else None, seal_tx=tx, seal_ts=ts)
 
-def assignments(g, cursor=None, limit=50):
-    """Grading assignments of one grader, newest origin first, keyset on (since, answer)."""
-    limit = max(1, min(LIMIT_MAX, int(limit))); ix = grading_index()
+# Per grader: the full sorted assignment list and its summary. An address page asks for it on every view (the Grading
+# tab count), so it is cached, keyed on what it is built from: the grading index (epochs blob id and ts) and this
+# grader's seal rows (count and highest rowid in txs and tx_detail; a late detail is an INSERT OR REPLACE, a new rowid).
+# ASSIGN_TTL bounds the one input outside the key: an answer tx archived later can turn 'unrecorded' into a known epoch.
+ASSIGN_TTL = 300
+ASSIGN_MAX = 256
+_alock = threading.Lock(); _acache = collections.OrderedDict()   # g -> (key, computed_at, out, summary, last)
+
+def _seal_mark(g):
+    r = db.q1("SELECT COUNT(*) AS n, MAX(t.rowid) AS r, MAX(d.rowid) AS dr FROM txs t LEFT JOIN tx_detail d ON d.id = t.id "
+              "WHERE t.from_addr = ? AND t.type = 'grade-sealed'", (g,)) or {}
+    return (r.get("n"), r.get("r"), r.get("dr"))
+
+def _assign_all(g):
+    ix = grading_index(); key = (_gx["key"], _seal_mark(g))
+    with _alock:
+        hit = _acache.get(g)
+        if hit and hit[0] == key and time.time() - hit[1] < ASSIGN_TTL:
+            _acache.move_to_end(g); return hit[2], hit[3], hit[4]
     rows = db.q("SELECT t.id, t.ts, json_extract(d.json, '$.body.assignment') AS a FROM txs t LEFT JOIN tx_detail d ON d.id = t.id "
                 "WHERE t.from_addr = ? AND t.type = 'grade-sealed'", (g,))
     seal_ts, seal_as = {}, {}
@@ -117,8 +133,18 @@ def assignments(g, cursor=None, limit=50):
                    unknown=sum(1 for o in out if o["sealed"] is None), seal_txs_indexed=len(rows),
                    seal_txs_linked=len(ts_used), not_in_record=sum(1 for o in out if o["evidence"] == "tx" and o["in_record"] is False and o["status"] != "awaiting_close"),
                    after_close=sum(1 for o in out if o["evidence"] == "tx" and (o["in_record"] is None or o["status"] == "awaiting_close")))
+    with _alock:
+        _acache[g] = (key, time.time(), out, summary, ix["last"]); _acache.move_to_end(g)
+        while len(_acache) > ASSIGN_MAX: _acache.popitem(last=False)
+    return out, summary, ix["last"]
+
+def assignments(g, cursor=None, limit=50):
+    """Grading assignments of one grader, newest origin first, keyset on (since, answer)."""
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    out, summary, last = _assign_all(g)
     if cursor:
         sv, ans = dec(cursor, 2); k = (int(sv), str(ans))
         out = [o for o in out if (o["since"] if o["since"] is not None else -1, o["answer"]) < k]
-    page = out[:limit]; nxt = enc(page[-1]["since"] if page[-1]["since"] is not None else -1, page[-1]["answer"]) if len(out) > limit else None
-    return dict(summary, rows=page, next_cursor=nxt, as_of_close=ix["last"])
+    page = [dict(o) for o in out[:limit]]   # copies: the cached rows are shared between requests
+    nxt = enc(page[-1]["since"] if page[-1]["since"] is not None else -1, page[-1]["answer"]) if len(out) > limit else None
+    return dict(summary, rows=page, next_cursor=nxt, as_of_close=last)

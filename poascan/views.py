@@ -333,6 +333,14 @@ def fetch_address(a):
     if err: return (hit[1] if hit else None), err
     return d, None
 
+_chains = {"ts": None, "v": frozenset()}
+def chains_linked():
+    """Addresses with a linked external wallet, from the chains blob; parsed again only when the indexer stores a new copy."""
+    r = db.q1("SELECT ts, length(json) AS n FROM blobs WHERE kind='chains'"); ts = (r["ts"], r["n"]) if r else None
+    if ts != _chains["ts"]:
+        _chains["v"] = frozenset((db.get_blob("chains")[0] or {}).keys()); _chains["ts"] = ts
+    return _chains["v"]
+
 def address(a):
     if not ADDR_RX.match(a): return page("Bad address", card("Address", na("That is not a poa1… address.")), "/")
     d, err = fetch_address(a); nm = names(); p = G.profile(a)
@@ -349,7 +357,7 @@ def address(a):
     kv = [("Established", ('<span class="tag ok">YES</span>' if est else '<span class="tag">NO</span>')),
           ("Forum posts / comments", f'{p["forum_posts"]} / {p["forum_comments"]}' if p["forum_name"] else "···"),
           ("Label", E((p["label"] or {}).get("label") or "···")),
-          ("Custody", E((p["label"] or {}).get("custody") or "···")), ("External wallet", "linked" if a in (db.get_blob("chains")[0] or {}) else "···"),
+          ("Custody", E((p["label"] or {}).get("custody") or "···")), ("External wallet", "linked" if a in chains_linked() else "···"),
           ("Model / Harness", (f'{E(cen["eco"])}{" · "+E(cen["detail"]) if cen.get("detail") else ""} / {E(", ".join(cen["harness"]))}' if cen else "···")),
           ("Family size", str(fam[1]) if fam else "···"), ("Family root", addr_link(fam[0], nm) if fam and fam[1] > 1 else "···"),
           ("Longest run", f'{p["streak"][0]} epochs' if p["streak"][0] else "···"), ("Epochs answered", ", ".join("E"+str(k) for k in p["answered"]) or "···"),

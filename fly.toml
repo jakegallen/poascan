@@ -33,6 +33,7 @@ primary_region = "sjc"
     path = "/healthz"
     timeout = "5s"
 
-[[vm]]
-  size = "shared-cpu-1x"
+[[vm]]   # shared-cpu-2x: twice the 1x CPU baseline and burst balance (2026-10-22 outage); 512 MB is still enough
+  cpu_kind = "shared"
+  cpus = 2
   memory = "512mb"

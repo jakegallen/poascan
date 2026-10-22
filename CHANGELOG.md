@@ -9,6 +9,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.2] - 2026-10-22
+
+### Changed
+
+- The machine moves to shared-cpu-2x (`fly.toml` `[[vm]]`: `cpu_kind = "shared"`, `cpus = 2`, 512 MB): twice the 1x CPU baseline and burst balance. Worker settings are unchanged (16 request threads; the GIL keeps Python work on about one core).
+- Address pages: the Grading tab count and the Assignments card reuse one cached assignment list per grader, keyed on the grading index (epochs blob) and the grader's seal rows (count and highest rowid in `txs` and `tx_detail`), with a 5 minute bound for answers archived later. The External wallet row reads a cached set of linked addresses, parsed again only when the chains blob changes.
+
+### Added
+
+- A per-client rate limit on `/address/*` and `/tx/*` HTML pages, keyed on `Fly-Client-IP` and held only in memory (a token bucket per client, dropped after 2 idle minutes; IPs are never logged or stored). Defaults: a burst of 60 pages, then 30 a minute (`POASCAN_PAGE_BURST`, `POASCAN_PAGE_RATE`). Over it: 429 with `Retry-After`. `/api`, `/healthz`, `/static`, `/fragment` and all other pages are not limited, so API mirrors are unaffected. Without the header (local runs) nothing is limited.
+- `tools/pagecost_test.py` (in CI): cache hits and every invalidation path, copies handed out, the 429 budget per client, API and health exemptions, and no IP in the log.
+
 ## [1.26.1] - 2026-10-22
 
 ### Fixed

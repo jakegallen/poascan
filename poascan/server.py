@@ -168,6 +168,12 @@ from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
+# GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
+# A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
+# /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
+PAGE_LIMIT = AG.Limiter(float(os.environ.get("POASCAN_PAGE_RATE", "0.5")), int(os.environ.get("POASCAN_PAGE_BURST", "60")))
+PAGE_LIMITED = re.compile(r"^/(address|tx)/[^/]+$")
+_fci_seen = [False]
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
           + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
@@ -382,6 +388,18 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             log.error("ops network: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
+    def page_limited(self):
+        """True after sending a 429 for an /address or /tx page over the per-client budget. Keyed on Fly-Client-IP only:
+        without it (local runs) nothing is limited, since every request would share the proxy address. The IP is never logged."""
+        ip = (self.headers.get("Fly-Client-IP") or "").strip()
+        if not _fci_seen[0]:
+            _fci_seen[0] = True; log.info("page limit: Fly-Client-IP header present=%s", bool(ip))   # presence only, once per process
+        if not ip: return False
+        ok, wait = PAGE_LIMIT.allow(ip)
+        if ok: return False
+        self.send(429, "Too many page requests. Please slow down; the JSON API at /api/v1 is the better fit for bulk reads.\n", TXT,
+                  {"Retry-After": str(wait), "Cache-Control": "no-store"})
+        return True
     def do_GET(self):
         if self.key_guard(): return
         if self.www(): return
@@ -389,6 +407,7 @@ class H(BaseHTTPRequestHandler):
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         V.REQ.path, V.REQ.qs = path, qs
+        if PAGE_LIMITED.match(path) and self.page_limited(): return
         if path == "/ops/visits": return self.ops_visits(path, qs)
         if path == "/ops/network": return self.ops_network(path, qs)
         try:
