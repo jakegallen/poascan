@@ -86,18 +86,31 @@ KEYLINE = "Your agent stores its key privately. Never paste it anywhere."
 # Chat apps come from join.APPS (shared with the Join and Ask modals); Cursor's documented prompt deeplink
 # (cursor.com/docs/integrations/deeplinks, web form, max 10,000 characters) opens Cursor with the prompt prefilled.
 CURSOR = ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=")
-TOP = ("Claude", "ChatGPT", "Grok Bot", "Muse")   # the four up front on /start, in order; everything else is under More
+TOP = ("Claude", "ChatGPT", "Grok", "Muse")   # the four up front on /start, in order; everything else is under More
+MORE_FIRST = ("Grok Bot",)                    # first under More, in order; the rest follow as before
 LOCK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
         '<path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>')
 
 NAME_RX = r"[A-Za-z0-9_-]{1,32}"
+def name_error(v):
+    """The /start name message, same words as app.js nameMsg (and POASwap). '' when the name is fine."""
+    import re
+    if not v: return "Name your agent to continue."
+    bad = []
+    for c in v:
+        if not re.fullmatch(r"[A-Za-z0-9_-]", c):
+            w = "space" if c == " " else c
+            if w not in bad: bad.append(w)
+    if bad: return "Not allowed: " + (bad[0] if len(bad) < 2 else ", ".join(bad[:-1]) + " and " + bad[-1]) + ". Use letters, numbers, _ or - (up to 32)."
+    return "Too long: up to 32 characters." if len(v) > 32 else ""
 def api_join(name=None):
     """GET /api/v1/prompts/join: the /start prompt as data, for other sites (POASwap) to reuse. No setup code, key or referral:
     the optional registry step is browser-made on /start and is not part of this text. ValueError on a bad name."""
     import re, hashlib
     from . import onboarding_prompt as OP, keysafe as KS
     if name is None or name == "": nm = "YOUR_NAME"
-    elif KS.has_key(name) or not re.fullmatch(NAME_RX, name): raise ValueError("name: 1 to 32 of A-Z a-z 0-9 _ -")
+    elif KS.has_key(name): raise ValueError("name: 1 to 32 of A-Z a-z 0-9 _ -")
+    elif not re.fullmatch(NAME_RX, name): raise ValueError(name_error(name) or "name: 1 to 32 of A-Z a-z 0-9 _ -")
     else: nm = name
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
@@ -108,7 +121,7 @@ def chats():
     from . import join as J
     a = [(n, k, b, p) for n, k, b, p, t in J.APPS] + [CURSOR]
     top = [x for n in TOP for x in a if x[0] == n]
-    rest = sorted((x for x in a if x[0] not in TOP), key=lambda x: x[1] != "auto")
+    rest = [x for n in MORE_FIRST for x in a if x[0] == n] + sorted((x for x in a if x[0] not in TOP + MORE_FIRST), key=lambda x: x[1] != "auto")
     return top, rest
 
 def _opt(value, shown, attrs, checked=False):
@@ -152,16 +165,18 @@ def page(page_fn, card=None, apps=None):
     from . import maint as M
     from .join import CLOSE, pbox, ARROW
     nm = default_name()
-    field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" maxlength="32" aria-labelledby="st1" '
-             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" enterkeyhint="next" data-name>'
-             '<p class="sthint">Letters, numbers, - and _</p>')
+    # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
+    field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" aria-labelledby="st1" aria-describedby="stname-hint stname-err" aria-invalid="false" '
+             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]{{1,32}}" required enterkeyhint="next" data-name>'
+             '<p class="sthint" id="stname-hint">Letters, numbers, - and _</p>'
+             '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>')
     pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
-    st = M.state()
-    join = f'<p class="sthint stjl">{E(M.join_line())}</p>' if st["active"] else ""
     n0, k0, b0, _ = chats()[0][0]
-    go = (f'<a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
-          f'<span data-golbl>{"Open " + E(n0) if k0 == "auto" else "Copy prompt"}</span>{ARROW}</a>'
-          f'<p class="gofb" data-gofb role="status" aria-live="polite">{"Opens " + E(n0) + " with the prompt." if k0 == "auto" else "Copies the prompt."}</p>' + join
+    go = (f'<div class="gorow"><a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
+          f'<span data-golbl><span class="gll">Copy prompt and open {E(n0)}</span><span class="gls">Copy and open {E(n0)}</span></span><em class="gauto"{"" if k0 == "auto" else " hidden"}>Auto</em>{ARROW}</a>'
+          '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>'
+          '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
+          '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
           + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
           + '<details class="stview"><summary>View prompt</summary>'
           + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>') + '</details>')

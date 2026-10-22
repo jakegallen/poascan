@@ -208,7 +208,7 @@ def main():
               and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
         check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
         _pb = [req(base + u)[1] for u in ("/start", "/swaps", "/how-to-buy-poa", "/api", "/how-to-mine-poa")]
-        check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
+        check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x.replace(b'<button class="gocp" type="button" data-gocopy>Copy prompt</button>', b"") and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
               and all(x.count(b'class="pcopy"') == x.count(b'<div class="pbox">') for x in _pb))
         import os as _os
         _bd = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "static", "brands")
@@ -599,8 +599,8 @@ def maintenance(base, root, env, check):
           and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
           and "lableak/#/post/1357" in um and um.count('class="pbox"') == 1 and "data-copy-prompt" in um and "24 to 72" not in um and ">Checkpoint<" in um
           and "api/receipt/TXID" in um and "system_notice" in um and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
-    check("maintenance: /start keeps the prompt and adds the live status strip and one join line; the prompt backs off and checks hourly at a random minute",
-          st.count('<p class="upstrip stup" role="status" data-live>') == 1 and st.count('class="sthint stjl"') == 1 and 'class="upn"' not in st and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
+    check("maintenance: /start keeps the prompt and the live status strip carries the state (no repeat under the button); the prompt backs off and checks hourly at a random minute",
+          st.count('<p class="upstrip stup" role="status" data-live>') == 1 and 'stjl' not in st and 'class="upn"' not in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
           and "once an hour at a random minute" in st and "try once more in an hour" in st and "api/receipt/TXID" in st
           and "minepoa.com/api/hosted/register?label=" in st and "invited_by" not in st and 'data-name' in st
           and st.index("register?label=") < st.index("go.md"))

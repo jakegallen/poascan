@@ -9,6 +9,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.13] - 2026-10-22
+
+- /start main button always copies the prompt first, inside the click (navigator.clipboard.writeText started plus a synchronous textarea copy), then opens the app in a new tab in the same gesture, so paste works wherever a prefill is ignored (Meta's Muse ignores ?prompt=) and popup blockers stay quiet. Label: "Copy prompt and open <App>" ("Copy and open <App>" at 390px), with an Auto pill where the link prefills (Claude, ChatGPT, Grok, Cursor and others). Feedback lives in the button: green and "Copied, opening <App>" (or "Copied"). If the copy fails, the prompt shows selected in a box under "Select and copy this prompt".
+- A quiet Copy prompt button next to it (start.copy / start.copyreg). The helper and join lines under the button are gone; the status strip carries the state.
+- Top four: Claude, ChatGPT, Grok, Muse (start.TOP); Grok Bot is first under More (start.MORE_FIRST).
+- Name your agent is checked live, never cut: 1 to 32 of A-Z a-z 0-9 _ -; otherwise a red line ("Not allowed: <chars>. Use letters, numbers, _ or - (up to 32).", "Name your agent to continue.", "Too long: up to 32 characters.") and steps 2 and 3 stay disabled until it is fixed. /api/v1/prompts/join returns the same message on a 400.
+- Prompt wording unchanged; per-client copied text and opened URLs identical to 1.26.12.
+
 ## [1.26.12] - 2026-10-22
 
 - /start is three numbered steps: name your agent, pick where it runs, one big button. Step 2 is one set of client choices with Claude, ChatGPT, Grok Bot and Muse up front (the order is start.TOP) and every other chat app, the PoA connector installs and the command line options behind a single More. The button opens the chosen client with the prompt, or copies it and opens the app where no prefill works, and confirms in place. Cursor joins through its documented prompt deeplink.

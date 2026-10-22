@@ -29,6 +29,10 @@ bl = dict(OP.blocks(S.prompt("n")))
 check("blocks: registration has the link, key_safety the key rule, wallet Emblem Wallet; closing the payment rule",
       bl["registration"].startswith("Open this exact link") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("1. Key:")
       and "Emblem Wallet" in bl["wallet"] and "Never send payment outside the network." in bl["closing"])
+NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
+      ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
+      ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32).")]
+check("name messages (Python mirror of app.js): " + "; ".join(S.name_error(v) or "ok" for v, _ in NE[:5]), all(S.name_error(v) == w for v, w in NE))
 d = S.api_join("test-agent-7")
 check("api_join: version, updated_ts (UTC ISO), text == /start prompt, sha256, blocks", d["version"] == OP.VERSION and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", d["updated_ts"])
       and d["text"] == S.prompt("test-agent-7") and d["sha256"] == hashlib.sha256(d["text"].encode()).hexdigest() and "".join(x["text"] for x in d["blocks"]) == d["text"])
@@ -42,7 +46,8 @@ check("api_join: no setup code, referral or key in the text", "{SETUP_CODE}" not
 
 # ---- clients
 top, rest = S.chats()
-check("client order lives in one constant: Claude, ChatGPT, Grok Bot, Muse", S.TOP == ("Claude", "ChatGPT", "Grok Bot", "Muse") and [x[0] for x in top] == list(S.TOP))
+check("client order lives in one constant: Claude, ChatGPT, Grok, Muse; Grok Bot first under More", S.TOP == ("Claude", "ChatGPT", "Grok", "Muse") and [x[0] for x in top] == list(S.TOP)
+      and S.MORE_FIRST == ("Grok Bot",) and rest[0][0] == "Grok Bot" and [x[0] for x in rest[1:4]] == ["Perplexity", "Kimi", "Z.ai"])
 check("every chat app is offered once; Cursor's prompt deeplink is under More", len(top) + len(rest) == len(J.APPS) + 1 and len({x[0] for x in top + rest}) == len(top) + len(rest)
       and ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=") in rest)
 from urllib.parse import quote
@@ -71,8 +76,15 @@ try:
           and re.search(r'value="Claude" data-kind="auto"[^>]* checked>', m) and m.count(" checked>") == 1)
     check("/start: everything else behind the single More (other chats, 8 connectors, 7 commands)", m.count("data-more") == 1 and ">More<" in m
           and len(allr) == len(J.APPS) + 1 + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
-    check("/start: one primary button, defaulting to the first client", len(re.findall(r"data-go[ >]", m)) == 1 and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl>Open Claude</span>' in m
-          and 'data-gofb role="status" aria-live="polite"' in m)
+    check("/start: one primary button for the first client: 'Copy prompt and open Claude' (short form at 390px) with the Auto pill",
+          len(re.findall(r"data-go[ >]", m)) == 1 and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em>' in m)
+    check("/start: a quiet Copy prompt button next to it; no helper or join lines under the button; the fallback box is hidden",
+          '</a><button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' in m and '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>' in m
+          and "stjl" not in m and "Opens Claude" not in m and "starts earning once" not in m[m.index("data-go "):]
+          and '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly' in m)
+    check("/start: name field is checked live, never cut: no maxlength, aria-invalid, aria-describedby, an assertive live error line",
+          "maxlength" not in m[m.index('id="stname"'):m.index('id="stname"') + 600] and 'aria-describedby="stname-hint stname-err" aria-invalid="false"' in m
+          and '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>' in m)
     view = m[m.index('<details class="stview">'):]
     check("/start: the prompt sits collapsed behind View prompt, with its Copy, and is the template text", '<details class="stview"><summary>View prompt</summary>' in m
           and "<details class=\"stview\" open" not in m and m.count("data-copy-prompt") == 1 and m.index("data-go") < m.index("stview") < m.index("data-copy-prompt")
@@ -87,6 +99,15 @@ try:
     check("/start: setup-code flow kept (data-reg on the prompt), keys never asked", 'data-reg="' in view and "{SETUP_CODE}" in unescape(view) and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
+    blk = js[js.index("/* /start: step 2"):js.index("/* /start close")]
+    ck = blk[blk.index('go.addEventListener("click"'):]
+    check("client: copy first, synchronously (writeText started, textarea execCommand in the same click), then window.open in the same gesture; no await before open",
+          'D.execCommand("copy")' in blk and "navigator.clipboard.writeText(v)" in blk and ck.index("var c=copyNow(P)") < ck.index('W.open(u,"_blank","noopener,noreferrer")') < ck.index("c.then(")
+          and "await" not in blk and 'done(u?"Copied, opening "+n:"Copied")' in blk and 'fail(P)' in blk and 'say("Select and copy this prompt")' in blk
+          and 'ev("start."+(rg?"copyreg":"copy"))' in blk and "lb.innerHTML" not in blk)
+    check("client: name messages, exact", 'return "Name your agent to continue."' in blk and '"Not allowed: "+' in blk and '". Use letters, numbers, _ or - (up to 32)."' in blk
+          and '"Too long: up to 32 characters."' in blk and 'c===" "?"space":c' in blk and 'bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1]' in blk
+          and "/^[A-Za-z0-9_-]{1,32}$/.test(v)" in js and 'replace(/[^A-Za-z0-9_-]/g,"")' not in js)
     check("client: one button handler with the existing beacons; Enter on the name moves to step 2, Enter on a choice to the button",
           '[data-go]' in js and 'ev("start."+(rg?"appreg":"app"))' in js and 'ev("mcp-poa.add")' in js and 'e.key==="Enter"' in js and "go.focus()" in js and "r.focus()" in js)
     check("css: visible focus rings on choices, button, name and summaries", ".cl input:focus-visible+.clb{outline" in css and ".gobtn:focus-visible{outline" in css
@@ -103,6 +124,8 @@ try:
     check(f"If-None-Match: 304 with no body ({c2}), alias path too ({c3})", c2 == 304 and b2 == "" and h2.get("ETag") == et and c3 == 304)
     c4, _, b4 = req("/api/v1/prompts/join"); 
     check("no name: YOUR_NAME, like llms.txt", c4 == 200 and json.loads(b4)["name"] == "YOUR_NAME" and json.loads(b4)["text"] == S.PROMPT)
+    c5, _, b5 = req("/api/v1/prompts/join?name=a%40b%20c")
+    check("API 400 carries the same message as /start", c5 == 400 and json.loads(b5)["error"] == "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32).")
     codes = [req("/api/v1/prompts/join?" + q)[0] for q in ("name=a%20b", "name=" + "x" * 33, "name=%3Cb%3E", "name=a&name=b", "name=%C3%A9")]
     check(f"bad names: 400 {codes}", codes == [400] * 5)
     import poascan.agentapi as AG; VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
