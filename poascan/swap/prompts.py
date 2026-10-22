@@ -33,6 +33,10 @@ BUY_TOKEN = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET} on {
              "from my linked Emblem vault without broadcasting, register it with /api/hosted/swap-intent, poll /api/hosted/swap-receipt until receipt_ready, then "
              "/api/hosted/swap-broadcast and /api/hosted/swap-fill with that ref. I expect about {OUT} POA after the network fee.")
 
+# Wallet setup prompt: the host may add an optional last step here (POAScan: the wallet registry step, filled in the
+# browser with a browser-made code; see poascan/regcode.py). lead starts the step, before is the line it goes above.
+WALLET_REG = dict(lead="4. Optional: ", before="Never paste or show passwords")
+
 def templates():
     c = _check()
     return {"buy": c + BUY + _TAIL, "buy_token": c + BUY_TOKEN + _TAIL, "sell": c + SELL + _TAIL, "connect": WALLET_PROMPT}

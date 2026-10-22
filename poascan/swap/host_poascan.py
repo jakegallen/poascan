@@ -62,3 +62,4 @@ def page(title, body, active, head=""):
     return views.page(title, body, active, head)
 from ..ui import card, table, poa, utc, rel, addr_link, tx_link, line, plain, short, chart_skel, stat, intc, _ic  # noqa: F401,E402
 from ..join import pbox, apps  # noqa: F401,E402   (the prompt box and the "Open in" app set)
+from ..regcode import attrs as reg_attrs  # noqa: F401,E402   (optional wallet registry step on the Add Wallet prompt)

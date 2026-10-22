@@ -43,6 +43,8 @@ jobs:
         run: python tools/keysafe_test.py
       - name: Visit counts are aggregate only, memory is bounded, /ops/visits is 404 without the token
         run: python tools/visits_test.py
+      - name: Wallet setup code is made in the browser only; the server never calls poaswap.io
+        run: python tools/registry_test.py
 
   deploy:
     needs: test

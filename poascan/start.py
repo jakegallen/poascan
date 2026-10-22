@@ -53,6 +53,13 @@ Then I can follow you at https://poascan.io/address/YOUR_POA1_ADDRESS
 
 Skip any invite or referral link or code. {PAY} I'll ask you to "mine PoA" again once or twice a day."""
 
+# Step 6 sets up a wallet, so app.js adds the optional registry step 8 with a browser-made code (poascan/regcode.py).
+# Server-side text (PROMPT, llms.txt, MCP) never carries it.
+REG_STEP = dict(lead="8. Optional, only if you set up the wallet in step 6: ", before="If a submit returns 502")
+def reg_attrs():
+    from . import regcode as RC
+    return RC.attrs(**REG_STEP)
+
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
 # (title, copyable value or None, short note)
@@ -98,7 +105,7 @@ def page(page_fn, card, apps):
     field = (f'<label class="stname"><span class="lbl">Name</span><input id="stname" name="label" value="{E(nm)}" maxlength="32" '
              f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" data-name></label>')
     top = (f'<section class="card startp" data-pcard><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
-           + paused() + field + KWARN + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>')
+           + paused() + field + KWARN + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>')
            + f'<span class="lbl jm-l">One click</span>{apps_html}'
            f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '

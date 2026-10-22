@@ -9,6 +9,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.22.0] - 2026-10-22
+
+### Added
+
+- Optional wallet registry step in the wallet setup prompts (Add Wallet on `/swaps`, and step 8 of the `/start` prompt, which sets up a wallet in step 6). The browser makes a setup code (`s_` plus 16 characters of a-z2-7, `crypto.getRandomValues`), once per page load, and fills it into the prompt before Copy and Open in use it. The agent may POST its wallet's public addresses with that code to the POASwap wallet registry at poaswap.io, or skip it. POAScan's server never sees, stores or sends the code and makes no request to poaswap.io; the code is not put in any POAScan URL, cookie or local storage. Without JS the step is left out. The server-side prompt text (llms.txt, the MCP onboarding tool) is unchanged.
+
+### Changed
+
+- The privacy page gains a "Setup code (optional)" section.
+
 ## [1.21.0] - 2026-10-22
 
 ### Added

@@ -99,7 +99,7 @@ def panel():
            '<button class="xbtn" type="button" id="xgo" data-up="1">Connect</button>' if up else
            '<button class="xbtn up" type="button" id="xgo" data-up="0" disabled><i></i>Being upgraded</button>')
     apps, apps2 = H.apps("oc"), H.apps("oc")
-    emb_box = H.pbox('<pre class="pc-text" tabindex="0">' + E(tpl["connect"]) + '</pre>')
+    emb_box = H.pbox('<pre class="pc-text" tabindex="0"' + (getattr(H, "reg_attrs", None) or (lambda **k: ""))(**P.WALLET_REG) + '>' + E(tpl["connect"]) + '</pre>')
     swap_box = H.pbox('<pre class="pc-text" tabindex="0"></pre>')
     lg = f' <span class="dim">· last good read {rel(h["last_good_read"])}</span>' if h["last_good_read"] else ""
     note = "" if up or not C.SWAPS_LIVE else f'<p class="xnote" role="status">{M.UPGRADE_MSG}{lg}</p>'
