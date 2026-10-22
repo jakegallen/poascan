@@ -30,11 +30,17 @@ def _decode(raw, enc):
     if d.unconsumed_tail: raise Busy("response too large")
     return out
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None   # surface the 3xx as an HTTPError
+_NOREDIR = urllib.request.build_opener(_NoRedirect)
+MISSING_CODES = (404, 301, 302, 303, 307, 308)   # minepoa answers an unknown tx id with a 307 to its HTML app
+
 def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
     Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
-    returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): a 404 raises
-    Missing without counting as an endpoint failure."""
+    returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): redirects are
+    not followed, and a 404 or a redirect (minepoa's answer for an unknown id) raises Missing without counting as an
+    endpoint failure."""
     if not ALLOWED.match(path):
         raise ValueError("path not allowlisted")
     from . import keysafe as _KS   # POAScan holds no PoA key and never sends one
@@ -46,7 +52,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     req = urllib.request.Request(BASE + path, headers=hd)
     now = int(time.time()); t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with (_NOREDIR.open(req, timeout=timeout) if soft else urllib.request.urlopen(req, timeout=timeout)) as r:
             wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag")
         _probe(ep, True, t0, "200")
         if raw[:1] not in (b"{", b"["):
@@ -70,8 +76,9 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
             body = json.loads(_decode(e.read() or b"{}", e.headers.get("Content-Encoding")) or b"{}"); retry = body.get("retry_after_seconds")
         except Exception:
             pass
+        if soft and e.code in MISSING_CODES:
+            _probe(ep, True, t0, str(e.code)); raise Missing("not found")
         _probe(ep, False, t0, str(e.code))
-        if soft and e.code == 404: raise Missing("not found")
         _fail(ep, f"HTTP {e.code}", retry)
         raise Busy(f"HTTP {e.code}", retry)
     except Busy as e:
@@ -373,7 +380,7 @@ def fetch_ondemand(path, endpoint, key):
     finally: _ondemand.release()
 
 def _bg_fetch_tx(tid, endpoint):
-    """A scheduled job's tx detail read: its own endpoint key and backoff, no visitor budget, no negative cache."""
+    """A scheduled job's tx detail read: its own endpoint key and backoff, no visitor budget; unknown ids are negative cached."""
     if not TX_ID.match(tid): raise Missing("not a valid id")
     if neg_get(endpoint + tid): raise Missing("not found (cached)")
     if not can_fetch(endpoint): raise Busy("backing off")

@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.4] - 2026-10-22
+
+### Fixed
+
+- minepoa answers an unknown tx id with a 307 to its HTML app (sometimes a 503 from the app host), not a 404. Single-id tx and address reads no longer follow redirects: a redirect or a 404 is "not found" (negative cached 10 min), not an endpoint failure, so one unknown id no longer puts tx reads into backoff for every visitor and job.
+- A pending swap tx the node does not know is dropped only once it is an hour old; before that it stays pending and is re-read on schedule.
+
 ## [1.26.3] - 2026-10-22
 
 Fixes from the 2026-10-22 audit (finding ids in brackets).
@@ -17,7 +24,7 @@ Fixes from the 2026-10-22 audit (finding ids in brackets).
 
 - Paging input (SC-002): `limit`, `offset`, `page` and `from` are parsed as bounded integers on every paginated API route, the `/txs` page and MCP tools. Non-numeric or overflowing input is a JSON 400, never a 500; negative values clamp to the floor. `/api/txs` keeps its documented max of 1000; offsets cap at 10,000,000. Non-`poa1` addresses on address routes are a 400. Unknown or oversized epoch numbers are a 404.
 - On-demand minepoa reads (SC-003): only ids in a valid format are fetched. Misses are held in a bounded negative cache (5000 ids; 10 min for a 404, 5 min for an error). New ids are limited per client (Fly-Client-IP, in memory) and by a global token bucket, with at most 3 in flight. Over budget, address reads fall back to stored data and an unknown tx is a 429 with Retry-After. On-demand failures use their own backoff key, so they never pause the live feed or swap fill ingest. Mirror reads of cached data are not limited.
-- Swap fills and cancels (SC-005): a fill or cancel applies only once its tx is final on the ledger. Among an offer's final fills and cancels the earliest by ledger ts wins (ties: the lower txid); later ones are ignored. Non-final txs stay pending (`final: false`), are re-read every 10 min (hourly after a day) or marked final from the explorer feed with no read, and a pending tx the node answers 404 for is dropped. With no final settlement an offer keeps its book state.
+- Swap fills and cancels (SC-005): a fill or cancel applies only once its tx is final on the ledger. Among an offer's final fills and cancels the earliest by ledger ts wins (ties: the lower txid); later ones are ignored. Non-final txs stay pending (`final: false`), are re-read every 10 min (hourly after a day) or marked final from the explorer feed with no read, and a pending tx the node still does not know an hour after it was first seen is dropped. With no final settlement an offer keeps its book state.
 - Expired offers (SC-006): an offer past its expiry is stored as `expired` and reads as `expired` everywhere (offer status, `/api/swaps/status` counts, `/ops/network` `open_swap_offers`). An offer missing from the book is `delisted` only after 2 consecutive misses.
 - `/privacy` (SC-007) now matches the code: Fly-Client-IP use (memory only, never stored), per-table retention, referrer bucketing, the setup code record (a hash of the code, `client`, `app_version`) and the DB-IP CC BY 4.0 attribution. Request logs no longer include an address.
 - CSV exports prefix cells that start with `=`, `+`, `-` or `@` (SC-015). Search suggestions escape every field (SC-014).

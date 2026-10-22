@@ -39,7 +39,11 @@ class Up(BaseHTTPRequestHandler):
             tid = self.path.rsplit("/", 1)[1]
             if MODE["tx"] == "busy": return self._send(503, {"error": "origin busy", "retry_after_seconds": 60})
             if tid in TXS: return self._send(200, TXS[tid])
-            return self._send(404, {"error": "not found"})
+            if tid.startswith("0f"): return self._send(404, {"error": "not found"})
+            # live minepoa: an unknown id is a 307 to its HTML app (which can itself fail)
+            self.send_response(307); self.send_header("Location", "/pub/poa/poa-read-node" + self.path); self.send_header("Content-Length", "0"); self.end_headers(); return
+        if self.path.startswith("/pub/"):
+            b = b"<!DOCTYPE html><html></html>"; self.send_response(200); self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b); return
         if self.path.startswith("/api/explorer/address/"):
             a = self.path.rsplit("/", 1)[1]; return self._send(200, {"address": a, "balance": "0.000000", "txs": []})
         self._send(404, {"error": "nope"})
@@ -91,18 +95,24 @@ check("SC-003 no request for malformed ids", len(seen("/api/explorer/tx/")) == n
 U = "00" * 32
 try: tx_req(U); out = "ok"
 except I.Missing: out = "missing"
-check("SC-003 an unknown id is Missing (404 upstream)", out == "missing" and len(seen("/api/explorer/tx/")) == n + 1)
+check("SC-003 an unknown id is Missing (minepoa's 307 to its app)", out == "missing" and len(seen("/api/explorer/tx/")) == n + 1)
+check("SC-003 the redirect is not followed", not seen("/pub/"))
 try: tx_req(U); out = "ok"
 except I.Missing: out = "missing"
 check("SC-003 negative cache: the same unknown id again makes no request", out == "missing" and len(seen("/api/explorer/tx/")) == n + 1)
+U4 = "0f" * 32
+try: tx_req(U4); out = "ok"
+except I.Missing: out = "missing"
+check("SC-003 a 404 id is Missing too", out == "missing" and len(seen("/api/explorer/tx/")) == n + 2)
+n += 1
 fl = db.q1("SELECT fails FROM fetch_log WHERE endpoint=?", (I.TX_EP,))
-check("SC-003 a 404 is not an endpoint failure (no backoff)", not fl or not fl["fails"])
+check("SC-003 a 307 or 404 is not an endpoint failure (no backoff)", not fl or not fl["fails"])
 codes = []
 for i in range(1, 7):
     try: tx_req("%064x" % (0x1000 + i)); codes.append("ok")
     except I.Limited as e: codes.append("limited")
     except I.Missing: codes.append("missing")
-check(f"SC-003 per-client budget: new ids past the burst are Limited ({codes})", codes[:3] == ["missing"] * 3 and codes[-1] == "limited")
+check(f"SC-003 per-client budget: new ids past the burst are Limited ({codes})", codes[:2] == ["missing"] * 2 and codes[-1] == "limited")
 try: tx_req("%064x" % 0x2001, ip="198.51.100.4"); other = "ok"
 except I.Limited: other = "limited"
 except I.Missing: other = "missing"
@@ -155,6 +165,9 @@ SI.ingest_swap_tx(tx("d5" * 32, "swap-fill", O5, now - 100, False), now=now)
 db.write("UPDATE swap_events SET checked=? WHERE txid=?", (now - 10000, "d5" * 32))
 db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?,?,?,?,?)", ("d5" * 32, "swap-fill", A2, now - 100, 1, 0))
 db.write("DELETE FROM tx_detail WHERE id=?", ("d5" * 32,))
+SI.ingest_events(now)
+check("SC-005 a young pending tx the node does not know yet is kept pending", db.q1("SELECT dropped FROM swap_events WHERE txid=?", ("d5" * 32,))["dropped"] in (0, None) and st(O5) == "open")
+db.write("UPDATE swap_events SET checked=?, first_seen=? WHERE txid=?", (now - 10000, now - SI.DROP_AFTER_S - 10, "d5" * 32))
 SI.ingest_events(now)
 check("SC-005 a pending tx the node no longer knows is dropped and never applies", db.q1("SELECT dropped FROM swap_events WHERE txid=?", ("d5" * 32,))["dropped"] == 1 and st(O5) == "open")
 # finality from the explorer feed, with no upstream read

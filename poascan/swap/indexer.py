@@ -27,6 +27,7 @@ def _f(x):
 # day old) until it is final, and never counts in status, fills, price, volume or market cap until then. A pending tx
 # the node no longer knows (HTTP 404) is marked dropped and never applies.
 MISS_RUNS = 2
+DROP_AFTER_S = 3600   # a pending swap tx the node does not know is dropped only once it is this old
 RECHECK_S, RECHECK_SLOW_S, SLOW_AFTER_S = 600, 3600, 86400
 NEW_PER_RUN, RECHECK_PER_RUN = 20, 5
 _miss = {}   # offer_id -> consecutive book reads without it (memory only)
@@ -97,7 +98,9 @@ def ingest_events(now):
             new += 1
         try: d = H.get_tx_detail(tid, bg=H.SWAP_TX_EP)
         except H.Missing:
-            if k: H.write("UPDATE swap_events SET dropped=1, checked=? WHERE txid=?", (now, tid)); touched.add(k["offer_id"])
+            if k and now - (k["first_seen"] or now) >= DROP_AFTER_S:   # still unknown to the node an hour on: dropped
+                H.write("UPDATE swap_events SET dropped=1, checked=? WHERE txid=?", (now, tid)); touched.add(k["offer_id"])
+            elif k: H.write("UPDATE swap_events SET checked=? WHERE txid=?", (now, tid))
             continue
         except H.Busy: break
         if not d or not d.get("id"): continue
