@@ -62,19 +62,42 @@ check("state: active, recovery phase, every route paused, notice active, supply 
       s["active"] and s["phase"] == "recovery" and set(s["hosted_routes"].values()) == {"paused"} and s["notice"]["active"] is True
       and s["recovery"]["supply_intact"] and s["recovery"]["status_fresh"] and s["recovery"]["state_root"] == ROOTHASH and s["recovery"]["open_ballots"] == 0)
 seed({"mining": "open"}); s = M.state()
-check(f"mining open: {s['headline']!r} / {s['headline_short']!r}, still active while the notice is up",
-      s["headline"] == "Mining reopened: some endpoints are back. Grading still paused." and s["headline_short"] == "Mining reopened. Grading paused." and s["active"] and "hosted_mining" not in s["paused"])
-seed({"grading": "open"}); check("grading open: Grading reopened: some endpoints are back. Mining still paused.", M.state()["headline"] == "Grading reopened: some endpoints are back. Mining still paused.")
+check(f"probe open but nothing official: {s['headline']!r} / {s['headline_short']!r}; never 'reopened', route reads Responding, still paused in the API, still active",
+      s["headline"] == "Mining endpoint responding: some endpoints are back. Grading still paused." and s["headline_short"] == "Mining endpoint responding. Grading paused."
+      and "reopened" not in s["headline"] + s["headline_short"] and s["hosted_routes_display"]["mining"] == "responding" and s["hosted_routes"]["mining"] == "open"
+      and s["hosted_mining"] == "paused" and "hosted_mining" in s["paused"] and s["active"] and s["official"]["mining"] is False and s["cleared_by"] is None)
+seed({"grading": "open"}); check("grading probe open: Grading endpoint responding: some endpoints are back. Mining still paused.", M.state()["headline"] == "Grading endpoint responding: some endpoints are back. Mining still paused.")
+# official signal 2: the post 1357 author says mining is back (from the forum mirror); hedged or other authors never count
+OP = "e02b5ebb251437fb20134e00"
+db.write("INSERT OR REPLACE INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched,body) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+         (M.POST_ID, "poa", "Network hardening in progress", "agent_" + OP, OP, "2026-10-21 19:00:51", 6, 3, 0, 1, int(time.time()),
+          "Expect mining to be mostly unavailable during this window. Mining is back once the surface is cleared."))
+def comment(i, who, body): db.write("INSERT OR REPLACE INTO forum_comments(id,post_id,parent_id,author,author_public_id,created_at,score,body) VALUES(?,?,?,?,?,?,?,?)",
+                                    (i, M.POST_ID, None, "agent_" + who, who, "2026-10-22 22:40:00", 0, body))
+comment(9001, "someoneelse0000000000000", "Mining is back! Just mined.")
+comment(9002, OP, "Mining will be back soon. Mining is not back yet.")
+seed({"mining": "open"}); s = M.state()
+check("hedged operator words, other authors and the hedged post body are not official", s["official"]["mining"] is False and s["headline"].startswith("Mining endpoint responding"))
+comment(9003, OP, "Update: hosted mining is now re-enabled. Grading follows.")
+s = M.state()
+check(f"operator comment on 1357 says mining is re-enabled: official (post), headline {s['headline']!r}, route reads Open, maintenance stays on during the grace",
+      s["official"] == {"mining": True, "routes": False, "source": "post"} and s["headline"] == "Mining reopened: some endpoints are back. Grading still paused."
+      and s["headline_short"] == "Mining reopened. Grading paused." and s["hosted_routes_display"]["mining"] == "open" and s["active"] and s["mining_back_at"])
+seed({}); check("official post but the mining route paused again: no 'reopened', not back", not M.state()["headline"].startswith("Mining reopened") and M.state()["mining_back_at"] is None)
+db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts")
 seed({"send": "open", "export": "open"}); s = M.state()
 check(f"two of six open, not mining or grading: {s['headline']!r}", s["headline"] == "Recovery in progress: about a third of endpoints are back. Mining and grading reopen in stages."
       and s["headline_short"] == "Recovering. Mining still paused.")
 seed({"send": "open", "export": "open", "vote": "open"}); check("three of six: about half", M.state()["headline"].startswith("Recovery in progress: about half of endpoints are back."))
 seed({}); db.put_blob(R.BLOB, {}); check("no route read at all: 'some endpoints are back', never a measured fraction", M.state()["headline"] == "Recovery in progress: some endpoints are back. Mining and grading reopen in stages.")
-seed({"mining": "open", "grading": "open"}); check("both open: Mining and grading reopened: about a third of endpoints are back. Other routes reopen in stages.",
-      M.state()["headline"] == "Mining and grading reopened: about a third of endpoints are back. Other routes reopen in stages." and "grading" not in M.state()["paused"])
-seed({"mining": "open"}, notice=False); s = M.state()
-check("mining open and the notice gone: maintenance clears itself (cleared_by mining_back)", s["active"] is False and s["cleared_by"] == "mining_back")
-seed({}, notice=False); check("notice gone but mining still paused: stays on", M.state()["active"] is True)
+seed({"mining": "open", "grading": "open"}); check("both probe open, nothing official: Mining and grading endpoints responding: about a third of endpoints are back.",
+      M.state()["headline"] == "Mining and grading endpoints responding: about a third of endpoints are back. Other routes reopen in stages.")
+seed({"mining": "open", "grading": "open"}, notice=False); s = M.state()
+check(f"official signal 1, notice gone: {s['headline']!r}, routes Open, source notice", s["headline"] == "Mining and grading reopened: about a third of endpoints are back. Other routes reopen in stages."
+      and s["official"]["source"] == "notice" and s["hosted_routes_display"]["grading"] == "open" and s["active"] and "grading" not in s["paused"])
+db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60})
+check("6 hours after the official signal, maintenance ends (cleared_by mining_back)", M.state()["active"] is False and M.state()["cleared_by"] == "mining_back")
+seed({}, notice=False); check("notice gone but mining still paused: stays on, the grace clock resets", M.state()["active"] is True and M.state()["mining_back_at"] is None)
 # /api/status answering without checkpoint_height, state_root and as_of: the newest snapshot that had them carries on
 seed({})
 db.add_snap("status", {"checkpoint_height": 33463, "state_root": ROOTHASH, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))})
@@ -139,15 +162,14 @@ try:
     # mining reopens: nothing restarts, the pages follow
     seed({"mining": "open"})
     c, hm = get("/"); c, up = get("/upgrade")
-    check("mining open: strip reads Mining reopened (desktop and 390px), /upgrade shows Mining Open and Grading Paused",
-          "<b>Mining reopened</b><span class=\"upx\">: some endpoints are back</span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining reopened</b>. Grading paused.</span>' in hm
-          and '<li data-hroute="mining"><span>Mining</span><span class="tag ok">Open</span></li>' in up and '<li data-hroute="grading"><span>Grading</span><span class="tag warn">Paused</span></li>' in up
-          and "Mining reopened: some endpoints are back. Grading still paused. Operators bring" in up)
+    check("probe open, not official: strip reads Mining endpoint responding (desktop and 390px), /upgrade shows Mining Responding and Grading Paused, never reopened",
+          "<b>Mining endpoint responding</b><span class=\"upx\">: some endpoints are back</span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining endpoint responding</b>. Grading paused.</span>' in hm
+          and 'data-hroute="mining"' in up and ">Responding<" in up and "reopened" not in hm[hm.index("<main"):] and "reopened" not in up[up.index("<main"):])
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
     check("client: snapshot updates the strip line and the route tags in place; 390px shows the short line",
           'var ul=$("[data-upline]")' in js and "s.upline" in js and "s.upstamp" in js and 'timeZoneName:"short"' in js and '" \\u00b7 "' in js and "[data-hroute]" in js and ".upstrip .upd{display:none}.upstrip .upm{display:inline}" in css)
     # notice cleared with mining open: maintenance ends by itself
-    seed({"mining": "open"}, notice=False)
+    seed({"mining": "open"}, notice=False); db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60})
     import http.client
     c, hm = get("/"); hc = http.client.HTTPConnection("127.0.0.1", port, timeout=20); hc.request("GET", "/upgrade"); rr = hc.getresponse(); c2 = rr.status; rr.read(); hc.close()
     check(f"mining back and notice gone: no strip, /upgrade redirects to Health ({c2}, strip {'class=\"upstrip\"' in hm})", 'class="upstrip"' not in hm and c2 == 302)

@@ -193,7 +193,7 @@ def upgrade_live():
     """Snapshot fields for the strip and the /upgrade route list; empty strings when maintenance is off (app.js hides the strip)."""
     from . import maint as M, hosted as R
     if not M.state()["active"]: return dict(upline="", upstamp="", routes={})
-    return dict(upline=upline(), upstamp=stamp(M.stamp_ts()), routes={k: v["state"] for k, v in R.current().items()})
+    return dict(upline=upline(), upstamp=stamp(M.stamp_ts()), routes=M.route_display())
 
 def txs(qs):
     pg_raw = (qs.get("page", ["1"])[0] or "1").strip(); typ = qs.get("type", [""])[0]; per = 50

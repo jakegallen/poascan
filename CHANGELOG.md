@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.10] - 2026-10-22
+
+### Changed
+
+- A route answering our keyless read is "responding", not reopened. The strip and `/upgrade` say "Mining endpoint responding: some endpoints are back. Grading still paused." (390px: "Mining endpoint responding. Grading paused."), and the route list shows Responding instead of Open.
+- "Mining reopened" (and Open in the route list) needs an official signal: the `2026-10-21-hardening` notice gone from minepoa's public notices (removed or replaced by a notice that is not about the hardening), or the author of pinned LabLeak post 1357 saying mining is back in the post or a comment on it. The post check reads POAScan's existing forum mirror (no extra request) and matches conservatively: a sentence naming mining with back, reopened, re-enabled, restored or resumed and no hedge word.
+- Maintenance ends 6 hours after the mining route answers with an official signal, so "Mining reopened" is visible first. `hosted_mining` stays paused until then.
+- `meta.maintenance` gains `hosted_routes_display`, `official` and `mining_back_at` (additive).
+
 ## [1.26.9] - 2026-10-22
 
 ### Changed

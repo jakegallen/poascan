@@ -512,7 +512,8 @@ from poascan import db, hosted as R
 db.put_blob("notices", {"active": [{"id": M.NOTICE_ID, "expires_ts": time.time() + 3600}]})
 db.put_blob(R.BLOB, {"routes": {"mining": {"state": "open", "since": time.time(), "checked": time.time()}}, "ts": time.time()})
 out["open_noticed"] = M.state()["cleared_by"]
-db.put_blob("notices", {"active": []}); out["mining_back"] = M.state()["cleared_by"]; out["back_state"] = fresh()["state"]
+db.put_blob("notices", {"active": []}); out["grace"] = M.state()["cleared_by"]
+db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60}); out["mining_back"] = M.state()["cleared_by"]; out["back_state"] = fresh()["state"]; db.put_blob("mining_back", {})
 db.put_blob(R.BLOB, {}); db.put_blob("notices", {}); A.status = s0
 print(json.dumps(out))
 """
@@ -629,9 +630,9 @@ def maintenance(base, root, env, check):
     check("maintenance: answer and grade prompts carry the pause guard", "paused for a network upgrade" in ask.replace("&#x27;", "'"))
     r = subprocess.run([sys.executable, "-c", MAINT_CHECK], cwd=root, env=env, capture_output=True, text=True)
     o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
-    check(f"maintenance: Stale still wins; a moved checkpoint keeps it on (recovery); mining open with the notice gone clears it {o}",
+    check(f"maintenance: Stale still wins; a moved checkpoint keeps it on (recovery); mining open with the notice gone clears it after the grace {o}",
           o.get("up") == "up" and o.get("stale") == "stale" and o.get("moved") == "up" and o.get("cleared") is None
-          and o.get("open_noticed") is None and o.get("mining_back") == "mining_back" and o.get("back_state") in ("live", "lag"))
+          and o.get("open_noticed") is None and o.get("grace") is None and o.get("mining_back") == "mining_back" and o.get("back_state") in ("live", "lag"))
 
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""

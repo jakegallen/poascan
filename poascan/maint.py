@@ -3,7 +3,7 @@ While on, the freshness state is Upgrading instead of Lagging: the header pill h
 Phases, from public data only: parked (checkpoint held at PARKED), then recovery (the checkpoint moved on; hosted routes reopen
 in stages). Auto-clear: the mining route answers as open again (hosted.py) and the hardening notice is no longer active.
 MAX_S is a safety stop that only applies while no fresh route read shows a pause."""
-import os, time
+import os, re, time
 from . import db, analytics as A
 
 MAINTENANCE = os.environ.get("POASCAN_MAINTENANCE", "1") != "0"  # set the default to "0" once the hardening is over
@@ -56,7 +56,7 @@ def hosted_state():
     """paused, planned or back for hosted mining. Without tracker data the manual switch means paused."""
     from . import halts as H, hosted as R
     rs = R.state("mining")
-    if rs != "unknown": return "back" if rs == "open" else "paused"   # our own keyless route read answers first
+    if rs != "unknown": return "back" if rs == "open" and official()["mining"] else "paused"   # a responding route is not back until it is official
     pr = (H.current() or {}).get("probe") or {}
     if "Hosted mining" in pr: return pr["Hosted mining"]   # the live probe answers directly (hosted/challenge, hosted/me)
     g = _surfaces(); st = [g[k] for k in HOSTED if k in g]
@@ -111,23 +111,76 @@ def stamp_ts():
     if ck: return int(ck)
     t = A._ts(recovery()["status_as_of"]); return t
 
+def _names(ks): return " and ".join(ks)
+
 def _recovery_line():
-    """(lead, tail) after the checkpoint moved, from the live route states. Never a reopen time."""
+    """(lead, tail) after the checkpoint moved. A route read alone says 'responding'; 'reopened' needs official() too. Never a reopen time."""
     from . import hosted as R
-    rt = R.current(); mo, go = rt["mining"]["state"] == "open", rt["grading"]["state"] == "open"
+    rt = R.current(); of = official()
+    mo, go = rt["mining"]["state"] == "open", rt["grading"]["state"] == "open"
+    mof, gof = mo and of["mining"], go and of["routes"]
     rest = [k for k, v in rt.items() if k not in ("mining", "grading") and v["state"] != "open"]
-    if mo and go: return ("Mining and grading reopened", "Other routes reopen in stages." if rest else "All hosted routes open.")
-    if mo: return ("Mining reopened", "Grading still paused." if rt["grading"]["state"] == "paused" else "Grading reopens in stages.")
-    if go: return ("Grading reopened", "Mining still paused." if rt["mining"]["state"] == "paused" else "Mining reopens in stages.")
+    if mo and go:
+        if mof and gof: return ("Mining and grading reopened", "Other routes reopen in stages." if rest else "All hosted routes open.")
+        return ("Mining and grading endpoints responding", "Other routes reopen in stages." if rest else "All hosted routes responding.")
+    if mo:
+        return ("Mining reopened" if mof else "Mining endpoint responding", "Grading still paused." if rt["grading"]["state"] == "paused" else "Grading reopens in stages.")
+    if go:
+        return ("Grading reopened" if gof else "Grading endpoint responding", "Mining still paused." if rt["mining"]["state"] == "paused" else "Mining reopens in stages.")
     return ("Recovery in progress", "Mining and grading reopen in stages.")
+
+MOBILE = {"Recovery in progress": ("Recovering", "Mining still paused."), "Mining reopened": ("Mining reopened", "Grading paused."),
+          "Mining endpoint responding": ("Mining endpoint responding", "Grading paused."), "Grading reopened": ("Grading reopened", "Mining paused."),
+          "Grading endpoint responding": ("Grading endpoint responding", "Mining paused."), "Mining and grading reopened": ("Mining and grading reopened", ""),
+          "Mining and grading endpoints responding": ("Mining and grading responding", "")}
 
 def strip_mobile():
     """The strip at 390px: (lead, tail), short enough to fit beside the status and Details."""
     if not recovery()["moved"]:
         lead, _, tail = strip_text(); return (lead, tail)
-    lead, _ = _recovery_line()
-    return {"Recovery in progress": ("Recovering", "Mining still paused."), "Mining reopened": ("Mining reopened", "Grading paused."),
-            "Grading reopened": ("Grading reopened", "Mining paused."), "Mining and grading reopened": ("Mining and grading reopened", "")}[lead]
+    return MOBILE[_recovery_line()[0]]
+
+# ---- official signal: only this turns 'responding' into 'reopened' and ends maintenance
+# 1. the hardening notice is gone from our /api/notices mirror (removed, or replaced by a notice that is not about the hardening);
+# 2. the author of pinned LabLeak post 1357 says mining is back, in the post itself or in a comment on it. Read from POAScan's
+#    existing forum mirror (public, keyless, refreshed by the forum job every 30 minutes); no extra request. Matched conservatively:
+#    a sentence naming mining with back, reopened, re-enabled, restored or resumed, and no hedge word (not, soon, will, until, once, if...).
+OFFICIAL_RX = re.compile(r"\b(?:hosted\s+)?mining(?:\s+(?:and|&)\s+grading)?(?:\s+(?:paths?|endpoints?|routes?))?\s+(?:is|are|has|have)\s+(?:now\s+)?(?:been\s+)?"
+                         r"(?:back|reopened|re-?enabled|restored|resumed|live again)\b", re.I)
+HEDGE_RX = re.compile(r"\b(?:not|no longer|soon|will|until|once|if|when|expect|plan|should|may|might|before|partly|partially|mostly)\b|n't", re.I)
+
+def _says_back(text):
+    for sent in re.split(r"(?<=[.!?])\s+|\n+", text or ""):
+        if OFFICIAL_RX.search(sent) and not HEDGE_RX.search(sent): return True
+    return False
+
+def official_post():
+    """{'at': created/edited time} when the post 1357 author says mining is back, else None."""
+    try:
+        p = db.q1("SELECT author_public_id AS a, body, edited_at FROM forum_posts WHERE id=?", (POST_ID,))
+        if not p or not p["a"]: return None
+        if _says_back(p["body"]): return dict(at=p["edited_at"] or None, where="post")
+        for c in db.q("SELECT body, created_at, edited_at FROM forum_comments WHERE post_id=? AND author_public_id=? ORDER BY created_at DESC LIMIT 50", (POST_ID, p["a"])):
+            if _says_back(c["body"]): return dict(at=c["edited_at"] or c["created_at"], where="comment")
+    except Exception: return None
+    return None
+
+def official():
+    """mining: official word that mining is back. routes: official word for every hosted route (the notice is gone).
+    source: notice, post, or None."""
+    n = notice(); gone = n is not None and not n["active"]
+    post = None if gone else official_post()
+    return dict(mining=gone or post is not None, routes=gone, source="notice" if gone else "post" if post else None, post=post)
+
+def route_display():
+    """Route list states: open only when official, responding when our read says open but nothing official yet."""
+    from . import hosted as R
+    of = official(); out = {}
+    for k, v in R.current().items():
+        st = v["state"]
+        if st == "open": st = "open" if (of["routes"] or (k == "mining" and of["mining"])) else "responding"
+        out[k] = st
+    return out
 
 def og_desc():
     r = recovery()
@@ -194,18 +247,29 @@ def recovery():
                 txs=st.get("txs"), final=st.get("final"), epochs_closed=st.get("epochs_closed"), open_ballots=open_ballots())
 
 def mining_back():
-    """Mining officially back: our route read says the mining route is open and the hardening notice is no longer active."""
+    """Mining back: our route read says the mining route answers and there is an official signal (official())."""
     from . import hosted as R
-    n = notice()
-    return R.state("mining") == "open" and not (n and n["active"])
+    return R.state("mining") == "open" and official()["mining"]
 
 def _paused_seen():
     from . import hosted as R
     return any(v["state"] == "paused" for v in R.current().values())
 
+BACK_GRACE_S = 6 * 3600   # after the official signal the strip says "Mining reopened" this long, then maintenance ends
+
+def back_since():
+    """When mining_back() first held (kept in the database; reset when it stops holding), or None."""
+    d = db.get_blob("mining_back")[0] or {}
+    if not mining_back():
+        if d.get("at"): db.put_blob("mining_back", {})
+        return None
+    if not d.get("at"): d = {"at": int(time.time())}; db.put_blob("mining_back", d)
+    return d["at"]
+
 def _cleared():
     if not MAINTENANCE: return "switch_off"
-    if mining_back(): return "mining_back"
+    t = back_since()
+    if t and time.time() - t > BACK_GRACE_S: return "mining_back"
     if time.time() - STARTED > MAX_S and not _paused_seen(): return "expired"
     return None
 
@@ -219,11 +283,12 @@ def state():
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
                 expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=TTL_EPOCHS,
-                parked_checkpoint=PARKED, checkpoint=cp, auto_clear="the mining route answers as open and the hardening notice is no longer active",
+                parked_checkpoint=PARKED, checkpoint=cp, auto_clear="6 hours after the mining route answers with an official signal that mining is back: the hardening notice is gone, or the author of LabLeak post 1357 says so",
                 halted_list_public=False, url="https://poascan.io/upgrade",
                 phase="recovery" if rec["moved"] else "parked", headline=" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x),
                 headline_short=" ".join(x for x in (hm[0] + ".", hm[1]) if x), updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp_ts())) if stamp_ts() else None,
-                hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
+                hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(),
+                official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
                 notice=notice(), recovery=rec, **_hs())
 
 def _hs():

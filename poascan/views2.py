@@ -182,7 +182,7 @@ def upgrade_card():
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
                 stamp(M.stamp_ts()) + f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
 
-ROUTE_TAG = {"open": ("ok", "Open"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
+ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
 
 def _recovery_rows(M, m, r):
     """Live rows after the checkpoint moved. Every figure comes from our own mirror or route read; no reopen time anywhere."""
@@ -191,7 +191,8 @@ def _recovery_rows(M, m, r):
     rt = R.current(); lead, tail = M._recovery_line(); fr = M.back_phrase()
     rest = "Operators bring endpoints back in stages while they watch system health."
     now = f"{E(lead)}" + (f": {E(fr)}" if fr else "") + (f". {E(tail)}" if lead != "Recovery in progress" else ".") + f" {rest}"
-    lis = "".join(f'<li data-hroute="{k}"><span>{E(v["label"])}</span><span class="tag {ROUTE_TAG[v["state"]][0]}">{ROUTE_TAG[v["state"]][1]}</span></li>' for k, v in rt.items())
+    dsp = M.route_display()
+    lis = "".join(f'<li data-hroute="{k}"><span>{E(v["label"])}</span><span class="tag {ROUTE_TAG[dsp[k]][0]}">{ROUTE_TAG[dsp[k]][1]}</span></li>' for k, v in rt.items())
     ck = R.checked_at()
     routes = (f'<ul class="hrl">{lis}</ul><p class="hrm dim small">'
               + (f"{stamp(ck, 'Checked')} ({rel(ck)}). " if ck else "First check pending. ")
