@@ -348,6 +348,11 @@ POASWAP_URL = "https://poaswap.io"
 SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noopener noreferrer" title="POASwap, agent to agent swaps" aria-label="POASwap, agent to agent swaps">'
             '<img class="swmark" src="/static/poaswap-mark.svg?v=1" width="18" height="18" alt="" aria-hidden="true"><span>POASwap</span></a>')
 
+# Non-home pages: the header pill hides while maintenance is on (the home strip carries Upgrading), so a small amber dot to /upgrade
+# keeps the status visible there. Same source as the strip and the API pill (analytics.freshness state "up"); hidden otherwise.
+def updot(state):
+    return f'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"{"" if state == "up" else " hidden"}><i aria-hidden="true"></i></a>'
+
 def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
@@ -360,20 +365,20 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=78">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=79">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
 <a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"{" hidden" if live_cls == "up" else ""}><i></i><span>{live_txt}</span></a>
-{SWAP_BTN}
+{"" if req_path() == "/" else updot(live_cls)}{SWAP_BTN}
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=32" defer></script></body></html>'''
+<script src="/static/app.js?v=33" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

@@ -73,6 +73,11 @@ def main():
         o = next((x for x in rows if x.get("status") == "open"), {})
         ok = "fill_final" not in o and "fee_poa" not in o and "taker_chains" not in o and "fill_epoch" not in o
         print(("ok   " if ok else "FAIL ") + "open offers leave fill-only fields out"); ok or fails.append("open fields")
+        pages = {u: urllib.request.urlopen(base + u, timeout=20).read().decode() for u in ("/epochs", "/about", "/address/poa1" + "A" * 40, "/swaps")}
+        dot = '<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"><i aria-hidden="true"></i></a>'
+        pl = json.loads(urllib.request.urlopen(base + "/api/v1/summary", timeout=20).read()).get("pill") or {}
+        ok = pl.get("state") == "up" and 'id="updot"' not in home and 'class="upstrip"' in home and all(h.count(dot) == 1 and 'class="pill up" id="livepill"' in h and 'title="Upgrading"' in h for h in pages.values())
+        print(("ok   " if ok else "FAIL ") + "Upgrading: amber dot to /upgrade on every page but home (home has the strip); header pill hidden"); ok or fails.append("updot")
         A1, A2 = "poa1" + "A" * 40, "poa1" + "B" * 40
         ad = json.loads(urllib.request.urlopen(base + f"/api/v1/agents/{A1}/addresses", timeout=20).read())
         vt = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(time.time()) - 7200))

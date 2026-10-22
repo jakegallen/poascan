@@ -112,7 +112,7 @@ def live():
         check("llms.txt prompt has no registry step", "poaswap" not in pages["/llms-full.txt"][2] and "poaswap" not in pages["/llms.txt"][2])
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
         check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-22", bool(sec) and "Updated 2026-10-22." in pv
-              and 'href="/swaps"' in sec.group(1) and 'href="/start"' in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
+              and 'href="/swaps"' not in sec.group(1) and 'step 8 on <a href="/start">Start</a>' in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
         check("no em dashes in the pages", not any("\u2014" in h for r, (_, _, h) in pages.items() if r in ("/swaps", "/start", "/privacy")))
         time.sleep(1)
         bad = [h for h in px.hosts if "poaswap" in h.lower()]

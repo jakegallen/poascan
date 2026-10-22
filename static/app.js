@@ -94,6 +94,7 @@ function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.datas
 /* apply a snapshot (from WS or polling) */
 function apply(s){if(!s||s.t&&s.t!=="snap")return;
  var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""};p.className="pill "+f.state;p.hidden=f.state=="up";if(f.href)p.setAttribute("href",f.href);p.title=f.state=="live"?"Status":(f.why||f.label);var l=p.querySelector("span");if(l)l.textContent=f.label}
+ var ud=$("#updot");if(ud&&s.pill)ud.hidden=s.pill.state!="up";
  if(s.nums)Object.keys(s.nums).forEach(function(k){setNum(k,s.nums[k][0],s.nums[k][1])});
  if(s.cards)Object.keys(s.cards).forEach(function(k){var el=$('.sv[data-live="'+k+'"]');if(!el)return;var tmp=D.createElement("div");tmp.innerHTML=s.cards[k];var nv=$(".sv",tmp);if(!nv)return;if(nv.innerHTML!==el.innerHTML)el.innerHTML=nv.innerHTML;el.className=nv.className;var st=nv.getAttribute("style");if(st)el.setAttribute("style",st);else el.removeAttribute("style")});
  if(s.epoch){$$(".ring,.vessel[data-close]").forEach(function(r){if(s.epoch.start)r.dataset.start=s.epoch.start;if(s.epoch.close)r.dataset.close=s.epoch.close});

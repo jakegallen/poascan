@@ -191,6 +191,15 @@ def main():
         _mk = req(base + "/static/poaswap-mark.svg?v=1")
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
               for u in ("/", "/swaps", "/epochs", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
+        _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
+        _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
+        check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
+              and b'<a class="more mswap" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
+        check("/about price history points to POASwap; /privacy setup code points to /start, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
+              and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
+              and b'such as step 8 on <a href="/start">Start</a>' in _pv and b'<a href="/swaps">Swap</a>' not in _pv and b"not sold" not in _pv.lower())
+        check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
+              and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/swaps", "/about", "/privacy")))
         check("page H1 kept but visually hidden", b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
         _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: More toggles closed, extra MCP deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 2 and '>More<' in _m and '>Other clients<' in _m

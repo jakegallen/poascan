@@ -896,3 +896,14 @@ td a.mono{display:inline-block;min-width:24px}
 .upstrip .ups+span{padding-left:9px;border-left:1px solid rgba(143,163,184,.3)}
 @media (max-width:520px){.upstrip .ups b{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.upstrip .ups+span{padding-left:0;border-left:0}}
 @media (prefers-reduced-motion:reduce){.upstrip .ups i{animation:none}}
+
+/* non-home status dot: the Upgrading state while the header pill steps aside for maintenance (links to /upgrade) */
+.updot{display:inline-grid;place-items:center;width:28px;height:28px;flex:none;border-radius:50%;text-decoration:none}
+.updot[hidden]{display:none}
+.updot i{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:breatheA 2.4s ease-in-out infinite}
+.updot:hover,.updot:focus-visible{background:rgba(255,176,0,.1);text-decoration:none}
+.updot:focus-visible{outline:2px solid rgba(255,176,0,.7);outline-offset:1px}
+@media (max-width:1100px){.updot{order:2;width:32px;height:40px;border-radius:12px}.pill[hidden]~.updot:not([hidden]){margin-left:auto}.pill[hidden]~.updot:not([hidden])~.swaplink{margin-left:0}}
+@media (max-width:420px){.updot{width:24px;margin-right:-4px}}
+@media (prefers-reduced-motion:reduce){.updot i{animation:none!important;box-shadow:0 0 0 3px rgba(255,176,0,.22)}}
+.more.mswap{gap:6px}.more.mswap img{flex:none;opacity:.85}.more.mswap:hover img{opacity:1}

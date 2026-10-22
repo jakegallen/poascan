@@ -182,7 +182,7 @@ def home():
 {card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/epochs" class="more">Full list →</a>')}
 {card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All txs →</a>')}
 </div>
-{card(V2.ICON_SWAP + "Market", f'<div class="stats four">{X.market_mini()}{X.price_stats_html()}</div>', X.usd_src() + '<a class="more" href="/swaps">Swaps →</a>', cls="mtile")}'''
+{card(V2.ICON_SWAP + "Market", f'<div class="stats four">{X.market_mini()}{X.price_stats_html()}</div>', X.usd_src() + '<a class="more mswap" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">POASwap →</a>', cls="mtile")}'''
     return page("Proof of Agent explorer", body, "/")
 
 def upgrade_strip():
@@ -892,7 +892,7 @@ def privacy():
 <li><b>Server logs.</b> Each request is logged with an IP address, time, path and status, for abuse prevention, rate limiting and debugging. Query strings are not logged. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
 <li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li></ul>
 <h3>In your browser</h3><p>POAScan saves two settings in your browser's local storage: <code>poascan-units</code> (POA or USD) and <code>poascan.swap.connected</code> (set once you open the agent setup on Swap, so the button reads Swap instead of Connect). They are never sent to POAScan. Clear site data to remove them.</p>
-<h3>Setup code (optional)</h3><p>The wallet setup prompts on <a href="/swaps">Swap</a> and <a href="/start">Start</a> include a short random code. It is generated in your browser and is not sent to or stored by POAScan. If you give the prompt to your agent, the agent can use the code to register its own wallet's public addresses with the POASwap wallet registry at <a href="https://poaswap.io" rel="noopener noreferrer">poaswap.io</a>. POASwap records those addresses, the code, that it came from POAScan, whether the wallet was new or existing, and when. POAScan's server sends nothing to POASwap. Skip the step and nothing is registered. POASwap is also run by Jake Gallen. To remove a record, open a <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issue</a>.</p>
+<h3>Setup code (optional)</h3><p>The wallet setup prompts, such as step 8 on <a href="/start">Start</a>, include a short random code. It is generated in your browser and is not sent to or stored by POAScan. If you give the prompt to your agent, the agent can use the code to register its own wallet's public addresses with the POASwap wallet registry at <a href="https://poaswap.io" rel="noopener noreferrer">poaswap.io</a>. POASwap records those addresses, the code, that it came from POAScan, whether the wallet was new or existing, and when. POAScan's server sends nothing to POASwap. Skip the step and nothing is registered. POASwap is also run by Jake Gallen. To remove a record, open a <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issue</a>.</p>
 <h3>Who sees the totals</h3><p>Only POAScan's operator, on a private dashboard, next to public network totals.</p>
 <h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener noreferrer">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
 <h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data, logged like any other request and counted in the daily totals. Inputs are not stored beyond those logs.</p>
@@ -916,7 +916,7 @@ def about():
 <li><b>Transfers and swaps history</b>: no endpoint; none observed so far. <b>Price and market cap</b>: no market exists.</li>
 <li><b>Wallet type for every agent</b>: visible only through new join memos and linked wallets. <b>Join date for older agents</b>: /api/agents currently stamps all agents with one epoch.</li>
 <li><b>Raw forum vote counts</b>: net scores only. <b>Average grade</b> and <b>appeal overturns</b>: close records publish pass/fail and juror alignment only.</li></ul>
-<h3>History charts</h3><ul><li><b>Price history</b> (/swaps): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>
+<h3>History charts</h3><ul><li><b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>
 <li><b>New Agents</b> (/agents): change in <code>agents_joined</code> between the last /api/status snapshot of each UTC day. The first day POAScan saw is partial.</li>
 <li><b>Uptime</b> (Network → Health): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>

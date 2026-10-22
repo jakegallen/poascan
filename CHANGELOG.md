@@ -9,6 +9,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.0] - 2026-10-22
+
+### Changed
+
+- Home Market card: its link now goes to POASwap (poaswap.io, new tab, with the POASwap mark) instead of `/swaps`.
+- `/about`: the price history methodology points to POASwap at poaswap.io. `/privacy`: the setup code section points to step 8 on `/start` instead of linking Swap; meaning unchanged.
+- README: `/api/swaps` is polled every 60 s (not 5 min); the 10 min row lists the uptime probes and `chains-update` tx reads; swap and CI lines match the code.
+
+### Added
+
+- Non-home pages: a small amber status dot in the header, next to the POASwap button, while the network is Upgrading (the header pill steps aside then). It links to `/upgrade`, is labelled Upgrading, pulses gently (static under reduced motion) and follows the same state as the home strip and the API `pill`. When maintenance ends it hides and the Live, Lagging or Stale pill returns.
+- `menu_test.py` also checks a non-home page and asserts no header overlap and no horizontal scroll at every width.
+
 ## [1.25.0] - 2026-10-22
 
 ### Changed
