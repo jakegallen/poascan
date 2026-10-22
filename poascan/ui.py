@@ -71,6 +71,13 @@ def rel(ts):
     s = f"{d}s ago" if d < 60 else f"{d//60}m ago" if d < 3600 else f"{d//3600}h {d%3600//60}m ago" if d < 86400 else f"{d//86400}d ago"
     return f'<time class="t rel" data-ts="{int(ts)}">{s}</time>'
 
+def stamp(ts, word="Updated"):
+    """Visible time for upgrade and status lines: UTC on the server ('Updated 22:35Z'); app.js adds the reader's local time
+    with a short zone name ('Updated 3:35 PM PDT · 22:35Z'). Empty without a time."""
+    if not ts: return ""
+    z = time.strftime("%H:%MZ", time.gmtime(int(ts))); iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts)))
+    return f'<span class="upts">{word} <time data-upts="{int(ts)}" datetime="{iso}">{z}</time></span>'
+
 def dur(s):
     if s is None: return "···"
     s = int(s); return f"{s//3600}h {s%3600//60:02d}m" if s >= 3600 else f"{s//60}m {s%60:02d}s"
@@ -362,7 +369,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=81">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=82">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -375,7 +382,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=35" defer></script></body></html>'''
+<script src="/static/app.js?v=36" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

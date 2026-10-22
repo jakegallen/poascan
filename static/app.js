@@ -12,7 +12,10 @@ function c3(v){var a=Math.abs(v),u=[[1e9,"B"],[1e6,"M"],[1e3,"K"]];for(var i=0;i
 var FMT={int:function(v){return Math.round(v).toLocaleString("en-US")},c2:function(v){return c3(v)},c1:function(v){return c3(v)},p1:function(v){return v.toFixed(1)+"%"}};
 
 /* times */
-function times(root){$$("time.t",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;if(!t.title)t.title=utc(ts)+" · local "+new Date(ts*1000).toLocaleString();if(t.classList.contains("rel"))t.textContent=rel(ts)})}
+function upts(root){$$("time[data-upts]",root).forEach(function(t){var ts=+t.dataset.upts;if(!ts||t.dataset.done==ts)return;var d=new Date(ts*1000),z=d.toISOString().slice(11,16)+"Z",l="";
+  try{l=new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d)}catch(e){}
+  t.textContent=l?l+" \u00b7 "+z:z;t.dataset.done=ts})}
+function times(root){upts(root);$$("time.t",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;if(!t.title)t.title=utc(ts)+" · local "+new Date(ts*1000).toLocaleString();if(t.classList.contains("rel"))t.textContent=rel(ts)})}
 
 /* hex identicons: deterministic from the address */
 function h32(s,seed){var h=seed>>>0;for(var i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),16777619)>>>0}return h}
@@ -96,6 +99,7 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
  var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""};p.className="pill "+f.state;p.hidden=f.state=="up";if(f.href)p.setAttribute("href",f.href);p.title=f.state=="live"?"Status":(f.why||f.label);var l=p.querySelector("span");if(l)l.textContent=f.label}
  var ud=$("#updot");if(ud&&s.pill)ud.hidden=s.pill.state!="up";
  var ul=$("[data-upline]");if(ul&&s.upline!=null){if(s.upline&&ul.innerHTML!==s.upline)ul.innerHTML=s.upline;ul.parentNode.hidden=!s.upline}
+ var us=$("[data-upstamp]");if(us&&s.upstamp){var ot=$("time",us);if(!ot||ot.dataset.upts!==(s.upstamp.match(/data-upts="(\d+)"/)||[])[1]){us.innerHTML=s.upstamp;upts(us)}}
  if(s.routes)$$("[data-hroute]").forEach(function(li){var v=s.routes[li.dataset.hroute];if(!v)return;var t=$(".tag",li);if(!t)return;t.className="tag "+(v=="open"?"ok":v=="paused"?"warn":"");t.textContent=v=="open"?"Open":v=="paused"?"Paused":"Checking"});
  if(s.nums)Object.keys(s.nums).forEach(function(k){setNum(k,s.nums[k][0],s.nums[k][1])});
  if(s.cards)Object.keys(s.cards).forEach(function(k){var el=$('.sv[data-live="'+k+'"]');if(!el)return;var tmp=D.createElement("div");tmp.innerHTML=s.cards[k];var nv=$(".sv",tmp);if(!nv)return;if(nv.innerHTML!==el.innerHTML)el.innerHTML=nv.innerHTML;el.className=nv.className;var st=nv.getAttribute("style");if(st)el.setAttribute("style",st);else el.removeAttribute("style")});

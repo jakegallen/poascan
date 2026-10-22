@@ -180,7 +180,7 @@ def upgrade_card():
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
     return card("Network upgrade", f'<dl class="upg">{dl}</dl>{box}',
-                f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
+                stamp(M.stamp_ts()) + f'<span class="tag">Since {since}</span><a class="more" href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>', cls="upc", id="upgrade")
 
 ROUTE_TAG = {"open": ("ok", "Open"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
 
@@ -188,13 +188,13 @@ def _recovery_rows(M, m, r):
     """Live rows after the checkpoint moved. Every figure comes from our own mirror or route read; no reopen time anywhere."""
     from . import hosted as R
     from decimal import Decimal
-    rt = R.current(); lead, tail = M._recovery_line()
-    rest = "Operators bring hosted endpoints back in stages while they watch system health."
-    now = f"{E(lead)}. {E(tail)} {rest}" if lead != "Recovery in progress" else f"Recovery in progress. {rest}"
+    rt = R.current(); lead, tail = M._recovery_line(); fr = M.back_phrase()
+    rest = "Operators bring endpoints back in stages while they watch system health."
+    now = f"{E(lead)}" + (f": {E(fr)}" if fr else "") + (f". {E(tail)}" if lead != "Recovery in progress" else ".") + f" {rest}"
     lis = "".join(f'<li data-hroute="{k}"><span>{E(v["label"])}</span><span class="tag {ROUTE_TAG[v["state"]][0]}">{ROUTE_TAG[v["state"]][1]}</span></li>' for k, v in rt.items())
     ck = R.checked_at()
     routes = (f'<ul class="hrl">{lis}</ul><p class="hrm dim small">'
-              + (f"Checked {rel(ck)}. " if ck else "First check pending. ")
+              + (f"{stamp(ck, 'Checked')} ({rel(ck)}). " if ck else "First check pending. ")
               + "One keyless read per route every 15 minutes. Paused routes answer at once with a short status.</p>")
     sr = r["state_root"]
     root = f' State root <code class="sr" title="{E(sr)}">{E(sr[:12])}…{E(sr[-8:])}</code>.' if isinstance(sr, str) and len(sr) > 24 else ""
@@ -205,7 +205,7 @@ def _recovery_rows(M, m, r):
     elif r["supply_intact"]: supply = f'<span class="num">{sup}</span> POA, unchanged across the checkpoint. Balances intact.'
     else: supply = f'<span class="num">{sup}</span> POA (<span class="num">{Decimal(r["supply_before"]):,}</span> at {r["previous_checkpoint"]:,}).'
     ts = A._ts(r["status_as_of"])
-    fresh = ("is fresh" if r["status_fresh"] else "is not fresh") + (f", as of {rel(ts)}" if ts else "")
+    fresh = ("is fresh" if r["status_fresh"] else "is not fresh") + (f", {stamp(ts, 'as of')} ({rel(ts)})" if ts else "")
     cnt = (f' Tx counters restarted at the new checkpoint: <span class="num">{int(r["txs"]):,}</span> {"tx" if r["txs"] == 1 else "txs"}, '
            f'<span class="num">{int(r["final"] or 0):,}</span> final.') if isinstance(r["txs"], int) else ""
     ob = r["open_ballots"]

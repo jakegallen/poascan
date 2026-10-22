@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.8] - 2026-10-22
+
+### Changed
+
+- Every upgrade line shows when its data was read: the home strip ("Updated 3:35 PM PDT · 22:35Z"; at 390px on its own line under the text), the `/upgrade` card header, the route list ("Checked ...") and `/api/status` ("as of ..."), and the `/start` pause line. The server writes UTC; the browser adds local time with a short zone name (Intl). The live snapshot refreshes the strip stamp in place.
+- The recovery headline says how much is back, from the live route reads: "Recovery in progress: about a third of endpoints are back. Mining and grading reopen in stages." The fraction follows the routes (some, about a third, about half, about two thirds, most, all); with no fresh read it says "some endpoints are back". Never a time.
+- A route reads as open only on a JSON answer from the app (an HTML edge page never does); the stored state keeps the HTTP code.
+- `meta.maintenance.updated_at` (additive).
+
 ## [1.26.7] - 2026-10-22
 
 ### Fixed

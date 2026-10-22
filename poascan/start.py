@@ -89,8 +89,13 @@ def paused():
     from . import maint as M
     if not M.state()["active"]: return ""
     if M.join_quiet():   # only this line while the derived pause is on
-        return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
-    return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
+        return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
+    return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
+
+def _stamp():
+    from . import maint as M
+    from .ui import stamp
+    s = stamp(M.stamp_ts()); return s + " " if s else ""
 
 KWARN = '<p class="kwarn" role="note">Never paste your pk_ key into a chat, post or screenshot. Treat a leaked key like a stolen wallet.</p>'
 

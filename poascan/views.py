@@ -179,7 +179,8 @@ def upgrade_strip():
     (the header pill hides while maintenance is on) next to the hosted mining and joining line."""
     from . import maint as M
     if not M.state()["active"]: return ""
-    return f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span data-upline>{upline()}</span><a href="/upgrade">Details</a></p>'
+    return (f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span data-upline>{upline()}</span>'
+            f'<span data-upstamp>{stamp(M.stamp_ts())}</span><a href="/upgrade">Details</a></p>')
 
 def upline():
     """The strip's text: the full line, and a shorter one for 390px (CSS shows one). The live snapshot re-sends it, so it updates in place."""
@@ -191,8 +192,8 @@ def upline():
 def upgrade_live():
     """Snapshot fields for the strip and the /upgrade route list; empty strings when maintenance is off (app.js hides the strip)."""
     from . import maint as M, hosted as R
-    if not M.state()["active"]: return dict(upline="", routes={})
-    return dict(upline=upline(), routes={k: v["state"] for k, v in R.current().items()})
+    if not M.state()["active"]: return dict(upline="", upstamp="", routes={})
+    return dict(upline=upline(), upstamp=stamp(M.stamp_ts()), routes={k: v["state"] for k, v in R.current().items()})
 
 def txs(qs):
     pg_raw = (qs.get("page", ["1"])[0] or "1").strip(); typ = qs.get("type", [""])[0]; per = 50

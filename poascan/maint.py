@@ -79,14 +79,37 @@ def strip_text():
     """Home strip: (lead, aside, tail). The aside may hide at 390px (strip_mobile() replaces the line there). Words chosen not to repeat the home screen."""
     r = recovery()
     if r["moved"]:
-        lead, tail = _recovery_line()
-        aside = f': new checkpoint {r["checkpoint"]:,}' + (", balances intact" if r["supply_intact"] else "") if lead == "Recovery in progress" else ""
+        lead, tail = _recovery_line(); fr = back_phrase()
+        if fr: aside = f": {fr}"
+        else: aside = f': new checkpoint {r["checkpoint"]:,}' + (", balances intact" if r["supply_intact"] else "") if lead == "Recovery in progress" else ""
         return (lead, aside, tail)
     h = hosted_state(); j = join_state() != "paused"
     ok = "Joining works."
     if h == "planned": return ("Hosted mining pauses soon", " for maintenance", ok if j else "Joining too.")
     if h == "back": return ("Hosted mining is back", "", ok if j else "Joining paused.")
     return ("Hosted mining paused", " for maintenance", ok) if j else ("Hosted mining and joining paused", " for maintenance", "")
+
+def back_phrase():
+    """How much of the hosted surface is back, from our own route reads. Words, never a count we cannot back:
+    no fresh read at all says 'some endpoints are back' (public word that they return in stages); none open says nothing."""
+    from . import hosted as R
+    k, n = R.counts(); total = len(R.ROUTES)
+    if n == 0: return "some endpoints are back"
+    if k == 0: return ""
+    f = k / total
+    if k == total: return "all hosted routes are back"
+    if f < 0.3: return "some endpoints are back"
+    if f < 0.45: return "about a third of endpoints are back"
+    if f < 0.6: return "about half of endpoints are back"
+    if f < 0.8: return "about two thirds of endpoints are back"
+    return "most endpoints are back"
+
+def stamp_ts():
+    """When the data behind the upgrade lines was read: our last route read, else the /api/status as_of."""
+    from . import hosted as R
+    ck = R.checked_at()
+    if ck: return int(ck)
+    t = A._ts(recovery()["status_as_of"]); return t
 
 def _recovery_line():
     """(lead, tail) after the checkpoint moved, from the live route states. Never a reopen time."""
@@ -199,7 +222,7 @@ def state():
                 parked_checkpoint=PARKED, checkpoint=cp, auto_clear="the mining route answers as open and the hardening notice is no longer active",
                 halted_list_public=False, url="https://poascan.io/upgrade",
                 phase="recovery" if rec["moved"] else "parked", headline=" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x),
-                headline_short=" ".join(x for x in (hm[0] + ".", hm[1]) if x),
+                headline_short=" ".join(x for x in (hm[0] + ".", hm[1]) if x), updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp_ts())) if stamp_ts() else None,
                 hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
                 notice=notice(), recovery=rec, **_hs())
 

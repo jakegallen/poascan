@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.7"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.8"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -661,7 +661,7 @@ def openapi():
                                                            "parked_checkpoint": {"type": "integer"}, "checkpoint": {"type": ["integer", "null"], "description": "current checkpoint height from /api/status"},
                                                            "auto_clear": {"type": "string"}, "halted_list_public": {"type": "boolean", "description": "false: minepoa.com publishes no unauthenticated list of halted endpoints"},
                                                            "url": {"type": "string"},
-                                                           "phase": {"type": "string", "enum": ["parked", "recovery"]}, "headline": {"type": "string", "description": "the home strip line"}, "headline_short": {"type": "string", "description": "the home strip line at 390px"},
+                                                           "phase": {"type": "string", "enum": ["parked", "recovery"]}, "headline": {"type": "string", "description": "the home strip line"}, "headline_short": {"type": "string", "description": "the home strip line at 390px"}, "updated_at": {"type": ["string", "null"], "format": "date-time", "description": "when the data behind the headline was read (last route check, else the /api/status as_of)"},
                                                            "hosted_routes": {"type": "object", "additionalProperties": {"type": "string", "enum": ["paused", "open", "unknown"]}, "description": "mining, grading, send, swap_offer, vote, export from one keyless read per route every 15 min; unknown when no read in the last hour"},
                                                            "hosted_routes_checked_at": {"type": ["string", "null"], "format": "date-time"},
                                                            "notice": {"type": ["object", "null"], "description": "the hardening system notice (id, active, issued_at, expires_at) from /api/notices; null before the first read"},

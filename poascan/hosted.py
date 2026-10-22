@@ -25,10 +25,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 def classify(code, body=b""):
-    """paused, open, or None (unknown: keep the last state)."""
-    b = (body or b"")[:2048].decode("utf-8", "replace").lower()
+    """paused, open, or None (unknown: keep the last state). Open needs a JSON answer from the app itself, so an edge
+    block page (HTML 403, challenge) never reads as a reopened route."""
+    b = (body or b"")[:2048].decode("utf-8", "replace").strip().lower()
     if code == 503 and "halted" in b: return "paused"
-    if code in OPEN_CODES: return "open"
+    if code in OPEN_CODES and b[:1] in ("{", "[") and "halted" not in b: return "open"
     return None
 
 def _get(path):
@@ -61,7 +62,7 @@ def job(now=None, get=None):
             if code == 429 or code >= 500: skip = now + SKIP_S; break
             continue
         old = routes.get(rid) or {}
-        routes[rid] = dict(state=st, since=old.get("since") if old.get("state") == st else now, checked=now)
+        routes[rid] = dict(state=st, since=old.get("since") if old.get("state") == st else now, checked=now, code=code)
     db.put_blob(BLOB, dict(routes=routes, ts=now, skip_until=skip))
 
 def current(now=None):
@@ -75,6 +76,9 @@ def current(now=None):
     return out
 
 def state(rid): return current()[rid]["state"]
+def counts():
+    """(open, known) over the route list."""
+    c = current(); return sum(1 for v in c.values() if v["state"] == "open"), sum(1 for v in c.values() if v["state"] != "unknown")
 def any_known(): return any(r["state"] != "unknown" for r in current().values())
 def checked_at():
     t = [r["checked"] for r in current().values() if r.get("checked")]

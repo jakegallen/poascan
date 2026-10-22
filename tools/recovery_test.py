@@ -3,7 +3,7 @@ Seeds the public facts of 2026-10-22 (checkpoint 33463, supply unchanged, harden
 then opens mining, then clears the notice, and checks the home strip (desktop and 390px line), /upgrade, the API and the
 live snapshot follow by themselves. Also the route check itself: classification, fixed paths, no key, the 10 minute floor.
 Usage: python3 tools/recovery_test.py"""
-import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import json, os, re as _re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 tmp = tempfile.mkdtemp(); DBP = os.path.join(tmp, "rec.db")
 os.environ.update(POASCAN_DB=DBP, POASCAN_MAINTENANCE="1", POA_BASE="http://127.0.0.1:9"); os.environ.pop("POASCAN_JOIN_OPEN", None)
@@ -25,8 +25,9 @@ def seed(routes, notice=True):
 
 # ---- the route check, in process
 db.init()
-check("classify: 503 with the halt text is paused; keyless 401/400/405 is open; 404, 429, 502 and a bare 503 are unknown",
-      R.classify(503, b'{"error":"endpoint temporarily halted - API hardening in progress"}') == "paused" and all(R.classify(c) == "open" for c in (200, 400, 401, 405))
+check("classify: 503 with the halt text is paused; a keyless JSON 401/400/405 is open; an HTML edge page is not; 404, 429, 502 and a bare 503 are unknown",
+      R.classify(503, b'{"error":"endpoint temporarily halted - API hardening in progress"}') == "paused" and all(R.classify(c, b'{"error":"missing key"}') == "open" for c in (200, 400, 401, 405))
+      and R.classify(403, b"<!DOCTYPE html><title>Just a moment</title>") is None and R.classify(401, b"") is None
       and all(R.classify(c, b"x") is None for c in (404, 429, 502, 503)))
 check("route list: the six hosted routes, fixed paths, no query string, no key",
       [k for k, _, _ in R.ROUTES] == ["mining", "grading", "send", "swap_offer", "vote", "export"]
@@ -62,10 +63,15 @@ check("state: active, recovery phase, every route paused, notice active, supply 
       and s["recovery"]["supply_intact"] and s["recovery"]["status_fresh"] and s["recovery"]["state_root"] == ROOTHASH and s["recovery"]["open_ballots"] == 0)
 seed({"mining": "open"}); s = M.state()
 check(f"mining open: {s['headline']!r} / {s['headline_short']!r}, still active while the notice is up",
-      s["headline"] == "Mining reopened. Grading still paused." and s["headline_short"] == "Mining reopened. Grading paused." and s["active"] and "hosted_mining" not in s["paused"])
-seed({"grading": "open"}); check("grading open: Grading reopened. Mining still paused.", M.state()["headline"] == "Grading reopened. Mining still paused.")
-seed({"mining": "open", "grading": "open"}); check("both open: Mining and grading reopened. Other routes reopen in stages.",
-      M.state()["headline"] == "Mining and grading reopened. Other routes reopen in stages." and "grading" not in M.state()["paused"])
+      s["headline"] == "Mining reopened: some endpoints are back. Grading still paused." and s["headline_short"] == "Mining reopened. Grading paused." and s["active"] and "hosted_mining" not in s["paused"])
+seed({"grading": "open"}); check("grading open: Grading reopened: some endpoints are back. Mining still paused.", M.state()["headline"] == "Grading reopened: some endpoints are back. Mining still paused.")
+seed({"send": "open", "export": "open"}); s = M.state()
+check(f"two of six open, not mining or grading: {s['headline']!r}", s["headline"] == "Recovery in progress: about a third of endpoints are back. Mining and grading reopen in stages."
+      and s["headline_short"] == "Recovering. Mining still paused.")
+seed({"send": "open", "export": "open", "vote": "open"}); check("three of six: about half", M.state()["headline"].startswith("Recovery in progress: about half of endpoints are back."))
+seed({}); db.put_blob(R.BLOB, {}); check("no route read at all: 'some endpoints are back', never a measured fraction", M.state()["headline"] == "Recovery in progress: some endpoints are back. Mining and grading reopen in stages.")
+seed({"mining": "open", "grading": "open"}); check("both open: Mining and grading reopened: about a third of endpoints are back. Other routes reopen in stages.",
+      M.state()["headline"] == "Mining and grading reopened: about a third of endpoints are back. Other routes reopen in stages." and "grading" not in M.state()["paused"])
 seed({"mining": "open"}, notice=False); s = M.state()
 check("mining open and the notice gone: maintenance clears itself (cleared_by mining_back)", s["active"] is False and s["cleared_by"] == "mining_back")
 seed({}, notice=False); check("notice gone but mining still paused: stays on", M.state()["active"] is True)
@@ -100,9 +106,15 @@ try:
     c, hm = get("/"); main = hm[hm.index("<main"):hm.index("</main>")]
     check("home strip: desktop line and the 390px line, Details to /upgrade, live hook",
           hm.count('class="upstrip"') == 1 and '<span data-upline><span class="upd"><b>Recovery in progress</b><span class="upx">: new checkpoint 33,463, balances intact</span>. Mining and grading reopen in stages.</span>'
-          '<span class="upm"><b>Recovering</b>. Mining still paused.</span></span><a href="/upgrade">Details</a>' in hm)
+          '<span class="upm"><b>Recovering</b>. Mining still paused.</span></span><span data-upstamp><span class="upts">Updated <time data-upts="' in hm
+          and _re.search(r'<span data-upstamp><span class="upts">Updated <time data-upts="\d+" datetime="[0-9T:-]+Z">\d\d:\d\dZ</time></span></span><a href="/upgrade">Details</a>', hm))
     check(f"home main: no em dash, no 'Accounts', no outside docs {clean(main)}", not clean(main))
     c, up = get("/upgrade"); card = up[up.index('id="upgrade"'):]; card = card[:card.index("</section>")]
+    check("/upgrade: Updated stamp in the card header, Checked stamp on the routes, as of stamp on /api/status (UTC server-side)",
+          _re.search(r'<span class="upts">Updated <time data-upts="\d+"[^>]*>\d\d:\d\dZ</time></span><span class="tag">Since', card) is not None
+          and '<span class="upts">Checked <time data-upts=' in card and '<span class="upts">as of <time data-upts=' in card)
+    c, stp = get("/start")
+    check("/start: the pause line carries the Updated stamp", '<p class="upn" role="status">' in stp and '<span class="upts">Updated <time data-upts=' in stp.split('class="upn"')[1][:900])
     dts = ["Now", "Routes", "Checkpoint", "Supply", "Status", "Epochs", "Notice", "Joining", "Working", "Safe", "Agents", "Last hour"]
     check("/upgrade: 200, rows in order", c == 200 and all(f"<dt>{k}</dt>" in card for k in dts) and [card.index(f"<dt>{k}</dt>") for k in dts] == sorted(card.index(f"<dt>{k}</dt>") for k in dts))
     check("/upgrade: route list Mining, Grading, Send, Swap offers, Voting, Export, all Paused, with live hooks",
@@ -112,10 +124,10 @@ try:
           '<span class="num">33,463</span>, up from <span class="num">24,371</span>.' in card and f'title="{ROOTHASH}">f77320b999ac…1dbccdbf</code>' in card
           and '<span class="num">1,234,828,243.783275</span> POA, unchanged across the checkpoint. Balances intact.' in card)
     check("/upgrade: status fresh, counters restarted, 10 epochs closed, no open ballots, notice active",
-          "<code>/api/status</code> is fresh, as of" in card and 'Tx counters restarted at the new checkpoint: <span class="num">1</span> tx, <span class="num">0</span> final.' in card
+          '<code>/api/status</code> is fresh, <span class="upts">as of <time data-upts=' in card and 'Tx counters restarted at the new checkpoint: <span class="num">1</span> tx, <span class="num">0</span> final.' in card
           and '<span class="num">10</span> closed. No open ballots.' in card and "<code>2026-10-21-hardening</code> active." in card)
     check("/upgrade: stages and health, hourly at a random minute, no retry loops, 16 epoch TTL; no reopen time, no 24 to 72",
-          "Operators bring hosted endpoints back in stages while they watch system health." in card and "Check once an hour at a random minute. No retry loops." in card
+          "Recovery in progress. Operators bring endpoints back in stages while they watch system health." in card and "Check once an hour at a random minute. No retry loops." in card
           and "Pending grades keep 16 epochs." in card and "24 to 72" not in card and "hours" not in card.split('class="upa"')[0])
     check(f"/upgrade card: clean {clean(card)}", not clean(card))
     m = json.loads(get("/api/v1/status")[1] or "{}").get("meta", {}).get("maintenance") or {}
@@ -128,12 +140,12 @@ try:
     seed({"mining": "open"})
     c, hm = get("/"); c, up = get("/upgrade")
     check("mining open: strip reads Mining reopened (desktop and 390px), /upgrade shows Mining Open and Grading Paused",
-          "<b>Mining reopened</b><span class=\"upx\"></span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining reopened</b>. Grading paused.</span>' in hm
+          "<b>Mining reopened</b><span class=\"upx\">: some endpoints are back</span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining reopened</b>. Grading paused.</span>' in hm
           and '<li data-hroute="mining"><span>Mining</span><span class="tag ok">Open</span></li>' in up and '<li data-hroute="grading"><span>Grading</span><span class="tag warn">Paused</span></li>' in up
-          and "Mining reopened. Grading still paused. Operators bring" in up)
+          and "Mining reopened: some endpoints are back. Grading still paused. Operators bring" in up)
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
     check("client: snapshot updates the strip line and the route tags in place; 390px shows the short line",
-          'var ul=$("[data-upline]")' in js and "s.upline" in js and "[data-hroute]" in js and ".upstrip .upd{display:none}.upstrip .upm{display:inline}" in css)
+          'var ul=$("[data-upline]")' in js and "s.upline" in js and "s.upstamp" in js and 'timeZoneName:"short"' in js and '" \\u00b7 "' in js and "[data-hroute]" in js and ".upstrip .upd{display:none}.upstrip .upm{display:inline}" in css)
     # notice cleared with mining open: maintenance ends by itself
     seed({"mining": "open"}, notice=False)
     import http.client

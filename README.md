@@ -103,7 +103,7 @@ Old URLs (`/live`, `/grading`, `/growth`, `/status`, `/find`, `/forum`, the FAQ 
 | `/search?q=` | address, 64-hex tx hash or epoch number |
 
 ## API
-Read-only JSON under `/api/v1` (API version 1.26.7). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
+Read-only JSON under `/api/v1` (API version 1.26.8). Unversioned `/api/...` paths are permanent aliases with the same responses. List endpoints also return CSV when you add `.csv` (for example `/api/v1/epochs.csv`). Full spec: `/openapi.json`; human index: `/api`.
 
 Object responses and MCP tool results carry a `meta` freshness block (`source_height`, `checkpoint`, `epoch`, `fetched_at`, `stale`, `maintenance`, ...). `maintenance.active` is true during staged network maintenance on minepoa.com; the switch lives in `poascan/maint.py` and clears itself once the checkpoint leaves its parked height. While it is on, `/upgrade` serves the status page with the upgrade card on top, and `maintenance.surfaces` lists what is paused, planned or back. List and CSV responses keep their bodies and carry `X-API-Version`, `X-Source-Height`, `X-Checkpoint`, `X-Epoch`, `X-Fetched-At` and `X-Stale` headers. v1 only gets additive changes; breaking changes go to `/api/v2` with notice. See [CHANGELOG.md](CHANGELOG.md).
 

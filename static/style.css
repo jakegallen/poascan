@@ -919,3 +919,8 @@ td a.mono{display:inline-block;min-width:24px}
 .hrm{margin:6px 0 0}
 .upg .sr{word-break:break-all}
 @media (max-width:480px){.hrl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.upts{color:var(--mute);font:500 var(--t12)/1.35 var(--ui);white-space:nowrap}
+.upts time{font-variant-numeric:tabular-nums}
+.upstrip [data-upstamp]{flex:none;margin-left:auto}.upstrip [data-upstamp]+a{margin-left:0}
+.upc .cx .upts{margin-right:2px}
+@media (max-width:420px){.upstrip{flex-wrap:wrap;row-gap:2px}.upstrip>span[data-upline]{flex:1 1 0}.upstrip [data-upstamp]{order:3;flex-basis:100%;margin-left:0;padding-left:16px;box-sizing:border-box}}
