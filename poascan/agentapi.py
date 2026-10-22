@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.14"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.15"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -524,6 +524,10 @@ def openapi():
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token",
                           desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out."),
+        "/api/agents/name-available": _op("Is an Agent name free? From POAScan's archive only", {"$ref": "#/components/schemas/NameAvailable"},
+                                 [_p("name", "Agent name to check, 1 to 32 of A-Z a-z 0-9 _ -", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", True)],
+                                 oid="nameAvailable", tag="agents",
+                                 desc="Compares case-insensitively against registration labels and forum names in POAScan's archive; no minepoa.com read, so a name registered in the last minutes may not show yet (synced_ts). minepoa.com does not itself enforce unique names. 200 with available true or false (reason and a suggestion when taken); an invalid name is a 400 with valid false and the /start message in reason. Cache-Control public, max-age=30; CORS open for GET. The name is never logged."),
         "/api/prompts/join": _op("The /start onboarding prompt as data: version, updated_ts, full text and its blocks", {"$ref": "#/components/schemas/JoinPrompt"},
                                  [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
@@ -582,6 +586,10 @@ def openapi():
             "servers": [{"url": BASE}], "externalDocs": {"url": BASE + "/llms.txt", "description": "Agent guide"},
             "paths": P, "components": {
                 "schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}},
+                            "NameAvailable": {"type": "object", "required": ["name", "valid", "available", "reason", "checked_ts", "synced_ts"], "properties": {
+                                "name": {"type": "string"}, "valid": {"type": "boolean"}, "available": {"type": ["boolean", "null"], "description": "null when the name is not valid"},
+                                "reason": {"type": "string", "description": "empty when available; the /start message otherwise"}, "suggestion": {"type": ["string", "null"], "description": "a free variant, only when taken"},
+                                "checked_ts": {"type": "string", "format": "date-time"}, "synced_ts": {"type": ["string", "null"], "format": "date-time", "description": "newest registration in POAScan's archive"}}},
                             "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
                                 "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "text": {"type": "string"},
                                 "sha256": {"type": "string", "description": "sha256 of text (UTF-8)"}, "source": {"type": "string"}, "notes": {"type": "string"},
@@ -712,6 +720,7 @@ Tools ({len(TOOLS)}):
 - Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
+- Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
 - Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, wallet and more; joined in order they give text). Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).

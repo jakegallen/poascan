@@ -167,7 +167,7 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  D.addEventListener("toggle",function(e){var d=e.target;if(d&&d.id==="xemb"&&d.open){var wp=$("pre[data-reg]",d);if(regOn(wp))ev("wallet.regshow")}},true)})();
 /* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
- R=function(a){return a[Math.floor(Math.random()*a.length)]},nm=R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900)),RX=/(register\?label=)[^\s]*/;
+ R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
  function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
  var jp=$("#jm-prompt");fill(jp,nm);
@@ -214,7 +214,17 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
  function nameMsg(v){var a=Array.from(v);if(!a.length)return "Name your agent to continue.";var bad=[];a.forEach(function(c){if(!/[A-Za-z0-9_-]/.test(c)){var w=c===" "?"space":c==="."?"period":c;if(bad.indexOf(w)<0)bad.push(w)}});
   if(bad.length)return "Not allowed: "+(bad.length<2?bad[0]:bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1])+". Use letters, numbers, _ or - (up to 32).";
   return a.length>32?"Too long: up to 32 characters.":""}
- function check(){if(!nf||!er)return true;var m=nameMsg(nf.value||""),bad=!!m;er.textContent=m;er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");
+ /* taken check: POAScan's own archive (/api/v1/agents/name-available), debounced; a network error or timeout never blocks */
+ var tk={v:null,taken:false},tT=null,tSeq=0,dflt=true,tries=0;
+ function avail(v){var q=++tSeq,ac=W.AbortController?new AbortController():null,to=setTimeout(function(){if(ac)ac.abort()},3000);
+  fetch("/api/v1/agents/name-available?name="+encodeURIComponent(v),{cache:"no-store",credentials:"omit",signal:ac?ac.signal:undefined}).then(function(r){return r.json()}).then(function(d){clearTimeout(to);
+   if(q!==tSeq||(nf.value||"")!==v)return;   /* a newer name is being checked */
+   if(d&&d.valid&&d.available===false){if(dflt&&tries<5&&W.poaNewName){tries++;setName(W.poaNewName(),true);return}tk={v:v,taken:true,sug:d.suggestion||""}}else tk={v:v,taken:false};
+   if(check())setup()}).catch(function(){clearTimeout(to)})}
+ function setName(v,isDefault){dflt=!!isDefault;nf.value=v;nf.dispatchEvent(new Event("input",{bubbles:true}));dflt=!!isDefault}
+ function queue(){clearTimeout(tT);var v=nf.value||"";if(nameMsg(v))return;tT=setTimeout(function(){avail(v)},300)}
+ function check(){if(!nf||!er)return true;var v=nf.value||"",m=nameMsg(v),sg="";if(!m&&tk.taken&&tk.v===v){m="Taken: "+v+" is already an agent. Try another.";sg=tk.sug}var bad=!!m;
+  er.textContent=m;if(sg){var u=D.createElement("button");u.type="button";u.className="stuse";u.textContent="Use "+sg;u.addEventListener("click",function(){setName(sg,false);nf.focus()});er.appendChild(D.createTextNode(" "));er.appendChild(u)}er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");
   $$("input[name=client]",card).forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;if(cpb)cpb.disabled=bad;
   go.classList.toggle("off",bad);if(bad){go.setAttribute("aria-disabled","true");go.setAttribute("tabindex","-1")}else{go.removeAttribute("aria-disabled");go.removeAttribute("tabindex")}
   card.classList.toggle("namebad",bad);return !bad}
@@ -226,7 +236,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
  function done(m){clearTimeout(T);go.classList.add("ok");lab([m,m]);if(ap)ap.hidden=true;say(m+". Paste with "+KEY+" if it is not filled in.",1);
   T=setTimeout(function(){go.classList.remove("ok");lab(L0);var r=sel();if(ap&&r)ap.hidden=r.dataset.kind!="auto"},2600)}
  card.addEventListener("change",function(e){if(e.target.name==="client")setup()});
- if(nf){nf.addEventListener("input",function(){if(check())setup()});nf.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();if(!check())return;var r=sel();if(r)r.focus()}})}
+ if(nf){nf.addEventListener("input",function(e){if(e.isTrusted)dflt=false;if(check())setup();queue()});nf.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();if(!check())return;var r=sel();if(r)r.focus()}})}
  card.addEventListener("keydown",function(e){var t=e.target;if(e.key==="Enter"&&t.name==="client"){e.preventDefault();t.checked=true;setup();go.focus()}});
  go.addEventListener("click",function(e){var r=sel();if(!r||!check()){e.preventDefault();return}var k=r.dataset.kind,n=r.dataset.app,P=txt(),rg=regOn($(".pc-text",card)),u=url(r,P);
   if(k=="mcp"){ev("mcp-poa.add");go.href=u;copyNow(r.dataset.mcpc).then(function(ok){if(ok)done("Copied, adding to "+n)});return}  /* app schemes open by the link itself */
@@ -236,7 +246,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
   c.then(function(ok){if(ok)done(u?"Copied, opening "+n:"Copied");else fail(P)})});
  if(cpb)cpb.addEventListener("click",function(){if(!check())return;var r=sel(),n=r?r.dataset.app:"your app",P=txt(),rg=regOn($(".pc-text",card));ev("start."+(rg?"copyreg":"copy"));
   copyNow(P).then(function(ok){if(ok){cpb.classList.add("ok");var o=cpb.textContent;cpb.textContent="Copied";setTimeout(function(){cpb.classList.remove("ok");cpb.textContent=o},1800);say("Prompt copied",1)}else fail(P)})});
- check();setup()})();
+ check();setup();if(nf)queue()})();
 /* /start close: back if we came from this site, else home */
 var bk=$("[data-back]");if(bk){var goBack=function(){var r=D.referrer;try{if(r&&new URL(r).origin===location.origin&&history.length>1){history.back();return}}catch(_){}location.href="/"};
  bk.addEventListener("click",function(e){e.preventDefault();goBack()});

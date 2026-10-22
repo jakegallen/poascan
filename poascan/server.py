@@ -6,6 +6,7 @@ from . import guard as GD
 from . import visits as VS
 from . import network as NW
 from . import keysafe as KS
+from . import names as NM
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -194,6 +195,7 @@ from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
+NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
 OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits and /ops/network: per IP, in memory, apart from MCP
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
@@ -556,6 +558,13 @@ class H(BaseHTTPRequestHandler):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
                 p = path[:-4] if path.endswith(".csv") else path
                 if p == "/api/epoch-records" or re.match(r"^/api/epoch/\d+/record$", p): return self.records(p, qs, fmt)
+                if p == "/api/agents/name-available":   # names.available: POAScan's archive only, no upstream read; the name is never logged
+                    ok, wait = NAME_LIMIT.allow(self.client_ip())
+                    hd = {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS"}
+                    if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait), "Cache-Control": "no-store"}))
+                    nq = qs.get("name") or [""]
+                    code, d = NM.available(nq[0] if len(nq) == 1 else "")
+                    return self.send(code, json.dumps(d, ensure_ascii=False), "application/json", dict(hd, **{"Cache-Control": "public, max-age=30" if code == 200 else "no-store"}))
                 if p == "/api/prompts/join":   # the /start prompt as data (start.api_join); keyless, read-only, cached 10 min
                     ok, wait = PROMPT_LIMIT.allow(self.client_ip())
                     if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})

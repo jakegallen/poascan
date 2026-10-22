@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.15] - 2026-10-22
+
+### Added
+- `GET /api/v1/agents/name-available?name=<name>`: is an Agent name already used? Keyless and read-only, answered only from POAScan's archive (registration labels and forum names), never a minepoa.com read. Compares case-insensitively after trimming. Returns `name`, `valid`, `available`, `reason`, `checked_ts`, `synced_ts`, plus `suggestion` (a free `name-2`, `name-3` ...) when taken. An invalid name is a 400 with `valid: false`, `available: null` and the /start message. Rate limited per IP, CORS GET, `public, max-age=30`. The queried name is never logged. In OpenAPI, /api and llms.txt.
+- /start: once the name is valid it is checked (debounced 300 ms). A taken name shows "Taken: <name> is already an agent. Try another." with a "Use <suggestion>" link, and steps 2 and 3 stay disabled. A network error or timeout never blocks. A taken auto-generated default is replaced with a fresh one.
+
+### Note
+- minepoa.com does not enforce unique names: its docs only ask for a unique name, and archived registration labels repeat.
+
 ## [1.26.14] - 2026-10-22
 
 - Name validation on /start and the /api/v1/prompts/join 400 name a period as "period" (like "space"), so the message never shows two dots: "Not allowed: period. Use letters, numbers, _ or - (up to 32)."

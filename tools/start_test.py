@@ -1,7 +1,8 @@
 """/start v2 and the shared onboarding prompt. Checks the three-step structure (name, one radio set of clients with the four
 up front and the rest behind one More, one primary button, View prompt collapsed, one key line), the client wiring and
 beacon ids, the frozen prompt (tools/start_prompt_fixture.txt) and GET /api/v1/prompts/join (blocks join back to the text,
-strong ETag with a 304, cache and CORS headers, 400 on a bad name, no keys or codes, counted as an API route).
+strong ETag with a 304, cache and CORS headers, 400 on a bad name, no keys or codes, counted as an API route) and
+GET /api/v1/agents/name-available (taken, case variants, free, invalid, no upstream read, the name never logged).
 Usage: python3 tools/start_test.py"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 from html import unescape
@@ -57,9 +58,36 @@ check("Cursor deeplink stays under its 10,000 character limit with the longest n
       len(S.CURSOR[3] + quote(RC.fill(S.prompt("x" * 32), OP.REG_STEP["lead"], OP.REG_STEP["before"], "s_" + "a" * 16), safe="")) < 10000)
 check("beacon ids used by /start are on the /ops/e allowlist", all(i in PR.ids() for i in ("start.app", "start.appreg", "start.copy", "start.copyreg", "start.regshow", "mcp-poa.add")))
 
+# ---- agent names: POAScan's archive only
+from poascan import names as NM
+with db.conn() as cx:
+    cx.executemany("INSERT INTO labels VALUES(?,?,?,?,?)", [("poa1aa", "GrokByxAI", "hosted", "join memo", 1792700000), ("poa1bb", "GrokByxAI-2", "hosted", "join memo", 1792700100),
+                                                           ("poa1cc", "web", "hosted", "census.csv registration label (Oct 19)", 0), ("poa1dd", "edge-leg herd test", "hosted", "join memo", 1792600000)])
+    cx.execute("INSERT INTO forum_posts(id, author, author_public_id) VALUES(1, 'ForumOnly_9', 'pub1')")
+real_connect = socket.socket.connect; dialed = []
+def no_net(self, *a): dialed.append(a); raise OSError("no network in this check")
+socket.socket.connect = no_net
+try: res = {n: NM.available(n) for n in ("GrokByxAI", "grokbyxai", "GROKBYXAI", " GrokByxAI", "forumonly_9", "Web", "free-name-77", "a b", "", "x" * 33, "bad.name")}
+finally: socket.socket.connect = real_connect
+check(f"names: answered from the archive with no network at all (dialed {len(dialed)})", not dialed)
+check("names: exact spelling taken, with the exact message and a free suggestion past the taken -2",
+      res["GrokByxAI"] == (200, dict(name="GrokByxAI", valid=True, available=False, reason="Taken: GrokByxAI is already an agent. Try another.", suggestion="GrokByxAI-3",
+                                    checked_ts=res["GrokByxAI"][1]["checked_ts"], synced_ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1792700100)))))
+check("names: case variants are taken too (compared case-insensitively; the message echoes what was typed)",
+      all(res[n][1]["available"] is False and res[n][1]["reason"] == f"Taken: {n} is already an agent. Try another." for n in ("grokbyxai", "GROKBYXAI", "Web"))
+      and res["forumonly_9"][1]["available"] is False)
+check("names: a free name is available with an empty reason and no suggestion", res["free-name-77"][0] == 200 and res["free-name-77"][1]["available"] is True
+      and res["free-name-77"][1]["reason"] == "" and "suggestion" not in res["free-name-77"][1] and set(res["free-name-77"][1]) == {"name", "valid", "available", "reason", "checked_ts", "synced_ts"})
+check("names: invalid names are a 400 with valid false, available null and the /start message",
+      [res[n][0] for n in ("a b", "", "x" * 33, "bad.name", " GrokByxAI")] == [400] * 5 and res["a b"][1]["available"] is None and res["a b"][1]["valid"] is False
+      and res["a b"][1]["reason"] == S.name_error("a b") == "Not allowed: space. Use letters, numbers, _ or - (up to 32)." and res[""][1]["reason"] == "Name your agent to continue."
+      and res["x" * 33][1]["reason"] == "Too long: up to 32 characters." and res["bad.name"][1]["reason"].startswith("Not allowed: period."))
+check("names: a suggestion always fits 32 characters", len(NM.suggest("w" * 32)) <= 32 and NM.suggest("web") == "web-2")
+
 # ---- the page, end to end
 sk = socket.socket(); sk.bind(("127.0.0.1", 0)); port = sk.getsockname()[1]; sk.close(); base = f"http://127.0.0.1:{port}"
-p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_INDEXER="0"))
+slog = open(os.path.join(tmp, "server.log"), "w+")
+p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_INDEXER="0"), stdout=slog, stderr=subprocess.STDOUT)
 def req(u, h=None):
     try: r = urllib.request.urlopen(urllib.request.Request(base + u, headers=h or {}), timeout=30); return r.status, dict(r.headers), r.read().decode()
     except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read().decode()
@@ -135,6 +163,29 @@ try:
     check("counted as its own API route (OpenAPI path), docs and llms list it, not an MCP tool",
           VS.api_route("/api/v1/prompts/join") == "/api/v1/prompts/join" and "/api/v1/prompts/join" in req("/openapi.json")[2] and "/prompts/join" in req("/llms.txt")[2]
           and "/api/v1/prompts/join" in req("/api")[2] and "prompts/join" not in json.dumps(AG.TOOLS, default=str))
+
+    # ---- name-available over HTTP
+    na = "/api/v1/agents/name-available?name="
+    c, hd, b = req(na + "grokbyxai"); j = json.loads(b)
+    check("GET name-available: taken case variant, 200, short public cache, CORS GET", c == 200 and j["available"] is False and j["suggestion"] == "grokbyxai-3"
+          and hd.get("Cache-Control") == "public, max-age=30" and hd.get("Access-Control-Allow-Origin") == "*" and "GET" in hd.get("Access-Control-Allow-Methods", ""))
+    c2, _, b2 = req(na + "zz-unused-404"); c3, h3, b3 = req(na + "a%20b"); c4, _, b4 = req("/api/agents/name-available"); c5, _, _ = req(na + "a&name=b")
+    check("GET name-available: free 200, invalid 400 no-store with the /start message, no name 400, two names 400",
+          c2 == 200 and json.loads(b2)["available"] is True and c3 == 400 and h3.get("Cache-Control") == "no-store"
+          and json.loads(b3)["reason"] == "Not allowed: space. Use letters, numbers, _ or - (up to 32)." and c4 == 400 and json.loads(b4)["reason"] == "Name your agent to continue." and c5 == 400)
+    codes = [req(na + "burst-%d" % i)[0] for i in range(60)]
+    check(f"GET name-available: rate limited per IP ({codes.count(429)} of 60 got 429)", 429 in codes and codes[0] == 200)
+    check("name-available: counted as its own API route, in OpenAPI, /api and llms.txt, not an MCP tool",
+          VS.api_route("/api/v1/agents/name-available") == "/api/v1/agents/name-available" and "/api/v1/agents/name-available" in req("/openapi.json")[2]
+          and "NameAvailable" in req("/openapi.json")[2] and "/api/v1/agents/name-available" in req("/api")[2] and "/agents/name-available?name=" in req("/llms.txt")[2]
+          and "name-available" not in json.dumps(AG.TOOLS, default=str))
+    check("client: debounced 300 ms check, 3 s timeout, stale answers ignored, errors never block, Use link, default name regenerated",
+          '"Taken: "+v+" is already an agent. Try another."' in blk and '"/api/v1/agents/name-available?name="+encodeURIComponent(v)' in blk and "setTimeout(function(){avail(v)},300)" in blk
+          and "if(ac)ac.abort()},3000)" in blk and "q!==tSeq" in blk and ".catch(function(){clearTimeout(to)})" in blk and 'u.textContent="Use "+sg' in blk
+          and "dflt&&tries<5&&W.poaNewName" in blk and "W.poaNewName=gen" in js and ".stuse{" in css)
+    time.sleep(0.5); slog.flush(); slog.seek(0); lg = slog.read()
+    check("logs: request lines carry the path only, never the queried name", "/api/v1/agents/name-available" in lg and "grokbyxai" not in lg.lower()
+          and "zz-unused-404" not in lg and "burst-" not in lg and "?name=" not in lg)
 finally:
     p.terminate(); p.wait(10)
 print("all passed" if not fails else f"{len(fails)} failed")
