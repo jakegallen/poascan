@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS visit_uniques(day TEXT PRIMARY KEY, uniques INTEGER N
 -- daily event counts (1.23.0): every key comes from a fixed allowlist or pattern in visits.py (route template, tool name, prompt id, tag)
 CREATE TABLE IF NOT EXISTS visit_counts(day TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('api','mcp','client','prompt','tag','device','country','edge','search','404','5xx','ms')),
   key TEXT NOT NULL CHECK (length(key) <= 64), n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY (day, metric, key)) WITHOUT ROWID;
+-- daily network rollup (1.24.0, poascan/network.py): per UTC day aggregates of archived txs and snapshots, updated incrementally
+CREATE TABLE IF NOT EXISTS network_daily(day INTEGER PRIMARY KEY, txs TEXT, snaps TEXT, updated INTEGER);
+CREATE TABLE IF NOT EXISTS network_first(addr TEXT PRIMARY KEY, ts INTEGER NOT NULL) WITHOUT ROWID;
 """
 
 def conn():

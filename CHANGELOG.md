@@ -9,6 +9,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.24.0] - 2026-10-22
+
+### Added
+
+- Private operator-only daily network aggregates (token-gated like the private visit totals, not linked anywhere): Agents, txs by type, transfers, epoch closes and rewards, mining, swaps, wallet cohorts and POAScan's own upstream request counts, plus a current holder snapshot. Derived only from data POAScan already archives; no new upstream reads. Backed by a small `network_daily` rollup table that is updated incrementally.
+
+### Changed
+
+- API, MCP server and registry version 1.24.0. No public route, field or tool changed.
+
 ## [1.23.0] - 2026-10-22
 
 ### Added

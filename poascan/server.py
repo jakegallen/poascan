@@ -4,6 +4,7 @@ from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
 from . import visits as VS
+from . import network as NW
 from . import keysafe as KS
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
@@ -351,19 +352,35 @@ class H(BaseHTTPRequestHandler):
         if not (KS.has_key(raw) or KS.has_cred_param(q)): return False
         log.warning("refused a request with a key-shaped value (not logged)")
         self.send(400, KS.WARN + "\n", TXT, {"Cache-Control": "no-store"}); return True
-    def ops_visits(self, path, qs):
-        """Private daily visit totals. Without POASCAN_STATS_TOKEN set, or without the right Bearer token, this is the
-        normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled."""
+    def ops_gate(self, path, qs):
+        """Shared gate for the private /ops JSON: without POASCAN_STATS_TOKEN set, or without the right Bearer token, the
+        normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled.
+        Returns (headers, from, to) when the caller may answer, else None after sending the response."""
         ok, wait = AG.LIMIT.allow(self.client_ip())
         good = VS.token_ok(self.headers.get("Authorization"))
-        if not good: return self.send(404, V.not_found(path=path))
+        if not good: self.send(404, V.not_found(path=path)); return None
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
-        if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait)}))
+        if not ok: self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait)})); return None
         try: fr, to = VS.parse_range(qs)
-        except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", hd)
+        except ValueError as e: self.send(400, json.dumps({"error": str(e)}), "application/json", hd); return None
+        return hd, fr, to
+    def ops_visits(self, path, qs):
+        """Private daily visit totals (gate: ops_gate)."""
+        g = self.ops_gate(path, qs)
+        if not g: return
+        hd, fr, to = g
         try: VS.COUNTER.flush(); out = json.dumps(VS.report(fr, to))
         except Exception as e:
             log.error("ops visits: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
+    def ops_network(self, path, qs):
+        """Private daily network aggregates from the archive (poascan/network.py; gate: ops_gate). No upstream call."""
+        g = self.ops_gate(path, qs)
+        if not g: return
+        hd, fr, to = g
+        try: out = NW.report(fr, to)
+        except Exception as e:
+            log.error("ops network: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
     def do_GET(self):
         if self.key_guard(): return
@@ -373,6 +390,7 @@ class H(BaseHTTPRequestHandler):
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         V.REQ.path, V.REQ.qs = path, qs
         if path == "/ops/visits": return self.ops_visits(path, qs)
+        if path == "/ops/network": return self.ops_network(path, qs)
         try:
             if path == "/ws":
                 return HUB.accept(self)
