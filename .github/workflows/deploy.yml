@@ -31,8 +31,8 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: |
-          python tools/secret_scan.py
-          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE" 2>/dev/null; then python tools/secret_scan.py --range "$BEFORE..$GITHUB_SHA"; fi
+          python tools/keyscan.py
+          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE" 2>/dev/null; then python tools/keyscan.py --range "$BEFORE..$GITHUB_SHA"; fi
       - name: Smoke test (empty DB, indexer off, no upstream calls)
         run: python tools/smoke_test.py
       - name: Joining state (open, delayed, paused)

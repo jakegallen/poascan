@@ -73,7 +73,7 @@ def main():
     check("server log never holds the key or a credential value", k not in log and b"token=abc" not in log and b"api_key=abc" not in log and b"refused a request" in log)
     from poascan import keysafe as KS
     check("log redaction helper", "[redacted]" in KS.redact_log("GET /x?q=1&token=abc&key=" + FAKE) and FAKE not in KS.redact_log("GET /x?q=" + quote(FAKE)))
-    import secret_scan as SS
+    import keyscan as SS
     gh = "gh" + "p_" + "A1b2" * 9
     hits = SS.scan_text("t", [(1, "x = '" + FAKE + "'"), (2, gh), (3, "https://minepoa.com/x?key=" + FAKE[3:]), (4, "key=YOUR_KEY pk_… api_key (pk_…)")])
     check("secret scan catches keys and tokens, ignores placeholders", [h.split(": ")[1] for h in hits] == ["PoA key", "GitHub token", "credential in URL"])
