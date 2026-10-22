@@ -154,7 +154,7 @@ def _last_status(field, window=86400):
         return r["v"] if r else None
     except Exception: return None
 
-STATUS_FRESH_S = 600   # /api/status as_of within this many seconds, without minepoa's own stale flag, reads as fresh
+STATUS_FRESH_S = 600   # /api/status as_of within this many seconds reads as fresh (A.LAG_NODE_S: minepoa's own stale flag counts only past this age)
 
 def recovery():
     """Public recovery facts from our own mirror: checkpoint moved, new state root, supply carried over, status freshness, counters."""
@@ -167,7 +167,7 @@ def recovery():
     return dict(moved=cp is not None and int(cp) > PARKED, checkpoint=int(cp) if cp is not None else None, previous_checkpoint=PARKED,
                 state_root=st.get("state_root"), supply=str(st.get("supply")) if st.get("supply") is not None else None, supply_before=PRE_SUPPLY,
                 supply_intact=sup is not None and sup == pre, status_as_of=st.get("as_of"), status_age_s=age,
-                status_fresh=age is not None and age <= STATUS_FRESH_S and not st.get("stale"),
+                status_fresh=age is not None and age <= STATUS_FRESH_S, status_stale_flag=bool(st.get("stale")),   # same rule as the pill: a stale flag on a read under 10 minutes old is not lag
                 txs=st.get("txs"), final=st.get("final"), epochs_closed=st.get("epochs_closed"), open_ballots=open_ballots())
 
 def mining_back():

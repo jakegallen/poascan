@@ -73,6 +73,12 @@ seed({}, notice=False); check("notice gone but mining still paused: stays on", M
 seed({})
 db.add_snap("status", {"checkpoint_height": 33463, "state_root": ROOTHASH, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))})
 db.put_blob("status", {"supply": "1234828243.783275", "txs": 1, "final": 0, "epochs_closed": 10})
+db.put_blob("status", dict(db.get_blob("status")[0], stale=True, stale_age_s=108, as_of=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 108))))
+check("minepoa's stale flag on a 2 minute old read still reads fresh (same rule as the pill); 15 minutes old does not",
+      M.recovery()["status_fresh"] and M.recovery()["status_stale_flag"])
+db.put_blob("status", dict(db.get_blob("status")[0], as_of=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 900))))
+check("a 15 minute old /api/status reads not fresh", M.recovery()["status_fresh"] is False)
+db.put_blob("status", {"supply": "1234828243.783275", "txs": 1, "final": 0, "epochs_closed": 10})
 r = M.recovery()
 check("lean /api/status answer: checkpoint, state root and as_of come from our newest snapshot, the headline holds",
       r["moved"] and r["checkpoint"] == 33463 and r["state_root"] == ROOTHASH and r["status_fresh"] and M.strip_text()[0] == "Recovery in progress")

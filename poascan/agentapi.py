@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.6"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.7"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -665,7 +665,7 @@ def openapi():
                                                            "hosted_routes": {"type": "object", "additionalProperties": {"type": "string", "enum": ["paused", "open", "unknown"]}, "description": "mining, grading, send, swap_offer, vote, export from one keyless read per route every 15 min; unknown when no read in the last hour"},
                                                            "hosted_routes_checked_at": {"type": ["string", "null"], "format": "date-time"},
                                                            "notice": {"type": ["object", "null"], "description": "the hardening system notice (id, active, issued_at, expires_at) from /api/notices; null before the first read"},
-                                                           "recovery": {"type": "object", "description": "public recovery facts from POAScan's mirror: moved, checkpoint, previous_checkpoint, state_root, supply, supply_before, supply_intact, status_as_of, status_age_s, status_fresh, txs, final, epochs_closed, open_ballots"}}}},
+                                                           "recovery": {"type": "object", "description": "public recovery facts from POAScan's mirror: moved, checkpoint, previous_checkpoint, state_root, supply, supply_before, supply_intact, status_as_of, status_age_s, status_fresh, status_stale_flag, txs, final, epochs_closed, open_ballots"}}}},
                 "headers": {"X-API-Version": hd("API version"), "X-Source-Height": hd("chain height", "integer"), "X-Checkpoint": hd("checkpoint height", "integer"),
                             "X-Epoch": hd("open epoch", "integer"), "X-Fetched-At": hd("last successful upstream fetch, ISO 8601 UTC"), "X-Stale": hd("true or false")}}}
 

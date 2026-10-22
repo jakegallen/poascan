@@ -9,6 +9,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.7] - 2026-10-22
+
+### Fixed
+
+- `/upgrade` status freshness uses the same rule as the header pill: a read under 10 minutes old is fresh even when minepoa.com flags its node snapshot stale for a moment. `meta.maintenance.recovery.status_stale_flag` carries that flag (additive).
+
 ## [1.26.6] - 2026-10-22
 
 ### Fixed
