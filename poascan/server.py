@@ -16,12 +16,31 @@ log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
 
+NUM_RX = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+def cell(v):
+    """CSV cell (SC-015): a text value a spreadsheet would run as a formula (=, +, -, @, tab, CR) gets a leading
+    apostrophe. Numbers, and text that is just a number such as "-1.5", are left as they are."""
+    if isinstance(v, (dict, list)): v = json.dumps(v)
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not NUM_RX.match(v): return "'" + v
+    return v
+
 def to_csv(rows):
     if not rows: return ""
     buf = io.StringIO(); keys = list(dict.fromkeys(k for r in rows for k in r.keys()))   # union: optional fields still get a column
-    w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore"); w.writeheader()
-    for r in rows: w.writerow({k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k, v in r.items()})
+    w = csv.DictWriter(buf, fieldnames=[cell(k) for k in keys], extrasaction="ignore"); w.writeheader()
+    for r in rows: w.writerow({cell(k): cell(v) for k, v in r.items()})
     return buf.getvalue()
+
+INT_RX = re.compile(r"^[+-]?\d{1,18}$")
+def qint(qs, k, default, lo, hi):
+    """An integer query parameter (SC-002): missing or empty is the default, anything else non-integer is a 400,
+    and the value is clamped to [lo, hi]."""
+    v = (qs.get(k) or [""])[0].strip()
+    if v == "": return default
+    if not INT_RX.match(v): raise BadRequest(f"{k} must be an integer from {lo} to {hi}")
+    return max(lo, min(hi, int(v)))
+
+TXS_MAX, OFFSET_MAX = 1000, 10_000_000
 
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
@@ -33,18 +52,19 @@ def api(path, qs):
     if path == "/api/summary":
         s = V.summary_json(); return s, False
     if path == "/api/txs":
-        lim = min(1000, int(qs.get("limit", ["100"])[0])); off = int(qs.get("offset", ["0"])[0]); typ = qs.get("type", [""])[0]; ad = qs.get("addr", [""])[0]
+        lim = qint(qs, "limit", 100, 1, TXS_MAX); off = qint(qs, "offset", 0, 0, OFFSET_MAX); typ = qs.get("type", [""])[0]; ad = qs.get("addr", [""])[0]
         w, a = [], []
         if typ: w.append("type=?"); a.append(typ)
         if ad: w.append("(from_addr=? OR to_addr=?)"); a += [ad, ad]
         sql = "SELECT * FROM txs" + (" WHERE " + " AND ".join(w) if w else "") + " ORDER BY ts DESC LIMIT ? OFFSET ?"
         return db.q(sql, tuple(a) + (lim, off)), True
     m = re.match(r"^/api/tx/([0-9a-fA-F]{64})$", path)
-    if m: return I.get_tx_detail(m.group(1).lower()), False
+    if m: return upstream(lambda: I.get_tx_detail(m.group(1).lower()), "transaction not found"), False
     m = re.match(r"^/api/address/(poa1\w+)/(txs|assignments)$", path)
     if m:
-        a, k = m.groups(); c = qs.get("cursor", [""])[0] or None; lim = qs.get("limit", ["50"])[0]; lim = int(lim) if lim.isdigit() else 50
-        if not V.ADDR_RX.match(a): return {"error": "address must be a poa1 address"}, False
+        a, k = m.groups(); c = qs.get("cursor", [""])[0] or None
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        lim = qint(qs, "limit", 50, 1, 200)
         try:
             if k == "assignments": return dict(address=a, **HI.assignments(a, c, lim), method=AG.BASE + "/about#history"), False
             typ = qs.get("type", [""])[0] or None; rows, nxt = HI.txs_page(a, c, lim, typ)
@@ -52,8 +72,14 @@ def api(path, qs):
         return dict(address=a, type=typ, txs=rows, next_cursor=nxt, types=HI.type_counts(a), coverage=HI.coverage(a), method=AG.BASE + "/about#history"), False
     m = re.match(r"^/api/address/(poa1\w+)$", path)
     if m:
-        a = m.group(1); p = G.profile(a); d, err = V.fetch_address(a)
-        return dict(address=a, balance=(d or {}).get("balance"), rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        p = G.profile(a); d, err = V.fetch_address(a)
+        bal = (d or {}).get("balance")
+        if bal is None:   # no fresh read (budget, backoff or busy): the balance from the network's agent list, 15 min old at most
+            acc = db.q1("SELECT balance_s, balance FROM accounts WHERE addr=?", (a,))
+            if acc: bal = acc["balance_s"] if acc["balance_s"] is not None else acc["balance"]
+        return dict(address=a, balance=bal, rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
@@ -67,8 +93,8 @@ def api(path, qs):
         return r, False
     if path == "/api/receipts":
         a = qs.get("address", [""])[0]
-        if not V.ADDR_RX.match(a): return {"error": "address must be a poa1 address"}, False
-        return RC.for_address(a, min(200, int(qs.get("limit", ["50"])[0] or 50))), True
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        return RC.for_address(a, qint(qs, "limit", 50, 1, 200)), True
     if path == "/api/epochs": return A.epoch_rows(), True
     if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
@@ -87,7 +113,7 @@ def api(path, qs):
         return V4.rows(t), True
     if path == "/api/status":
         d = V2.status_data(); return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"]), False
-    m = re.match(r"^/api/epoch/(\d+)$", path)
+    m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]
         if not r: raise KeyError
@@ -168,6 +194,7 @@ from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
+OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits and /ops/network: per IP, in memory, apart from MCP
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
@@ -223,6 +250,7 @@ MCP_HDRS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": 
             "Access-Control-Expose-Headers": "Mcp-Session-Id", "Allow": "POST, OPTIONS"}
 TXT = "text/plain; charset=utf-8"
 HSTS = "max-age=31536000"
+CANONICAL = os.environ.get("POASCAN_CANONICAL", "https://poascan.io").rstrip("/")   # the apex www. redirects to
 MPID = re.compile(rb'"mp\d+"')
 IMMUTABLE = "public, max-age=31536000, immutable"
 
@@ -230,12 +258,24 @@ QS_RX = re.compile(r"\?[^\s\"']*")   # query strings (searches included) never r
 
 class BadRequest(Exception): pass
 class NotFound(Exception): pass   # a known route with an unknown subject: 404 with the reason
+class TooMany(Exception):         # the per-client or global on-demand upstream budget is spent: 429 with Retry-After
+    def __init__(self, msg, retry): super().__init__(msg); self.retry = max(1, int(retry or 1))
+class Unavailable(Exception): pass   # upstream busy or backing off and nothing stored: 503
+
+def upstream(fn, missing):
+    """Run an on-demand upstream read for the API: unknown ids are 404, a spent budget 429, a busy node 503 (never 500)."""
+    try: d = fn()
+    except I.Missing: raise NotFound(missing)
+    except I.Limited as e: raise TooMany(str(e), e.retry)
+    except I.Busy as e: raise Unavailable(str(e) or "upstream busy")
+    if not (isinstance(d, dict) and d.get("id")): raise NotFound(missing)
+    return d
 
 class H(BaseHTTPRequestHandler):
     timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
     server_version = "POASCAN/1.0"
-    def log_message(self, fmt, *a):   # query strings are never logged; paths pass through the redaction filter
-        log.info("%s %s", self.address_string(), QS_RX.sub("", fmt % a))
+    def log_message(self, fmt, *a):   # no address (on Fly the peer is the proxy) and no query string; paths pass the redaction filter
+        log.info("%s", QS_RX.sub("", fmt % a))
     def parse_request(self):
         self._t0 = time.monotonic(); return super().parse_request()
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
@@ -254,12 +294,14 @@ class H(BaseHTTPRequestHandler):
             tag = 'W/"' + hashlib.sha1(MPID.sub(b"", b)).hexdigest()[:16] + '"'  # toggle ids count up per render; ignore them
             hdr.update({"ETag": tag, "Cache-Control": "no-cache"})
             if tag in (self.headers.get("If-None-Match") or ""):
-                self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", "no-cache"); self.send_header("Strict-Transport-Security", HSTS); self.end_headers(); return
+                self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", "no-cache"); self.send_header("Strict-Transport-Security", HSTS)
+                self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.end_headers(); return
         if gz: b = gzip.compress(b, 5)
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
         if gz: self.send_header("Content-Encoding", "gzip"); self.send_header("Vary", "Accept-Encoding")
         self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("Strict-Transport-Security", HSTS)
         self.send_header("Content-Security-Policy", CSP); self.send_header("X-Frame-Options", "DENY"); self.send_header("Permissions-Policy", PERMS)
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         for k, v in hdr.items(): self.send_header(k, KS.redact(str(v)))
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
@@ -287,7 +329,9 @@ class H(BaseHTTPRequestHandler):
             if fmt == "csv": return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": 'attachment; filename="api_epoch_records.csv"', "Access-Control-Allow-Origin": "*"}))
             b = RR.canonical(rows); return self.cond(b, RR.sha256(b), "max-age=60", mh)
         if not fr.isdigit(): return self.send(400, json.dumps({"error": "from must be a closed epoch number"}), "application/json", mh)
-        lim = qs.get("limit", [str(RR.FROM_MAX)])[0]; lim = max(1, min(RR.FROM_MAX, int(lim))) if lim.isdigit() else RR.FROM_MAX
+        try: lim = qint(qs, "limit", RR.FROM_MAX, 1, RR.FROM_MAX)
+        except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", mh)
+        if len(fr) > 9: return self.send(404, json.dumps({"error": f"no close record for epoch {fr}", "last_close": last}), "application/json", mh)
         b, nxt = RR.page(int(fr), lim)
         return self.cond(b, RR.sha256(b), "max-age=60", dict(mh, **({"X-Next-From": str(nxt)} if nxt is not None else {})))
     def client_ip(self):
@@ -312,6 +356,7 @@ class H(BaseHTTPRequestHandler):
         return self.send(204, b"", TXT, hd)
     def do_POST(self):
         """The only write-shaped methods we accept are JSON-RPC to the read-only MCP server and the click count."""
+        I.CLIENT.ip = self.client_ip()
         pth = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
         if pth == "/ops/e":
             try: return self.ops_event()
@@ -324,7 +369,8 @@ class H(BaseHTTPRequestHandler):
         try:
             ok, wait = AG.LIMIT.allow(self.client_ip())
             if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
-            n = int(self.headers.get("Content-Length") or -1)
+            n = self.headers.get("Content-Length") or ""
+            n = int(n) if n.isdigit() else -1
             if n < 0: return self.send(411, json.dumps(AG._err(None, -32600, "Content-Length required")), "application/json", MCP_HDRS)
             if n > 65536: return self.send(413, json.dumps(AG._err(None, -32600, "request too large")), "application/json", MCP_HDRS)
             pv = self.headers.get("MCP-Protocol-Version")
@@ -333,6 +379,10 @@ class H(BaseHTTPRequestHandler):
             if KS.has_key(raw):   # MCP tools never take keys; refuse without echoing the request
                 log.warning("refused an MCP call with a key-shaped value (not logged)")
                 return self.send(400, json.dumps(AG._err(None, -32602, KS.WARN)), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
+            extra = AG.batch_size(raw) - 1   # SC-013: a batch spends one token per message, not one per POST
+            if extra > 0:
+                ok, wait = AG.LIMIT.allow(self.client_ip(), extra)
+                if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
             code, out = AG.handle_mcp(raw)
             if out is None: return self.send(202, b"", "application/json", MCP_HDRS)
             return self.send(code, json.dumps(out, default=str), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
@@ -350,7 +400,7 @@ class H(BaseHTTPRequestHandler):
         """www.poascan.io redirects to the apex, keeping path and query. Fly health checks use the machine address, never www."""
         host = (self.headers.get("Host") or "").lower()
         if not host.startswith("www."): return False
-        self.send(301, "", TXT, {"Location": "https://" + host[4:].split(":")[0] + self.path, "Cache-Control": "public, max-age=86400"}); return True
+        self.send(301, "", TXT, {"Location": CANONICAL + self.path, "Cache-Control": "public, max-age=86400"}); return True   # never built from Host
     def key_guard(self):
         """Anything key-shaped in the path or query, or a credential parameter, is refused before routing:
         never fetched upstream, never logged, stored, cached, echoed or redirected."""
@@ -362,11 +412,9 @@ class H(BaseHTTPRequestHandler):
         """Shared gate for the private /ops JSON: without POASCAN_STATS_TOKEN set, or without the right Bearer token, the
         normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled.
         Returns (headers, from, to) when the caller may answer, else None after sending the response."""
-        ok, wait = AG.LIMIT.allow(self.client_ip())
-        good = VS.token_ok(self.headers.get("Authorization"))
-        if not good: self.send(404, V.not_found(path=path)); return None
+        ok, _ = OPS_LIMIT.allow(self.client_ip())   # checked first, own bucket: over the limit is the same 404, token or not
+        if not ok or not VS.token_ok(self.headers.get("Authorization")): self.send(404, V.not_found(path=path)); return None
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
-        if not ok: self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait)})); return None
         try: fr, to = VS.parse_range(qs)
         except ValueError as e: self.send(400, json.dumps({"error": str(e)}), "application/json", hd); return None
         return hd, fr, to
@@ -401,6 +449,7 @@ class H(BaseHTTPRequestHandler):
                   {"Retry-After": str(wait), "Cache-Control": "no-store"})
         return True
     def do_GET(self):
+        I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)
         if self.key_guard(): return
         if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
@@ -489,7 +538,7 @@ class H(BaseHTTPRequestHandler):
                 q = (qs.get("q", [""])[0] or "").strip().lower()[:40]; out = []
                 if len(q) >= 2:
                     nm = A.forum_names(); hits = [(n.lower().find(q), len(n), a, n) for a, n in nm.items() if n and q in n.lower()]
-                    out = [dict(id=a, name=n) for _, _, a, n in sorted(hits)[:6]]
+                    out = [dict(id=a, name=n) for _, _, a, n in sorted(hits) if V.ADDR_RX.match(a or "")][:6]   # SC-014: addresses only
                 return self.send(200, json.dumps(out), "application/json", {"Cache-Control": "public, max-age=60"})
             if path == "/fragment/lb":   # Rankings Load more
                 try: return self.send(200, json.dumps(V4.fragment(qs)), "application/json", {"Cache-Control": "no-store"})
@@ -504,7 +553,8 @@ class H(BaseHTTPRequestHandler):
                 p = path[:-4] if path.endswith(".csv") else path
                 if p == "/api/epoch-records" or re.match(r"^/api/epoch/\d+/record$", p): return self.records(p, qs, fmt)
                 if p == "/api/agents/view":
-                    try: body, etag = G.agents_view(qs.get("after", [""])[0], qs.get("limit", ["100"])[0] if qs.get("limit", ["100"])[0].isdigit() else 100)
+                    try: body, etag = G.agents_view(qs.get("after", [""])[0], qint(qs, "limit", 100, 1, 500))
+                    except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION})
                     except ValueError: return self.send(400, json.dumps({"error": "bad cursor"}), "application/json", {"X-API-Version": AG.VERSION})
                     m = AG.meta(); hd = dict(AG.meta_headers(m), **{"ETag": etag, "Cache-Control": "max-age=15", "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "ETag"})
                     inm = [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]
@@ -514,8 +564,15 @@ class H(BaseHTTPRequestHandler):
                 try: data, is_list = api(p, qs)
                 except NotFound as e: return self.send(404, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
-                except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION})
+                except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
+                except TooMany as e: return self.send(429, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": str(e.retry), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                except Unavailable as e: return self.send(503, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": "60", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 m = AG.meta(); mh = AG.meta_headers(m)
+                tag = SW.etag(p) if fmt != "csv" else None   # swap list routes: weak ETag of the data (SC-010)
+                if tag:
+                    mh = dict(mh, **{"ETag": tag, "Access-Control-Expose-Headers": mh["Access-Control-Expose-Headers"] + ", ETag"})
+                    if tag in [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]:
+                        return self.send(304, b"", "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
                 if isinstance(data, dict) and data.get("next_cursor"):
                     mh = dict(mh, **{"X-Next-Cursor": data["next_cursor"], "Access-Control-Expose-Headers": mh["Access-Control-Expose-Headers"] + ", X-Next-Cursor"})
                 if not is_list and isinstance(data, dict) and fmt != "csv": data = dict(data); data.setdefault("meta", m)
@@ -528,6 +585,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
             html = page(path, qs)
             if html is None: return self.send(404, V.not_found(path=path))
+            if isinstance(html, tuple): return self.send(*html)   # (status, html): a known route with an unknown subject
             return self.send(200, html)
         except BrokenPipeError:
             pass
@@ -564,7 +622,7 @@ def main():
     db.init()
     VS.COUNTER.start()
     def _term(*_):   # flush the visit counts, then exit as before
-        try: VS.COUNTER.flush()
+        try: VS.COUNTER.flush(final=True)   # rare referrers go out as 'other', never by name
         except Exception: pass
         logging.shutdown(); os._exit(0)
     signal.signal(signal.SIGTERM, _term)

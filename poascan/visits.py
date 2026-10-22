@@ -12,8 +12,8 @@ log = logging.getLogger("visits")
 FLUSH_EVERY = int(os.environ.get("POASCAN_VISITS_FLUSH", "600"))   # seconds
 P = 12; M = 1 << P                       # HyperLogLog: 4096 registers, about 1.6% standard error
 REF_CAP = 256                            # referrer domains held between flushes; new ones past the cap count as 'other'
-REF_MIN = 3                              # referrers seen fewer times in a day are folded into 'other' at day end
-KEEP_DAYS = 400                          # visit_referrers retention
+REF_MIN = 3                              # referrers seen fewer times in a day are saved only as 'other' (held in memory until then)
+KEEP_DAYS = 400                          # retention of every visit_* table
 KINDS = ("human", "bot", "agent")
 OWN_HOSTS = ("poascan.io", "poascan.fly.dev")
 BOT_NAMES = []                           # extra bot names (server.AI_BOTS), matched case-insensitively
@@ -278,9 +278,27 @@ class Counter:
             st.append(("INSERT INTO visit_uniques(day,uniques,segments) VALUES (?,?,1) ON CONFLICT(day) DO UPDATE SET uniques = excluded.uniques", (day, uniq), False))
         db.write_tx(st)
 
-    def flush(self):
+    def _split(self, r, stored, final):
+        """Referrer deltas to write now. A domain not yet saved by name today and under REF_MIN views stays in memory
+        (put back); at day end or shutdown (final) it is written as 'other'. So a rare domain is never written by name."""
+        out, held = {}, {}
+        for d, n in r.items():
+            (held if d != "other" and d not in stored and n < REF_MIN else out)[d] = n
+        if final:
+            if held: out["other"] = out.get("other", 0) + sum(held.values())
+        else:
+            for d, n in held.items(): self._ref(d, n)
+        return out
+
+    def _stored_refs(self, day):
+        try: return {x["domain"] for x in db.q("SELECT domain FROM visit_referrers WHERE day=?", (day,))}
+        except Exception: return set()
+
+    def flush(self, final=False):
+        stored = self._stored_refs(self.day)
         with self.lk:
             day, v, r, uniq, e = self._take()
+            r = self._split(r, stored if day == self.day else set(), final)
             if not v and not r and uniq == self.base and not self.base: uniq = None   # nothing seen yet today
         try: self._write(day, v, r, uniq, e)
         except Exception as e:
@@ -293,9 +311,10 @@ class Counter:
     def _roll(self, d):
         """At a UTC day change: flush the old day, fold its small referrers, drop the salt and sketch."""
         if d == self.day: return
+        stored = self._stored_refs(self.day)
         with self.lk:
             if d == self.day: return
-            old = self._take(); self._fresh(d); self.base = 0
+            old = list(self._take()); old[2] = self._split(old[2], stored, True); self._fresh(d); self.base = 0
         try: self._write(*old)
         except Exception as e: log.warning("visit rollover flush failed: %s", type(e).__name__)
         fold_before(d)
@@ -321,7 +340,8 @@ class Counter:
         return dict(registers=len(self.hll.r), views_keys=len(self.views), referrer_keys=len(self.refs), salt=len(self.salt), event_keys=len(self.ev))
 
 def fold_before(day):
-    """Referrers and campaign tags with fewer than REF_MIN views on a finished day become 'other'; rows past retention are pruned."""
+    """Referrers and campaign tags with fewer than REF_MIN views on a finished day become 'other' (a safety net: flush
+    already holds them back); rows of every visit_* table past KEEP_DAYS are pruned."""
     cut = (dt.date.fromisoformat(day) - dt.timedelta(days=KEEP_DAYS)).isoformat()
     db.write_tx([
         ("INSERT INTO visit_referrers(day,domain,views) SELECT day,'other',SUM(views) FROM visit_referrers WHERE day<? AND domain<>'other' AND views<? GROUP BY day "
@@ -331,7 +351,9 @@ def fold_before(day):
         ("INSERT INTO visit_counts(day,metric,key,n) SELECT day,'tag','other',SUM(n) FROM visit_counts WHERE metric='tag' AND day<? AND key<>'other' AND n<? GROUP BY day "
          "ON CONFLICT(day,metric,key) DO UPDATE SET n = n + excluded.n", (day, REF_MIN), False),
         ("DELETE FROM visit_counts WHERE metric='tag' AND day<? AND key<>'other' AND n<?", (day, REF_MIN), False),
-        ("DELETE FROM visit_counts WHERE day<?", (cut,), False)])
+        ("DELETE FROM visit_counts WHERE day<?", (cut,), False),
+        ("DELETE FROM visit_views WHERE day<?", (cut,), False),
+        ("DELETE FROM visit_uniques WHERE day<?", (cut,), False)])
 
 def report(frm, to):
     """Daily rows for [frm, to]. Today's small referrers are shown folded too."""

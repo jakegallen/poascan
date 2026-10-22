@@ -16,8 +16,8 @@ def seed(path):
     db.write(f"INSERT OR REPLACE INTO swaps({cols}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
              [(O1, A1, 10000, "solana", "SOL", 0.01, "So1Pay", now + 3600, now - 900, "filled", A2, F1, now - 300, 100, now),
               (O2, A2, 5000, "base", "ETH", 0.002, "0xpay", now + 3600, now - 600, "open", None, None, None, 100, now)], many=True)
-    db.write("INSERT OR REPLACE INTO swap_events VALUES(?,?,?,?,?,?)",
-             [(O1, O1, "swap-offer", A1, now - 900, "{}"), (F1, O1, "swap-fill", A2, now - 300, "{}"), (O2, O2, "swap-offer", A2, now - 600, "{}")], many=True)
+    db.write("INSERT OR REPLACE INTO swap_events(txid,offer_id,kind,addr,ts,json,final,checked,first_seen) VALUES(?,?,?,?,?,?,1,?,?)",
+             [(O1, O1, "swap-offer", A1, now - 900, "{}", now, now), (F1, O1, "swap-fill", A2, now - 300, "{}", now, now), (O2, O2, "swap-offer", A2, now - 600, "{}", now, now)], many=True)
     db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?,?,?,?,?)",
              [(F1, "swap-fill", A2, now - 300, 5, 1), ("e0" * 32, "join", A2, now - 3 * 3600, 9, 1)], many=True)
     db.write("DELETE FROM txs WHERE type='join' AND ts > ?", (now - 3 * 3600,))   # last join 3 h ago: joining reads paused
@@ -33,7 +33,7 @@ def main():
     tmp = tempfile.mkdtemp(); dbp = os.path.join(tmp, "r.db")
     subprocess.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {os.path.dirname(os.path.abspath(__file__))!r}); import routes_test as R; R.seed({dbp!r})"], check=True, cwd=ROOT)
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"
-    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POASCAN_MAINTENANCE="1")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="1")
     env.pop("POASCAN_JOIN_OPEN", None)
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env)
     fails = []

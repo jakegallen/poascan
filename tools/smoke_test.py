@@ -37,7 +37,7 @@ META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of"
 
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
-    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9")
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
     fails = []
@@ -629,7 +629,7 @@ def maintenance(base, root, env, check):
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
-    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "f.db"), POASCAN_INDEXER="0", POASCAN_MAINTENANCE="0")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "f.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     subprocess.run([sys.executable, "tools/fixture.py"], cwd=root, env=env, check=True)
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)

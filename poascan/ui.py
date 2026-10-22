@@ -123,7 +123,6 @@ SRC_URL = "https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1"
 ICON_GH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>'
 ICON_SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 3.6 16.4 7v6.8l-5.9 3.4-5.9-3.4V7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.2 15.6 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
 ICON_MENU = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
-ICON_COPY = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 10.5V3.6A1.1 1.1 0 0 1 4.1 2.5H10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'
 
 def idn(a):
     """Deterministic hex identicon placeholder; static/app.js paints it from the address."""
@@ -181,7 +180,6 @@ OG_IMAGE = SITE_URL + "static/og-card.png?v=1"
 OG_HOOK = None   # server sets og.url_for: path -> per-page preview image, or None for the generic card
 
 REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canonical URLs and per-page meta
-REPO_URL = "https://github.com/jakegallen/poascan"
 CANON = {"/index.html": "/", "/blocks": "/epochs", "/community": "/forum", "/join": "/start", "/onboarding": "/start"}
 DESCS = {
     "/": SITE_DESC,
@@ -315,7 +313,6 @@ def head_meta(full_title, title=""):
             f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{_verify_meta()}{jsonld()}')
 
 from . import join as _join
-TICKER_FN = None  # set by views (latest epochs + txs strip)
 
 FOOT = [("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
@@ -355,7 +352,7 @@ def updot(state):
 
 def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
-    nav = "".join(f'<a href="{h}" class="{"on" if h == active else ""}">{n}</a>' for h, n in NAV)
+    nav = "".join(f'<a href="{h}" class="on" aria-current="page">{n}</a>' if h == active else f'<a href="{h}" class="">{n}</a>' for h, n in NAV)
     if not isinstance(live, dict):
         from . import analytics as _A
         live = _A.freshness()
@@ -365,7 +362,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=79">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=80">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -378,7 +375,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=33" defer></script></body></html>'''
+<script src="/static/app.js?v=34" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

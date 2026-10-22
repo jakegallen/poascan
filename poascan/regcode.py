@@ -1,4 +1,4 @@
-"""Optional wallet registry step for the wallet setup prompts (/swaps Add Wallet, /start step 6).
+"""Optional wallet registry step for the wallet setup prompts (/swaps Add Wallet, /start step 8).
 The setup code is made in the visitor's browser (static/app.js: 's_' + 16 chars of a-z2-7, crypto.getRandomValues) and
 filled into the prompt there. POAScan's server never generates, receives, logs or stores it, never calls poaswap.io, and
 never puts the code in a URL, cookie or local storage. Without JS the prompt shows without this step.

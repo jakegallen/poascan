@@ -1,5 +1,5 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
-import json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging
+import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
 from . import db
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
@@ -12,35 +12,67 @@ ALLOWED = re.compile(r"^/(api/(status|networks|txs|explorer/txs|explorer/tx/[0-9
 class Busy(Exception):
     def __init__(self, msg, retry=None):
         super().__init__(msg); self.retry = retry
+class Missing(Busy):
+    """The node does not know this id (HTTP 404, or a detail answer without an id). Never an endpoint failure."""
+class Limited(Busy):
+    """An on-demand read was refused by the upstream budget (per client or global); retry is in seconds."""
 
-def fetch(path, timeout=60, endpoint=None):
-    """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure."""
+NOT_MODIFIED = object()            # fetch(..., cond=True) result when the node answered 304 to our If-None-Match
+MAX_BODY = 96 * 1024 * 1024        # decoded size cap (the epochs list is about 11 MB)
+_etags = {}                        # path -> ETag of the last 200, in memory only (a restart sends one plain GET)
+
+def _decode(raw, enc):
+    """gzip bodies are inflated with a size cap; anything other than gzip or identity is refused."""
+    enc = (enc or "").strip().lower()
+    if enc in ("", "identity"): return raw
+    if enc != "gzip": raise Busy("unexpected content-encoding " + enc[:20])
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS); out = d.decompress(raw, MAX_BODY)
+    if d.unconsumed_tail: raise Busy("response too large")
+    return out
+
+def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
+    """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
+    Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
+    returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): a 404 raises
+    Missing without counting as an endpoint failure."""
     if not ALLOWED.match(path):
         raise ValueError("path not allowlisted")
     from . import keysafe as _KS   # POAScan holds no PoA key and never sends one
     if _KS.has_key(path) or _KS.has_cred_param(path.partition("?")[2]):
         raise ValueError("refused: credential-shaped value in an outbound path")
     ep = endpoint or path.split("?")[0]
-    req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Accept": "application/json"})
+    hd = {"User-Agent": UA, "Accept": "application/json", "Accept-Encoding": "gzip"}
+    if cond and _etags.get(path): hd["If-None-Match"] = _etags[path]
+    req = urllib.request.Request(BASE + path, headers=hd)
     now = int(time.time()); t0 = time.time()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read()
+            wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag")
         _probe(ep, True, t0, "200")
         if raw[:1] not in (b"{", b"["):
             raise Busy("non-JSON response (load page?)")
         data = json.loads(raw)
+        if cond:
+            if et: _etags[path] = et
+            else: _etags.pop(path, None)
         db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes,err) VALUES(?,?,0,0,?,NULL) "
                  "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, bytes=excluded.bytes",
                  (ep, now, len(raw)))
         return data
     except urllib.error.HTTPError as e:
+        if e.code == 304 and cond:
+            _probe(ep, True, t0, "304")
+            db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,err) VALUES(?,?,0,0,NULL) "
+                     "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0", (ep, now))
+            return NOT_MODIFIED
         retry = None
         try:
-            body = json.loads(e.read() or b"{}"); retry = body.get("retry_after_seconds")
+            body = json.loads(_decode(e.read() or b"{}", e.headers.get("Content-Encoding")) or b"{}"); retry = body.get("retry_after_seconds")
         except Exception:
             pass
-        _probe(ep, False, t0, str(e.code)); _fail(ep, f"HTTP {e.code}", retry)
+        _probe(ep, False, t0, str(e.code))
+        if soft and e.code == 404: raise Missing("not found")
+        _fail(ep, f"HTTP {e.code}", retry)
         raise Busy(f"HTTP {e.code}", retry)
     except Busy as e:
         _fail(ep, str(e), None); raise
@@ -123,11 +155,13 @@ def upsert_txs(rows, source):
 
 def job_live():
     # Each read stands alone: a slow /api/networks must not hold back the tx feed that drives the Live pill.
-    rows = fetch("/api/explorer/txs?limit=200")
-    upsert_txs(rows, "explorer/txs")
+    rows = fetch("/api/explorer/txs?limit=200", cond=True)
+    if rows is not NOT_MODIFIED: upsert_txs(rows, "explorer/txs")
     for path, fn in (("/api/status", _live_status), ("/api/networks", _live_networks)):
         if not can_fetch(path): continue
-        try: fn(fetch(path, timeout=20))
+        try:
+            d = fetch(path, timeout=20, cond=True)
+            if d is not NOT_MODIFIED: fn(d)
         except Busy as e: log.warning("%s: %s", path, e)
 
 def _live_status(st): db.add_snap("status", st); db.put_blob("status", st)
@@ -139,7 +173,8 @@ def _live_networks(nw):
             db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height")})
 
 def job_window():
-    d = fetch("/api/txs", timeout=90)
+    d = fetch("/api/txs", timeout=90, cond=True)
+    if d is NOT_MODIFIED: return
     upsert_txs(d.get("valid", []), "txs-window")
     now = int(time.time())
     db.write("INSERT OR IGNORE INTO invalid_txs(txid,error,first_seen) VALUES(?,?,?)",
@@ -149,7 +184,9 @@ def job_meta():
     for kind, path in (("anchors", "/api/anchors"), ("notices", "/api/notices"), ("ballots", "/api/ballots")):
         if not can_fetch(path): continue
         try:
-            d = fetch(path); db.put_blob(kind, d)
+            d = fetch(path, cond=True)
+            if d is NOT_MODIFIED: continue
+            db.put_blob(kind, d)
             if kind == "anchors":
                 db.write("INSERT OR IGNORE INTO anchors VALUES(?,?,?,?,?,?,?)",
                          [(a["height"], a["chain"], a.get("tx_hash") or a.get("tx_signature"), a.get("state_root"),
@@ -161,7 +198,9 @@ def job_meta():
 def job_hourly_meta():
     for kind, path in (("params", "/api/params"), ("release", "/api/release"), ("chains", "/api/chains")):
         if not can_fetch(path): continue
-        try: db.put_blob(kind, fetch(path))
+        try:
+            d = fetch(path, cond=True)
+            if d is not NOT_MODIFIED: db.put_blob(kind, d)
         except Busy as e: log.warning("%s: %s", path, e)
         time.sleep(1)
 
@@ -170,7 +209,7 @@ def job_epochs(force=False):
     st, _ = db.get_blob("status"); have = A.epochs_count(); ep = have
     need = (st or {}).get("epochs_closed", 0)
     if not force and ep and have >= need: return False
-    d = fetch("/api/epochs", timeout=180)
+    d = fetch("/api/epochs", timeout=180, cond=True)
     if isinstance(d, list) and d:
         db.put_blob("epochs", d); return True
     return False
@@ -187,12 +226,15 @@ def job_agents():
 
 def job_forum():
     B = "/lableak/api"
-    comms = fetch(B + "/communities"); db.put_blob("communities", comms)
+    comms = fetch(B + "/communities", cond=True)
+    if comms is NOT_MODIFIED: comms = db.get_blob("communities")[0] or []
+    else: db.put_blob("communities", comms)
     known = {r["id"]: (r["comment_count"], r["edited_at"]) for r in db.q("SELECT id, comment_count, edited_at FROM forum_posts")}
     changed = []
     for c in comms:
         time.sleep(1)
-        ps = fetch(f"{B}/posts?sort=new&community={c['slug']}&limit=1000", endpoint=B + "/posts")
+        ps = fetch(f"{B}/posts?sort=new&community={c['slug']}&limit=1000", endpoint=B + "/posts", cond=True)
+        if ps is NOT_MODIFIED: continue   # same list as last time: nothing new in this community
         for p in ps:
             pid = int(p["id"]); cc = int(p.get("comment_count") or 0); ed = p.get("edited_at") or None
             # The list carries body (and edited_at once a post is edited): edited bodies refresh here at no extra request.
@@ -205,10 +247,13 @@ def job_forum():
                       p.get("body"), ed))
             k = known.get(pid)
             if not k or k[0] != cc or (ed and ed != k[1]): changed.append(pid)   # new comments, or an edit (its comments may have changed too)
+    broke = False
     for pid in changed[:120]:   # cap detail calls per run; the rest catch up next run
         time.sleep(0.8)
         try: ingest_post(fetch(f"{B}/posts/{pid}", endpoint=B + "/posts/:id"))
-        except Busy as e: log.warning("forum post %s: %s", pid, e); break
+        except Busy as e: log.warning("forum post %s: %s", pid, e); broke = True; break
+    if broke or len(changed) > 120:   # a backlog is only visible in the full lists: next run reads them without If-None-Match
+        for k in [k for k in list(_etags) if k.startswith(B + "/posts?")]: _etags.pop(k, None)
 
 def ingest_post(p):
     pid = int(p["id"]); cs = p.get("comments", [])
@@ -250,21 +295,97 @@ def lang(t):
     best = max(sc, key=sc.get)
     return best if sc[best] >= 2 else "unknown"
 
-# On-demand upstream reads made while serving a page (tx detail, address balance). They must never pile up
-# behind a slow or down upstream: short timeout, at most ONDEMAND_MAX at once, one fetch per id, and the
-# endpoint's backoff is honoured, so during maintenance pages answer from what is stored instead of waiting.
+# On-demand upstream reads made while serving a visitor (tx detail, address balance) on the HTML pages, the API and MCP.
+# They must never pile up behind a slow or down upstream, and visitors must never be able to turn POAScan into a steady
+# minepoa.com caller (SC-003). In order, a visitor read is refused before any request when:
+#   * the id does not match the valid format (64 hex for a tx, a base58 poa1 address),
+#   * the id failed recently (negative cache: NEG_TTL s for a 404 or an answer without an id, NEG_ERR_TTL s for other
+#     errors; bounded to NEG_MAX ids, oldest dropped first),
+#   * the on-demand endpoint key is backing off (its own key: a visitor miss never pauses scheduled ingest),
+#   * the client's budget is spent (CLIENT_RATE per s, burst CLIENT_BURST, per Fly-Client-IP, in memory only),
+#   * the global budget is spent (GLOBAL_RATE per s, burst GLOBAL_BURST, all visitors together),
+#   * ONDEMAND_MAX reads are already in flight.
+# Scheduled jobs (swap fills, wallet links, answer sample) read tx details through their own endpoint keys with their own
+# backoff and never spend the visitor budget. Mirror reads of /api/v1/swaps*, /agents/<a>/addresses and /epochs are
+# answered from the local archive and never reach this path; /address/<a> balance reads are cached 60 s per address
+# and fall back to the stored balance when the budget is spent.
 ONDEMAND_MAX = int(os.environ.get("POASCAN_ONDEMAND_MAX", "3"))
 ONDEMAND_TIMEOUT = float(os.environ.get("POASCAN_ONDEMAND_TIMEOUT", "8"))
+GLOBAL_RATE = float(os.environ.get("POASCAN_UPSTREAM_RATE", "0.5")); GLOBAL_BURST = int(os.environ.get("POASCAN_UPSTREAM_BURST", "20"))
+CLIENT_RATE = float(os.environ.get("POASCAN_UPSTREAM_CLIENT_RATE", "0.2")); CLIENT_BURST = int(os.environ.get("POASCAN_UPSTREAM_CLIENT_BURST", "20"))
+NEG_TTL, NEG_ERR_TTL, NEG_MAX = 600, 300, 5000
+TX_EP, ADDR_EP = "/api/explorer/tx/:id (on demand)", "/api/explorer/address/:addr"   # visitor keys
+BG_TX_EP = "/api/explorer/tx/:id"            # scheduled answer sample and wallet links (JOBS)
+SWAP_TX_EP = "/api/explorer/tx/:id (swaps)"  # swap fill ingest, never paused by a visitor or by the sample
+TX_ID = re.compile(r"^[0-9a-f]{64}$")
+ADDR_ID = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 _ondemand = threading.BoundedSemaphore(ONDEMAND_MAX)
 _tx_lock = threading.Lock(); _tx_inflight = {}
+CLIENT = threading.local()   # server.py sets CLIENT.ip (Fly-Client-IP, else the peer) per request; jobs have none
 
-def fetch_ondemand(path, endpoint):
+class Bucket:
+    """Token bucket; keyed buckets idle for 10 min are dropped (memory stays bounded)."""
+    def __init__(self, rate, burst):
+        self.rate, self.burst, self.b, self.lock = rate, burst, {}, threading.Lock()
+    def take(self, key=""):
+        now = time.monotonic()
+        with self.lock:
+            if len(self.b) > 5000: self.b = {k: v for k, v in self.b.items() if now - v[1] < 600}
+            tok, last = self.b.get(key, (self.burst, now)); tok = min(self.burst, tok + (now - last) * self.rate)
+            if tok < 1: self.b[key] = (tok, now); return False, int((1 - tok) / self.rate) + 1
+            self.b[key] = (tok - 1, now); return True, 0
+GLOBAL_BUDGET = Bucket(GLOBAL_RATE, GLOBAL_BURST)
+CLIENT_BUDGET = Bucket(CLIENT_RATE, CLIENT_BURST)
+
+_neg = collections.OrderedDict(); _neg_lock = threading.Lock()   # id -> (until, Missing or Busy)
+def neg_get(key):
+    with _neg_lock:
+        hit = _neg.get(key)
+        if hit and hit[0] > time.time(): return hit[1]
+        if hit: _neg.pop(key, None)
+    return None
+def neg_put(key, missing):
+    with _neg_lock:
+        _neg[key] = (time.time() + (NEG_TTL if missing else NEG_ERR_TTL), Missing if missing else Busy); _neg.move_to_end(key)
+        while len(_neg) > NEG_MAX: _neg.popitem(last=False)
+def neg_size(): return len(_neg)
+
+def fetch_ondemand(path, endpoint, key):
+    """One visitor-triggered read (see the block comment above). key is the tx id or address."""
+    if not (TX_ID.match(key) if endpoint == TX_EP else ADDR_ID.match(key)): raise Missing("not a valid id")
+    k = neg_get(endpoint + key)
+    if k: raise k("not found (cached)" if k is Missing else "upstream failed recently (cached)")
     if not can_fetch(endpoint): raise Busy("upstream backing off")
+    ip = getattr(CLIENT, "ip", None)
+    if ip:
+        ok, wait = CLIENT_BUDGET.take(ip)
+        if not ok: raise Limited("too many lookups of new ids; slow down", wait)
+    ok, wait = GLOBAL_BUDGET.take()
+    if not ok: raise Limited("upstream budget spent; try again shortly", wait)
     if not _ondemand.acquire(timeout=0.5): raise Busy("upstream busy")
-    try: return fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint)
+    try:
+        d = fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint, soft=True)
+        if endpoint == TX_EP and not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
+        return d
+    except Missing: neg_put(endpoint + key, True); raise
+    except Limited: raise
+    except Busy: neg_put(endpoint + key, False); raise
     finally: _ondemand.release()
 
-def get_tx_detail(tid, allow_fetch=True):
+def _bg_fetch_tx(tid, endpoint):
+    """A scheduled job's tx detail read: its own endpoint key and backoff, no visitor budget, no negative cache."""
+    if not TX_ID.match(tid): raise Missing("not a valid id")
+    if neg_get(endpoint + tid): raise Missing("not found (cached)")
+    if not can_fetch(endpoint): raise Busy("backing off")
+    try:
+        d = fetch(f"/api/explorer/tx/{tid}", timeout=20, endpoint=endpoint, soft=True)
+        if not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
+    except Missing: neg_put(endpoint + tid, True); raise
+    return d
+
+def get_tx_detail(tid, allow_fetch=True, bg=None):
+    """Stored detail when final (or read in the last 120 s), else one read. bg=None is a visitor read (fetch_ondemand);
+    bg=<endpoint key> is a scheduled job's read (BG_TX_EP or SWAP_TX_EP). Raises Missing, Limited or Busy when nothing is stored."""
     r = db.q1("SELECT json, fetched, final FROM tx_detail WHERE id=?", (tid,))
     if r and (r["final"] or time.time() - r["fetched"] < 120):
         return json.loads(r["json"])
@@ -277,16 +398,15 @@ def get_tx_detail(tid, allow_fetch=True):
         ev.wait(ONDEMAND_TIMEOUT + 2)
         return get_tx_detail(tid, allow_fetch=False)
     try:
-        d = fetch_ondemand(f"/api/explorer/tx/{tid}", "/api/explorer/tx/:id")
+        d = _bg_fetch_tx(tid, bg) if bg else fetch_ondemand(f"/api/explorer/tx/{tid}", TX_EP, tid)
     except Busy:
         if r: return json.loads(r["json"])
         raise
     finally:
         with _tx_lock: _tx_inflight.pop(tid, None)
         ev.set()
-    if isinstance(d, dict) and d.get("id"):
-        db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
-        upsert_txs([d], "explorer/tx")
+    db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
+    upsert_txs([d], "explorer/tx")
     return d
 
 def job_sample(n=20):
@@ -295,7 +415,8 @@ def job_sample(n=20):
     random.shuffle(rows)
     for r in rows[:n]:
         time.sleep(1.0)
-        try: d = get_tx_detail(r["id"])
+        try: d = get_tx_detail(r["id"], bg=BG_TX_EP)
+        except Missing: continue
         except Busy: break
         body = (d or {}).get("body") or {}
         c = classify(body.get("answer", ""))
@@ -309,7 +430,8 @@ def job_links(n=10):
     rows = db.q("""SELECT t.id FROM txs t LEFT JOIN tx_detail d ON d.id = t.id WHERE t.type = 'chains-update'
                    AND (d.id IS NULL OR (d.final = 0 AND t.final = 1)) ORDER BY t.ts DESC LIMIT ?""", (n,))
     for r in rows:
-        try: get_tx_detail(r["id"])
+        try: get_tx_detail(r["id"], bg=BG_TX_EP)
+        except Missing: pass
         except Busy: break
         time.sleep(1.0)
 
@@ -397,23 +519,35 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
 ]
 
-def run_forever(stop=None):
-    last = {}
+# Jobs that drive the Live pill and swap freshness run in their own thread, so a slow forum, epochs or /api/txs read
+# never holds them back (SC-025). The swap read keeps a fixed phase SWAP_PHASE_S after the live read plus a little
+# jitter each run, so the two 60 s reads (and 60 s mirror polls of the cached swap API) do not line up (SC-004).
+FAST = ("live", "swaps")
+SWAP_PHASE_S, SWAP_JITTER_S = 30, 5
+
+def _phase(name, every, now):
+    """Initial last-run time: the swap read starts SWAP_PHASE_S after the live read."""
+    return now - every + SWAP_PHASE_S if name == "swaps" else 0
+
+def run_forever(stop=None, jobs=None):
+    jobs = JOBS if jobs is None else jobs
+    t0 = time.time(); last = {name: _phase(name, every, t0) for name, fn, every, ep in jobs}
     while not (stop and stop.is_set()):
         now = time.time()
-        for name, fn, every, ep in JOBS:
+        for name, fn, every, ep in jobs:
             if now - last.get(name, 0) < every: continue
             if ep and not can_fetch(ep): continue
-            last[name] = now
+            last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
             try:
                 fn()
             except Busy as e:
                 log.warning("job %s busy: %s", name, e)
             except Exception as e:
+                _etags.clear()   # the job may not have stored what it read: the next reads are plain GETs
                 log.exception("job %s failed: %s", name, e)
             db.put_blob("job:" + name, {"ran": int(time.time())})
             time.sleep(2)  # spacing between jobs
-        time.sleep(5)
+        time.sleep(5 if len(jobs) > 2 else 1)
 
 def _purge_keys():
     from . import keysafe as _KS
@@ -428,5 +562,7 @@ def start(seed_dir=None):
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()
     try: seed(seed_dir)
     except Exception as e: log.exception("seed failed: %s", e)
-    th = threading.Thread(target=run_forever, daemon=True, name="indexer"); th.start()
+    fast = [j for j in JOBS if j[0] in FAST]; slow = [j for j in JOBS if j[0] not in FAST]
+    threading.Thread(target=run_forever, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
+    th = threading.Thread(target=run_forever, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
     return th

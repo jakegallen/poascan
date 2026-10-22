@@ -130,7 +130,6 @@ def swap_names():
 # ---------------- book and history ----------------
 # go.md SWAPS: open chains solana, ethereum, base; one-call take pays native SOL/ETH; token legs (USDC on Solana) use the coordinated flow
 SUPPORTED = [("SOL", "solana"), ("ETH", "base"), ("ETH", "ethereum"), ("USDC", "solana")]
-NATIVE = {"SOL", "ETH"}
 
 def rows():
     rs = S.swaps_all()

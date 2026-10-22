@@ -9,6 +9,35 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.3] - 2026-10-22
+
+Fixes from the 2026-10-22 audit (finding ids in brackets).
+
+### Fixed
+
+- Paging input (SC-002): `limit`, `offset`, `page` and `from` are parsed as bounded integers on every paginated API route, the `/txs` page and MCP tools. Non-numeric or overflowing input is a JSON 400, never a 500; negative values clamp to the floor. `/api/txs` keeps its documented max of 1000; offsets cap at 10,000,000. Non-`poa1` addresses on address routes are a 400. Unknown or oversized epoch numbers are a 404.
+- On-demand minepoa reads (SC-003): only ids in a valid format are fetched. Misses are held in a bounded negative cache (5000 ids; 10 min for a 404, 5 min for an error). New ids are limited per client (Fly-Client-IP, in memory) and by a global token bucket, with at most 3 in flight. Over budget, address reads fall back to stored data and an unknown tx is a 429 with Retry-After. On-demand failures use their own backoff key, so they never pause the live feed or swap fill ingest. Mirror reads of cached data are not limited.
+- Swap fills and cancels (SC-005): a fill or cancel applies only once its tx is final on the ledger. Among an offer's final fills and cancels the earliest by ledger ts wins (ties: the lower txid); later ones are ignored. Non-final txs stay pending (`final: false`), are re-read every 10 min (hourly after a day) or marked final from the explorer feed with no read, and a pending tx the node answers 404 for is dropped. With no final settlement an offer keeps its book state.
+- Expired offers (SC-006): an offer past its expiry is stored as `expired` and reads as `expired` everywhere (offer status, `/api/swaps/status` counts, `/ops/network` `open_swap_offers`). An offer missing from the book is `delisted` only after 2 consecutive misses.
+- `/privacy` (SC-007) now matches the code: Fly-Client-IP use (memory only, never stored), per-table retention, referrer bucketing, the setup code record (a hash of the code, `client`, `app_version`) and the DB-IP CC BY 4.0 attribution. Request logs no longer include an address.
+- CSV exports prefix cells that start with `=`, `+`, `-` or `@` (SC-015). Search suggestions escape every field (SC-014).
+- Referrers below the daily minimum are held in memory until they reach it; a shutdown or day rollover stores them as `other`. Visit tables are pruned at 400 days.
+
+### Changed
+
+- minepoa requests (SC-009) send `Accept-Encoding: gzip` and, where minepoa returns an ETag, `If-None-Match`; a 304 reuses the stored copy. Bodies are capped at 96 MB after decoding.
+- Swap API (SC-004): responses are cached for 30 s keyed on the data version, with a weak ETag; `/api/swaps` and `/api/swaps/price-history` answer `If-None-Match` with 304. The 60 s swap refresh starts 30 s after the live read, with 5 s of jitter per run, in its own scheduler thread so slow jobs never delay it.
+- `/ops/*` is rate limited per client before the token check; over the limit it is the same 404.
+- WebSocket live updates allow 8 sockets per client.
+- MCP batches (SC-013) count each message against the per-client limit; only the first 20 messages of a batch are run. A missing or malformed Content-Length is a JSON-RPC error, never a 500.
+- All responses carry `Cross-Origin-Opener-Policy: same-origin`; 304s keep `nosniff` and `Referrer-Policy`. The www redirect target is configurable (`POASCAN_CANONICAL`).
+- A SIGTERM flushes visit totals before exit. Accessibility: `aria-current` on the active nav item, a heading on `/txs`, 24 px footer link targets.
+- Removed unused code (ticker strip, tps helpers, the "Is it real?" card, `config_json`).
+
+### Added
+
+- `tools/audit_test.py` (in CI) covers each fix above with an in-process fake minepoa: clamps and a fuzz of every numeric API and MCP input, negative cache and budgets, finality and ordering of fills and cancels, expiry in counts, gzip and conditional requests, swap ETags, headers and the privacy copy. `established_test`, `halts_test` and `pulse_test` now run in CI too.
+
 ## [1.26.2] - 2026-10-22
 
 ### Changed

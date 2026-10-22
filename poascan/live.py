@@ -8,6 +8,7 @@ import base64, hashlib, json, logging, queue, selectors, struct, threading, time
 log = logging.getLogger("live")
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_CLIENTS = 2000
+PER_IP = 8          # sockets one client (Fly-Client-IP) may hold at once (SC-016); the count lives in memory only
 PUMP_EVERY = 3.0
 PING_EVERY = 25.0
 
@@ -28,6 +29,7 @@ class Hub:
         self.last_json = None; self.last_frame = None; self.last_at = 0
         self.sel = selectors.DefaultSelector()
         self.sent = 0
+        self.ip_of = {}; self.per_ip = {}   # sock -> client key, client key -> open sockets
 
     # ---- snapshot shared with the polling fallback ----
     def snapshot(self, max_age=PUMP_EVERY):
@@ -53,6 +55,11 @@ class Hub:
             handler.send(426, "upgrade required", "text/plain"); return
         if len(self.clients) >= MAX_CLIENTS:
             handler.send(503, "busy", "text/plain"); return
+        ip = (h.get("Fly-Client-IP") or "").strip() or None   # without the header (local runs) only MAX_CLIENTS applies
+        if ip:
+            with self.lock: n = self.per_ip.get(ip, 0)
+            if n >= PER_IP:
+                handler.send(429, "too many live connections from one client", "text/plain", {"Retry-After": "30"}); return
         acc = base64.b64encode(hashlib.sha1((key.strip() + GUID).encode()).digest()).decode()
         sock = handler.connection
         try:
@@ -65,12 +72,19 @@ class Hub:
             return
         handler.close_connection = True
         handler.server.detached.add(sock)
-        with self.lock: self.clients[sock] = bytearray()
+        with self.lock:
+            self.clients[sock] = bytearray()
+            if ip: self.ip_of[sock] = ip; self.per_ip[ip] = self.per_ip.get(ip, 0) + 1
         self.pending.put(sock)
 
     def drop(self, sock):
         with self.lock:
             if self.clients.pop(sock, None) is None: return
+            ip = self.ip_of.pop(sock, None)
+            if ip:
+                n = self.per_ip.get(ip, 1) - 1
+                if n > 0: self.per_ip[ip] = n
+                else: self.per_ip.pop(ip, None)
         try: self.sel.unregister(sock)
         except Exception: pass
         try: sock.close()

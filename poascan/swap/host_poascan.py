@@ -45,12 +45,16 @@ def swap_tx_ids():
     return [r["id"] for r in _db.q("SELECT id FROM txs WHERE type LIKE 'swap-%' OR type='attest-fill' ORDER BY ts")]
 
 # ---- upstream reads: the host's rate-limited, backed-off client for minepoa.com ----
-_LAZY = ("fetch", "get_tx_detail", "Busy", "UA")   # fetch(path, timeout, endpoint), get_tx_detail(txid), Busy (rate limit hit), UA
+# fetch(path, timeout, endpoint, cond), get_tx_detail(txid, bg=SWAP_TX_EP), Busy (rate limit hit), Missing (unknown id), NOT_MODIFIED (304), UA
+_LAZY = ("fetch", "get_tx_detail", "Busy", "Missing", "NOT_MODIFIED", "SWAP_TX_EP", "UA")
 def __getattr__(n):   # resolved on first use, so the host indexer can import the swap jobs without a cycle
     if n in _LAZY:
         from .. import indexer as _I
         return getattr(_I, n)
     raise AttributeError(n)
+def blob_ts(kind):
+    """When the host last stored a blob (no JSON parse)."""
+    r = _db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,)); return r["ts"] if r else None
 def fetch_log(endpoint):
     """Last ok / last error of the host's scheduled read of an upstream endpoint (no extra upstream call)."""
     return _db.q1("SELECT last_ok, last_err, err, fails FROM fetch_log WHERE endpoint=?", (endpoint,)) or {}

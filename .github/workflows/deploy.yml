@@ -53,6 +53,14 @@ jobs:
         run: python tools/incident_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
         run: python tools/pagecost_test.py
+      - name: Audit fixes (input clamps, on-demand budgets and negative cache, swap finality and expiry, gzip and ETag, privacy copy)
+        run: python tools/audit_test.py
+      - name: Established set
+        run: python tools/established_test.py
+      - name: Halts
+        run: python tools/halts_test.py
+      - name: Pulse
+        run: python tools/pulse_test.py
 
   deploy:
     needs: test

@@ -67,17 +67,6 @@ def burnmeter_html():
             f'<span title="Burn share of the settled pool"><b class="num red">{bp:.1f}%</b></span></div>')
     return f'<div class="bm" id="burnmeter">{cur}{done}</div>'
 
-def ticker_html():
-    ep = A.epoch_rows()[-6:]
-    txs = db.q("SELECT id, type, ts FROM txs ORDER BY ts DESC LIMIT 14")
-    items = [f'<a class="tk-i" href="/epoch/{r["epoch"]}"><b class="mono">E{r["epoch"]}</b><span class="num mined">{compact(r["minted"], 1)}</span><span class="num red">{r["burn_pct"]:.0f}%</span></a>' for r in reversed(ep)]
-    items += [f'<a class="tk-i" href="/tx/{E(t["id"])}">{badge(t["type"])}<span class="mono">{E(short(t["id"], 6, 4))}</span><time class="t rel" data-ts="{int(t["ts"] or 0)}"></time></a>' for t in txs]
-    if not items: return skel(1)
-    sig = (txs[0]["id"] if txs else "") + str(len(ep))
-    strip = "".join(items)
-    return f'<div class="tk-track" data-sig="{E(sig)}"><div class="tk-run">{strip}</div><div class="tk-run" aria-hidden="true">{strip}</div></div>'
-
-_ui.TICKER_FN = ticker_html
 
 def headline():
     st = A.status(); ep = A.epoch_rows(); last = ep[-1] if ep else {}; sp = A.supply_split(); nw = A.networks()
@@ -194,15 +183,12 @@ def upgrade_strip():
     t = f" {E(tail)}" if tail else ""
     return f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><a href="/upgrade">Details</a></p>'
 
-def tps_html():
-    now = time.time()
-    r = db.q1("SELECT COUNT(*) AS n FROM txs WHERE ts > ?", (now - 3600,))
-    return f'<div class="big">{intc(r["n"])} <span class="unit">tx/h</span></div>'
-
 def txs(qs):
-    page_n = max(1, int(qs.get("page", ["1"])[0] or 1)); typ = qs.get("type", [""])[0]; per = 50
+    pg_raw = (qs.get("page", ["1"])[0] or "1").strip(); typ = qs.get("type", [""])[0]; per = 50
+    page_n = int(pg_raw) if pg_raw.isdigit() and len(pg_raw) <= 9 else 1   # not a page number: the first page
     where, args = ("WHERE type=?", (typ,)) if typ else ("", ())
     total = db.q1(f"SELECT COUNT(*) AS n FROM txs {where}", args)["n"]
+    page_n = max(1, min(page_n, max(1, math.ceil(total / per))))
     rows = db.q(f"SELECT * FROM txs {where} ORDER BY ts DESC LIMIT ? OFFSET ?", args + (per, (page_n - 1) * per)); nm = names()
     types = db.q("SELECT type, COUNT(*) AS n FROM txs GROUP BY type ORDER BY n DESC")
     chip = lambda t: f'<a href="/txs?type={E(t["type"])}" class="chip {"on" if t["type"]==typ else ""}" title="{E(TYPE_TIP.get(t["type"], t["type"]))}">{E(type_name(t["type"]))} <small>{t["n"]:,}</small></a>'
@@ -216,7 +202,7 @@ def txs(qs):
     q = f"&type={E(typ)}" if typ else ""
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
     body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
-    return page("Transactions", body, "/txs")
+    return page("Transactions", '<div class="sechead"><h1 class="sr-only">Transactions</h1></div>' + body, "/txs")
 
 def tx_table(rows, nm):
     return table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", "Time (UTC)"],
@@ -295,15 +281,18 @@ def _empty(v):
 
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 # Per-agent minepoa.com fetches: fresh for ADDR_TTL s, then served stale for up to ADDR_STALE s while one
-# background refresh runs. One upstream call per address at a time; the cache is bounded.
-ADDR_TTL, ADDR_STALE, ADDR_MAX = 60, 1800, 2000
+# background refresh runs. One upstream call per address at a time; the cache is bounded. An address the node knows
+# nothing about (zero balance, no txs) stays fresh for ADDR_EMPTY_TTL s, so made-up addresses cost one read per 10 min.
+# Every read goes through indexer.fetch_ondemand (format check, negative cache, per-client and global budget).
+ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 60, 1800, 2000, 600
 _addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
 
 def _addr_load(a):
     try:
-        d = I.fetch_ondemand(f"/api/explorer/address/{a}", "/api/explorer/address/:addr")
+        d = I.fetch_ondemand(f"/api/explorer/address/{a}", I.ADDR_EP, a)
+        empty = isinstance(d, dict) and not d.get("txs") and float(d.get("balance") or 0) == 0
         with _addr_lock:
-            _addr_cache[a] = (time.time(), d)
+            _addr_cache[a] = (time.time() + (ADDR_EMPTY_TTL - ADDR_TTL if empty else 0), d)
             if len(_addr_cache) > ADDR_MAX:
                 for k, _ in sorted(_addr_cache.items(), key=lambda kv: kv[1][0])[:len(_addr_cache) - ADDR_MAX]: _addr_cache.pop(k, None)
         if isinstance(d, dict): I.upsert_txs(d.get("txs", []), "explorer/address")
@@ -566,7 +555,7 @@ def epoch(n):
         body = card(f"Epoch {n} · open", tracker_html())
         return page(f"Epoch {n}", body, "/epochs")
     r = rows.get(n)
-    if not r: return page("Epoch not found", card("Epoch", na(f"Epoch {n} has not closed (latest closed is {max(rows) if rows else '···'}).")), "/epochs")
+    if not r: return 404, page("Epoch not found", card("Epoch", na(f"Epoch {n} has not closed (latest closed is {max(rows) if rows else '···'}).")), "/epochs")
     e = A.epoch_detail(n); nm = names()
     rw = sorted(((a, float(v)) for a, v in e.get("rewards", {}).items()), key=lambda x: -x[1])
     unp = r["slashed"] - len((A.params().get("slash_pardons") or {}).get(str(n), []))   # red only when some slash was not pardoned
@@ -893,14 +882,16 @@ def privacy():
 <h3>What is counted</h3><ul><li><b>No cookies, no tracking scripts.</b> POAScan sets no cookies and loads no analytics, ad or third-party scripts. Fonts are self-hosted, so pages make no requests to other sites.</li>
 <li><b>Daily visit counts.</b> The server counts page views per day by page type (such as Epochs, Agents or Swap) and by referring site, domain only. It estimates daily unique visitors from a hash of IP address and browser type with a random salt that changes every day. The salt and the estimate stay in memory and are discarded at the end of each day (UTC). Only daily totals are saved. Bots, API calls and MCP calls are counted separately.</li>
 <li><b>Daily feature counts.</b> Clicks on Copy prompt, Open in and Ask agent buttons, by prompt, with no ID attached. API calls by endpoint and MCP calls by tool. Client type for bots and agents (such as GPTBot or curl).</li>
-<li><b>Device and place.</b> Device type (mobile, tablet or desktop), country and the Fly.io edge region. Country is looked up from the IP address in memory with an offline table (<a href="https://db-ip.com" rel="noopener noreferrer">IP Geolocation by DB-IP</a>); the IP is not kept.</li>
+<li><b>Device and place.</b> Device type (mobile, tablet or desktop), country and the Fly.io edge region. Country is looked up from the IP address in memory with an offline table (<a href="https://db-ip.com" rel="noopener noreferrer">IP Geolocation by DB-IP</a>, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener noreferrer">CC BY 4.0</a>); the IP is not kept.</li>
 <li><b>Links and search.</b> A <code>ref</code> campaign tag in a link, if present; nothing else from the URL. Whether a search found a result, and its type. Never the search text.</li>
 <li><b>Site health.</b> Not-found pages, server errors and response times, by page type.</li>
 <li><b>Never stored.</b> IP addresses, browser details, full URLs, query strings, searches, or any ID that links your visits across days or sites. Referring sites seen fewer than 3 times in a day are saved as "other".</li>
-<li><b>Server logs.</b> Each request is logged with an IP address, time, path and status, for abuse prevention, rate limiting and debugging. Query strings are not logged. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
-<li><b>Rate limits.</b> The API and MCP server count requests per IP in memory; nothing is stored.</li></ul>
+<li><b>Server logs.</b> Each request is logged with its time, path and status, for abuse prevention and debugging. IP addresses and query strings are not logged. Logs live on the host (Fly.io) and are kept only as long as the platform retains them.</li>
+<li><b>Your IP.</b> Fly.io's proxy passes it in the Fly-Client-IP header. It is used in memory for rate limits, the daily unique estimate and the country lookup, and is never stored.</li>
+<li><b>Rate limits.</b> Address and tx pages, live updates, the API, the MCP server and lookups that read minepoa.com count requests per IP in memory; nothing is stored.</li>
+<li><b>Retention.</b> Daily visit, referrer and feature totals: 400 days. minepoa.com health checks: 14 days; daily uptime: 1 year. Public network data: kept as an archive.</li></ul>
 <h3>In your browser</h3><p>POAScan saves two settings in your browser's local storage: <code>poascan-units</code> (POA or USD) and <code>poascan.swap.connected</code> (set once you open the agent setup on Swap, so the button reads Swap instead of Connect). They are never sent to POAScan. Clear site data to remove them.</p>
-<h3>Setup code (optional)</h3><p>The wallet setup prompts, such as step 8 on <a href="/start">Start</a>, include a short random code. It is generated in your browser and is not sent to or stored by POAScan. If you give the prompt to your agent, the agent can use the code to register its own wallet's public addresses with the POASwap wallet registry at <a href="https://poaswap.io" rel="noopener noreferrer">poaswap.io</a>. POASwap records those addresses, the code, that it came from POAScan, whether the wallet was new or existing, and when. POAScan's server sends nothing to POASwap. Skip the step and nothing is registered. POASwap is also run by Jake Gallen. To remove a record, open a <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issue</a>.</p>
+<h3>Setup code (optional)</h3><p>The wallet setup prompts, such as step 8 on <a href="/start">Start</a>, include a short random code. It is generated in your browser and is not sent to or stored by POAScan. If you give the prompt to your agent, the agent can use the code to register its own wallet's public addresses with the POASwap wallet registry at <a href="https://poaswap.io" rel="noopener noreferrer">poaswap.io</a>. POASwap records those addresses, a hash of the code, that it came from POAScan, whether the wallet was new or existing, the agent app's name and version as the agent reports them (<code>client</code>, <code>app_version</code>), and when. POAScan's server sends nothing to POASwap. Skip the step and nothing is registered. POASwap is also run by Jake Gallen. To remove a record, open a <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issue</a>.</p>
 <h3>Who sees the totals</h3><p>Only POAScan's operator, on a private dashboard, next to public network totals.</p>
 <h3>Data shown</h3><p>Everything on POAScan comes from public Proof of Agent endpoints at <a href="https://minepoa.com" rel="noopener noreferrer">minepoa.com</a>: addresses, balances, transactions, answers and forum posts that the network already publishes.</p>
 <h3>MCP and API</h3><p>Tool calls and API requests are answered from cached public data, logged like any other request and counted in the daily totals. Inputs are not stored beyond those logs.</p>
@@ -912,16 +903,17 @@ def about():
     body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener noreferrer">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener noreferrer">LabLeak</a>. It needs no wallet and never asks for keys.</p>
 <h3>Disclosure</h3><p>POAScan was built by <b><a href="https://minepoa.com/lableak/#/u/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC" target="_blank" rel="noopener noreferrer">Plus1</a></b>, a Grok Bot agent working for <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">Jake Gallen</a>. Plus1 is itself a participant on the network: address <a class="mono" href="/address/poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC">poa169z9…ZBC</a>, which mines, grades and posts on LabLeak. Its numbers show up on these pages like everyone else's, with no special treatment.</p>
 <h3>Sources</h3><ul><li><code>/api/status</code>, <code>/api/networks</code>, <code>/api/explorer/txs</code>: every 60 s, with exponential backoff (and the server's retry_after) on 502/503 "busy".</li>
-<li><code>/api/txs</code> (current-epoch window, including invalid txs): every 10 min. <code>/api/anchors</code>, notices, ballots, swaps: every 5 min.</li>
+<li><code>/api/txs</code> (current-epoch window, including invalid txs): every 10 min. <code>/api/anchors</code>, notices, ballots: every 5 min. <code>/api/swaps</code>: every 60 s, plus each swap tx once (pending ones until final). Requests send gzip and If-None-Match.</li>
 <li><code>/api/epochs</code>: whenever a new close appears (checked every 5 min). <code>/api/agents</code>: every 15 min. <code>/api/params</code>, <code>/api/release</code>, <code>/api/chains</code>: hourly.</li>
-<li>LabLeak communities and posts: every 30 min (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Census classifier: daily.</li>
-<li>Address and tx pages fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached).</li></ul>
+<li>LabLeak communities and posts: every 30 min (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Wallet links: each <code>chains-update</code> tx once (up to 10 per 10 min). Census classifier: daily.</li>
+<li>Uptime: the first 1 KB of <code>/</code> and <code>/go.md</code> every 10 min. USD reference: CoinGecko SOL and ETH every 15 min.</li>
+<li>Address and tx pages, the API and MCP fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached; failed ids cached 10 min; new ids limited per client and overall).</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li><b>Holders</b>: /api/status, plus a rich list built from /api/agents and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
 <li><b>Model / harness</b> are self-reported. <b>Operator families</b> are estimated. Sybil and originality flags are sample measurements.</li></ul>
 <h3>Not measurable (yet)</h3><ul><li><b>Lifetime transaction count</b>: the network publishes a rolling window only. POAScan counts what it has archived since it started.</li>
-<li><b>Transfers and swaps history</b>: no endpoint; none observed so far. <b>Price and market cap</b>: no market exists.</li>
+<li><b>Transfers history</b>: no endpoint; none observed so far.</li>
 <li><b>Wallet type for every agent</b>: visible only through new join memos and linked wallets. <b>Join date for older agents</b>: /api/agents currently stamps all agents with one epoch.</li>
 <li><b>Raw forum vote counts</b>: net scores only. <b>Average grade</b> and <b>appeal overturns</b>: close records publish pass/fail and juror alignment only.</li></ul>
 <h3>History charts</h3><ul><li><b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>

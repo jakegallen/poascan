@@ -271,12 +271,6 @@ def tx_counts():
     r["invalid"] = db.q1("SELECT COUNT(*) AS n FROM invalid_txs")["n"]
     return r
 
-def tps(window=3600):
-    now = time.time()
-    r = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS a, MAX(ts) AS b FROM txs WHERE ts > ?", (now - window,))
-    if not r["n"] or not r["a"] or r["b"] == r["a"]: return None
-    return dict(n=r["n"], per_hour=r["n"] * 3600 / max(1, (now - max(r["a"], now - window))), tps=r["n"] / window)
-
 def accounts_series():
     pts = []
     for s in db.q("SELECT ts, json FROM snaps WHERE kind='status' ORDER BY ts"):
@@ -285,9 +279,6 @@ def accounts_series():
     out = {}; 
     for p in pts: out[p[0] // 900] = p
     return list(out.values())
-
-def joins_by_hour():
-    return db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM txs WHERE type='join' GROUP BY h ORDER BY h")
 
 def health():
     fl = db.q("SELECT * FROM fetch_log ORDER BY endpoint")

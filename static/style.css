@@ -907,3 +907,5 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:420px){.updot{width:24px;margin-right:-4px}}
 @media (prefers-reduced-motion:reduce){.updot i{animation:none!important;box-shadow:0 0 0 3px rgba(255,176,0,.22)}}
 .more.mswap{gap:6px}.more.mswap img{flex:none;opacity:.85}.more.mswap:hover img{opacity:1}
+/* 1.26.3: footer links are at least 24 px tall (WCAG 2.5.8 target size) */
+.foot a{display:inline-block;min-height:24px;line-height:24px;padding-block:0}

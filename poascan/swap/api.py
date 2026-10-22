@@ -1,7 +1,7 @@
 """The module's HTTP surface. The host server calls api() for JSON and page() for HTML; both take paths without the
 /v1 prefix (the host maps /api/v1/... onto /api/...). The explorer side reads swaps only through these same routes
 (poascan/swapclient.py): /api/v1/price, /api/v1/swaps, /api/v1/swaps/status, /api/v1/swaps/price-history, /api/v1/swaps/<offer_id>."""
-import os, re, mimetypes
+import hashlib, json, os, re, mimetypes, threading, time
 from . import config as C, market as M, store as S, pages as P, host as H
 
 OFFER = re.compile(r"^/api/swaps/([A-Za-z0-9_-]{1,128})$")   # after /status and /price-history
@@ -44,11 +44,24 @@ def offer_json(oid):
     """One offer with its fill and cancel events, or None."""
     r = S.offer(oid)
     if not r: return None
-    ev = [{k: e[k] for k in ("txid", "kind", "addr", "ts")} for e in S.events(oid)]
+    ev = [{k: e[k] for k in ("txid", "kind", "addr", "ts", "final")} for e in S.events(oid) if not e["dropped"]]
     return dict(offer=enrich([r])[0], events=ev)
 
-def api(path, qs):
-    """(rows_or_obj, is_list) for a swap API path, or raises KeyError."""
+# Response cache (SC-004): each swap route's data is built once per data version and reused for at most CACHE_TTL s.
+# The version moves when the swap job writes (every 60 s), a swap tx is stored or finalizes, the USD reference, the
+# chains blob or the status and epochs blobs change, or the upstream read health changes. Mirrors polling every 60 s
+# (POASwap) get a stored copy instead of paying a cold recompute. One build per route at a time.
+CACHE_TTL = 30
+_rc, _rc_lock, _rc_build = {}, threading.Lock(), {}
+
+def _version():
+    v = H.q1("SELECT (SELECT MAX(updated) FROM swaps) AS u, (SELECT COUNT(*) FROM swaps) AS n, (SELECT COUNT(*) FROM swap_events) AS e, "
+             "(SELECT COALESCE(SUM(final), 0) FROM swap_events) AS f, (SELECT COALESCE(SUM(dropped), 0) FROM swap_events) AS d") or {}
+    fl = H.fetch_log(C.SWAPS_EP)
+    return (v.get("u"), v.get("n"), v.get("e"), v.get("f"), v.get("d"), fl.get("last_ok"), fl.get("last_err"), fl.get("fails"),
+            tuple(H.blob_ts(k) for k in ("fx", "chains", "status", "epochs")) if hasattr(H, "blob_ts") else None)
+
+def _build(path):
     if path == "/api/swaps": return enrich(S.swaps_all()), True
     if path == "/api/swaps/status": return M.swap_status_api(), False
     if path == "/api/swaps/price-history": return M.price_history(), True
@@ -59,6 +72,42 @@ def api(path, qs):
         if d is None: raise KeyError(path)
         return d, False
     raise KeyError(path)
+
+def _cached(path):
+    """(data, is_list, etag) from the cache when the version matches and the copy is under CACHE_TTL s old, else rebuilt."""
+    now = time.time(); ver = _version()
+    with _rc_lock:
+        hit = _rc.get(path)
+        if hit and hit[1] == ver and now - hit[0] < CACHE_TTL: return hit[2]
+        lk = _rc_build.setdefault(path, threading.Lock())
+    with lk:
+        with _rc_lock:
+            hit = _rc.get(path)
+            if hit and hit[1] == ver and time.time() - hit[0] < CACHE_TTL: return hit[2]
+        data, is_list = _build(path)
+        tag = 'W/"' + hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:20] + '"'
+        with _rc_lock:
+            if len(_rc) > 512: _rc.clear(); _rc_build.clear()
+            _rc[path] = (time.time(), ver, (data, is_list, tag))
+        return data, is_list, tag
+
+def _fresh_age(d):
+    """The status copy may be up to CACHE_TTL s old: its age field is recomputed per request."""
+    ok = H.fetch_log(C.SWAPS_EP).get("last_ok")
+    if d.get("last_good_read_age_s") is None or not ok: return d
+    return dict(d, last_good_read_age_s=int(time.time()) - int(ok))
+
+ETAG_ROUTES = ("/api/swaps", "/api/swaps/price-history")   # list routes: unchanged data answers If-None-Match with 304
+
+def api(path, qs):
+    """(rows_or_obj, is_list) for a swap API path, or raises KeyError."""
+    data, is_list, _ = _cached(path)
+    if path == "/api/swaps/status": data = _fresh_age(data)
+    return data, is_list
+
+def etag(path):
+    """Weak ETag of a list route's current data (None for other routes)."""
+    return _cached(path)[2] if path in ETAG_ROUTES else None
 
 def page(path):
     """HTML for the swap page path, or None."""

@@ -30,7 +30,7 @@ def main():
     con.execute("INSERT OR REPLACE INTO forum_posts(id,community,title,author,created_at,score,comment_count,deleted,pinned,fetched,body) VALUES(990001,'general',?,'x','2026-10-21 00:00:00',1,0,0,0,0,?)", ("leak " + FAKE, "body " + FAKE))
     con.commit(); con.close()
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"
-    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POASCAN_MAINTENANCE="1")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="1")
     lf = open(logp, "w"); p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=lf, stderr=lf)
     fails = []
     def check(name, ok):

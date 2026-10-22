@@ -78,14 +78,24 @@ def unit():
           and v["api"]["agent"] == n and v["mcp"]["agent"] == 1 and v["epochs"]["human"] == 1)
     check("static, healthz, ops, HEAD, 404 and 302 not counted", set(v) == {"address", "privacy", "home", "api", "mcp", "epochs"})
     check(f"uniques estimate {r['uniques']} near {2 * n + 1}", abs(r["uniques"] - (2 * n + 1)) <= 5)   # IP+UA pairs: n, n with a varied UA, 1
-    check("referrers: hostnames only, today folded on read", r["referrers"].get("example.org") == n and r["referrers"].get("news.ycombinator.com") == n
-          and r["referrers"].get("other") == n and not any(k.startswith("tiny") for k in r["referrers"]))
+    check("referrers: hostnames only; a domain under 3 views today is held in memory, never written by name", r["referrers"].get("example.org") == n
+          and r["referrers"].get("news.ycombinator.com") == n and not any(k.startswith("tiny") for k in r["referrers"])
+          and not db.q("SELECT 1 FROM visit_referrers WHERE domain LIKE 'tiny%'") and sum(v for k, v in c.refs.items() if k.startswith("tiny")) == n)
+    hit("/", UA_H, IPS[0], ref="https://tiny0.example.net/"); hit("/", UA_H, IPS[1], ref="https://tiny0.example.net/"); c.flush()
+    check("a domain that reaches 3 views today is written by name", db.q1("SELECT views FROM visit_referrers WHERE day=? AND domain='tiny0.example.net'", (day,)) == {"views": 3})
+    hit("/", UA_H, IPS[0], ref="https://tiny0.example.net/"); c.flush()
+    check("then every later view of it is written too", db.q1("SELECT views FROM visit_referrers WHERE day=? AND domain='tiny0.example.net'", (day,)) == {"views": 4})
     # day rollover: flush, fold, new salt and sketch
     salt0 = c.salt; clock[0] += 86400; hit("/", UA_H, IPS[0])
     check("new salt and empty sketch at UTC midnight", c.salt != salt0 and c.day == VS.today(clock[0]) and len(c.salt) == 32)
     raw = db.q("SELECT domain, views FROM visit_referrers WHERE day=?", (day,))
     check("finished day: referrers under 3 folded into 'other' in the table", not any(x["views"] < 3 and x["domain"] != "other" for x in raw)
-          and any(x["domain"] == "other" for x in raw))
+          and any(x["domain"] == "other" and x["views"] == n - 1 for x in raw) and not any(x["domain"].startswith("tiny") and x["domain"] != "tiny0.example.net" for x in raw))
+    m2 = VS.Counter(now=lambda: clock[0]); m2.hit("GET", 200, "/", UA_H, "https://rare.example.com/", lambda: IPS[0]); m2.flush(final=True)
+    check("shutdown flush (final) writes a rare referrer as 'other', not by name", not db.q("SELECT 1 FROM visit_referrers WHERE domain='rare.example.com'"))
+    db.write("INSERT INTO visit_views(day,grp,kind,views) VALUES('2020-01-01','home','human',1)"); db.write("INSERT INTO visit_uniques(day,uniques) VALUES('2020-01-01',1)")
+    VS.fold_before(VS.today(clock[0]))
+    check("visit_views and visit_uniques pruned after 400 days", not db.q("SELECT 1 FROM visit_views WHERE day='2020-01-01'") and not db.q("SELECT 1 FROM visit_uniques WHERE day='2020-01-01'"))
     c.flush()
     rows, bad = scan(os.environ["POASCAN_DB"])
     check(f"no IP, UA, hash, path or URL persisted ({rows} rows scanned)", rows > 0 and not bad)
@@ -117,7 +127,7 @@ def req(base, path, headers=None):
     except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read()
 
 def serve(dbp, token):
-    port = free_port(); env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0")
+    port = free_port(); env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9")
     env.pop("POASCAN_STATS_TOKEN", None)
     if token: env["POASCAN_STATS_TOKEN"] = token
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

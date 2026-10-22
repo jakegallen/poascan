@@ -71,7 +71,7 @@ from poascan import server as S
 check("page limit defaults are generous (>= 60 burst, >= 30 pages/min sustained)", S.PAGE_LIMIT.burst >= 60 and S.PAGE_LIMIT.rate * 60 >= 30)
 logp = os.path.join(tmp, "server.log")
 s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"
-env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POASCAN_MAINTENANCE="1",
+env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="1",
            POASCAN_PAGE_BURST="6", POASCAN_PAGE_RATE="0.01")
 lf = open(logp, "w"); p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=lf, stderr=lf)
 def get(path, ip=None):

@@ -216,16 +216,6 @@ def _okpct(v):
     c = "ok" if v >= .95 else "warn" if v >= .5 else "red"
     return f'<span class="num {c}">{v*100:.1f}%</span>'
 
-# ================= is it real? =================
-def real_card():
-    est = len(A.established_set()); op = G.operators(); sy = A.sybil()
-    acc = op["accounts"]; fam = op["families"]
-    inv = sy["invited"]; k = sy["inviter_count"] or 0
-    top5 = sum(x["n"] for x in sy["inviters"])
-    s = "".join([stat("Established", intc(est)), stat("Est. operators", intc(fam)), stat("Agents / operator", f'<span class="num">{acc/max(1,fam):.2f}</span>'),
-                 stat("Invite fan-out", f'<span class="num">{(inv/k if k else 0):.1f}</span>'), stat("Invited", pct(inv / acc) if acc else "···"), stat("Top-5 inviters", pct(top5 / inv) if inv else "···")])
-    return card(ICON_SEAL + "Is it real?", f'<div class="stats six real">{s}</div>', '<a class="more" href="/about#real">Method →</a>')
-
 # ================= safety / official / community =================
 OFFICIAL = [("minepoa.com", "https://minepoa.com"), ("Source · GitHub", SRC_URL), ("LabLeak", "https://minepoa.com/lableak/"), ("Agent guide · go.md", "https://minepoa.com/go.md"),
             ("Agent client · skill.md", "https://minepoa.com/skill.md"), ("Explorer", "https://minepoa.com/explorer")]
@@ -249,5 +239,5 @@ def community_html():
     return src_card() + '<div class="lks">' + "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer nofollow">{E(n)} ↗</a>' for n, u in COMMUNITY) + '</div><p class="dim small">Independent. Listed, not endorsed.</p>'
 
 from . import join as _J
-def _apps(auto_first=False, cls=""):   # the "Open in" app set on /start
+def _apps(cls=""):   # the "Open in" app set on /start
     return _J.apps(cls)

@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.2"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.3"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -60,16 +60,17 @@ class Limiter:
     """Token bucket per client IP: `burst` requests, refilled at `rate` per second."""
     def __init__(self, rate=1.0, burst=30):
         self.rate, self.burst, self.b, self.lock = rate, burst, {}, threading.Lock()
-    def allow(self, ip):
+    def allow(self, ip, cost=1):
+        """Spend cost tokens (all or none)."""
         now = time.time()
         with self.lock:
             if len(self.b) > 5000:
                 self.b = {k: v for k, v in self.b.items() if now - v[1] < 120}
             tok, last = self.b.get(ip, (self.burst, now))
             tok = min(self.burst, tok + (now - last) * self.rate)
-            if tok < 1:
-                self.b[ip] = (tok, now); return False, int((1 - tok) / self.rate) + 1
-            self.b[ip] = (tok - 1, now); return True, 0
+            if tok < cost:
+                self.b[ip] = (tok, now); return False, int((cost - tok) / self.rate) + 1
+            self.b[ip] = (tok - cost, now); return True, 0
 
 ON_TOOL = None   # set by server.py: counts a tools/call by tool name only (poascan/visits.py)
 LIMIT = Limiter(float(os.environ.get("POASCAN_MCP_RATE", "1")), int(os.environ.get("POASCAN_MCP_BURST", "30")))
@@ -79,8 +80,9 @@ class ToolError(Exception): pass
 
 def _int(args, k, default, lo, hi):
     v = args.get(k, default)
+    if isinstance(v, bool): raise ToolError(f"{k} must be an integer")
     try: v = int(v)
-    except (TypeError, ValueError): raise ToolError(f"{k} must be an integer")
+    except (TypeError, ValueError, OverflowError): raise ToolError(f"{k} must be an integer")
     return max(lo, min(hi, v))
 
 def _addr(args):
@@ -340,7 +342,7 @@ TOOLS = [  # name, title, description, input schema, fn
     ("list_swap_offers", "Swap offers",
      "POA swap offers seen on the network, newest first, with the current swap availability. Read-only: it never places or takes offers. "
      "Use it to see what is on offer; call get_swap_status first when the question is whether swapping is possible.",
-     S(status={"type": "string", "enum": ["open", "filled", "cancelled", "expired", "all"], "default": "open", "description": "offer status to list (default open)"}, limit=LIMD(20, 200, "offers")), t_swaps),
+     S(status={"type": "string", "enum": ["open", "filled", "cancelled", "expired", "delisted", "all"], "default": "open", "description": "offer status to list (default open); delisted = gone from the network's book before expiry"}, limit=LIMD(20, 200, "offers")), t_swaps),
     ("get_swap_offer", "Swap offer",
      "One swap offer by offer_id with its fill and cancel events. Use it after list_swap_offers to inspect a single offer.",
      dict(S(offer_id={"type": "string", "description": "the offer_id from list_swap_offers (64-hex)"}), required=["offer_id"]), t_swap),
@@ -430,13 +432,20 @@ def _one(m):
             return ok({"content": [{"type": "text", "text": "internal error; the archive may still be loading"}], "isError": True})
     return _err(i, -32601, f"Method not found: {meth}")
 
+BATCH_MAX = 20
+def batch_size(raw):
+    """Messages in a JSON-RPC body (a batch counts each one, up to BATCH_MAX); 1 for anything else."""
+    try: msg = json.loads(raw)
+    except Exception: return 1
+    return max(1, min(BATCH_MAX, len(msg))) if isinstance(msg, list) else 1
+
 def handle_mcp(raw):
     """raw: request body bytes. Returns (http_status, response_obj_or_None)."""
     try: msg = json.loads(raw)
     except Exception: return 400, _err(None, -32700, "Parse error")
     if isinstance(msg, list):
         if not msg: return 400, _err(None, -32600, "Invalid Request")
-        out = [r for r in (_one(m) for m in msg[:20]) if r is not None]
+        out = [r for r in (_one(m) for m in msg[:BATCH_MAX]) if r is not None]
         return (200, out) if out else (202, None)
     r = _one(msg)
     return (200, r) if r is not None else (202, None)
@@ -478,8 +487,8 @@ def openapi():
         "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed, swaps availability", oid="summary", desc="Includes a swaps block (schema SwapStatus)."),
         "/api/live": _op("Live-feed (WebSocket hub) stats", oid="live", tag="meta"),
         "/api/status": _op("Upstream endpoint health, incidents and anchors", oid="status", tag="meta"),
-        "/api/txs": _op("Archived transactions, newest first", ROWS, [_p("limit", "max 1000", {"type": "integer", "default": 100, "maximum": 1000}, "query", False),
-                        _p("offset", "", {"type": "integer", "default": 0}, "query", False), _p("type", "tx type, e.g. challenge, join, transfer", {"type": "string"}, "query", False),
+        "/api/txs": _op("Archived transactions, newest first", ROWS, [_p("limit", "1 to 1000 (clamped; not an integer: 400)", {"type": "integer", "default": 100, "minimum": 1, "maximum": 1000}, "query", False),
+                        _p("offset", "0 or more (clamped; not an integer: 400)", {"type": "integer", "default": 0, "minimum": 0}, "query", False), _p("type", "tx type, e.g. challenge, join, transfer", {"type": "string"}, "query", False),
                         _p("addr", "poa1 address (from or to)", {"type": "string"}, "query", False)], True, oid="listTxs"),
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="Served from the archive; a tx not yet archived is fetched once from minepoa.com and cached."),
@@ -490,7 +499,7 @@ def openapi():
                                              desc="addresses: one {chain, address, verified_at} per chain as the network lists them (today solana and ethereum; the network's one ethereum entry covers every EVM chain, Base included), sorted by chain; only links minepoa.com /api/chains marks verified:true (archived hourly). verified_at (ISO 8601 UTC) is the time of the newest finalized chains-update tx in which the Agent registered that address with its ownership proof, from POAScan's ledger archive; null when that tx is not in the archive. Empty list for a known Agent with no verified link; 404 JSON for an unknown Agent. Method: https://poascan.io/about#addresses"),
         "/api/receipt/{hash}": _op("Answer receipt for one answer (challenge) tx", {"$ref": "#/components/schemas/Receipt"}, [_p("hash", "64-hex answer tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getReceipt", tag="agents",
                                    desc="Built from the archived tx, close records (basis.pending, basis.settled, rewards) and cached grade-sealed txs. Unknown fields are null. Method: https://poascan.io/about#receipts"),
-        "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "max 200", {"type": "integer", "default": 50, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
+        "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "1 to 200", {"type": "integer", "default": 50, "minimum": 1, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
         "/api/epochs": _op("Every epoch close: pool, minted, burned, grading", ROWS, csv=True, oid="listEpochs"),
         "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number", {"type": "integer"})], oid="getEpoch"),
         "/api/epoch/{n}/record": _op("One close record exactly as minepoa.com published it, in canonical form", ANY, [_p("n", "closed epoch number", {"type": "integer", "minimum": 0})], oid="getEpochRecord",
@@ -514,7 +523,7 @@ def openapi():
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token",
-                          desc="One row per offer. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out."),
+                          desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
@@ -657,7 +666,6 @@ def openapi():
 
 # ---------------------------------------------------------------- llms.txt, mcp.json, /api page
 def claude_cmd(): return f"claude mcp add --transport http poascan {MCP_URL}"
-def config_json(): return json.dumps({"mcpServers": {"poascan": {"url": MCP_URL}}}, indent=2)
 
 def llms_txt():
     tools = "\n".join(f"- {n}: {d}" for n, _, d, _, _ in TOOLS)
@@ -724,7 +732,7 @@ Tools ({len(TOOLS)}):
 - Official network guide: https://minepoa.com/go.md
 """
 
-UPDATED = "2026-10-20"
+UPDATED = "2026-10-22"
 JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 - Start page with one copy-ready prompt: https://poascan.io/start (MCP tool get_onboarding_steps returns the same content)
 - Official guide: https://minepoa.com/go.md (code: https://minepoa.com/skill.md)

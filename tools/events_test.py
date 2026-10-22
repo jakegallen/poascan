@@ -133,7 +133,7 @@ def req(base, path, headers=None, data=None, method=None):
 
 def server():
     tmp = tempfile.mkdtemp(); dbp = os.path.join(tmp, "s.db"); tok = secrets.token_urlsafe(32); logf = os.path.join(tmp, "server.log")
-    port = free_port(); env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POASCAN_STATS_TOKEN=tok)
+    port = free_port(); env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POASCAN_STATS_TOKEN=tok, POA_BASE="http://127.0.0.1:9")
     lg = open(logf, "wb")
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=lg, stderr=subprocess.STDOUT)
     base = f"http://127.0.0.1:{port}"
@@ -173,7 +173,7 @@ def server():
               and day.get("edges", {}).get("sjc", 0) >= 2 and day.get("campaigns") == {"other": 1})
         check(f"funnel {day.get('funnel')}", day.get("funnel", {}).get("start_views_human") == 1 and day.get("funnel", {}).get("start_copies") == 1
               and day.get("funnel", {}).get("registry_shows") == 1)
-        check(f"health {day.get('health', {}).get('not_found')}", day.get("health", {}).get("not_found") == {"other": 1} and "home" in day.get("health", {}).get("response_ms", {}))
+        check(f"health {day.get('health', {}).get('not_found')}", day.get("health", {}).get("not_found") == {"other": 1, "epochs": 1} and "home" in day.get("health", {}).get("response_ms", {}))
         c, _, b = req(base, "/ops/visits"); check("/ops/visits without the token is still 404", c == 404 and b"days" not in b)
         c, _, pv = req(base, "/privacy"); pv = pv.decode()
         check("/privacy lists the new counts, never search text, no 'not sold' claim, no em dash", c == 200 and "Daily feature counts." in pv and "Never the search text." in pv

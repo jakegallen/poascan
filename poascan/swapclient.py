@@ -37,7 +37,7 @@ def status():
     """/api/v1/swaps/status: availability, open offers and market (market cap, FDV, trades, volume, last trade, best ask)."""
     return _call("/swaps/status") or {}
 def offers(status=None):
-    """/api/v1/swaps: every offer, newest activity first; status filters one state (open, filled, cancelled, expired)."""
+    """/api/v1/swaps: every offer, newest activity first; status filters one state (open, filled, cancelled, expired, delisted)."""
     rows = _call("/swaps") or []
     return rows if not status else [r for r in rows if r.get("status") == status]
 def offer(oid):
