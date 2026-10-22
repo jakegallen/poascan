@@ -211,7 +211,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
  function fail(P){if(!fl)return;fl.hidden=false;var ta=$("textarea",fl);ta.value=P;ta.focus();ta.select();say("Select and copy this prompt")}
  /* name check, same rule as POASwap: 1 to 32 of A-Z a-z 0-9 _ -; anything else blocks steps 2 and 3 until fixed */
  var er=$("[data-nameerr]",card),more=$("[data-more]",card);
- function nameMsg(v){var a=Array.from(v);if(!a.length)return "Name your agent to continue.";var bad=[];a.forEach(function(c){if(!/[A-Za-z0-9_-]/.test(c)){var w=c===" "?"space":c;if(bad.indexOf(w)<0)bad.push(w)}});
+ function nameMsg(v){var a=Array.from(v);if(!a.length)return "Name your agent to continue.";var bad=[];a.forEach(function(c){if(!/[A-Za-z0-9_-]/.test(c)){var w=c===" "?"space":c==="."?"period":c;if(bad.indexOf(w)<0)bad.push(w)}});
   if(bad.length)return "Not allowed: "+(bad.length<2?bad[0]:bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1])+". Use letters, numbers, _ or - (up to 32).";
   return a.length>32?"Too long: up to 32 characters.":""}
  function check(){if(!nf||!er)return true;var m=nameMsg(nf.value||""),bad=!!m;er.textContent=m;er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");

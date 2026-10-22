@@ -9,6 +9,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.14] - 2026-10-22
+
+- Name validation on /start and the /api/v1/prompts/join 400 name a period as "period" (like "space"), so the message never shows two dots: "Not allowed: period. Use letters, numbers, _ or - (up to 32)."
+
 ## [1.26.13] - 2026-10-22
 
 - /start main button always copies the prompt first, inside the click (navigator.clipboard.writeText started plus a synchronous textarea copy), then opens the app in a new tab in the same gesture, so paste works wherever a prefill is ignored (Meta's Muse ignores ?prompt=) and popup blockers stay quiet. Label: "Copy prompt and open <App>" ("Copy and open <App>" at 390px), with an Auto pill where the link prefills (Claude, ChatGPT, Grok, Cursor and others). Feedback lives in the button: green and "Copied, opening <App>" (or "Copied"). If the copy fails, the prompt shows selected in a box under "Select and copy this prompt".

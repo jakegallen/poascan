@@ -93,13 +93,13 @@ LOCK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="
 
 NAME_RX = r"[A-Za-z0-9_-]{1,32}"
 def name_error(v):
-    """The /start name message, same words as app.js nameMsg (and POASwap). '' when the name is fine."""
+    """The /start name message, same words as app.js nameMsg (and POASwap). '' when the name is fine. Space and period are named."""
     import re
     if not v: return "Name your agent to continue."
     bad = []
     for c in v:
         if not re.fullmatch(r"[A-Za-z0-9_-]", c):
-            w = "space" if c == " " else c
+            w = {" ": "space", ".": "period"}.get(c, c)
             if w not in bad: bad.append(w)
     if bad: return "Not allowed: " + (bad[0] if len(bad) < 2 else ", ".join(bad[:-1]) + " and " + bad[-1]) + ". Use letters, numbers, _ or - (up to 32)."
     return "Too long: up to 32 characters." if len(v) > 32 else ""

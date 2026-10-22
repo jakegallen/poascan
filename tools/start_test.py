@@ -31,7 +31,9 @@ check("blocks: registration has the link, key_safety the key rule, wallet Emblem
       and "Emblem Wallet" in bl["wallet"] and "Never send payment outside the network." in bl["closing"])
 NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
       ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
-      ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32).")]
+      ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32)."),
+      ("bad.name", "Not allowed: period. Use letters, numbers, _ or - (up to 32)."), ("a.b c", "Not allowed: period and space. Use letters, numbers, _ or - (up to 32).")]
+check("no message ever shows two dots in a row", all(".." not in S.name_error(v) for v in ("bad.name", ".", "a..b", "x.y z@", "." * 40)))
 check("name messages (Python mirror of app.js): " + "; ".join(S.name_error(v) or "ok" for v, _ in NE[:5]), all(S.name_error(v) == w for v, w in NE))
 d = S.api_join("test-agent-7")
 check("api_join: version, updated_ts (UTC ISO), text == /start prompt, sha256, blocks", d["version"] == OP.VERSION and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", d["updated_ts"])
@@ -106,7 +108,7 @@ try:
           and "await" not in blk and 'done(u?"Copied, opening "+n:"Copied")' in blk and 'fail(P)' in blk and 'say("Select and copy this prompt")' in blk
           and 'ev("start."+(rg?"copyreg":"copy"))' in blk and "lb.innerHTML" not in blk)
     check("client: name messages, exact", 'return "Name your agent to continue."' in blk and '"Not allowed: "+' in blk and '". Use letters, numbers, _ or - (up to 32)."' in blk
-          and '"Too long: up to 32 characters."' in blk and 'c===" "?"space":c' in blk and 'bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1]' in blk
+          and '"Too long: up to 32 characters."' in blk and 'c===" "?"space":c==="."?"period":c' in blk and 'bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1]' in blk
           and "/^[A-Za-z0-9_-]{1,32}$/.test(v)" in js and 'replace(/[^A-Za-z0-9_-]/g,"")' not in js)
     check("client: one button handler with the existing beacons; Enter on the name moves to step 2, Enter on a choice to the button",
           '[data-go]' in js and 'ev("start."+(rg?"appreg":"app"))' in js and 'ev("mcp-poa.add")' in js and 'e.key==="Enter"' in js and "go.focus()" in js and "r.focus()" in js)
@@ -124,8 +126,9 @@ try:
     check(f"If-None-Match: 304 with no body ({c2}), alias path too ({c3})", c2 == 304 and b2 == "" and h2.get("ETag") == et and c3 == 304)
     c4, _, b4 = req("/api/v1/prompts/join"); 
     check("no name: YOUR_NAME, like llms.txt", c4 == 200 and json.loads(b4)["name"] == "YOUR_NAME" and json.loads(b4)["text"] == S.PROMPT)
-    c5, _, b5 = req("/api/v1/prompts/join?name=a%40b%20c")
-    check("API 400 carries the same message as /start", c5 == 400 and json.loads(b5)["error"] == "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32).")
+    c5, _, b5 = req("/api/v1/prompts/join?name=a%40b%20c"); c6, _, b6 = req("/api/v1/prompts/join?name=bad.name")
+    check("API 400 carries the same message as /start (space and period named)", c5 == 400 and json.loads(b5)["error"] == "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."
+          and c6 == 400 and json.loads(b6)["error"] == "Not allowed: period. Use letters, numbers, _ or - (up to 32).")
     codes = [req("/api/v1/prompts/join?" + q)[0] for q in ("name=a%20b", "name=" + "x" * 33, "name=%3Cb%3E", "name=a&name=b", "name=%C3%A9")]
     check(f"bad names: 400 {codes}", codes == [400] * 5)
     import poascan.agentapi as AG; VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
