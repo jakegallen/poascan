@@ -26,6 +26,24 @@ def join_open():
     if JOIN_ENV is not None: return JOIN_ENV != "0"
     return _surfaces().get("Joining") != "paused"
 
+JOIN_QUIET_S = 90 * 60       # no new join on the ledger for this long during maintenance reads as delayed
+
+def last_join():
+    r = db.q1("SELECT MAX(ts) AS t FROM txs WHERE type='join'"); return r["t"] if r else None
+
+def _feed_fresh():
+    """Our ledger feed is current, so a missing join is real and not a gap in our own reads."""
+    r = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint='/api/explorer/txs'")
+    return bool(r and r["last_ok"] and time.time() - r["last_ok"] < 900)
+
+def join_state():
+    """open, delayed or paused. Paused comes from the tracker or the manual switch. Delayed is derived:
+    maintenance is on, our feed is current and no join has landed for JOIN_QUIET_S. A new join flips it back."""
+    if not join_open(): return "paused"
+    if JOIN_ENV is not None or not _active(): return "open"
+    t = last_join()
+    return "delayed" if t and _feed_fresh() and time.time() - t > JOIN_QUIET_S else "open"
+
 def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "Joining" in _surfaces() else "default")   # the probe never covers joining
 
 def hosted_state():
@@ -44,16 +62,20 @@ def working(): return (["onboarding"] if join_open() else []) + ["self_custody_m
 PAUSED = ["hosted_mining", "grading"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "reward_payouts", "balances", "explorer"]   # defaults
 
 # Copy, one place. Joining wording follows join_open(); never hard-code it elsewhere.
-def join_line(): return "Join now; your agent starts earning once it's back." if join_open() else "Joining pauses during the upgrade too."
+def join_line():
+    j = join_state()
+    if j == "delayed": return "Joins are delayed during the upgrade. Your agent may need to retry later."
+    return "Join now; your agent starts earning once it's back." if j == "open" else "Joining pauses during the upgrade too."
 def strip_text():
     """Home strip: (lead, aside, tail). The aside may hide at 390px. Words chosen not to repeat the home screen."""
-    h = hosted_state(); j = join_open()
-    if h == "planned": return ("Hosted mining pauses soon", " for maintenance", "Joining works." if j else "Joining too.")
-    if h == "back": return ("Hosted mining is back", "", "Joining works." if j else "Joining paused.")
-    return ("Hosted mining paused", " for maintenance", "Joining works.") if j else ("Hosted mining and joining paused", " for maintenance", "")
+    h = hosted_state(); js = join_state(); j = js != "paused"
+    ok = "Joining delayed." if js == "delayed" else "Joining works."
+    if h == "planned": return ("Hosted mining pauses soon", " for maintenance", ok if j else "Joining too.")
+    if h == "back": return ("Hosted mining is back", "", ok if j else "Joining paused.")
+    return ("Hosted mining paused", " for maintenance", ok) if j else ("Hosted mining and joining paused", " for maintenance", "")
 def og_desc():
     h = {"planned": "Hosted mining pauses soon", "back": "Hosted mining is back"}.get(hosted_state(), "Hosted mining paused")
-    return f"{h} for network upgrades, joining {'open' if join_open() else 'paused'}, rewards paying. Live status on POAScan."
+    return f"{h} for network upgrades, joining {join_state()}, rewards paying. Live status on POAScan."
 
 def seen(window=3600):
     """Answers and grade seals in our own feed over the last hour: what actually still lands."""
@@ -61,13 +83,19 @@ def seen(window=3600):
     r = {x["type"]: x["n"] for x in db.q("SELECT type, COUNT(*) AS n FROM txs WHERE ts > ? AND type IN ('challenge','grade-sealed') GROUP BY type", (since,))}
     return dict(answers=r.get("challenge", 0), seals=r.get("grade-sealed", 0), window_s=window)
 
+def _active():
+    cp = A.status().get("checkpoint_height")
+    return MAINTENANCE and not (cp is not None and int(cp) > PARKED) and not (time.time() - STARTED > MAX_S)
+
 def state():
     now = time.time(); cp = A.status().get("checkpoint_height")
     moved = cp is not None and int(cp) > PARKED
     expired = now - STARTED > MAX_S
     active = MAINTENANCE and not moved and not expired
+    lj = last_join()
     cleared = None if active else ("switch_off" if not MAINTENANCE else "checkpoint_moved" if moved else "expired")
-    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_source=join_source(), hosted_mining=hosted_state(),
+    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
+                last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
                 expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=TTL_EPOCHS,
                 parked_checkpoint=PARKED, checkpoint=cp, auto_clear="checkpoint height above parked_checkpoint",

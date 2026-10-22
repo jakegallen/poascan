@@ -27,6 +27,8 @@ jobs:
           python -c "import poascan.server, poascan.agentapi"
       - name: Smoke test (empty DB, indexer off, no upstream calls)
         run: python tools/smoke_test.py
+      - name: Joining state (open, delayed, paused)
+        run: python tools/join_state_test.py
 
   deploy:
     needs: test

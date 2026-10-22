@@ -98,7 +98,7 @@ def _upgrade():
     from . import maint as M
     lead = M.strip_text()[0]
     return ("Network upgrade", lead, ["Rewards paying · epochs closing"],
-            [("Joining", "Open" if M.join_open() else "Paused"), ("Self-custody", "Working"), ("Finalized height", "Parked")])
+            [("Joining", {"open": "Open", "delayed": "Delayed"}.get(M.join_state(), "Paused")), ("Self-custody", "Working"), ("Finalized height", "Parked")])
 
 def render(path):
     """Returns (png bytes, max-age) or None for a path that is not an OG route."""

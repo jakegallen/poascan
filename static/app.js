@@ -141,6 +141,15 @@ function toast(m,big){if(!toastEl)return;var am0=D.getElementById("askmodal"),ho
 function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(jm&&jm.open?jm:D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb()});return Promise.resolve(fb())}
 D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
+/* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
+(function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
+ R=function(a){return a[Math.floor(Math.random()*a.length)]},nm=R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900)),RX=/(register\?label=)[^\s]*/;
+ function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
+ function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
+ var jp=$("#jm-prompt");fill(jp,nm);
+ var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
+ function upd(){var v=(f.value||"").replace(/[^A-Za-z0-9_-]/g,"").slice(0,32)||nm;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}
+ f.value=nm;upd();f.addEventListener("input",upd)})();
 if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
  function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?($(".pc-text",c).textContent||"").trim():P}
  $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});

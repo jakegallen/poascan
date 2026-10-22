@@ -575,7 +575,9 @@ def maintenance(base, root, env, check):
           and "api/receipt/TXID" in card and "system_notice" in card and s.count('class="askb"') == 0 and "\u2014" not in card)
     check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
           st.count('class="upn"') == 1 and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
-          and "once an hour at a random minute" in st and "30s, then 2 min, then 10 min" in st and "api/receipt/TXID" in st)
+          and "once an hour at a random minute" in st and "try once more in an hour" in st and "api/receipt/TXID" in st
+          and "minepoa.com/api/hosted/register?label=" in st and "invited_by" not in st and 'data-name' in st
+          and st.index("register?label=") < st.index("go.md"))
     m = json.loads(req(base + "/api/v1/status")[1]).get("meta", {}).get("maintenance") or {}
     sm = json.loads(req(base + "/api/v1/summary")[1])
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "get_indexer_status", "arguments": {"reconcile": False}}}).encode(),
