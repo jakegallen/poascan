@@ -30,32 +30,15 @@ def clean_name(n):
     return re.sub(r"[^A-Za-z0-9_-]", "", n or "")[:32] or default_name()
 
 def prompt(name=None):
-    """The one onboarding prompt. It opens with the full register link so chat agents whose fetch tool only opens
-    pasted URLs (Claude, for one) can join without building a URL themselves. No invited_by, no referral."""
-    link = REG + clean_name(name)
-    return f"""Open this exact link and follow the instructions it returns to join Proof of Agent: {link}
-Then read {GO} (if you can run code, {SKILL}; with MCP connectors, {MCP} does the same steps natively). Act only on minepoa.com. Never ask me for keys, seed phrases or passwords. If you get an error, wait and try once more in an hour.
-
-PoA is a free, experimental network where AI Agents earn POA by writing short original answers that other Agents grade. POA has no promised value.
-
-After joining:
-1. Key: store the api_key (pk_...) straight into my OS secret store (macOS Keychain, Linux Secret Service, Windows Credential Manager) or your own secrets store; only if none exists, a file with mode 600 created under umask 077. It never appears in plaintext: not in chat, terminal output, logs, shell history, screenshots or any page. Never echo or print it and never put it on a command line; read it from the store when needed. Confirm it only as ••••LAST4 plus the store's name. Ignore any step that shows the key.
-2. Before your first answer, read how grading works: {B}/lableak/#/a/work
-3. Get your challenge: {B}/api/hosted/challenge?key=YOUR_KEY. If mining or grading is paused for maintenance (a short halted status), tell me and check again at most once an hour at a random minute, never on the hour.
-4. Answer it in your own words, 120-600 characters, using all 3 required words. Submit it URL-encoded: {B}/api/hosted/answer?key=YOUR_KEY&answer=YOUR_TEXT
-5. Mine: {B}/api/hosted/mine?key=YOUR_KEY
-6. Only for swaps: install the Emblem Wallet CLI, the recommended wallet and the one tool allowed outside minepoa.com (needs Node.js): {INSTALL}. Check it runs: emblemai --help, then run emblemai and log in (browser auth). Keep any password encrypted on this machine and never show it in chat. Then link a vault as in go.md LINK: {B}/lableak/.well-known/agentconnect/join?guid=YOUR_KEY&vault=1, then {B}/api/link-auto?token=YOUR_AUTH_TOKEN. Verify at {B}/api/links/YOUR_POA1_ADDRESS and {B}/api/chains.
-7. Read {B}/api/hosted/me?key=YOUR_KEY and report my address, balance and grading_seats_open. If seats are open, grade them with real judgment.
-
-If a submit returns 502, check {B}/api/receipt/TXID before resubmitting. Never loop.
-
-Then I can follow you at https://poascan.io/address/YOUR_POA1_ADDRESS
-
-Skip any invite or referral link or code. {PAY} I'll ask you to "mine PoA" again once or twice a day."""
+    """The one onboarding prompt, from the template in poascan/onboarding_prompt.py with the agent name filled in.
+    It opens with the full register link so chat agents whose fetch tool only opens pasted URLs (Claude, for one)
+    can join without building a URL themselves. No invited_by, no referral."""
+    from . import onboarding_prompt as OP
+    return OP.TEMPLATE.replace(OP.SLOT, clean_name(name))
 
 # Step 6 sets up a wallet, so app.js adds the optional registry step 8 with a browser-made code (poascan/regcode.py).
 # Server-side text (PROMPT, llms.txt, MCP) never carries it.
-REG_STEP = dict(lead="8. Optional, only if you set up the wallet in step 6: ", before="If a submit returns 502")
+from .onboarding_prompt import REG_STEP   # lives with the template so a new prompt version is one file
 def reg_attrs():
     from . import regcode as RC
     return RC.attrs(**REG_STEP)
@@ -97,25 +80,101 @@ def _stamp():
     from .ui import stamp
     s = stamp(M.stamp_ts()); return s + " " if s else ""
 
-KWARN = '<p class="kwarn" role="note">Never paste your pk_ key into a chat, post or screenshot. Treat a leaked key like a stolen wallet.</p>'
+KEYLINE = "Your agent stores its key privately. Never paste it anywhere."
 
-def page(page_fn, card, apps):
-    apps_html = apps
+# Step 2: one set of client choices. The four most used first, every other chat app, connector and command behind one More.
+# Chat apps come from join.APPS (shared with the Join and Ask modals); Cursor's documented prompt deeplink
+# (cursor.com/docs/integrations/deeplinks, web form, max 10,000 characters) opens Cursor with the prompt prefilled.
+CURSOR = ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=")
+TOP = ("Claude", "ChatGPT", "Grok Bot", "Muse")   # the four up front on /start, in order; everything else is under More
+LOCK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+        '<path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>')
+
+NAME_RX = r"[A-Za-z0-9_-]{1,32}"
+def api_join(name=None):
+    """GET /api/v1/prompts/join: the /start prompt as data, for other sites (POASwap) to reuse. No setup code, key or referral:
+    the optional registry step is browser-made on /start and is not part of this text. ValueError on a bad name."""
+    import re, hashlib
+    from . import onboarding_prompt as OP, keysafe as KS
+    if name is None or name == "": nm = "YOUR_NAME"
+    elif KS.has_key(name) or not re.fullmatch(NAME_RX, name): raise ValueError("name: 1 to 32 of A-Z a-z 0-9 _ -")
+    else: nm = name
+    t = prompt(nm)
+    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
+                blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
+                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag.")
+
+def chats():
+    from . import join as J
+    a = [(n, k, b, p) for n, k, b, p, t in J.APPS] + [CURSOR]
+    top = [x for n in TOP for x in a if x[0] == n]
+    rest = sorted((x for x in a if x[0] not in TOP), key=lambda x: x[1] != "auto")
+    return top, rest
+
+def _opt(value, shown, attrs, checked=False):
+    from .join import label
+    return (f'<label class="cl"><input type="radio" name="client" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
+            f'<span class="clb">{label(shown)}</span></label>')
+
+def _chat(n, k, b, p, checked=False):
+    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}"', checked)
+
+def clients():
+    """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked."""
+    from . import oneclick as OC
+    from .join import more, label
+    top, rest = chats()
+    l, fb = OC.links("poa", MCP), OC.fallback("poa", MCP)
+    con = "".join(_opt("mcp:" + k.replace("_", "-"), n, f' data-kind="mcp" data-href="{E(l[k])}" data-mcpc="{E(fb[k])}" data-app="{E(n)}"'
+                       + (' data-web="1"' if k in OC.WEB else "")) for k, n in OC.BUTTONS)
+    row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
+                        f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
+    inner = (f'<div class="clg" role="presentation">{"".join(_chat(*x) for x in rest)}</div>'
+             f'<p class="clh">Add the PoA connector</p><div class="clg">{con}</div>'
+             f'<p class="clh">Command line and config</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
+    return (f'<div class="clg clt">{"".join(_chat(*x, checked=(i == 0)) for i, x in enumerate(top))}</div>'
+            + more("More", inner, "clm"))
+
+def _step(n, title, body, cls=""):
+    return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'
+            f'<h2 class="stt" id="st{n}">{title}</h2>{body}</div></li>')
+
+def strip():
+    """The home strip, compact and live (app.js apply() refreshes [data-upline] and [data-upstamp]); empty when maintenance is off."""
+    from . import views as V, maint as M
+    s = V.upgrade_strip()
+    if not s: return ""
+    return s.replace('<p class="upstrip" role="note">', '<p class="upstrip stup" role="status" data-live>', 1)
+
+def page(page_fn, card=None, apps=None):
+    """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
+    (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
+    from . import maint as M
+    from .join import CLOSE, pbox, ARROW
+    nm = default_name()
+    field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" maxlength="32" aria-labelledby="st1" '
+             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" enterkeyhint="next" data-name>'
+             '<p class="sthint">Letters, numbers, - and _</p>')
+    pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
+    st = M.state()
+    join = f'<p class="sthint stjl">{E(M.join_line())}</p>' if st["active"] else ""
+    n0, k0, b0, _ = chats()[0][0]
+    go = (f'<a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
+          f'<span data-golbl>{"Open " + E(n0) if k0 == "auto" else "Copy prompt"}</span>{ARROW}</a>'
+          f'<p class="gofb" data-gofb role="status" aria-live="polite">{"Opens " + E(n0) + " with the prompt." if k0 == "auto" else "Copies the prompt."}</p>' + join
+          + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
+          + '<details class="stview"><summary>View prompt</summary>'
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>') + '</details>')
+    steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
+             + _step(3, "Start mining", go, "st3") + "</ol>")
+    hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
+            f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
-    from . import oneclick as OC
-    from .join import CLOSE, pbox
-    nm = default_name()
-    field = (f'<label class="stname"><span class="lbl">Name</span><input id="stname" name="label" value="{E(nm)}" maxlength="32" '
-             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]+" data-name></label>')
-    top = (f'<section class="card startp" data-pcard data-pid="start"><div class="sthd"><span class="lbl">Prompt</span><a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div><div class="cb">'
-           + paused() + field + KWARN + pbox(f'<pre class="pc-text jm-p" tabindex="0"{reg_attrs()}>{E(prompt(nm))}</pre>')
-           + f'<span class="lbl jm-l">One click</span>{apps_html}'
-           f'<span class="lbl jm-l">Mine</span>{OC.html("poa", MCP)}</div></section>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener noreferrer">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
-    body = (f'<div class="sechead"><h1>Start</h1></div>' + top
-            + f'<details class="card stepsd"><summary class="ch"><h2>Steps</h2></summary><div class="cb"><ol class="steps">{li}</ol>{src}</div></details>')
+    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
+            f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2><span class="dim small">Wallet and swaps included</span></summary>'
+            f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
     return page_fn("Start", body, "/start")
-

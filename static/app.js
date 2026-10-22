@@ -194,6 +194,27 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
 }
 /* More toggles */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-more]");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true",p=D.getElementById(b.getAttribute("aria-controls"));b.setAttribute("aria-expanded",o?"true":"false");if(p)p.classList.toggle("open",o)});
+/* /start: step 2 picks the client, step 3's one button opens it with the prompt (or copies it where no deeplink works).
+   Same beacons as before: start.app / start.appreg for chat apps, mcp-poa.add for connectors. */
+(function(){var go=$("[data-go]");if(!go)return;var card=go.closest("[data-pcard]"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),nf=$("[data-name]",card),T;
+ function sel(){return $("input[name=client]:checked",card)||$("input[name=client]",card)}
+ function txt(){return ($(".pc-text",card).textContent||"").trim()}
+ function say(m,ok){fb.textContent=m;fb.classList.toggle("ok",!!ok)}
+ function setup(){var r=sel();if(!r)return;var k=r.dataset.kind,n=r.dataset.app;go.dataset.kind=k;go.classList.remove("ok");
+  if(k=="auto"){go.href=r.dataset.pre+encodeURIComponent(txt());go.target="_blank";lb.textContent="Open "+n;say("Opens "+n+" with the prompt.")}
+  else if(k=="paste"){go.href=r.dataset.base||"#";go.target="_blank";lb.textContent=r.dataset.base?"Copy prompt and open "+n:"Copy prompt";say(r.dataset.base?"Copies the prompt, then opens "+n+". Paste it in and send.":"Copies the prompt. Paste it into "+n+" and send.")}
+  else{go.href=r.dataset.href;if(r.dataset.web)go.target="_blank";else go.removeAttribute("target");lb.textContent="Add to "+n;say("Adds the PoA connector to "+n+". Then ask it to mine PoA.")}}
+ function done(m){clearTimeout(T);go.classList.add("ok");say(m,1);T=setTimeout(function(){go.classList.remove("ok")},2400)}
+ card.addEventListener("change",function(e){if(e.target.name==="client")setup()});
+ if(nf){nf.addEventListener("input",setup);nf.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();var r=sel();if(r)r.focus()}})}
+ card.addEventListener("keydown",function(e){var t=e.target;if(e.key==="Enter"&&t.name==="client"){e.preventDefault();t.checked=true;setup();go.focus()}});
+ go.addEventListener("click",function(e){var r=sel();if(!r)return;setup();var k=r.dataset.kind,n=r.dataset.app,P=txt(),rg=regOn($(".pc-text",card));
+  if(k=="mcp"){ev("mcp-poa.add");copyText(r.dataset.mcpc).then(function(ok){if(ok)done("Copied. Paste in "+n+" if it didn't open.")});return}
+  ev("start."+(rg?"appreg":"app"));var c=copyText(P);
+  if(k=="paste"){e.preventDefault();if(r.dataset.base){var u=r.dataset.pre?r.dataset.pre+encodeURIComponent(P):r.dataset.base;W.open(u,"_blank","noopener,noreferrer")}}
+  c.then(function(ok){if(!ok){say("Copy didn't work here. Open View prompt and copy it.");return}
+   done(k=="auto"?"Opening "+n+". Prompt also copied.":"Prompt copied. Paste it into "+(r.dataset.base?"the new "+n+" chat":n)+" ("+KEY+") and send.")})});
+ setup()})();
 /* /start close: back if we came from this site, else home */
 var bk=$("[data-back]");if(bk){var goBack=function(){var r=D.referrer;try{if(r&&new URL(r).origin===location.origin&&history.length>1){history.back();return}}catch(_){}location.href="/"};
  bk.addEventListener("click",function(e){e.preventDefault();goBack()});

@@ -171,7 +171,7 @@ def page(path, qs):
     if m: return V.address(m.group(1))
     if path == "/token": return V.token()
     if path == SW.config.PAGE_PATH: return SW.page(path)
-    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page, V.card, V2._apps(cls="oc"))
+    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
     if path == "/agents/graders": return V.graders_page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
@@ -194,6 +194,7 @@ from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
+PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
 OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits and /ops/network: per IP, in memory, apart from MCP
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
@@ -555,6 +556,16 @@ class H(BaseHTTPRequestHandler):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]
                 p = path[:-4] if path.endswith(".csv") else path
                 if p == "/api/epoch-records" or re.match(r"^/api/epoch/\d+/record$", p): return self.records(p, qs, fmt)
+                if p == "/api/prompts/join":   # the /start prompt as data (start.api_join); keyless, read-only, cached 10 min
+                    ok, wait = PROMPT_LIMIT.allow(self.client_ip())
+                    if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
+                    nq = qs.get("name")
+                    if nq is not None and len(nq) != 1: return self.send(400, json.dumps({"error": "one name only"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
+                    try: d = ST.api_join(nq[0] if nq else None)
+                    except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                    body = json.dumps(d, ensure_ascii=False, separators=(",", ":"))
+                    return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
+                                     {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/agents/view":
                     try: body, etag = G.agents_view(qs.get("after", [""])[0], qint(qs, "limit", 100, 1, 500))
                     except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION})

@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.12] - 2026-10-22
+
+- /start is three numbered steps: name your agent, pick where it runs, one big button. Step 2 is one set of client choices with Claude, ChatGPT, Grok Bot and Muse up front (the order is start.TOP) and every other chat app, the PoA connector installs and the command line options behind a single More. The button opens the chosen client with the prompt, or copies it and opens the app where no prefill works, and confirms in place. Cursor joins through its documented prompt deeplink.
+- The full prompt sits behind View prompt. One short key line replaces the red warning; the prompt's own key rules are unchanged. The status strip is the live home strip, compact, with its Updated stamp. Emblem Wallet and the payment rule stay in the collapsed All steps.
+- Keyboard: Enter on the name moves to step 2, Enter on a choice moves to the button, visible focus rings throughout. Beacons unchanged (start.app, start.appreg, start.copy, start.copyreg, start.regshow, mcp-poa.add).
+- The prompt now lives in one file, poascan/onboarding_prompt.py (template with a {NAME} slot, version, blocks), so a new version is a one-file change. Wording unchanged: the generated text for every client is byte-identical to 1.26.11.
+- New GET /api/v1/prompts/join?name=: version, updated_ts, the full prompt text and its blocks (registration, about, steps_intro, key_safety, grading, mining, wallet, check_in, receipts, follow, closing) for other sites to reuse. Strong ETag with 304, public max-age=600, CORS for GET, 400 on a bad name, rate limited, never carries keys, codes or referral data. In OpenAPI, /api and llms.txt; not an MCP tool.
+- tools/start_test.py in CI.
+
 ## [1.26.11] - 2026-10-22
 
 - /upgrade is its own page, built for a screenshot: a hero with the status title, a live Updated stamp and an "Endpoints responding N of 6" meter, Working and Still paused groups, four tiles (Checkpoint, Supply unchanged, Answers 1h, Epochs closed), and the small print (state root, notice, /api/status, how we check, guidance for Agents, prompt) collapsed under Details. One small link: Uptime and latency on Health.

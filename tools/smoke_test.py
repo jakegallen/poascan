@@ -170,18 +170,18 @@ def main():
               and "trades_all_time" in spec["components"]["schemas"]["SwapStatus"]["properties"]["market"]["properties"])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         swap_module(base, spec, check)
-        c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1 class=\"sr-only\">Start</h1>" in b
+        c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1>Start mining PoA</h1>" in b
               and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
-        _cur = _re.search(r'href="(https://cursor\.com/install-mcp\?[^"]+)" data-mcp="cursor" target="_blank" rel="noopener noreferrer" data-mcpcopy=', _m); _vs = _re.search(r'href="(vscode:mcp/install\?[^"]+)"', _m)
+        _cur = _re.search(r'value="mcp:cursor" data-kind="mcp" data-href="(https://cursor\.com/install-mcp\?[^"]+)" data-mcpc=', _m); _vs = _re.search(r'data-href="(vscode:mcp/install\?[^"]+)"', _m)
         _ok = bool(_cur and _vs)
         if _ok:
             _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
-        check("/start: Copy before One click, Mine deeplinks decode", _ok and _m.index("data-copy-prompt") < _m.index("One click") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
+        check("/start: View prompt (with Copy) after the button, connector deeplinks decode", _ok and _m.index("data-go") < _m.index("View prompt") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("pill: Stale (red) when our own fetch has nothing", b'class="pill stale" id="livepill"' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
@@ -200,9 +200,9 @@ def main():
               and b'such as step 8 on <a href="/start">Start</a>' in _pv and b'<a href="/swaps">Swap</a>' not in _pv and b"not sold" not in _pv.lower())
         check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
               and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/swaps", "/about", "/privacy")))
-        check("page H1 kept but visually hidden", b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Start</h1>' in req(base + "/start")[1] and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
-        _lm = _re.search(r'href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
-        check("/start: More toggles closed, extra MCP deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 2 and '>More<' in _m and '>Other clients<' in _m
+        check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
+        _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
+        check("/start: one More toggle, closed; extra connector deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 1 and '>More<' in _m and '>Other clients<' not in _m
               and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
               and _js.loads(_pq(_up(_ki.group(1).replace("&amp;", "&")).query)["config"][0])["url"] == "https://minepoa.com/mcp"
               and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
@@ -214,16 +214,15 @@ def main():
         _bd = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "static", "brands")
         _lg = _re.findall(r'<span class="an">(?:<img class="blogo" src="/static/brands/([^"?]+)\?v=1"[^>]*>|<i class="blogo mono")', _m)
         check("logos: every option on /start has a brand mark, files exist and serve, SOURCES.md listed",
-              len(_lg) == _m.count('<span class="an">') == 29 and all(f and _os.path.isfile(_os.path.join(_bd, f)) for f in _lg)
+              len(_lg) == _m.count('<span class="an">') == 30 and all(f and _os.path.isfile(_os.path.join(_bd, f)) for f in _lg)
               and all(req(base + "/static/brands/" + f)[0] == 200 for f in set(_lg))
               and all(f in open(_os.path.join(_bd, "SOURCES.md")).read() for f in set(_lg))
               and all(b'<span class="an"><img class="blogo"' in x for x in _pb))
-        _mc = _m[_m.index('apps mcpa'):]; _oc = _mc.index('>Other clients<')
-        check("/start Mine: every Add button also copies a config", all(_re.search(f'data-mcp="{k}"(?: target="_blank" rel="noopener noreferrer")? data-mcpcopy="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
-        check("/start Mine: four one-click Add up front, everything else under Other clients", _mc[:_oc].count('data-mcp=') == 4
-              and all(f'data-mcp="{k}"' in _mc[:_oc] for k in ("cursor", "vscode", "lmstudio", "goose")) and 'class="cmd"' not in _mc[:_oc]
-              and _mc[_oc:].count('class="cmd"') == 7 and _mc[_oc:].index('data-mcp="cherry"') < _mc[_oc:].index('data-mcp="claude-code"'))
-        check("/start: Open in apps + collapsed Steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
+        _mp = _m[_m.index('class="morep'):]
+        check("/start connectors: every Add choice also copies a config", all(_re.search(f'value="mcp:{k}" data-kind="mcp" data-href="[^"]+" data-mcpc="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
+        check("/start: ChatGPT, Claude, Grok, Cursor up front; connectors and the 7 commands behind More", 'value="mcp:' not in _m[:_m.index('class="morep')]
+              and _mp.count('value="mcp:') == 8 and _mp.count('class="cmd"') == 7 and _mp.index('value="mcp:cherry"') < _mp.index('data-mcp="claude-code"'))
+        check("/start: chat choices + collapsed All steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)
         c, b = req(base + "/"); check("home has no second onboarding CTA", b"Start mining in one paste" not in b and b.count(b'href="/start"') == 1)
@@ -600,8 +599,8 @@ def maintenance(base, root, env, check):
           and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
           and "lableak/#/post/1357" in um and um.count('class="pbox"') == 1 and "data-copy-prompt" in um and "24 to 72" not in um and ">Checkpoint<" in um
           and "api/receipt/TXID" in um and "system_notice" in um and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
-    check("maintenance: /start keeps the prompt and adds one line; the prompt backs off and checks hourly at a random minute",
-          st.count('class="upn"') == 1 and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
+    check("maintenance: /start keeps the prompt and adds the live status strip and one join line; the prompt backs off and checks hourly at a random minute",
+          st.count('<p class="upstrip stup" role="status" data-live>') == 1 and st.count('class="sthint stjl"') == 1 and 'class="upn"' not in st and "Join now" in st and 'href="/upgrade"' in st and "Hosted mining" in st and st.count('class="pbox"') == 1
           and "once an hour at a random minute" in st and "try once more in an hour" in st and "api/receipt/TXID" in st
           and "minepoa.com/api/hosted/register?label=" in st and "invited_by" not in st and 'data-name' in st
           and st.index("register?label=") < st.index("go.md"))

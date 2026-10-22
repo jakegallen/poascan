@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.11"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.12"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -524,6 +524,10 @@ def openapi():
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", ROWS, csv=True, oid="swaps", tag="token",
                           desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out."),
+        "/api/prompts/join": _op("The /start onboarding prompt as data: version, updated_ts, full text and its blocks", {"$ref": "#/components/schemas/JoinPrompt"},
+                                 [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False)],
+                                 oid="joinPrompt", tag="meta",
+                                 desc="Byte-identical to the prompt /start shows, with the name in the register link. blocks (registration, about, steps_intro, key_safety, grading, mining, wallet, check_in, receipts, follow, closing) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
@@ -578,6 +582,10 @@ def openapi():
             "servers": [{"url": BASE}], "externalDocs": {"url": BASE + "/llms.txt", "description": "Agent guide"},
             "paths": P, "components": {
                 "schemas": {"Error": {"type": "object", "properties": {"error": {"type": "string"}}},
+                            "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
+                                "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "text": {"type": "string"},
+                                "sha256": {"type": "string", "description": "sha256 of text (UTF-8)"}, "source": {"type": "string"}, "notes": {"type": "string"},
+                                "blocks": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}}}},
                             "Concentration": {"type": "object", "description": "Holder concentration from the rich list. Shares are fractions of the total held balance (0 to 1).",
                                   "properties": {"holders": {"type": "integer"}, "total_balance": {"type": "number"}, "top1_share": {"type": ["number", "null"]}, "top5_share": {"type": ["number", "null"]},
                                                  "top10_share": {"type": ["number", "null"]}, "top20_share": {"type": ["number", "null"]}, "gini": {"type": ["number", "null"]}, "median_balance": {"type": ["number", "null"]},
@@ -704,6 +712,7 @@ Tools ({len(TOOLS)}):
 - Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
+- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, wallet and more; joined in order they give text). Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).

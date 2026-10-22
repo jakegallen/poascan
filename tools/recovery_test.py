@@ -159,7 +159,7 @@ try:
     check("/upgrade: no reopen time, no 24 to 72, never 'reopened' while nothing is official", "24 to 72" not in card and "reopened" not in card and " hours" not in card.split('class="upa"')[0])
     check(f"/upgrade: clean {clean(card)}", not clean(card))
     c, stp = get("/start")
-    check("/start: the pause line carries the Updated stamp", '<p class="upn" role="status">' in stp and '<span class="upts">Updated <time data-upts=' in stp.split('class="upn"')[1][:900])
+    check("/start: the live status strip carries the Updated stamp", '<p class="upstrip stup" role="status" data-live>' in stp and '<span class="upts">Updated <time data-upts=' in stp.split('class="upstrip stup"')[1][:1500])
     c, hl = get("/network?tab=health")
     check("Health: one compact recovery line with the headline and stamp, links /upgrade; no hero, groups or route meter",
           hl.count('class="uphl"') == 1 and "Recovery in progress: new checkpoint 33,463, balances intact." in hl and '<a href="/upgrade">Recovery details</a>' in hl
