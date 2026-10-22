@@ -9,6 +9,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.9] - 2026-10-22
+
+### Changed
+
+- Polite polling toward minepoa.com while it recovers. The live tx feed reads every 60 s when upstream is healthy and every 2 min while it is degraded (a 429, 5xx or timeout on the feed endpoints in the last 15 min), and comes back by itself. `/api/status` is read once per 60 s (2 min while degraded) and shared by every feature; `/api/networks` every 2 min; LabLeak lists hourly. All of these are env-tunable (`POASCAN_LIVE_S`, `POASCAN_LIVE_DEGRADED_S`, `POASCAN_STATUS_S`, `POASCAN_STATUS_DEGRADED_S`, `POASCAN_NETWORKS_S`, `POASCAN_SWAPS_S`, `POASCAN_FORUM_S`, `POASCAN_META_S`, `POASCAN_DEGRADED_FOR_S`) with floors (live 30 s, status 60 s).
+- Incremental tx feed: minepoa's explorer ignores `since` and sends no ETag, so POAScan reads one page per cycle and pages back with `before=<ts>` only to fill a gap, stopping at the first tx it has already seen (at most `POASCAN_LIVE_MAX_PAGES`, default 3).
+- Backoff: exponential with equal jitter (`POASCAN_BACKOFF_BASE_S` 30 s doubling to `POASCAN_BACKOFF_MAX_S` 900 s), and `Retry-After` (header, seconds or HTTP date, or `retry_after_seconds`) is a floor. A 429 pauses every read host-wide until it passes.
+- Visitor-triggered reads: the global budget is 0.25 per second (900 per hour at most), with address lookups capped at 0.05 per second and on-demand tx reads at 0.1 per second inside it; one address is read at most once per 5 min (`POASCAN_ADDR_MIN_S`); a scheduled job's unknown tx id is not retried for 6 h.
+- A restart or deploy resumes the job schedule instead of running every job at once.
+- The swap mirror routes (`/api/v1/swaps*`, `/agents/<a>/addresses`, `/epochs`) stay archive reads with no upstream call; swap book freshness is unchanged (60 s).
+
+### Added
+
+- Upstream request counter: every request to minepoa.com (scheduled, on demand, uptime probes, the hosted route check) by endpoint and status class, in `/ops/visits` (token) under `upstream` (last 15 min, 60 min and 24 h rates, hourly and daily totals). Counts only. `tools/polite_test.py` in CI.
+
 ## [1.26.8] - 2026-10-22
 
 ### Changed

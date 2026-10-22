@@ -388,7 +388,13 @@ def report(frm, to):
                  campaigns=srt(e.get("tag", {})), devices=srt(e.get("device", {})), countries=srt(e.get("country", {})),
                  edges=srt(e.get("edge", {})), search=srt(e.get("search", {})),
                  health=dict(not_found=srt(e.get("404", {})), errors=srt(e.get("5xx", {})), response_ms=dict(sorted(ms.items()))))
-    return dict(**{"from": frm, "to": to}, country_source=geo.source(), metrics=METRICS, days=[days[k] for k in sorted(days, reverse=True)])
+    try:   # requests POAScan sent to minepoa.com, per endpoint template (poascan/indexer.py counter); counts only
+        from . import indexer as I
+        up = I.upstream_report(); upd = I.upstream_daily(frm, to); up["daily"] = dict(sorted(upd.items(), reverse=True))
+    except Exception as e:
+        log.warning("upstream report: %s", type(e).__name__); up, upd = None, {}
+    for day, x in days.items(): x["health"]["upstream"] = dict(sorted(upd.get(day, {}).items(), key=lambda kv: -kv[1]))
+    return dict(**{"from": frm, "to": to}, country_source=geo.source(), metrics=METRICS, upstream=up, days=[days[k] for k in sorted(days, reverse=True)])
 
 COUNTER = Counter()
 

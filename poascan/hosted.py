@@ -36,12 +36,15 @@ def _get(path):
     """(code, first 2 KB). Raises on network errors."""
     if path not in {p for _, _, p in ROUTES}: raise ValueError("path not in the route list")
     req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Accept": "application/json"})
+    from . import indexer as _I   # upstream request counter (/ops/visits)
     try:
-        with _OPENER.open(req, timeout=TIMEOUT) as r: return r.status, r.read(2048)
+        with _OPENER.open(req, timeout=TIMEOUT) as r: _I.count(path + " (route check)", r.status); return r.status, r.read(2048)
     except urllib.error.HTTPError as e:
+        _I.count(path + " (route check)", e.code)
         try: body = e.read(2048)
         except Exception: body = b""
         return e.code, body
+    except Exception: _I.count(path + " (route check)", "err"); raise
 
 def job(now=None, get=None):
     """Indexer job. Only while maintenance is switched on; a round after trouble is skipped."""

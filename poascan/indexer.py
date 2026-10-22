@@ -5,6 +5,34 @@ from . import db
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
 UA = "POAScan-indexer/1.0 (+https://poascan.io; read-only)"
 log = logging.getLogger("indexer")
+
+def _env_num(name, default, lo=None, hi=None, cast=float):
+    """Numeric env knob with a clamp; a bad value falls back to the default."""
+    try: v = cast(os.environ.get(name, "") or default)
+    except ValueError: v = cast(default)
+    if lo is not None: v = max(lo, v)
+    if hi is not None: v = min(hi, v)
+    return v
+_ei = lambda n, d, lo=None, hi=None: _env_num(n, d, lo, hi, int)
+
+# ---- polling cadence (env-tunable; floors keep a bad value from hammering minepoa.com) ----
+# Healthy cadence, and the slower one used while upstream is degraded: any 429, 5xx or timeout on the shared feed
+# endpoints in the last DEGRADED_FOR_S seconds. Back to healthy once that window passes clean.
+LIVE_S = _ei("POASCAN_LIVE_S", 60, 30)                         # /api/explorer/txs, healthy
+LIVE_DEGRADED_S = _ei("POASCAN_LIVE_DEGRADED_S", 120, 30)      # /api/explorer/txs, degraded (never faster than 30 s)
+STATUS_S = _ei("POASCAN_STATUS_S", 60, 60)                     # /api/status, one shared read for every feature
+STATUS_DEGRADED_S = _ei("POASCAN_STATUS_DEGRADED_S", 120, 60)
+NETWORKS_S = _ei("POASCAN_NETWORKS_S", 120, 60)                # /api/networks (height, checkpoint)
+SWAPS_S = _ei("POASCAN_SWAPS_S", 60, 30, 120)                  # /api/swaps (swap mirrors read our cached copy, never minepoa.com)
+FORUM_S = _ei("POASCAN_FORUM_S", 3600, 900)                    # communities plus one posts list per community
+META_S = _ei("POASCAN_META_S", 300, 120)                       # anchors, notices, ballots
+DEGRADED_FOR_S = _ei("POASCAN_DEGRADED_FOR_S", 900, 60)
+LIVE_LIMIT = _ei("POASCAN_LIVE_LIMIT", 200, 20, 500)           # rows per /api/explorer/txs page
+LIVE_MAX_PAGES = _ei("POASCAN_LIVE_MAX_PAGES", 3, 1, 10)       # gap fill after a pause: older pages until a seen txid
+BACKOFF_BASE_S = _ei("POASCAN_BACKOFF_BASE_S", 30, 5)          # first retry delay; doubles per failure
+BACKOFF_MAX_S = _ei("POASCAN_BACKOFF_MAX_S", 900, 60)
+RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After beyond this is treated as this
+FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
 ALLOWED = re.compile(r"^/(api/(status|networks|txs|explorer/txs|explorer/tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
                      r"epochs|agents|anchors|params|release|notices|ballots|chains|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
@@ -47,6 +75,8 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     if _KS.has_key(path) or _KS.has_cred_param(path.partition("?")[2]):
         raise ValueError("refused: credential-shaped value in an outbound path")
     ep = endpoint or path.split("?")[0]
+    hold = _hold[0] - time.time()
+    if hold > 0: raise Limited("minepoa.com asked us to wait (429)", int(hold) + 1)
     hd = {"User-Agent": UA, "Accept": "application/json", "Accept-Encoding": "gzip"}
     if cond and _etags.get(path): hd["If-None-Match"] = _etags[path]
     req = urllib.request.Request(BASE + path, headers=hd)
@@ -54,7 +84,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     try:
         with (_NOREDIR.open(req, timeout=timeout) if soft else urllib.request.urlopen(req, timeout=timeout)) as r:
             wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag")
-        _probe(ep, True, t0, "200")
+        _probe(ep, True, t0, "200"); count(ep, 200)
         if raw[:1] not in (b"{", b"["):
             raise Busy("non-JSON response (load page?)")
         data = json.loads(raw)
@@ -66,25 +96,28 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
                  (ep, now, len(raw)))
         return data
     except urllib.error.HTTPError as e:
+        count(ep, e.code)
         if e.code == 304 and cond:
             _probe(ep, True, t0, "304")
             db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,err) VALUES(?,?,0,0,NULL) "
                      "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0", (ep, now))
             return NOT_MODIFIED
-        retry = None
+        retry = retry_after(e.headers.get("Retry-After"))
         try:
-            body = json.loads(_decode(e.read() or b"{}", e.headers.get("Content-Encoding")) or b"{}"); retry = body.get("retry_after_seconds")
+            body = json.loads(_decode(e.read() or b"{}", e.headers.get("Content-Encoding")) or b"{}")
+            retry = max(retry or 0, float(body.get("retry_after_seconds") or 0)) or None
         except Exception:
             pass
         if soft and e.code in MISSING_CODES:
             _probe(ep, True, t0, str(e.code)); raise Missing("not found")
         _probe(ep, False, t0, str(e.code))
+        if e.code == 429: _hold[0] = max(_hold[0], time.time() + min(RETRY_AFTER_MAX_S, retry or BACKOFF_BASE_S))
         _fail(ep, f"HTTP {e.code}", retry)
         raise Busy(f"HTTP {e.code}", retry)
     except Busy as e:
         _fail(ep, str(e), None); raise
     except Exception as e:
-        _probe(ep, False, t0, type(e).__name__); _fail(ep, type(e).__name__ + ": " + str(e)[:120], None)
+        count(ep, "err"); _probe(ep, False, t0, type(e).__name__); _fail(ep, type(e).__name__ + ": " + str(e)[:120], None)
         raise Busy(str(e))
 
 def _probe(ep, ok, t0, code):
@@ -97,14 +130,15 @@ PROBES = ["/", "/go.md"]
 DERIVED = ("/api/status", "/api/swaps", "/lableak/api/communities")
 def uptime_name(ep): return "probe " + ep if ep in DERIVED else ep
 def job_probe():
+    if _hold[0] > time.time(): return
     for path in PROBES:
         t0 = time.time()
         try:
             req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Range": "bytes=0-1023"})
             with urllib.request.urlopen(req, timeout=30) as r:
-                r.read(1024); _probe("probe " + path, 200 <= r.status < 400, t0, str(r.status))
-        except urllib.error.HTTPError as e: _probe("probe " + path, False, t0, str(e.code))
-        except Exception as e: _probe("probe " + path, False, t0, type(e).__name__)
+                r.read(1024); _probe("probe " + path, 200 <= r.status < 400, t0, str(r.status)); count(path + " (probe)", r.status)
+        except urllib.error.HTTPError as e: _probe("probe " + path, False, t0, str(e.code)); count(path + " (probe)", e.code)
+        except Exception as e: _probe("probe " + path, False, t0, type(e).__name__); count(path + " (probe)", "err")
         time.sleep(0.5)
     db.write("DELETE FROM probes WHERE ts < ?", (int(time.time()) - 14 * 86400,))
     rollup_uptime()
@@ -118,15 +152,110 @@ def rollup_uptime(now=None):
     db.write("DELETE FROM uptime_daily WHERE day >= ? AND endpoint IN (?,?,?)", (d0,) + DERIVED)
     db.write("DELETE FROM uptime_daily WHERE day < ?", (now - 365 * 86400,))
 
+_hold = [0.0]   # host-wide pause after a 429: every read waits it out (minepoa rate limits per client, not per path)
+
+def retry_after(v, now=None):
+    """Retry-After header in seconds: delta-seconds or an HTTP date. None when absent or unreadable."""
+    v = (v or "").strip()
+    if not v: return None
+    if v.isdigit(): return float(v)
+    try:
+        import email.utils
+        return max(0.0, email.utils.parsedate_to_datetime(v).timestamp() - (now or time.time()))
+    except Exception: return None
+
+def backoff_s(fails, retry=None, rnd=random.random):
+    """Delay before the next try after `fails` failures in a row: exponential (BACKOFF_BASE_S doubling, capped at
+    BACKOFF_MAX_S) with equal jitter (half fixed, half random), so retries spread out instead of lining up. A
+    Retry-After (header or body) is a floor, plus up to 10 % jitter; it is honoured even beyond BACKOFF_MAX_S (to 6 h)."""
+    cap = min(BACKOFF_MAX_S, BACKOFF_BASE_S * (2 ** min(max(fails, 1) - 1, 16)))
+    d = cap / 2 + rnd() * cap / 2
+    if retry:
+        r = min(RETRY_AFTER_MAX_S, float(retry)); d = max(d, r + rnd() * r * 0.1)
+    return d
+
 def _fail(ep, err, retry):
     row = db.q1("SELECT fails FROM fetch_log WHERE endpoint=?", (ep,))
     fails = (row["fails"] if row else 0) + 1
-    backoff = min(900, 30 * (2 ** min(fails - 1, 5)))
-    if retry: backoff = max(backoff, int(retry))
     now = int(time.time())
     db.write("INSERT INTO fetch_log(endpoint,last_err,err,fails,next_at) VALUES(?,?,?,?,?) "
              "ON CONFLICT(endpoint) DO UPDATE SET last_err=excluded.last_err, err=excluded.err, fails=excluded.fails, next_at=excluded.next_at",
-             (ep, now, err, fails, now + backoff + random.randint(0, 15)))
+             (ep, now, err, fails, now + int(backoff_s(fails, retry))))
+
+def degraded(now=None):
+    """Upstream is degraded: a failed read (429, 5xx, timeout) on a shared feed endpoint in the last DEGRADED_FOR_S,
+    or POASCAN_UPSTREAM_DEGRADED=1. Feed polls slow down to their *_DEGRADED_S cadence while this holds."""
+    if os.environ.get("POASCAN_UPSTREAM_DEGRADED") == "1": return True
+    now = now or time.time()
+    if _hold[0] > now: return True
+    r = db.q1(f"SELECT MAX(last_err) AS t FROM fetch_log WHERE endpoint IN ({','.join('?' * len(FEED_EPS))})", FEED_EPS)
+    return bool(r and r["t"] and now - r["t"] < DEGRADED_FOR_S)
+
+def live_every(): return LIVE_DEGRADED_S if degraded() else LIVE_S
+
+def _last_try(ep):
+    """Last read of ep (ok or not), from fetch_log, so a restart or deploy never adds an early read."""
+    r = db.q1("SELECT last_ok, last_err FROM fetch_log WHERE endpoint=?", (ep,))
+    return max((r["last_ok"] or 0), (r["last_err"] or 0)) if r else 0
+
+# ---------------- upstream request counter ----------------
+# Every request that leaves for minepoa.com (scheduled, on demand, probes, the hosted route check) is counted here by
+# endpoint key (path template, plus the caller in brackets where one template has several) and status class, in
+# minute buckets: in memory, flushed to upstream_counts about once a minute, kept UPSTREAM_KEEP_DAYS. Private:
+# reported only in /ops/visits (token). Counts only; no ids, addresses or query strings.
+UPSTREAM_KEEP_DAYS = 8
+_ctr = collections.Counter(); _ctr_lock = threading.Lock(); _ctr_flushed = [0.0]
+def _code_class(code):
+    if code in (200, 304, 404, 429): return str(code)
+    if isinstance(code, int): return f"{code // 100}xx"
+    return "err"
+def count(ep, code, now=None):
+    m = int((now or time.time()) // 60) * 60
+    with _ctr_lock: _ctr[(m, ep, _code_class(code))] += 1
+def _ensure_counts():
+    db.write("CREATE TABLE IF NOT EXISTS upstream_counts(minute INTEGER, endpoint TEXT, code TEXT, n INTEGER, PRIMARY KEY(minute, endpoint, code))")
+def flush_counts(force=False):
+    if not force and time.time() - _ctr_flushed[0] < 60: return
+    _ctr_flushed[0] = time.time()
+    with _ctr_lock: items = list(_ctr.items()); _ctr.clear()
+    _ensure_counts()
+    if items:
+        db.write("INSERT INTO upstream_counts VALUES(?,?,?,?) ON CONFLICT(minute, endpoint, code) DO UPDATE SET n = n + excluded.n",
+                 [(m, ep, c, n) for (m, ep, c), n in items], many=True)
+    db.write("DELETE FROM upstream_counts WHERE minute < ?", (int(time.time()) - UPSTREAM_KEEP_DAYS * 86400,))
+def template(ep): return ep.split(" (")[0]
+def upstream_report(now=None):
+    """Requests to minepoa.com per endpoint: counts and per-hour rates over the last 15 min, 60 min and 24 h (full
+    minutes only, so a partial minute never inflates a rate), per-hour buckets for the last 24 h, and status classes."""
+    flush_counts(force=True); now = int(now or time.time()); cur = now // 60 * 60
+    first = (db.q1("SELECT MIN(minute) AS m FROM upstream_counts") or {}).get("m")
+    def win(mins):
+        lo = cur - mins * 60; span = (cur - max(lo, first or cur)) / 3600
+        rows = db.q("SELECT endpoint, SUM(n) AS n FROM upstream_counts WHERE minute >= ? AND minute < ? GROUP BY endpoint", (lo, cur))
+        by = {r["endpoint"]: r["n"] for r in rows}; tp = {}
+        for k, v in by.items(): tp[template(k)] = tp.get(template(k), 0) + v
+        ph = lambda x: {k: round(v / span, 1) for k, v in sorted(x.items(), key=lambda kv: -kv[1])} if span > 0 else {}
+        return dict(minutes=round(span * 60), total=sum(by.values()), per_hour_total=round(sum(by.values()) / span, 1) if span > 0 else None,
+                    per_hour=ph(tp), per_hour_by_caller=ph(by), counts=dict(sorted(by.items(), key=lambda kv: -kv[1])))
+    hours = {}
+    for r in db.q("SELECT (minute/3600)*3600 AS h, endpoint, SUM(n) AS n FROM upstream_counts WHERE minute >= ? GROUP BY 1, 2", (cur - 86400,)):
+        hours.setdefault(r["h"], {})[template(r["endpoint"])] = hours.get(r["h"], {}).get(template(r["endpoint"]), 0) + r["n"]
+    codes = {}
+    for r in db.q("SELECT endpoint, code, SUM(n) AS n FROM upstream_counts WHERE minute >= ? GROUP BY 1, 2", (cur - 3600,)):
+        codes.setdefault(r["endpoint"], {})[r["code"]] = r["n"]
+    return dict(counting_since=first, now=now, degraded=degraded(now), last_15m=win(15), last_60m=win(60), last_24h=win(1440),
+                hourly=[dict(hour=h, **{"endpoints": hours[h]}) for h in sorted(hours)], codes_60m=codes,
+                cadence=dict(live_s=LIVE_S, live_degraded_s=LIVE_DEGRADED_S, status_s=STATUS_S, status_degraded_s=STATUS_DEGRADED_S,
+                             networks_s=NETWORKS_S, swaps_s=SWAPS_S, forum_s=FORUM_S, meta_s=META_S, live_limit=LIVE_LIMIT, live_max_pages=LIVE_MAX_PAGES))
+def upstream_daily(frm, to):
+    """{YYYY-MM-DD: {endpoint template: requests}} for /ops/visits days (UTC)."""
+    import datetime as _dt
+    flush_counts(force=True); out = {}
+    lo = int(_dt.datetime.fromisoformat(frm + "T00:00:00+00:00").timestamp()); hi = int(_dt.datetime.fromisoformat(to + "T00:00:00+00:00").timestamp()) + 86400
+    for r in db.q("SELECT minute/86400 AS d, endpoint, SUM(n) AS n FROM upstream_counts WHERE minute >= ? AND minute < ? GROUP BY 1, 2", (lo, hi)):
+        day = _dt.datetime.fromtimestamp(r["d"] * 86400, _dt.timezone.utc).date().isoformat(); t = template(r["endpoint"])
+        out.setdefault(day, {})[t] = out.get(day, {}).get(t, 0) + r["n"]
+    return out
 
 def can_fetch(ep):
     row = db.q1("SELECT next_at FROM fetch_log WHERE endpoint=?", (ep,))
@@ -160,12 +289,38 @@ def upsert_txs(rows, source):
         db.write("INSERT OR REPLACE INTO labels VALUES(?,?,?,?,?)", labs, many=True)
     return len(out)
 
+def _known(ids):
+    ids = [i for i in ids if i]
+    if not ids: return set()
+    return {r["id"] for r in db.q(f"SELECT id FROM txs WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))}
+
+def live_txs(get=None):
+    """The newest LIVE_LIMIT txs (attestation counts and final flags of recent txs refresh from this page). minepoa's
+    explorer has no since or cursor parameter going forward (since= is ignored) and sends no ETag, so incremental means:
+    one page per cycle, and only when the page holds no txid we have already seen (a gap after a pause or an outage)
+    older pages are read with before=<oldest ts>, stopping at the first page that reaches a seen txid, at a short page,
+    or after LIVE_MAX_PAGES. Returns the number of pages read."""
+    get = get or (lambda path, first: fetch(path, cond=first, endpoint="/api/explorer/txs"))
+    batch = get(f"/api/explorer/txs?limit={LIVE_LIMIT}", True); pages = 1; run = set()
+    while isinstance(batch, list):
+        fresh = [t for t in batch if isinstance(t, dict) and t.get("id") and t["id"] not in run]
+        seen = _known([t["id"] for t in fresh])
+        upsert_txs(fresh, "explorer/txs"); run |= {t["id"] for t in fresh}
+        if seen or not fresh or len(batch) < LIVE_LIMIT or pages >= LIVE_MAX_PAGES: break
+        oldest = min((int(t.get("ts") or 0) for t in fresh), default=0)
+        if not oldest: break
+        time.sleep(1)
+        batch = get(f"/api/explorer/txs?limit={LIVE_LIMIT}&before={oldest + 1}", False); pages += 1   # +1: same-second txs past the cut
+    return pages
+
 def job_live():
     # Each read stands alone: a slow /api/networks must not hold back the tx feed that drives the Live pill.
-    rows = fetch("/api/explorer/txs?limit=200", cond=True)
-    if rows is not NOT_MODIFIED: upsert_txs(rows, "explorer/txs")
-    for path, fn in (("/api/status", _live_status), ("/api/networks", _live_networks)):
-        if not can_fetch(path): continue
+    # /api/status is read here once per STATUS_S (STATUS_DEGRADED_S while degraded) and shared: every feature reads
+    # the stored copy (db blob "status"), never minepoa.com.
+    live_txs()
+    now = time.time(); slow = degraded(now)
+    for path, fn, every in (("/api/status", _live_status, STATUS_DEGRADED_S if slow else STATUS_S), ("/api/networks", _live_networks, NETWORKS_S)):
+        if not can_fetch(path) or now - _last_try(path) < every - 5: continue   # 5 s slack: the job itself drifts
         try:
             d = fetch(path, timeout=20, cond=True)
             if d is not NOT_MODIFIED: fn(d)
@@ -318,9 +473,16 @@ def lang(t):
 # and fall back to the stored balance when the budget is spent.
 ONDEMAND_MAX = int(os.environ.get("POASCAN_ONDEMAND_MAX", "3"))
 ONDEMAND_TIMEOUT = float(os.environ.get("POASCAN_ONDEMAND_TIMEOUT", "8"))
-GLOBAL_RATE = float(os.environ.get("POASCAN_UPSTREAM_RATE", "0.5")); GLOBAL_BURST = int(os.environ.get("POASCAN_UPSTREAM_BURST", "20"))
+GLOBAL_RATE = float(os.environ.get("POASCAN_UPSTREAM_RATE", "0.25")); GLOBAL_BURST = int(os.environ.get("POASCAN_UPSTREAM_BURST", "20"))
 CLIENT_RATE = float(os.environ.get("POASCAN_UPSTREAM_CLIENT_RATE", "0.2")); CLIENT_BURST = int(os.environ.get("POASCAN_UPSTREAM_CLIENT_BURST", "20"))
-NEG_TTL, NEG_ERR_TTL, NEG_MAX = 600, 300, 5000
+NEG_TTL = _ei("POASCAN_NEG_TTL", 600, 60); NEG_ERR_TTL = _ei("POASCAN_NEG_ERR_TTL", 300, 30); NEG_MAX = 5000
+NEG_BG_TTL = _ei("POASCAN_NEG_BG_TTL", 6 * 3600, 600)   # a scheduled job's unknown tx id (e.g. rolled back by the upgrade)
+# Per-endpoint on-demand budgets inside the global one, and the shortest gap between two reads of the same address
+# (the page serves its cached copy meanwhile). With these the visitor-driven ceiling is GLOBAL_RATE*3600 per hour.
+ADDR_RATE = _env_num("POASCAN_UPSTREAM_ADDR_RATE", 0.05, 0.001); ADDR_BURST = _ei("POASCAN_UPSTREAM_ADDR_BURST", 10, 1)
+TXOD_RATE = _env_num("POASCAN_UPSTREAM_TX_RATE", 0.1, 0.001); TXOD_BURST = _ei("POASCAN_UPSTREAM_TX_BURST", 20, 1)
+ADDR_MIN_S = _ei("POASCAN_ADDR_MIN_S", 300, 30)
+TX_REFRESH_S = _ei("POASCAN_TX_REFRESH_S", 120, 30)   # a stored non-final tx is read again at most this often
 TX_EP, ADDR_EP = "/api/explorer/tx/:id (on demand)", "/api/explorer/address/:addr"   # visitor keys
 BG_TX_EP = "/api/explorer/tx/:id"            # scheduled answer sample and wallet links (JOBS)
 SWAP_TX_EP = "/api/explorer/tx/:id (swaps)"  # swap fill ingest, never paused by a visitor or by the sample
@@ -343,6 +505,16 @@ class Bucket:
             self.b[key] = (tok - 1, now); return True, 0
 GLOBAL_BUDGET = Bucket(GLOBAL_RATE, GLOBAL_BURST)
 CLIENT_BUDGET = Bucket(CLIENT_RATE, CLIENT_BURST)
+EP_BUDGET = {ADDR_EP: Bucket(ADDR_RATE, ADDR_BURST), TX_EP: Bucket(TXOD_RATE, TXOD_BURST)}
+_recent = collections.OrderedDict(); _recent_lock = threading.Lock()   # endpoint+key -> last on-demand read (bounded)
+def _recent_hit(k, gap):
+    now = time.time()
+    with _recent_lock:
+        t = _recent.get(k)
+        if t and now - t < gap: return int(gap - (now - t)) + 1
+        _recent[k] = now; _recent.move_to_end(k)
+        while len(_recent) > 5000: _recent.popitem(last=False)
+    return 0
 
 _neg = collections.OrderedDict(); _neg_lock = threading.Lock()   # id -> (until, Missing or Busy)
 def neg_get(key):
@@ -351,9 +523,9 @@ def neg_get(key):
         if hit and hit[0] > time.time(): return hit[1]
         if hit: _neg.pop(key, None)
     return None
-def neg_put(key, missing):
+def neg_put(key, missing, ttl=None):
     with _neg_lock:
-        _neg[key] = (time.time() + (NEG_TTL if missing else NEG_ERR_TTL), Missing if missing else Busy); _neg.move_to_end(key)
+        _neg[key] = (time.time() + (ttl or (NEG_TTL if missing else NEG_ERR_TTL)), Missing if missing else Busy); _neg.move_to_end(key)
         while len(_neg) > NEG_MAX: _neg.popitem(last=False)
 def neg_size(): return len(_neg)
 
@@ -363,10 +535,16 @@ def fetch_ondemand(path, endpoint, key):
     k = neg_get(endpoint + key)
     if k: raise k("not found (cached)" if k is Missing else "upstream failed recently (cached)")
     if not can_fetch(endpoint): raise Busy("upstream backing off")
+    if endpoint == ADDR_EP:
+        w = _recent_hit(endpoint + key, ADDR_MIN_S)
+        if w: raise Limited("read recently; the cached copy is current enough", w)
     ip = getattr(CLIENT, "ip", None)
     if ip:
         ok, wait = CLIENT_BUDGET.take(ip)
         if not ok: raise Limited("too many lookups of new ids; slow down", wait)
+    if endpoint in EP_BUDGET:
+        ok, wait = EP_BUDGET[endpoint].take()
+        if not ok: raise Limited("upstream budget for this lookup spent; try again shortly", wait)
     ok, wait = GLOBAL_BUDGET.take()
     if not ok: raise Limited("upstream budget spent; try again shortly", wait)
     if not _ondemand.acquire(timeout=0.5): raise Busy("upstream busy")
@@ -387,14 +565,14 @@ def _bg_fetch_tx(tid, endpoint):
     try:
         d = fetch(f"/api/explorer/tx/{tid}", timeout=20, endpoint=endpoint, soft=True)
         if not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
-    except Missing: neg_put(endpoint + tid, True); raise
+    except Missing: neg_put(endpoint + tid, True, NEG_BG_TTL); raise
     return d
 
 def get_tx_detail(tid, allow_fetch=True, bg=None):
     """Stored detail when final (or read in the last 120 s), else one read. bg=None is a visitor read (fetch_ondemand);
     bg=<endpoint key> is a scheduled job's read (BG_TX_EP or SWAP_TX_EP). Raises Missing, Limited or Busy when nothing is stored."""
     r = db.q1("SELECT json, fetched, final FROM tx_detail WHERE id=?", (tid,))
-    if r and (r["final"] or time.time() - r["fetched"] < 120):
+    if r and (r["final"] or time.time() - r["fetched"] < TX_REFRESH_S):
         return json.loads(r["json"])
     if not allow_fetch:
         return json.loads(r["json"]) if r else None
@@ -503,22 +681,22 @@ def seed(seed_dir):
 
 # ---------------- scheduler ----------------
 # How often each upstream source is read when healthy (for the /status freshness table).
-EVERY = {"/api/explorer/txs": 60, "/api/status": 60, "/api/networks": 60, "/api/swaps": 60, "/api/txs": 600, "/api/anchors": 300,
-         "/api/notices": 300, "/api/ballots": 300, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600, "/api/release": 3600,
-         "/api/chains": 3600, "/lableak/api/communities": 1800, "/lableak/api/posts": 1800}
+EVERY = {"/api/explorer/txs": LIVE_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": 600,
+         "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
+         "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S}
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
-    ("live", job_live, 60, "/api/explorer/txs"),
-    _SWAP_JOBS[0],   # swaps: open-offer book, 60 s
+    ("live", job_live, live_every, "/api/explorer/txs"),   # LIVE_S, or LIVE_DEGRADED_S while upstream is degraded
+    _SWAP_JOBS[0][:2] + (SWAPS_S,) + _SWAP_JOBS[0][3:],   # swaps: open-offer book, SWAPS_S (60 s)
     ("probe", job_probe, 600, None),
     _SWAP_JOBS[1],   # fx: SOL/ETH USD reference, 15 min
     ("window", job_window, 600, "/api/txs"),
-    ("meta", job_meta, 300, None),
+    ("meta", job_meta, META_S, None),
     ("epochs", job_epochs, 300, "/api/epochs"),
     ("agents", job_agents, 900, "/api/agents"),
     ("hourly", job_hourly_meta, 3600, None),
-    ("forum", job_forum, 1800, "/lableak/api/communities"),
+    ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
@@ -537,12 +715,23 @@ def _phase(name, every, now):
     """Initial last-run time: the swap read starts SWAP_PHASE_S after the live read."""
     return now - every + SWAP_PHASE_S if name == "swaps" else 0
 
+def _ran(name):
+    """When a job last ran (its job: blob), so a restart or deploy resumes the schedule instead of re-reading everything."""
+    try: return int((db.get_blob("job:" + name)[0] or {}).get("ran") or 0)
+    except Exception: return 0
+
 def run_forever(stop=None, jobs=None):
     jobs = JOBS if jobs is None else jobs
-    t0 = time.time(); last = {name: _phase(name, every, t0) for name, fn, every, ep in jobs}
+    t0 = time.time()
+    last = {name: max(_phase(name, every() if callable(every) else every, t0), min(_ran(name), t0)) for name, fn, every, ep in jobs}
     while not (stop and stop.is_set()):
         now = time.time()
+        try: flush_counts()
+        except Exception as e: log.warning("upstream counter flush: %s", type(e).__name__)
         for name, fn, every, ep in jobs:
+            if callable(every):
+                try: every = every()
+                except Exception: every = 60
             if now - last.get(name, 0) < every: continue
             if ep and not can_fetch(ep): continue
             last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
