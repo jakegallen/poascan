@@ -36,13 +36,16 @@ def _feed_fresh():
     r = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint='/api/explorer/txs'")
     return bool(r and r["last_ok"] and time.time() - r["last_ok"] < 900)
 
-def join_state():
-    """open, delayed or paused. Paused comes from the tracker or the manual switch. Delayed is derived:
-    maintenance is on, our feed is current and no join has landed for JOIN_QUIET_S. A new join flips it back."""
-    if not join_open(): return "paused"
-    if JOIN_ENV is not None or not _active(): return "open"
+def join_quiet():
+    """Derived pause: maintenance is on, our feed is current and no join has landed for JOIN_QUIET_S.
+    A new join flips it back. Only applies while the tracker and the manual switch say joining is open."""
+    if not join_open() or JOIN_ENV is not None or not _active(): return False
     t = last_join()
-    return "delayed" if t and _feed_fresh() and time.time() - t > JOIN_QUIET_S else "open"
+    return bool(t and _feed_fresh() and time.time() - t > JOIN_QUIET_S)
+
+def join_state():
+    """open or paused. Paused comes from the tracker, the manual switch, or join_quiet()."""
+    return "paused" if not join_open() or join_quiet() else "open"
 
 def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "Joining" in _surfaces() else "default")   # the probe never covers joining
 
@@ -64,18 +67,20 @@ PAUSED = ["hosted_mining", "grading"]; WORKING = ["onboarding", "self_custody_mi
 # Copy, one place. Joining wording follows join_open(); never hard-code it elsewhere.
 def join_line():
     j = join_state()
-    if j == "delayed": return "Joins are delayed during the upgrade. Your agent may need to retry later."
+    if join_quiet(): return "Joining is paused during the upgrade. Your agent may need to retry later."
     return "Join now; your agent starts earning once it's back." if j == "open" else "Joining pauses during the upgrade too."
 def strip_text():
     """Home strip: (lead, aside, tail). The aside may hide at 390px. Words chosen not to repeat the home screen."""
-    h = hosted_state(); js = join_state(); j = js != "paused"
-    ok = "Joining delayed." if js == "delayed" else "Joining works."
+    h = hosted_state(); j = join_state() != "paused"
+    ok = "Joining works."
     if h == "planned": return ("Hosted mining pauses soon", " for maintenance", ok if j else "Joining too.")
     if h == "back": return ("Hosted mining is back", "", ok if j else "Joining paused.")
     return ("Hosted mining paused", " for maintenance", ok) if j else ("Hosted mining and joining paused", " for maintenance", "")
 def og_desc():
-    h = {"planned": "Hosted mining pauses soon", "back": "Hosted mining is back"}.get(hosted_state(), "Hosted mining paused")
-    return f"{h} for network upgrades, joining {join_state()}, rewards paying. Live status on POAScan."
+    hs = hosted_state(); js = join_state()
+    if hs == "paused" and js == "paused": return "Hosted mining and joining paused for network upgrades, rewards paying. Live status on POAScan."
+    h = {"planned": "Hosted mining pauses soon", "back": "Hosted mining is back"}.get(hs, "Hosted mining paused")
+    return f"{h} for network upgrades, joining {js}, rewards paying. Live status on POAScan."
 
 def seen(window=3600):
     """Answers and grade seals in our own feed over the last hour: what actually still lands."""

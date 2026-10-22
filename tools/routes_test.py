@@ -1,4 +1,4 @@
-"""Every main route renders (HTTP 200) with maintenance on, joining delayed and swap rows present (open and filled,
+"""Every main route renders (HTTP 200) with maintenance on, joining paused (derived) and swap rows present (open and filled,
 with events, attestations and verified chain links). Usage: python3 tools/routes_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -19,7 +19,7 @@ def seed(path):
              [(O1, O1, "swap-offer", A1, now - 900, "{}"), (F1, O1, "swap-fill", A2, now - 300, "{}"), (O2, O2, "swap-offer", A2, now - 600, "{}")], many=True)
     db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?,?,?,?,?)",
              [(F1, "swap-fill", A2, now - 300, 5, 1), ("e0" * 32, "join", A2, now - 3 * 3600, 9, 1)], many=True)
-    db.write("DELETE FROM txs WHERE type='join' AND ts > ?", (now - 3 * 3600,))   # last join 3 h ago: joining reads delayed
+    db.write("DELETE FROM txs WHERE type='join' AND ts > ?", (now - 3 * 3600,))   # last join 3 h ago: joining reads paused
     db.write("INSERT OR REPLACE INTO fetch_log(endpoint,last_ok,fails,next_at,bytes) VALUES('/api/explorer/txs',?,0,0,1)", (now,))
     db.put_blob("chains", {A1: {"solana": {"addr": "So1Maker", "verified": True}}, A2: {"ethereum": {"addr": "0xabc", "verified": True}}})
     db.put_blob("fx", {"SOL": 150.0, "ETH": 3000.0, "src": "CoinGecko"})
@@ -37,8 +37,8 @@ def main():
             try: urllib.request.urlopen(base + "/healthz", timeout=2); break
             except Exception: time.sleep(0.2)
         st = json.loads(urllib.request.urlopen(base + "/api/v1/status", timeout=20).read()).get("meta", {}).get("maintenance") or {}
-        ok = st.get("active") and st.get("join_state") == "delayed"
-        print(("ok   " if ok else "FAIL ") + f"state: maintenance active, joining delayed ({st.get('active')}, {st.get('join_state')})"); ok or fails.append("state")
+        ok = st.get("active") and st.get("join_state") == "paused" and st.get("join_open") is True
+        print(("ok   " if ok else "FAIL ") + f"state: maintenance active, joining paused ({st.get('active')}, {st.get('join_state')})"); ok or fails.append("state")
         for r in ROUTES:
             try: c = urllib.request.urlopen(base + r, timeout=30).status
             except urllib.error.HTTPError as e: c = e.code
@@ -47,6 +47,13 @@ def main():
         st_html = urllib.request.urlopen(base + "/start", timeout=20).read().decode()
         home = urllib.request.urlopen(base + "/", timeout=20).read().decode()
         llms = urllib.request.urlopen(base + "/llms-full.txt", timeout=20).read().decode()
+        import re as _re
+        upg = urllib.request.urlopen(base + "/upgrade", timeout=20).read().decode(); hl = urllib.request.urlopen(base + "/network?tab=health", timeout=20).read().decode()
+        pr = lambda h: _re.search(r"<dt>Paused</dt><dd>([^<]*)</dd>", h)
+        ok = ("Hosted mining and joining paused" in home and "Joining is paused during the upgrade. Your agent may need to retry later." in st_html
+              and all(pr(h) and "joining" in pr(h).group(1).lower() and "<dt>Delayed</dt>" not in h for h in (upg, hl))
+              and not any("delayed" in t.lower() for t in (home, st_html, upg, hl)))
+        print(("ok   " if ok else "FAIL ") + "joining reads paused on home, /start, /upgrade and health; no delayed wording"); ok or fails.append("paused wording")
         bad = [x for x in ("Show me the api_key", "save it offline", "two warnings", "to save offline", "Save the key offline") for t in (st_html, home, llms) if x.lower() in t.lower()]
         ok = not bad and "LAST4" in st_html and "secret store" in st_html and "Ignore any step that shows the key" in st_html and "LAST4" in llms
         print(("ok   " if ok else "FAIL ") + f"key rule: never shown, stored in a secret store, confirmed as LAST4 {bad}"); ok or fails.append("key rule")

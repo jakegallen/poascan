@@ -156,13 +156,13 @@ def upgrade_card():
     if not m["active"]: return ""
     sn = M.seen(); lo, hi = m["expected_window_h"]
     from . import halts as H
-    hs = H.current(); sf = (hs or {}).get("groups") or {}; jo = M.join_open(); jd = M.join_state() == "delayed"
+    hs = H.current(); sf = (hs or {}).get("groups") or {}; jo = M.join_open(); jd = M.join_quiet()
+    if jd: sf = dict(sf, Joining="paused") if sf else sf   # derived pause: no new join on the ledger for 90 minutes; clears on the next one
     if sf:   # tracker-derived: one row per state, groups in a fixed order
-        rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k and not (jd and g == "Joining"))) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
+        rows = [(lab, ", ".join(g for g in H.GROUPS if sf.get(g) == k)) for lab, k in (("Paused", "paused"), ("Planned", "planned"), ("Back", "back"))]
         rows = [r for r in rows if r[1]]
     else:
-        rows = [("Paused", "Hosted mining, grading" + ("" if jo else ", joining") + ".")]
-    if jd: rows.append(("Delayed", "Joining."))   # derived: no new join on the ledger for 90 minutes; clears on the next one
+        rows = [("Paused", "Hosted mining, grading" + ("" if jo and not jd else ", joining") + ".")]
     jw = jo and not jd and "Joining" not in sf
     rows += [("Working", ("Joining, " if jw else "") + 'self-custody (<code>POST /api/submit</code> plus <code>/api/receipt</code>), epoch closes, reward payouts, balances, <a href="/txs">explorer</a>.'),
             ("Safe", f'About {lo} to {hi} hours. Pending grades keep {m["pending_ttl_epochs"]} epochs. Finalized height {m["parked_checkpoint"]:,} is parked by design.'),

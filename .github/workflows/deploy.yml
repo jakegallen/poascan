@@ -35,9 +35,9 @@ jobs:
           if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE" 2>/dev/null; then python tools/keyscan.py --range "$BEFORE..$GITHUB_SHA"; fi
       - name: Smoke test (empty DB, indexer off, no upstream calls)
         run: python tools/smoke_test.py
-      - name: Joining state (open, delayed, paused)
+      - name: Joining state (open, paused, derived pause)
         run: python tools/join_state_test.py
-      - name: Every main route renders with maintenance on, joining delayed and swap rows present
+      - name: Every main route renders with maintenance on, joining paused and swap rows present
         run: python tools/routes_test.py
       - name: Keys are never echoed, stored, logged or forwarded; security headers present
         run: python tools/keysafe_test.py

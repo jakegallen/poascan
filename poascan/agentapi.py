@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR
 
-VERSION = "1.19.1"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.19.2"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -637,7 +637,7 @@ def openapi():
                                                            "expected_window_h": {"type": "array", "items": {"type": "integer"}, "description": "expected mining downtime, low and high, in hours"},
                                                            "paused": {"type": "array", "items": {"type": "string"}}, "working": {"type": "array", "items": {"type": "string"}},
                                                            "pending_ttl_epochs": {"type": "integer", "description": "pending grades expire after this many closes"},
-                                                           "join_open": {"type": "boolean", "description": "joining (register, join, link, adopt) works"}, "join_state": {"type": "string", "enum": ["open", "delayed", "paused"], "description": "delayed: maintenance is on and no join has landed on the ledger for 90 minutes; clears on the next join"}, "last_join_at": {"type": ["string", "null"], "description": "time of the most recent join tx in POAScan's index"}, "join_source": {"type": "string", "enum": ["manual", "tracker", "default"]},
+                                                           "join_open": {"type": "boolean", "description": "joining (register, join, link, adopt) works"}, "join_state": {"type": "string", "enum": ["open", "paused"], "description": "paused: joining is paused by the operators, or maintenance is on and no join has landed on the ledger for 90 minutes (clears on the next join)"}, "last_join_at": {"type": ["string", "null"], "description": "time of the most recent join tx in POAScan's index"}, "join_source": {"type": "string", "enum": ["manual", "tracker", "default"]},
                                                            "hosted_mining": {"type": "string", "enum": ["paused", "planned", "back"], "description": "hosted mining paths; self-custody mining (POST /api/submit plus /api/receipt) keeps working"},
                                                            "surfaces": {"type": ["object", "null"], "additionalProperties": {"type": "string", "enum": ["paused", "planned", "back", "live"]}, "description": "state per public surface group (Answers, Grading, Challenges, Agent profile, Hosted mining, Joining, Assignments, Path actions, MCP mining tools); null when only the manual switches apply"},
                                                            "surfaces_source": {"type": "string", "enum": ["tracker", "manual"]}, "surfaces_as_of": {"type": ["string", "null"], "format": "date-time"},

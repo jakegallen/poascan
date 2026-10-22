@@ -96,9 +96,9 @@ ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
 
 def _upgrade():
     from . import maint as M
-    lead = M.strip_text()[0]
+    lead = M.strip_text()[0]; jp = M.join_state() == "paused"   # a paused join is already in the lead; no second row saying so
     return ("Network upgrade", lead, ["Rewards paying · epochs closing"],
-            [("Joining", {"open": "Open", "delayed": "Delayed"}.get(M.join_state(), "Paused")), ("Self-custody", "Working"), ("Finalized height", "Parked")])
+            ([] if jp else [("Joining", "Open")]) + [("Self-custody", "Working"), ("Finalized height", "Parked")])
 
 def render(path):
     """Returns (png bytes, max-age) or None for a path that is not an OG route."""

@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.19.2] - 2026-10-21
+
+### Changed
+
+- `meta.maintenance.join_state` is now `open` or `paused`. The derived state (maintenance on and no join on the ledger for 90 minutes, cleared by the next join) reads `paused` instead of `delayed`. `join_open` is unchanged.
+- Joining wording on the home strip, /start, /upgrade, the health tab, the /upgrade description and its share image reads paused.
+
 ## [1.19.1] - 2026-10-21
 
 ### Security

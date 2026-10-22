@@ -81,7 +81,7 @@ def paused():
     """One line near the prompt while the network upgrade is on: joining works, mining follows."""
     from . import maint as M
     if not M.state()["active"]: return ""
-    if M.join_state() == "delayed":   # only this line while joins are delayed
+    if M.join_quiet():   # only this line while the derived pause is on
         return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
     return f'<p class="upn" role="status"><i></i><span>Hosted mining is paused for network upgrades. {E(M.join_line())} <a href="/upgrade">Details</a></span></p>'
 
