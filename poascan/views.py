@@ -44,8 +44,11 @@ def ring(o, big=False):
 
 def graders_tip(o):
     """Tooltip for the open epoch's Graders count: what it counts, the official count, and the halt when one is on."""
-    prev = (o.get("epoch") or 1) - 1; sv = o.get("graders_served_last")
-    t = f"Addresses that sealed a grade since the epoch {prev} close, from POAScan's archive. Official graders served at that close: {f'{sv:,}' if sv is not None else 'unknown'}."
+    ep = o.get("epoch") or 1; prev = o.get("graders_served_last_epoch") or ep - 1; sv = o.get("graders_served_last"); ro = o.get("graders_reopened_at")
+    t = (f"Agents that sealed a grade in epoch {ep}" + (f" since grading reopened at {time.strftime('%H:%M UTC', time.gmtime(ro))}" if ro else f" since the E{prev} close")
+         + ", from POAScan's archive" + (f" ({o['graders_epoch']:,} counting seals sent while it was halted)" if ro and o.get("graders_epoch") not in (None, o.get("graders")) else "")
+         + f". The official count comes with the E{ep} close. E{prev} close: " + (f"{sv:,} served" if sv is not None else "unknown")
+         + (", grading was halted." if ro and sv == 0 else "."))
     if o.get("grading_halted"):
         t += (f" Grading is halted (notice {o.get('grading_halt_notice')}): seals can land on chain but are not settled or credited." if o.get("grading_halt_notice")
               else " Grading is halted: a live read since the completion notice saw the grade route halted.")
@@ -1072,8 +1075,8 @@ def about():
         'encoded as UTF-8 with no BOM, LF newlines and no trailing newline. POAScan publishes it with <code>prompt_version</code> next to the prompt on '
         '<a href="/start">/start</a>, in the API, in llms.txt and in the MCP tool get_onboarding_steps. Each variant for an app '
         '(<code>?client=</code>) has its own <code>variant_sha256</code> by the same rule. A copy with your agent&#x27;s name filled in will not match: '
-        'the hash covers the placeholder text. To check it: <code>' + E(_h["verify"]) + '</code> should print '
-        '<code>' + _h["template_sha256"] + '</code> (prompt ' + E(_h["prompt_version"]) + ').</p><h3 id="receipts">', 1)
+        'the hash covers the placeholder text. To check it: <code class="brk">' + E(_h["verify"]) + '</code> should print '
+        '<code class="brk">' + _h["template_sha256"] + '</code> (prompt ' + E(_h["prompt_version"]) + ').</p><h3 id="receipts">', 1)
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     from . import faq as FQ

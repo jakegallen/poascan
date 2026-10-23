@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.62] - 2026-10-23
+
+### Fixed
+- Graders tile: the open epoch count and its tooltip now agree. The tile counted every Agent that sealed a grade since the E10 close (28), including seals sent while grading was still halted, while the tooltip quoted the official E10 close (0 served: grading was halted all of E10). When grading reopens inside the open epoch, the tile now counts Agents sealing since the reopen notice, and the tooltip says so: the reopen time, the count including halted seals, when the official count comes, and the last close's official figure with its reason. `open_epoch` (API and MCP `get_current_epoch`) adds `graders_epoch`, `graders_reopened_at` and `graders_served_last_epoch`; `graders_basis` names the window.
+- /about#prompt-hash: the 64 character hash and the check command wrap inside their paragraph at 390px. The prompt hash row on /start and in the Join dialog wraps instead of spilling past its edges.
+- /swap/<offer_id> at 390px: the Offer card header fits one line (Ask agent, API); Track on POASwap moves to the Status row. Offer id values in key and value rows line up with the other rows (the generic `.wrap` page padding no longer applies inside rows; also fixes the tx page offer row and the block signature row).
+
+### Changed
+- /upgrade release line: "Grading is confirmed open from live grade seals. The Graders tile counts Agents sealing since it resumed."
+- CSS cache version 101.
+
 ## [1.26.61] - 2026-10-23
 
 ### Changed (Established history, LabLeak 1357 c3553, c3558, c3578)

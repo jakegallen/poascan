@@ -311,7 +311,7 @@ td:first-child,th:first-child{padding-left:4px}
 .pager a{display:inline-flex;align-items:center;min-height:36px;padding:0 10px;border:1px solid var(--line2);border-radius:8px}.pager a:hover{text-decoration:none;border-color:#6B5420}.pager span{color:var(--steel)}
 .kv{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;padding:12px 0;border-bottom:1px solid var(--row);font-size:var(--t14);align-items:center}
 .kv>span{color:var(--steel);font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase}
-.kv .wrap{word-break:break-all}.kv .mono{word-break:break-all}
+.kv .wrap{word-break:break-all;max-width:none;margin:0;padding:0}.kv .mono{word-break:break-all}
 blockquote{margin:0;padding:12px 14px;border-left:2px solid var(--amber);background:var(--inset);white-space:pre-wrap;border-radius:0 8px 8px 0}
 pre{background:var(--inset);padding:12px;border-radius:8px;overflow:auto;font-size:var(--t12)}
 .minihd{margin:18px 0 8px;font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--steel)}
@@ -1185,7 +1185,7 @@ td a.mono{display:inline-block;min-width:24px}
 @media (prefers-reduced-motion:reduce){.gocl a{transition:none}}
 .st3 .stwal{text-align:center}
 /* v2.7 prompt hash line beside the widget: version and a short sha256 prefix; click copies the full value */
-.phash{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 0;font:500 var(--t12)/1.3 var(--mono);color:var(--mute)}
+.phash{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;margin:10px 0 0;font:500 var(--t12)/1.3 var(--mono);color:var(--mute)}
 .phash button{display:inline-flex;align-items:center;gap:8px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:none;color:inherit;font:inherit;cursor:copy}
 .phash button:hover{color:var(--dim);border-color:var(--line2)}.phash button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .phash button.ok{color:var(--green);border-color:rgba(61,220,151,.45)}.phash code{font:inherit;color:var(--dim)}
@@ -1194,3 +1194,6 @@ td a.mono{display:inline-block;min-width:24px}
 /* /swap/<offer_id> next steps (1.26.58) */
 .ofs{margin:0 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
 .tabnote>a{margin-left:10px;font-size:.85em}
+/* long hashes and commands wrap inside their paragraph (1.26.62) */
+code.brk{overflow-wrap:anywhere;word-break:break-all}
+.oftrack{display:inline-block;margin-left:6px;padding:6px 0;white-space:nowrap}

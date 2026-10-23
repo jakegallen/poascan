@@ -42,7 +42,7 @@ def main():
     h = V.tracker_html()
     check("tile keeps the count", 'data-live="graders"' in h and '>3</span></b>' in h)
     check("tile shows a Halted tag", '<span class="tag warn">Halted</span>' in h)
-    check("tooltip names the official count and the notice", "Official graders served at that close: 0." in h and HALT["id"] in h)
+    check("tooltip names the official count and the notice", "E10 close: 0 served." in h and HALT["id"] in h)
     check("live hero carries the same tile", '<span class="tag warn">Halted</span>' in V.live_hero())
     check("no em or en dashes in the tile", "\u2014" not in h and "\u2013" not in h and "&mdash;" not in h)
 
@@ -59,6 +59,25 @@ def main():
     check("a halt is read from the message too", A.grading_halt() == "x")
     reset(None)
     check("no notices mirror yet: not halted", A.grading_halt() is None and A.open_epoch()["grading_halted"] is False)
+
+    # grading reopened inside the open epoch (completion notice after the close): only seals since the notice count
+    from poascan import maint as M
+    at = int(last + 3350)
+    real = M.grading_state
+    M.grading_state = lambda now=None: dict(state="open", basis="notice+seals", halt_notice=None, notice_at=at, last_seal_at=None)
+    try:
+        A._cache.clear(); o = A.open_epoch()
+        check("reopened in the epoch: graders count seals since the notice", o["graders"] == 1 and o["graders_epoch"] == 3 and o["graders_reopened_at"] == at)
+        check("reopened: basis says so, the last close is named", o["graders_basis"] == "grade-sealed senders since grading reopened" and o["graders_served_last_epoch"] == 10)
+        t = V.graders_tip(o)
+        check("reopened tooltip: Agents, reopen time, halted seals, official close", t.startswith("Agents that sealed a grade in epoch 11 since grading reopened at ")
+              and "(3 counting seals sent while it was halted)" in t and "The official count comes with the E11 close." in t and t.endswith("E10 close: 0 served, grading was halted."))
+        check("reopened tooltip: no dashes", "\u2014" not in t and "\u2013" not in t)
+        M.grading_state = lambda now=None: dict(state="open", basis="notice+seals", halt_notice=None, notice_at=int(last - 600), last_seal_at=None)
+        A._cache.clear(); o = A.open_epoch()
+        check("notice before the close: every sealer since the close counts", o["graders"] == 3 and o["graders_reopened_at"] is None)
+    finally:
+        M.grading_state = real
     sys.exit(1 if fails else 0)
 
 if __name__ == "__main__": main()

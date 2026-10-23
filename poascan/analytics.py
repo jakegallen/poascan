@@ -132,13 +132,20 @@ def open_epoch():
     pool = e0 / (2 ** (closed // halv))
     answers = db.q1("SELECT COUNT(*) AS n FROM txs WHERE type='challenge' AND ts > ?", (last_close or 0,))["n"] if last_close else None
     # graders: distinct senders of grade-sealed txs archived since the last close. Not the official count: that is
-    # basis.graders_served, published per close (graders_served_last). Seals still land while grading is halted.
-    graders = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE type='grade-sealed' AND ts > ?", (last_close or 0,))["n"] if last_close else None
+    # basis.graders_served, published per close (graders_served_last). Seals still land while grading is halted, so when
+    # the completion notice reopened grading inside this epoch only seals since the notice count (graders_reopened_at);
+    # graders_epoch keeps every sealer since the close.
     from . import maint as M
     gs = M.grading_state(); halt = gs["halt_notice"]
+    nq = lambda t: db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE type='grade-sealed' AND ts > ?", (t,))["n"]
+    graders_epoch = nq(last_close) if last_close else None
+    na = gs.get("notice_at"); reopened = na if (last_close and na and na > last_close and gs["state"] != "halted") else None
+    graders = nq(reopened - 1) if reopened else graders_epoch
     return dict(epoch=closed, last_close=last_close, est_close=(last_close + period) if last_close else None,
-                period=period, pool=pool, answers=answers, graders=graders, graders_basis="grade-sealed senders since the last close",
-                graders_served_last=rows[-1].get("graders") if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
+                period=period, pool=pool, answers=answers, graders=graders,
+                graders_basis="grade-sealed senders since grading reopened" if reopened else "grade-sealed senders since the last close",
+                graders_epoch=graders_epoch, graders_reopened_at=reopened,
+                graders_served_last=rows[-1].get("graders") if rows else None, graders_served_last_epoch=rows[-1]["epoch"] if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
                 grading_state=gs["state"], grading_basis=gs["basis"], last_seal_at=gs.get("last_seal_at"),
                 start_estimated=est)
 

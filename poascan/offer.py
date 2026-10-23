@@ -56,7 +56,8 @@ def page_body(oid):
              '<span class="ok">final</span>' if e.get("final") else '<span class="warn">pending</span>'] for e in ev]
     if o.get("status") == "expired" and o.get("expires_ts"): hist.append(["Expired", utc(o["expires_ts"]) + " · " + rel(o["expires_ts"]), "···", "···"])
     pay_to = _ext(ch, o.get("pay_to"))
-    rows = [("Offer id", f'<span class="mono wrap">{E(oid)}</span>{copy(oid)}'), ("Status", tag + (f' <span class="dim small">E{o["fill_epoch"]} fill</span>' if o.get("fill_epoch") is not None else "")),
+    rows = [("Offer id", f'<span class="mono wrap">{E(oid)}</span>{copy(oid)}'), ("Status", tag + (f' <span class="dim small">E{o["fill_epoch"]} fill</span>' if o.get("fill_epoch") is not None else "")
+             + f' <a class="small oftrack" href="{TRACK}{E(oid)}" target="_blank" rel="noopener noreferrer">Track on POASwap ↗</a>'),
             ("Maker", addr_link(o.get("maker"), None, (48, 0))),
             ("Escrow", f'<span class="num">{plain(o.get("poa"), 6)}</span> <span class="unit">POA</span> locked by the maker' + (f' · offer tx {tx_link(oid, (10, 6))}' if any(e["txid"] == oid for e in ev) else "")),
             ("Wants", f'<span class="num">{plain(o.get("want"), 6)}</span> <span class="unit">{asset}</span> on {E(CHAIN.get(ch, ch.capitalize() or "···"))} to {pay_to}'),
@@ -72,8 +73,7 @@ def page_body(oid):
     unseen = ('<p class="dim small">Not in POAScan\'s data: anything on the external chain beyond the payment ref, such as a durable nonce account or its rent '
               'from a timed out take.' + (f' Check the taker\'s verified {E(CHAIN.get(ch, ch))} address: {_ext(ch, tv)}.' if tv else "") + '</p>')
     steps = "".join(f"<li>{E(s)}</li>" for s in next_steps(st, o))
-    links = (f'<a class="more" href="{TRACK}{E(oid)}" target="_blank" rel="noopener noreferrer">Track on POASwap ↗</a>'
-             f'<a class="more" href="/api/v1/swaps/{E(oid)}">API →</a>')
+    links = f'<a class="more" href="/api/v1/swaps/{E(oid)}">API →</a>'   # Track on POASwap sits in the Status row, so the header fits one line at 390px
     body = (f'<div class="sechead"><h1>Swap offer <span class="mono">{E(short(oid, 8, 6))}</span></h1></div>'
             + card("Offer", kv + unseen, PR.ask([ask(oid)]) + links)
             + card("Next steps", f'<ol class="ofs">{steps}</ol><p class="dim small">Read only: this page never signs or sends anything. Never send payment outside the network.</p>')
