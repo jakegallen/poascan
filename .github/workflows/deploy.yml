@@ -97,6 +97,8 @@ jobs:
         run: python tools/swap_retake_test.py
       - name: Lazy Join dialog (empty shell on pages, /fragment/join once with ETag, byte identical prompt, button order, Muse panel) and coming_soon state wording
         run: python tools/lazyjoin_test.py
+      - name: Standing expiry estimate (observed rule, close L + estab_ttl + 1 from the last challenge_eligible epoch; null when unknown; labelled an estimate)
+        run: python tools/standing_test.py
 
   deploy:
     needs: test

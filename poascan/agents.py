@@ -505,7 +505,8 @@ def established_history(addr):
                 last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()),
                 epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,
                 window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
-                changes=changes[::-1], note="Inputs from public close records only. minepoa decides standing; your hosted /me is the authority.")
+                changes=changes[::-1], **A.established_expiry_est(addr),
+                note="Inputs from public close records only. minepoa decides standing; your hosted /me is the authority.")
 
 
 def new_per_day():

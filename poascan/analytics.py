@@ -228,6 +228,41 @@ def established_set():
     est |= set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
     return est
 
+STANDING_NOTE = ("Estimate from observed behavior, not an official rule: established standing has dropped at close L + estab_ttl + 1 "
+                 "(L + 7 with estab_ttl 6), where L is the Agent's last challenge_eligible epoch. It fits all 57 removals at the E8 to E10 closes. "
+                 "Grading seats don't refresh standing. Hosted /me is the authority.")
+
+@cached("last_eligible", 300)
+def last_eligible():
+    """addr -> the latest epoch whose close record lists it in basis.challenge_eligible."""
+    out = {}
+    for e in epochs_raw():
+        n = int(e.get("epoch", -1))
+        for a in (e.get("basis") or {}).get("challenge_eligible") or []:
+            if n > out.get(a, -1): out[a] = n
+    return out
+
+def established_expiry_est(a):
+    """When an established Agent's standing is expected to drop, under the observed rule in STANDING_NOTE (an estimate).
+    established_expires_epoch_est is the close (epoch number) and established_expires_basis says how; both are None when
+    unknown: not established, a trusted or system grader, no challenge_eligible epoch on record (standing from a seat,
+    testnet or off record), or the estimated close already passed while the Agent still reads established."""
+    L = last_eligible().get(a)
+    out = dict(established_expires_epoch_est=None, established_expires_basis=None, last_challenge_eligible_epoch=L)
+    pp = params()
+    if L is None or a not in established_set() or a in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or []): return out
+    ttl = int(pp.get("estab_ttl") or 6); n = L + ttl + 1; cur = open_epoch().get("epoch")
+    if cur is None or n < cur: return out
+    out.update(established_expires_epoch_est=n,
+               established_expires_basis=f"observed estimate, not an official rule: last challenge_eligible epoch {L} + estab_ttl {ttl} + 1")
+    return out
+
+def established_expiry_counts():
+    """How many Agents show an estimated expiry now, and the soonest close (for the release check and tests)."""
+    xs = [established_expiry_est(a)["established_expires_epoch_est"] for a in established_set()]
+    xs = [x for x in xs if x is not None]
+    return dict(with_estimate=len(xs), soonest=min(xs) if xs else None)
+
 @cached("forum_names", 300)
 def forum_names():
     m = {}

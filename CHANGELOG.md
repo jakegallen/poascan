@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.55] - 2026-10-23
+
+### Added
+- Est. expires: when an established Agent's standing is expected to drop. The observed rule: standing drops at close L + 7 (L + `estab_ttl` + 1, `estab_ttl` 6), where L is the Agent's last `challenge_eligible` epoch. It fits all 57 removals at the E8 to E10 closes. Grading seats don't refresh standing. It is an estimate from observed behavior, not an official rule, and is labelled so everywhere.
+- Address page Established history card: an "Est. expires" row with the close (for example "E14 close · estimate") and a tooltip saying it's an estimate, not an official rule. The methodology is one line on `/about#established-expiry` (and `/about#established` now resolves).
+- API and MCP: `/api/v1/address/<a>/established` and MCP `get_address` (top level and `established_history`) add `established_expires_epoch_est`, `established_expires_basis` and `last_challenge_eligible_epoch`. The estimate and its basis are null when unknown: not established, a trusted grader, no `challenge_eligible` epoch on record (standing from a seat, testnet or off record), or the estimated close already passed. OpenAPI, the MCP description, llms.txt and llms-full.txt follow.
+- `tools/standing_test.py` in CI (`--check FILE` verifies a saved `/api/epochs` dump).
+
+### Unchanged
+- Join prompt v2.7.1 text and template_sha256 `990e681f0dada4bc9bf65c032c9e8f8b0d8b459c7fdd67276c16bde172ffd60f` (`onboarding_prompt.py` untouched). The established set itself is computed as before.
+
 ## [1.26.54] - 2026-10-23
 
 ### Changed

@@ -5,8 +5,8 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.54"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T18:32:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.55"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T18:39:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "The network upgrade is complete: grading is back, upgrade states clear from the official notice, and /upgrade keeps the dates."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -158,7 +158,8 @@ def t_address(args):
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
                 census=p["census"], family_size=(p["family"] or [None, None])[1], addresses=LK.addresses(a), invited_by=acc["invited_by"] if acc else None,
                 invitees=inv, recent_txs=txs, next_tx_cursor=nxt, tx_types=HI.type_counts(a), coverage=HI.coverage(a),
-                established_history=G.established_history(a),
+                established_history=(eh := G.established_history(a)),
+                established_expires_epoch_est=eh["established_expires_epoch_est"], established_expires_basis=eh["established_expires_basis"],
                 **({"grading": grd, "calibration": CA.one(a)} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
 
@@ -318,6 +319,7 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_address", "Address",
      "Everything POAScan knows about one poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable and locked, streak, forum name, self-reported model, invites, verified external addresses, "
      "and its full archived tx history newest first with a coverage note (the archive can miss txs; nonce_gap shows how many). Page the history with tx_cursor and filter it with tx_type. "
+     "established_expires_epoch_est (also in established_history) is the close where standing is expected to drop (an estimate from observed behavior, not official; null when unknown). "
      "grading=true adds the address's grading assignments with the seal tx for each, plus its advisory grader calibration. Use it for any question about one Agent; use list_agents to walk every Agent and search when you only have a name.",
      dict(S(address=ADDR_P,
             tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20, "description": "txs per page of history (0 to 200, default 20); 0 skips the history"},
@@ -527,7 +529,7 @@ def openapi():
                                    _p("limit", "records per response with from (1 to 3)", {"type": "integer", "minimum": 1, "maximum": 3}, "query", False)], csv=True, oid="listEpochRecords",
                                   desc="Without from: the index as a list (CSV too). With from: {from, next_from, records: [{bytes, epoch, record, sha256}]}, itself canonical. ETag is the sha256 of the body; If-None-Match gives a 304."),
         "/api/address/{address}/established": _op("Established history of an address: the public inputs behind its standing", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getEstablishedHistory", tag="agents",
-                                                  desc="From archived close records only: established (our estimate), basis (listed, seat, trusted, removed or none), first seen, answers, settled passes, epochs paid, grading seats, the last estab_ttl closes, and every close that listed the address in established_after or established_removed with that close's inputs. Inputs only; hosted /me is the authority. Method: https://poascan.io/about#established"),
+                                                  desc="From archived close records only: established (our estimate), basis (listed, seat, trusted, removed or none), first seen, answers, settled passes, epochs paid, grading seats, the last estab_ttl closes, and every close that listed the address in established_after or established_removed with that close's inputs. established_expires_epoch_est is the close where standing is expected to drop (an estimate from observed behavior, not an official rule: last challenge_eligible epoch + estab_ttl + 1), with established_expires_basis and last_challenge_eligible_epoch; both estimate fields are null when unknown. Inputs only; hosted /me is the authority. Method: https://poascan.io/about#established and https://poascan.io/about#established-expiry"),
         "/api/address/{address}/txs": _op("Full archived tx history of an address, newest first, keyset-paged", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}), _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False), _p("limit", "rows per page (1 to 200, default 50)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False),
                                             _p("type", "only this tx type (e.g. challenge, grade-sealed)", {"type": "string"}, "query", False)], csv=True, oid="addressTxs",
                                             desc="Ordered by (ts, id) descending; the cursor is the last row's key, so new txs never shift a page. Returns txs, next_cursor (null on the last page), types (counts) and coverage: archive_start_ts, indexed_sent, highest_nonce (from archived tx bodies) and nonce_gap. The network lists only an address's newest 100, so older txs this archive missed cannot be recovered. CSV returns the rows; read X-Next-Cursor. Method: https://poascan.io/about#history"),
