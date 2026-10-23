@@ -326,6 +326,8 @@ class Counter:
         if r:
             self.base = int(r["uniques"] or 0)
             db.write("UPDATE visit_uniques SET segments = segments + 1 WHERE day=?", (self.day,))
+        try: note_start(self.day, restart=bool(r))
+        except Exception as e: log.warning("restart kind: %s", type(e).__name__)
         threading.Thread(target=self._loop, daemon=True, name="visits").start()
 
     def _loop(self):
@@ -397,6 +399,29 @@ def report(frm, to):
     return dict(**{"from": frm, "to": to}, country_source=geo.source(), metrics=METRICS, upstream=up, days=[days[k] for k in sorted(days, reverse=True)])
 
 COUNTER = Counter()
+
+RESTARTS_BLOB = "restart_kinds"
+def _image_tag():
+    """sha256 prefix of FLY_IMAGE_REF (the deployed image): equal across restarts of one deploy, new on every deploy. Never the raw ref."""
+    ref = os.environ.get("FLY_IMAGE_REF", "")
+    return hashlib.sha256(ref.encode()).hexdigest()[:16] if ref else ""
+
+def note_start(day, restart):
+    """Each process start compares the image with the last start's. A restart (a segment after the day's first) is a deploy
+    when the image changed, else other (a crash, a guard exit or a machine move). Kept per UTC day in one blob, 400 days."""
+    b = db.get_blob(RESTARTS_BLOB)[0] or {}
+    img, last = _image_tag(), b.get("image")
+    days = b.get("days") or {}
+    if restart:
+        k = "deploy" if (img != last and last is not None) else "other"
+        e = days.setdefault(day, {"deploy": 0, "other": 0}); e[k] = e.get(k, 0) + 1
+    else: days.setdefault(day, {"deploy": 0, "other": 0})   # tracked from this day's first start
+    cut = (dt.datetime.strptime(day, "%Y-%m-%d") - dt.timedelta(days=KEEP_DAYS)).strftime("%Y-%m-%d")
+    db.put_blob(RESTARTS_BLOB, {"image": img, "days": {d: v for d, v in days.items() if d >= cut}})
+
+def restart_kinds():
+    """{day: {"deploy": n, "other": n}} for days since the split began."""
+    return (db.get_blob(RESTARTS_BLOB)[0] or {}).get("days") or {}
 
 def token_ok(auth):
     """POASCAN_STATS_TOKEN (32+ chars) as 'Authorization: Bearer <token>', compared in constant time."""

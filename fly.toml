@@ -2,6 +2,8 @@
 # No secrets live here; deploy credentials come from FLY_API_TOKEN (a GitHub Actions secret or your shell).
 app = "poascan"
 primary_region = "sjc"
+kill_signal = "SIGTERM"   # server.py flushes visit and upstream counts on SIGTERM (and SIGINT) before exiting
+kill_timeout = 10
 
 [build]
 

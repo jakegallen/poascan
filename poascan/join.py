@@ -79,9 +79,9 @@ def label(n):
     return f'<span class="an">{img}<span class="ant">{E(n)}</span></span>'
 
 # Muse on phones (only the Ask dialog lists it; /start and the Join modal give it the no-path panel): iOS copies only and
-# points to the Meta AI app in the App Store; Android opens the Meta AI app by intent. app.js reads these.
-MOBILE = {"Muse": ("https://apps.apple.com/app/id1558240027", "intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.stella;end",
-                   "Prompt copied. Open the Meta AI app and paste.")}
+# points to Muse from Meta in the App Store; Android opens Muse from Meta (com.facebook.aura) by intent. app.js reads these.
+MOBILE = {"Muse": ("https://apps.apple.com/app/id6760173601", "intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.aura;end",
+                   "Prompt copied. Open Muse from Meta and paste.")}
 
 def _app(n, kind, base, pre):
     if kind == "auto":

@@ -732,6 +732,7 @@ def main():
         except Exception: pass
         logging.shutdown(); os._exit(0)
     signal.signal(signal.SIGTERM, _term)
+    signal.signal(signal.SIGINT, _term)   # Fly's default stop signal; fly.toml sets SIGTERM, this is the second safeguard
     if os.environ.get("POASCAN_INDEXER", "1") == "1":
         I.start(os.environ.get("POASCAN_SEED_DIR"))
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))

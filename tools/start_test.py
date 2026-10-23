@@ -186,9 +186,9 @@ check("Coding agents one-liner runs the v2.4 built-link test before registering,
       and not any(x in _J.LINE + _J.CLINE for x in "\u2014\u2013"))
 _am = _J.ask_modal(); _mu = re.search(r'<button class="app cpy"[^>]*data-app="Muse"[^>]*>', _am).group(0)
 _js = open(os.path.join(ROOT, "static", "app.js")).read()
-check("Muse where it is still an open-app button (Ask dialog): iOS copies only with the Meta AI line and an App Store link, Android opens the Meta AI app by intent",
-      'data-ios="https://apps.apple.com/app/id1558240027"' in _mu and 'data-android="intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.stella;end"' in _mu
-      and 'data-iosmsg="Prompt copied. Open the Meta AI app and paste."' in _mu and _am.count("data-ios=") == 1
+check("Muse where it is still an open-app button (Ask dialog): iOS copies only with the Muse from Meta line and its App Store link, Android opens Muse from Meta by intent",
+      'data-ios="https://apps.apple.com/app/id6760173601"' in _mu and 'data-android="intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.aura;end"' in _mu
+      and 'data-iosmsg="Prompt copied. Open Muse from Meta and paste."' in _mu and "id1558240027" not in _am + _js and "com.facebook.stella" not in _am + _js and "Meta AI app" not in _js and _am.count("data-ios=") == 1
       and "if(ios){pr.then(function(ok){toast(ok?co.dataset.iosmsg" in _js and "if(and)u=co.dataset.android" in _js and 'function toast(m,big,href,lt)' in _js and '"App Store"' in _js)
 _fx = [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
 _aa = "poa1" + "x" * 40

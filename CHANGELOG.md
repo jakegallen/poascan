@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.39] - 2026-10-23
+
+### Changed
+- The Add Emblem Wallet prompt matches POASwap's final wallet steps (POASwap main 6262068): the `POASCAN_WALLET_HOLD` switch is gone, so cases A and B read an existing wallet with `--profile PROFILE` (case B moves the old layout only after asking, checked by migratedFrom). The one-attempt read, the stop on "created a new wallet identity" and the ask before a new wallet are unchanged.
+- Muse on phones (Ask dialog): Meta's mobile app is now Muse from Meta. iOS copies the prompt with "Prompt copied. Open Muse from Meta and paste." and links https://apps.apple.com/app/id6760173601; Android opens it by intent (package com.facebook.aura). The copy-failed line names Muse from Meta. Cache key app.js v50.
+
 ## [1.26.38] - 2026-10-23
 
 ### Changed

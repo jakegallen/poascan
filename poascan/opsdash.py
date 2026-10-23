@@ -146,6 +146,10 @@ def service(fu, vs, fr, to, lo, hi):
     sr = [dict(version=r["version"], client=r["client"], success_rate=r["success_rate"], join_rate=r["join_rate"], probe_rate=r["probe_rate"],
                answer_rate=r["answer_rate"], mine_rate=r["mine_rate"]) for r in fu["rows"]]
     days, b_all, nf_all, er_all = [], dict.fromkeys(_BMAX, 0), {}, {}
+    try:
+        from . import visits as _VS
+        rk = _VS.restart_kinds()
+    except Exception: rk = {}
     for d in vs["days"]:
         h = d["health"]; b = dict.fromkeys(_BMAX, 0)
         for g in h["response_ms"].values():
@@ -154,9 +158,15 @@ def service(fu, vs, fr, to, lo, hi):
         resp = sum(b.values()); e5 = sum(h["errors"].values())
         days.append(dict(day=d["day"], responses=resp, errors_5xx=e5, not_found_404=sum(h["not_found"].values()), availability=_rate(resp - e5, resp) if resp else None,
                          restarts=max(0, (d.get("segments") or 0) - 1), latency=dict(buckets=b, p50=_bucket_pct(b, 50), p95=_bucket_pct(b, 95))))
+        n, k = days[-1]["restarts"], rk.get(d["day"])
+        dep = min(n, int(k.get("deploy") or 0)) if k is not None else None
+        days[-1].update(restarts_deploy=dep, restarts_other=(n - dep) if k is not None else None)
     resp = sum(b_all.values()); e5 = sum(er_all.values())
     poascan = dict(responses=resp, errors_5xx=e5, not_found_404=sum(nf_all.values()), availability=_rate(resp - e5, resp),
-                   restarts=sum(x["restarts"] for x in days), latency=dict(buckets=b_all, p50=_bucket_pct(b_all, 50), p95=_bucket_pct(b_all, 95)),
+                   restarts=sum(x["restarts"] for x in days),
+                   restarts_deploy=(sum(x["restarts_deploy"] for x in days if x["restarts_deploy"] is not None) if any(x["restarts_deploy"] is not None for x in days) else None),
+                   restarts_other=(sum(x["restarts_other"] for x in days if x["restarts_other"] is not None) if any(x["restarts_other"] is not None for x in days) else None),
+                   latency=dict(buckets=b_all, p50=_bucket_pct(b_all, 50), p95=_bucket_pct(b_all, 95)),
                    errors_5xx_by_page=_top(er_all, 99), not_found_by_page=_top(nf_all, 99), days=days)
     rc = {}
     for r in db.q("SELECT route, code, ms, ok FROM route_checks WHERE ts >= ? AND ts < ?", (lo, hi)):
@@ -234,6 +244,8 @@ DEFINITIONS = {
     "service.poascan.responses": "Responses POAScan served for counted pages and API calls (static files, fragments and check-ins left out).",
     "service.poascan.availability": "Share of those responses that were not a server error (5xx); POAScan's own view, not an outside uptime monitor.",
     "service.poascan.restarts": "Extra process starts on that UTC day (deploys, crashes or machine moves).",
+    "service.poascan.restarts_deploy": "Of those restarts, starts on a new image (FLY_IMAGE_REF changed): deploys. Null for days before the split began.",
+    "service.poascan.restarts_other": "Restarts on the same image: a crash, a guard exit or a machine move. Null for days before the split began.",
     "service.poascan.latency": "Server time to the response in buckets under 100 ms, under 300 ms, under 1 s and 1 s or more; p50 and p95 name the bucket.",
     "service.poascan.errors_5xx": "Server error responses, total and by page group.",
     "service.poascan.not_found_404": "Not-found responses, total and by page group (search misses left out).",

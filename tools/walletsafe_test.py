@@ -1,9 +1,9 @@
 """Wallet safety after the Oct 22 emblemai 3.3.0 incident (a new random wallet when --agent found no stored password).
 * No served text tells an agent to install the CLI globally or to run emblemai --agent without --profile.
-* The wallet prompt uses POASwap's steps (fix/wallet-prompt-safety) word for word: own computer, Node 20.18+, pinned
+* The wallet prompt uses POASwap's steps (main 6262068) word for word: own computer, Node 20.18+, pinned
   npx -y -p @emblemvault/agentwallet@3.3.0 emblemai, cp -a backup first, file names only (.env and .env.keys), cases A to D,
   always --profile, never -p or EMBLEM_PASSWORD, one attempt, stop on "created a new wallet identity", no retry on 500/405,
-  ask before a new wallet. POASCAN_WALLET_HOLD (default on) stops cases A and B before the CLI runs.
+  ask before a new wallet. Matched against POASwap main 6262068 (no hold switch).
 * Its prefill links stay under 8,000 characters with the setup code step in. No em or en dashes.
 Usage: python3 tools/walletsafe_test.py"""
 import os, re, subprocess, sys
@@ -38,13 +38,9 @@ def main():
     from poascan.swap import prompts as P, faq as SF
     from poascan import start as ST, faq as FQ, regcode as RC, join as J, keysafe as KS
     import json
-    texts = {}
-    for hold in ("on", "off"):
-        os.environ["POASCAN_WALLET_HOLD"] = hold
-        texts[hold] = P.templates()["connect"]
-    os.environ.pop("POASCAN_WALLET_HOLD", None)
-    on, off = texts["on"], texts["off"]
-    check("default is hold on (the import-time WALLET_PROMPT and templates())", P.WALLET_PROMPT == on and P.wallet_hold())
+    on = P.templates()["connect"]
+    texts = {"default": on}
+    check("templates() connect is WALLET_PROMPT", P.WALLET_PROMPT == on)
     for nm, t in texts.items():
         check(f"[{nm}] pinned CLI, no global install, no bare emblemai", P.EMB in t and "npm install" not in t and not GLOBAL.search(t) and not bare_agent(t)
               and not re.search(r"(?<![-@/\w])emblemai --help", t))
@@ -64,10 +60,7 @@ def main():
         check(f"[{nm}] setup code step lands last ({nums[-1][:12]!r})", [n[:2] for n in nums] == ["1.", "2.", "3.", "4.", "5."] and nums[-1].startswith(P.WALLET_REG["lead"]))
         ll = max(len(p) + len(quote(f, safe="")) for _, _, _, p, _ in J.APPS if p)
         check(f"[{nm}] longest prefill link under 8,000 characters ({ll})", ll < 8000)
-    check("hold on: cases A and B stop before the CLI", P.CASE_A_HOLD in on and P.CASE_B_HOLD in on and P.CASE_A not in on)
-    check("hold off: cases A and B read per POASwap", P.CASE_A in off and P.CASE_B.format(migrated_cmd=P.MIGRATED_CMD) in off and P.CASE_A_HOLD not in off)
-
-    # POASwap's blocks, as on fix/wallet-prompt-safety d21f6ae (poaswap/prompts/start_prompt.json, poaswap/site.py), with tokens filled
+    # POASwap's blocks on main 6262068 (poaswap/prompts/start_prompt.json, poaswap/site.py), with tokens filled
     SW_INSTALL = "Only on my own computer: in a sandbox or container, stop and tell me. node -v under 20.18: stop, ask me to upgrade. Wallet CLI: only npx -y -p @emblemvault/agentwallet@3.3.0 emblemai (EMBLEMAI below), never another version."
     SW_ADDR = ('Read the addresses, one attempt only: EMBLEMAI --profile PROFILE --agent -m "List my wallet addresses as JSON: solana, evm. Addresses only."\nCase A or B and it says "created a new wallet identity"? '
                "Stop: no retry, no other wallet command, no change in ~/.emblemai; tell me it made a new wallet, not mine, and where the backup is. Other errors (500, 405, any): show the error, say my files are unchanged, stop. "
@@ -76,10 +69,16 @@ def main():
                "cp -a ~/.emblemai ~/.emblemai.backup-$(date +%Y%m%d-%H%M%S)", "grep -c migratedFrom ~/.emblemai/profiles/default/metadata.json")
     check("POASwap wording: install and read steps verbatim", SW_INSTALL in on and SW_ADDR in on)
     check("POASwap wording: same check, backup and migrated commands", (P.CHECK_CMD, P.BACKUP_CMD, P.MIGRATED_CMD) == SW_CMDS)
+    SW_FIND = ("Back up, then find my wallet by file names only. Never open, print, edit or delete anything in ~/.emblemai or ~/.emblem-vault. Never use -p, --password or EMBLEM_PASSWORD. "
+               "If ~/.emblemai exists, back it up: " + SW_CMDS[1] + "; check the copy exists. Then run " + SW_CMDS[0] + " (lines are files; END alone: none). Pick one case:\n"
+               "A. ~/.emblemai/profiles/PROFILE has both .env and .env.keys: use it (several: ask me which).\n"
+               "B. ~/.emblemai/.env and .env.keys at the top (old layout): ask me before moving it. On yes, run EMBLEMAI profile list once, check profiles/default has both files and " + SW_CMDS[2] + " prints 1; PROFILE is default.\n"
+               "C. Anything else (a lone .env, an empty profile, ~/.emblem-vault, anything unclear): stop, tell me what you found and where the backup is, run nothing else.\n"
+               "D. Nothing found: ask me once, \"Do you already have an Emblem Wallet? (made by an AI on another computer / one you sign into at emblemvault.ai / no)\". Another computer: I run EMBLEMAI --restore-auth with my backup file in Terminal; then redo this step. "
+               "emblemvault.ai: skip the next step; I type those addresses under Need help on POASwap. No: ask me to confirm a new wallet. Only on yes, run EMBLEMAI profile create default and use PROFILE default.")
     fw = on.split("\n2. ", 1)[1].split("\n3. ", 1)[0]
     check("POASwap wording: find step verbatim except the emblemvault.ai line (no POASwap page here)",
-          fw.startswith("Back up, then find my wallet by file names only.") and "emblemvault.ai: skip the next step; link that vault in the last step." in fw and "POASwap" not in fw)
-
+          fw == SW_FIND.replace("I type those addresses under Need help on POASwap.", "link that vault in the last step.") and "POASwap" not in fw)
     d = ST.data()
     check("MCP and llms data: wallet run pinned with a safety note", d["wallet"]["install"] == P.EMB and "--profile" in d["wallet"]["note"] and "EMBLEM_PASSWORD" in d["wallet"]["note"]
           and not GLOBAL.search(json.dumps(d)) and not bare_agent(json.dumps(d)))
