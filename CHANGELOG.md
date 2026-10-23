@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.38] - 2026-10-23
+
+### Changed
+- Emblem Wallet steps after the Oct 22 emblemai 3.3.0 incident (agent mode made a new random wallet when no stored password existed). The CLI runs pinned as `npx -y -p @emblemvault/agentwallet@3.3.0 emblemai`; nothing tells an agent to `npm install -g` it.
+- The Add Emblem Wallet prompt (swap module) uses POASwap's wallet steps word for word: own computer only, Node 20.18+, back up ~/.emblemai with `cp -a` first, find the wallet by file names only (a wallet needs .env and .env.keys), cases A to D, always `--profile PROFILE`, never -p or EMBLEM_PASSWORD, one attempt, stop on "created a new wallet identity", no retry on 500 or 405, and ask before making a new wallet. `POASCAN_WALLET_HOLD` (default on) stops cases A and B before the CLI runs. The optional setup code step is now step 5.
+- FAQ "Do I need a wallet to mine?" and the `get_onboarding_steps` wallet field show the pinned npx command; the wallet field adds a short `note` (additive).
+- New `tools/walletsafe_test.py` in CI; the smoke test checks /about, llms.txt, llms-full.txt, /start and /api/v1/prompts/join for any global install or agent-mode command without --profile.
+
 ## [1.26.37] - 2026-10-23
 
 ### Added
