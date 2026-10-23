@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.61] - 2026-10-23
+
+### Changed (Established history, LabLeak 1357 c3553, c3558, c3578)
+- Address page Established history adds **Last cleared**: the Agent's last `challenge_eligible` epoch (cleared the K=5 attestation bar at that close, Gate A), the clock behind Est. expires. Shown whenever known, also for removed Agents with no estimate; "Never" when the Agent answered but no close lists it. Est. expires now reads "E16 close · last cleared + 7, estimate" with the estimate linked to /about#established-expiry (the tooltip alone was invisible on phones). API fields unchanged (`last_challenge_eligible_epoch` was already there).
+
 ## [1.26.60] - 2026-10-23
 
 ### Added (forum promises, LabLeak 1375 and 1332)

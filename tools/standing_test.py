@@ -36,7 +36,7 @@ def check_dump(path):
 
 def seed():
     db.init(); now = time.time(); last_ts = now - 600
-    db.put_blob("params", {"estab_ttl": 6, "auto_epoch_seconds": 21600, "trusted_graders": [TRUST]})
+    db.put_blob("params", {"estab_ttl": 6, "K": 5, "auto_epoch_seconds": 21600, "trusted_graders": [TRUST]})
     db.put_blob("status", {"epochs_closed": 11})
     E = [close(n, last_ts - (10 - n) * 21600) for n in range(11)]
     E[1]["basis"].update(challenge_eligible=[OLD, SEATED], established_after=[OLD, SEATED])
@@ -106,6 +106,17 @@ def main():
         check(f"address page ({c}): Est. expires row reads E16 close, labelled estimate, tooltip says not official",
               c == 200 and row is not None and "E16 close" in row.group(1) and "estimate" in row.group(1) and "not an official rule" in row.group(1))
         check("address page: a future close is plain text, not a link to a missing epoch page", row is not None and "/epoch/16" not in row.group(1))
+        lc = re.search(r'<div class="kv"><span>Last cleared</span><div>(.*?)</div></div>', h, re.S)
+        check("address page: Last cleared row names the last challenge_eligible epoch (E9) and the K=5 bar (LabLeak 1357 c3553)",
+              lc is not None and '<a href="/epoch/9">E9</a>' in lc.group(1) and "cleared K=5 attestations at the close" in lc.group(1))
+        check("address page: Est. expires says last cleared + 7 and links the method", row is not None and "last cleared + 7" in row.group(1) and 'href="/about#established-expiry"' in row.group(1)
+              and h.index("<span>Last cleared</span>") < h.index("<span>Est. expires</span>"))
+        from poascan import views as VV
+        h3 = VV.established_card(OLD); lc3 = re.search(r'<div class="kv"><span>Last cleared</span><div>(.*?)</div></div>', h3, re.S)
+        check("Established card: Last cleared shows even with no expiry estimate (removed Agent, E3)", lc3 is not None and ">E3<" in lc3.group(1) and "Est. expires" not in h3)
+        check("Last cleared reads Never for an Agent that answered but no close lists", VV._last_cleared({"last_challenge_eligible_epoch": None, "answers": 4}).startswith("Never")
+              and VV._last_cleared({"last_challenge_eligible_epoch": None, "answers": 0}) == "···")
+        check("no em or en dashes on the Last cleared row", lc is not None and not re.search("[\u2013\u2014]", lc.group(1)))
         db.put_blob("status", {"epochs_closed": 16}); A._cache.clear(); time.sleep(16)   # the server's epoch caches expire
         c, h = get(f"/address/{FRESH}"); row2 = re.search(r'<div class="kv"><span>Est\. expires</span><div>(.*?)</div></div>', h, re.S)
         check("address page: the close links once that epoch has a page (open epoch)", row2 is not None and '<a href="/epoch/16">E16</a> close' in row2.group(1))
