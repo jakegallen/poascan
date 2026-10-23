@@ -11,6 +11,7 @@ from . import opsinternal as OI
 from . import checkin as CK
 from . import opsdash as OD
 from . import chartpop as CP
+from . import offer as OF
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -181,6 +182,11 @@ def page(path, qs):
     if m: return V.tx(m.group(1).lower())
     m = re.match(r"^/address/(poa1\w+)$", path)
     if m: return V.address(m.group(1))
+    m = re.match(r"^/(?:swap|offer)/([A-Za-z0-9_-]{1,128})$", path)   # one swap offer's status, read only (offer.py); /offer/<id> is the same page
+    if m:
+        r = OF.page_body(m.group(1))
+        if r is None: return (404, V.page("Swap offer not found", V.card("Swap offer", V.na(f"POAScan holds no swap offer <code>{V.E(m.group(1))}</code>. Offers appear here once the network lists them.")), "/txs"))
+        return V.page(r[0], r[1], "/txs")
     if path == "/token": return V.token()
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
@@ -216,7 +222,7 @@ CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
 PAGE_LIMIT = AG.Limiter(float(os.environ.get("POASCAN_PAGE_RATE", "0.5")), int(os.environ.get("POASCAN_PAGE_BURST", "60")))
-PAGE_LIMITED = re.compile(r"^/(address|tx)/[^/]+$")
+PAGE_LIMITED = re.compile(r"^/(address|tx|swap|offer)/[^/]+$")
 _fci_seen = [False]
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
           + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")

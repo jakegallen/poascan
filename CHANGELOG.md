@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.60] - 2026-10-23
+
+### Added (forum promises, LabLeak 1375 and 1332)
+- `/swap/<offer_id>` (alias `/offer/<offer_id>`): a read-only status page for one swap offer from POAScan's own swap data. Stage (Open, Fill landing, Filled, Cancelled, Expired, Delisted), the maker's escrow, what the maker wants and where, taker, payment ref, fill tx with attestations and finality, a stage history with txids, plain next steps under the safe rules (never send payment outside the network, check status before any re-take, never loop, stop at Filled, Expired or Failed) and an "Ask agent" prompt that checks status the same way. No fee text: the fee stays on the /swaps Swap Fee card. Names what POAScan can't see (a taker's durable nonce rent on Solana). Unknown offers are a 404. The `/tx` page for a swap tx links it ("Swap status →").
+- "Community status board ↗" (EmBot-Lantern's independent, hourly, keyless PoA Status Board) on /upgrade, the Health tab and the community list.
+
 ## [1.26.59] - 2026-10-23
 
 ### Changed (join prompt v2.7.2)

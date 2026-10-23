@@ -150,6 +150,14 @@ MCP = ("Add POAScan to your agent",
     "Then call get_network_summary and tell me the open epoch, supply and holders. POAScan never needs keys, so never share any." + RO)
 
 
+# ---- swap status (LabLeak 1332): read only, one offer; the safe take rules, no fee
+def swap_status(oid):
+    return ("Check this swap's status",
+        f"Check PoA (Proof of Agent) swap offer {oid} for me, read only. GET https://poaswap.io/api/v1/check?offer={oid} (add &ref=REF only if I gave you my payment ref) "
+        f"and https://poascan.io/api/v1/swaps/{oid}. Tell me the stage, whether money moved and the next step it gives. "
+        "Stop at Filled, Expired or Failed: tell me and stop checking. Check status before any re-take; never take or pay again while a take may be landing. "
+        "Never loop: if it says to check again, do it once, later. Never send payment outside the network. Never ask me for keys or seed phrases." + RO)
+
 # ---- fixed ids for the prompt button click counts (poascan/visits.py, POST /ops/e). Never derived from page data.
 def pid(title):
     """'Explain epoch 12' -> 'ask-explain-epoch-n'. Titles come from this module only."""
@@ -162,7 +170,7 @@ ACTS = ("open", "copy", "app", "copyreg", "appreg", "regshow", "add")
 def titles():
     a = "poa1" + "x" * 40
     fixed = [v for v in globals().values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
-    return sorted({t for t, _ in fixed + [answer_epoch(), answer_epoch(1), explain_epoch(1), addr_rewards(a), addr_send(a), addr_invites(a), explain_tx("0" * 64)]})
+    return sorted({t for t, _ in fixed + [answer_epoch(), answer_epoch(1), explain_epoch(1), addr_rewards(a), addr_send(a), addr_invites(a), explain_tx("0" * 64), swap_status("0" * 64)]})
 
 def ids():
     """Every accepted id: '<card>.<action>' for the fixed cards and every Ask agent prompt."""

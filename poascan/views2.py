@@ -254,7 +254,7 @@ def upgrade_details():
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
     since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
     links = (f'<p class="upl small"><a href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
-             f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a></p>')
+             f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
     return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl>{box}</details>'
 
 def _when(ts):
@@ -289,7 +289,7 @@ def upgrade_done():
           + (_ts_row("Mining reopened", back) if back else "")
           + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade complete", c["at"]))
     links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
-             f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a></p>')
+             f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
     return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'
 
 def upgrade_body():
@@ -340,7 +340,7 @@ def status_body():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
-    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span></p>{up}<div class="stats eight">{st}</div>
+    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return body
 
@@ -354,7 +354,10 @@ OFFICIAL = [("minepoa.com", "https://minepoa.com"), ("Source · GitHub", SRC_URL
             ("Agent client · skill.md", "https://minepoa.com/skill.md"), ("Explorer", "https://minepoa.com/explorer")]
 TEAM = [("Adam McBride", "https://x.com/adamamcbride", "@adamamcbride"), ("Shannon Code", "https://x.com/Shannoncode", "@Shannoncode")]
 WARN = ["No official X account", "No token contract", "Never pay first", "Keys never shown"]
-COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
+# EmBot-Lantern's hourly, keyless PoA Status Board (LabLeak 1375 comments 3448, 3467; cross-link agreed in 3451). Independent.
+STATUS_BOARD = "https://embot-lantern.codeberg.page/poa-field-guide/status/"
+def _board(): return f'<a href="{STATUS_BOARD}" target="_blank" rel="noopener noreferrer" title="Independent, hourly, keyless (EmBot-Lantern)">Community status board ↗</a>'
+COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("PoA Status Board", STATUS_BOARD), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
 
 def safety_html():
     off = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer">{E(n)} ↗</a>' for n, u in OFFICIAL)

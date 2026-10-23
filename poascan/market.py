@@ -103,7 +103,7 @@ def tx_rows(b, nm=None):
         out.append(("Amount", f'<span class="num">{plain(o["poa"], 6)}</span> <span class="unit">POA</span> for <span class="num">{plain(o["want"], 6)}</span> <span class="unit">{asset}</span>'
                     + (f' <span class="dim small">· taker gets {plain(net, 6)} POA after the {fee * 100:g}% fee</span>' if net else "")))
         out.append(("Offer", f'{net_logo(ch)}<b>POA / {asset}</b> <span class="dim small">{E(o["status"])}</span>'
-                    f'<div class="mono wrap small">{E(oid)}</div>'))
+                    f'<div class="mono wrap small">{E(oid)}</div><a class="small" href="/swap/{E(oid)}">Swap status →</a>'))
     elif oid:
         out.append(("Offer", f'<span class="mono wrap">{E(oid)}</span>'))
     if pr.get("ref"):

@@ -1,0 +1,57 @@
+{
+ "source": "https://poascan.io/api/v1/swaps/9d09558034e73372335c2ff0f1387a759f36e864f0054166083c5b458d6937d2 (public, 2026-10-23 19:28Z), LabLeak post 1332",
+ "swap": {
+  "offer_id": "9d09558034e73372335c2ff0f1387a759f36e864f0054166083c5b458d6937d2",
+  "maker": "poa1BLbddcacWm1gBnvL8X5VDNAkM43LW1myPZrAbTFvnxbt",
+  "poa": 10000.0,
+  "chain": "solana",
+  "asset": "SOL",
+  "want": 0.001,
+  "pay_to": "9xvnw8ukoCUSoqoQ9LcQ4Ly6SK7yByvn9cnVsPuCEx22",
+  "expires_ts": 1792608690,
+  "created_ts": 1792522290,
+  "status": "filled",
+  "taker": "poa14SnSeRyiwFvQbBNrzUbZjieubqnssAJwKtRmLNDmKBFS",
+  "fill_txid": "74a00942e91993f178d6ebb34ebb61a4b68ccd2a7d6478706ad898ef231a2f32",
+  "fill_ts": 1792551896,
+  "ext_ref": "2sRSfUaZYosTykjSEdBGfG6Gw2bwN7B7g6frz4KfHqFNJCEG1aPs6u8ovgFVLfkEndVZBJfGt5cHWTR8gE3bGMbJ",
+  "cancel_txid": null,
+  "cancel_ts": null,
+  "fee_bp": 100,
+  "memo": "test swap for castle-claude-agent (a/sales 1287, proving-grounds 1085)",
+  "last_open_seen": 1792556083,
+  "updated": 1792781992,
+  "fill_usd": null
+ },
+ "events": [
+  {
+   "txid": "9d09558034e73372335c2ff0f1387a759f36e864f0054166083c5b458d6937d2",
+   "kind": "swap-offer",
+   "addr": "poa1BLbddcacWm1gBnvL8X5VDNAkM43LW1myPZrAbTFvnxbt",
+   "ts": 1792522290,
+   "final": true
+  },
+  {
+   "txid": "74a00942e91993f178d6ebb34ebb61a4b68ccd2a7d6478706ad898ef231a2f32",
+   "kind": "swap-fill",
+   "addr": "poa14SnSeRyiwFvQbBNrzUbZjieubqnssAJwKtRmLNDmKBFS",
+   "ts": 1792551896,
+   "final": true
+  }
+ ],
+ "fill_atts": 5,
+ "chains": {
+  "poa1BLbddcacWm1gBnvL8X5VDNAkM43LW1myPZrAbTFvnxbt": {
+   "solana": {
+    "addr": "9xvnw8ukoCUSoqoQ9LcQ4Ly6SK7yByvn9cnVsPuCEx22",
+    "verified": true
+   }
+  },
+  "poa14SnSeRyiwFvQbBNrzUbZjieubqnssAJwKtRmLNDmKBFS": {
+   "solana": {
+    "addr": "Ab2BaqcDZPTrgGN1vLRnxoV6c3keGb41s3tzVeENUdCh",
+    "verified": true
+   }
+  }
+ }
+}

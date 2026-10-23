@@ -1191,3 +1191,6 @@ td a.mono{display:inline-block;min-width:24px}
 .phash button.ok{color:var(--green);border-color:rgba(61,220,151,.45)}.phash code{font:inherit;color:var(--dim)}
 .phash a{color:var(--mute);text-decoration:underline;text-decoration-color:var(--line2,rgba(255,255,255,.25));text-underline-offset:3px}.phash a:hover{color:var(--amber)}
 .phash button span{white-space:nowrap}
+/* /swap/<offer_id> next steps (1.26.58) */
+.ofs{margin:0 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
+.tabnote>a{margin-left:10px;font-size:.85em}
