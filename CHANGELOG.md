@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.26] - 2026-10-23
+
+### Added
+- Private ops endpoint (token only, not part of the public API). It adds no request to minepoa.com. No public API or MCP change.
+
 ## [1.26.25] - 2026-10-23
 
 ### Changed

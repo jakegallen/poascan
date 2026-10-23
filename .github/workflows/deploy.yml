@@ -73,6 +73,8 @@ jobs:
         run: python tools/swap_cutover_test.py
       - name: Home headline row and Agents / hr (window and pause rule, own snapshots only, cached, /about#home, additive API fields)
         run: python tools/joins_test.py
+      - name: Private ops stats (/ops/internal is 404 without the token, no-store, 31-day range, no IP, UA or tx id, no upstream call)
+        run: python tools/opsinternal_test.py
 
   deploy:
     needs: test

@@ -54,15 +54,20 @@ def job(now=None, get=None):
     if not ON or not M.MAINTENANCE: return
     get = get or _get; now = int(now or time.time())
     prev = db.get_blob(BLOB)[0] or {}
-    if (prev.get("skip_until") or 0) > now or now - (prev.get("ts") or 0) < FLOOR_S: return
+    if (prev.get("skip_until") or 0) > now:
+        from . import indexer as _I   # a round skipped after trouble: one backoff denial per route (/ops/internal)
+        for _, _, path in ROUTES: _I.deny(path + " (route check)", "backoff")
+        return
+    if now - (prev.get("ts") or 0) < FLOOR_S: return
     routes = dict(prev.get("routes") or {}); skip = None
     for i, (rid, _, path) in enumerate(ROUTES):
         if i and get is _get: time.sleep(GAP)
-        old = routes.get(rid) or {}
+        old = routes.get(rid) or {}; t0 = time.monotonic()
         try: code, body = get(path)
         except Exception as e:
+            record(now, path, "timeout" if "timeout" in type(e).__name__.lower() or "timed out" in str(e).lower() else "error", t0, False)
             log.warning("hosted: %s no answer (%s)", rid, type(e).__name__); routes[rid] = dict(old, tried=now, slow_since=old.get("slow_since") or now); continue
-        st = classify(code, body)
+        st = classify(code, body); record(now, path, str(int(code)), t0, st is not None)
         if st is None:
             log.warning("hosted: %s unknown (HTTP %s)", rid, code); routes[rid] = dict({k: v for k, v in old.items() if k != "slow_since"}, tried=now)   # it answered: not slow
             if code == 429 or code >= 500: skip = now + SKIP_S; break
@@ -71,6 +76,20 @@ def job(now=None, get=None):
         routes[rid] = dict(state=st, since=old.get("since") if same else now, checked=now, code=code, tried=now,
                            streak=(old.get("streak") or 1) + 1 if same else 1)
     db.put_blob(BLOB, dict(routes=routes, ts=now, skip_until=skip))
+
+# Per-read log of the route check (1.26.26, private /ops/internal): time, route path, HTTP code (or timeout / error),
+# latency and whether the read was clear (paused or open). No body, key or query string. Kept CHECKS_KEEP_DAYS.
+CHECKS_KEEP_DAYS = 400
+def _ensure_checks():
+    db.write("CREATE TABLE IF NOT EXISTS route_checks(ts INTEGER NOT NULL, route TEXT NOT NULL, code TEXT NOT NULL CHECK (length(code) <= 8), "
+             "ms INTEGER, ok INTEGER NOT NULL)")
+    db.write("CREATE INDEX IF NOT EXISTS route_checks_ts ON route_checks(ts)")
+def record(now, path, code, t0, ok):
+    try:
+        _ensure_checks()
+        db.write("INSERT INTO route_checks VALUES(?,?,?,?,?)", (int(now), path, code[:8], int((time.monotonic() - t0) * 1000), 1 if ok else 0))
+        db.write("DELETE FROM route_checks WHERE ts < ?", (int(now) - CHECKS_KEEP_DAYS * 86400,))
+    except Exception as e: log.warning("hosted: route check log failed (%s)", type(e).__name__)
 
 def current(now=None):
     """{id: {label, state, since, checked, streak, stale, tried}} for every route. state is the last clear read (paused or open),

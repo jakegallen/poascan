@@ -7,6 +7,7 @@ from . import visits as VS
 from . import network as NW
 from . import keysafe as KS
 from . import names as NM
+from . import opsinternal as OI
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -197,7 +198,7 @@ AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, neve
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
-OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits and /ops/network: per IP, in memory, apart from MCP
+OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network and /ops/internal: per IP, in memory, apart from MCP
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
@@ -416,14 +417,14 @@ class H(BaseHTTPRequestHandler):
         if not (KS.has_key(raw) or KS.has_cred_param(q)): return False
         log.warning("refused a request with a key-shaped value (not logged)")
         self.send(400, KS.WARN + "\n", TXT, {"Cache-Control": "no-store"}); return True
-    def ops_gate(self, path, qs):
+    def ops_gate(self, path, qs, parse=VS.parse_range):
         """Shared gate for the private /ops JSON: without POASCAN_STATS_TOKEN set, or without the right Bearer token, the
         normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled.
         Returns (headers, from, to) when the caller may answer, else None after sending the response."""
         ok, _ = OPS_LIMIT.allow(self.client_ip())   # checked first, own bucket: over the limit is the same 404, token or not
         if not ok or not VS.token_ok(self.headers.get("Authorization")): self.send(404, V.not_found(path=path)); return None
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
-        try: fr, to = VS.parse_range(qs)
+        try: fr, to = parse(qs)
         except ValueError as e: self.send(400, json.dumps({"error": str(e)}), "application/json", hd); return None
         return hd, fr, to
     def ops_visits(self, path, qs):
@@ -443,6 +444,17 @@ class H(BaseHTTPRequestHandler):
         try: out = NW.report(fr, to)
         except Exception as e:
             log.error("ops network: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
+    def ops_internal(self, path, qs):
+        """Private ops stats for POASwap's dashboard (poascan/opsinternal.py; gate: ops_gate). At most 31 days, default 7.
+        Only from and to are accepted: any other query parameter (a token in the URL included) is a 400. No upstream call."""
+        g = self.ops_gate(path, qs, OI.parse_range)
+        if not g: return
+        hd, fr, to = g
+        if set(qs) - {"from", "to"}: return self.send(400, json.dumps({"error": "only from and to are accepted; send the token in the Authorization header"}), "application/json", hd)
+        try: out = json.dumps(OI.report(fr, to, AG.VERSION))
+        except Exception as e:
+            log.error("ops internal: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
     def page_limited(self):
         """True after sending a 429 for an /address or /tx page over the per-client budget. Keyed on Fly-Client-IP only:
@@ -469,6 +481,7 @@ class H(BaseHTTPRequestHandler):
         if PAGE_LIMITED.match(path) and self.page_limited(): return
         if path == "/ops/visits": return self.ops_visits(path, qs)
         if path == "/ops/network": return self.ops_network(path, qs)
+        if path == "/ops/internal": return self.ops_internal(path, qs)
         try:
             if path == "/ws":
                 return HUB.accept(self)
@@ -651,8 +664,12 @@ def main():
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
     VS.COUNTER.start()
+    try: OI.start()   # when the /ops/internal counters began (since_ts)
+    except Exception as e: log.warning("ops internal start: %s", type(e).__name__)
     def _term(*_):   # flush the visit counts, then exit as before
         try: VS.COUNTER.flush(final=True)   # rare referrers go out as 'other', never by name
+        except Exception: pass
+        try: I.flush_counts(force=True)   # upstream request and denial counts held in memory
         except Exception: pass
         logging.shutdown(); os._exit(0)
     signal.signal(signal.SIGTERM, _term)

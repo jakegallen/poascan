@@ -76,7 +76,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         raise ValueError("refused: credential-shaped value in an outbound path")
     ep = endpoint or path.split("?")[0]
     hold = _hold[0] - time.time()
-    if hold > 0: raise Limited("minepoa.com asked us to wait (429)", int(hold) + 1)
+    if hold > 0: deny(ep, "pause_429"); raise Limited("minepoa.com asked us to wait (429)", int(hold) + 1)
     hd = {"User-Agent": UA, "Accept": "application/json", "Accept-Encoding": "gzip"}
     if cond and _etags.get(path): hd["If-None-Match"] = _etags[path]
     req = urllib.request.Request(BASE + path, headers=hd)
@@ -130,7 +130,9 @@ PROBES = ["/", "/go.md"]
 DERIVED = ("/api/status", "/api/swaps", "/lableak/api/communities")
 def uptime_name(ep): return "probe " + ep if ep in DERIVED else ep
 def job_probe():
-    if _hold[0] > time.time(): return
+    if _hold[0] > time.time():
+        for path in PROBES: deny(path + " (probe)", "pause_429")
+        return
     for path in PROBES:
         t0 = time.time()
         try:
@@ -223,7 +225,41 @@ def flush_counts(force=False):
         db.write("INSERT INTO upstream_counts VALUES(?,?,?,?) ON CONFLICT(minute, endpoint, code) DO UPDATE SET n = n + excluded.n",
                  [(m, ep, c, n) for (m, ep, c), n in items], many=True)
     db.write("DELETE FROM upstream_counts WHERE minute < ?", (int(time.time()) - UPSTREAM_KEEP_DAYS * 86400,))
+    try: flush_denials()
+    except Exception as e: log.warning("upstream denials flush: %s", type(e).__name__)
 def template(ep): return ep.split(" (")[0]
+
+# Upstream budget denials (1.26.26, private /ops/internal): a read POAScan chose not to send, per UTC day, endpoint key and
+# reason. Counts only, in memory, flushed with the request counter to upstream_denials (kept DENY_KEEP_DAYS).
+# pause_429: the host-wide pause after a 429. backoff: the endpoint key is backing off (scheduled reads count once per
+# backoff window, a visitor read every time). visitor_cap:<cap>: a visitor-triggered read refused by the polite caps.
+DENY_REASONS = ("pause_429", "backoff", "visitor_cap:recent", "visitor_cap:client", "visitor_cap:endpoint", "visitor_cap:global", "visitor_cap:inflight")
+DENY_KEEP_DAYS = 400
+_deny = collections.Counter(); _deny_seen = {}
+def _utc_day(t): return time.strftime("%Y-%m-%d", time.gmtime(t))
+def deny(ep, reason, now=None):
+    if reason not in DENY_REASONS: return
+    with _ctr_lock: _deny[(_utc_day(now or time.time()), ep, reason)] += 1
+def skip_backoff(ep):
+    """A scheduled read skipped because ep is backing off: counted once per backoff window (its next_at)."""
+    try:
+        r = db.q1("SELECT next_at FROM fetch_log WHERE endpoint=?", (ep,)); w = (r or {}).get("next_at") or 0
+        with _ctr_lock:
+            if _deny_seen.get(ep) == w: return
+            _deny_seen[ep] = w
+            if len(_deny_seen) > 500: _deny_seen.clear()
+        deny(ep, "backoff")
+    except Exception: pass
+def _ensure_denials():
+    db.write("CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT NULL CHECK (length(endpoint) <= 80), "
+             "reason TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, endpoint, reason)) WITHOUT ROWID")
+def flush_denials():
+    with _ctr_lock: items = list(_deny.items()); _deny.clear()
+    _ensure_denials()
+    if items:
+        db.write("INSERT INTO upstream_denials VALUES(?,?,?,?) ON CONFLICT(day, endpoint, reason) DO UPDATE SET n = n + excluded.n",
+                 [(d, ep[:80], r, n) for (d, ep, r), n in items], many=True)
+    db.write("DELETE FROM upstream_denials WHERE day < ?", (_utc_day(time.time() - DENY_KEEP_DAYS * 86400),))
 def upstream_report(now=None):
     """Requests to minepoa.com per endpoint: counts and per-hour rates over the last 15 min, 60 min and 24 h (full
     minutes only, so a partial minute never inflates a rate), per-hour buckets for the last 24 h, and status classes."""
@@ -320,7 +356,8 @@ def job_live():
     live_txs()
     now = time.time(); slow = degraded(now)
     for path, fn, every in (("/api/status", _live_status, STATUS_DEGRADED_S if slow else STATUS_S), ("/api/networks", _live_networks, NETWORKS_S)):
-        if not can_fetch(path) or now - _last_try(path) < every - 5: continue   # 5 s slack: the job itself drifts
+        if not can_fetch(path): skip_backoff(path); continue
+        if now - _last_try(path) < every - 5: continue   # 5 s slack: the job itself drifts
         try:
             d = fetch(path, timeout=20, cond=True)
             if d is not NOT_MODIFIED: fn(d)
@@ -344,7 +381,7 @@ def job_window():
 
 def job_meta():
     for kind, path in (("anchors", "/api/anchors"), ("notices", "/api/notices"), ("ballots", "/api/ballots")):
-        if not can_fetch(path): continue
+        if not can_fetch(path): skip_backoff(path); continue
         try:
             d = fetch(path, cond=True)
             if d is NOT_MODIFIED: continue
@@ -359,7 +396,7 @@ def job_meta():
 
 def job_hourly_meta():
     for kind, path in (("params", "/api/params"), ("release", "/api/release"), ("chains", "/api/chains")):
-        if not can_fetch(path): continue
+        if not can_fetch(path): skip_backoff(path); continue
         try:
             d = fetch(path, cond=True)
             if d is not NOT_MODIFIED: db.put_blob(kind, d)
@@ -534,20 +571,20 @@ def fetch_ondemand(path, endpoint, key):
     if not (TX_ID.match(key) if endpoint == TX_EP else ADDR_ID.match(key)): raise Missing("not a valid id")
     k = neg_get(endpoint + key)
     if k: raise k("not found (cached)" if k is Missing else "upstream failed recently (cached)")
-    if not can_fetch(endpoint): raise Busy("upstream backing off")
+    if not can_fetch(endpoint): deny(endpoint, "backoff"); raise Busy("upstream backing off")
     if endpoint == ADDR_EP:
         w = _recent_hit(endpoint + key, ADDR_MIN_S)
-        if w: raise Limited("read recently; the cached copy is current enough", w)
+        if w: deny(endpoint, "visitor_cap:recent"); raise Limited("read recently; the cached copy is current enough", w)
     ip = getattr(CLIENT, "ip", None)
     if ip:
         ok, wait = CLIENT_BUDGET.take(ip)
-        if not ok: raise Limited("too many lookups of new ids; slow down", wait)
+        if not ok: deny(endpoint, "visitor_cap:client"); raise Limited("too many lookups of new ids; slow down", wait)
     if endpoint in EP_BUDGET:
         ok, wait = EP_BUDGET[endpoint].take()
-        if not ok: raise Limited("upstream budget for this lookup spent; try again shortly", wait)
+        if not ok: deny(endpoint, "visitor_cap:endpoint"); raise Limited("upstream budget for this lookup spent; try again shortly", wait)
     ok, wait = GLOBAL_BUDGET.take()
-    if not ok: raise Limited("upstream budget spent; try again shortly", wait)
-    if not _ondemand.acquire(timeout=0.5): raise Busy("upstream busy")
+    if not ok: deny(endpoint, "visitor_cap:global"); raise Limited("upstream budget spent; try again shortly", wait)
+    if not _ondemand.acquire(timeout=0.5): deny(endpoint, "visitor_cap:inflight"); raise Busy("upstream busy")
     try:
         d = fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint, soft=True)
         if endpoint == TX_EP and not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
@@ -561,7 +598,7 @@ def _bg_fetch_tx(tid, endpoint):
     """A scheduled job's tx detail read: its own endpoint key and backoff, no visitor budget; unknown ids are negative cached."""
     if not TX_ID.match(tid): raise Missing("not a valid id")
     if neg_get(endpoint + tid): raise Missing("not found (cached)")
-    if not can_fetch(endpoint): raise Busy("backing off")
+    if not can_fetch(endpoint): skip_backoff(endpoint); raise Busy("backing off")
     try:
         d = fetch(f"/api/explorer/tx/{tid}", timeout=20, endpoint=endpoint, soft=True)
         if not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
@@ -734,7 +771,7 @@ def run_forever(stop=None, jobs=None):
                 try: every = every()
                 except Exception: every = 60
             if now - last.get(name, 0) < every: continue
-            if ep and not can_fetch(ep): continue
+            if ep and not can_fetch(ep): skip_backoff(ep); continue
             last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
             try:
                 fn()
