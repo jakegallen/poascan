@@ -341,6 +341,7 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):   # no address (on Fly the peer is the proxy) and no query string; paths pass the redaction filter
         m = QS_RX.sub("", fmt % a)
         if "/j" in m: m = J_RX.sub("/j/[check-in]", m)
+        if KS.GUID_PRE.search(m): m = re.sub(KS.GUID, "[redacted]", m)   # a bare GUID in a path is a pasted key (refused, never logged)
         log.info("%s", m)
     def parse_request(self):
         self._t0 = time.monotonic(); return super().parse_request()
@@ -472,7 +473,7 @@ class H(BaseHTTPRequestHandler):
         """Anything key-shaped in the path or query, or a credential parameter, is refused before routing:
         never fetched upstream, never logged, stored, cached, echoed or redirected."""
         raw = self.path or ""; q = raw.partition("?")[2]
-        if not (KS.has_key(raw) or KS.has_cred_param(q)): return False
+        if not (KS.has_key(raw) or KS.has_cred_param(q) or KS.has_guid_value(raw)): return False
         log.warning("refused a request with a key-shaped value (not logged)")
         self.send(400, KS.WARN + "\n", TXT, {"Cache-Control": "no-store"}); return True
     def ops_gate(self, path, qs, parse=VS.parse_range):

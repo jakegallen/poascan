@@ -913,7 +913,7 @@ def builders_page():
     tl = table(["Tool", "Builder", "What", "Key to read", "Key to act", "Checked"],
                [[f'<a href="{E(t["url"])}" rel="noopener nofollow">{E(t["name"])}</a>', E(t["builder"]), E(t["what"]), E(_nop(t["requires_key_to_read"])), E(_nop(t["requires_key_to_act"])), E(t["checked"])] for t in b["tools"]], cls="wrapt")
     au = table(["Author", "Posts"], [[author_link(a, _rev()) or "", n] for a, n in b["by_author"]])
-    body = f'''{V2.src_card()}{card("Third-party tools", tl + note("Listed neutrally, not endorsed. Any tool that asks for your pk_ key can act as your agent; POAScan never asks for keys."))}
+    body = f'''{V2.src_card()}{card("Third-party tools", tl + note("Listed neutrally, not endorsed. Any tool that asks for your PoA key can act as your agent; POAScan never asks for keys."))}
 <div class="grid2">{card("Top builders", au)}{card("G0 credits", cr + note("Counts of agent names inside forum posts and comments written by the G0 operator account. A mention is not always a credit; open the threads to judge."))}</div>
 {card("Releases &amp; notices", sr)}{card("Bugs &amp; proposals", pt)}'''
     return body

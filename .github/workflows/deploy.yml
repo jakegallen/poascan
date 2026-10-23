@@ -105,6 +105,10 @@ jobs:
         run: python tools/standing_test.py
       - name: Signed notices (G0 signature on real saved records passes, altered fails, unsigned is Unverified; each tx read once, checked once; /api/v1/notices/verified, badge, /about line)
         run: python tools/signed_test.py
+      - name: Onboarding blueprint safety cues (leak watch and critical-notice stop on write prompts, held is not paid, the 524 rule, no fee row; join prompt unchanged)
+        run: python tools/blueprint_copy_test.py
+      - name: GUID-shaped keys (redacted only in credential slots, bare GUID path or query refused and never logged, keyscan rules)
+        run: python tools/guidkey_test.py
 
   deploy:
     needs: test

@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.66] - 2026-10-23
+
+### Changed (onboarding blueprint, safety cues)
+- Ask agent prompts that write (Answer this epoch's challenge, Grade submissions, Send POA to this address) add a leak watch: before the first write of a visit, read /api/hosted/me; the address must match and next_nonce must match the Agent's own writes; no answer means no write; a move it did not cause means stop all writes and tell the owner; an active critical notice in /api/notices means stop. Once per visit, not per write, to keep minepoa.com load light.
+- Behave during the network upgrade: a critical notice means stop and tell me. Retry with backoff: if /me doesn't answer either, don't write.
+- Check this swap's status and /swap/<offer_id> Next steps: pending_receipt is held, not paid; after a timeout or a 524, wait about 2 minutes and check status (held: wait; nothing held: take once more; still nothing: stop); POAScan lag is not failure.
+- /about How to buy POA: pending_receipt is held, not paid; a SOL take parks about 0.00106 SOL of nonce rent until the nonce account is closed; the 524 rule; never move money through Emblem's chat agent or agent mode; keep the vault balance low. How swaps work drops the Fee row (the fee lives only on POASwap's Swap Fee card).
+- llms.txt Safety adds the leak watch, the critical-notice stop, no Emblem chat agent for money and the 524 rule; MCP get_swap_status and OpenAPI /api/v1/swaps/status say pending_receipt is held, not paid. llms.txt Updated 2026-10-23.
+- Credentials follow current go.md (token=AUTH_TOKEN main, key= legacy; /api/hosted/me takes X-Api-Key): Ask agent key rules send MY_KEY in an X-Api-Key header where a call takes one (key= only as fallback) and use token= if the agent saved a minepoa token for the owner; llms.txt Safety and the MCP safety text name GUID keys and tokens instead of pk_/psk_ only; the Third-party tools note says PoA key.
+
+### Security
+- GUID-shaped PoA keys: poascan/keysafe.py redacts a GUID in a credential slot (key=, guid=, token=, api_key, auth_token, access_token, X-Api-Key, JSON key/token/guid, Bearer) in responses, logs and stored text, and leaves ordinary GUIDs alone. The server refuses a request whose path segment or query value is a bare GUID (400, not echoed) and the access log redacts it. tools/keyscan.py adds a PoA GUID key rule and a bare GUID rule (public GUIDs listed, or a line marked keyscan: public-uuid). tools/guidkey_test.py in CI.
+- Join prompt v2.7.2 unchanged (c3f7e1ad); data/clients.json unchanged.
+
 ## [1.26.65] - 2026-10-23
 
 ### Added (Signed notices)

@@ -39,7 +39,9 @@ def next_steps(st, o):
     if st == "cancelled": return ["Cancelled by the maker: stop. Don't take or pay this offer."]
     if st == "delisted": return ["Gone from the book before its expiry. Check status before any take; don't pay."]
     return ["Open. Check status before any take or re-take.", "Take only through the network's swap flow (receipt before broadcast). Never send payment outside the network.",
-            "One take; after a failure or timeout check status, never loop. Stop at Filled, Expired or Failed."]
+            "pending_receipt is held, not paid: wait for the seller.",
+            "One take, and never loop. After a timeout or a 524, wait about 2 min, then check status: held, wait; nothing held, take once more; still nothing, stop.",
+            "Stop at Filled, Expired or Failed. POAScan can lag a few minutes; lag is not failure."]
 
 def ask(oid):
     return PR.swap_status(oid)
