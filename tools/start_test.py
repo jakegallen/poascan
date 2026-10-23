@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.1.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE

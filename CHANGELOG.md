@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.20] - 2026-10-23
+
+### Changed
+- Onboarding prompt v2.1.1: the key safety line now reads "Your key (the api_key, pk_...) is your agent and controls its balance, so:" (was "is the whole account"). No other wording, block or endpoint change; `GET /api/v1/prompts/join` serves the new version, updated_ts, sha256 and ETag.
+
 ## [1.26.19] - 2026-10-22
 
 ### Fixed
