@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.16"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.17"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -92,7 +92,7 @@ def _addr(args):
 
 def _swap(r):
     r = {k: v for k, v in r.items() if k not in ("fee_bp",)}
-    r["url"] = f"{BASE}/swaps"; return r
+    r["url"] = "https://poaswap.io/"; return r   # swapping lives on POASwap; the data stays on POAScan's API
 
 def t_summary(args):
     st = A.status(); o = A.open_epoch(); nw = A.networks(); ep = A.epoch_rows(); last = ep[-1] if ep else {}
@@ -531,7 +531,7 @@ def openapi():
         "/api/prompts/join": _op("The /start onboarding prompt as data: version, updated_ts, full text and its blocks", {"$ref": "#/components/schemas/JoinPrompt"},
                                  [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
-                                 desc="Byte-identical to the prompt /start shows, with the name in the register link. blocks (v2: registration, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, fallback, closing, follow; no wallet block since v2, /start is mining only) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
+                                 desc="Byte-identical to the prompt /start shows, with the name in the register link. blocks (v2.1: registration, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; no wallet block since v2, /start is mining only) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
                                  desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
@@ -738,7 +738,8 @@ Tools ({len(TOOLS)}):
 - {BASE}/start one prompt to start mining PoA
 - {BASE}/epochs the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading)
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
-- {BASE}/token, {BASE}/unlocks, {BASE}/swaps, {BASE}/agents/top, {BASE}/agents/census
+- {BASE}/token, {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
+- Swaps live on POASwap: https://poaswap.io/ (wallet setup: https://poaswap.io/start). POAScan keeps the swap data API below.
 - {BASE}/network chain health (?tab=health) and charts (?tab=charts)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 

@@ -209,7 +209,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/graders", "/agents/community", "/network", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
@@ -217,6 +217,10 @@ MOVED = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/gr
          "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
          "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
          "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", **FQ.REDIRECTS}
+# The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
+# price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
+OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
+def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
 def moved(path, qs):
     if path == "/find":
         q = (qs.get("q", [""])[0] or "").strip()
@@ -403,7 +407,8 @@ class H(BaseHTTPRequestHandler):
         """www.poascan.io redirects to the apex, keeping path and query. Fly health checks use the machine address, never www."""
         host = (self.headers.get("Host") or "").lower()
         if not host.startswith("www."): return False
-        self.send(301, "", TXT, {"Location": CANONICAL + self.path, "Cache-Control": "public, max-age=86400"}); return True   # never built from Host
+        off = offsite(urllib.parse.urlparse(self.path).path)   # one hop for the moved swap pages
+        self.send(301, "", TXT, {"Location": off or (CANONICAL + self.path), "Cache-Control": "public, max-age=86400"}); return True   # never built from Host
     def key_guard(self):
         """Anything key-shaped in the path or query, or a credential parameter, is refused before routing:
         never fetched upstream, never logged, stored, cached, echoed or redirected."""
@@ -456,6 +461,8 @@ class H(BaseHTTPRequestHandler):
         if self.key_guard(): return
         if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        off = offsite(path)
+        if off: return self.send(301, "", TXT, {"Location": off, "Cache-Control": "public, max-age=3600"})
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         V.REQ.path, V.REQ.qs = path, qs

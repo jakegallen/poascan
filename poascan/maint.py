@@ -165,6 +165,20 @@ def official_post():
     except Exception: return None
     return None
 
+# Operator comments on post 1357 that /upgrade Details cites, read only from our forum mirror (no extra request).
+CITES = [(3121, "All clear"), (3123, "Grading clarification")]
+def citations():
+    """[(label, comment id, created_at as stored)] for CITES that our mirror holds, written by the post 1357 author."""
+    try:
+        p = db.q1("SELECT author_public_id AS a FROM forum_posts WHERE id=?", (POST_ID,))
+        if not p or not p["a"]: return []
+        out = []
+        for cid, lab in CITES:
+            c = db.q1("SELECT created_at FROM forum_comments WHERE id=? AND post_id=? AND author_public_id=?", (cid, POST_ID, p["a"]))
+            if c and c["created_at"]: out.append((lab, cid, str(c["created_at"])))
+        return out
+    except Exception: return []
+
 def official():
     """mining: official word that mining is back. routes: official word for every hosted route (the notice is gone).
     source: notice, post, or None."""

@@ -214,6 +214,10 @@ def upgrade_details():
             ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Pending grades keep "
              f'{m["pending_ttl_epochs"]} epochs.'),
             ("Joining", E(M.join_line()))]
+    cites = M.citations()
+    if cites:   # no per-comment anchors on LabLeak, so the link is the post and the comment is named
+        rows.append(("Operator", "; ".join(f'{E(lab)}: comment {cid}, <time datetime="{E(at.replace(" ", "T"))}Z">{E(at.replace(" ", "T").split("T")[-1][:8])}Z</time>'
+                                           for lab, cid, at in cites) + f' on <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>.'))
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')

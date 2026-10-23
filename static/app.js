@@ -165,7 +165,7 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
 (function(){var c=W.crypto;if(!c||!c.getRandomValues)return;var A="abcdefghijklmnopqrstuvwxyz234567",b=c.getRandomValues(new Uint8Array(16)),k="s_";for(var i=0;i<16;i++)k+=A[b[i]&31];$$("pre[data-reg]").forEach(function(p){var t=p.textContent,j=t.indexOf("\n\n"+p.dataset.regAt);if(j<0)return;p.textContent=t.slice(0,j)+"\n"+p.dataset.reg.split("{SETUP_CODE}").join(k)+t.slice(j);p.dataset.regOn="1"});
  var sp=$("[data-pid=start] pre[data-reg]");if(regOn(sp))ev("start.regshow");
  D.addEventListener("toggle",function(e){var d=e.target;if(d&&d.id==="xemb"&&d.open){var wp=$("pre[data-reg]",d);if(regOn(wp))ev("wallet.regshow")}},true)})();
-/* /start "Add a wallet" goes to /swaps#xemb: open that Add Emblem Wallet prompt (its toggle adds the setup code) */
+/* /swaps#xemb opens the Add Emblem Wallet prompt (its toggle adds the setup code) */
 (function(){function op(){if(W.location.hash!=="#xemb")return;var d=D.getElementById("xemb");if(d&&!d.open){d.open=true;d.scrollIntoView({block:"center"})}}op();W.addEventListener("hashchange",op)})();
 /* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),

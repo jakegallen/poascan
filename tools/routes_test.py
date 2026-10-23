@@ -3,7 +3,7 @@ with events, attestations and verified chain links). Usage: python3 tools/routes
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-ROUTES = ["/", "/start", "/upgrade", "/epochs", "/txs", "/agents", "/token", "/network", "/about", "/swaps", "/status",
+ROUTES = ["/", "/start", "/upgrade", "/epochs", "/txs", "/agents", "/token", "/network", "/about", "/privacy", "/status",
           "/network?tab=health", "/api/v1/swaps", "/api/v1/swaps.csv", "/api/v1/swaps/status", "/api/v1/status", "/api/v1/summary",
           "/api/v1/agents/poa1" + "A" * 40 + "/addresses", "/api/v1/address/poa1" + "A" * 40]
 
@@ -75,7 +75,7 @@ def main():
         o = next((x for x in rows if x.get("status") == "open"), {})
         ok = "fill_final" not in o and "fee_poa" not in o and "taker_chains" not in o and "fill_epoch" not in o
         print(("ok   " if ok else "FAIL ") + "open offers leave fill-only fields out"); ok or fails.append("open fields")
-        pages = {u: urllib.request.urlopen(base + u, timeout=20).read().decode() for u in ("/epochs", "/about", "/address/poa1" + "A" * 40, "/swaps")}
+        pages = {u: urllib.request.urlopen(base + u, timeout=20).read().decode() for u in ("/epochs", "/about", "/address/poa1" + "A" * 40, "/privacy")}
         dot = '<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"><i aria-hidden="true"></i></a>'
         pl = json.loads(urllib.request.urlopen(base + "/api/v1/summary", timeout=20).read()).get("pill") or {}
         ok = pl.get("state") == "up" and 'id="updot"' not in home and 'class="upstrip"' in home and all(h.count(dot) == 1 and 'class="pill up" id="livepill"' in h and 'title="Upgrading"' in h for h in pages.values())

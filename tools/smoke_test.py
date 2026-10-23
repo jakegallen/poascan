@@ -47,7 +47,7 @@ def main():
         for _ in range(50):
             try: req(base + "/api/health"); break
             except Exception: time.sleep(0.2)
-        for path in ["/", "/about", "/api", "/token", "/swaps", "/epochs", "/agents", "/agents/top", "/status"]:
+        for path in ["/", "/about", "/api", "/token", "/epochs", "/agents", "/agents/top", "/status"]:
             c, _ = req(base + path); check(f"GET {path} -> {c}", c == 200)
         c, b = req(base + "/healthz"); check(f"GET /healthz -> {c}", c == 200)
         c, b = req(base + "/api/health"); h = json.loads(b) if c in (200, 503) else {}
@@ -125,16 +125,7 @@ def main():
         check(f"swaps status -> {c}", c == 200 and {"available", "state", "last_good_read", "open_offers", "meta"} <= set(sw))
         check("swaps status coming soon before launch", sw.get("available") is False and sw.get("state") == "coming_soon" and "coming soon" in (sw.get("message") or ""))
         c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "coming_soon", "upgrading"))
-        c, b = req(base + "/swaps"); low = b.decode().lower()
-        import re as _re0
-        _mn0 = _re0.sub(rb'data-tpl="[^"]*"', b"", b.split(b"<main")[1].split(b"</main>")[0])
-        check("swaps: Coming soon once, no upgrade copy", _mn0.count(b"Coming soon") == 1 and _mn0.lower().count(b"coming soon") == 1 and b"being upgraded" not in _mn0.lower()
-              and b'<button class="xbtn soon" type="button" id="xgo" data-up="0" aria-disabled="true">Coming soon</button>' in _mn0 and b'class="xnote"' not in _mn0)
-        _mn = b.split(b"<main")[1].split(b"</main>")[0]
-        check("swap panel: Buy/Sell, pair, Coming soon button, Emblem row, safe line, fee once", all(x in _mn for x in (b'data-side="buy"', b'data-side="sell"', b'id="xpair"', b'id="xgo" data-up="0" aria-disabled="true"', b'id="xemb"', b"Never send payment outside the network.", b"via Emblem", b'<summary aria-label="Add Emblem Wallet">', b"<span>Add Wallet</span>")) and b"Self-custody" not in _mn and b'<div class="xembr"><p class="xsafe">' in _mn and _mn.count(b"1%") == 1)
-        check("swaps: no wallet card, warn tiles or how-to", not any(x in _mn for x in (b"walletc", b"wtiles", b'id="howto"', b"Get the Emblem Wallet")))
-        check("swaps: book, price, fills", all(x in _mn for x in (b'id="xbook"', b"Order book", b"Recent fills", b"No fills yet")) and req(base + "/static/swap.js")[0] == 200)
-        check("swap prompts say coming soon and gate on swaps/status", b"Swaps are coming soon. Until https://poascan.io/api/v1/swaps/status shows available:true" in b and b"don&#x27;t call swap-offer, swap-take" in b and b"being upgraded" not in b)
+        check("/swaps (HTML) 301s to POASwap; swap data stays in the API", req0(base + "/swaps") == (301, "https://poaswap.io/") and req0(base + "/swaps/?a=1") == (301, "https://poaswap.io/"))
         c, b = req(base + "/api/v1/concentration"); cj = json.loads(b) if c == 200 else {}
         check(f"concentration -> {c}", c == 200 and {"top1_share", "top5_share", "top10_share", "top20_share", "gini", "min_activity", "meta"} <= set(cj))
         check("summary concentration + openapi", "concentration" in json.loads(req(base + "/api/v1/summary")[1]) and "/api/v1/concentration" in spec["paths"] and "Concentration" in spec["components"]["schemas"])
@@ -163,10 +154,9 @@ def main():
               and not _re.search(r"\d[eE][-+]\d", req(base + "/api/v1/swaps/status")[1].decode().split('"meta"')[0])
               and [_U(v) for v in (327.56, 10388.08, 0.11, 0.00001059)] == ["$327.56", "$10,388", "$0.11", "$0.000011"]
               and _SIX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
-        _mk = json.loads(req(base + "/api/v1/swaps/status")[1])["market"]; _sw = req(base + "/swaps")[1].decode()
-        check("swaps market: all-time fields added, 24h kept; /swaps row says Trades and Volume once",
+        _mk = json.loads(req(base + "/api/v1/swaps/status")[1])["market"]
+        check("swaps market: all-time fields added, 24h kept",
               {"trades_all_time", "volume_all_time_usd", "trades_24h", "volume_24h_usd"} <= set(_mk) and isinstance(_mk["trades_all_time"], int)
-              and _sw.count('<span class="lbl">Trades</span>') == 1 and _sw.count('<span class="lbl">Volume</span>') == 1 and "24h Trades" not in _sw
               and "trades_all_time" in spec["components"]["schemas"]["SwapStatus"]["properties"]["market"]["properties"])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         swap_module(base, spec, check)
@@ -183,23 +173,23 @@ def main():
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
         check("/start: View prompt (with Copy) after the button, connector deeplinks decode", _ok and _m.index("data-go") < _m.index("View prompt") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
         check("pill: Stale (red) when our own fetch has nothing", b'class="pill stale" id="livepill"' in req(base + "/")[1])
-        check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/swaps", "/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
+        check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
-        _sw, _hm = req(base + "/swaps"), req(base + "/")
-        check("no Swap tab in the nav (swaps live on POASwap); /swaps still serves", _sw[0] == 200 and all(b"/swaps" not in _nv(h) and b">Swap<" not in _nv(h) for h in (_sw[1], _hm[1])))
+        _hm = req(base + "/")
+        check("no Swap tab in the nav (swaps live on POASwap); /swaps 301s there", req0(base + "/swaps")[0] == 301 and all(b"/swaps" not in _nv(h) and b">Swap<" not in _nv(h) for h in (_hm[1],)))
         _sb = b'<a class="swaplink" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"'
         _mk = req(base + "/static/poaswap-mark.svg?v=1")
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
-              for u in ("/", "/swaps", "/epochs", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
+              for u in ("/", "/epochs", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
         _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
         _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
         check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
               and b'<a class="more mswap" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
-        check("/about price history points to POASwap; /privacy setup code points to the /swaps Add Emblem Wallet prompt and Start, no bare /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
+        check("/about price history points to POASwap; /privacy says swaps and wallet setup are on POASwap, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
-              and b'such as Add Emblem Wallet on <a href="/swaps#xemb">Swaps</a> (the Add a wallet link on <a href="/start">Start</a>)' in _pv and b'<a href="/swaps">Swap</a>' not in _pv and b"not sold" not in _pv.lower())
+              and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
         check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
-              and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/swaps", "/about", "/privacy")))
+              and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/about", "/privacy")))
         check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
         _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: one More toggle, closed; extra connector deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 1 and '>More<' in _m and '>Other clients<' not in _m
@@ -207,7 +197,7 @@ def main():
               and _js.loads(_pq(_up(_ki.group(1).replace("&amp;", "&")).query)["config"][0])["url"] == "https://minepoa.com/mcp"
               and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
         check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
-        _pb = [req(base + u)[1] for u in ("/start", "/swaps", "/how-to-buy-poa", "/api", "/how-to-mine-poa")]
+        _pb = [req(base + u)[1] for u in ("/start", "/about", "/api", "/how-to-mine-poa")]
         check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x.replace(b'<button class="gocp" type="button" data-gocopy>Copy prompt</button>', b"") and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
               and all(x.count(b'class="pcopy"') == x.count(b'<div class="pbox">') for x in _pb))
         import os as _os
@@ -223,14 +213,16 @@ def main():
         check("/start: ChatGPT, Claude, Grok, Cursor up front; connectors and the 7 commands behind More", 'value="mcp:' not in _m[:_m.index('class="morep')]
               and _mp.count('value="mcp:') == 8 and _mp.count('class="cmd"') == 7 and _mp.index('value="mcp:cherry"') < _mp.index('data-mcp="claude-code"'))
         check("/start: chat choices + collapsed All steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
-        check(f"GET /start -> {c}", c == 200 and b"npm install -g @emblemvault/agentwallet" in b and b"Never send payment outside the network" in b
+        check(f"GET /start -> {c}", c == 200 and b"npm install" not in b and b"Emblem" not in b.split(b"<main")[1].split(b"</main>")[0] and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)
         c, b = req(base + "/"); check("home has no second onboarding CTA", b"Start mining in one paste" not in b and b.count(b'href="/start"') == 1)
         check("Start button -> /start", b'<a class="joinbtn hdrjoin" href="/start">Start</a>' in b)
         c, b = req(base + "/join"); check("/join alias", c == 200 and b'href="https://poascan.io/start"' in b)
         check("sitemap + llms have /start", b"https://poascan.io/start" in req(base + "/sitemap.xml")[1] and b"https://poascan.io/start" in req(base + "/llms.txt")[1])
         ab = req(base + "/about")[1]
-        for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan"]:
+        check("FAQ /how-to-buy-poa -> 301 https://poaswap.io/about#faq; the /about section keeps its title", req0(base + "/how-to-buy-poa") == (301, "https://poaswap.io/about#faq")
+              and b'id="how-to-buy-poa"' in ab and b"https://poascan.io/how-to-buy-poa<" not in req(base + "/sitemap.xml")[1])
+        for u in ["/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan"]:
             c, loc = req0(base + u)
             check(f"FAQ {u} -> 301 /about#{u[1:]}, section keeps its title", c == 301 and loc == "/about#" + u[1:] and f'id="{u[1:]}"'.encode() in ab and b'"FAQPage"' in ab
                   and f"https://poascan.io{u}<".encode() not in req(base + "/sitemap.xml")[1] and f"#{u[1:]}".encode() in req(base + "/llms.txt")[1])
@@ -245,14 +237,12 @@ def main():
         for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
-        check("history charts", b"Price</h2>" in req(base + "/swaps")[1] and b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
-        sb = req(base + "/swaps")[1]; check("swap market row", b'class="xstats"' in sb and all(x in sb for x in (b">Market Cap<", b">FDV<", b">Trades<", b">Volume<")) and sb.count(b"Trades") == 1 and sb.count(b"Volume") == 1)
+        check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
         lv = req(base + "/epochs?tab=pending")[1]; check("Pending tab: the queue", b"Queue</h2>" in lv and b"\xe2\x80\x94" not in lv and b'class="chip on">Pending' in lv)
-        check("emblem toggle logo", b"/static/emblem-32.png" in sb and b"<span>Add Wallet</span>" in sb and b"\xc2\xb7\xc2\xb7\xc2\xb7</span></b>" not in sb.split(b'class="xstats"')[1][:900])
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/swaps", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/how-to-buy-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)
@@ -560,9 +550,9 @@ def swap_module(base, spec, check):
         if not os.path.basename(f).startswith("host") and _re.search(r"from \.\.|import poascan", t): bad.append("swap/" + os.path.basename(f) + " (host import outside host*.py)")
     check(f"swap boundary: explorer reads swaps via the API, the module enters POAScan only via host.py {bad}", not bad
           and not os.path.exists(os.path.join(root, "poascan", "swapx.py")) and not os.path.exists(os.path.join(root, "static", "swap.js")))
-    c, b = req(base + "/swaps"); c2, css = req(base + "/static/swap.css"); c3, _ = req(base + "/static/swap.js")
-    check("swap assets served from the package at the same URLs; /swaps links swap.css",
-          c == 200 and c2 == 200 and c3 == 200 and b'/static/swap.css?v=' in b and b".xgrid{" in css and b".xgrid{" not in req(base + "/static/style.css")[1])
+    c2, css = req(base + "/static/swap.css"); c3, _ = req(base + "/static/swap.js")
+    check("swap assets still served from the package at the same URLs (/swaps itself 301s to POASwap)",
+          req0(base + "/swaps")[0] == 301 and c2 == 200 and c3 == 200 and b".xgrid{" in css and b".xgrid{" not in req(base + "/static/style.css")[1])
     st = json.loads(req(base + "/api/v1/swaps/status")[1]); oid = (json.loads(req(base + "/api/v1/swaps")[1]) or [{}])[0].get("offer_id")
     m = st["market"]
     check("status market carries what the explorer tiles need (last_trade, best_ask, poa_on_offer, fills)",
@@ -571,10 +561,6 @@ def swap_module(base, spec, check):
         d = json.loads(req(base + "/api/v1/swaps/" + oid)[1])
         check("/api/v1/swaps/<offer_id>: offer + events; unknown -> 404", d["offer"]["offer_id"] == oid and isinstance(d["events"], list)
               and req(base + "/api/v1/swaps/nope-not-an-offer")[0] == 404)
-    sb = b.decode()
-    check("swaps rules kept: Coming soon, fee once, never send payment outside, Add Wallet with Emblem logo, Market Cap/FDV/Trades/Volume",
-          sb.count(">Coming soon<") == 1 and len(_re.findall(r">1%<", sb)) == 1 and "Never send payment outside the network" in sb
-          and "embl" in sb and all(sb.count(f'<span class="lbl">{k}</span>') == 1 for k in ("Market Cap", "FDV", "Trades", "Volume")))
     env = dict(os.environ, SWAP_BRAND="SwapSite", SWAP_BASE_URL="https://swap.example.com", SWAP_PAGE_PATH="/", SWAP_METHOD_URL="https://swap.example.com/method",
                PYTHONPATH=root, POASCAN_INDEXER="0")
     out = _sp.run([_sys.executable, "-c", "from poascan.swap import config as C, prompts as P, faq as F, pages as G; "
@@ -617,7 +603,7 @@ def maintenance(base, root, env, check):
     hm = req(base + "/")[1].decode(); hm_main = hm[hm.index("<main"):hm.index("</main>")]
     check("maintenance: home strip, once, quiet, steel, carries the Upgrading status, links /upgrade, no em dash",
           hm.count('class="upstrip"') == 1 and '<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span>' in hm and '<a href="/upgrade">Details</a>' in hm and "Hosted mining paused" in hm and "Joining works." in hm and "\u2014" not in hm_main)
-    for u in ("/network", "/status", "/swaps"):
+    for u in ("/network", "/status", "/privacy"):
         if 'class="upstrip"' in req(base + u)[1].decode(): check(f"maintenance: strip is home only ({u} has it)", False)
     c, up = req(base + "/upgrade"); up = up.decode()
     check("maintenance: /upgrade serves the card with its own title, description, canonical and OG image",

@@ -37,9 +37,9 @@ def prompt(name=None):
     return OP.TEMPLATE.replace(OP.SLOT, clean_name(name))
 
 # Prompt v2 is mining only: no wallet setup, so no wallet registry setup code goes into this prompt (no data-reg on its <pre>).
-# Wallet users get that code on /swaps (Add Emblem Wallet), linked as "Add a wallet" under step 3.
-WALLET_HREF = "/swaps#xemb"
-WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" data-wallet>Add a wallet</a> <span>for swaps, set up separately</span></p>'
+# Wallet setup lives on POASwap (https://poaswap.io/start), linked as "Add a wallet on POASwap" under step 3.
+WALLET_HREF = "https://poaswap.io/start"
+WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>'
 
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
@@ -50,8 +50,6 @@ STEPS = [
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
     ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
     ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
-    ("Install Emblem Wallet", INSTALL, "Recommended. Only needed for swaps."),
-    ("Link your vault", f"{B}/api/link-auto?token=YOUR_AUTH_TOKEN", "For swaps only. " + PAY),
     ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
 ]
 
@@ -213,8 +211,9 @@ def page(page_fn, card=None, apps=None):
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
-           f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="{EMB_REPO}" target="_blank" rel="noopener noreferrer">Emblem Wallet ↗</a> · <a href="/about#safety">Safety</a></p>')
+           f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
+           f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
     body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
-            f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2><span class="dim small">Wallet and swaps included</span></summary>'
+            f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
     return page_fn("Start", body, "/start")

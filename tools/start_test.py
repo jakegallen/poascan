@@ -21,7 +21,9 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2" and not hasattr(OP, "REG_STEP")
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+      and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
+      and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
       and "poaswap" not in OP.TEMPLATE.lower() and "guid=" not in OP.TEMPLATE)
 check("v2 key rule: never shown, confirmed only as the last 4 characters plus the store; never sent to POAScan; no em or en dashes",
@@ -36,7 +38,7 @@ check("blocks: registration has the link, key_safety rules 1 to 5, mining steps 
       bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
       and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
       and bl["expectations"].startswith("The network is coming back") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
-      and list(bl) == ["registration", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "fallback", "closing", "follow"])
+      and list(bl) == ["registration", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
 NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
       ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
       ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32)."),
@@ -97,6 +99,21 @@ check("banner: a responding grading route is only 'responding'; 'back' only on t
       B["grading responding"] == "Joining and answers are landing. Grading endpoint responding." and B["official back"] == "Joining and answers are landing. Hosted mining is back."
       and not any("reopened" in v.lower() or "Join now" in v or "paused for network upgrades" in v or "\u2014" in v for v in B.values()))
 with db.conn() as cx: cx.execute("DELETE FROM txs WHERE id LIKE 'bn%'")
+
+# ---- /upgrade Details cites the operator comments on post 1357, from our forum mirror only
+from poascan import views2 as V2
+with db.conn() as cx:
+    cx.execute("INSERT OR REPLACE INTO forum_posts(id, author, author_public_id, body) VALUES(1357, 'op', 'opid', 'Hardening window')")
+    cx.executemany("INSERT OR REPLACE INTO forum_comments(id, post_id, author, author_public_id, created_at, body) VALUES(?,?,?,?,?,?)",
+                   [(3121, 1357, "op", "opid", "2026-10-22 23:16:55", "all clear"), (3123, 1357, "op", "opid", "2026-10-22 23:22:29", "grading still halted"),
+                    (3124, 1357, "x", "other", "2026-10-22 23:30:00", "not the operator")])
+cit = M.citations(); det = V2.upgrade_details()
+check(f"/upgrade Details: operator all clear (3121) and grading clarification (3123) cited from the mirror {cit}",
+      cit == [("All clear", 3121, "2026-10-22 23:16:55"), ("Grading clarification", 3123, "2026-10-22 23:22:29")]
+      and '<dt>Operator</dt><dd>All clear: comment 3121, <time datetime="2026-10-22T23:16:55Z">23:16:55Z</time>; Grading clarification: comment 3123, <time datetime="2026-10-22T23:22:29Z">23:22:29Z</time> on <a href="https://minepoa.com/lableak/#/post/1357"' in det)
+with db.conn() as cx: cx.execute("UPDATE forum_comments SET author_public_id='other' WHERE id=3123")
+check("/upgrade Details: a comment not by the post author is never cited", [c[1] for c in M.citations()] == [3121])
+with db.conn() as cx: cx.execute("DELETE FROM forum_comments"); cx.execute("DELETE FROM forum_posts")
 
 # ---- agent names: POAScan's archive only
 from poascan import names as NM
@@ -164,12 +181,14 @@ try:
     check("/start: live status strip with the Updated stamp and responding wording, never reopened", m.count('<p class="upstrip stup" role="status" data-live>') == 1
           and "<span data-upstamp>" in m and "<span data-upline>" in m and "reopened" not in m.lower())
     st = m[m.index('<details class="card stepsd">'):]
-    check("/start: Emblem Wallet and the payment rule tucked in the collapsed All steps", "<details class=\"card stepsd\" open" not in m and "Install Emblem Wallet" in st
-          and "Never send payment outside the network." in st and "Emblem Wallet" not in m[:m.index('class="stview"')].split('class="morep')[0])
+    check("/start: collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
+          "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
+          and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
+          and [x for x, _, _ in S.STEPS] == ["Register", "Store the key", "Read how grading works", "Answer the challenge", "Mine", "Check in"])
     go3 = m[m.index('data-go '):m.index('<details class="stview">')]
-    check("/start: Add a wallet, low key, under the main and Copy buttons, to the /swaps Add Emblem Wallet prompt (it keeps the setup code there)",
-          go3.index("data-gocopy") < go3.index('<p class="stwal"><a href="/swaps#xemb" data-wallet>Add a wallet</a>') < go3.index('class="stkey"') and m.count("data-wallet") == 1
-          and 'W.location.hash!=="#xemb"' in open(os.path.join(ROOT, "static", "app.js")).read())
+    check("/start: Add a wallet on POASwap, low key, under the main and Copy buttons, new tab to https://poaswap.io/start",
+          go3.index("data-gocopy") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
+          and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
     check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
