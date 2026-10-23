@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.71] - 2026-10-23
+
+### Added (swap settlement fields)
+- /api/v1/swaps and /api/v1/swaps/<offer_id> (CSV and MCP too): taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state on every offer, null when they do not apply. From archived public txs only.
+- taker_credit: on a filled offer (final swap-fill), poa minus fee_poa (poa x fee_bp / 10000), with the fill tx time (UTC ISO) and txid. cb83e695: 4950.
+- refund_txid and refund_at: the final swap-cancel tx of a cancelled offer. An expired offer stays null until the maker cancels: null does not mean not refunded.
+- receipt_state: signed when a finalized swap-fill carries the seller's receipt signature (proof.recv_sig), else null. A fill that never finalized reads null (de1ddefb). Receipts before a fill are not public.
+- OpenAPI, llms.txt, MCP get_swap_offer, /about#swap-settle. tools/swap_fields_test.py in CI.
+
 ## [1.26.70] - 2026-10-23
 
 ### Fixed (swap page state, signed feed)

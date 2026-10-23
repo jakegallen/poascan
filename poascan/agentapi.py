@@ -5,8 +5,8 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.70"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T23:07:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.71"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T23:17:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -393,7 +393,8 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it to see what is on offer; call get_swap_status first when the question is whether swapping is possible.",
      S(status={"type": "string", "enum": ["open", "filled", "cancelled", "expired", "delisted", "all"], "default": "open", "description": "offer status to list (default open); delisted = gone from the network's book before expiry"}, limit=LIMD(20, 200, "offers")), t_swaps),
     ("get_swap_offer", "Swap offer",
-     "One swap offer by offer_id with its fill and cancel events. Use it after list_swap_offers to inspect a single offer.",
+     "One swap offer by offer_id with its fill and cancel events. Use it after list_swap_offers to inspect a single offer. "
+     "taker_credit (poa minus fee_poa) on a final fill, refund_txid on a cancel, receipt_state signed when a finalized fill carries the seller's receipt; null when not applicable. An expired offer has refund_txid null until the maker cancels; pre-fill receipts are not public.",
      dict(S(offer_id={"type": "string", "description": "the offer_id from list_swap_offers (64-hex)"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census",
      "Which AI models and harnesses Agents self-report: Agent counts per model and per harness, disclosure rate, pass rates and earnings per family. "
@@ -507,7 +508,18 @@ def handle_mcp(raw):
 ANY = {"type": "object", "additionalProperties": True}
 ROWS = {"type": "array", "items": ANY}
 FILL_USD = {"type": ["number", "null"], "description": "USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd."}
-SWAP_ROW = {"type": "object", "additionalProperties": True, "properties": {"fill_usd": FILL_USD}}
+_NS, _NN = {"type": ["string", "null"]}, {"type": ["number", "null"]}
+SETTLE = {"taker_credit": dict(_NN, description="Filled offers only (the swap-fill is final): POA credited to the taker, poa minus fee_poa. null otherwise."),
+          "taker_credit_at": dict(_NS, format="date-time", description="UTC time of the final swap-fill tx. null otherwise."),
+          "taker_credit_txid": dict(_NS, description="The final swap-fill txid. null otherwise."),
+          "refund_txid": dict(_NS, description="Cancelled offers only: the final swap-cancel txid that returned the escrow. null otherwise. An expired offer stays null until the maker cancels, so null does not mean not refunded."),
+          "refund_at": dict(_NS, format="date-time", description="UTC time of that swap-cancel tx. null otherwise."),
+          "receipt_state": {"type": ["string", "null"], "enum": ["signed", None], "description": "signed when a finalized swap-fill tx carries the seller's receipt signature. null otherwise, including a fill that never finalized. Receipts before a fill are not public, so null does not mean unsigned."}}
+SETTLE_DOC = ("Every row also carries taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at and receipt_state, null when they do not apply; "
+              "all come from archived public txs. taker_credit (filled, final swap-fill): poa minus fee_poa, at the fill tx time (UTC ISO), with its txid. "
+              "refund_txid and refund_at (cancelled): the final swap-cancel tx. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. "
+              "receipt_state: signed when a finalized swap-fill tx carries the seller's receipt signature, else null (a fill that never finalized reads null); receipts before a fill are not public.")
+SWAP_ROW = {"type": "object", "additionalProperties": True, "properties": dict({"fill_usd": FILL_USD}, **SETTLE)}
 SWAP_ROWS = {"type": "array", "items": SWAP_ROW}
 SWAP_OFFER = {"type": "object", "additionalProperties": True, "properties": {"offer": SWAP_ROW, "events": {"type": "array", "items": ANY}}}
 FMT = {"name": "format", "in": "query", "required": False, "description": "csv for CSV (same as adding .csv to the path)", "schema": {"type": "string", "enum": ["json", "csv"]}}
@@ -586,7 +598,7 @@ def openapi():
         "/api/richlist": _op("Holders by balance", ROWS, csv=True, oid="richList"),
         "/api/unlocks": _op("Network unlock calendar (vesting)", ROWS, csv=True, oid="unlocks", tag="token"),
         "/api/swaps": _op("Swap offers and fills", SWAP_ROWS, csv=True, oid="swaps", tag="token",
-                          desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out. fill_usd (number or null): USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd."),
+                          desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out. fill_usd (number or null): USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd. " + SETTLE_DOC),
         "/api/agents/name-available": _op("Is an Agent name free? From POAScan's archive only", {"$ref": "#/components/schemas/NameAvailable"},
                                  [_p("name", "Agent name to check, 1 to 32 of A-Z a-z 0-9 _ -", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", True)],
                                  oid="nameAvailable", tag="agents",
@@ -603,7 +615,7 @@ def openapi():
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", SWAP_OFFER, params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
-                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final, fill_epoch) and fill_usd: USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd; events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
+                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final, fill_epoch), the settlement fields (taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state; null when they do not apply) and fill_usd: USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd; events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
         "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
@@ -807,7 +819,7 @@ Tools ({len(TOOLS)}):
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
-- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded). Each offer in {BASE}{API_PREFIX}/swaps and /swaps/<offer_id> carries taker_credit, taker_credit_at and taker_credit_txid (final fills: poa minus fee_poa), refund_txid and refund_at (cancels), and receipt_state (signed when a finalized fill carries the seller's receipt), null when they do not apply. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. Receipts before a fill are not public.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.

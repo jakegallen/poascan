@@ -1,5 +1,5 @@
 """The module's own tables. The host database creates them through init() (called from the host's db.init)."""
-import time
+import json, time
 from . import host as H
 
 SCHEMA = """
@@ -47,3 +47,15 @@ def events_all():
     for e in H.q("SELECT offer_id, txid, kind, ts FROM swap_events WHERE final=1 AND dropped=0 ORDER BY ts, txid"): out.setdefault(e["offer_id"], []).append(e)
     return out
 def fx_ts(): return H.get_blob("fx")[1]
+
+RECEIPT_KEYS = ("recv_sig", "receipt_sig")   # the seller's release receipt signature on a swap-fill body (minepoa: proof.recv_sig)
+def _has_receipt(body):
+    try: b = json.loads(body or "{}")
+    except Exception: return False
+    if not isinstance(b, dict): return False
+    p = b.get("proof") if isinstance(b.get("proof"), dict) else {}
+    return any(isinstance(src.get(k), str) and src[k] for src in (b, p) for k in RECEIPT_KEYS)
+def receipt_signed():
+    """Offer ids with a finalized swap-fill tx (not dropped) that carries the seller's receipt signature. A fill that never
+    finalized does not count."""
+    return {e["offer_id"] for e in H.q("SELECT offer_id, json FROM swap_events WHERE kind='swap-fill' AND final=1 AND dropped=0") if _has_receipt(e.get("json"))}

@@ -115,6 +115,8 @@ jobs:
         run: python tools/devbar_test.py
       - name: Swap page state and signed backfill (a terminal API status wins over Fill landing on /swap/<offer_id>, every offer's page matches the API, canonical poaswap.io/status links, same-name signed txs kept and labelled, pending retries at 2 per run with backoff)
         run: python tools/swap_state_test.py
+      - name: Swap settlement fields (taker_credit on final fills as poa minus fee_poa, refund_txid on cancels, receipt_state signed from the fill's receipt; null otherwise; archive only, no upstream read; API, CSV, MCP, OpenAPI, llms.txt, /about)
+        run: python tools/swap_fields_test.py
 
   deploy:
     needs: test

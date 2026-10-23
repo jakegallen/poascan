@@ -1,0 +1,180 @@
+{
+ "_note": "Real records from POAScan's public API (live 1.26.69, 2026-10-23 16:20 PDT): /api/v1/swaps/<offer_id> rows and their swap-fill and swap-cancel tx bodies from /api/v1/tx/<txid>. de1ddefb: expired, a fill attempt with the seller's receipt that never finalized (expect receipt_state null). cb83e695: filled (taker_credit 4950, receipt_state signed). c4e566fa: cancelled (refund_txid d6970ae1).",
+ "offers": [
+  {
+   "swap": {
+    "offer_id": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+    "maker": "poa18u1PiDvvzvKBocrErLFzfLNr4WXTWpc1sFePmLEePdEy",
+    "poa": 4000.0,
+    "chain": "solana",
+    "asset": "SOL",
+    "want": 0.00144,
+    "pay_to": "7uEbHLMfQD1VUmSidcMdJR54fZNntLpPkn9BHNbwsJHh",
+    "expires_ts": 1792793325,
+    "created_ts": 1792789727,
+    "status": "expired",
+    "taker": null,
+    "fill_txid": null,
+    "fill_ts": null,
+    "ext_ref": null,
+    "cancel_txid": null,
+    "cancel_ts": null,
+    "fee_bp": 100,
+    "memo": "",
+    "last_open_seen": 1792797059,
+    "updated": 1792797059,
+    "fill_usd": null
+   },
+   "events": [
+    {
+     "txid": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+     "kind": "swap-offer",
+     "addr": "poa18u1PiDvvzvKBocrErLFzfLNr4WXTWpc1sFePmLEePdEy",
+     "ts": 1792789727,
+     "final": true,
+     "body": null
+    },
+    {
+     "txid": "b994976f1127606f9a988d2ad3788753697c65b1d2423580aff64d7b9d47ecba",
+     "kind": "swap-fill",
+     "addr": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+     "ts": 1792789857,
+     "final": false,
+     "body": {
+      "type": "swap-fill",
+      "offer": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+      "proof": {
+       "chain": "solana",
+       "ref": "2CmCr8HQBncY4K5kiRbScFKiwrFwUJ6sfcMoKAhMFQfWsdU1TqKngnBbdgfSGaKfp7XEcJe8ddKYdEm85uX9YZQz",
+       "recv_sig": "2su2HU1r73wzVP95XedUWcThHzzR8fioscUJQ2JPYJYmriUVUUogMqudDCEkUw1bAurJgUwr7i6dLKQCrz2EUGRG"
+      },
+      "from": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+      "nonce": 5,
+      "parents": [
+       "2fe924f96d3e98481389fc80ac321351eb44ca131b0f6a4b02b66304242e9dc4",
+       "e7d011a2514bcfc337b6ef20a31a3c89afb0f3d559c962a8d586c5a4429733a1"
+      ],
+      "ts": 1792789857,
+      "cid": "poa-mainnet-1",
+      "sig": "3XtTcpUPkuM13SEW9qsZwESGejUndh8P2nQiKHPqR4sR8ShteZ9d6ga5a93DoGVBEUpAu6DKXNAudg8NyoueHUsY"
+     }
+    }
+   ]
+  },
+  {
+   "swap": {
+    "offer_id": "cb83e695636f61a761522cdf137e612f0a8f4df8e75975ec94ce93bf7d094bff",
+    "maker": "poa1E9WV4vmY7vR1fE9GUkvER7hDraY8giaj6CPtg5YsxdMk",
+    "poa": 5000.0,
+    "chain": "solana",
+    "asset": "SOL",
+    "want": 0.002,
+    "pay_to": "CKczsFrCybCvrvVP3abxW42PNWk7gtWitDQ9UvYyEwzy",
+    "expires_ts": 1792794810,
+    "created_ts": 1792791212,
+    "status": "filled",
+    "taker": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+    "fill_txid": "68e123b9c59026836e51284e5e5666cf870dc3470e61fb295793dc04f2802a9d",
+    "fill_ts": 1792791356,
+    "ext_ref": "uaANF6GZc6KyYhueSsM77FafX5nFW2eaxNiJ8GCebnsg5AfkUjbLxu65ZnjMqjXydirRnwoCuEvT7h6JK98QGke",
+    "cancel_txid": null,
+    "cancel_ts": null,
+    "fee_bp": 100,
+    "memo": "",
+    "last_open_seen": 1792797059,
+    "updated": 1792797059,
+    "fill_usd": 103.71
+   },
+   "events": [
+    {
+     "txid": "cb83e695636f61a761522cdf137e612f0a8f4df8e75975ec94ce93bf7d094bff",
+     "kind": "swap-offer",
+     "addr": "poa1E9WV4vmY7vR1fE9GUkvER7hDraY8giaj6CPtg5YsxdMk",
+     "ts": 1792791212,
+     "final": true,
+     "body": null
+    },
+    {
+     "txid": "68e123b9c59026836e51284e5e5666cf870dc3470e61fb295793dc04f2802a9d",
+     "kind": "swap-fill",
+     "addr": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+     "ts": 1792791356,
+     "final": true,
+     "body": {
+      "type": "swap-fill",
+      "offer": "cb83e695636f61a761522cdf137e612f0a8f4df8e75975ec94ce93bf7d094bff",
+      "proof": {
+       "chain": "solana",
+       "ref": "uaANF6GZc6KyYhueSsM77FafX5nFW2eaxNiJ8GCebnsg5AfkUjbLxu65ZnjMqjXydirRnwoCuEvT7h6JK98QGke",
+       "recv_sig": "3ewFsnC5JLq7f2MvARNMFtPnptEzquczGJk3n5vUA5oJKx4cvNFyxftzstQdN4onScy1c5GRhzuvty45GtGXLedw"
+      },
+      "from": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+      "nonce": 8,
+      "parents": [
+       "3f775c579599ae4590f9c2b91dccb4d15cb2d56c5a2d5d269773445696b932b3",
+       "1fa84be6339e4bf37231fc437ef48ffafa6b6dd1e11077d530bcd2a102c52a17"
+      ],
+      "ts": 1792791356,
+      "cid": "poa-mainnet-1",
+      "sig": "2Ksa1TsJe787eQ6pMhNWodBswCaVY7ZU2MJFVyWMUk4Z3rJb6bT1iLko3nPMbBHfPKLUEJyto8VRmZC8nd7xVBRS"
+     }
+    }
+   ]
+  },
+  {
+   "swap": {
+    "offer_id": "c4e566fa359a95ded992673a9bf348ecf1ece4373aebc15dc934c78c7bf4cd08",
+    "maker": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+    "poa": 3000.0,
+    "chain": "solana",
+    "asset": "SOL",
+    "want": 0.00117,
+    "pay_to": "HaRecBVp3NwUnGgoW42WupCUjBZgbpgUKmPbXwd4gmey",
+    "expires_ts": 1792790916,
+    "created_ts": 1792790018,
+    "status": "cancelled",
+    "taker": null,
+    "fill_txid": null,
+    "fill_ts": null,
+    "ext_ref": null,
+    "cancel_txid": "d6970ae16cc19f822bfb834c23576c237745ad13e7b5bdc213b8ac0003534de5",
+    "cancel_ts": 1792791141,
+    "fee_bp": 100,
+    "memo": "",
+    "last_open_seen": 1792791120,
+    "updated": 1792797059,
+    "fill_usd": null
+   },
+   "events": [
+    {
+     "txid": "c4e566fa359a95ded992673a9bf348ecf1ece4373aebc15dc934c78c7bf4cd08",
+     "kind": "swap-offer",
+     "addr": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+     "ts": 1792790018,
+     "final": true,
+     "body": null
+    },
+    {
+     "txid": "d6970ae16cc19f822bfb834c23576c237745ad13e7b5bdc213b8ac0003534de5",
+     "kind": "swap-cancel",
+     "addr": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+     "ts": 1792791141,
+     "final": true,
+     "body": {
+      "type": "swap-cancel",
+      "offer": "c4e566fa359a95ded992673a9bf348ecf1ece4373aebc15dc934c78c7bf4cd08",
+      "from": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+      "nonce": 7,
+      "parents": [
+       "1ec80296a39f9f6af4e3fc13012df4ac01ba4131190f8ebf246590add93911fd",
+       "3abc975449bfc84fbc6e59ea7df76bfdab9b6264eb3497bf55110a62a18a9fa3"
+      ],
+      "ts": 1792791141,
+      "cid": "poa-mainnet-1",
+      "sig": "2xkySP1StBsoACZ17Cgs4nvdTk9KZgtEzYhHeZwA4cRcEjTYyXJag6B9cxwLsJY5RvofkmZeQ3fBwPjBoGCo2QEk"
+     }
+    }
+   ]
+  }
+ ]
+}
