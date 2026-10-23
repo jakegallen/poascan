@@ -36,7 +36,7 @@ SEEDED = {k for k, *_ in SEED}
 
 # Routes the route check covers: (route id, label). A route seen open gets "<label> responding" at its first open read.
 ROUTE_LABEL = {"mining": "Mining", "grading": "Grading", "send": "Send", "swap_offer": "Swap offers", "vote": "Voting", "export": "Export"}
-# Chart priority when markers are grouped: the group shows its most telling label plus a count.
+# Chart priority when markers are grouped: the group shows its most telling label (no count suffix).
 PRIORITY = ["ended", "mining_reopened", "grading_reopened", "notice_cleared", "allclear", "checkpoint", "begins", "route:mining", "grading_halted"]
 
 def _route_since():
@@ -99,7 +99,7 @@ def events():
 
 def group(evs, t0, t1, width=576, gap=64):
     """Chart markers for evs inside [t0, t1]: events closer than `gap` viewBox units (on a `width`-unit plot) become one
-    marker at the first event's time, labelled with the group's most telling label plus a count ("Mining reopened +6").
+    marker at the first event's time, labelled with the group's most telling label only ("Mining reopened").
     Returns [(ts, label, url, title)], title listing every member for the hover tip."""
     span = max(1, t1 - t0); px = lambda t: width * (t - t0) / span
     evs = [e for e in evs if t0 <= e["ts"] <= t1]; groups = []
@@ -109,7 +109,7 @@ def group(evs, t0, t1, width=576, gap=64):
     rank = lambda e: PRIORITY.index(e["key"]) if e["key"] in PRIORITY else len(PRIORITY)
     out = []
     for g in groups:
-        top = min(g, key=rank); lab = top["label"] + (f" +{len(g) - 1}" if len(g) > 1 else "")
+        top = min(g, key=rank); lab = top["label"]   # the main event name only; the title lists the group
         title = "; ".join(time.strftime("%m-%d %H:%M", time.gmtime(e["ts"])) + " " + e["label"] for e in g)
         out.append((g[0]["ts"], lab, top["url"] or next((e["url"] for e in g if e["url"]), None), title + " (UTC)"))
     return out

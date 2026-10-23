@@ -77,11 +77,12 @@ check("seeded keys are never replaced by live reads", ev["mining_reopened"]["ts"
 # ---------------- grouping ----------------
 e7 = [e for e in MS.events() if e["key"] in want]
 t1 = 1792712749 + 3600; g = MS.group(e7, t1 - 7 * 86400, t1)
-check(f"7 days: two groups ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins +2", "Mining reopened +8"])
+check(f"7 days: two groups ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
+check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for x in g))
 check("a group's tip lists every member", all(e["label"] in g[1][3] for e in e7 if e["ts"] >= 1792704843) and g[1][3].endswith("(UTC)"))
 check("a group links its lead event's source", g[1][2] == MS.POST)
 g1 = MS.group(e7, 1792704843 - 600, 1792712749 + 600)
-check(f"zoomed in, close events still group, far ones split ({[x[1] for x in g1]})", len(g1) >= 3 and sum(int(x[1].rsplit("+", 1)[1]) + 1 if "+" in x[1] else 1 for x in g1) == 9)
+check(f"zoomed in, close events still group, far ones split ({[x[1] for x in g1]})", len(g1) >= 3 and sum(len(x[3].split("; ")) for x in g1) == 9 and not any("+" in x[1] for x in g1))
 check("events outside the range are left out", MS.group(e7, 0, 1000) == [])
 
 # ---------------- Supply chart and Milestones table ----------------
@@ -93,7 +94,7 @@ db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply
 from poascan import views3 as V3
 h = V3.charts_body("7d")
 sup = h[h.find(">Supply<"):h.find(">Txs")]
-check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and "Mining reopened +" in sup and "<title>" in sup)
+check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
 check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
 mls = h[h.find(">Milestones<"):]
 check("Milestones table lists every upgrade event", all(lab in mls for _, lab in want.values()))

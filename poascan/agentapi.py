@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.34"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T03:24:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC
-RELEASE_LINE = "Chart pop-out: 24h, 7d, 30d and All on every chart, milestone labels clear of the line; join prompt v2.3.2."
+VERSION = "1.26.35"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T04:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC
+RELEASE_LINE = "Chart milestone labels show the event name only; the hover tip sits below the label lanes."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"

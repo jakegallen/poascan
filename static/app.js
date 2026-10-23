@@ -432,7 +432,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
     o.push('<text x="'+X(tt).toFixed(1)+'" y="'+(H-8)+'" class="ax" text-anchor="'+(i===0?"start":i===nt-1?"end":"middle")+'">'+esc2(lab)+'</text>')}
    geo={n:P.length,x:P.map(function(p){return X(p[0])}),y:P.map(function(p){return Y(p[1])}),long:long};now.textContent=fv(P[P.length-1][1]);lg.hidden=true}
   o.push('<circle class="cp-dot" r="4" cx="-20" cy="-20" fill="'+d.color+'"/></svg>');
-  box.innerHTML=o.join("")+'<i class="xh"></i><div class="xt" aria-hidden="true"></div>';xh=$(".xh",box);tip=$(".xt",box);xh.style.top=pt+"px";
+  box.innerHTML=o.join("")+'<i class="xh"></i><div class="xt" aria-hidden="true"></div>';xh=$(".xh",box);tip=$(".xt",box);xh.style.top=pt+"px";tip.style.top=(ML.length?pt+4:10)+"px";   /* the tip sits below the milestone label lanes, never over a label */
   box.setAttribute("aria-label",d.title+", "+(CPL[d.range]||d.range)+". Arrow keys read values.")}
  function near(px){var x=geo.x,lo2=0,hi2=x.length-1;while(hi2-lo2>1){var m=(lo2+hi2)>>1;if(x[m]<px)lo2=m;else hi2=m}return Math.abs(x[lo2]-px)<=Math.abs(x[hi2]-px)?lo2:hi2}
  function at(i,say){if(!geo||!data)return;idx=i;var px=geo.x[i],t,s,sep=svgW<560?"\n":" \u00b7 ";

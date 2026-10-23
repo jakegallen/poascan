@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.35] - 2026-10-23
+
+### Changed
+- Upgrade milestone labels read the event name only ("Upgrade begins", "Mining reopened"), with no +N count for grouped events. The marker's hover title still lists every grouped event. Applies to the chart pop-out and the Network > Charts Supply chart.
+- Chart pop-out: the hover tip sits below the milestone label lanes, so it never covers a label (1440 and 390 px).
+- Cache key app.js v48.
+
 ## [1.26.34] - 2026-10-23
 
 ### Changed

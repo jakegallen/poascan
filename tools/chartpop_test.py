@@ -4,7 +4,8 @@
 * /fragment/chart: strict params (c, r, w; one value each, nothing else is a 400), known keys and ranges only
 * every chart offers all four ranges (24h, 7d, 30d, All, plus Epoch for per epoch data); a range wider than the history
   shows all of it, a quiet 24h still draws, windows are never padded, milestones are grouped with milestones.group, no upstream
-* milestone labels sit in lanes above the plot (never over the line, each other or the axis labels)
+* milestone labels sit in lanes above the plot (never over the line, each other or the axis labels), read the event name only
+  (no +N count), and the hover tip sits below the lanes
 * the openers are on the page (home headline row and Holders, Network > Charts cards, /token) and there are no share buttons
 * nothing in the pop-out can start invisible: no entrance animation and no opacity 0 (the 1.26.28 iOS rule)
 Usage: python3 tools/chartpop_test.py"""
@@ -100,6 +101,10 @@ check("All and 7d on short history show the same full history", pall["pts"] == p
 evs = [e for e in MS.events() if p7["pts"][0][0] <= e["ts"] <= p7["pts"][-1][0]]
 want = [[a, b, c] for a, b, _u, c in MS.group(evs, p7["pts"][0][0], p7["pts"][-1][0], width=1000 - 64)] if evs else []
 check("milestones grouped with milestones.group at the plot width", p7["marks"] == want)
+ge = MS.group(MS.events(), MS.events()[0]["ts"], MS.events()[-1]["ts"] + 3600, width=400 - 64)
+labs = {e["label"] for e in MS.events()}
+check(f"milestone labels read the event name only, no +N suffix ({[x[1] for x in ge]})", ge and all(x[1] in labs and not re.search(r"\+\d", x[1]) for x in ge) and any("; " in x[3] for x in ge)
+      and all(not re.search(r"\+\d", m[1]) for k in ("joins", "agents", "supply") for r_ in ("24h", "7d", "30d", "all") for m in CP.payload(k, r_, 400).get("marks", [])))
 check("Answers per epoch: bars with Answered and Paid", pa["kind"] == "bars" and pa["legend"] == ["Answered", "Paid"] and all(re.fullmatch(r"E\d+", b[0]) for b in pa["bars"]))
 check("Circulating Epoch view: one bar per closed epoch", pe["kind"] == "bars" and len(pe["bars"]) == len(A.epoch_rows()))
 check("Agents / hr and Txs / hour are lines", pj["kind"] == "line" and pt["kind"] == "line" and pt["title"] == "Txs / hour")
@@ -126,6 +131,7 @@ check("phones: full screen, touch scrub on the plot", re.search(r"@media \(max-w
 check("watermark on the big chart (chartbox)", 'class="chartbox cp-box"' in blk)
 check("milestone labels: lanes above the plot with a background, plot top moves down, no labels near the x axis",
       "pt=8+20*ends.length+10" in blk and 'class="mkb"' in blk and "H-pb-8-(j%2)*14" not in blk and ".cpchart .mk .mkb{" in cs_flat)
+check("hover tip sits below the milestone label lanes, never over a label", 'tip.style.top=(ML.length?pt+4:10)+"px"' in blk)
 check("reduced motion covered", "prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt" in cs_flat)
 check("no em or en dash in the pop-out code", not re.search("[\u2013\u2014]", blk + cs))
 
