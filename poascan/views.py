@@ -437,6 +437,11 @@ def _eps(ks):
     if len(ks) > 4 and ks == list(range(ks[0], ks[-1] + 1)): return f"E{ks[0]} to E{ks[-1]}"
     return ", ".join(f"E{k}" for k in ks)
 
+def _ep_link(n):
+    """E{n}, linked only once that epoch has a page (the open epoch or a closed one); a later epoch is plain text."""
+    o = A.open_epoch().get("epoch")
+    return f'<a href="/epoch/{n}">E{n}</a>' if o is not None and n <= o else f"E{n}"
+
 def established_card(a):
     """Established history: the public inputs behind standing (agents.established_history). Inputs only, never the rule."""
     h = G.established_history(a)
@@ -453,7 +458,7 @@ def established_card(a):
             ("Settled", f'{h["passed"]} passed of {h["settled"]}' if h["settled"] else "···"),
             ("Paid", f'{h["epochs_paid"]} epoch{"" if h["epochs_paid"] == 1 else "s"} <span class="dim">· last E{h["last_paid_epoch"]}</span>' if h["epochs_paid"] else "···"),
             ("Grading seats", f'{h["seated_closes"]} close{"" if h["seated_closes"] == 1 else "s"} <span class="dim">· last E{h["last_seat_epoch"]}</span>' if h["seated_closes"] else "···"),
-            ("Est. expires", (f'<span title="{E(A.STANDING_NOTE)}"><a href="/epoch/{h["established_expires_epoch_est"]}">E{h["established_expires_epoch_est"]} close</a> '
+            ("Est. expires", (f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
                               f'<span class="dim">· estimate</span></span>') if h["established_expires_epoch_est"] is not None else "···")]
     if w["through"] is not None:
         rows.append((f"Last {t} closes", f'Answered {_eps(w["answered"])} · {w["passed"]} passed · seated {len(w["seated"])}'))

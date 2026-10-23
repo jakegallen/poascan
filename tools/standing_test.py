@@ -105,6 +105,11 @@ def main():
         row = re.search(r'<div class="kv"><span>Est\. expires</span><div>(.*?)</div></div>', h, re.S)
         check(f"address page ({c}): Est. expires row reads E16 close, labelled estimate, tooltip says not official",
               c == 200 and row is not None and "E16 close" in row.group(1) and "estimate" in row.group(1) and "not an official rule" in row.group(1))
+        check("address page: a future close is plain text, not a link to a missing epoch page", row is not None and "/epoch/16" not in row.group(1))
+        db.put_blob("status", {"epochs_closed": 16}); A._cache.clear(); time.sleep(16)   # the server's epoch caches expire
+        c, h = get(f"/address/{FRESH}"); row2 = re.search(r'<div class="kv"><span>Est\. expires</span><div>(.*?)</div></div>', h, re.S)
+        check("address page: the close links once that epoch has a page (open epoch)", row2 is not None and '<a href="/epoch/16">E16</a> close' in row2.group(1))
+        db.put_blob("status", {"epochs_closed": 11})
         c, h = get(f"/address/{SEATONLY}")
         check(f"address page ({c}): no Est. expires row when unknown", c == 200 and "Est. expires" not in h)
         c, h = get("/about")

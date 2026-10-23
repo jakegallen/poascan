@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.56] - 2026-10-23
+
+### Fixed
+- Est. expires on the address page Established history card: a close later than the open epoch is plain text ("E14 close · estimate"), not a link to an epoch page that doesn't exist yet (those returned 404). The open epoch and closed epochs still link. API and MCP fields unchanged. `tools/standing_test.py` covers both.
+
 ## [1.26.55] - 2026-10-23
 
 ### Added
