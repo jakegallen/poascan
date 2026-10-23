@@ -62,7 +62,9 @@ def unit():
         try: CK.parse(p, q); acc.append((p, q))
         except ValueError: pass
     check(f"allowlist refuses {len(bad)} shapes (versions, clients, steps, params, addresses) {acc}", not acc)
-    check("versions: v2.3 (copies still in chats) and the current v2.3.1", CK.VERSIONS == ("v2.3", "v2.3.1") and OP.VERSION == "v2.3.1")
+    check("versions: v2.3 and v2.3.1 (copies still in chats) and the current v2.3.2", CK.VERSIONS == ("v2.3", "v2.3.1", "v2.3.2") and OP.VERSION == "v2.3.2")
+    k2 = [CK.parse("/j/v2.3.2/start", ""), CK.parse("/j/v2.3.2/kimi/joined", "addr=" + A[0]), CK.parse("/j/v2.3.2/muse/rate", "route=mine")]
+    check(f"v2.3.2 check-ins: start, joined and rate ({k2})", k2 == [("v2.3.2", "none", "start", None), ("v2.3.2", "kimi", "joined", A[0]), ("v2.3.2", "muse", "rate", "mine")])
     rk = [CK.parse("/j/v2.3.1/rate", "route=register"), CK.parse("/j/v2.3.1/muse/rate", "route=me")] + [CK.parse("/j/v2.3.1/claude/rate", "route=" + r) for r in CK.ROUTES]
     check(f"rate check-in: v2.3.1, a client or none, one route from the allowlist ({rk[1]})", rk[0] == ("v2.3.1", "none", "rate", "register") and rk[1] == ("v2.3.1", "muse", "rate", "me")
           and [x[3] for x in rk[2:]] == list(CK.ROUTES) == ["register", "challenge", "answer", "mine", "me"])
@@ -81,7 +83,7 @@ def unit():
     first = db.q1("SELECT client, ts FROM checkin_addrs WHERE addr=?", (A[0],))
     check("first check-in per address wins", first["ts"] == NOW - int(2.5 * 3600))
     t0 = time.time(); out = CK.report(iso(NOW - 3 * 86400), iso(NOW), now=NOW); ms = (time.time() - t0) * 1000
-    check(f"top-level shape ({ms:.0f} ms)", set(out) == TOP and out["window_s"] == 21600 and out["versions"] == ["v2.3", "v2.3.1"] and set(out["totals"]) == ROWK
+    check(f"top-level shape ({ms:.0f} ms)", set(out) == TOP and out["window_s"] == 21600 and out["versions"] == ["v2.3", "v2.3.1", "v2.3.2"] and set(out["totals"]) == ROWK
           and all(set(r) == ROWK | {"version", "client"} for r in out["rows"]) and out["since_ts"] == NOW - 86400)
     rows = {(r["version"], r["client"]): r for r in out["rows"]}
     mu, cl, no = rows[("v2.3", "muse")], rows[("v2.3", "claude")], rows[("v2.3", "none")]
@@ -143,6 +145,8 @@ def server():
         check(f"joined with a public address 200 ({c2}); trailing slash ok ({c3}); HEAD answers but is not counted ({c4})", c2 == 200 and c3 == 200 and c4 == 200)
         cr, _, _ = req(base, "/j/v2.3.1/muse/rate?route=register", IP)
         check(f"rate check-in with an allowed route: 200 ({cr})", cr == 200)
+        c32 = [req(base, u, dict(IP, **{"Fly-Client-IP": f"198.51.108.{i}"}))[0] for i, u in enumerate(("/j/v2.3.2/kimi/start", "/j/v2.3.2/kimi/joined?addr=" + A[4], "/j/v2.3.2/kimi/rate?route=me"))]
+        check(f"v2.3.2 start, joined and rate check-ins: 200 {c32}", c32 == [200] * 3)
         badp = ["/j/v2.3.1/muse/rate?route=pk_" + "c" * 30, "/j/v2.3.1/muse/rate?route=register&key=x", "/j/v2.3.1/muse/rate?route=grade", "/j/v2.3/muse/rate?route=me", "/j/v2.3/muse/joined?addr=pk_" + "a" * 30, "/j/v2.3/muse/start?key=abc", "/j/v2.3/pk_" + "b" * 30 + "/start", "/j/v2.3/muse/joined?addr=" + A[0] + "&key=x",
                 "/j/v2.3/muse/joined?addr=" + A[0] + "&token=x", "/j/v2.3/evil/start", "/j/v2.2/start", "/j/v2.3/muse/start?ref=x", "/j/v2.3/muse/joined?addr=nope",
                 "/j/v2.3/muse/joined?addr=" + A[1] + "&utm=1", "/j", "/j/whatever", "/j/v2.3/muse/joined?addr=" + A[2] + "%26key%3Dx"]
@@ -168,7 +172,7 @@ def server():
             ("from=" + iso(NOW - 31 * 86400) + "&to=" + iso(NOW), "from=x", "x=1", "token=" + tok))]
         check(f"/ops/funnel: 32 days, a bad date, another parameter, a token in the URL: 400 {codes}", codes == [400] * 4)
         pub = b"".join(req(base, x)[2] for x in ("/", "/sitemap.xml", "/openapi.json", "/llms.txt", "/llms-full.txt", "/robots.txt", "/api"))
-        check("/ops/funnel and /j/ are not in the home page, sitemap, OpenAPI, llms.txt, robots or /api", b"ops/funnel" not in pub and b"poascan.io/j/" not in pub.replace(b"https://poascan.io/j/v2.3.1/start once now", b"").replace(b"https://poascan.io/j/v2.3.1/joined?addr=", b"").replace(b"https://poascan.io/j/v2.3.1/rate?route=", b"")
+        check("/ops/funnel and /j/ are not in the home page, sitemap, OpenAPI, llms.txt, robots or /api", b"ops/funnel" not in pub and b"poascan.io/j/" not in pub.replace(b"https://poascan.io/j/v2.3.2/start once now", b"").replace(b"https://poascan.io/j/v2.3.2/joined?addr=", b"").replace(b"https://poascan.io/j/v2.3.2/rate?route=", b"")
               and b"/j/" not in req(base, "/robots.txt")[2] and b"/j/" not in req(base, "/sitemap.xml")[2])
         time.sleep(0.5); slog.flush(); slog.seek(0); lg = slog.read()
         check("server log: check-ins as /j/[check-in] only; never the client, address, key or query", "/j/[check-in]" in lg and "/j/v2.3" not in lg and "muse" not in lg and "route=" not in lg

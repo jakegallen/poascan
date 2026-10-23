@@ -16,7 +16,7 @@ epoch close rewards for mined). Nothing here calls minepoa.com."""
 import datetime as dt, re, threading, time
 from . import db, onboarding_prompt as OP
 
-VERSIONS = ("v2.3", "v2.3.1")           # prompt versions that carry check-ins; add each new one here (older copies stay in chats)
+VERSIONS = ("v2.3", "v2.3.1", "v2.3.2") # prompt versions that carry check-ins; add each new one here (older copies stay in chats)
 assert OP.VERSION in VERSIONS, "add the new prompt version to checkin.VERSIONS"
 STEPS = ("start", "joined", "rate")
 ROUTES = ("register", "challenge", "answer", "mine", "me")   # rate?route= allowlist (v2.3.1)

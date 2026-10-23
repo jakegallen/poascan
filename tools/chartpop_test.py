@@ -2,8 +2,9 @@
 * URL param parsing and allowlist: app.js cpParse and cpSearch run in node (skipped if node is missing); ?chart= takes a
   known key only, ?range= a known range only, and closing clears both (the Network > Charts page range is kept)
 * /fragment/chart: strict params (c, r, w; one value each, nothing else is a 400), known keys and ranges only
-* ranges are offered only where the data reaches (no padded history), an unsupported range falls back, windows start at
-  the first real point, upgrade milestones are grouped with milestones.group, and nothing calls upstream
+* every chart offers all four ranges (24h, 7d, 30d, All, plus Epoch for per epoch data); a range wider than the history
+  shows all of it, a quiet 24h still draws, windows are never padded, milestones are grouped with milestones.group, no upstream
+* milestone labels sit in lanes above the plot (never over the line, each other or the axis labels)
 * the openers are on the page (home headline row and Holders, Network > Charts cards, /token) and there are no share buttons
 * nothing in the pop-out can start invisible: no entrance animation and no opacity 0 (the 1.26.28 iOS rule)
 Usage: python3 tools/chartpop_test.py"""
@@ -55,23 +56,27 @@ for name, qs in [("unknown key", {"c": ["nope"]}), ("no key", {}), ("unknown ran
                  ("width too long", {"c": ["supply"], "w": ["12345"]}), ("key case", {"c": ["Supply"]})]:
     check(f"parse: 400 on {name}", bad(qs))
 
-# ---------------- ranges: only where the data reaches ----------------
+# ---------------- ranges: always all four ----------------
 now = 2_000_000_000; D = 86400
 real = CP.series
 def fake(pts):
     CP.series = lambda key, rng="": pts
 def rg(key, pts): fake(pts); r = CP.ranges(key, now); CP.series = real; return r
+FOUR = ["24h", "7d", "30d", "all"]
 h35 = [(now - 3.5 * D + i * 900, i) for i in range(int(3.5 * 96))]
-check("3.5 days of history: 24h and 7d only", rg("agents", h35) == ["24h", "7d"])
-check("12 hours: 24h only", rg("agents", [(now - 12 * 3600 + i * 900, i) for i in range(48)]) == ["24h"])
-check("10 days: 24h, 7d and 30d", rg("holders", [(now - 10 * D + i * 3600, i) for i in range(240)]) == ["24h", "7d", "30d"])
-check("40 days: All appears", rg("supply", [(now - 40 * D + i * 3600, i) for i in range(960)]) == ["24h", "7d", "30d", "all"])
-check("stale series (nothing in 24h): no 24h", rg("agents", [(now - 3 * D + i * 900, i) for i in range(96)]) == ["7d"])
-check("per epoch data adds Epoch", rg("circ", h35) == ["24h", "7d", "epoch"])
-check("Answers: Epoch stands for All", rg("answers", [(e, now - 40 * D + e * 21600, [1, 1]) for e in range(160)]) == ["24h", "7d", "30d", "epoch"])
+check("3.5 days of history: all four ranges", rg("agents", h35) == FOUR)
+check("12 hours: all four ranges", rg("agents", [(now - 12 * 3600 + i * 900, i) for i in range(48)]) == FOUR)
+check("40 days: all four ranges", rg("supply", [(now - 40 * D + i * 3600, i) for i in range(960)]) == FOUR)
+check("stale series (nothing in 24h): still all four", rg("agents", [(now - 3 * D + i * 900, i) for i in range(96)]) == FOUR)
+check("per epoch data adds Epoch after the four", rg("circ", h35) == FOUR + ["epoch"])
+check("Answers: the four (its bars are per epoch, All is the Epoch view)", rg("answers", [(e, now - 40 * D + e * 21600, [1, 1]) for e in range(160)]) == FOUR)
+check("every key offers 24h, 7d, 30d and All", all(rg(k, h35)[:4] == FOUR for k in CP.CHARTS))
 check("no data: no ranges", rg("agents", []) == [])
-check("pick: unsupported wider range falls back to the widest supported", CP.pick("30d", ["24h", "7d"]) == "7d" and CP.pick("all", ["24h", "7d", "epoch"]) == "7d")
-check("pick: default 7d, else what there is", CP.pick("", ["24h", "7d"]) == "7d" and CP.pick("", ["24h"]) == "24h" and CP.pick("epoch", ["24h"]) == "24h")
+check("pick: what was asked, Epoch on Answers is All, default 7d", CP.pick("30d", FOUR) == "30d" and CP.pick("all", FOUR) == "all" and CP.pick("epoch", FOUR) == "all"
+      and CP.pick("", FOUR) == "7d" and CP.pick("epoch", FOUR + ["epoch"]) == "epoch")
+w = CP.window([(now - 3 * D, 1), (now - 2 * D, 2)], now - D)
+check("window: a quiet 24h draws from the last real points before it, never padded", w == [(now - 3 * D, 1), (now - 2 * D, 2)])
+check("window: enough points inside, nothing added", CP.window([(now - 3 * D, 1), (now - 600, 2), (now - 300, 3)], now - D) == [(now - 600, 2), (now - 300, 3)])
 
 # ---------------- payloads from the fixture, no upstream ----------------
 t = int(time.time())
@@ -83,9 +88,15 @@ p7 = CP.payload("supply", "7d", 1000); p30 = CP.payload("agents", "30d", 400); p
 pj = CP.payload("joins", "24h", 800); pt = CP.payload("txs", "", 800)
 I.flush_counts(force=True)
 check("no upstream request for any chart", db.q1("SELECT COALESCE(SUM(n),0) AS n FROM upstream_counts")["n"] == before)
-check("Supply 7d: line, 24h and 7d offered", p7["kind"] == "line" and p7["range"] == "7d" and p7["ranges"][:2] == ["24h", "7d"] and "30d" not in p7["ranges"])
+check("Supply 7d: line, all four ranges offered", p7["kind"] == "line" and p7["range"] == "7d" and p7["ranges"] == FOUR)
 check("window starts at the first real point (no padding)", p7["pts"][0][0] >= t - int(3.5 * D) - 900)
-check("30d asked on 3.5 days falls back to 7d", p30["range"] == "7d")
+check("30d on 3.5 days of history: 30d, with all of it", p30["range"] == "30d" and len(p30["pts"]) > 1 and p30["pts"][0][0] >= t - int(3.5 * D) - 900)
+for k in CP.CHARTS:
+    for r_ in ("24h", "7d", "30d", "all"):
+        pk = CP.payload(k, r_, 400)
+        check(f"{k} {r_}: shows that range with data, no empty state", pk["range"] == r_ and pk["ranges"][:4] == FOUR and (len(pk["pts"]) > 1 if pk["kind"] == "line" else len(pk["bars"]) > 0))
+pall = CP.payload("agents", "all", 400); p7a = CP.payload("agents", "7d", 400)
+check("All and 7d on short history show the same full history", pall["pts"] == p7a["pts"])
 evs = [e for e in MS.events() if p7["pts"][0][0] <= e["ts"] <= p7["pts"][-1][0]]
 want = [[a, b, c] for a, b, _u, c in MS.group(evs, p7["pts"][0][0], p7["pts"][-1][0], width=1000 - 64)] if evs else []
 check("milestones grouped with milestones.group at the plot width", p7["marks"] == want)
@@ -113,6 +124,8 @@ cs_flat = re.sub(r"/\*.*?\*/", "", cs, flags=re.S)
 check("pop-out CSS has no entrance animation and no opacity 0 on content", "animation" not in cs_flat.replace("animation:none", "") and not re.search(r"\.(cpop|cp-in|cp-box|cpchart|cp-hd)[^{]*\{[^}]*opacity:\s*0(?![.\d])", cs_flat))
 check("phones: full screen, touch scrub on the plot", re.search(r"@media \(max-width:640px\)\{\s*\.cpop\{width:100%;height:100%", cs_flat) is not None and "touch-action:none" in cs_flat)
 check("watermark on the big chart (chartbox)", 'class="chartbox cp-box"' in blk)
+check("milestone labels: lanes above the plot with a background, plot top moves down, no labels near the x axis",
+      "pt=8+20*ends.length+10" in blk and 'class="mkb"' in blk and "H-pb-8-(j%2)*14" not in blk and ".cpchart .mk .mkb{" in cs_flat)
 check("reduced motion covered", "prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt" in cs_flat)
 check("no em or en dash in the pop-out code", not re.search("[\u2013\u2014]", blk + cs))
 
@@ -133,6 +146,9 @@ try:
         except Exception: time.sleep(.25)
     c, b, h = get("/fragment/chart?c=supply&r=7d&w=900")
     check("GET /fragment/chart: 200 JSON, cached 60 s", c == 200 and json.loads(b)["c"] == "supply" and "max-age=60" in (h.get("Cache-Control") or ""))
+    for k in CP.CHARTS:
+        for r_ in ("30d", "all"):
+            c, b, h = get(f"/fragment/chart?c={k}&r={r_}&w=390"); check(f"GET /fragment/chart?c={k}&r={r_}: 200 with that range", c == 200 and json.loads(b)["range"] == r_)
     for q in ("c=nope", "c=supply&r=1y", "c=supply&token=x", "c=supply&c=agents", "", "c=supply&w=-1"):
         c, b, h = get("/fragment/chart?" + q); check(f"GET /fragment/chart?{q}: 400", c == 400 and '"c"' not in b)
     c, b, h = get("/?chart=supply&range=7d"); check("a shared URL renders the page (the browser opens the pop-out)", c == 200 and 'data-chart="mined"' in b)

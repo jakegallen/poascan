@@ -405,6 +405,12 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   var yl=[0,1,2,3,4].map(function(i){var v=lo+(hi-lo)*i/4;return d.fmt==="c"?c3(v):Math.round(v).toLocaleString("en-US")}),
    pl=Math.max(36,Math.max.apply(null,yl.map(function(s){return s.length}))*7.4+14),pr=12,pt=14,pb=26,mob=Wd<560,
    Y=function(v){return pt+(H-pt-pb)*(1-(v-lo)/(hi-lo))},o=[];
+  /* upgrade milestone labels sit in lanes above the plot, so they never cover the line, each other or the axis labels.
+     Each label is centred on its line and kept inside the plot; one that fits no lane keeps its line and its title. */
+  var ML=[];if(!bars&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
+   d.marks.forEach(function(m){var mx=pl+(Wd-pl-pr)*(m[0]-mt0)/((mt1-mt0)||1),lw=Math.round(m[1].length*cw+14),x0=Math.max(pl+2,Math.min(Wd-pr-lw-2,mx-lw/2)),ln=-1;
+    for(var q=0;q<3;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:m[2]||m[1]})});
+   pt=8+20*ends.length+10}
   o.push('<svg class="cpchart" viewBox="0 0 '+Wd+' '+H+'" width="'+Wd+'" height="'+H+'" aria-hidden="true"><defs><linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+d.color+'" stop-opacity=".22"/><stop offset="1" stop-color="'+d.color+'" stop-opacity="0"/></linearGradient></defs>');
   for(var i=0;i<5;i++){var gy=Y(lo+(hi-lo)*i/4);o.push('<line x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" class="grid"/><text x="'+(pl-8)+'" y="'+(gy+4).toFixed(1)+'" class="ax" text-anchor="end">'+yl[i]+'</text>')}
   if(bars){var n=d.bars.length,step=(Wd-pl-pr)/n,bw=Math.max(2,step*.62),k=d.bars[0][2].length,cols=d.colors.length?d.colors:[d.color],every=Math.max(1,Math.ceil(n/Math.max(1,Math.floor((Wd-pl)/(mob?44:56))))),cx=[];
@@ -417,15 +423,16 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
     pa=P.map(function(p,j){return (j?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)}).join("");
    o.push('<path d="'+pa+"L"+X(t1).toFixed(1)+","+(H-pb)+"L"+X(t0).toFixed(1)+","+(H-pb)+'Z" fill="url(#cpg)"/>');
    /* upgrade milestones, grouped on the server with milestones.group at this plot width (the Network > Charts rule) */
-   d.marks.forEach(function(m,j){var mx=X(m[0]),end=mx>Wd-pr-Math.min(180,m[1].length*7.2+8);
-    o.push('<g class="mk"><title>'+esc2(m[2]||m[1])+'</title><line x1="'+mx.toFixed(1)+'" x2="'+mx.toFixed(1)+'" y1="'+pt+'" y2="'+(H-pb)+'"/><text x="'+(end?mx-4:mx+4).toFixed(1)+'" y="'+(H-pb-8-(j%2)*14)+'" class="ax mkl"'+(end?' text-anchor="end"':'')+'>'+esc2(m[1])+'</text></g>')});
+   ML.forEach(function(m){var ly=8+20*m.ln;
+    o.push('<g class="mk"><title>'+esc2(m.ti)+'</title><line x1="'+m.mx.toFixed(1)+'" x2="'+m.mx.toFixed(1)+'" y1="'+(m.ln<0?pt:ly+17)+'" y2="'+(H-pb)+'"/>'+
+     (m.ln<0?'':'<rect class="mkb" x="'+m.x0.toFixed(1)+'" y="'+ly+'" width="'+m.w+'" height="17" rx="4"/><text x="'+(m.x0+7).toFixed(1)+'" y="'+(ly+12.5)+'" class="ax mkl">'+esc2(m.t)+'</text>')+'</g>')});
    o.push('<path d="'+pa+'" fill="none" stroke="'+d.color+'" stroke-width="2" stroke-linejoin="round"/>');
    var nt=Math.max(2,Math.min(7,Math.floor((Wd-pl)/(long?96:110))));
    for(i=0;i<nt;i++){var tt=t0+(t1-t0)*i/(nt-1),dd=new Date(tt*1000),lab=long?dtf({month:"short",day:"numeric"},dd)+" "+dtf({hour:"numeric"},dd).replace(/\s/g,"").toLowerCase():dtf({hour:"numeric",minute:"2-digit"},dd);
     o.push('<text x="'+X(tt).toFixed(1)+'" y="'+(H-8)+'" class="ax" text-anchor="'+(i===0?"start":i===nt-1?"end":"middle")+'">'+esc2(lab)+'</text>')}
    geo={n:P.length,x:P.map(function(p){return X(p[0])}),y:P.map(function(p){return Y(p[1])}),long:long};now.textContent=fv(P[P.length-1][1]);lg.hidden=true}
   o.push('<circle class="cp-dot" r="4" cx="-20" cy="-20" fill="'+d.color+'"/></svg>');
-  box.innerHTML=o.join("")+'<i class="xh"></i><div class="xt" aria-hidden="true"></div>';xh=$(".xh",box);tip=$(".xt",box);
+  box.innerHTML=o.join("")+'<i class="xh"></i><div class="xt" aria-hidden="true"></div>';xh=$(".xh",box);tip=$(".xt",box);xh.style.top=pt+"px";
   box.setAttribute("aria-label",d.title+", "+(CPL[d.range]||d.range)+". Arrow keys read values.")}
  function near(px){var x=geo.x,lo2=0,hi2=x.length-1;while(hi2-lo2>1){var m=(lo2+hi2)>>1;if(x[m]<px)lo2=m;else hi2=m}return Math.abs(x[lo2]-px)<=Math.abs(x[hi2]-px)?lo2:hi2}
  function at(i,say){if(!geo||!data)return;idx=i;var px=geo.x[i],t,s,sep=svgW<560?"\n":" \u00b7 ";

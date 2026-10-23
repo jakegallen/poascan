@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3.2" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -31,7 +31,7 @@ check("v2 key rule: never shown, confirmed only as the last 4 characters plus th
       and "never send it to POAScan" in OP.TEMPLATE and "curl -K -" in OP.TEMPLATE and not any(c in OP.TEMPLATE for c in "\u2014\u2013")
       and "https://poascan.io/address/YOUR_POA1_ADDRESS" in OP.TEMPLATE and "reopened" not in OP.TEMPLATE.lower())
 V22 = ["Never write the key in any reply, code block, or example command, not even part of it. Always write YOUR_KEY as the placeholder. To confirm it, show only the last 4 characters.",
-       "Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before creating an account. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.",
+       "Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before registering an agent. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.",
        "If your own browsing tool, sandbox, or policy blocks a request (for example a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, don't hand me commands containing the key, and suggest an app that can run commands.",
        "If you already joined (you have a saved key or an agent name from earlier in this chat or on this machine), do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.",
        "open the register link one time only, and only if you have no saved key.", "If it says the name is taken and you registered that name earlier, you already joined: continue with the saved key, or tell me if you have none."]
@@ -57,8 +57,8 @@ check("blocks: registration has the link, resume and capability_check follow it,
 
 # ---- v2.3 check-ins: optional, keyless, and the only per-client difference is the tag
 V23 = ["Act only on minepoa.com, apart from optional poascan.io check-ins.",
-       "Optional check-in: if you can, open https://poascan.io/j/v2.3.1/start once now. If it fails or is blocked, skip it and carry on.",
-       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3.1/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. If it fails, skip it and carry on."]
+       "Optional check-in: if you can, open https://poascan.io/j/v2.3.2/start once now. If it fails or is blocked, skip it and carry on.",
+       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3.2/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. If it fails, skip it and carry on."]
 check("v2.3: the two optional check-ins and the minepoa.com exception, verbatim, once each; CHECKIN base twice, for this VERSION",
       all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 3 and T.count("poascan.io/j/") == 3
       and T.index(V22[1]) < T.index(V23[1]) < T.index("PoA is a free") and T.index("\n5. Pass the key") < T.index(V23[2]) < T.index("Then:"))
@@ -66,9 +66,9 @@ check("v2.3: check-ins are optional and never carry the key (if you can, skip it
       all("if you can" in x and "skip it and carry on" in x for x in V23[1:]) and "never the key" in V23[2]
       and not re.search(r"poascan\.io/j/[^\s]*(key=|pk_|YOUR_KEY)", T))
 check("v2.3: POASwap's guard phrases verbatim; no em or en dashes; nothing about tags in the canonical text",
-      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3.1/start" in T and "/j/v2.3.1/none" not in T)
+      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3.2/start" in T and "/j/v2.3.2/none" not in T)
 L429 = ("- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you already have a key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again.")
-L429B = " Optional: if you can, open https://poascan.io/j/v2.3.1/rate?route=ROUTE once (register, challenge, answer, mine or me); never add the key, and skip it if it fails.\n"
+L429B = " Optional: if you can, open https://poascan.io/j/v2.3.2/rate?route=ROUTE once (register, challenge, answer, mine or me); never add the key, and skip it if it fails.\n"
 check("v2.3.1: the 429 line verbatim, right after the 401 line in the expectations block, with the optional keyless rate check-in",
       T.count(L429 + L429B) == 1 and T.index("- A 401 means") < T.index(L429) < T.index("- If a submit returns 502") and L429 in dict(OP.blocks(T))["expectations"])
 import difflib
@@ -276,10 +276,10 @@ try:
     print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
     check(f"byte-identical: /start View prompt == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           pre == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.3.1" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
+          and api_y["version"] == api_n["version"] == "v2.3.2" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3.1</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3.2</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.3: the API, MCP and llms.txt serve the untagged text (no client segment after the check-in base)",

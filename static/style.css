@@ -1139,7 +1139,7 @@ td a.mono{display:inline-block;min-width:24px}
 .cp-box .skel,.cp-box .naBox{height:100%;margin:0}
 .cpchart{display:block;width:100%;height:100%;overflow:visible}
 .cpchart .grid{stroke:#2A251C;stroke-width:1}.cpchart .ax{fill:#8A8270;font:400 12px var(--mono)}
-.cpchart .mk line{stroke:#6B5420;stroke-dasharray:3 3}.cpchart .mk .mkl{fill:var(--amber);font-size:12px;paint-order:stroke;stroke:var(--inset);stroke-width:3px}
+.cpchart .mk line{stroke:#6B5420;stroke-dasharray:3 3}.cpchart .mk .mkb{fill:rgba(255,176,0,.07);stroke:rgba(107,84,32,.7);stroke-width:1}.cpchart .mk .mkl{fill:var(--amber);font-size:12px}
 .cpchart .cp-dot{stroke:var(--inset);stroke-width:2;pointer-events:none}
 .cp-box .xh{bottom:26px;top:14px}
 .cp-box .xt{top:10px;white-space:pre;text-align:center;line-height:1.45}
@@ -1150,5 +1150,6 @@ td a.mono{display:inline-block;min-width:24px}
  .cp-now{font-size:var(--t16)}
  .cp-rng{gap:6px}.cp-rng .chip{flex:1 1 0;min-width:0;max-width:76px;padding:4px 6px}
  .chartbox.cp-box{flex:1;height:auto;min-height:260px}
+ .cpchart .mk .mkl{font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt,.cp-rng .chip{transition:none!important}}

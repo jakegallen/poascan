@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.34] - 2026-10-23
+
+### Changed
+- Chart pop-out: every chart always shows all four ranges, 24h, 7d, 30d and All (plus Epoch for Circulating supply). When the history is shorter than a range, that range shows all of it: no error, no empty state, never padded. A quiet 24h draws from the last real points. `/fragment/chart` takes `r=30d` and `r=all` for every key, and so do `?range=30d` and `?range=all`. Txs switch to per day at 30d and All once there are 3 days to draw. On Answers / epoch, All is the per epoch view (`?range=epoch` opens All).
+- Chart pop-out milestone labels sit in lanes at the top of the plot on a subtle background, centred on their line and kept inside the plot, so they never cover the data line, each other or the axis labels (they were stacked near the x axis at 390 px).
+- Onboarding prompt v2.3.2: the capability check says "stop before registering an agent" (was "creating an account"). Check-in URLs carry v2.3.2; v2.3 and v2.3.1 check-ins are still accepted. Every block id, key rule and POASwap guard phrase is unchanged. Longest prefill link (Kimi, longest name) is 7,975 characters, under 8,000.
+- Cache keys app.js v47, style.css v95.
+
 ## [1.26.33] - 2026-10-23
 
 ### Added
