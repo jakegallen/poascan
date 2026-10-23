@@ -80,18 +80,23 @@ def template_sha256():
     return variant_sha256("full")
 
 def hash_fields(variant="full"):
-    """The v2.7 fields every surface carries: prompt_version, template_sha256, variant_sha256 (None without a prompt), the rule."""
+    """The v2.7 fields every surface carries: prompt_version, template_sha256, variant_sha256 (None without a prompt), the rule,
+    and combined_sha256 (poascan/combined.py; None until the combined prompt text lands)."""
     from . import onboarding_prompt as OP
+    from . import combined as CB
     return dict(prompt_version=OP.VERSION, template_sha256=template_sha256(), variant_sha256=variant_sha256(variant) if variant else None,
-                hash_rule=HASH_RULE, verify=VERIFY)
+                hash_rule=HASH_RULE, verify=VERIFY, **CB.fields())
 
 def phash():
     """The small line beside the widget on /start and in the Join dialog: version and a 12 character hash prefix; the button
-    copies the full value (also in its title), Verify goes to the /about method."""
-    from . import onboarding_prompt as OP
-    h = template_sha256()
+    copies the full value (also in its title), Verify goes to the /about method. A second button for the combined prompt hash
+    renders only once poascan/combined_prompt.txt exists."""
+    from . import onboarding_prompt as OP, combined as CB
+    h = template_sha256(); c = CB.SHA256
+    cb = (f'<button type="button" data-phash="{c}" title="Combined prompt sha256 {c}" aria-label="Copy the combined prompt sha256">'
+          f'<span>Combined</span><span>sha256 <code>{c[:12]}</code></span></button>') if c else ""   # nothing until the text lands
     return (f'<p class="phash"><button type="button" data-phash="{h}" title="Template sha256 {h}" aria-label="Copy the template sha256">'
-            f'<span>Prompt {E(OP.VERSION)}</span><span>sha256 <code>{h[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>')
+            f'<span>Prompt {E(OP.VERSION)}</span><span>sha256 <code>{h[:12]}</code></span></button>{cb}<a href="/about#prompt-hash">Verify</a></p>')
 
 # v2.3 check-in tags. Each /start chat choice carries data-tag; its copy buttons tag the two check-in URLs with it
 # (onboarding_prompt.tagged). The API, MCP and llms.txt serve the untagged text. POASwap renders the API prompt and may tag

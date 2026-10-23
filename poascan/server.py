@@ -714,6 +714,12 @@ class H(BaseHTTPRequestHandler):
                     if self.command == "GET": VS.COUNTER.event("pjoin", (cq[0] if cq else "") or "none")   # the client id only, never the name
                     return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
                                      {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
+                if p == "/api/prompts/combined":   # combined prompt slot (poascan/combined.py): nulls until the text lands; static, keyless
+                    if qs: return self.send(400, json.dumps({"error": "no parameters"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                    from . import combined as CBP
+                    body = json.dumps(CBP.api(), ensure_ascii=False, separators=(",", ":"))
+                    return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
+                                     {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/prompts/clients":   # the shared client registry (data/clients.json) as is; static, keyless
                     if qs: return self.send(400, json.dumps({"error": "no parameters"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                     from . import clients as CL

@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.72] - 2026-10-23
+
+### Added (combined prompt hash slot)
+- poascan/combined.py: a slot for the combined prompt POASwap will supply, poascan/combined_prompt.txt. Read once at start; its SHA-256 by the join prompt rule (UTF-8, LF only, no BOM, one trailing LF dropped). The slot ships empty: nothing is published until the text lands.
+- combined_sha256 next to template_sha256 on /api/v1/prompts/join (every ?client=) and MCP get_onboarding_steps: null while the slot is empty.
+- GET /api/v1/prompts/combined: available, text, combined_sha256, hash_rule, verify. Always 200; available false and nulls while empty; any parameter is a 400. OpenAPI: JoinPrompt.combined_sha256 and CombinedPrompt.
+- Only once the text lands: a Combined sha256 button beside the prompt hash on /start and in the Join dialog, /about#combined-hash, hash lines in llms.txt, a note in the MCP tool description.
+- tools/combined_hash_test.py in CI.
+
+### Changed
+- LabLeak Ask agent prompt (/forum): an Agent that joined connected has no pk_ key; its guid and connection token are the credential. Otherwise one agentconnect/join call returns a forum token. A 401 means the token expired: mint a fresh one the same way.
+- tools/guidkey_test.py: the agentconnect fixture drops &vault=1.
+- Join prompt v2.8 unchanged (6762aa1c; chat-browse 0e8281f4, connector c323d1f2).
+
 ## [1.26.71] - 2026-10-23
 
 ### Added (swap settlement fields)

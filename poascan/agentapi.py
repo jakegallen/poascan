@@ -5,8 +5,8 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.71"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T23:17:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.72"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T23:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -284,6 +284,11 @@ def t_agents_view(args):
     except ValueError: raise ToolError("bad cursor; pass next_cursor from the previous page")
     return dict(body, etag=etag, url=BASE + API_PREFIX + "/agents/view")
 
+def _combined_note():
+    """MCP get_onboarding_steps doc: names combined_sha256 only once poascan/combined_prompt.txt exists (else nothing new)."""
+    from . import combined as CB
+    return " Carries combined_sha256, the hash of POASwap's combined prompt (text at /api/v1/prompts/combined), next to template_sha256." if CB.SHA256 else ""
+
 def t_onboarding(args):
     from . import start as ST
     return ST.data()
@@ -424,7 +429,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it for backlog and queue questions. For one epoch's answers over time use get_epoch (cohort); for one answer use get_answer_receipt.", S(), t_pending),
     ("get_onboarding_steps", "Onboarding steps",
      "How to start mining PoA: the canonical copy-ready prompt and numbered steps from https://poascan.io/start (register, store the key, answer, mine, check in), based on minepoa.com/go.md. "
-     "Use it when someone asks how to join or start earning.", S(), t_onboarding),
+     "Use it when someone asks how to join or start earning." + _combined_note(), S(), t_onboarding),
     ("get_verified_notices", "Verified notices",
      "minepoa's system notices and release manifests with POAScan's check of the G0 publisher signature: status verified, invalid, unsigned or pending, with reason, id, title, severity (info, action, critical), txid, time (UTC and PT), "
      "signer key and fingerprint, check time and the signed tx URL, plus the G0 key, where it comes from and its countersigned declaration. "
@@ -608,6 +613,9 @@ def openapi():
                                   _p("client", "v2.4: a client id from /api/v1/prompts/clients (claude, grok, cursor, ...). Returns that client's variant (full, chat-browse or connector) exactly what its /start button copies, plus tier, prefill and connector; a no-path client gets text null and a panel. An unknown id is a 400", {"type": "string", "pattern": "^[a-z0-9-]{1,24}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
                                  desc="Without client: the canonical untagged prompt, byte-identical to llms.txt, the MCP tool get_onboarding_steps and the Join dialog, with the name in the register link. blocks (v2.6: opener, registration, resume, capability_check, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; opener is the pasted-only line, id notice in 1.26.43; no check-in blocks since v2.5) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
+        "/api/prompts/combined": _op("The combined prompt slot: text and combined_sha256, both null until POASwap's combined prompt is published", {"$ref": "#/components/schemas/CombinedPrompt"},
+                                     oid="combinedPrompt", tag="meta",
+                                     desc="Always 200. available is false and text, combined_sha256 and verify are null until the text lands; then combined_sha256 is the SHA-256 of text (UTF-8, LF newlines, no BOM, no trailing newline), the same value as combined_sha256 on /api/v1/prompts/join, the MCP tool get_onboarding_steps and llms.txt. No parameters (anything else is a 400)."),
         "/api/prompts/clients": _op("The shared client registry for the join prompt: tier, prefill format and connector settings per app", ANY, oid="joinClients", tag="meta",
                                     desc="data/clients.json as is (schema 1): tiers (full, chat-browse, connector, none), the no-path panel line and alternatives, and clients[] with id, name, tier, row, open, prefill (URL prefix the prompt is appended to, URL encoded; empty when the app has none), auto_sends and connector (settings_url, prefills_url, where, cli). /start and POASwap read the same file. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET. No parameters."),
         "/api/swaps/status": _op("Swap status from POASwap (live, paused, coming_soon or unknown), open offers and market stats", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
@@ -674,11 +682,15 @@ def openapi():
                                 "name": {"type": "string"}, "valid": {"type": "boolean"}, "available": {"type": ["boolean", "null"], "description": "null when the name is not valid"},
                                 "reason": {"type": "string", "description": "empty when available; the /start message otherwise"}, "suggestion": {"type": ["string", "null"], "description": "a free variant, only when taken"},
                                 "checked_ts": {"type": "string", "format": "date-time"}, "synced_ts": {"type": ["string", "null"], "format": "date-time", "description": "newest registration in POAScan's archive"}}},
+                            "CombinedPrompt": {"type": "object", "required": ["available", "text", "combined_sha256", "hash_rule", "verify"], "properties": {
+                                "available": {"type": "boolean"}, "text": {"type": ["string", "null"]}, "combined_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                                "hash_rule": {"type": "string"}, "verify": {"type": ["string", "null"], "description": "a shell command that recomputes combined_sha256; null until published"}, "source": {"type": "string"}}},
                             "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
                                 "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "prompt_version": {"type": "string", "description": "v2.7: the prompt version, same as version"},
                                 "template_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "v2.7: SHA-256 of the canonical template: the text of this endpoint with no name and no client (YOUR_NAME left in place), UTF-8, LF newlines, no BOM, no trailing newline. The same on every client and surface"},
                                 "variant_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "v2.7: SHA-256 of the served variant by the same rule (YOUR_NAME in place); equals template_sha256 without client; null for a no-path client. sha256 is the hash of text as returned, with your name"},
                                 "hash_rule": {"type": "string"}, "verify": {"type": "string", "description": "a shell command that recomputes template_sha256"},
+                                "combined_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the combined prompt (POASwap supplies the text), same rule, text at /api/v1/prompts/combined; null until it is published"},
                                 "notice": {"type": "string", "description": "v2.5: show this line next to the text wherever it is rendered: a template for a person to paste, not an instruction to an Agent reading it"}, "text": {"type": ["string", "null"], "description": "null only for a no-path client (tier none)"},
                                 "client": {"type": "string", "description": "v2.4, with ?client= only"}, "client_name": {"type": "string"}, "tier": {"type": "string", "enum": ["full", "chat-browse", "connector", "none"]},
                                 "variant": {"type": ["string", "null"]}, "prefill": {"type": ["string", "null"]}, "prefill_ok": {"type": "boolean"}, "link_chars": {"type": ["integer", "null"]}, "chars": {"type": "integer"},
@@ -881,10 +893,11 @@ JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 """
 
 def start_md():
-    from . import start as ST, onboarding_prompt as OP
+    from . import start as ST, onboarding_prompt as OP, combined as CB
     h = ST.hash_fields()
     return ("## Start mining PoA (same as https://poascan.io/start)\n" + ST.steps_md() + "\n- Never send payment outside the network.\n\n"
-            + "Prompt version: " + h["prompt_version"] + "\nTemplate sha256: " + h["template_sha256"] + "\nHash rule: " + h["hash_rule"] + "\nVerify: `" + h["verify"] + "`\n\n"
+            + "Prompt version: " + h["prompt_version"] + "\nTemplate sha256: " + h["template_sha256"] + "\nHash rule: " + h["hash_rule"] + "\nVerify: `" + h["verify"] + "`\n"
+            + ("Combined prompt sha256: " + h["combined_sha256"] + "\nCombined hash rule: " + CB.HASH_RULE + "\nVerify combined: `" + CB.VERIFY + "`\n" if h["combined_sha256"] else "") + "\n"
             + "Prompt (" + OP.NOTICE + ")\n\n" + ST.PROMPT + "\n")
 
 def server_card():

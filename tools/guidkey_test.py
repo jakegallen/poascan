@@ -13,7 +13,7 @@ from poascan import keysafe as K
 import keyscan as S
 g = str(uuid.uuid4()); G = g.upper()
 
-slots = [f"https://minepoa.com/api/hosted/me?key={g}", f"/lableak/.well-known/agentconnect/join?guid={g}&vault=1", f"x?token={G}",
+slots = [f"https://minepoa.com/api/hosted/me?key={g}", f"/lableak/.well-known/agentconnect/join?guid={g}", f"x?token={G}",
          f"X-Api-Key: {g}", f'{{"api_key": "{g}"}}', f"{{'key': '{g}'}}", f'"token":"{g}"', f"Authorization: Bearer {g}", f"auth_token={g}"]
 check("has_key: a GUID in every credential slot", all(K.has_key(t) for t in slots))
 check("redact: the GUID is gone from every slot, the slot name stays", all(g not in K.redact(t).lower() and K.REDACTED in K.redact(t) for t in slots))

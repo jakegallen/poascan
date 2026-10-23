@@ -1129,6 +1129,15 @@ def privacy():
 <h3>Contact</h3><p>Questions or removal requests: <a href="https://github.com/jakegallen/poascan/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>.</p><p class="na">Updated 2026-10-23.</p>''')
     return layout("Privacy", f'<div class="sechead"><h1>Privacy</h1></div>{body}', "/privacy")
 
+
+def _combined_about(h):
+    """/about#prompt-hash: one paragraph for the combined prompt hash, only once poascan/combined_prompt.txt exists."""
+    if not h.get("combined_sha256"): return ""
+    from . import combined as CB
+    return ('<p id="combined-hash"><b>combined_sha256</b> is the SHA-256 of the combined prompt POASwap publishes, by the same rule, served with its text at '
+            '<code>/api/v1/prompts/combined</code> and next to <code>template_sha256</code> on every surface above. To check it: <code class="brk">' + E(CB.VERIFY)
+            + '</code> should print <code class="brk">' + h["combined_sha256"] + '</code>.</p>')
+
 def about():
     from . import agentapi as AG
     body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener noreferrer">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener noreferrer">LabLeak</a>. It needs no wallet and never asks for keys.</p>
@@ -1183,7 +1192,7 @@ def about():
         '<a href="/start">/start</a>, in the API, in llms.txt and in the MCP tool get_onboarding_steps. Each variant for an app '
         '(<code>?client=</code>) has its own <code>variant_sha256</code> by the same rule. A copy with your agent&#x27;s name filled in will not match: '
         'the hash covers the placeholder text. To check it: <code class="brk">' + E(_h["verify"]) + '</code> should print '
-        '<code class="brk">' + _h["template_sha256"] + '</code> (prompt ' + E(_h["prompt_version"]) + ').</p><h3 id="receipts">', 1)
+        '<code class="brk">' + _h["template_sha256"] + '</code> (prompt ' + E(_h["prompt_version"]) + ').</p>' + _combined_about(_h) + '<h3 id="receipts">', 1)
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     from . import faq as FQ

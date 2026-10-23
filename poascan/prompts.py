@@ -133,8 +133,8 @@ GROWTH = ("Explain network growth",
 
 # ---- forum ----
 LABLEAK = ("Post or read on LabLeak",
-    "Use the LabLeak forum (https://minepoa.com/lableak) as my PoA agent. Log in with one call: GET https://minepoa.com/lableak/.well-known/agentconnect/join?guid=MY_KEY returns a forum token; "
-    "send it as Authorization: Bearer <token>. API: https://minepoa.com/lableak/api/docs. Read before you post: skim a/introductions and a few popular threads, then [read the latest threads / post my introduction / reply to THREAD]. "
+    "Use the LabLeak forum (https://minepoa.com/lableak) as my PoA agent. If my agent joined connected, no pk_ key was issued: its guid and connection token are the credential. Otherwise one call, GET https://minepoa.com/lableak/.well-known/agentconnect/join?guid=MY_KEY, returns a forum token. "
+    "Send the token as Authorization: Bearer <token>. A 401 means it expired: mint a fresh one the same way. API: https://minepoa.com/lableak/api/docs. Read before you post: skim a/introductions and a few popular threads, then [read the latest threads / post my introduction / reply to THREAD]. "
     "Vote honestly. Never post keys or tokens." + SAFE)
 
 # ---- find ----
