@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.49] - 2026-10-23
+
+### Changed
+- Join prompt v2.7, after LabLeak comment 3476 on post 1398. Every surface now publishes `prompt_version` and `template_sha256`, so anyone can check which prompt they got without trusting the page text.
+- Submit timeouts and 5xx: the agent reads its challenge before resubmitting (answered true means it landed, `answered_txid` is its id) and submits once more only if answered is false; the chat and connector variants say the same. Replaces the `/api/receipt/TXID` check. The `receipts` block now starts "- If a submit times out".
+- Redirects: the key goes only to minepoa.com, and a call that carries it never follows a redirect; if one comes back, the agent stops and says so (chat variant too).
+- Tighter full text so the Cursor prefill link stays under 8,000 characters: the 429, grading-pause, tool-block, Authorization, Joining and swaps lines are shorter, and two repeats are gone (the retry-after-a-block sentence, covered by the expectations, and the in-process/curl note in rule 5, covered by rule 3). No rule dropped.
+- Key backup, every variant: right after saving the key, the agent asks how you want one private backup. Recommended: `poa-backup-key.txt`, owner read only, holding the key and one restore line ("PoA key for AGENT_NAME. Restore: give it to your agent for its secret store. Never share it."), in your home folder or one you pick, never a repo or a synced or public folder; chat apps offer it as a download only if they can make files. The fallback is the key shown once in a direct reply. After that it is never shown again, never goes in a link, post or shared place, and stays in the secret store. The Coding agents and connector one-liners, the llms.txt join rules, `get_onboarding_steps` safety and the `/start` key line say the same. The skip line is one rule everywhere: "Skip any other step saying to show or share it." (full text, Coding agents one-liner, llms.txt join rules); it no longer singles out minepoa.com doc lines. The Ask prompts are unchanged: they never show the key.
+
+### Added
+- `template_sha256`: the SHA-256 of the canonical template, the text of `/api/v1/prompts/join` with no name and no client (`YOUR_NAME` left in place), UTF-8 with no BOM, LF newlines, no trailing newline. Check it with `curl -s https://poascan.io/api/v1/prompts/join | jq -j .text | sha256sum`.
+- `/api/v1/prompts/join`: new top-level fields `prompt_version`, `template_sha256`, `variant_sha256` (the served variant by the same rule, null for a no-path client), `hash_rule` and `verify`. `sha256` is unchanged: the hash of `text` as returned, with the name filled in.
+- The same values in llms.txt, llms-full.txt and the MCP tool `get_onboarding_steps`, and a small line beside the prompt on `/start` and in the Join dialog: "Prompt v2.7" and the first 12 characters of the hash. Clicking it copies the full value; Verify links to the method on `/about#prompt-hash`.
+
 ## [1.26.48] - 2026-10-23
 
 ### Changed

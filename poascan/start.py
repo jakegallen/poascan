@@ -12,8 +12,9 @@ WALLET_NOTE = ("Needs Node 20.18+ (macOS: brew install node; Linux: nvm install 
                "Before reading: emblemai profile inspect NAME must show Credentials: present, else stop. One attempt; ask before creating a new wallet.")
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
 PAY = "Never send payment outside the network."
-KEY_RULE = ("The PoA key never appears in plaintext: the agent stores it in the OS secret store (or its own; else a mode 600 file under umask 077), "
-            "never echoes it or puts it on a command line, and confirms it only as ••••LAST4 plus the store's name.")
+KEY_RULE = ("The agent stores the PoA key in the OS secret store (or its own; else a mode 600 file under umask 077) and offers one private backup "
+            "(a poa-backup-key.txt file, else the key once in a direct reply). After that it never appears in plaintext: never echoed or on a command line, "
+            "confirmed only as ••••LAST4 plus the store's name.")
 
 TITLE = "Start mining PoA"
 
@@ -53,6 +54,41 @@ WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" target="_blank" rel="no
 
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
+# v2.7 (LabLeak 1398, comment 3476): a published hash so a reader can check which prompt they got without trusting page text.
+# template_sha256 is the SHA-256 of the canonical template: the full variant exactly as GET /api/v1/prompts/join returns it
+# with no name and no client (YOUR_NAME left in place), UTF-8 with no BOM, LF newlines only, no trailing newline. Each
+# variant gets variant_sha256 by the same rule (connector and chat-browse via ?client=). A filled-in name changes the text,
+# so a copy with your agent's name will not match; the hash is of the placeholder text.
+HASH_RULE = ("SHA-256 of the UTF-8 text from /api/v1/prompts/join with no name and no client: YOUR_NAME left in place, "
+             "LF newlines, no BOM, no trailing newline.")
+VERIFY = "curl -s https://poascan.io/api/v1/prompts/join | jq -j .text | sha256sum"
+
+def text_sha256(t):
+    import hashlib
+    assert "\r" not in t and not t.startswith("\ufeff") and not t.endswith("\n"), "hash rule: LF only, no BOM, no trailing newline"
+    return hashlib.sha256(t.encode("utf-8")).hexdigest()
+
+def variant_sha256(variant="full"):
+    """SHA-256 of one variant with the YOUR_NAME placeholder (HASH_RULE); "full" is template_sha256."""
+    return text_sha256(prompt("YOUR_NAME", variant))
+
+def template_sha256():
+    return variant_sha256("full")
+
+def hash_fields(variant="full"):
+    """The v2.7 fields every surface carries: prompt_version, template_sha256, variant_sha256 (None without a prompt), the rule."""
+    from . import onboarding_prompt as OP
+    return dict(prompt_version=OP.VERSION, template_sha256=template_sha256(), variant_sha256=variant_sha256(variant) if variant else None,
+                hash_rule=HASH_RULE, verify=VERIFY)
+
+def phash():
+    """The small line beside the widget on /start and in the Join dialog: version and a 12 character hash prefix; the button
+    copies the full value (also in its title), Verify goes to the /about method."""
+    from . import onboarding_prompt as OP
+    h = template_sha256()
+    return (f'<p class="phash"><button type="button" data-phash="{h}" title="Template sha256 {h}" aria-label="Copy the template sha256">'
+            f'<span>Prompt {E(OP.VERSION)}</span><span>sha256 <code>{h[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>')
+
 # v2.3 check-in tags. Each /start chat choice carries data-tag; its copy buttons tag the two check-in URLs with it
 # (onboarding_prompt.tagged). The API, MCP and llms.txt serve the untagged text. POASwap renders the API prompt and may tag
 # it as "poaswap" itself (the API's checkin field says how). checkin.py accepts only these ids, plus "none" for untagged.
@@ -74,7 +110,7 @@ STEPS = [
     # v2.5: links are written whole. The register one carries the YOUR_NAME placeholder, so a crawler or HowTo reader that
     # fetched it could only hit a placeholder name, never a real one; key links carry YOUR_KEY.
     ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent opens it once."),
-    ("Store the key", None, "OS secret store only. Never shown; confirm as ••••LAST4."),
+    ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
     ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
     ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
@@ -84,7 +120,7 @@ STEPS = [
 def data():
     """Same content as /start, for the MCP onboarding tool and llms.txt."""
     from . import onboarding_prompt as OP
-    return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
+    return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, **hash_fields(), steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
                 wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
                 sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, "No invite or referral codes.", PAY],
                 url="https://poascan.io/start")
@@ -124,7 +160,7 @@ def _stamp():
     from .ui import stamp
     s = stamp(M.stamp_ts()); return s + " " if s else ""
 
-KEYLINE = "Your agent stores its key privately. Never paste it anywhere."
+KEYLINE = "Your agent keeps its key private and gives you one backup. Never share it."
 
 def notice():
     """v2.5 (LabLeak post 1398): the visible line next to every copy of a prompt, in the fetched HTML too."""
@@ -170,7 +206,7 @@ def api_join(name=None, client=None):
     else: nm = name
     if client is not None and client not in INTERNAL_CLIENTS: return _api_client(nm, client)
     t = prompt(nm)
-    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
+    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(), text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
                 # 1.26.44: base is null because the text has no check-ins (since v2.5). The v2.4 base stays as legacy_base, only
                 # for copies of older prompts still in chats; /j/ keeps answering those.
@@ -187,7 +223,7 @@ def _api_client(nm, cid):
     c = C.get(cid) if isinstance(cid, str) else None
     if not c: raise ValueError("client: one of the ids in " + CLIENTS_URL)
     v = C.variant(c)
-    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, client=cid, client_name=c["name"], tier=c["tier"], variant=v,
+    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(v), client=cid, client_name=c["name"], tier=c["tier"], variant=v,
                 open=c["open"] or None, connector=dict(c["connector"], url=C.MCP_URL) if c.get("connector") else None, clients_url=CLIENTS_URL,
                 source="https://poascan.io/start")
     if not v:
@@ -329,7 +365,7 @@ def page(page_fn, card=None, apps=None):
     pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
     c0 = chats()[0][0]
     go = (go_block(c0)
-          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice()
+          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice() + phash()
           + '<details class="stview" data-stview><summary>View prompt</summary>'
           # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so a crawler
           # that pulled the register link out of the page text could only hit the placeholder, never a fresh name each hour.

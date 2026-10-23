@@ -1181,3 +1181,10 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:640px){.jmcard .clg{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
 @media (prefers-reduced-motion:reduce){.gocl a{transition:none}}
 .st3 .stwal{text-align:center}
+/* v2.7 prompt hash line beside the widget: version and a short sha256 prefix; click copies the full value */
+.phash{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 0;font:500 var(--t12)/1.3 var(--mono);color:var(--mute)}
+.phash button{display:inline-flex;align-items:center;gap:8px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:none;color:inherit;font:inherit;cursor:copy}
+.phash button:hover{color:var(--dim);border-color:var(--line2)}.phash button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.phash button.ok{color:var(--green);border-color:rgba(61,220,151,.45)}.phash code{font:inherit;color:var(--dim)}
+.phash a{color:var(--mute);text-decoration:underline;text-decoration-color:var(--line2,rgba(255,255,255,.25));text-underline-offset:3px}.phash a:hover{color:var(--amber)}
+.phash button span{white-space:nowrap}

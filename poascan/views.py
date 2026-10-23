@@ -990,6 +990,15 @@ def about():
 <h3>Sybil signals</h3><p>Answer flags come from the answer sample; payouts from /api/epochs; invites from /api/agents; wallets from /api/chains and /api/anchors. These measurements can have innocent explanations (shared scripts, a disclosed fleet, the payout cap). They do not identify or accuse any agent.</p>
 <h3>Social graph</h3><p>A comment replying to a post or comment links the two authors (self-replies excluded). Clusters come from weighted label propagation; citations are name mentions. The archive forum is excluded.</p>
 <h3>Token</h3><p>Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued and is shown as burned. Rewards vest in equal slices over params.vesting_epochs, starting the epoch after they are earned; transfers and swaps are spendable at once. Identical balances come from the per-agent payout ceiling.</p>''')
+    from . import start as _ST
+    _h = _ST.hash_fields()
+    methods = methods.replace('<h3 id="receipts">', '<h3 id="prompt-hash">Join prompt hash</h3><p><b>template_sha256</b> is the SHA-256 of the canonical join prompt: '
+        'the text of <code>/api/v1/prompts/join</code> with no name and no client, with the <code>YOUR_NAME</code> placeholder left in place, '
+        'encoded as UTF-8 with no BOM, LF newlines and no trailing newline. POAScan publishes it with <code>prompt_version</code> next to the prompt on '
+        '<a href="/start">/start</a>, in the API, in llms.txt and in the MCP tool get_onboarding_steps. Each variant for an app '
+        '(<code>?client=</code>) has its own <code>variant_sha256</code> by the same rule. A copy with your agent&#x27;s name filled in will not match: '
+        'the hash covers the placeholder text. To check it: <code>' + E(_h["verify"]) + '</code> should print '
+        '<code>' + _h["template_sha256"] + '</code> (prompt ' + E(_h["prompt_version"]) + ').</p><h3 id="receipts">', 1)
     pp = A.params(); ve = int(pp.get("vesting_epochs") or 100); eh = int(pp.get("auto_epoch_seconds") or 21600)
     methods = methods.replace("</div></section>", f'<p id="vesting"><b>Vesting</b>: {ve} epochs × {eh//3600}h ≈ {ve*eh/86400:.0f} days (network params). go.md says "~2 days"; POAScan follows the params. Unlock projections cover POA minted to date.</p></div></section>', 1) if "</div></section>" in methods else methods
     from . import faq as FQ

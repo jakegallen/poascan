@@ -283,6 +283,9 @@ $$("[data-go]").forEach(function(go){var card=go.closest("[data-pcard]");if(!car
   var mp=r.closest(".morep");if(mp&&!mp.classList.contains("open")){var t=$("[data-more][aria-controls='"+mp.id+"']",card);if(t)t.click()}
   r.checked=true;setup();go.focus()});
  check();setup();if(nf)queue()});
+/* v2.7 prompt hash: the button copies the full template sha256 (also in its title) and says Copied for a moment */
+D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-phash]");if(!b)return;var s=$("code",b),o=s.textContent;
+ copyText(b.dataset.phash).then(function(ok){b.classList.add("ok");s.textContent=ok?"copied":b.dataset.phash.slice(0,12);setTimeout(function(){b.classList.remove("ok");s.textContent=o},1400)})});
 /* /start close: back if we came from this site, else home */
 var bk=$("[data-back]");if(bk){var goBack=function(){var r=D.referrer;try{if(r&&new URL(r).origin===location.origin&&history.length>1){history.back();return}}catch(_){}location.href="/"};
  bk.addEventListener("click",function(e){e.preventDefault();goBack()});
