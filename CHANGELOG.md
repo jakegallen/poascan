@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.21] - 2026-10-23
+
+### Security
+- CI (audit SC-008): every action in `.github/workflows/deploy.yml` is pinned to a full commit SHA: `actions/checkout` v4.4.0, `actions/setup-python` v5.6.0 and `superfly/flyctl-actions/setup-flyctl` v1.6 (was the `master` branch, in the job that holds the deploy token). No app, API or MCP change.
+
 ## [1.26.20] - 2026-10-23
 
 ### Changed
