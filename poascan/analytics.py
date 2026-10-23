@@ -112,11 +112,22 @@ def epoch_detail(n):
         if int(e["epoch"]) == n: return e
     return None
 
+AHEAD_MIN = 3   # distinct Agents whose answers carry the next epoch before that tag counts as the open epoch
+
 def open_epoch():
+    """The open epoch. Answers are tagged with the epoch they land in, so when the newest answers already carry the next
+    number (a close our /api/status or /api/epochs read hasn't caught up with yet), that number is the open epoch.
+    Its start is the previous close when we have that record, else the first answer tagged with it (start_estimated)."""
     rows = epoch_rows(); p = params(); st = status()
-    closed = st.get("epochs_closed", len(rows))
+    closed = max(int(st.get("epochs_closed") or 0), (rows[-1]["epoch"] + 1) if rows else 0)
     period = int(p.get("auto_epoch_seconds") or 21600)
-    last_close = rows[-1]["close_ts"] if rows else None
+    nxt = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE type='challenge' AND epoch=? AND ts > ?", (closed + 1, int(time.time()) - period))
+    ep = closed + 1 if nxt and nxt["n"] >= AHEAD_MIN else closed
+    last_close, est = (rows[-1]["close_ts"] if rows else None), False
+    if rows and rows[-1]["epoch"] != ep - 1:
+        t0 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='challenge' AND epoch=? AND ts > ?", (ep, int(time.time()) - 2 * period))["t"]
+        if t0: last_close, est = t0, True
+    closed = ep
     e0 = float(p.get("E0") or 1e9); halv = int(p.get("halving_epochs") or 720)
     pool = e0 / (2 ** (closed // halv))
     answers = db.q1("SELECT COUNT(*) AS n FROM txs WHERE type='challenge' AND ts > ?", (last_close or 0,))["n"] if last_close else None
@@ -126,7 +137,8 @@ def open_epoch():
     halt = grading_halt()
     return dict(epoch=closed, last_close=last_close, est_close=(last_close + period) if last_close else None,
                 period=period, pool=pool, answers=answers, graders=graders, graders_basis="grade-sealed senders since the last close",
-                graders_served_last=rows[-1].get("graders") if rows else None, grading_halted=bool(halt), grading_halt_notice=halt)
+                graders_served_last=rows[-1].get("graders") if rows else None, grading_halted=bool(halt), grading_halt_notice=halt,
+                start_estimated=est)
 
 HALT_ID_RX = re.compile(r"grading[-_ ]halt", re.I)
 HALT_MSG_RX = re.compile(r"\bgrading\b[^.]{0,40}?\bhalted\b", re.I)

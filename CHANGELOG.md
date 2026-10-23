@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.50] - 2026-10-23
+
+### Changed
+- `/api/v1/tx/{hash}`: when the node can't serve a tx (older answers often got a 503), POAScan returns its archived row with `found: true`, `source: "archive"` and a note, instead of `{"error": "HTTP 503"}`. Node answers carry `found: true, source: "node"`.
+- Unknown txs are a clean JSON 404 on `/api/v1/tx` and `/api/v1/receipt`: `{"error": "transaction not found", "found": false, "tx": ..., "hint": ...}` (`/tx` adds `node`: not_found or unavailable). `/receipt` used to say "unknown endpoint". A known tx that is not an answer is a 404 with `found: true, answer: false`. Bad routes still say "unknown endpoint".
+- Open epoch follows the ledger sooner: it moves to the next number once at least 3 distinct Agents have answers tagged with it, while our close count catches up. `open_epoch` adds `start_estimated` when the previous close record is not archived yet.
+- `meta.maintenance`: `reward_payouts` is split into `attestation_earnings` and `challenge_pool_payouts`. Challenge-pool payouts read paused while an active minepoa notice says so or grading is not open. The `/upgrade` og line and chips follow ("attestation earnings live" until both are live, then "rewards paying"). Readers that looked for `reward_payouts` in `working` should read the two new values.
+
+### Added
+- Receipts (`/api/v1/receipt`, `/api/v1/receipts`, MCP `get_answer_receipt`): `basis_state` (pending, settled, absent, or null before the epoch closes), `challenge_eligible`, `challenges_amount` and `paid_via_challenge_eligible`. The receipt Paid cell shows "challenge-eligible, not in basis" for that case. Method on `/about#receipts`.
+- Established history: a card on address pages, `GET /api/v1/address/{address}/established` and `established_history` in MCP `get_address`, built only from public close records (inputs, never the rule; hosted `/me` is the authority). Method on `/about#established`.
+- OpenAPI: `fill_usd` on `/api/v1/swaps` and `/api/v1/swaps/{offer_id}` is now described: "USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd." Docs only; the field is unchanged. llms-full.txt follows.
+- `tools/feedback_test.py` in CI.
+
 ## [1.26.49] - 2026-10-23
 
 ### Changed

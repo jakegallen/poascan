@@ -10,10 +10,11 @@ QUORUM_DEFAULT = 4
 def index():
     """Per answer txid: first/last close it sat in pending, its record there, and the close that settled it."""
     ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
-    out, credited = {}, {}
+    out, credited, elig, chal = {}, {}, {}, {}
     for e in ep:
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}
         credited[n] = set((e.get("rewards") or {}).keys())
+        elig[n] = set(b.get("challenge_eligible") or []); chal[n] = dict(e.get("challenges") or {})
         for t, p in (b.get("pending") or {}).items():
             r = out.setdefault(t, {}); r.setdefault("first", n); r["last"] = n
             r.update(since=p.get("since"), panel=len(p.get("panel") or []), kind=p.get("kind"),
@@ -26,7 +27,16 @@ def index():
                   "WHERE json_extract(json, '$.type') = 'grade-sealed'"):
         if r["a"] and r["f"]: seals.setdefault(r["a"], set()).add(r["f"])
     closes = [int(e.get("epoch", 0)) for e in ep]
-    return dict(rec=out, credited=credited, seals={k: len(v) for k, v in seals.items()}, last=closes[-1] if closes else None)
+    return dict(rec=out, credited=credited, elig=elig, chal=chal, seals={k: len(v) for k, v in seals.items()}, last=closes[-1] if closes else None)
+
+# basis_state (LabLeak 1375 c3176): where the answer sits in the close records. settled: in a close's basis.settled;
+# pending: in the latest close's basis.pending; absent: its epoch has closed and it is in neither (vanished from pending,
+# or never recorded); None: its epoch has not closed yet.
+BASIS = {"passed": "settled", "failed": "settled", "pending": "pending", "vanished": "absent", "unrecorded": "absent"}
+
+def _num(v):
+    try: return float(v)
+    except (TypeError, ValueError): return None
 
 def _detail(tid, fetch):
     try: return I.get_tx_detail(tid, allow_fetch=fetch)
@@ -66,6 +76,12 @@ def receipt(tid, fetch=False, row=None):
         if st["passed"] and author: paid = author in ix["credited"].get(st["close"], set()); paid_close = st["close"] if paid else None
         elif not st["passed"]: paid = False
     since = r.get("since") if r.get("since") is not None else ep
+    # The answer's own close, keyed on (author, epoch) in challenge_eligible and challenges, not on rewards (LabLeak 1370 c3269, c3502).
+    k = int(ep) if ep is not None else None
+    have = k is not None and k in ix["elig"] and author is not None
+    ce = (author in ix["elig"][k]) if have else None
+    ca = ix["chal"][k].get(author) if have else None
+    bs = BASIS.get(status)
     return dict(tx=tid, address=author, epoch=ep, accepted=True, final=bool((row or {}).get("final") or d.get("final")),
                 seed=body.get("seed"), submitted_at=ts, age_s=int(time.time() - ts) if ts else None,
                 closes_waited=(last - int(since)) if (last is not None and since is not None and status in ("pending", "vanished")) else None,
@@ -73,7 +89,9 @@ def receipt(tid, fetch=False, row=None):
                 seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q,
                 settled_close=st["close"] if st else None, passed=st["passed"] if st else None,
                 paid_close=paid_close, address_credited=paid, reward_attributable=None,
-                vanished=status == "vanished", last_pending_close=r.get("last"))
+                vanished=status == "vanished", last_pending_close=r.get("last"),
+                basis_state=bs, challenge_eligible=ce, challenges_amount=ca,
+                paid_via_challenge_eligible=(bs == "absent" and bool(ce) and (_num(ca) or 0) > 0) if have and bs else None)
 
 def for_address(a, limit=50):
     rows = db.q("SELECT id, type, from_addr, epoch, ts, final FROM txs WHERE from_addr=? AND type='challenge' ORDER BY ts DESC LIMIT ?", (a, limit))
@@ -99,6 +117,7 @@ def seals_txt(r):
     return f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span> <span class="dim">/ {q}</span>'
 
 def paid_txt(r):
+    if r.get("paid_via_challenge_eligible"): return f'E{r["epoch"]} <span class="dim">· challenge-eligible, not in basis</span>'
     if r["address_credited"] is True: return f'E{r["paid_close"]}'
     if r["passed"] is True: return f'No credit at E{r["settled_close"]}'
     if r["passed"] is False: return "No"
@@ -121,7 +140,7 @@ def list_html(rs):
     """Compact list: quorum sits in the header, unsettled rows leave Paid blank."""
     q = rs[0]["quorum"] if rs else None
     def sl(r): return UNK if r["seals"] is None else f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span>'
-    def pd(r): return '<span class="dim">·</span>' if r["passed"] is None else paid_txt(r)
+    def pd(r): return paid_txt(r) if r["passed"] is not None or r.get("paid_via_challenge_eligible") else '<span class="dim">·</span>'
     return table(["Answer", "Status", f"Seals / {q}" if q else "Seals", "Paid"],
                  [[f'<span class="ep dim">E{r["epoch"]}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 4, 4))}</a>',
                    status_tag(r), sl(r), pd(r)] for r in rs], cls="rcpt")

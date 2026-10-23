@@ -64,7 +64,12 @@ def api(path, qs):
         sql = "SELECT * FROM txs" + (" WHERE " + " AND ".join(w) if w else "") + " ORDER BY ts DESC LIMIT ? OFFSET ?"
         return db.q(sql, tuple(a) + (lim, off)), True
     m = re.match(r"^/api/tx/([0-9a-fA-F]{64})$", path)
-    if m: return upstream(lambda: I.get_tx_detail(m.group(1).lower()), "transaction not found"), False
+    if m: return tx_api(m.group(1)), False
+    m = re.match(r"^/api/address/(poa1\w+)/established$", path)
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        return dict(address=a, **G.established_history(a), method=AG.BASE + "/about#established"), False
     m = re.match(r"^/api/address/(poa1\w+)/(txs|assignments)$", path)
     if m:
         a, k = m.groups(); c = qs.get("cursor", [""])[0] or None
@@ -93,8 +98,10 @@ def api(path, qs):
         return dict(agent=a, addresses=LK.addresses(a)), False
     m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
     if m:
-        r = RC.receipt(m.group(1), fetch=True)
-        if not r: raise KeyError(path)
+        tid = m.group(1).lower(); r = RC.receipt(tid, fetch=True)
+        if not r:
+            if db.q1("SELECT 1 FROM txs WHERE id=?", (tid,)): raise NotFound("not an answer (challenge) tx", found=True, answer=False, tx=tid)
+            raise NotFound("transaction not found", found=False, tx=tid, hint=TX_HINT)
         return r, False
     if path == "/api/receipts":
         a = qs.get("address", [""])[0]
@@ -272,7 +279,8 @@ QS_RX = re.compile(r"\?[^\s\"']*")   # query strings (searches included) never r
 J_RX = re.compile(r"(?<= )/j(?:/[^\s\"']*)?(?=[\s\"']|$)")   # check-in paths are logged as /j/[check-in] only
 
 class BadRequest(Exception): pass
-class NotFound(Exception): pass   # a known route with an unknown subject: 404 with the reason
+class NotFound(Exception):        # a known route with an unknown subject: 404 with the reason (plus extra JSON fields)
+    def __init__(self, msg, **extra): super().__init__(msg); self.extra = extra
 class TooMany(Exception):         # the per-client or global on-demand upstream budget is spent: 429 with Retry-After
     def __init__(self, msg, retry): super().__init__(msg); self.retry = max(1, int(retry or 1))
 class Unavailable(Exception): pass   # upstream busy or backing off and nothing stored: 503
@@ -285,6 +293,37 @@ def upstream(fn, missing):
     except I.Busy as e: raise Unavailable(str(e) or "upstream busy")
     if not (isinstance(d, dict) and d.get("id")): raise NotFound(missing)
     return d
+
+TX_HINT = "Not in POAScan's archive. A tx from the last few minutes may not be indexed yet; for your own answer, read /challenge answered_txid."
+
+def archived_tx(tid):
+    """A tx from POAScan's own archive (the txs row plus the sampled answer text), for when the node can't serve it.
+    Older answers (E5 to E10 before the restart) often get a 307 or 503 from the node's tx route. None when not archived."""
+    row = db.q1("SELECT * FROM txs WHERE id=?", (tid,))
+    if not row: return None
+    a = db.q1("SELECT text FROM answers WHERE id=?", (tid,))
+    body = {"epoch": row["epoch"]}
+    if a and a["text"]: body["answer"] = a["text"]
+    return dict(row, body=body, found=True, source="archive",
+                note="From POAScan's archive. Parents, nonce and signature are not archived; Source JSON on minepoa.com has them when the node serves this tx.")
+
+def tx_api(tid):
+    """/api/v1/tx/<hash>: the node's detail when it answers, else POAScan's archive, else a JSON 404 with found false.
+    A spent upstream budget or a busy node never turns an archived tx into an error."""
+    tid = tid.lower(); node = "unavailable"
+    try:
+        d = I.get_tx_detail(tid)
+        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, source="node")
+        node = "not_found"
+    except I.Missing: node = "not_found"
+    except I.Limited as e:
+        a = archived_tx(tid)
+        if a: return a
+        raise TooMany(str(e), e.retry)
+    except I.Busy: pass
+    a = archived_tx(tid)
+    if a: return a
+    raise NotFound("transaction not found", found=False, tx=tid, node=node, hint=TX_HINT)
 
 class H(BaseHTTPRequestHandler):
     timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
@@ -665,7 +704,7 @@ class H(BaseHTTPRequestHandler):
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
                 try: data, is_list = api(p, qs)
-                except NotFound as e: return self.send(404, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
+                except NotFound as e: return self.send(404, json.dumps(dict({"error": str(e)}, **getattr(e, "extra", {}))), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
                 except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
                 except TooMany as e: return self.send(429, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": str(e.retry), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})

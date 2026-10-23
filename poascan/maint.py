@@ -64,12 +64,42 @@ def hosted_state():
     if not st: return "paused"
     return "paused" if "paused" in st else "planned" if "planned" in st else "back"
 
+# Payouts, split the way minepoa's notices split them (2026-10-22-grading-halted: "attestation earnings fully LIVE",
+# "grading + challenge-pool payouts paused until further notice"; 2026-10-22-restored: "grading + pool payouts resume after ...").
+POOL_PAUSED_RX = re.compile(r"pool payouts?\b[^.]*\b(?:paused|halted|resume after)", re.I)
+ATTEST_PAUSED_RX = re.compile(r"attestation earnings?\b[^.]*\b(?:paused|halted)", re.I)
+
+def _active_notices():
+    d = db.get_blob("notices")[0]
+    if not isinstance(d, dict): return []
+    now = time.time()
+    return [x for x in d.get("active") or [] if isinstance(x, dict) and not (isinstance(x.get("expires_ts"), (int, float)) and x["expires_ts"] < now)]
+
+def pool_payouts():
+    """paused or live for challenge-pool payouts: paused while an active notice says so, or while grading is not open
+    (answers only earn from the pool once graded, so with grading paused the pool can't pay them)."""
+    from . import hosted as R
+    if any(POOL_PAUSED_RX.search(str(x.get("msg") or "")) for x in _active_notices()): return "paused"
+    return "live" if R.state("grading") == "open" else "paused"
+
+def attestation_earnings():
+    """live unless an active notice says attestation earnings are paused."""
+    return "paused" if any(ATTEST_PAUSED_RX.search(str(x.get("msg") or "")) for x in _active_notices()) else "live"
+
 # Only the hosted mining paths pause; self-custody miners (POST /api/submit plus /api/receipt) keep working.
 def paused():
     from . import hosted as R
-    return (["hosted_mining"] if hosted_state() == "paused" else []) + ([] if R.state("grading") == "open" else ["grading"]) + ([] if join_open() else ["onboarding"])
-def working(): return (["onboarding"] if join_open() else []) + ["self_custody_mining", "epoch_closes", "reward_payouts", "balances", "explorer"]
-PAUSED = ["hosted_mining", "grading"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "reward_payouts", "balances", "explorer"]   # defaults
+    return ((["hosted_mining"] if hosted_state() == "paused" else []) + ([] if R.state("grading") == "open" else ["grading"]) + ([] if join_open() else ["onboarding"])
+            + (["challenge_pool_payouts"] if pool_payouts() == "paused" else []) + (["attestation_earnings"] if attestation_earnings() == "paused" else []))
+def working():
+    return ((["onboarding"] if join_open() else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
+            + (["challenge_pool_payouts"] if pool_payouts() == "live" else []) + ["balances", "explorer"])
+PAUSED = ["hosted_mining", "grading", "challenge_pool_payouts"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "attestation_earnings", "balances", "explorer"]   # defaults
+
+def payouts_phrase():
+    """og/strip wording for payouts, from the same two states."""
+    a, p = attestation_earnings(), pool_payouts()
+    return "rewards paying" if a == p == "live" else "attestation earnings live" if a == "live" else "challenge-pool payouts live" if p == "live" else "payouts paused"
 
 # Copy, one place. Joining wording follows join_open(); never hard-code it elsewhere.
 def join_line():
@@ -226,9 +256,9 @@ def og_desc():
         bal = ", balances intact" if r["supply_intact"] else ""
         return f'{lead}: checkpoint {r["checkpoint"]:,}{bal}. {tail} Live status on POAScan.'.replace(". .", ".").replace("  ", " ")
     hs = hosted_state(); js = join_state()
-    if hs == "paused" and js == "paused": return "Hosted mining and joining paused for network upgrades, rewards paying. Live status on POAScan."
+    if hs == "paused" and js == "paused": return f"Hosted mining and joining paused for network upgrades, {payouts_phrase()}. Live status on POAScan."
     h = {"planned": "Hosted mining pauses soon", "back": "Hosted mining is back"}.get(hs, "Hosted mining paused")
-    return f"{h} for network upgrades, joining {js}, rewards paying. Live status on POAScan."
+    return f"{h} for network upgrades, joining {js}, {payouts_phrase()}. Live status on POAScan."
 
 def seen(window=3600):
     """Answers and grade seals in our own feed over the last hour: what actually still lands."""

@@ -170,7 +170,7 @@ def upgrade_sig():
     from . import maint as M
     r = M.recovery()
     return str(abs(hash((M.stamp_ts(), tuple(sorted(M.route_display().items())), M.join_state(), r["checkpoint"], r["supply_intact"], M.strip_text(), M.seen()["answers"],
-                         r["epochs_closed"]))) % 10**10)
+                         r["epochs_closed"], M.pool_payouts(), M.attestation_earnings()))) % 10**10)
 
 def upgrade_view():
     """Hero (status, live time, routes meter, Working and Still paused) plus four tiles. Everything here is live."""
@@ -190,8 +190,11 @@ def upgrade_view():
     if A.freshness()["state"] != "stale": ok.append("Explorer live")
     if M.join_state() == "open": ok.append("Joining open")
     ok.append("Self-custody mining")
+    if M.attestation_earnings() == "live": ok.append("Attestation earnings")
+    if M.pool_payouts() == "live": ok.append("Challenge-pool payouts")
     ok += [f'{rt[k]["label"]} {"open" if ds[k] == "open" else "responding"}' for k in back]
     wait = [rt[k]["label"] for k in rt if ds[k] == "paused"] + [f'{rt[k]["label"]} (not read yet)' for k in rt if ds[k] == "unknown"]   # slow routes are not paused
+    wait += (["Challenge-pool payouts"] if M.pool_payouts() == "paused" else []) + (["Attestation earnings"] if M.attestation_earnings() == "paused" else [])
     slow = [k for k in rt if ds[k] == "slow"]
     if M.join_state() == "paused": wait.append("Joining")
     grp = (f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>'

@@ -173,7 +173,7 @@ def server():
               and day.get("edges", {}).get("sjc", 0) >= 2 and day.get("campaigns") == {"other": 1})
         check(f"funnel {day.get('funnel')}", day.get("funnel", {}).get("start_views_human") == 1 and day.get("funnel", {}).get("start_copies") == 1
               and day.get("funnel", {}).get("registry_shows") == 1)
-        check(f"health {day.get('health', {}).get('not_found')}", day.get("health", {}).get("not_found") == {"other": 1, "epochs": 1} and "home" in day.get("health", {}).get("response_ms", {}))
+        check(f"health {day.get('health', {}).get('not_found')}", day.get("health", {}).get("not_found") == {"other": 1, "epochs": 1, "api": 1} and "home" in day.get("health", {}).get("response_ms", {}))
         c, _, b = req(base, "/ops/visits"); check("/ops/visits without the token is still 404", c == 404 and b"days" not in b)
         c, _, pv = req(base, "/privacy"); pv = pv.decode()
         check("/privacy lists the new counts, never search text, no 'not sold' claim, no em dash", c == 200 and "Daily feature counts." in pv and "Never the search text." in pv

@@ -606,7 +606,8 @@ def maintenance(base, root, env, check):
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
     check("maintenance: meta.maintenance, summary pill and MCP get_indexer_status carry it",
-          m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["hosted_mining", "grading"] and m.get("join_open") is True
+          m.get("active") is True and m.get("parked_checkpoint") == 24371 and m.get("post_id") == 1357 and m.get("paused") == ["hosted_mining", "grading", "challenge_pool_payouts"] and m.get("join_open") is True
+          and "attestation_earnings" in m.get("working", []) and "reward_payouts" not in m.get("working", [])
           and "self_custody_mining" in m.get("working", []) and m.get("surfaces_source") == "manual" and "surfaces" in m
           and sm.get("pill", {}).get("state") == "up" and sm["pill"].get("href") == "/upgrade"
           and (sc.get("maintenance") or {}).get("active") is True and "answers" in (sc["maintenance"].get("seen_last_hour") or {}) and sc.get("pill", {}).get("label") == "Upgrading")
@@ -618,7 +619,7 @@ def maintenance(base, root, env, check):
     c, up = req(base + "/upgrade"); up = up.decode()
     check("maintenance: /upgrade serves the card with its own title, description, canonical and OG image",
           c == 200 and "<title>Network upgrade · POAScan</title>" in up and 'class="uph"' in up and '<link rel="canonical" href="https://poascan.io/upgrade">' in up
-          and 'property="og:title" content="Network upgrade · POAScan"' in up and "Hosted mining paused for network upgrades, joining open, rewards paying" in up
+          and 'property="og:title" content="Network upgrade · POAScan"' in up and "Hosted mining paused for network upgrades, joining open, attestation earnings live" in up
           and ('og:image" content="https://poascan.io/og/upgrade.png"' in up or not _og_ok()) and 'name="twitter:title" content="Network upgrade · POAScan"' in up)
     c, png = req(base + "/og/upgrade.png"); check("maintenance: /og/upgrade.png is a PNG", c == 200 and png[:4] == b"\x89PNG")
     r = subprocess.run([sys.executable, "-c", JOIN_CHECK], cwd=root, env=dict(env, POASCAN_JOIN_OPEN="0"), capture_output=True, text=True)

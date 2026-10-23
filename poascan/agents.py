@@ -468,6 +468,46 @@ def profile(addr):
                 family=fam, label=lab)
 
 
+def established_history(addr):
+    """Public inputs behind an address's ESTABLISHED standing, from close records POAScan already archives. Inputs only:
+    minepoa decides standing and publishes only the changes (basis.established_after / established_removed); hosted /me
+    is the authority. Every count is over closes we have; window is the last estab_ttl closes up to each close."""
+    ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
+    pp = A.params(); ttl = int(pp.get("estab_ttl") or 6)
+    ans = answerers(); rb = A.rewards_by_addr().get(addr, {})
+    passed, settled, seated = collections.Counter(), collections.Counter(), set()   # seated: closes where it held a grading seat
+    for n, _, au, ok, jury in settled_records():
+        if au == addr: settled[n] += 1; passed[n] += 1 if ok else 0
+        if any(j.get("grader") == addr for j in jury): seated.add(n)
+    changes, listed = [], None
+    for e in ep:
+        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
+        if (b.get("graders_served", {}) or {}).get(addr): seated.add(n)
+        ch = "added" if addr in (b.get("established_after") or []) else "removed" if addr in (b.get("established_removed") or []) else None
+        if not ch: continue
+        w = range(n - ttl + 1, n + 1)
+        changes.append(dict(epoch=n, close_ts=int(e.get("ts") or 0) or None, change=ch, answered=[k for k in w if addr in ans.get(k, ())],
+                            passed=sum(passed[k] for k in w), settled=sum(settled[k] for k in w), seated=[k for k in w if k in seated]))
+        listed = changes[-1]
+    last = int(ep[-1].get("epoch", 0)) if ep else None
+    w = range(last - ttl + 1, last + 1) if last is not None else range(0)
+    trusted = addr in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
+    seat_eps = sorted(seated)
+    est = addr in A.established_set()
+    basis = ("trusted" if trusted else "listed" if listed and listed["change"] == "added" else
+             "seat" if est and seat_eps else "removed" if listed else "none")
+    answered = sorted(k for k, s in ans.items() if addr in s)
+    n_ans = db.q1("SELECT COUNT(*) AS n FROM txs WHERE from_addr=? AND type='challenge'", (addr,))["n"]
+    f = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=? OR to_addr=?", (addr, addr))["t"]
+    paid = sorted(k for k, v in rb.items() if v > 0)
+    return dict(established=est, basis=basis, basis_epoch=(listed or {}).get("epoch") if basis in ("listed", "removed") else (seat_eps[-1] if basis == "seat" else None),
+                first_seen_ts=f, answers=n_ans, epochs_answered=len(answered), first_answer_epoch=answered[0] if answered else None,
+                last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()),
+                epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,
+                window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
+                changes=changes[::-1], note="Inputs from public close records only. minepoa decides standing; your hosted /me is the authority.")
+
+
 def new_per_day():
     """New Agents per UTC day from POAScan's /api/status snapshots (agents_joined). The first day is partial."""
     last = {}
