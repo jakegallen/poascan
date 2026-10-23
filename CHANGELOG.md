@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.29] - 2026-10-23
+
+### Changed
+- /start: the Muse choice no longer shows the "Join only" tag. Muse stays in the top row with its normal button (copy prompt and open). `start.JOIN_ONLY`, the tag markup and the `.cltag` / `.cl.tagd` CSS are removed; stylesheet cache-buster v=91. The join prompt is unchanged (v2.2 already covers this with its capability check and tool block lines).
+
 ## [1.26.28] - 2026-10-23
 
 ### Fixed

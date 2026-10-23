@@ -179,11 +179,11 @@ try:
           and len(allr) == len(J.APPS) + 1 + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
     check("/start: one primary button for the first client: 'Copy prompt and open Claude' (short form at 390px) with the Auto pill",
           len(re.findall(r"data-go[ >]", m)) == 1 and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em>' in m)
-    tags = re.findall(r'<input type="radio" name="client" value="([^"]+)"[^>]*><span class="clb">(?:(?!</label>).)*?<em class="cltag">([^<]+)</em>', m)
-    check(f"/start: Muse stays in the top row with the join only tag on its choice, styled like the Auto pill; only JOIN_ONLY clients tagged {tags}",
-          S.JOIN_ONLY == ("Muse",) and tags == [("Muse", "Join only. Finish mining in an app that can run commands.")] and m.count('class="cltag"') == 1
-          and m.index('value="Muse"') < i_more and '<label class="cl tagd"><input type="radio" name="client" value="Muse"' in m
-          and ".cltag{" in open(os.path.join(ROOT, "static", "style.css")).read() and "Join only" not in m[m.index("data-go "):])
+    css = open(os.path.join(ROOT, "static", "style.css")).read()
+    check("/start: no Join only tag on any client; Muse stays in the top row with its normal choice, no tag markup or CSS left",
+          "Join only" not in m and "cltag" not in m and "tagd" not in m and not hasattr(S, "JOIN_ONLY") and not hasattr(S, "JOIN_ONLY_TAG")
+          and m.index('value="Muse"') < i_more and '<label class="cl"><input type="radio" name="client" value="Muse"' in m
+          and ".cltag" not in css and "tagd" not in css)
     check("/start: a quiet Copy prompt button next to it; no helper or join lines under the button; the fallback box is hidden",
           '</a><button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' in m and '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>' in m
           and "stjl" not in m and "Opens Claude" not in m and "starts earning once" not in m[m.index("data-go "):]

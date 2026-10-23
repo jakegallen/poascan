@@ -106,8 +106,6 @@ MORE_FIRST = ("Grok Bot",)                    # first under More, in order; the 
 # Chat-only clients that clearly can't make repeat requests to the hosted API: their choice carries a small tag, styled like
 # the Auto pill. Only Muse for now (its chat fetch does not repeat calls to minepoa.com/api/hosted). Add a name only when
 # that is clearly true; the prompt's own capability check (fetch go.md twice) covers every other client.
-JOIN_ONLY = ("Muse",)
-JOIN_ONLY_TAG = "Join only. Finish mining in an app that can run commands."
 LOCK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
         '<path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>')
 
@@ -152,14 +150,13 @@ def chats():
     rest = [x for n in MORE_FIRST for x in a if x[0] == n] + sorted((x for x in a if x[0] not in TOP + MORE_FIRST), key=lambda x: x[1] != "auto")
     return top, rest
 
-def _opt(value, shown, attrs, checked=False, tag=""):
+def _opt(value, shown, attrs, checked=False):
     from .join import label
-    t = f'<em class="cltag">{E(tag)}</em>' if tag else ""
-    return (f'<label class="cl{" tagd" if tag else ""}"><input type="radio" name="client" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
-            f'<span class="clb">{label(shown)}{t}</span></label>')
+    return (f'<label class="cl"><input type="radio" name="client" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
+            f'<span class="clb">{label(shown)}</span></label>')
 
 def _chat(n, k, b, p, checked=False):
-    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}"', checked, JOIN_ONLY_TAG if n in JOIN_ONLY else "")
+    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}"', checked)
 
 def clients():
     """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked."""
