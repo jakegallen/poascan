@@ -4,16 +4,16 @@ from . import config as C
 SAFE = "Never send payment outside the network."
 
 # Emblem Wallet CLI: npm @emblemvault/agentwallet (bin: emblemai); npm "repository" points at this repo.
-# Wallet steps follow POASwap's wording (main 6262068) (Oct 22 incident: 3.3.0 in --agent mode mints a new random
+# Wallet steps follow POASwap's wording (main 6262068; EMB as main 2452a02) (Oct 22 incident: 3.3.0 in --agent mode mints a new random
 # wallet when its profile has no password). Pinned CLI, no global install, backup first, file names only, always --profile.
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
-EMB = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai"   # pinned: 3.3.0's source was read for the Oct 22 incident
+EMB = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai"   # pinned: 3.3.0's source was read for the Oct 22 incident; --hustle-url: agenthustle.ai/api/chat 301s and fetch turns the POST into a GET (405)
 ADDR_CMD = 'EMBLEMAI --profile PROFILE --agent -m "List my wallet addresses as JSON: solana, evm. Addresses only."'   # --profile: a missing profile exits, never mints
 CHECK_CMD = "find ~/.emblemai ~/.emblem-vault -maxdepth 3 -name '.env*' -o -name metadata.json -o -name .emblem-vault 2>/dev/null; echo END"   # no globs
 BACKUP_CMD = "cp -a ~/.emblemai ~/.emblemai.backup-$(date +%Y%m%d-%H%M%S)"
 MIGRATED_CMD = "grep -c migratedFrom ~/.emblemai/profiles/default/metadata.json"   # metadata.json holds no secrets
 BACKUP_RULE = "Emblem backup: tell me only where the file is; never open, cat or print it."
-# Same strings as POASwap's start_prompt.json registration blocks (install, find_wallet, addresses) on main 6262068.
+# Same strings as POASwap's start_prompt.json registration blocks (install, find_wallet, addresses) on main 6262068; EMB as POASwap main 2452a02.
 W_INSTALL = "Only on my own computer: in a sandbox or container, stop and tell me. node -v under 20.18: stop, ask me to upgrade. Wallet CLI: only {emb} (EMBLEMAI below), never another version."
 W_FIND = ("Back up, then find my wallet by file names only. Never open, print, edit or delete anything in ~/.emblemai or ~/.emblem-vault. "
           "Never use -p, --password or EMBLEM_PASSWORD. If ~/.emblemai exists, back it up: {backup_cmd}; check the copy exists. "

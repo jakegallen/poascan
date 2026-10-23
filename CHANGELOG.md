@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.40] - 2026-10-23
+
+### Fixed
+- Emblem Wallet address lookup: agenthustle.ai/api/chat now 301s to emblemvault.ai/api/chat and fetch turns the POST into a GET (405), so the pinned CLI is `npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai` (as POASwap main 2452a02). It reaches the Add Emblem Wallet prompt (EMBLEMAI), the FAQ wallet answer and the `get_onboarding_steps` / llms `wallet` field (install and note).
+- walletsafe_test and smoke_test require --hustle-url https://emblemvault.ai on every emblemai --agent run. The join prompt is unchanged.
+
 ## [1.26.39] - 2026-10-23
 
 ### Changed

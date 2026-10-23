@@ -5,8 +5,8 @@ from html import escape as E
 
 GO, SKILL, MCP = "https://minepoa.com/go.md", "https://minepoa.com/skill.md", "https://minepoa.com/mcp"
 B = "https://minepoa.com"
-INSTALL = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai"   # pinned, no global install (swap/prompts.EMB; Oct 22 incident)
-WALLET_NOTE = "Back up ~/.emblemai first (cp -a), always pass --profile NAME, never -p or EMBLEM_PASSWORD, one attempt; ask before creating a new wallet."
+INSTALL = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai"   # pinned, no global install (swap/prompts.EMB; Oct 22 incident)
+WALLET_NOTE = "Back up ~/.emblemai first (cp -a), always pass --profile NAME and --hustle-url https://emblemvault.ai, never -p or EMBLEM_PASSWORD, one attempt; ask before creating a new wallet."
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
 PAY = "Never send payment outside the network."
 KEY_RULE = ("The PoA key never appears in plaintext: the agent stores it in the OS secret store (or its own; else a mode 600 file under umask 077), "
