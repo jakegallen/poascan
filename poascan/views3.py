@@ -199,5 +199,7 @@ def charts_body(rng=""):
     rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0] + [(e["ts"], 1, lk(e)) for e in up]
     ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
     chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
+    pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out
+    tn = "Txs" + (" / day" if rng == "all" else " / hour")
     return f'''<div class="stats three">{st}</div><div class="chips rng" role="group" aria-label="Range">{chips}</div>
-<div class="grid3 smalls">{card(ICON_BOT + "Agents", ac)}{card(ICON_USERS + "Holders", hc)}{card("Supply", sc)}{card("Txs" + (" / day" if rng == "all" else " / hour"), tc)}{card(ICON_CUBE + "Answers / epoch", ec)}{card("Milestones", ml, cls="mls")}</div>'''
+<div class="grid3 smalls">{pc(ICON_BOT + "Agents", "Agents", "agents", ac)}{pc(ICON_USERS + "Holders", "Holders", "holders", hc)}{pc("Supply", "Supply", "supply", sc)}{pc(tn, tn, "txs", tc)}{pc(ICON_CUBE + "Answers / epoch", "Answers / epoch", "answers", ec)}{card("Milestones", ml, cls="mls")}</div>'''

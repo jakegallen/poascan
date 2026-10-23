@@ -79,6 +79,8 @@ jobs:
         run: python tools/opsinternal_test.py
       - name: Signup check-ins and the private funnel (strict allowlist, 400 on keys, no IP or UA, logged without the path, /ops/funnel is 404 without the token, no upstream call)
         run: python tools/checkin_test.py
+      - name: Chart pop-out (?chart= and ?range= allowlist in app.js, strict /fragment/chart params, ranges only where the data reaches, milestone grouping, no upstream call, no entrance fade)
+        run: python tools/chartpop_test.py
 
   deploy:
     needs: test

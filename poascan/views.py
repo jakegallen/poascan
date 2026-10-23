@@ -181,8 +181,8 @@ def home():
     """Search, then the headline row (Total mined, Circulating supply, Agents, Agents / hr; method on /about#home), the open epoch,
     Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
-    kpis = "".join(spark_in(h[k], sp.get(sk)) for k, sk in (("mined_hero", "mined"), ("circ", "vest"), ("accounts", "accounts"), ("joins_hr", "joins_hr")))
-    more = spark_in(h["holders"], sp.get("holders")) + h["height"] + h["checkpoint"]
+    kpis = "".join(pop(spark_in(h[k], sp.get(sk)), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("joins_hr", "joins_hr", "joins")))
+    more = pop(spark_in(h["holders"], sp.get("holders")), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
@@ -515,8 +515,8 @@ def token():
     cum, run = {}, 0.0
     for r in ep: run += r["minted"] or 0; cum[r["close_ts"]] = run
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
-    stats = "".join([spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]),
-                     spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),
+    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]), "holders"),
+                     pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
     c = A.concentration(); ma = c["min_activity"]
     gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"

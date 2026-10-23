@@ -369,7 +369,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=93">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=94">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 <header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -382,7 +382,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.modal()}{_join.ask_modal()}
-<script src="/static/app.js?v=45" defer></script></body></html>'''
+<script src="/static/app.js?v=46" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -429,6 +429,18 @@ def spark_in(stat_html, points):
     """Put a sparkline under a stat card's value."""
     sv = spark(points)
     return stat_html[:-len("</div>")] + sv + "</div>" if sv and stat_html.endswith("</div>") else stat_html
+
+ICON_EXPAND = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+
+def pop(stat_html, key):
+    """Make a stat card open the chart pop-out (app.js, chartpop.py): the whole card is the button."""
+    if not stat_html.startswith('<div class="stat">'): return stat_html
+    return (f'<div class="stat cpt" data-chart="{key}" role="button" tabindex="0" aria-haspopup="dialog">'
+            f'<i class="cpi" aria-hidden="true">{ICON_EXPAND}</i>' + stat_html[len('<div class="stat">'):])
+
+def pop_btn(key, name):
+    """Expand button for a chart card header."""
+    return f'<button type="button" class="cpx" data-chart="{key}" aria-haspopup="dialog" aria-label="Expand {E(name)} chart" title="Expand">{ICON_EXPAND}</button>'
 
 def _fit(value):
     """Inline sizing hints: --nc number characters, --fx px taken by unit, ≈$ and gaps (12px mono is ~7.2px a character)."""

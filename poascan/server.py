@@ -9,6 +9,7 @@ from . import keysafe as KS
 from . import names as NM
 from . import opsinternal as OI
 from . import checkin as CK
+from . import chartpop as CP
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -600,6 +601,10 @@ class H(BaseHTTPRequestHandler):
                 h = V.live_rows(qs.get("t", [""])[0])
                 if h is None: return self.send(404, "", "text/plain")
                 return self.send(200, h, extra={"Cache-Control": "no-store"})
+            if path == "/fragment/chart":   # chart pop-out data (chartpop.py): POAScan's own archive only, strict params, cached 60 s
+                try: c, r, w = CP.parse(qs)
+                except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"Cache-Control": "no-store"})
+                return self.send(200, json.dumps(CP.payload(c, r, w), separators=(",", ":")), "application/json", {"Cache-Control": "public, max-age=60"})
             if path == "/fragment/upgrade":   # the live /upgrade view, refetched by app.js when the snapshot's upsig changes
                 if not MT.state()["active"]: return self.send(404, "", "text/plain")
                 return self.send(200, f'<div data-upview data-sig="{V2.upgrade_sig()}">{V2.upgrade_view()}</div>', extra={"Cache-Control": "no-store"})

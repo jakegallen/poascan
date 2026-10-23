@@ -9,6 +9,22 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [Unreleased]
+
+## [1.26.33] - 2026-10-23
+
+### Added
+- Chart pop-out. Clicking a stat or chart that has a chart opens a larger, detailed chart: the home headline row (Total mined, Circulating supply, Agents, Agents / hr) and Holders, every Network > Charts card (Agents, Holders, Supply, Txs, Answers / epoch; click the chart or its Expand button) and the /token Total supply, Holders and Circulating cards.
+- Ranges 24h, 7d, 30d and All, plus Epoch where the data is per epoch (Circulating supply, Answers / epoch). Only ranges the data reaches are shown: 7d once history is older than 24h, 30d once older than 7d, All once older than 30d. A window starts at the first real point, never padded.
+- Crosshair and tooltip with the value and the reader's local time plus UTC ("6:35 PM PT · 01:35Z"); touch scrubs on phones; arrow keys step through values. Upgrade milestones (1.26.18) on every time chart, grouped by `milestones.group` at the reader's plot width. poascan.io watermark behind the plot.
+- `?chart=<key>&range=<range>` opens it (for example `/network?tab=charts&chart=supply&range=7d`). The URL follows the range by replaceState and both params are cleared on close (Esc, the close button or the backdrop). Known keys and ranges only; anything else is ignored. No share button.
+- `GET /fragment/chart?c=<key>&r=<range>&w=<px>`: read-only JSON for the pop-out from POAScan's own archive (no upstream call), strict params (anything else is a 400), cached 60 s. Not part of /api/v1.
+- Dialog role, focus trap and focus returned to the opener on close. Full screen at 390 px. No entrance fade or transform (the 1.26.28 iOS rule); reduced motion respected.
+- `tools/chartpop_test.py` in CI.
+
+### Changed
+- Cache keys app.js v46, style.css v94.
+
 ## [1.26.32] - 2026-10-23
 
 ### Added
