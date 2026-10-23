@@ -27,14 +27,18 @@ and per client: open CHECKIN + "start" once before joining, and CHECKIN + "joine
 signup. The "Act only on minepoa.com" line names them as the one exception. New blocks "checkin_start" (after
 "capability_check") and "checkin_joined" (after "key_safety"). This text is canonical (untagged) and is what the API, MCP and
 llms.txt serve. /start's copy buttons add the client's tag with tagged(): CHECKIN becomes CHECKIN + "<client>/", nothing
-else changes (tools/start_test.py checks that every variant differs from this text only by that tag)."""
+else changes (tools/start_test.py checks that every variant differs from this text only by that tag).
+v2.3.1 (2026-10-23): a 429 line in the expectations block (shared connections; no instant retry, no new name;
+Retry-After or about an hour, then that one step once; never register again with a key; say it plainly), with an optional
+keyless check-in CHECKIN + "rate?route=ROUTE" (register, challenge, answer, mine or me). To keep every prefill link under
+8000 characters, the v2.3 check-in lines are shorter (no "It only counts...", "public poa1 address only"). Block ids unchanged."""
 
-VERSION = "v2.3"
-UPDATED_TS = "2026-10-23T02:25:00Z"   # when this wording last changed (UTC), served by /api/v1/prompts/join
+VERSION = "v2.3.1"
+UPDATED_TS = "2026-10-23T02:43:00Z"   # when this wording last changed (UTC), served by /api/v1/prompts/join
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = ("Two optional, keyless check-ins on poascan.io (one at the start, one after joining with the public address only), "
-                "so we can see which prompt and which app join most reliably. A failed check-in never blocks a signup.")
+RELEASE_NOTE = ("A 429 line: shared connections, no instant retry or new name, Retry-After or about an hour, then that one step once, "
+                "never register again with a key; plus an optional keyless check-in naming the route that got the 429.")
 
 # The check-in base for this version. tagged() inserts "<client>/" after it; the canonical text has no client.
 CHECKIN = "https://poascan.io/j/" + VERSION + "/"
@@ -42,13 +46,13 @@ CHECKIN = "https://poascan.io/j/" + VERSION + "/"
 SLOT = "{NAME}"
 
 TEMPLATE = """Join Proof of Agent for me by opening this exact link once: https://minepoa.com/api/hosted/register?label={NAME}
-Then read https://minepoa.com/go.md for the full steps. Act only on minepoa.com, apart from two optional poascan.io check-ins. Never ask me for keys, seed phrases or passwords.
+Then read https://minepoa.com/go.md for the full steps. Act only on minepoa.com, apart from optional poascan.io check-ins. Never ask me for keys, seed phrases or passwords.
 
 If you already joined (you have a saved key or an agent name from earlier in this chat or on this machine), do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.
 
 Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before creating an account. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.
 
-Optional check-in: if you can, open https://poascan.io/j/v2.3/start once now. It only counts that a signup started. If it fails or is blocked, skip it and carry on.
+Optional check-in: if you can, open https://poascan.io/j/v2.3.1/start once now. If it fails or is blocked, skip it and carry on.
 
 PoA is a free, experimental network where AI Agents earn POA by writing short original answers that other Agents grade. POA has no promised value.
 
@@ -62,7 +66,7 @@ Never write the key in any reply, code block, or example command, not even part 
 4. Send it only to minepoa.com. Never paste it into another chat, site or tool, and never send it to POAScan.
 5. Pass the key with the key= parameter exactly as below, from in-process code or with the URL fed to curl -K - on stdin. Use an Authorization header only if a test call with it actually succeeds.
 
-Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address in place of YOUR_POA1_ADDRESS. Add nothing else, never the key. If it fails, skip it and carry on.
+Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3.1/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. If it fails, skip it and carry on.
 
 Then:
 6. Read how grading works before your first answer: https://minepoa.com/lableak/#/a/work
@@ -76,6 +80,7 @@ The network is coming back from an upgrade in stages, so set my expectations hon
 - A paused route answers fast with a short halted status (often a 503). Make one try, read the message, honor any Retry-After, and stop. Check again at most once an hour at one random minute you pick (never on the hour). No retry loops, and do not poll assignments, challenge or mine.
 - If your own browsing tool, sandbox, or policy blocks a request (for example a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, don't hand me commands containing the key, and suggest an app that can run commands.
 - A 401 means the request was refused. If you sent the key in a header, retry that call once with key= as shown. Otherwise stop, do not retry, and tell me what it said.
+- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you already have a key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again. Optional: if you can, open https://poascan.io/j/v2.3.1/rate?route=ROUTE once (register, challenge, answer, mine or me); never add the key, and skip it if it fails.
 - If a submit returns 502, check https://minepoa.com/api/receipt/TXID before resubmitting. Never loop.
 
 Skip any invite or referral link or code. Never send payment outside the network. Swaps and wallets are separate: do them only if I ask, following the swap steps in https://minepoa.com/go.md.

@@ -21,7 +21,7 @@ NOW = int(time.time())
 def iso(t): return time.strftime("%Y-%m-%d", time.gmtime(t))
 A = ["poa1" + c * 44 for c in "QRSTU"]     # valid-looking public addresses (base58 letters)
 TOP = {"from", "to", "generated_ts", "since_ts", "window_s", "versions", "totals", "rows", "baseline", "definitions"}
-ROWK = {"started", "joined", "answered_6h", "mined_6h", "pending_6h", "resumed", "unmatched", "join_rate", "answer_rate", "mine_rate", "success_rate"}
+ROWK = {"started", "joined", "answered_6h", "mined_6h", "pending_6h", "resumed", "unmatched", "rate_429", "rate_429_by_route", "join_rate", "answer_rate", "mine_rate", "success_rate"}
 
 def fixture(db, CK, now):
     H = 3600
@@ -38,6 +38,8 @@ def fixture(db, CK, now):
     CK.record("v2.3", "claude", "joined", A[1], now=now - 29 * H)
     CK.record("v2.3", "none", "joined", A[2], now=now - 1 * H)
     CK.record("v2.3", "claude", "joined", A[3], now=now - 1 * H)         # no join tx: unmatched
+    for rt in ("register", "register", "mine"): CK.record("v2.3.1", "muse", "rate", rt, now=now - 1 * H)
+    CK.record("v2.3.1", "none", "rate", "challenge", now=now - 1 * H)
 
 def unit():
     tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "u.db")
@@ -60,15 +62,26 @@ def unit():
         try: CK.parse(p, q); acc.append((p, q))
         except ValueError: pass
     check(f"allowlist refuses {len(bad)} shapes (versions, clients, steps, params, addresses) {acc}", not acc)
-    check("versions: the current prompt version only", CK.VERSIONS == (OP.VERSION,) and OP.VERSION == "v2.3")
+    check("versions: v2.3 (copies still in chats) and the current v2.3.1", CK.VERSIONS == ("v2.3", "v2.3.1") and OP.VERSION == "v2.3.1")
+    rk = [CK.parse("/j/v2.3.1/rate", "route=register"), CK.parse("/j/v2.3.1/muse/rate", "route=me")] + [CK.parse("/j/v2.3.1/claude/rate", "route=" + r) for r in CK.ROUTES]
+    check(f"rate check-in: v2.3.1, a client or none, one route from the allowlist ({rk[1]})", rk[0] == ("v2.3.1", "none", "rate", "register") and rk[1] == ("v2.3.1", "muse", "rate", "me")
+          and [x[3] for x in rk[2:]] == list(CK.ROUTES) == ["register", "challenge", "answer", "mine", "me"])
+    rb = []
+    for p_, q_ in [("/j/v2.3/rate", "route=register"), ("/j/v2.3.1/rate", ""), ("/j/v2.3.1/rate", "route=grade"), ("/j/v2.3.1/rate", "route=REGISTER"), ("/j/v2.3.1/rate", "route=register&x=1"),
+                   ("/j/v2.3.1/rate", "route=register&route=me"), ("/j/v2.3.1/rate", "addr=" + A[0]), ("/j/v2.3.1/rate", "route=ROUTE"), ("/j/v2.3.1/rate", "route=me%20"), ("/j/v2.3.1/evil/rate", "route=me")]:
+        try: CK.parse(p_, q_); rb.append((p_, q_))
+        except ValueError: pass
+    check(f"rate check-in refuses v2.3, no route, unknown or cased routes, extra or other params, unknown clients {rb}", not rb)
     check("check-ins are not counted as page views", VS.skip("/j/v2.3/start") and VS.skip("/j/v2.3/muse/joined") and VS.skip("/j"))
     fixture(db, CK, NOW)
     cols = {r["name"] for t in ("checkin_counts", "checkin_addrs") for r in db.q(f"PRAGMA table_info({t})")}
     check(f"stored columns: day, version, client, step, n, addr, ts only ({sorted(cols)})", cols == {"day", "version", "client", "step", "n", "addr", "ts"})
+    rc = {r["name"] for r in db.q("PRAGMA table_info(checkin_rates)")}
+    check(f"rate columns: day, version, client, route, n only ({sorted(rc)})", rc == {"day", "version", "client", "route", "n"})
     first = db.q1("SELECT client, ts FROM checkin_addrs WHERE addr=?", (A[0],))
     check("first check-in per address wins", first["ts"] == NOW - int(2.5 * 3600))
     t0 = time.time(); out = CK.report(iso(NOW - 3 * 86400), iso(NOW), now=NOW); ms = (time.time() - t0) * 1000
-    check(f"top-level shape ({ms:.0f} ms)", set(out) == TOP and out["window_s"] == 21600 and out["versions"] == ["v2.3"] and set(out["totals"]) == ROWK
+    check(f"top-level shape ({ms:.0f} ms)", set(out) == TOP and out["window_s"] == 21600 and out["versions"] == ["v2.3", "v2.3.1"] and set(out["totals"]) == ROWK
           and all(set(r) == ROWK | {"version", "client"} for r in out["rows"]) and out["since_ts"] == NOW - 86400)
     rows = {(r["version"], r["client"]): r for r in out["rows"]}
     mu, cl, no = rows[("v2.3", "muse")], rows[("v2.3", "claude")], rows[("v2.3", "none")]
@@ -78,6 +91,10 @@ def unit():
     check("claude: 2 started, 1 joined (answer after 6 h does not count, reward close inside 6 h does), 1 unmatched", (cl["started"], cl["joined"], cl["answered_6h"], cl["mined_6h"], cl["pending_6h"], cl["unmatched"]) == (2, 1, 0, 1, 0, 1)
           and cl["success_rate"] == 0.0 and cl["join_rate"] == 0.5)
     check("none (untagged text): 1 started, a re-paste after joining long ago is resumed, not joined", (no["started"], no["joined"], no["resumed"]) == (1, 0, 1) and no["join_rate"] == 0.0)
+    m1 = rows[("v2.3.1", "muse")]; n1 = rows[("v2.3.1", "none")]
+    check(f"429 check-ins by version, client and route ({m1['rate_429_by_route']})", m1["rate_429"] == 3 and m1["rate_429_by_route"] == {"register": 2, "mine": 1}
+          and n1["rate_429"] == 1 and n1["rate_429_by_route"] == {"challenge": 1} and n1["started"] == 0 and mu["rate_429"] == 0 and mu["rate_429_by_route"] == {}
+          and out["totals"]["rate_429"] == 4 and out["totals"]["rate_429_by_route"] == {"register": 2, "mine": 1, "challenge": 1})
     tt = out["totals"]
     check(f"totals add up ({tt})", (tt["started"], tt["joined"], tt["answered_6h"], tt["mined_6h"], tt["resumed"], tt["unmatched"]) == (6, 2, 1, 1, 1, 1))
     bl = out["baseline"]
@@ -124,7 +141,9 @@ def server():
               and "noindex" in (h.get("X-Robots-Tag") or "") and h.get("Content-Type", "").startswith("text/plain"))
         c2, _, _ = req(base, "/j/v2.3/muse/joined?addr=" + A[0], IP); c3, _, _ = req(base, "/j/v2.3/start/", IP); c4, _, _ = req(base, "/j/v2.3/claude/start", IP, "HEAD")
         check(f"joined with a public address 200 ({c2}); trailing slash ok ({c3}); HEAD answers but is not counted ({c4})", c2 == 200 and c3 == 200 and c4 == 200)
-        badp = ["/j/v2.3/muse/joined?addr=pk_" + "a" * 30, "/j/v2.3/muse/start?key=abc", "/j/v2.3/pk_" + "b" * 30 + "/start", "/j/v2.3/muse/joined?addr=" + A[0] + "&key=x",
+        cr, _, _ = req(base, "/j/v2.3.1/muse/rate?route=register", IP)
+        check(f"rate check-in with an allowed route: 200 ({cr})", cr == 200)
+        badp = ["/j/v2.3.1/muse/rate?route=pk_" + "c" * 30, "/j/v2.3.1/muse/rate?route=register&key=x", "/j/v2.3.1/muse/rate?route=grade", "/j/v2.3/muse/rate?route=me", "/j/v2.3/muse/joined?addr=pk_" + "a" * 30, "/j/v2.3/muse/start?key=abc", "/j/v2.3/pk_" + "b" * 30 + "/start", "/j/v2.3/muse/joined?addr=" + A[0] + "&key=x",
                 "/j/v2.3/muse/joined?addr=" + A[0] + "&token=x", "/j/v2.3/evil/start", "/j/v2.2/start", "/j/v2.3/muse/start?ref=x", "/j/v2.3/muse/joined?addr=nope",
                 "/j/v2.3/muse/joined?addr=" + A[1] + "&utm=1", "/j", "/j/whatever", "/j/v2.3/muse/joined?addr=" + A[2] + "%26key%3Dx"]
         codes = [req(base, u, dict(IP, **{"Fly-Client-IP": f"198.51.104.{i}"}))[0] for i, u in enumerate(badp)]
@@ -142,16 +161,17 @@ def server():
               and "noindex" in (h.get("X-Robots-Tag") or "") and not any(k.lower().startswith("access-control") for k in h))
         check("funnel counts what the server accepted: muse 1 and none 1 started (start/ is untagged), grok 12, claude HEAD not counted, nothing from the 400s",
               rows.get(("v2.3", "muse"), {}).get("started") == 1 and rows.get(("v2.3", "none"), {}).get("started") == 1 and rows.get(("v2.3", "grok"), {}).get("started") == 12
-              and ("v2.3", "claude") not in rows and ("v2.3", "evil") not in rows and rows[("v2.3", "muse")]["unmatched"] == 1)
+              and ("v2.3", "claude") not in rows and ("v2.3", "evil") not in rows and rows[("v2.3", "muse")]["unmatched"] == 1
+              and rows.get(("v2.3.1", "muse"), {}).get("rate_429_by_route") == {"register": 1})
         check("no IP, UA or address in the funnel", b"198.51" not in b and b"CheckinTestAgent" not in b and b"poa1" not in b)
         codes = [req(base, "/ops/funnel?" + q, dict(H, **{"Fly-Client-IP": f"198.51.107.{i}"}))[0] for i, q in enumerate(
             ("from=" + iso(NOW - 31 * 86400) + "&to=" + iso(NOW), "from=x", "x=1", "token=" + tok))]
         check(f"/ops/funnel: 32 days, a bad date, another parameter, a token in the URL: 400 {codes}", codes == [400] * 4)
         pub = b"".join(req(base, x)[2] for x in ("/", "/sitemap.xml", "/openapi.json", "/llms.txt", "/llms-full.txt", "/robots.txt", "/api"))
-        check("/ops/funnel and /j/ are not in the home page, sitemap, OpenAPI, llms.txt, robots or /api", b"ops/funnel" not in pub and b"poascan.io/j/" not in pub.replace(b"https://poascan.io/j/v2.3/start once now", b"").replace(b"https://poascan.io/j/v2.3/joined?addr=", b"")
+        check("/ops/funnel and /j/ are not in the home page, sitemap, OpenAPI, llms.txt, robots or /api", b"ops/funnel" not in pub and b"poascan.io/j/" not in pub.replace(b"https://poascan.io/j/v2.3.1/start once now", b"").replace(b"https://poascan.io/j/v2.3.1/joined?addr=", b"").replace(b"https://poascan.io/j/v2.3.1/rate?route=", b"")
               and b"/j/" not in req(base, "/robots.txt")[2] and b"/j/" not in req(base, "/sitemap.xml")[2])
         time.sleep(0.5); slog.flush(); slog.seek(0); lg = slog.read()
-        check("server log: check-ins as /j/[check-in] only; never the client, address, key or query", "/j/[check-in]" in lg and "/j/v2.3" not in lg and "muse" not in lg
+        check("server log: check-ins as /j/[check-in] only; never the client, address, key or query", "/j/[check-in]" in lg and "/j/v2.3" not in lg and "muse" not in lg and "route=" not in lg
               and A[0] not in lg and "addr=" not in lg and "pk_aaaa" not in lg and "198.51" not in lg and "CheckinTestAgent" not in lg)
         import sqlite3
         cx = sqlite3.connect(dbp); dump = "\n".join(cx.iterdump()); cx.close()

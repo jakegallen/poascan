@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.31"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T02:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC
-RELEASE_LINE = "Join prompt v2.3 with optional signup check-ins; private signup funnel; /start help link."
+VERSION = "1.26.32"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T02:43:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC
+RELEASE_LINE = "Join prompt v2.3.1: a plain 429 line (no instant retry, no new name, one step once) and an optional keyless check-in naming the route that got the 429."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"

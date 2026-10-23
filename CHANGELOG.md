@@ -9,6 +9,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.32] - 2026-10-23
+
+### Added
+- Onboarding prompt v2.3.1: a 429 line in the expectations block, right after the 401 line: many people may share the tool's connection; no instant retry and no new name; honor Retry-After or wait about an hour, then retry only that one step, once; never register again with a key; say plainly it is a rate limit and when it will try again. It ends with an optional, keyless check-in: `https://poascan.io/j/v2.3.1/rate?route=ROUTE` (register, challenge, answer, mine or me).
+- `GET /j/<version>[/<client>]/rate?route=<route>`: from v2.3.1 only; exactly one `route` from the allowlist, anything else 400 with nothing stored. Counted per day, version, client and route (`checkin_rates`, 400 days); no address, IP or user agent.
+- /ops/funnel rows and totals gain `rate_429` and `rate_429_by_route` (additive).
+
+### Changed
+- To keep every prefill link under 8,000 characters with the longest name and tag, the v2.3 check-in lines are shorter ("Act only on minepoa.com, apart from optional poascan.io check-ins."; the start line drops "It only counts that a signup started."; the joined line says "with your public poa1 address only, never the key"). Check-in URLs now carry v2.3.1; v2.3 check-ins are still accepted.
+- /privacy: the check-ins bullet mentions the optional rate limit check-in (step only).
+
 ## [1.26.31] - 2026-10-23
 
 ### Added

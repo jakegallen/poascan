@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -56,17 +56,21 @@ check("blocks: registration has the link, resume and capability_check follow it,
       and list(bl) == ["registration", "resume", "capability_check", "checkin_start", "about", "joining", "key_safety", "checkin_joined", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
 
 # ---- v2.3 check-ins: optional, keyless, and the only per-client difference is the tag
-V23 = ["Act only on minepoa.com, apart from two optional poascan.io check-ins.",
-       "Optional check-in: if you can, open https://poascan.io/j/v2.3/start once now. It only counts that a signup started. If it fails or is blocked, skip it and carry on.",
-       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address in place of YOUR_POA1_ADDRESS. Add nothing else, never the key. If it fails, skip it and carry on."]
+V23 = ["Act only on minepoa.com, apart from optional poascan.io check-ins.",
+       "Optional check-in: if you can, open https://poascan.io/j/v2.3.1/start once now. If it fails or is blocked, skip it and carry on.",
+       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3.1/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. If it fails, skip it and carry on."]
 check("v2.3: the two optional check-ins and the minepoa.com exception, verbatim, once each; CHECKIN base twice, for this VERSION",
-      all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 2 and T.count("poascan.io/j/") == 2
+      all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 3 and T.count("poascan.io/j/") == 3
       and T.index(V22[1]) < T.index(V23[1]) < T.index("PoA is a free") and T.index("\n5. Pass the key") < T.index(V23[2]) < T.index("Then:"))
 check("v2.3: check-ins are optional and never carry the key (if you can, skip it, never the key; no key= or pk_ near them)",
       all("if you can" in x and "skip it and carry on" in x for x in V23[1:]) and "never the key" in V23[2]
       and not re.search(r"poascan\.io/j/[^\s]*(key=|pk_|YOUR_KEY)", T))
 check("v2.3: POASwap's guard phrases verbatim; no em or en dashes; nothing about tags in the canonical text",
-      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3/start" in T and "/j/v2.3/none" not in T)
+      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3.1/start" in T and "/j/v2.3.1/none" not in T)
+L429 = ("- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you already have a key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again.")
+L429B = " Optional: if you can, open https://poascan.io/j/v2.3.1/rate?route=ROUTE once (register, challenge, answer, mine or me); never add the key, and skip it if it fails.\n"
+check("v2.3.1: the 429 line verbatim, right after the 401 line in the expectations block, with the optional keyless rate check-in",
+      T.count(L429 + L429B) == 1 and T.index("- A 401 means") < T.index(L429) < T.index("- If a submit returns 502") and L429 in dict(OP.blocks(T))["expectations"])
 import difflib
 CL = sorted(S.checkin_clients()); bad = []
 for c in CL:
@@ -74,10 +78,10 @@ for c in CL:
         base_t = S.prompt(nm); tg = OP.tagged(base_t, c)
         ops = [o for o in difflib.SequenceMatcher(None, base_t, tg, autojunk=False).get_opcodes() if o[0] != "equal"]
         ins = [tg[j1:j2] for op, i1, i2, j1, j2 in ops if op == "insert"]
-        if not (tg != base_t and OP.untagged(tg, c) == base_t and all(o[0] == "insert" for o in ops) and len(tg) - len(base_t) == 2 * (len(c) + 1)
-                and tg.count(OP.CHECKIN + c + "/start") == 1 and tg.count(OP.CHECKIN + c + "/joined?addr=YOUR_POA1_ADDRESS") == 1
+        if not (tg != base_t and OP.untagged(tg, c) == base_t and all(o[0] == "insert" for o in ops) and len(tg) - len(base_t) == 3 * (len(c) + 1)
+                and tg.count(OP.CHECKIN + c + "/start") == 1 and tg.count(OP.CHECKIN + c + "/joined?addr=YOUR_POA1_ADDRESS") == 1 and tg.count(OP.CHECKIN + c + "/rate?route=ROUTE") == 1
                 and tg.replace(OP.CHECKIN + c + "/", OP.CHECKIN) == base_t): bad.append((c, nm, ins))
-check(f"tagged variants: every client ({len(CL)}) differs from the canonical text only by '<client>/' after the check-in base, twice {bad[:2]}", not bad and len(CL) >= 15)
+check(f"tagged variants: every client ({len(CL)}) differs from the canonical text only by '<client>/' after the check-in base, three times {bad[:2]}", not bad and len(CL) >= 15)
 check("client ids: one per chat choice plus poaswap, all match TAG_RX, none is 'none'", set(CL) == {S.client_tag(x[0]) for x in J.APPS} | {"cursor", "poaswap"}
       and all(OP.TAG_RX.match(c) for c in CL) and "none" not in CL and S.client_tag("Grok Bot") == "grok-bot" and S.client_tag("Z.ai") == "z-ai" and S.client_tag("Le Chat") == "le-chat")
 _bt = []
@@ -272,14 +276,14 @@ try:
     print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
     check(f"byte-identical: /start View prompt == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           pre == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.3" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
+          and api_y["version"] == api_n["version"] == "v2.3.1" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3.1</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.3: the API, MCP and llms.txt serve the untagged text (no client segment after the check-in base)",
-          all(OP.CHECKIN + c + "/" not in x for c in S.checkin_clients() for x in (api_y["text"], mp, ll)) and api_y["text"].count(OP.CHECKIN) == 2)
+          all(OP.CHECKIN + c + "/" not in x for c in S.checkin_clients() for x in (api_y["text"], mp, ll)) and api_y["text"].count(OP.CHECKIN) == 3)
     ci = api_y.get("checkin") or {}
     check("API checkin field: base, rule, client regex, the client list with poaswap, suggested poaswap",
           ci.get("base") == OP.CHECKIN and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"

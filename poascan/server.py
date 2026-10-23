@@ -473,7 +473,7 @@ class H(BaseHTTPRequestHandler):
             log.error("ops funnel: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
     def checkin(self, path, query):
-        """GET /j/<version>[/<client>]/start and .../joined?addr=<poa1>: an optional, keyless signup check-in (poascan/checkin.py).
+        """GET /j/<version>[/<client>]/start, .../joined?addr=<poa1> and (v2.3.1) .../rate?route=<route>: an optional, keyless signup check-in (poascan/checkin.py).
         Strict allowlist, else 400 with nothing stored. Rate limited per IP in memory; never cached, indexed or logged with its path."""
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Access-Control-Allow-Origin": "*"}
         ok, wait = CHECKIN_LIMIT.allow(self.client_ip())
