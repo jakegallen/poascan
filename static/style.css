@@ -1195,5 +1195,5 @@ td a.mono{display:inline-block;min-width:24px}
 .ofs{margin:0 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
 .tabnote>a{margin-left:10px;font-size:.85em}
 /* long hashes and commands wrap inside their paragraph (1.26.62) */
-code.brk{overflow-wrap:anywhere;word-break:break-all}
+code.brk{overflow-wrap:anywhere}
 .oftrack{display:inline-block;margin-left:6px;padding:6px 0;white-space:nowrap}

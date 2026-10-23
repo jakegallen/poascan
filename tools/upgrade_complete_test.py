@@ -66,6 +66,8 @@ check("/upgrade shows the completed note", "Upgrade complete" in h and "API hard
 check("/upgrade carries the dates", all(x in h for x in ("Oct 21, 2026, 19:00 UTC", "Oct 23, 2026, 16:57 UTC")) and 'datetime="2026-10-23T16:57:36Z"' in h)
 check("/upgrade links the notice tx and post 1357", "/tx/" + DONE["txid"] in h and M.POST_URL in h)
 check("no em or en dash on /upgrade", "\u2014" not in h and "\u2013" not in h)
+from poascan import agentapi as AG
+check("completed /upgrade shows the Release row with the release line", "<dt>Release</dt>" in h and AG.VERSION in h and AG.RELEASE_LINE in h)
 check("og description says complete", M.og_desc().startswith("Network upgrade complete"))
 check("no home strip", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "")
 check("graders tile has no Halted tag", "Halted" not in V.graders_tile(A.open_epoch()))

@@ -287,7 +287,7 @@ def upgrade_done():
     back = next((e["ts"] for e in MS.events() if e["key"] == "mining_reopened"), None) or M.back_since()
     dl = (_ts_row("Started", M.STARTED, f' · <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>')
           + (_ts_row("Mining reopened", back) if back else "")
-          + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade complete", c["at"]))
+          + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade complete", c["at"]) + f"<dt>Release</dt><dd>{_release()}</dd>")
     links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
              f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
     return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'

@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.63] - 2026-10-23
+
+### Fixed
+- /about#prompt-hash at 390px: the check command breaks at spaces again; the 64 character hash still wraps (`overflow-wrap:anywhere`, no `word-break:break-all`). CSS cache version 102.
+- The completed /upgrade page shows the Release row (version, release time and the release line), so the release line is visible again after the upgrade.
+
 ## [1.26.62] - 2026-10-23
 
 ### Fixed
