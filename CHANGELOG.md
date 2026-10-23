@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.42] - 2026-10-23
+
+### Changed
+- Add Emblem Wallet prompt, step 1: the npx cache retry adds "(Windows: use any new empty folder)" right after `npx --cache "$(mktemp -d)"`. The rest of step 1 stays word for word as POASwap's wallet step v2. walletsafe_test checks the hint.
+
 ## [1.26.41] - 2026-10-23
 
 ### Changed

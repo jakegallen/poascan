@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.41"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T05:29:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Emblem Wallet steps match POASwap wallet step v2: Node 20.18+ install help, one npx retry, and a credentials check before the read."
+VERSION = "1.26.42"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T05:36:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "The Add Emblem Wallet prompt tells Windows agents how to adapt the npx cache retry."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"

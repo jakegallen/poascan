@@ -3,7 +3,7 @@
   --hustle-url https://emblemvault.ai (agenthustle.ai/api/chat 301s; fetch turns the POST into a GET, 405). EMBLEMAI
   shorthand counts only where the text defines it as the pinned command with --hustle-url.
 * The wallet prompt uses POASwap's wallet step v2 (main d26bd69, as served at poaswap.io/start/prompt.txt) word for
-  word, except case D's emblemvault.ai line: own computer, Node 20.18+ with the install command per OS, pinned
+  word, except the Windows hint after the npx --cache retry and case D's emblemvault.ai line: own computer, Node 20.18+ with the install command per OS, pinned
   npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai, one npx --cache retry and one
   network retry, no version check, cp -a backup first, file names only (.env and .env.keys), cases A to D, always
   --profile, never -p or EMBLEM_PASSWORD, profile inspect must show Credentials: present, one attempt, stop on
@@ -69,7 +69,7 @@ def main():
         check(f"[{nm}] asks before a new wallet", "No: ask me to confirm a new wallet. Only on yes, run EMBLEMAI profile create default" in t)
         check(f"[{nm}] own computer, Node 20.18+ with install commands, then check again", t.split("\n1. ", 1)[1].startswith("Only on my own computer") and "Need node -v 20.18+" in t
               and all(k in t for k in ("macOS: brew install node", "Linux: nvm install 22", "Windows: winget install OpenJS.NodeJS.LTS", "wait for me, check again")))
-        check(f"[{nm}] one npx --cache retry, one network retry, no version check", 'retry once with npx --cache "$(mktemp -d)"' in t and "network error: say so, retry once." in t
+        check(f"[{nm}] one npx --cache retry with the Windows hint, one network retry, no version check", 'retry once with npx --cache "$(mktemp -d)" (Windows: use any new empty folder); network error' in t and "network error: say so, retry once." in t
               and not re.search(r"emblemai\b[^\n]{0,80}?(--version|\s-v\b|-V\b)", t, re.I) and "never another version" not in t)
         check(f"[{nm}] profile inspect shows Credentials: present before the one read", "EMBLEMAI profile inspect PROFILE runs and, in case A or B, shows Credentials: present; else stop." in t
               and t.index("EMBLEMAI profile inspect PROFILE") < t.index("EMBLEMAI --profile PROFILE --agent"))
@@ -86,9 +86,10 @@ def main():
                "cp -a ~/.emblemai ~/.emblemai.backup-$(date +%s)", "grep -c migratedFrom ~/.emblemai/profiles/default/metadata.json")
     check("POASwap wording: same check, backup and migrated commands", (P.CHECK_CMD, P.BACKUP_CMD, P.MIGRATED_CMD) == SW_CMDS)
     ours = "1. " + on.split("\n1. ", 1)[1].split("\n4. ", 1)[0]
+    SW_W, OURS_W = 'retry once with npx --cache "$(mktemp -d)"; network', 'retry once with npx --cache "$(mktemp -d)" (Windows: use any new empty folder); network'
     SW_D, OURS_D = "emblemvault.ai: skip step 3; I type my addresses under Need help on POASwap.", "emblemvault.ai: skip step 3; link that vault in step 4."
-    check("POASwap wording: steps 1 to 3 verbatim except case D's emblemvault.ai line (no POASwap page here)",
-          SW_D in SW_STEPS and ours == SW_STEPS.replace(SW_D, OURS_D) and "POASwap" not in ours)
+    check("POASwap wording: steps 1 to 3 verbatim except the Windows hint and case D's emblemvault.ai line (no POASwap page here)",
+          SW_D in SW_STEPS and SW_STEPS.count(SW_W) == 1 and ours == SW_STEPS.replace(SW_D, OURS_D).replace(SW_W, OURS_W) and "POASwap" not in ours)
     d = ST.data()
     nt = d["wallet"]["note"]
     check("MCP and llms data: wallet run pinned with a safety note (v2: Node, npx retries, inspect)", d["wallet"]["install"] == P.EMB and "--profile" in nt and "EMBLEM_PASSWORD" in nt
