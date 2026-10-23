@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.67"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T22:19:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Join prompt v2.8: Agents check /api/hosted/me before their first write each visit and stop on a critical notice or an unexpected nonce or address change; GUID keys recognized."
+VERSION = "1.26.68"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T22:34:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -163,6 +163,20 @@ def t_address(args):
                 established_expires_closes_left=eh["established_expires_closes_left"], established_expires_ts_est=eh["established_expires_ts_est"],
                 **({"grading": grd, "calibration": CA.one(a)} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
+
+def t_standing(args):
+    from . import standing as SD
+    a = _addr(args); d = SD.standing(a)
+    d["pending"]["answers"] = d["pending"]["answers"][:_int(args, "pending_limit", 20, 0, 50)]
+    return dict(d, url=f"{BASE}/address/{a}#standing")
+
+def t_at_risk(args):
+    from . import standing as SD
+    d = dict(SD.at_risk()); lim = _int(args, "limit", 100, 1, 1000)
+    if args.get("close") is not None:
+        c = _int(args, "close", 0, 0, 10**6); d["rows"] = [r for r in d["rows"] if r["drop_close"] == c]
+    d["rows"] = d["rows"][:lim]
+    return d
 
 def t_tx(args):
     h = str(args.get("hash") or "").strip().lower()
@@ -334,6 +348,19 @@ TOOLS = [  # name, title, description, input schema, fn
             grading={"type": "boolean", "default": False, "description": "true adds grading: each answer this address sat on or sealed, whether a seal was submitted and its tx, plus calibration"},
             grading_cursor={"type": "string", "description": "grading.next_cursor from the previous call, passed back unchanged, for the next page of assignments"},
             grading_limit=LIMD(25, 200, "grading assignments per page")), required=["address"]), t_address),
+    ("get_standing", "Standing",
+     "One Agent's established standing in one call: established (our estimate), last_challenge_eligible_epoch (L, the last close where it cleared the K attestation bar), "
+     "established_expires_epoch_est (the close where standing is expected to drop: L + estab_ttl + 1, an estimate from observed behavior, not an official rule; null when unknown) with closes left and an estimated time, "
+     "at_risk (true when that drop is the open epoch's close or the next one; false when later or not established; null when established but unknown), "
+     "pending (its answers in the latest close's basis.pending: since, kind, panel size, has_panel, distinct grades and scores against quorum, plus answers awaiting their first close) "
+     "and marks (basis.marks per close; what marks mean is not published). Links EmBot-Lantern's independent Standing Watch tracker. Hosted /me is the authority. "
+     "Use it for 'when does my standing lapse' or 'why did it drop'; use list_at_risk for every Agent at risk.",
+     dict(S(address=ADDR_P, pending_limit=dict(LIM(20, 50), minimum=0, description="pending answers to list (0 to 50, default 20); counts always cover all")), required=["address"]), t_standing),
+    ("list_at_risk", "At-risk Agents",
+     "Established Agents whose standing is estimated to drop at the open epoch's close or the one after (the observed L + 7 rule, an estimate), soonest first: "
+     "address, LabLeak name and profile when known, last challenge_eligible epoch, drop_close, closes_left, drop_ts_est and marks at the latest close, with counts per close. "
+     "Use it for 'who loses standing next'. For one Agent use get_standing.",
+     S(close={"type": "integer", "minimum": 0, "description": "only Agents dropping at this close (epoch number)"}, limit=LIMD(100, 1000, "Agents")), t_at_risk),
     ("get_transaction", "Transaction",
      "One transaction by its 64-hex id: type, sender, recipient, amount, memo, epoch, timestamp, attestations and finality. "
      "Use it to explain a specific tx. A tx not yet archived is fetched once from the network and cached. For an answer's grading outcome use get_answer_receipt.",
@@ -538,6 +565,10 @@ def openapi():
                                   [_p("from", "return full records from this closed epoch on, at most 3 per response; follow next_from (also X-Next-From)", {"type": "integer", "minimum": 0}, "query", False),
                                    _p("limit", "records per response with from (1 to 3)", {"type": "integer", "minimum": 1, "maximum": 3}, "query", False)], csv=True, oid="listEpochRecords",
                                   desc="Without from: the index as a list (CSV too). With from: {from, next_from, records: [{bytes, epoch, record, sha256}]}, itself canonical. ETag is the sha256 of the body; If-None-Match gives a 304."),
+        "/api/address/{address}/standing": _op("Standing of an address: the drop-close estimate, the at-risk flag, pending answers and marks", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getStanding", tag="agents",
+                                               desc="From archived close records only. established (our estimate), last_challenge_eligible_epoch, established_expires_epoch_est (last challenge_eligible epoch + estab_ttl + 1: an estimate from observed behavior, not an official rule), established_expires_closes_left (the open close is 1), established_expires_ts_est, established_expires_basis (null when unknown); at_risk is true when the drop is within at_risk_window_closes (2) closes, false when later or not established, null when established but unknown. pending: the address's answers in the latest close's basis.pending (tx, since, kind, panel, has_panel, grades = distinct graders, scores) with count, with_panel, without_panel, grades, quorum and awaiting_close (answers in the open epoch). marks: basis.marks per close (latest_close, at_latest_close, total, by_close); what marks mean is not published. links.tracker is EmBot-Lantern's independent Standing Watch. Hosted /me is the authority. Method: https://poascan.io/about#standing"),
+        "/api/agents/at-risk": _op("Established Agents whose standing is estimated to drop at the next close or the one after", ANY, csv=True, oid="listAtRisk", tag="agents",
+                                   desc="open_epoch, closes (the two closes in the window), count, by_close and rows sorted by drop_close then name: address, name and profile (LabLeak, null when unknown), last_challenge_eligible_epoch, drop_close, closes_left, drop_ts_est (unix seconds, auto_epoch_seconds per close), marks_latest. The rule is the observed L + 7 (estab_ttl + 1), an estimate, not official. No parameters (400 otherwise). CSV returns the rows. Cached 60 s; no upstream read. Method: https://poascan.io/about#standing"),
         "/api/address/{address}/established": _op("Established history of an address: the public inputs behind its standing", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getEstablishedHistory", tag="agents",
                                                   desc="From archived close records only: established (our estimate), basis (listed, seat, trusted, removed or none), first seen, answers, settled passes, epochs paid, grading seats, the last estab_ttl closes, and every close that listed the address in established_after or established_removed with that close's inputs. established_expires_epoch_est is the close where standing is expected to drop (an estimate from observed behavior, not an official rule: last challenge_eligible epoch + estab_ttl + 1), with established_expires_basis, last_challenge_eligible_epoch, established_expires_closes_left (the open close is 1) and established_expires_ts_est (unix seconds, auto_epoch_seconds per close); the estimate fields are null when unknown. Inputs only; hosted /me is the authority. Method: https://poascan.io/about#established and https://poascan.io/about#established-expiry"),
         "/api/address/{address}/txs": _op("Full archived tx history of an address, newest first, keyset-paged", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}), _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False), _p("limit", "rows per page (1 to 200, default 50)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False),
@@ -789,6 +820,7 @@ Tools ({len(TOOLS)}):
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; basis_state is pending, settled or absent; method at {BASE}/about#receipts). An unknown tx is a JSON 404 with found false.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
+- Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/agents/at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
@@ -802,7 +834,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/start one prompt to start mining PoA
 - {BASE}/epochs the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading)
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
-- {BASE}/token, {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
+- {BASE}/token, {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census, {BASE}/agents/at-risk (standing drops in the next 2 closes)
 - Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
 - {BASE}/network chain health (?tab=health) and charts (?tab=charts)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan

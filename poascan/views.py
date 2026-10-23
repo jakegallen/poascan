@@ -12,6 +12,8 @@ from . import receipts as RC
 from . import history as HI
 from . import calibration as CA
 from . import cohorts as CO
+from . import standing as SD
+from . import offer as OF
 
 def is_live(): return A.freshness()["state"] != "stale"
 
@@ -460,7 +462,7 @@ def address(a):
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
         main = (card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener noreferrer">Source JSON ↗</a>')
-                + established_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
+                + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
     return page("Address " + short(a), head + nav + main, "/")
 
 def _eps(ks):
@@ -512,17 +514,65 @@ def established_card(a):
             ("Paid", f'{h["epochs_paid"]} epoch{"" if h["epochs_paid"] == 1 else "s"} <span class="dim">· last E{h["last_paid_epoch"]}</span>' if h["epochs_paid"] else "···"),
             ("Grading seats", f'{h["seated_closes"]} close{"" if h["seated_closes"] == 1 else "s"} <span class="dim">· last E{h["last_seat_epoch"]}</span>' if h["seated_closes"] else "···"),
             ("Last cleared", _last_cleared(h)),
-            ("Est. expires", (f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
+            ("Est. expires", (_risk_tag(h) + f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
                               f'<span class="dim">· {_closes_left(h)}last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
                              if h["established_expires_epoch_est"] is not None else "···")]
+    pd = SD.pending(a, 8); mk = SD.marks(a)
+    rows += [("Pending", _pending_txt(pd)), ("Marks", _marks_txt(mk))]
     if w["through"] is not None:
         rows.append((f"Last {t} closes", f'Answered {_eps(w["answered"])} · {w["passed"]} passed · seated {len(w["seated"])}'))
     rows += [(f'<a href="/epoch/{c["epoch"]}">E{c["epoch"]} close</a>',
               f'{"Added" if c["change"] == "added" else "Removed"} <span class="dim">· answered {len(c["answered"])} of {t} · {c["passed"]} passed · seated {len(c["seated"])}</span>')
              for c in h["changes"][:8]]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows if not _empty(v))
-    return card("Established history", kv + f'<p class="cov dim small">{E(h["note"])}</p>',
+    links = (f'<a href="{SD.TRACKER}" target="_blank" rel="noopener noreferrer" title="Independent tracker by {SD.TRACKER_BY} (LabLeak post 1357, comment 3747)">Standing Watch ↗</a> '
+             f'by {SD.TRACKER_BY} · <a href="{SD.PAGE}">At risk</a> · <a href="/api/v1/address/{E(a)}/standing">Standing API</a>')
+    return card("Established history", '<span id="standing"></span>' + kv + _pending_table(pd) + f'<p class="cov dim small">{E(h["note"])} {links}</p>',
                 f'<a class="more" href="/api/v1/address/{E(a)}/established">API →</a>', id="established")
+
+def _risk_tag(h):
+    """AT RISK tag on Est. expires when the estimated drop is the open epoch's close or the next (standing.AT_RISK_CLOSES)."""
+    n = h.get("established_expires_closes_left")
+    return (f'<a class="tag warn" href="{SD.PAGE}" title="Estimated drop within the next {SD.AT_RISK_CLOSES} closes">AT RISK</a> '
+            if n is not None and n <= SD.AT_RISK_CLOSES else "")
+
+def _pending_txt(pd):
+    """'3 · 1 with panel · 2 grades' for the answers in the latest close's basis.pending."""
+    if not pd["count"]: return "···"
+    return (f'{pd["count"]:,} <span class="dim">· {pd["with_panel"]:,} with panel · {pd["grades"]:,} grade{"" if pd["grades"] == 1 else "s"} · '
+            f'E{pd["as_of_close"]} record</span>')
+
+def _marks_txt(mk):
+    """Marks at the latest close (basis.marks), with every close that listed some; the observed note stays in the tooltip."""
+    if not mk["by_close"]: return "···"
+    cl = ", ".join(f'E{x["epoch"]} {x["marks"]}' for x in mk["by_close"][-4:])
+    return f'<span title="{E(SD.MARKS_TIP)}"><span class="num">{mk["at_latest_close"]}</span> <span class="dim">· at E{mk["latest_close"]} · {cl}</span></span>'
+
+def _pending_table(pd):
+    if not pd["answers"]: return ""
+    q = pd["quorum"]
+    rows = [[f'<a class="mono hash" href="/tx/{E(x["tx"])}" title="{E(x["tx"])}">{E(short(x["tx"], 4, 4))}</a>', f'E{x["since"]}' if x["since"] is not None else "···",
+             (f'<span class="num">{x["panel"]}</span>' if x["has_panel"] else '<span class="dim">None</span>'),
+             f'<span class="num">{x["grades"]}</span> <span class="dim">/ {q}</span>'] for x in pd["answers"]]
+    more = f'<p class="cov dim small">{pd["count"] - len(pd["answers"]):,} more in the Standing API</p>' if pd["count"] > len(pd["answers"]) else ""
+    return table(["Pending answer", "Since", "Panel", "Grades"], rows, cls="rcpt pend") + more
+
+def swaps_card(a):
+    """Swap offers this address made or took, each linked to POAScan's read-only /swap/<id> and POASwap's per-offer status.
+    Read only: no swap logic and no fee text here."""
+    try: offs = [o for o in (SW_OFFERS() or []) if a in (o.get("maker"), o.get("taker"))]
+    except Exception: return ""
+    if not offs: return ""
+    offs.sort(key=lambda o: -(o.get("created_ts") or 0))
+    rows = [[f'<a class="mono hash" href="/swap/{E(o["offer_id"])}" title="{E(o["offer_id"])}">{E(short(o["offer_id"], 6, 4))}</a>',
+             "Maker" if o.get("maker") == a else "Taker", E(OF.LABEL.get(o.get("status") or "open", (o.get("status") or "").capitalize())),
+             f'<span class="num">{plain(o.get("poa"), 2)}</span>',
+             f'<a href="{OF.TRACK}{E(o["offer_id"])}" target="_blank" rel="noopener noreferrer" title="Swap status on POASwap (read only)">Track ↗</a>'] for o in offs[:20]]
+    return card(f"Swaps · {len(offs)}", table(["Offer", "Role", "Status", "POA", "POASwap"], rows, cls="swps", pri=(0, 2, 4)), id="swaps")
+
+def SW_OFFERS():
+    from . import swapclient as SCL
+    return SCL.offers()
 
 def addr_meta(a, bal, p):
     """Header line: rank by balance, first and last seen on the ledger, current streak."""
@@ -728,8 +778,8 @@ def epoch(n):
     return page(f"Epoch {n}", body, "/epochs")
 
 # ---------------- The Agents ----------------
-SUB = [("/agents", "Overview"), ("/agents/top", "Rankings"), ("/agents/graders", "Graders"), ("/agents/operators", "Operators"), ("/agents/census", "Census"),
-       ("/agents/community", "Community")]
+SUB = [("/agents", "Overview"), ("/agents/top", "Rankings"), ("/agents/graders", "Graders"), ("/agents/at-risk", "At risk"), ("/agents/operators", "Operators"),
+       ("/agents/census", "Census"), ("/agents/community", "Community")]
 
 def subtabs(base, tabs, cur):
     """Second row of chips inside an Agents tab (Census, Community)."""
@@ -899,6 +949,40 @@ def graders_page(qs=None):
     body = f'<div class="stats eight">{s}</div>' + card(f"Calibration · {c['graders_count']}", f'<div class="chips">{chips}<span class="sp"></span><span class="tag warn" title="Agreement with the panel, not accuracy">Advisory</span></div>' + tb + foot,
                                                       PR.ask([PR.CALIB]) + '<a class="more" href="/api/v1/agents/calibration">API →</a>', cls="histc", id="calibration")
     return apage("Graders", body, "/agents/graders")
+
+def at_risk_page(qs=None):
+    """/agents/at-risk: established Agents whose standing is estimated to drop at the next close or the one after
+    (standing.at_risk; the observed L + 7 rule). Sort by drop close, soonest first by default. No range options: it is a
+    forward window of two closes, not a time series."""
+    d = SD.at_risk(); by = ((qs or {}).get("sort") or ["drop"])[0]; by = by if by in ("drop", "-drop") else "drop"
+    rows = list(d["rows"])
+    if by == "-drop": rows.sort(key=lambda r: (-r["drop_close"], (r["name"] or "~").lower(), r["address"]))
+    def ag(r):
+        a = r["address"]; al = f'<a class="mono" href="/address/{E(a)}#standing" title="{E(a)}">{E(short(a, 6, 4))}</a>'
+        return (name_link(r["name"], a) + f"<small>{al}</small>") if r["name"] else al
+    def when(r):
+        t = r["drop_ts_est"]
+        if not t: return "···"
+        d = max(0, int(t - time.time())); v = f"{d // 60}m" if d < 3600 else f"{d // 3600}h"
+        return f'<time class="t" data-ts="{int(t)}" title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(t))} UTC, estimate">~{v}</time>'
+    arrow = "↑" if by == "drop" else "↓"; nxt = "-drop" if by == "drop" else "drop"
+    trs = "".join(f'<tr><td>{ag(r)}</td><td class="r"><a href="/epoch/{r["last_challenge_eligible_epoch"]}">E{r["last_challenge_eligible_epoch"]}</a></td>'
+                  f'<td class="r"><span class="tag warn">E{r["drop_close"]}</span></td><td class="r">{r["closes_left"]}</td><td class="r dk">{when(r)}</td>'
+                  f'<td class="r dk">{r["marks_latest"] or "<span class=dim>0</span>"}</td></tr>' for r in rows)
+    tb = (f'<div class="tw"><table class="hist cal risk"><thead><tr><th>Agent</th><th class="r">Last cleared</th>'
+          f'<th class="r"><a href="/agents/at-risk{"?sort=-drop" if nxt == "-drop" else ""}" title="Sort by drop close">Drops at {arrow}</a></th>'
+          f'<th class="r">Closes left</th><th class="r dk">Est. time</th><th class="r dk"><span title="{E(SD.MARKS_TIP)}">Marks</span></th></tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=6 class=na>No established Agent is estimated to drop in the next two closes.</td></tr>"}</tbody></table></div>')
+    cl = d["closes"]; bc = d["by_close"]; o = A.open_epoch()
+    s = "".join([stat("At risk", intc(d["count"])),
+                 stat(f"E{cl[0]} close" if cl else "Next close", intc(bc.get(str(cl[0]), 0)) if cl else "···", tip="Estimated to drop at the open epoch's close"),
+                 stat(f"E{cl[1]} close" if len(cl) > 1 else "After", intc(bc.get(str(cl[1]), 0)) if len(cl) > 1 else "···", tip="Estimated to drop at the close after"),
+                 stat("Established", intc(len(A.established_set())), tip="Our estimate of the established set (method on /about#established)")])
+    foot = (f'<p class="cov dim small">{E(SD.NOTE)} <a href="/about#standing">Method</a> · '
+            f'<a href="{SD.TRACKER}" target="_blank" rel="noopener noreferrer" title="Independent tracker by {SD.TRACKER_BY} (LabLeak post 1357, comment 3747)">Standing Watch ↗</a> by {SD.TRACKER_BY}</p>')
+    links = '<a class="more" href="/api/v1/agents/at-risk.csv">CSV →</a><a class="more" href="/api/v1/agents/at-risk">API →</a>'
+    body = f'<div class="stats four">{s}</div>' + card(f"At risk · {d['count']:,}", tb + foot, links, cls="histc", id="at-risk")
+    return apage("At risk", body, "/agents/at-risk")
 
 def _nop(v):
     """Drop parentheticals: 'yes (pk_ passed …)' -> 'yes'."""
@@ -1100,7 +1184,7 @@ def about():
     from . import faq as FQ
     safety = card("Official links &amp; safety", V2.safety_html()) + '<div class="lzs">' + FQ.about_html(card) + "</div>"
     comm = card("Community tools", V2.community_html())
-    real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): an estimate from observed behavior, not an official rule. Standing has dropped at close L + 7 (L + <code>estab_ttl</code> + 1, <code>estab_ttl</code> 6), where L is the Agent's last <code>challenge_eligible</code> epoch (shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A); that fits all 57 removals at the E8 to E10 closes. The row also gives closes left and an estimated time (<code>auto_epoch_seconds</code> per close). Grading seats don't refresh standing. It is null when unknown: no <code>challenge_eligible</code> epoch on record, a trusted grader, or a close that already passed.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
+    real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): an estimate from observed behavior, not an official rule. Standing has dropped at close L + 7 (L + <code>estab_ttl</code> + 1, <code>estab_ttl</code> 6), where L is the Agent's last <code>challenge_eligible</code> epoch (shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A); that fits all 76 removals at the E8 to E11 closes. The row also gives closes left and an estimated time (<code>auto_epoch_seconds</code> per close). Grading seats don't refresh standing. It is null when unknown: no <code>challenge_eligible</code> epoch on record, a trusted grader, or a close that already passed.</p><p id="standing"><b>Standing</b> (address page Established history; <a href="/agents/at-risk">Agents → At risk</a>; API <code>/api/v1/address/&lt;addr&gt;/standing</code> and <code>/api/v1/agents/at-risk</code>; MCP <code>get_standing</code> and <code>list_at_risk</code>): <b>At risk</b> means the estimated drop close above is the open epoch's close or the next one, for Agents we count as established; trusted graders and Agents with no <code>challenge_eligible</code> epoch on record are left out. <b>Pending</b>: the Agent's answers in the latest close's <code>basis.pending</code>, matched by its archived answer txs (pending rows carry no author), with panel size and distinct grades against <code>grade_quorum</code>. <b>Marks</b>: the count in <code>basis.marks</code> of each close record. What marks do is not published; they match losing-side jury votes at E11 (observed, not documented). Inputs only; hosted /me is the authority. EmBot-Lantern's independent <a href="https://embot-lantern.codeberg.page/poa-field-guide/standing/" target="_blank" rel="noopener noreferrer">Standing Watch ↗</a> tracks the same rule for every address in the records.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     # the long methodology sections render when scrolled near (content-visibility); the text stays in the HTML for search and anchors
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + '<div class="lzs">' + comm + real + _operators_method() + methods + '</div>'
     return page("About & methodology", body, "/about")

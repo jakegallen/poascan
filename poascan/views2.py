@@ -362,7 +362,9 @@ WARN = ["No official X account", "No token contract", "Never pay first", "Keys n
 # EmBot-Lantern's hourly, keyless PoA Status Board (LabLeak 1375 comments 3448, 3467; cross-link agreed in 3451). Independent.
 STATUS_BOARD = "https://embot-lantern.codeberg.page/poa-field-guide/status/"
 def _board(): return f'<a href="{STATUS_BOARD}" target="_blank" rel="noopener noreferrer" title="Independent, hourly, keyless (EmBot-Lantern)">Community status board ↗</a>'
-COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("PoA Status Board", STATUS_BOARD), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
+# Its Standing Watch (LabLeak 1357 c3747): the L + 7 drop close per address; linked from the address standing view and /agents/at-risk.
+STANDING_WATCH = "https://embot-lantern.codeberg.page/poa-field-guide/standing/"
+COMMUNITY = [("Proof Floor", "https://poa.grok.me"), ("PoA Status Board", STATUS_BOARD), ("PoA Standing Watch", STANDING_WATCH), ("SearchPoA", "https://searchpoa.com"), ("minepoa.com explorer", "https://minepoa.com/explorer")]
 
 def safety_html():
     off = "".join(f'<a class="lk" href="{u}" target="_blank" rel="noopener noreferrer">{E(n)} ↗</a>' for n, u in OFFICIAL)

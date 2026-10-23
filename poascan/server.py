@@ -11,6 +11,7 @@ from . import opsinternal as OI
 from . import checkin as CK
 from . import opsdash as OD
 from . import chartpop as CP
+from . import standing as SD
 from . import offer as OF
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
@@ -71,6 +72,14 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return dict(address=a, **G.established_history(a), method=AG.BASE + "/about#established"), False
+    m = re.match(r"^/api/address/(poa1\w+)/standing$", path)
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        return SD.standing(a), False
+    if path == "/api/agents/at-risk":
+        if set(qs) - {"format"}: raise BadRequest("no parameters")
+        return SD.at_risk(), False
     m = re.match(r"^/api/address/(poa1\w+)/(txs|assignments)$", path)
     if m:
         a, k = m.groups(); c = qs.get("cursor", [""])[0] or None
@@ -195,6 +204,7 @@ def page(path, qs):
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
     if path == "/agents/graders": return V.graders_page(qs)
+    if path == "/agents/at-risk": return V.at_risk_page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/upgrade": return V2.status_page("Network upgrade")
@@ -234,13 +244,14 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
 STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/agents", "/agents/top", "/agents/census",
-                 "/agents/operators", "/agents/graders", "/agents/community", "/network", "/about", "/privacy", "/api"]
+                 "/agents/operators", "/agents/graders", "/agents/at-risk", "/agents/community", "/network", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
 MOVED = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
          "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
          "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
-         "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", **FQ.REDIRECTS}
+         "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", "/at-risk": "/agents/at-risk",
+         **FQ.REDIRECTS}
 # The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
@@ -735,7 +746,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))

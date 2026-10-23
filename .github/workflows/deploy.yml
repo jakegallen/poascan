@@ -109,6 +109,8 @@ jobs:
         run: python tools/blueprint_copy_test.py
       - name: GUID-shaped keys (redacted only in credential slots, bare GUID path or query refused and never logged, keyscan rules)
         run: python tools/guidkey_test.py
+      - name: Standing view and at-risk list (at risk within 2 closes, pending answers with panel and grades, marks, /standing and /agents/at-risk API, MCP get_standing and list_at_risk, Standing Watch credit, swap status links, L + 7 and marks on the real E0 to E11 records)
+        run: python tools/standing_view_test.py
 
   deploy:
     needs: test

@@ -238,7 +238,7 @@ def established_set():
     return est
 
 STANDING_NOTE = ("Estimate from observed behavior, not an official rule: established standing has dropped at close L + estab_ttl + 1 "
-                 "(L + 7 with estab_ttl 6), where L is the Agent's last challenge_eligible epoch. It fits all 57 removals at the E8 to E10 closes. "
+                 "(L + 7 with estab_ttl 6), where L is the Agent's last challenge_eligible epoch. It fits all 76 removals at the E8 to E11 closes. "
                  "Grading seats don't refresh standing. Hosted /me is the authority.")
 
 @cached("last_eligible", 300)

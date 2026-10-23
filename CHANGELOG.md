@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.68] - 2026-10-23
+
+### Added (standing view, LabLeak 1357)
+- Address page standing view (#standing): AT RISK tag on Est. expires when the drop is at the next close or the one after; Pending row and table from the latest close's basis.pending (since, panel, distinct grades vs grade_quorum); Marks row from basis.marks. Links to EmBot-Lantern's Standing Watch, the at-risk list and the standing API.
+- /agents/at-risk sub-tab (/at-risk redirects): established Agents dropping in the next 2 closes, sorted by drop close.
+- /api/v1/address/<addr>/standing and /api/v1/agents/at-risk (JSON and CSV). MCP get_standing and list_at_risk (24 tools). OpenAPI, llms.txt and /about#standing follow.
+- Address page Swaps card: each offer links /swap/<offer_id> and POASwap's per-offer status. Read only.
+- Community list adds PoA Standing Watch (EmBot-Lantern).
+
+### Changed
+- L + 7 note reads 76 removals at E8 to E11 (was 57 at E8 to E10); rule unchanged.
+
 ## [1.26.67] - 2026-10-23
 
 ### Changed (join prompt v2.8)
