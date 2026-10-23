@@ -7,6 +7,8 @@
 * Auth as /ops/internal: the normal 404 without the token, a wrong one or another scheme; ?token= is the key guard's 400;
   any other parameter (blank too) is a 400; at most 31 days; no-store, noindex, no CORS. Not in public docs or MCP.
 * No em or en dash in the module or the response.
+* Stop and restarts: fly.toml stops with SIGTERM (kill_timeout 10); SIGINT and SIGTERM both flush the visit counts and exit 0
+  with no KeyboardInterrupt traceback. Each start compares FLY_IMAGE_REF with the last: restarts_deploy and restarts_other.
 Test tokens are generated at runtime. Usage: python3 tools/opsdash_test.py"""
 import json, os, re, secrets, socket, subprocess, sys, tempfile, threading, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -43,6 +45,7 @@ def fixture(db, CK, now):
     CK.record("v2.4", "chatgpt", "rate", "register", now=now - 10 * D)
     d = iso(now)
     db.write("INSERT INTO visit_uniques VALUES(?,?,?)", (d, 77, 3))
+    db.put_blob("restart_kinds", {"image": "x", "days": {d: {"deploy": 1, "other": 0}}})
     db.write("INSERT INTO visit_views VALUES(?,?,?,?)", [(d, "home", "human", 50), (d, "start", "human", 20), (d, "agents", "bot", 9), (d, "api", "agent", 31)], many=True)
     db.write("INSERT INTO visit_referrers VALUES(?,?,?)", [(d, "x.com", 12)], many=True)
     db.write("INSERT INTO visit_counts VALUES(?,?,?,?)", [(d, "device", "mobile", 40), (d, "country", "US", 30), (d, "api", "/api/v1/summary", 31), (d, "mcp", "get_summary", 4),
@@ -100,6 +103,8 @@ def unit():
     sv = o["service"]; pc = sv["poascan"]; mine = sv["upstream"]["route_checks"].get("/api/hosted/mine") or {}
     check(f"service: success rates, availability, latency buckets, 5xx and 404 ({pc['availability']}, {pc['latency']})", any(r["version"] == "v2.4" for r in sv["success_rates"])
           and pc["responses"] == 100 and pc["errors_5xx"] == 2 and pc["not_found_404"] == 5 and pc["availability"] == 0.98 and pc["restarts"] == 2
+          and pc["restarts_deploy"] == 1 and pc["restarts_other"] == 1 and pc["days"][-1]["restarts_deploy"] == 1 and pc["days"][-1]["restarts_other"] == 1
+          and all(x["restarts_deploy"] is None and x["restarts_other"] is None for x in pc["days"] if x["day"] != iso(NOW))
           and pc["latency"]["p50"] == "lt100ms" and pc["latency"]["p95"] == "ge1s")
     check(f"service: upstream route check p50/p95 and error rate ({mine})", mine.get("count") == 3 and mine.get("ok") == 2 and mine.get("error_rate") == 0.3333
           and mine.get("p50_ms") in (100, 300) and mine.get("p95_ms") == 300 and sv["upstream"]["probes"]["probe /"]["uptime"] == 0.9)
@@ -202,7 +207,38 @@ def server():
     check(f"no request reached the upstream ({len(UPSTREAM)})", not UPSTREAM)
     check("README does not mention /ops/dashboard", "/ops/dashboard" not in open(os.path.join(ROOT, "README.md")).read())
 
+def stops():
+    fl = open(os.path.join(ROOT, "fly.toml")).read()
+    top = fl.split("\n[", 1)[0]
+    check("fly.toml: kill_signal SIGTERM and kill_timeout 10 at the top level", re.search(r'(?m)^kill_signal = "SIGTERM"', top) is not None and re.search(r"(?m)^kill_timeout = 10\b", top) is not None)
+    import signal as SG
+    tmp = tempfile.mkdtemp(); dbp = os.path.join(tmp, "r.db"); today = iso(time.time())
+    def run(img, sig):
+        port = free_port(); env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=dbp, POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", FLY_IMAGE_REF=img)
+        env.pop("POASCAN_STATS_TOKEN", None)
+        p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        base = f"http://127.0.0.1:{port}"
+        for _ in range(100):
+            try: urllib.request.urlopen(base + "/healthz", timeout=2); break
+            except Exception: time.sleep(0.2)
+        try: urllib.request.urlopen(urllib.request.Request(base + "/", headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/130"}), timeout=10).read()
+        except Exception: pass
+        p.send_signal(sig)
+        try: rc = p.wait(15)
+        except subprocess.TimeoutExpired: p.kill(); rc = None
+        return rc, p.stderr.read().decode("utf-8", "replace")
+    out = [run("registry.fly.io/poascan:deployment-a", SG.SIGINT), run("registry.fly.io/poascan:deployment-a", SG.SIGTERM), run("registry.fly.io/poascan:deployment-b", SG.SIGINT)]
+    check(f"SIGINT and SIGTERM exit 0 with no KeyboardInterrupt traceback ({[o[0] for o in out]})", all(o[0] == 0 and "KeyboardInterrupt" not in o[1] and "Traceback" not in o[1] for o in out))
+    from poascan import db
+    db.DB_PATH = dbp; db._local.c = None
+    v = db.q1("SELECT SUM(views) AS n FROM visit_views WHERE day=?", (today,)); u = db.q1("SELECT segments FROM visit_uniques WHERE day=?", (today,))
+    check(f"the stop flushed the visit counts on SIGINT ({v['n'] if v else None} views, {u['segments'] if u else None} segments)", v and (v["n"] or 0) >= 3 and u and u["segments"] == 3)
+    b = db.get_blob("restart_kinds")[0] or {}
+    check(f"restart split: same image is other, a new image is a deploy, raw ref never stored ({b.get('days', {}).get(today)})", b.get("days", {}).get(today) == {"deploy": 1, "other": 1}
+          and "deployment" not in json.dumps(b) and len(b.get("image", "")) == 16)
+    db._local.c.close(); db._local.c = None
+
 if __name__ == "__main__":
-    unit(); server()
+    unit(); server(); stops()
     print("FAILED: " + ", ".join(fails) if fails else "all ops dashboard checks passed")
     sys.exit(1 if fails else 0)
