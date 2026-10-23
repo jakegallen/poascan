@@ -16,6 +16,10 @@ KEY_RULE = ("The agent stores the PoA key in the OS secret store (or its own; el
             "(a poa-backup-key.txt file, else the key once in a direct reply). After that it never appears in plaintext: never echoed or on a command line, "
             "confirmed only as ••••LAST4 plus the store's name.")
 
+# v2.8: the prompt's leak watch and critical-notice stop, for the safety list (MCP onboarding tool and llms.txt data).
+WATCH_RULE = ("Each visit, before its first write, the agent reads /api/hosted/me (no answer, no write) and stops all writes on an active "
+              "critical notice or a next_nonce or address change it didn't make.")
+
 TITLE = "Start mining PoA"
 
 # A fresh default name per page view (and again in the browser), so visitors who keep the default do not collide.
@@ -112,9 +116,9 @@ STEPS = [
     ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent opens it once."),
     ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
-    ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
+    ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
     ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
-    ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
+    ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day. An X-Api-Key header works here in place of key=."),
 ]
 
 def data():
@@ -122,7 +126,7 @@ def data():
     from . import onboarding_prompt as OP
     return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, **hash_fields(), steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
                 wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
-                sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, "No invite or referral codes.", PAY],
+                sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, WATCH_RULE, "No invite or referral codes.", PAY],
                 url="https://poascan.io/start")
 
 def steps_md():

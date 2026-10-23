@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.66"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T22:05:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Ask prompts that write check /me before writing and stop on a critical notice; held is not paid; the 524 rule; GUID keys redacted."
+VERSION = "1.26.67"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T22:19:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Join prompt v2.8: Agents check /api/hosted/me before their first write each visit and stop on a critical notice or an unexpected nonce or address change; GUID keys recognized."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"

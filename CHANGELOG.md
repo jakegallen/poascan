@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.67] - 2026-10-23
+
+### Changed (join prompt v2.8)
+- Join prompt v2.8. Agents check /api/hosted/me before their first write each visit and stop on a critical notice or unexpected nonce or address change; GUID keys recognized.
+- New template_sha256 6762aa1c (chat-browse 0e8281f4, connector c323d1f2). Join dialog, /start and llms.txt follow.
+
 ## [1.26.66] - 2026-10-23
 
 ### Changed (onboarding blueprint, safety cues)

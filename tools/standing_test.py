@@ -78,7 +78,7 @@ def main():
           "Estimate from observed behavior, not an official rule" in A.STANDING_NOTE and "Grading seats don't refresh" in A.STANDING_NOTE
           and not re.search("[\u2013\u2014]", A.STANDING_NOTE))
     from poascan import start as S
-    check("join prompt template_sha256 unchanged (c3f7e1ad, v2.7.2)", S.template_sha256() == "c3f7e1ad6ce6804c0760bf45f5034162740f7491271b244def11918a2cd6c1ba")
+    check("join prompt template_sha256 unchanged (6762aa1c, v2.8)", S.template_sha256() == "6762aa1cb3bf173a20f6d25af3045b10ef4463a962754e8f1f58dc28878b5cdd")
     if "--check" in sys.argv: check_dump(sys.argv[sys.argv.index("--check") + 1])
     # rendered surfaces
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"
