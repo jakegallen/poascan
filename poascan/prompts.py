@@ -162,6 +162,7 @@ def swap_status(oid):
         f"Check PoA (Proof of Agent) swap offer {oid} for me, read only. GET https://poaswap.io/api/v1/check?offer={oid} (add &ref=REF only if I gave you my payment ref) "
         f"and https://poascan.io/api/v1/swaps/{oid}. Tell me the stage, whether money moved and the next step it gives. "
         "pending_receipt means held, not paid: say it waits for the seller. POAScan can lag a few minutes; lag is not failure. "
+        "If POAScan's money_moved is null, a fill was submitted but isn't final: say the payment may have landed and is unknown, never that nothing was paid. "
         "Stop at Filled, Expired or Failed: tell me and stop checking. Check status before any re-take; never take or pay again while a take may be landing. "
         "Never loop: if it says to check again, do it once, later. Never send payment outside the network. Never ask me for keys or seed phrases." + RO)
 

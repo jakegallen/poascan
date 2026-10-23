@@ -59,3 +59,6 @@ def receipt_signed():
     """Offer ids with a finalized swap-fill tx (not dropped) that carries the seller's receipt signature. A fill that never
     finalized does not count."""
     return {e["offer_id"] for e in H.q("SELECT offer_id, json FROM swap_events WHERE kind='swap-fill' AND final=1 AND dropped=0") if _has_receipt(e.get("json"))}
+def fill_submitted():
+    """Offer ids with any archived swap-fill tx that is not dropped (final or not)."""
+    return {e["offer_id"] for e in H.q("SELECT DISTINCT offer_id FROM swap_events WHERE kind='swap-fill' AND dropped=0")}

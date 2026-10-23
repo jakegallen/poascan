@@ -39,8 +39,9 @@ check("fixture: the API record says expired and carries a non-final swap-fill", 
       and any(e["kind"] == "swap-fill" and not e["final"] for e in api["events"]))
 check("de1ddefb page reads Expired, not Fill landing", tag(h) == "Expired" and "Fill landing" not in h)
 check("expired next steps: stop, don't take or pay; nothing about a landing fill", "Expired: stop." in h and "while it lands" not in h and "A fill tx is landing" not in h)
-check("stage history keeps the fill tx as a fill attempt that never finalized, then Expired",
-      "Fill attempt" in h and '<span class="dim">never final</span>' in h and h.index("Fill attempt") < h.rindex(">Expired<") and '<span class="warn">pending</span>' not in h)
+check("stage history keeps the fill tx as Fill submitted, not final, then Expired",
+      "Fill submitted, not final" in h and '<span class="dim">not final</span>' in h and h.index("Fill submitted, not final") < h.rindex(">Expired<")
+      and '<span class="warn">pending</span>' not in h and "Fill attempt" not in h and "never final" not in h)
 check("the page's status is the API record's (same source as /api/v1/swaps/<id>)", OF.stage(SWM.api("/api/swaps/" + OID, {})[0]) == "expired" == OF.stage(api))
 
 # ---------------- every terminal state wins; only live offers infer Fill landing ----------------

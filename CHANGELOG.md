@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.73] - 2026-10-23
+
+### Fixed (unfinished fill)
+- money_moved on every swap offer in /api/v1/swaps, /api/v1/swaps/<offer_id>, CSV and MCP: true when filled, null (unknown) when a swap-fill tx was submitted but is not final, false only when no fill tx exists (a dropped fill does not count). A filled offer with an extra pending fill stays true. POAScan can't see external-chain payments: null never means no payment. de1ddefb (expired, fill b994976f not final) reads null.
+- /swap/<offer_id>: stage history reads 'Fill submitted, not final' (was 'Fill attempt', never final); the Fill row reads 'Submitted, not final' with the tx; Payment ref says the payment is unknown instead of '···'; next steps say the payment may have landed. Status still reads Expired.
+- Ask prompt, OpenAPI, llms.txt, MCP get_swap_offer and list_swap_offers, /about#swap-settle.
+- tools/unfinished_fill_test.py in CI.
+
 ## [1.26.72] - 2026-10-23
 
 ### Added (combined prompt hash slot)

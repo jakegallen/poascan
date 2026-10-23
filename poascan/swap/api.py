@@ -19,11 +19,11 @@ def enrich(rows):
     timeline (ledger swap txs, then expiry), maker_chains and taker_chains (verified links), and on fills
     fee_poa, fill_atts and fill_final. A field with no data is left out, never sent as null, except fill_epoch:
     every filled row carries it, null when the host cannot place the fill in an epoch. Unfilled rows leave it out.
-    Every row carries settle(): taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state
+    Every row carries settle(): taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state, money_moved
     (null when not applicable)."""
     rows = [dict(r) for r in rows]
     if not rows: return rows
-    ch = S.chains(); ev = S.events_all(); marks = H.tx_marks([r.get("fill_txid") for r in rows]); rs = S.receipt_signed()
+    ch = S.chains(); ev = S.events_all(); marks = H.tx_marks([r.get("fill_txid") for r in rows]); rs = S.receipt_signed(); fs = S.fill_submitted()
     ep = getattr(H, "epoch_of_ts", None)   # optional host hook: network epoch of a ledger timestamp
     for r in rows:
         tl = [dict(event=EVENT.get(e["kind"], e["kind"]), ts=e["ts"], txid=e["txid"]) for e in ev.get(r["offer_id"], [])]
@@ -40,23 +40,26 @@ def enrich(rows):
             if mk:
                 if mk[0] is not None: r["fill_atts"] = int(mk[0])
                 if mk[1] is not None: r["fill_final"] = bool(mk[1])
-        r.update(settle(r, r["offer_id"] in rs))
+        r.update(settle(r, r["offer_id"] in rs, r["offer_id"] in fs))
     return rows
 
 def _iso(ts):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts))) if ts else None
 
-def settle(r, signed):
+def settle(r, signed, submitted=False):
     """Settlement fields from the archived public txs only (no extra reads). taker_credit: on a filled offer (its
     swap-fill is final), poa minus fee_poa, at the fill tx time. refund_txid: on a cancelled offer, the final swap-cancel
     that returned the escrow. An expired offer keeps refund_txid null until the maker cancels; null is not proof the
     escrow stayed locked. receipt_state: 'signed' once a finalized swap-fill tx carries the seller's receipt signature;
-    receipts before a fill are not public, so null is not proof none exists."""
+    receipts before a fill are not public, so null is not proof none exists. money_moved: true on a filled offer (final
+    swap-fill); null (unknown) when a swap-fill tx was submitted (not dropped) but the offer is not filled by it, since
+    POAScan can't see external-chain payments; false only when no swap-fill tx exists."""
     out = dict(taker_credit=None, taker_credit_at=None, taker_credit_txid=None, refund_txid=None, refund_at=None, receipt_state="signed" if signed else None)
     if r.get("status") == "filled" and r.get("fill_txid"):
         if r.get("poa") and r.get("fee_bp") is not None:
             out["taker_credit"] = round(r["poa"] - round(r["poa"] * r["fee_bp"] / 10000, 6), 6)
         out["taker_credit_at"] = _iso(r.get("fill_ts")); out["taker_credit_txid"] = r["fill_txid"]
+    out["money_moved"] = True if r.get("status") == "filled" and r.get("fill_txid") else (None if submitted else False)
     if r.get("status") == "cancelled" and r.get("cancel_txid"):
         out["refund_txid"] = r["cancel_txid"]; out["refund_at"] = _iso(r.get("cancel_ts"))
     return out
