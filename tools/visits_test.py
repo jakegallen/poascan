@@ -187,12 +187,12 @@ def server():
         tl = urllib.request.urlopen(urllib.request.Request(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode(),
                                     {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}), timeout=20).read()
         check("/ops not in sitemap, OpenAPI, llms.txt or MCP", b"/ops" not in pub and b"/ops" not in tl and b"visits" not in tl)
-        for q in ("?client=claude", "?client=claude&name=pjoin-secret-name", "", "?name=pjoin-secret-name"): req(base, "/api/v1/prompts/join" + q)
+        for q in ("?client=claude", "?client=claude&name=pjoin-secret-name", "", "?name=pjoin-secret-name", "?client=poaswap", "?client=poaswap", "?client=poaswap&name=pjoin-secret-name"): req(base, "/api/v1/prompts/join" + q)
         req(base, "/api/v1/prompts/join?client=not-a-client")                                   # 400: not counted
         urllib.request.urlopen(urllib.request.Request(base + "/api/v1/prompts/join?client=claude", method="HEAD"), timeout=20)   # HEAD: not counted
     finally: p.terminate(); p.wait(10)
     pj = dict(sqlite3.connect(dbp).execute("SELECT key, SUM(n) FROM visit_counts WHERE metric='pjoin' GROUP BY key").fetchall())
-    check(f"1.26.44: /api/v1/prompts/join GETs counted by client variant only (no name, no 400s, no HEAD) ({pj})", pj == {"claude": 2, "none": 2})
+    check(f"1.26.44: /api/v1/prompts/join GETs counted by client variant, poaswap (POASwap's server fetch) on its own (no name, no 400s, no HEAD) ({pj})", pj == {"claude": 2, "none": 2, "poaswap": 3})
     raw0 = open(dbp, "rb").read() + (open(dbp + "-wal", "rb").read() if os.path.exists(dbp + "-wal") else b"")
     check("the ?name= of a prompt fetch is never stored", b"pjoin-secret-name" not in raw0)
     rows, bad = scan(dbp)

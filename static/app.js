@@ -176,18 +176,18 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s`]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
  function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
- var jp=$("#jm-prompt");fill(jp,nm);
+ var jp=$("#jm-prompt");fill(jp,nm);W.poaName=nm;
  var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
- function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
+ function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;W.poaName=v;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
  f.value=nm;upd();f.addEventListener("input",upd)})();
 /* prompt v2.3 to v2.4 check-ins (v2.5 has none and no data-checkin, so this returns the text unchanged): on /start the copied text carries the picked client's tag in the two check-in URLs
    (data-checkin base + data-tag + "/"); everything else stays byte for byte. Elsewhere the text is untagged. */
-W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[name=client]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
+W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[type=radio]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
 if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
  function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?W.poaTag(c,($(".pc-text",c).textContent||"").trim()):P}
  $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});
  $$("[data-pcard] a[data-pre]").forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))});
- function jmOpen(){ev("join.open");if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
+ function jmOpen(){ev("join.open");var jc=$("[data-pcard]",jm);if(jc)jc.dispatchEvent(new Event("poa:refresh"));if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
  function jmClose(){if(jm.close)jm.close();else jm.removeAttribute("open")}
  jm.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")});
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;
@@ -203,30 +203,35 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
 }
 /* More toggles */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-more]");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true",p=D.getElementById(b.getAttribute("aria-controls"));b.setAttribute("aria-expanded",o?"true":"false");if(p)p.classList.toggle("open",o)});
-/* /start: step 2 picks the client; step 3's main button always copies the prompt first, inside the click, then opens the app
-   (prefilled where its link supports it) in the same gesture, so a popup blocker never fires and paste always works.
-   Beacons as before: start.app / start.appreg for copy plus open, start.copy / start.copyreg for Copy prompt, mcp-poa.add for connectors. */
-(function(){var go=$("[data-go]");if(!go)return;var card=go.closest("[data-pcard]"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0="",T,nf=$("[data-name]",card),cpb=$("[data-gocopy]",card),fl=$("[data-gofail]",card);
- /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's own templates; a connector client
-    gets step 1 (copy https://minepoa.com/mcp or its command, open the app's connector settings) above step 2 (the prompt);
-    a no-path client (tier none) gets the panel instead of a prompt. */
- var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),cap=$("[data-conauto]",card),gon=$("[data-gon]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0=["",""],CT;
- $$("pre[data-variant]",card).forEach(function(p){TPL[p.dataset.variant]=p.textContent});
- function render(r){var t=TPL[r.dataset.tier],v=nf?nf.value||"":"";if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
+/* /start step 3 and the Join dialog (one button): step 2 picks the client; step 3 is one button that always copies the prompt
+   first, inside the click. Auto apps (the link carries the prompt): one click copies and opens, in the same gesture, so a
+   popup blocker never fires. Paste apps: the first click copies and the button turns into "Copied. Open X"; the second opens.
+   No open URL (Grok Bot, Codex): one click copies, "Copied. Paste it into X". A connector app adds one small text link.
+   Beacons: <pid>.app / .appreg for copy plus open, <pid>.copy / .copyreg for a copy alone, <pid>.add for the connector link,
+   mcp-poa.add for the connector options under More. The second click of a paste app copies again but sends no beacon. */
+$$("[data-go]").forEach(function(go){var card=go.closest("[data-pcard]");if(!card)return;var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
+ dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
+ /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's templates (in the Join dialog,
+    once per page); a no-path client (tier none) gets the panel instead of a prompt. */
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0="",CT;
+ $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
+ function nameV(){return nf?nf.value||"":W.poaName||""}
+ function render(r){var t=TPL[r.dataset.tier],v=nameV();if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
  function hide(el,h){if(el)el.hidden=!!h}
- function clab(a){if(!clb)return;var x=$(".gll",clb),y=$(".gls",clb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}
- function sel(){return $("input[name=client]:checked",card)||$("input[name=client]",card)}
+ function radios(){return $$("input[name='"+RN+"']",card)}
+ function sel(){return $("input[name='"+RN+"']:checked",card)||radios()[0]}
  function txt(){return W.poaTag(card,($(".pc-text",card).textContent||"").trim())}
- function say(m,ok){fb.textContent=m;fb.classList.toggle("ok",!!ok)}
+ function say(m,ok){if(!fb)return;fb.textContent=m;fb.classList.toggle("ok",!!ok)}
  function url(r,P){var k=r.dataset.kind;if(k=="mcp")return r.dataset.href;var b=r.dataset.base,pre=r.dataset.pre;return pre?pre+encodeURIComponent(P):b||""}
  /* copy now: start navigator.clipboard.writeText, and also run the synchronous textarea copy in the same gesture, so the
-    clipboard holds the text before the new tab takes focus. Returns a promise of success. */
+    clipboard holds the text before the new tab takes focus. Inside the dialog the textarea goes into the dialog (the rest
+    of the page is inert). Returns a promise of success. */
  function copyNow(v){var sync=false,t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
   var p=null;try{if(navigator.clipboard&&W.isSecureContext)p=navigator.clipboard.writeText(v)}catch(_){p=null}
-  D.body.appendChild(t);t.select();try{sync=D.execCommand("copy")}catch(_){}t.remove();
+  (dlg||D.body).appendChild(t);t.select();try{sync=D.execCommand("copy")}catch(_){}t.remove();
   if(sync)return Promise.resolve(true);return p?p.then(function(){return true},function(){return false}):Promise.resolve(false)}
  function fail(P){if(!fl)return;fl.hidden=false;var ta=$("textarea",fl);ta.value=P;ta.focus();ta.select();say("Select and copy this prompt")}
- /* name check, same rule as POASwap: 1 to 32 of A-Z a-z 0-9 _ -; anything else blocks steps 2 and 3 until fixed */
+ /* name check (/start only), same rule as POASwap: 1 to 32 of A-Z a-z 0-9 _ -; anything else blocks steps 2 and 3 until fixed */
  var er=$("[data-nameerr]",card),more=$("[data-more]",card);
  function nameMsg(v){var a=Array.from(v);if(!a.length)return "Name your agent to continue.";var bad=[];a.forEach(function(c){if(!/[A-Za-z0-9_-]/.test(c)){var w=c===" "?"space":c==="."?"period":c;if(bad.indexOf(w)<0)bad.push(w)}});
   if(bad.length)return "Not allowed: "+(bad.length<2?bad[0]:bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1])+". Use letters, numbers, _ or - (up to 32).";
@@ -240,41 +245,44 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    if(check())setup()}).catch(function(){clearTimeout(to)})}
  function setName(v,isDefault){dflt=!!isDefault;nf.value=v;nf.dispatchEvent(new Event("input",{bubbles:true}));dflt=!!isDefault}
  function queue(){clearTimeout(tT);var v=nf.value||"";if(nameMsg(v))return;tT=setTimeout(function(){avail(v)},300)}
+ function off(el,bad){if(!el)return;el.classList.toggle("off",bad);if(bad){el.setAttribute("aria-disabled","true");el.setAttribute("tabindex","-1")}else{el.removeAttribute("aria-disabled");el.removeAttribute("tabindex")}}
  function check(){if(!nf||!er)return true;var v=nf.value||"",m=nameMsg(v),sg="";if(!m&&tk.taken&&tk.v===v){m="Taken: "+v+" is already an agent. Try another.";sg=tk.sug}var bad=!!m;
   er.textContent=m;if(sg){var u=D.createElement("button");u.type="button";u.className="stuse";u.textContent="Use "+sg;u.addEventListener("click",function(){setName(sg,false);nf.focus()});er.appendChild(D.createTextNode(" "));er.appendChild(u)}er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");
-  $$("input[name=client]",card).forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;if(cpb)cpb.disabled=bad;
-  go.classList.toggle("off",bad);if(con)con.classList.toggle("off",bad);if(bad){go.setAttribute("aria-disabled","true");go.setAttribute("tabindex","-1")}else{go.removeAttribute("aria-disabled");go.removeAttribute("tabindex")}
+  radios().forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;off(go,bad);off(con,bad);
   card.classList.toggle("namebad",bad);return !bad}
- function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",cn=tier=="connector";render(r);
-  hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,!cn);hide(gon,!cn);if(none){if(fl)fl.hidden=true;say("");return}
-  if(cn&&con){clearTimeout(CT);con.classList.remove("ok");con.href=r.dataset.cset||"#";C0=r.dataset.cset?["Add PoA connector to "+r.dataset.app,"Add connector"]:["Copy connector command","Copy command"];clab(C0);hide(cap,!r.dataset.cauto)}
-  var k=r.dataset.kind,n=r.dataset.app,P=txt();go.dataset.kind=k;go.classList.remove("ok");if(fl)fl.hidden=true;
-  var u=url(r,P);go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";
-  clearTimeout(T);L0=k=="mcp"?["Add to "+n,"Add to "+n]:u?["Copy prompt and open "+n,"Copy and open "+n]:["Copy prompt for "+n,"Copy for "+n];lab(L0);if(ap)ap.hidden=k!="auto";say("")}
- /* feedback lives in the button: green, a short "Copied, opening X" (or "Copied"), then back to its label */
- function lab(a){var x=$(".gll",lb),y=$(".gls",lb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}   /* long label, and a short one for 390px; the nodes stay, only their text changes */
- function done(m){clearTimeout(T);go.classList.add("ok");lab([m,m]);if(ap)ap.hidden=true;say(m+". Paste with "+KEY+" if it is not filled in.",1);
-  T=setTimeout(function(){go.classList.remove("ok");lab(L0);var r=sel();if(ap&&r)ap.hidden=r.dataset.kind!="auto"},2600)}
- card.addEventListener("change",function(e){if(e.target.name==="client")setup()});
+ /* the button: label (long, and a short one for 390px; the nodes stay, only their text changes) and one icon: a arrow, c copy, k check */
+ function lab(a){var x=$(".gll",lb),y=$(".gls",lb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}
+ function icon(i){$$("[data-gi]",go).forEach(function(s){s.hidden=s.dataset.gi!==i})}
+ function rest(){var r=sel();clearTimeout(T);ARM=false;go.classList.remove("ok");lab(L0);icon(I0);if(ap)ap.hidden=!(r&&r.dataset.kind=="auto")}
+ function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",n=r.dataset.app,k=r.dataset.kind;render(r);
+  var cl=r.dataset.cset?"Or add the PoA connector to "+n:r.dataset.ccopy?"Or copy the "+n+" connector command":"";
+  hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,none||!cl||k=="mcp");if(fl)fl.hidden=true;say("");if(none)return;
+  clearTimeout(CT);C0=cl;if(clb)clb.textContent=cl;if(con){con.classList.remove("ok");con.href=r.dataset.cset||"#"}
+  var P=txt(),u=url(r,P);go.dataset.kind=k;go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";
+  L0=k=="mcp"?["Add to "+n,"Add to "+n]:k=="auto"?["Copy prompt and open "+n,"Copy and open "+n]:["Copy prompt for "+n,"Copy for "+n];I0=k=="mcp"||k=="auto"?"a":"c";rest()}
+ function flash(m,i){clearTimeout(T);go.classList.add("ok");lab([m,m]);icon(i||"k");if(ap)ap.hidden=true;T=setTimeout(rest,2600)}
+ card.addEventListener("change",function(e){if(e.target.name===RN)setup()});
+ card.addEventListener("poa:refresh",function(){setup()});
  if(nf){nf.addEventListener("input",function(e){if(e.isTrusted)dflt=false;if(check())setup();queue()});nf.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();if(!check())return;var r=sel();if(r)r.focus()}})}
- card.addEventListener("keydown",function(e){var t=e.target;if(e.key==="Enter"&&t.name==="client"){e.preventDefault();t.checked=true;setup();go.focus()}});
+ card.addEventListener("keydown",function(e){var t=e.target;if(e.key==="Enter"&&t.name===RN){e.preventDefault();t.checked=true;setup();go.focus()}});
  go.addEventListener("click",function(e){var r=sel();if(!r||!check()){e.preventDefault();return}var k=r.dataset.kind,n=r.dataset.app,P=txt(),rg=regOn($(".pc-text",card)),u=url(r,P);
-  if(k=="mcp"){ev("mcp-poa.add");go.href=u;copyNow(r.dataset.mcpc).then(function(ok){if(ok)done("Copied, adding to "+n)});return}  /* app schemes open by the link itself */
-  e.preventDefault();ev("start."+(rg?"appreg":"app"));
-  var c=copyNow(P);   /* copy first, synchronously in this click */
-  if(u)W.open(u,"_blank","noopener,noreferrer");   /* then open, still inside the same gesture */
-  c.then(function(ok){if(ok)done(u?"Copied, opening "+n:"Copied");else fail(P)})});
- if(con)con.addEventListener("click",function(e){e.preventDefault();var r=sel();if(!r||!check())return;var n=r.dataset.app,u=r.dataset.cset,v=r.dataset.ccopy||"";ev("start.add");
+  if(k=="mcp"){ev("mcp-poa.add");go.href=u;copyNow(r.dataset.mcpc).then(function(ok){if(ok)flash("Copied. Adding to "+n)});return}  /* app schemes open by the link itself */
+  e.preventDefault();
+  if(k=="auto"){ev(PID+"."+(rg?"appreg":"app"));var c=copyNow(P);if(u)W.open(u,"_blank","noopener,noreferrer");c.then(function(ok){if(ok)flash("Copied. Opening "+n);else fail(P)});return}
+  if(ARM&&u){copyNow(P);W.open(u,"_blank","noopener,noreferrer");flash("Opening "+n,"a");return}   /* second click: open (the prompt is copied again) */
+  ev(PID+"."+(rg?"copyreg":"copy"));
+  copyNow(P).then(function(ok){if(!ok){fail(P);return}
+   if(u){clearTimeout(T);ARM=true;go.classList.add("ok");lab(["Copied. Open "+n,"Copied. Open "+n]);icon("k");say("Prompt copied. Open "+n+" and paste with "+KEY+".",1)}
+   else{flash("Copied. Paste it into "+n);say("Prompt copied. Paste it into "+n+" with "+KEY+".",1)}})});
+ if(con)con.addEventListener("click",function(e){e.preventDefault();var r=sel();if(!r||!check())return;var n=r.dataset.app,u=r.dataset.cset,v=r.dataset.ccopy||"";ev(PID+".add");
   var c=copyNow(v);if(u)W.open(u,"_blank","noopener,noreferrer");
-  c.then(function(ok){if(!ok){fail(v);return}clearTimeout(CT);con.classList.add("ok");var m=u?"Copied, opening "+n:"Copied";clab([m,m]);hide(cap,true);
-   CT=setTimeout(function(){con.classList.remove("ok");clab(C0);var q=sel();hide(cap,!(q&&q.dataset.cauto))},2600)})});
+  c.then(function(ok){if(!ok){fail(v);return}clearTimeout(CT);con.classList.add("ok");if(clb)clb.textContent=u?"Connector URL copied. Opening "+n:"Connector command copied";
+   CT=setTimeout(function(){con.classList.remove("ok");if(clb)clb.textContent=C0},2600)})});
  if(np)np.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-pick]");if(!b)return;
-  var r=$$("input[name=client]",card).filter(function(i){return i.value===b.dataset.pick})[0];if(!r)return;
+  var r=radios().filter(function(i){return i.value===b.dataset.pick})[0];if(!r)return;
   var mp=r.closest(".morep");if(mp&&!mp.classList.contains("open")){var t=$("[data-more][aria-controls='"+mp.id+"']",card);if(t)t.click()}
-  r.checked=true;setup();(con&&!crow.hidden?con:go).focus()});
- if(cpb)cpb.addEventListener("click",function(){if(!check())return;var r=sel(),n=r?r.dataset.app:"your app",P=txt(),rg=regOn($(".pc-text",card));ev("start."+(rg?"copyreg":"copy"));
-  copyNow(P).then(function(ok){if(ok){cpb.classList.add("ok");var o=cpb.textContent;cpb.textContent="Copied";setTimeout(function(){cpb.classList.remove("ok");cpb.textContent=o},1800);say("Prompt copied",1)}else fail(P)})});
- check();setup();if(nf)queue()})();
+  r.checked=true;setup();go.focus()});
+ check();setup();if(nf)queue()});
 /* /start close: back if we came from this site, else home */
 var bk=$("[data-back]");if(bk){var goBack=function(){var r=D.referrer;try{if(r&&new URL(r).origin===location.origin&&history.length>1){history.back();return}}catch(_){}location.href="/"};
  bk.addEventListener("click",function(e){e.preventDefault();goBack()});

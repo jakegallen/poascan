@@ -198,7 +198,7 @@ VS.BOT_NAMES = AI_BOTS
 from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 from . import clients as _CL
-VS.PJOIN_KEYS = frozenset(_CL.ids()) | {"none"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
+VS.PJOIN_KEYS = frozenset(_CL.ids()) | ST.INTERNAL_CLIENTS | {"none"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)

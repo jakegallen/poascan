@@ -1169,3 +1169,15 @@ td a.mono{display:inline-block;min-width:24px}
 .npb .an{gap:8px}
 @media (max-width:760px){.npg{grid-template-columns:repeat(2,minmax(0,1fr))}.nopath p{font-size:var(--t14)}.gocrow{margin-bottom:8px}}
 .toast a{pointer-events:auto;color:inherit;text-decoration:underline;text-underline-offset:2px}
+/* one button (one button): one icon at a time, the connector as a small text link under it, and the Join dialog card */
+.gobtn .gi{display:inline-flex;flex:none}.gobtn .gi[hidden]{display:none}
+.gocl{margin:12px 0 0;text-align:center;font:500 var(--t13)/1.4 var(--ui)}.gocl[hidden]{display:none}
+.gocl a{display:inline-flex;align-items:center;gap:6px;color:var(--dim);text-decoration:underline;text-decoration-color:var(--line2,rgba(255,255,255,.25));text-underline-offset:3px;transition:color var(--fast) var(--ease)}
+.gocl a:hover{color:var(--amber);text-decoration-color:currentColor}.gocl a:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}
+.gocl svg{width:13px;height:13px;flex:none}.gocl a.ok{color:var(--green)}.gocl a.off{opacity:.4;pointer-events:none}
+.jmcard{margin:4px 0 18px}.jmcard .jm-l{display:block;margin:0 0 10px}.jmcard .clw{margin-bottom:16px}
+.jmcard .clb{min-height:48px;font-size:var(--t14)}.jmcard .clt .clb{min-height:50px;font-size:var(--t15,15px)}
+.jmcard .stkey{margin-top:14px;padding-top:12px}.jmcard .stview{margin-top:8px}
+@media (max-width:640px){.jmcard .clg{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+@media (prefers-reduced-motion:reduce){.gocl a{transition:none}}
+.st3 .stwal{text-align:center}

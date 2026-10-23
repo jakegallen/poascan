@@ -152,6 +152,11 @@ def name_error(v):
     return "Too long: up to 32 characters." if len(v) > 32 else ""
 CLIENTS_URL = "https://poascan.io/api/v1/prompts/clients"
 
+# Internal fetch ids for /api/v1/prompts/join: accepted only so a partner's own server fetch is counted under its id in
+# /ops/dashboard offchain.setup_signals. They are not registry clients: never on /start, in the Ask buttons, llms.txt or
+# /api/v1/prompts/clients, and they get exactly the no-client response (the plain untagged full text).
+INTERNAL_CLIENTS = frozenset({"poaswap"})
+
 def api_join(name=None, client=None):
     """GET /api/v1/prompts/join[?client=&name=]: the /start prompt as data, for other sites (POASwap) to reuse. No setup code,
     key or referral. Without client: the canonical untagged text (unchanged since v2). With a registry client id (v2.4): that
@@ -163,7 +168,7 @@ def api_join(name=None, client=None):
     elif KS.has_key(name): raise ValueError("name: 1 to 32 of A-Z a-z 0-9 _ -")
     elif not re.fullmatch(NAME_RX, name): raise ValueError(name_error(name) or "name: 1 to 32 of A-Z a-z 0-9 _ -")
     else: nm = name
-    if client is not None: return _api_client(nm, client)
+    if client is not None and client not in INTERNAL_CLIENTS: return _api_client(nm, client)
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
@@ -226,16 +231,16 @@ def chats():
         a.append(dict(c, kind=k, pre=c["prefill"] if k == "auto" else "", variant=v))
     return [x for x in a if x["row"] == "top"], [x for x in a if x["row"] == "more"]
 
-def _opt(value, shown, attrs, checked=False):
+def _opt(value, shown, attrs, checked=False, rn="client"):
     from .join import label
-    return (f'<label class="cl"><input type="radio" name="client" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
+    return (f'<label class="cl"><input type="radio" name="{rn}" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
             f'<span class="clb">{label(shown)}</span></label>')
 
-def _chat(c, checked=False):
+def _chat(c, checked=False, rn="client"):
     co = c.get("connector") or {}
     con = (f' data-cset="{E(co.get("settings_url") or "")}" data-ccopy="{E(co.get("cli") or MCP)}"' + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
     return _opt(c["name"], c["name"], f' data-kind="{c["kind"]}" data-tier="{c["tier"]}" data-base="{E(c["open"])}" data-pre="{E(c["pre"])}" '
-                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}', checked)
+                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}', checked, rn)
 
 def nopath_panel():
     """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
@@ -249,21 +254,55 @@ def variant_templates():
     from . import onboarding_prompt as OP
     return "".join(f'<pre hidden data-variant="{v}">{E(t)}</pre>' for v, t in OP.VARIANTS.items())
 
-def clients():
-    """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked."""
+def clients(rn="client"):
+    """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked. rn is the radio
+    name: "client" on /start, "jclient" in the Join dialog (both sit on /start, and radios group by name page-wide)."""
     from . import oneclick as OC
     from .join import more, label
     top, rest = chats()
     l, fb = OC.links("poa", MCP), OC.fallback("poa", MCP)
     con = "".join(_opt("mcp:" + k.replace("_", "-"), n, f' data-kind="mcp" data-href="{E(l[k])}" data-mcpc="{E(fb[k])}" data-app="{E(n)}"'
-                       + (' data-web="1"' if k in OC.WEB else "")) for k, n in OC.BUTTONS)
+                       + (' data-web="1"' if k in OC.WEB else ""), False, rn) for k, n in OC.BUTTONS)
     row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
                         f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
-    inner = (f'<div class="clg" role="presentation">{"".join(_chat(x) for x in rest)}</div>'
+    inner = (f'<div class="clg" role="presentation">{"".join(_chat(x, False, rn) for x in rest)}</div>'
              f'<p class="clh">Add the PoA connector</p><div class="clg">{con}</div>'
              f'<p class="clh">Command line and config</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
-    return (f'<div class="clg clt">{"".join(_chat(x, checked=(i == 0)) for i, x in enumerate(top))}</div>'
+    return (f'<div class="clg clt">{"".join(_chat(x, (i == 0), rn) for i, x in enumerate(top))}</div>'
             + more("More", inner, "clm"))
+
+# One button (one button): the step 3 button copies the prompt in every case. Auto apps (the link carries the prompt): one click
+# copies and opens. Paste apps with an open URL: the first click copies and the button becomes "Copied. Open X"; the second
+# opens. Apps with no open URL: one click copies, "Copied. Paste it into X". A connector app adds one small text link under
+# the button. app.js setup() mirrors go_label() and con_label() for the picked app.
+COPYI = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+         '<path d="M3 10.5V3.6A1.1 1.1 0 0 1 4.1 2.5H10" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>')
+CHECKI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+
+def go_label(c):
+    """(long label, short label for 390px, icon) of the step 3 button before a click: auto apps copy and open, the rest copy."""
+    n = c["name"]
+    if c["kind"] == "auto": return f"Copy prompt and open {n}", f"Copy and open {n}", "a"
+    return f"Copy prompt for {n}", f"Copy for {n}", "c"
+
+def con_label(c):
+    """The small connector link under the button, or "" when the app has no PoA connector."""
+    co = c.get("connector") or {}
+    if not co: return ""
+    return f"Or add the PoA connector to {c['name']}" if co.get("settings_url") else f"Or copy the {c['name']} connector command"
+
+def go_block(c0):
+    """Step 3: the one button, the connector link, the no-path panel and the copy fallback; shared by /start and the Join dialog."""
+    from .join import ARROW
+    co0 = c0.get("connector") or {}; ll, ls, ic = go_label(c0); cl = con_label(c0)
+    ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
+           f'<span class="gi gi-k" data-gi="k" hidden>{CHECKI}</span>')
+    return (f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
+            f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>'
+            f'<p class="gocl" data-conrow{"" if cl else " hidden"}><a href="{E(co0.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
+            f'<span data-conlbl>{E(cl)}</span>{ARROW}</a></p>'
+            + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
+            '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
 
 def _step(n, title, body, cls=""):
     return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'
@@ -280,7 +319,7 @@ def page(page_fn, card=None, apps=None):
     """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
     (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
     from . import maint as M, onboarding_prompt as OP
-    from .join import CLOSE, pbox, ARROW
+    from .join import CLOSE, pbox
     nm = default_name()
     # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
     field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" aria-labelledby="st1" aria-describedby="stname-hint stname-err" aria-invalid="false" '
@@ -288,22 +327,13 @@ def page(page_fn, card=None, apps=None):
              '<p class="sthint" id="stname-hint">Letters, numbers, - and _</p>'
              '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>')
     pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
-    c0 = chats()[0][0]; n0, k0, b0 = c0["name"], c0["kind"], c0["open"]; con0 = c0["tier"] == "connector"
-    co0 = c0.get("connector") or {}
-    con = (f'<div class="gorow gocrow" data-conrow{"" if con0 else " hidden"}><a class="gobtn gocon" href="{E(co0.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
-           f'<span class="gon" aria-hidden="true">1</span><span data-conlbl><span class="gll">Add PoA connector to {E(n0)}</span><span class="gls">Add connector</span></span>'
-           f'<em class="gauto" data-conauto{"" if co0.get("prefills_url") else " hidden"}>Auto</em>{ARROW}</a></div>')
-    go = (con + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
-          f'<span class="gon" data-gon aria-hidden="true"{"" if con0 else " hidden"}>2</span>'
-          f'<span data-golbl><span class="gll">Copy prompt and open {E(n0)}</span><span class="gls">Copy and open {E(n0)}</span></span><em class="gauto"{"" if k0 == "auto" else " hidden"}>Auto</em>{ARROW}</a>'
-          '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' + nopath_panel()
-          + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
-          '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
+    c0 = chats()[0][0]
+    go = (go_block(c0)
           + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice()
           + '<details class="stview" data-stview><summary>View prompt</summary>'
           # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so a crawler
           # that pulled the register link out of the page text could only hit the placeholder, never a fresh name each hour.
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + variant_templates() + HELP_LINE)
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
     hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'

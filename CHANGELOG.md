@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.45] - 2026-10-23
+
+The join prompt text is unchanged (still v2.6).
+
+### Changed
+- App row on `/start` step 2 and in the Join dialog: Claude, ChatGPT, Grok, Muse up front. Cursor moves under More, right after Grok Bot. Muse still shows "This app can't mine yet" with the working alternatives. `data/clients.json` carries the new order (`row` for `cursor` is now `more`, for `muse` `top`).
+- Step 3 is one button. Auto apps: "Copy prompt and open Claude" copies and opens in one click. Other apps: "Copy prompt for Le Chat" copies, then the button reads "Copied. Open Le Chat" and the second click opens it. Apps with no open link: "Copy prompt for Codex", then "Copied. Paste it into Codex". A connector app adds one small link under the button, "Or add the PoA connector to Claude". The connector card, the step numbers and the separate Copy prompt button are gone. The prompt is still copied on every click, and the name check still disables the button.
+- The Join dialog uses the same app row and button, with the prompt behind View prompt. The three prompt templates are now embedded once per page, in the dialog.
+
+### Added
+- `/api/v1/prompts/join?client=poaswap`: an internal id for POASwap's own server fetch. It returns exactly the no-client response (the plain default text) and counts under `poaswap` in `/ops/dashboard` `offchain.setup_signals.prompt_fetches_by_client`. It is not a registry client: not on `/start`, in the Ask buttons, `llms.txt` or `/api/v1/prompts/clients`. Other unknown ids still get a 400.
+
 ## [1.26.44] - 2026-10-23
 
 ### Changed

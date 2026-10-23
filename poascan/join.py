@@ -112,17 +112,24 @@ def apps(cls="", join=False):
     return f'<div class="apps {cls}">{top}</div>' + more("More", rest, f"apps {cls}")
 
 def modal():
-    # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback. v2.5: the HTML carries the
-    # YOUR_NAME placeholder (app.js fill() swaps in a fresh name on load) and the visible notice line.
+    """The Join dialog on every page (one button): the /start app row and its one step 3 button, sharing start.go_block() and
+    app.js's card code. Radios are named jclient so they never group with /start's. The prompt sits behind View prompt.
+    v2.5: the HTML carries the YOUR_NAME placeholder (app.js puts the visitor's name in) and the visible notice line.
+    The three variant templates live here once per page; /start's card reads them too."""
     coders = "".join(f'<div class="cmd"><span class="lbl">{n}</span><code>{E(c)}</code>'
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
+    c0 = _S.chats()[0][0]
+    card = (f'<div class="jmcard" data-pcard data-pid="join" data-rname="jclient"><span class="lbl jm-l" id="jm-pick">Pick where it runs</span>'
+            f'<div class="clw" role="radiogroup" aria-labelledby="jm-pick">{_S.clients("jclient")}</div>'
+            f'<div class="jmgo">{_S.go_block(c0)}<p class="stkey" data-stkey>{_S.LOCK}<span>{_S.KEYLINE}</span></p>'
+            '<details class="stview" data-stview><summary>View prompt</summary>'
+            + pbox(f'<pre class="pc-text jm-p" id="jm-prompt" tabindex="0">{E(_S.prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details></div></div>')
     return f'''<dialog class="jm" id="joinmodal" data-pid="join" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
-{_S.paused()}{_S.notice()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>')}
-<span class="lbl jm-l">Open in</span>{apps(join=True)}
+{_S.paused()}{_S.notice()}{card}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
-</div></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>'''
+{_S.variant_templates()}</div></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>'''
 
 def ask_modal():
     """Shared 'Ask your agent' dialog; app.js fills title/prompt from the clicked [data-ask] button."""

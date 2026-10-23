@@ -99,7 +99,8 @@ def unit():
     check("setup_signals definitions say plainly these are intent signals, not joins, and daily counts only",
           "Intent signals, not joins" in dd["offchain.setup_signals"] and "Daily counts only" in dd["offchain.setup_signals"]
           and all(("not a join" in dd[k] or "not people or joins" in dd[k] or "not a signup" in dd[k] or "Intent only" in dd[k]) for k in dd if k.startswith("offchain.setup_signals."))
-          and "setup_signals" in o["not_measurable"]["untagged_signups"])
+          and "setup_signals" in o["not_measurable"]["untagged_signups"]
+          and "poaswap is POASwap's own server fetch (about every 10 minutes), not a visitor" in dd["offchain.setup_signals.prompt_fetches_by_client"])
     tc = of["time_to_checkin"]
     check(f"time to check-in: the clock skew clamped to 0 ({tc})", tc["all"] == {"n": 1, "median_s": 0, "p90_s": 0} and tc["clock_skew_clamped"] == 1)
     rt = of["retention"]

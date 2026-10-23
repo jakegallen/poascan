@@ -38,7 +38,7 @@ METRICS = {
     "mcp": "MCP tools/call by tool name",
     "client": "bot and agent requests by client family (fixed list)",
     "prompt": "prompt button clicks by fixed id, from POST /ops/e",
-    "pjoin": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant id from the shared registry (none without one); never the name",
+    "pjoin": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant id from the shared registry or start.INTERNAL_CLIENTS (none without one); never the name",
     "tag": "human page views by ?ref= campaign tag",
     "device": "human page views by device class",
     "country": "human page views by country (offline DB-IP Lite lookup; IP dropped)",
