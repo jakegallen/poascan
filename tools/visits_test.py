@@ -187,13 +187,33 @@ def server():
         tl = urllib.request.urlopen(urllib.request.Request(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode(),
                                     {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}), timeout=20).read()
         check("/ops not in sitemap, OpenAPI, llms.txt or MCP", b"/ops" not in pub and b"/ops" not in tl and b"visits" not in tl)
+        for q in ("?client=claude", "?client=claude&name=pjoin-secret-name", "", "?name=pjoin-secret-name"): req(base, "/api/v1/prompts/join" + q)
+        req(base, "/api/v1/prompts/join?client=not-a-client")                                   # 400: not counted
+        urllib.request.urlopen(urllib.request.Request(base + "/api/v1/prompts/join?client=claude", method="HEAD"), timeout=20)   # HEAD: not counted
     finally: p.terminate(); p.wait(10)
+    pj = dict(sqlite3.connect(dbp).execute("SELECT key, SUM(n) FROM visit_counts WHERE metric='pjoin' GROUP BY key").fetchall())
+    check(f"1.26.44: /api/v1/prompts/join GETs counted by client variant only (no name, no 400s, no HEAD) ({pj})", pj == {"claude": 2, "none": 2})
+    raw0 = open(dbp, "rb").read() + (open(dbp + "-wal", "rb").read() if os.path.exists(dbp + "-wal") else b"")
+    check("the ?name= of a prompt fetch is never stored", b"pjoin-secret-name" not in raw0)
     rows, bad = scan(dbp)
     check(f"server DB after SIGTERM flush: rows saved, none hold an IP, UA, hash or URL ({rows} rows)", rows > 0 and not bad)
     raw = open(dbp, "rb").read() + (open(dbp + "-wal", "rb").read() if os.path.exists(dbp + "-wal") else b"")
     check("raw DB bytes hold no test IP, UA or token", b"203.0.113.77" not in raw and b"TestBrowser" not in raw and tok.encode() not in raw)
 
+def migrate():
+    """1.26.44: an older visit_counts (CHECK without 'pjoin') is rebuilt by db.init(), every row kept, and then takes pjoin rows."""
+    tmp = tempfile.mkdtemp(); dbp = os.path.join(tmp, "m.db"); c = sqlite3.connect(dbp)
+    c.executescript("CREATE TABLE visit_counts(day TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('api','mcp','client','prompt','tag','device','country','edge','search','404','5xx','ms')),"
+                    " key TEXT NOT NULL CHECK (length(key) <= 64), n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY (day, metric, key)) WITHOUT ROWID;"
+                    " INSERT INTO visit_counts VALUES('2026-10-01','prompt','start.copy',4),('2026-10-01','mcp','get_onboarding_steps',2);"); c.commit(); c.close()
+    r = subprocess.run([sys.executable, "-c", "import os,sys; sys.path.insert(0, os.getcwd()); os.environ['POASCAN_DB']=sys.argv[1]\nfrom poascan import db; db.DB_PATH=sys.argv[1]; db.init(); db.init()\n"
+                        "db.write(\"INSERT INTO visit_counts VALUES('2026-10-02','pjoin','none',1)\")", dbp], cwd=ROOT, capture_output=True, text=True)
+    c = sqlite3.connect(dbp); rows = sorted(c.execute("SELECT * FROM visit_counts").fetchall()); sql = c.execute("SELECT sql FROM sqlite_master WHERE name='visit_counts'").fetchone()[0]
+    left = c.execute("SELECT count(*) FROM sqlite_master WHERE name='visit_counts_new'").fetchone()[0]
+    check(f"1.26.44 migration: old visit_counts rebuilt once, rows kept, pjoin allowed ({r.returncode}, {r.stderr[-200:]})", r.returncode == 0 and "'pjoin'" in sql and "WITHOUT ROWID" in sql and left == 0
+          and rows == [("2026-10-01", "mcp", "get_onboarding_steps", 2), ("2026-10-01", "prompt", "start.copy", 4), ("2026-10-02", "pjoin", "none", 1)])
+
 if __name__ == "__main__":
-    unit(); server()
+    unit(); migrate(); server()
     print("FAILED: " + ", ".join(fails) if fails else "all visit checks passed")
     sys.exit(1 if fails else 0)

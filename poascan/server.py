@@ -197,6 +197,8 @@ AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-Searc
 VS.BOT_NAMES = AI_BOTS
 from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
+from . import clients as _CL
+VS.PJOIN_KEYS = frozenset(_CL.ids()) | {"none"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
@@ -645,6 +647,7 @@ class H(BaseHTTPRequestHandler):
                     try: d = ST.api_join(nq[0] if nq else None, cq[0] if cq else None)
                     except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                     body = json.dumps(d, ensure_ascii=False, separators=(",", ":"))
+                    if self.command == "GET": VS.COUNTER.event("pjoin", (cq[0] if cq else "") or "none")   # the client id only, never the name
                     return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
                                      {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/prompts/clients":   # the shared client registry (data/clients.json) as is; static, keyless

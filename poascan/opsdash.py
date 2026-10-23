@@ -105,7 +105,22 @@ def _failures(r):
 def _dist(xs):
     return dict(n=len(xs), median_s=_pct(xs, 50), p90_s=_pct(xs, 90))
 
-def offchain(fu, cohort, now):
+def setup_signals(vs):
+    """1.26.44: intent signals that survive without check-ins (prompt v2.5 and later): copies of the join prompt from /start
+    and the Join dialog, Join dialog opens, /api/v1/prompts/join fetches by client and MCP get_onboarding_steps calls.
+    Daily counts from visits.py only (no IP, user agent, name or address). They show someone took the prompt, not a join."""
+    days, by_c = [], {}
+    tot = dict(prompt_copies=dict(start=0, join=0), join_opens=0, prompt_fetches=0, mcp_onboarding_calls=0)
+    for d in vs["days"]:
+        s = d.get("setup") or {}; pc = s.get("prompt_copies") or {}; fc = s.get("prompt_fetches_by_client") or {}
+        _add(by_c, fc)
+        for k in ("start", "join"): tot["prompt_copies"][k] += pc.get(k, 0)
+        tot["join_opens"] += s.get("join_opens", 0); tot["prompt_fetches"] += sum(fc.values()); tot["mcp_onboarding_calls"] += s.get("mcp_onboarding_calls", 0)
+        days.append(dict(day=d["day"], prompt_copies=dict(start=pc.get("start", 0), join=pc.get("join", 0)), join_opens=s.get("join_opens", 0),
+                         prompt_fetches_by_client=dict(fc), mcp_onboarding_calls=s.get("mcp_onboarding_calls", 0)))
+    return dict(totals=dict(tot, prompt_fetches_by_client=_top(by_c, 99)), days=days)
+
+def offchain(fu, cohort, now, vs=None):
     rows = [dict(version=r["version"], client=r["client"], started=r["started"], probed=r["probed"], joined=r["joined"],
                  answered_6h=r["answered_6h"], mined_6h=r["mined_6h"], pending_6h=r["pending_6h"], failures=_failures(r)) for r in fu["rows"]]
     t = fu["totals"]; tf = dict(start_no_probe=sum((x["failures"]["start_no_probe"] or 0) for x in rows),
@@ -123,7 +138,8 @@ def offchain(fu, cohort, now):
         for a, _, _, jt, _ in el:
             if db.q1("SELECT 1 AS x FROM txs WHERE from_addr=? AND ts >= ? AND ts < ? LIMIT 1", (a, jt + n * 86400, jt + (n + 1) * 86400)): k += 1
         ret[f"day_{n}"] = dict(eligible=len(el), retained=k, rate=_rate(k, len(el)))
-    return dict(funnel=dict(totals=dict(started=t["started"], probed=t["probed"], joined=t["joined"], answered_6h=t["answered_6h"], mined_6h=t["mined_6h"],
+    return dict(setup_signals=setup_signals(vs or {"days": []}),
+                funnel=dict(totals=dict(started=t["started"], probed=t["probed"], joined=t["joined"], answered_6h=t["answered_6h"], mined_6h=t["mined_6h"],
                                         pending_6h=t["pending_6h"]), rows=rows),
                 failures=tf,
                 time_to_checkin=dict(all=_dist(lag), by_version={k: _dist(v) for k, v in sorted(lag_v.items())},
@@ -223,7 +239,12 @@ DEFINITIONS = {
     "onchain.network.epochs_minted": "Rewards paid by those epoch closes, in POA.",
     "onchain.network.txs_total": "Archived txs with a ledger time in the range.",
     "onchain.network.txs_by_type": "The same split by tx type.",
-    "offchain.funnel.started": "Start check-ins from the prompt, by version and client.",
+    "offchain.setup_signals": "Intent signals, not joins: someone took the join prompt. Daily counts only, from POAScan's own aggregate counters; no IP, user agent, name or address. Since prompt v2.5 has no check-ins, these and onchain.network.chain_joins are what is left to watch.",
+    "offchain.setup_signals.prompt_copies": "Copy and open clicks on the join prompt by card: start (/start step 3 and View prompt) and join (the Join dialog). Human browsers only. A copy is not a signup.",
+    "offchain.setup_signals.join_opens": "Join dialog opens by human browsers. Intent only.",
+    "offchain.setup_signals.prompt_fetches_by_client": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant asked for (an app id from /api/v1/prompts/clients, none without one, other for anything else). The client is the variant, not the site that fetched it. Responses are cacheable for 10 minutes, so this counts fetches, not people or joins.",
+    "offchain.setup_signals.mcp_onboarding_calls": "MCP get_onboarding_steps calls. An agent or app asked for the steps; not a join.",
+    "offchain.funnel.started": "Start check-ins from the prompt, by version and client (v2.3 to v2.4 only; v2.5 and later have no check-ins, so this flattens).",
     "offchain.funnel.probed": "Probe check-ins (v2.4 and later): the agent opened a link it built itself.",
     "offchain.funnel.joined": "Joined check-ins matched to an on-chain join tx within 6 h.",
     "offchain.funnel.answered_6h": "Joined Agents with an answer tx within 6 h of the join tx.",
@@ -260,7 +281,7 @@ NOT_MEASURABLE = {
     "distinct_visitors_over_range": "unique visitors are a daily sketch with a salt replaced each UTC midnight, so the same person cannot be recognised across days",
     "failure_error_classes_beyond_429": "agents report only 429s (by route) through check-ins; 401s, refused tool calls and other errors are not reported back, so drop-offs are inferred from step counts",
     "probe_failures_before_v2_4": "the probe check-in starts with v2.4; older versions have no step between start and join",
-    "untagged_signups": "agents that join from POAScan text but skip the check-ins cannot be told apart from other joins",
+    "untagged_signups": "agents that join from POAScan text without a check-in (every v2.5 and later signup) cannot be told apart from other joins; offchain.setup_signals shows intent only",
     "poascan_outside_uptime": "POAScan has no outside monitor of itself; availability is the share of non 5xx responses it served, plus restarts per day",
     "retention_beyond_90_days": "check-in addresses are kept 90 days, so cohorts older than that are gone",
     "wallets": "POAScan does not create wallets; that data comes from POASwap",
@@ -271,7 +292,7 @@ def _compute(fr, to, version, now):
     vs = VS.report(fr, to); fu = CK.report(fr, to, now=now); nw = json.loads(NW.report(fr, to))
     cohort = _cohort(lo, hi, now)
     out = {"from": fr, "to": to, "generated_ts": now, "version": version, "cache_ttl_s": CACHE_TTL,
-           "traffic": traffic(vs), "onchain": onchain(fu, nw, lo, hi), "offchain": offchain(fu, cohort, now),
+           "traffic": traffic(vs), "onchain": onchain(fu, nw, lo, hi), "offchain": offchain(fu, cohort, now, vs),
            "service": service(fu, vs, fr, to, lo, hi), "wallets": None,
            "definitions": DEFINITIONS, "not_measurable": NOT_MEASURABLE}
     del cohort

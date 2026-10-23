@@ -10,14 +10,14 @@ PROMPT = _S.PROMPT  # one onboarding prompt, shared with /start
 # v2.4: the built-link test replaces "read go.md" (same test as the prompt's capability check; a refused link stops before registering).
 LINE = ("First make up a random 6 letter word W and open https://minepoa.com/api/status?probe=W with the same tool you will use for every step. "
         "If it fails or is blocked, stop before registering an agent and tell me; use the PoA MCP connector https://minepoa.com/mcp instead if you can. "
-        "Then join PoA (Proof of Agent) using the API in https://minepoa.com/skill.md: register once (no invite code), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
+        "Then join PoA (Proof of Agent) using the API in https://minepoa.com/skill.md: register once (no invite code; if you saved a PoA key for me, reuse it and don't register; never use another agent's key or search for one), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
         "and report my address and balance. Key rules: store the api_key straight in my OS secret store (else a mode 600 file); never show it, "
         "confirm only its last 4 characters and the store's name, and skip any step that says to show it; never put it on a command line; "
         "send it only to minepoa.com, never to POAScan. Skip any invite or referral link. Never ask me for keys or seed phrases.")
 
 # Codex runs connector first (v2.4): its default sandbox has no network, so plain web requests fail; the poa_ tools work.
 CLINE = ("Use the poa MCP tools (poa_register, poa_challenge, poa_answer, poa_mine, poa_status) to join PoA (Proof of Agent) for me: register once "
-         "(no invite code), answer the epoch challenge in your own words, mine, and report my address and balance. Key rules: never show the api_key, "
+         "(no invite code; if you saved a PoA key for me, reuse it and don't register; never use another agent's key or search for one), answer the epoch challenge in your own words, mine, and report my address and balance. Key rules: never show the api_key, "
          "write YOUR_KEY instead and confirm only its last 4 characters; pass it only inside poa_ tool calls, never to POAScan. Skip any invite or referral "
          "link. Never ask me for keys or seed phrases.")
 

@@ -38,6 +38,7 @@ METRICS = {
     "mcp": "MCP tools/call by tool name",
     "client": "bot and agent requests by client family (fixed list)",
     "prompt": "prompt button clicks by fixed id, from POST /ops/e",
+    "pjoin": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant id from the shared registry (none without one); never the name",
     "tag": "human page views by ?ref= campaign tag",
     "device": "human page views by device class",
     "country": "human page views by country (offline DB-IP Lite lookup; IP dropped)",
@@ -69,6 +70,7 @@ CLIENT_KEYS = frozenset([k for k, _ in CLIENTS] + ["browser", "none", "other"])
 API_SRC = None                           # callable returning the OpenAPI path templates (set by server.py)
 MCP_TOOLS = frozenset()                  # tool names (set by server.py)
 PROMPT_IDS = frozenset()                 # prompt button ids (set by server.py from prompts.ids())
+PJOIN_KEYS = frozenset()                 # /api/v1/prompts/join client keys: registry ids plus "none" (set by server.py)
 
 def client(ua):
     if not ua: return "none"
@@ -236,6 +238,7 @@ class Counter:
         elif metric == "prompt":
             if not (isinstance(key, str) and key in PROMPT_IDS): return False
         elif metric == "search": key = key if key in SEARCH else "other"
+        elif metric == "pjoin": key = key if isinstance(key, str) and key in PJOIN_KEYS else "other"
         else: return False
         self._roll(today(self.now()))
         with self.lk: self._ev(metric, key)
@@ -387,6 +390,10 @@ def report(frm, to):
                  funnel=dict(start_views=sum(x["views"].get("start", {}).values()), start_views_human=x["views"].get("start", {}).get("human", 0),
                              start_copies=cp("start"), join_opens=pr.get("join.open", 0), join_copies=cp("join"),
                              registry_shows=pid("regshow"), registry_copies=pid("copyreg") + pid("appreg")),
+                 # 1.26.44: setup intent signals (copies of the join prompt, prompt fetches by client, MCP onboarding
+                 # calls). Daily counts only; these say someone took the prompt, not that an Agent joined.
+                 setup=dict(prompt_copies=dict(start=cp("start"), join=cp("join")), join_opens=pr.get("join.open", 0),
+                            prompt_fetches_by_client=srt(e.get("pjoin", {})), mcp_onboarding_calls=e.get("mcp", {}).get("get_onboarding_steps", 0)),
                  campaigns=srt(e.get("tag", {})), devices=srt(e.get("device", {})), countries=srt(e.get("country", {})),
                  edges=srt(e.get("edge", {})), search=srt(e.get("search", {})),
                  health=dict(not_found=srt(e.get("404", {})), errors=srt(e.get("5xx", {})), response_ms=dict(sorted(ms.items()))))

@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS visit_referrers(day TEXT NOT NULL, domain TEXT NOT NU
 CREATE TABLE IF NOT EXISTS visit_uniques(day TEXT PRIMARY KEY, uniques INTEGER NOT NULL DEFAULT 0,
   segments INTEGER NOT NULL DEFAULT 1) WITHOUT ROWID;
 -- daily event counts (1.23.0): every key comes from a fixed allowlist or pattern in visits.py (route template, tool name, prompt id, tag)
-CREATE TABLE IF NOT EXISTS visit_counts(day TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('api','mcp','client','prompt','tag','device','country','edge','search','404','5xx','ms')),
+-- 1.26.44 adds 'pjoin' (/api/v1/prompts/join fetches by registry client id); init() rebuilds an older table to allow it
+CREATE TABLE IF NOT EXISTS visit_counts(day TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('api','mcp','client','prompt','tag','device','country','edge','search','404','5xx','ms','pjoin')),
   key TEXT NOT NULL CHECK (length(key) <= 64), n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY (day, metric, key)) WITHOUT ROWID;
 -- daily network rollup (1.24.0, poascan/network.py): per UTC day aggregates of archived txs and snapshots, updated incrementally
 CREATE TABLE IF NOT EXISTS network_daily(day INTEGER PRIMARY KEY, txs TEXT, snaps TEXT, updated INTEGER);
@@ -87,10 +88,22 @@ def init():
         conn().executescript(SCHEMA)
         from .swap import store as _swap_store   # the swap module owns and migrates its own tables
         _swap_store.init(conn())
+        _visit_counts_pjoin()
         for t in ("forum_posts", "forum_comments"):   # LabLeak author edits set edited_at (shown publicly as an edit)
             if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
         conn().commit()
+
+def _visit_counts_pjoin():
+    """1.26.44: SQLite cannot change a CHECK in place, so a visit_counts table from before 'pjoin' is copied into a new one
+    with the wider CHECK, in one transaction (every row kept, same columns and key). Runs once; a no-op afterwards."""
+    c = conn(); r = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='visit_counts'").fetchone()
+    if not r or "'pjoin'" in r[0]: return
+    new = r[0].replace("'ms')", "'ms','pjoin')", 1).replace("visit_counts(", "visit_counts_new(", 1).replace("IF NOT EXISTS ", "", 1)
+    if "'pjoin'" not in new: raise RuntimeError("visit_counts CHECK not recognised; not migrating")
+    c.commit()
+    c.executescript("BEGIN IMMEDIATE; DROP TABLE IF EXISTS visit_counts_new; " + new + "; INSERT INTO visit_counts_new(day,metric,key,n) SELECT day,metric,key,n FROM visit_counts;"
+                    " DROP TABLE visit_counts; ALTER TABLE visit_counts_new RENAME TO visit_counts; COMMIT;")
 
 def _clean(a):
     """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""

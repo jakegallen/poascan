@@ -49,7 +49,8 @@ def fixture(db, CK, now):
     db.write("INSERT INTO visit_views VALUES(?,?,?,?)", [(d, "home", "human", 50), (d, "start", "human", 20), (d, "agents", "bot", 9), (d, "api", "agent", 31)], many=True)
     db.write("INSERT INTO visit_referrers VALUES(?,?,?)", [(d, "x.com", 12)], many=True)
     db.write("INSERT INTO visit_counts VALUES(?,?,?,?)", [(d, "device", "mobile", 40), (d, "country", "US", 30), (d, "api", "/api/v1/summary", 31), (d, "mcp", "get_summary", 4),
-        (d, "prompt", "start.copy", 6), (d, "5xx", "address", 2), (d, "404", "other", 5), (d, "ms", "home.lt100ms", 90), (d, "ms", "address.ge1s", 10)], many=True)
+        (d, "prompt", "start.copy", 6), (d, "prompt", "join.open", 3), (d, "prompt", "join.copy", 2), (d, "pjoin", "claude", 5), (d, "pjoin", "none", 1),
+        (d, "mcp", "get_onboarding_steps", 2), (d, "5xx", "address", 2), (d, "404", "other", 5), (d, "ms", "home.lt100ms", 90), (d, "ms", "address.ge1s", 10)], many=True)
     db.write("INSERT INTO route_checks VALUES(?,?,?,?,?)", [(now - 300, "/api/hosted/mine", "200", 100, 1), (now - 200, "/api/hosted/mine", "200", 300, 1),
                                                            (now - 100, "/api/hosted/mine", "timeout", 10000, 0)], many=True)
     db.write("INSERT INTO uptime_daily VALUES(?,?,?,?,?)", [((now // D) * D, "probe /", 10, 9, 200)], many=True)
@@ -80,7 +81,7 @@ def unit():
     tr = o["traffic"]
     check(f"traffic: uniques, views by kind, top pages, api, mcp, prompt clicks ({tr['totals']})", tr["totals"]["views"] == {"human": 70, "bot": 9, "agent": 31}
           and tr["days"][0]["uniques"] == 77 and tr["top_pages"]["home"]["human"] == 50 and tr["referrers"] == {"x.com": 12} and tr["devices"] == {"mobile": 40}
-          and tr["countries"] == {"US": 30} and tr["totals"]["api_calls"] == 31 and tr["totals"]["mcp_calls"] == 4 and tr["totals"]["prompt_clicks"] == 6)
+          and tr["countries"] == {"US": 30} and tr["totals"]["api_calls"] == 31 and tr["totals"]["mcp_calls"] == 6 and tr["totals"]["prompt_clicks"] == 11)
     oc = o["onchain"]; vp = oc["via_poascan"]
     check(f"onchain: matched joins in range next to every chain join ({vp}, {oc['network']['chain_joins']})", vp["joined"] == 1 and vp["joined_by_version"] == {"v2.4": 1}
           and vp["joined_by_client"] == {"none": 1} and vp["tagged_joins"] == 1 and oc["network"]["chain_joins"] == 3 and vp["share_of_chain_joins"] == round(1 / 3, 4))
@@ -88,6 +89,17 @@ def unit():
     of = o["offchain"]; f = of["failures"]
     check(f"offchain funnel and failures ({of['funnel']['totals']}, {f})", of["funnel"]["totals"]["started"] == 1 and of["funnel"]["totals"]["probed"] == 1
           and f["unmatched"] == 1 and f["resumed"] == 1 and f["start_no_probe"] == 0)
+    ss = of.get("setup_signals") or {}; st = ss.get("totals") or {}; sd = [x for x in ss.get("days", []) if x["day"] == iso(NOW)]
+    check(f"1.26.44 offchain.setup_signals: daily copies, Join opens, prompt fetches by client, MCP onboarding calls ({st})",
+          st.get("prompt_copies") == {"start": 6, "join": 2} and st.get("join_opens") == 3 and st.get("prompt_fetches_by_client") == {"claude": 5, "none": 1}
+          and st.get("prompt_fetches") == 6 and st.get("mcp_onboarding_calls") == 2 and len(ss["days"]) == len(tr["days"]) and len(sd) == 1
+          and sd[0] == {"day": iso(NOW), "prompt_copies": {"start": 6, "join": 2}, "join_opens": 3, "prompt_fetches_by_client": {"claude": 5, "none": 1}, "mcp_onboarding_calls": 2}
+          and set(ss) == {"totals", "days"} and all(set(x) == {"day", "prompt_copies", "join_opens", "prompt_fetches_by_client", "mcp_onboarding_calls"} for x in ss["days"]))
+    dd = OD.DEFINITIONS
+    check("setup_signals definitions say plainly these are intent signals, not joins, and daily counts only",
+          "Intent signals, not joins" in dd["offchain.setup_signals"] and "Daily counts only" in dd["offchain.setup_signals"]
+          and all(("not a join" in dd[k] or "not people or joins" in dd[k] or "not a signup" in dd[k] or "Intent only" in dd[k]) for k in dd if k.startswith("offchain.setup_signals."))
+          and "setup_signals" in o["not_measurable"]["untagged_signups"])
     tc = of["time_to_checkin"]
     check(f"time to check-in: the clock skew clamped to 0 ({tc})", tc["all"] == {"n": 1, "median_s": 0, "p90_s": 0} and tc["clock_skew_clamped"] == 1)
     rt = of["retention"]

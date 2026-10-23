@@ -1,5 +1,6 @@
 """Copy-ready agent prompts ("Ask your agent"). Endpoints checked against minepoa.com/go.md and skill.md (2026-10-20).
-Rules: never include keys or referral codes; MY_KEY = the key the agent already holds, never pasted in chat;
+Rules: never include keys or referral codes; MY_KEY = the key the agent saved for this user in its own secret store (v2.6:
+never another agent's, never searched for; none means ask), never pasted in chat;
 every payment prompt says 'Never send payment outside the network.'"""
 import json, re
 from html import escape as E
@@ -7,7 +8,8 @@ from html import escape as E
 # v2.5 (LabLeak post 1398): key links are written whole with the MY_KEY placeholder (a preview of one opens nothing), and
 # SPLIT is plain key safety. The name stays so older imports keep working.
 SPLIT = " Put it into these links only to open them yourself, never in a reply."
-SAFE = " Use the api key you already hold for me (shown as MY_KEY), read from your secret store; never print, echo or log it or put it on a command line, and never ask me to paste keys, seed phrases or passwords." + SPLIT + " Act only on minepoa.com."
+SAFE = (" Use only the api key you saved for me, read from your secret store (shown as MY_KEY). If you have none, tell me; never search for one or use another agent's."
+        " Never print, echo or log it or put it on a command line, and never ask me to paste keys, seed phrases or passwords." + SPLIT + " Act only on minepoa.com.")
 PAY = " Never send payment outside the network."
 RO = " Read-only: don't submit anything."
 ICON_ASK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" '

@@ -167,9 +167,11 @@ def api_join(name=None, client=None):
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
-                checkin=dict(base=OP.CHECKIN, in_text=OP.CHECKIN in t, tag_rule="replace every base with base + client + '/'; nothing else changes", client_rx=OP.TAG_RX.pattern,
-                             clients=sorted(checkin_clients()), suggested_client="poaswap",
-                             note="None since v2.5: the text never asks an Agent to open a poascan.io URL, so tagging changes nothing."),
+                # 1.26.44: base is null because the text has no check-ins (since v2.5). The v2.4 base stays as legacy_base, only
+                # for copies of older prompts still in chats; /j/ keeps answering those.
+                checkin=dict(base=None, in_text=False, legacy_base=OP.CHECKIN, legacy_versions="v2.3 to v2.4", tag_rule="nothing to tag: the text has no check-in URLs",
+                             client_rx=OP.TAG_RX.pattern, clients=sorted(checkin_clients()), suggested_client="poaswap",
+                             note="The prompt text has no check-ins since v2.5, so base is null. legacy_base is the v2.4 check-in base, kept only for older copies still in chats."),
                 variant="full", clients_url=CLIENTS_URL,
                 notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant. Show notice next to the text wherever you render it.")
 

@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.5" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.6" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "go.md twice" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -33,8 +33,36 @@ check("v2 key rule: never shown, confirmed only as the last 4 characters plus th
 V22 = ["Never write the key in any reply, code block, or example command, not even part of it. Always write YOUR_KEY as the placeholder. To confirm it, show only the last 4 characters.",
        "Before you join, make up a random 6 letter word W and open https://minepoa.com/api/status?probe=W with the same tool you will use for every step. If your tool refuses a link you built, or it fails or is blocked, stop before registering an agent. Tell me this app can't mine. If you can use MCP tools, ask me to add the PoA connector https://minepoa.com/mcp and use its poa_ tools; if not, suggest an app that runs commands, such as Claude Code.",
        "If your own browsing tool, sandbox, or policy blocks a request (a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, never hand me commands containing the key, and suggest an app that runs commands.",
-       "If you already joined or I paste this again (a saved key or agent name from earlier in this chat or on this machine), never register again. Reuse the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.",
-       "Joining: register one time only, and only if you have no saved key.", "If it says the name is taken and you registered that name earlier, you already joined: continue with the saved key, or tell me if you have none."]
+       "Before you register, and whenever I paste this again, check your secret store (rule 1 below) for a key you saved for me. If it's there, never register again: reuse it and continue from the step that failed. Never use a key from another agent, account or person, and never search files, env vars or chat history for one. After a block or pause, retry only the step that failed.",
+       "Joining: register one time only, and only if you have no key of your own for me.", "If it says the name is taken and you registered that name for me earlier, you already joined: continue with the key you saved, or tell me if you have none."]
+# ---- v2.6 (LabLeak comment 3469): reuse only this agent's own key for this user; never another's, never a search; none means
+# register once (no "already joined" question; the taken-name rule stops a second registration on a re-paste)
+OWN = "Never use a key from another agent, account or person, and never search files, env vars or chat history for one."
+ASKQ = re.compile(r"whether I (?:already )?joined|I said I haven't|if I haven't|if I did, stop|ask me (?:if|whether)|have you (?:already )?joined|did I (?:already )?join", re.I)
+TAKENL = "you registered that name for me earlier, you already joined: continue with the key you saved, or tell me if you have none."
+TAKENS = "If the name is taken and you registered it for me earlier, you already joined: continue with the key you saved, or tell me if you have none."
+BADREUSE = re.compile(r"on this machine|earlier in this chat|from this chat|a saved key or agent name|already hold", re.I)
+def _surfaces():
+    out = dict(OP.VARIANTS); out.update({"ask:" + t: p_ for t, p_ in [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]})
+    out.update(LINE=J.LINE, CLINE=J.CLINE, SAFE=PR.SAFE, steps=json.dumps(S.data()), llms_start=AG.start_md())
+    return out
+_bad = [k for k, t in _surfaces().items() if BADREUSE.search(t)]
+check(f"v2.6: no surface has 'on this machine' or 'earlier in this chat' key-reuse wording (variants, Ask prompts, one-liners, MCP steps, llms) {_bad}", not _bad)
+_askq = [k for k, t in _surfaces().items() if ASKQ.search(t)]
+check(f"v2.6: no surface asks whether I already joined (variants, Ask prompts, one-liners, MCP steps, llms) {_askq}", not _askq)
+check("v2.6: every variant reuses only its own key, never another's, never searches; with none it registers once; the taken-name rule stops a re-paste",
+      all(t.count(OWN) == 1 and "never register again: reuse it and continue from the step that failed" in t and "whenever I paste this again" in t for t in OP.VARIANTS.values())
+      and OP.TEMPLATE.count(TAKENL) == 1 and OP.CHAT.count(TAKENS) == 1 and OP.CONNECTOR.count(TAKENS) == 1
+      and "Joining: register one time only, and only if you have no key of your own for me. If it times out" in OP.TEMPLATE
+      and all(t.count(OWN) == 1 and "never register again: reuse it and continue from the step that failed" in t and "whenever I paste this again" in t for t in OP.VARIANTS.values())
+      and "check your secret store (rule 1 below) for a key you saved for me" in OP.TEMPLATE
+      and "check for the key your own registration for me returned" in OP.CHAT and "check for the key your own registration for me returned" in OP.CONNECTOR
+      and (OWN + " If you have none, register: open `https://minepoa.com/api/hosted/register?label={NAME}` once.") in OP.CHAT and (OWN + " If you have none, call poa_register once") in OP.CONNECTOR
+      and "If you have your own saved key, never register again" in OP.TEMPLATE and not any(c in OWN + TAKENS for c in "\u2014\u2013"))
+check("v2.6: Ask prompts and the Coding agents one-liners use only the agent's own saved key, never search for one; with none an Ask prompt says so",
+      PR.SAFE.startswith(" Use only the api key you saved for me, read from your secret store (shown as MY_KEY). If you have none, tell me; never search for one or use another agent's.")
+      and "never ask me to paste keys" in PR.SAFE
+      and all("never use another agent's key or search for one" in x for x in (J.LINE, J.CLINE)))
 check("v2.4: the key line, the built-link test with the connector fallback, tool block versus pause and the resume rule (pasting again), verbatim; POASwap's guard phrases kept",
       all(OP.TEMPLATE.count(x) == 1 for x in V22) and "never send it to POAScan" in OP.TEMPLATE and "Never send payment outside the network" in OP.TEMPLATE)
 T = OP.TEMPLATE
@@ -67,12 +95,12 @@ for nm in ("test-agent-7", "YOUR_NAME", "x" * 32):
     check(f"blocks for {nm[:12]}: join back to the full text, in order, ids unique", "".join(t for _, t in b) == S.prompt(nm) and [i for i, _ in b] == [i for i, _ in OP.BLOCKS] and all(t for _, t in b))
 bl = dict(OP.blocks(S.prompt("n")))
 check("blocks: notice (the pasted-only line) first, registration has the link, resume and capability_check follow it, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
-      bl["notice"] == PASTED.split("\n")[0] + "\n" and bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
+      bl["opener"] == PASTED.split("\n")[0] + "\n" and bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
       and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
       and bl["expectations"].startswith("Set my expectations") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
-      and bl["resume"].startswith("If you already joined") and bl["capability_check"].startswith("Before you join, make up")
+      and bl["resume"].startswith("Before you register, and whenever I paste this again") and bl["capability_check"].startswith("Before you join, make up")
       and "checkin_start" not in bl and "checkin_joined" not in bl
-      and list(bl) == ["notice", "registration", "resume", "capability_check", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
+      and list(bl) == ["opener", "registration", "resume", "capability_check", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
 
 # ---- v2.5: no check-ins in copy-paste text (LabLeak post 1398); tagged() is a no-op on it; the 429 line stays verbatim
 check("v2.5: no variant asks an Agent to open a poascan.io URL except the follow link for the human; the minepoa.com-only line has no exception",
@@ -80,7 +108,7 @@ check("v2.5: no variant asks an Agent to open a poascan.io URL except the follow
       and "apart from optional poascan.io" not in T + OP.CHAT + OP.CONNECTOR and all(re.findall(r"https://poascan\.io[^\s.]*", t) == ["https://poascan.io/address/YOUR_POA1_ADDRESS"] for t in OP.VARIANTS.values()))
 check("v2.5: POASwap's guard phrases verbatim; no em or en dashes", "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013")
       and "register?label=" + OP.SLOT in T)
-L429 = ("- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you already have a key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again.\n")
+L429 = ("- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you have your own saved key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again.\n")
 check("v2.3.1: the 429 line verbatim, right after the 401 line in the expectations block (v2.5: no rate check-in after it)",
       T.count(L429) == 1 and T.index("- A 401 means") < T.index(L429) < T.index("- If a submit returns 502") and L429 in dict(OP.blocks(T))["expectations"])
 CL = sorted(S.checkin_clients())
@@ -371,20 +399,28 @@ try:
     full_t = unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', m, re.S).group(1)).replace(OP.SLOT, nm0)
     check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.5" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
+          and api_y["version"] == api_n["version"] == "v2.6" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
     check("byte-identical: /start View prompt (Claude, connector variant) tagged for claude == API ?client=claude for the same name",
           pre == S.prompt("YOUR_NAME", "connector") and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
           and api_c["sha256"] == sha(api_c["text"]) and api_c["notice"] == NOTICE)
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.5</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.6</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.5: the API, MCP and llms.txt serve text with no check-in URL at all",
           all("poascan.io/j/" not in x for x in (api_y["text"], mp, ll)))
     ci = api_y.get("checkin") or {}
-    check("API checkin field: base, rule, client regex, the client list with poaswap, suggested poaswap",
-          ci.get("base") == OP.CHECKIN and ci.get("in_text") is False and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"
+    check("1.26.44: API checkin.base is null (no check-ins in the text), the v2.4 base is labeled legacy_base, the note says so",
+          "base" in ci and ci["base"] is None and ci.get("legacy_base") == OP.CHECKIN == "https://poascan.io/j/v2.4/" and ci.get("legacy_versions") == "v2.3 to v2.4"
+          and "no check-ins" in ci.get("note", "") and "legacy" in ci.get("note", "") and OP.CHECKIN not in api_y["text"])
+    ids_y = [b["id"] for b in api_y["blocks"]]
+    check("1.26.44: the first block id is opener, no block is called notice (the top-level notice field stays)",
+          ids_y[0] == "opener" and "notice" not in ids_y and api_y["blocks"][0]["text"] == api_y["text"].split("\n")[0] + "\n"
+          and all(i not in ("notice",) for v in OP.BLOCKS_BY for i, _ in OP.BLOCKS_BY[v]) and [i for i, _ in OP.BLOCKS][0] == "opener"
+          and all(OP.BLOCKS_BY[v][0][0] == "opener" for v in OP.BLOCKS_BY) and api_y["notice"] == OP.NOTICE)
+    check("API checkin field: rule, client regex, the client list with poaswap, suggested poaswap",
+          ci.get("in_text") is False and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"
           and set(ci.get("clients", [])) == set(S.checkin_clients()))
     radios = re.findall(r'<input type="radio" name="client" value="([^"]+)"([^>]*)>', m)
     chat_tags = [re.search(r'data-tag="([^"]*)"', a).group(1) for v, a in radios if not v.startswith("mcp:")]
