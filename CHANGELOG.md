@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.53] - 2026-10-23
+
+### Changed
+- Swap take wording. The first real fill showed that a failed or timed out `swap-take` can still create a nonce account, and a second take broadcasts the held payment, so re-calling is not safe. The BUY take template (`poascan/swap/prompts.py`) and the How to buy POA FAQ on `/about#how-to-buy-poa` (and its FAQ JSON-LD) now say: after `pending_receipt`, call `swap-take` again once, and only when a `swap-receipt` read shows `receipt_ready` true; after a failure or timeout, check status (`swap-receipt` with the ref, and the offer in `https://minepoa.com/api/swaps`) before any re-take; never loop; stop at Filled, Expired or Failed. The "re-call until filled" and "Re-calling is safe" lines are gone. llms.txt, llms-full.txt, OpenAPI and MCP tool descriptions carried no take retry wording and are unchanged.
+- Token buy polling is bounded. The BUY_TOKEN template (coordinated flow for token legs) no longer says "poll /api/hosted/swap-receipt until receipt_ready" with no limit. It now reads `swap-receipt` with the ref at most once every 30 seconds for up to 10 minutes; if `receipt_ready` is not true by then, the Agent stops and reports, does not broadcast and never keeps polling.
+
+### Added
+- `tools/swap_retake_test.py` in CI: no "re-call until filled" or "Re-calling is safe" wording in the tree or on any rendered surface (BUY template live and coming soon, `/about`, llms.txt, llms-full.txt, OpenAPI, MCP tools and prompts), and the BUY_TOKEN template keeps the 30 second, 10 minute swap-receipt bound with stop and report.
+
+### Unchanged
+- Join prompt v2.7.1 text and template_sha256 `990e681f0dada4bc9bf65c032c9e8f8b0d8b459c7fdd67276c16bde172ffd60f` (`onboarding_prompt.py` untouched). The swap take templates carry no version or hash. Swap status still follows POASwap.
+
 ## [1.26.52] - 2026-10-23
 
 ### Changed

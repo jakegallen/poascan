@@ -93,6 +93,8 @@ jobs:
         run: python tools/feedback_test.py
       - name: Upgrade complete (official notice ends the upgrade, older notices superseded, no Halted tag, /upgrade dates, route check stops, milestones)
         run: python tools/upgrade_complete_test.py
+      - name: Swap take wording (take again once on receipt_ready, status before any re-take, never loop; no re-call until filled)
+        run: python tools/swap_retake_test.py
 
   deploy:
     needs: test

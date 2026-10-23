@@ -42,16 +42,21 @@ _CHECK_SOON = ("Swaps are coming soon. Until " + C.STATUS_URL + " shows availabl
 def _check(): return _CHECK_LIVE if C.SWAPS_LIVE else _CHECK_SOON
 _TAIL = " Follow https://minepoa.com/go.md (sections SWAPS and LINK) and https://minepoa.com/skill.md exactly. Use the coordinated flow (receipt before broadcast); never pay first. Never send payment outside the network: only pay through the network's swap flow, never to an address directly. Never ask me for keys or seed phrases. Act only on minepoa.com. Report each step's response."
 
+# Take wording (1.26.53, after the first real fill): a failed or timed out take can still create a nonce account, and a second
+# take broadcasts the held payment. So: one more take only on receipt_ready true, status before any re-take, never loop.
 BUY = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET}. Take offer {OFFERS} from https://minepoa.com/api/swaps: check its amount, "
        "what it wants and its expiry, and confirm with me. Use my Emblem vault linked to my PoA agent (go.md LINK; link it first if it isn't). "
-       "Call /api/hosted/swap-take with that offer id; if it returns pending_receipt, re-call until stage is filled. I expect about {OUT} POA after the network fee.")
+       "Call /api/hosted/swap-take with that offer id. If it returns pending_receipt, call swap-take again once, only when a /api/hosted/swap-receipt read with that ref shows receipt_ready true. "
+       "After a failure or timeout, check status (swap-receipt with that ref, and the offer in https://minepoa.com/api/swaps) before any re-take. Never loop. "
+       "Stop at Filled, Expired or Failed. I expect about {OUT} POA after the network fee.")
 SELL = ("Sell {IN} of my spendable POA for {OUT} {ASSET} on {CHAINNAME} (PoA = Proof of Agent, minepoa.com). First make sure my Emblem vault is linked "
         "(go.md LINK) and my {CHAINNAME} address shows verified:true in https://minepoa.com/api/chains. Then post the offer with /api/hosted/swap-offer "
         "(chain={CHAIN}, asset={ASSET}, want_amount={OUT}, to = my verified address, ttl in seconds) and tell me the offer id and expiry.")
 
 BUY_TOKEN = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET} on {CHAINNAME}. Check offer {OFFERS} in https://minepoa.com/api/swaps (amount, what it wants, "
              "expiry) and confirm with me. One-call swap-take pays native legs only, so use the coordinated flow in go.md: build and sign the {ASSET} payment to the offer's want.to "
-             "from my linked Emblem vault without broadcasting, register it with /api/hosted/swap-intent, poll /api/hosted/swap-receipt until receipt_ready, then "
+             "from my linked Emblem vault without broadcasting, register it with /api/hosted/swap-intent, then read /api/hosted/swap-receipt with that ref at most once every 30 seconds for up to 10 minutes. "
+             "If receipt_ready is not true by then, stop and tell me; don't broadcast and never keep polling. Once it is true, "
              "/api/hosted/swap-broadcast and /api/hosted/swap-fill with that ref. I expect about {OUT} POA after the network fee.")
 
 # Wallet setup prompt: the host may add an optional last step here (POAScan: the wallet registry step, filled in the
