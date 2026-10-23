@@ -9,6 +9,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.19] - 2026-10-22
+
+### Fixed
+- Recovery strip: mining was officially reopened (post 1357, 23:45:49Z) but the strip fell back to "Recovery in progress" once the keyless mining route read started timing out. An unknown read (timeout, network error, unexpected status) no longer changes a route's shown state: the last clear read and its time are kept, flagged stale when old. Only a 503 halt answer or a normal answer changes it.
+- The official signal is now kept in the database (`official.mining_at`) and is never cleared by a route read, a forum mirror gap or a restart. `mining_back_at` is never cleared by a route read either; it was restored to 2026-10-22T23:45:49Z after the empty value the bug wrote at 00:16:36Z.
+- After the official signal the strip says "Mining reopened" unless mining answers with a clear halt twice in a row after the official time, then "Mining paused again".
+- /upgrade: a route whose reads time out now shows "Slow" (amber, with "last answered" time) instead of "Checking", sits in its own "Slow to answer" group, never in "Still paused", and is not counted in the endpoints meter. The strip says "some endpoints are slow". `hosted_routes_display` gains the value `slow`.
+- llms.txt: the swap data API is listed above, not below.
+
 ## [1.26.18] - 2026-10-22
 
 ### Added

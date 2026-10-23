@@ -151,7 +151,16 @@ def recon_card():
     return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
 
 # ================= /upgrade: the recovery page (its own layout; Health keeps uptime and latency) =================
-ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "unknown": ("", "Checking")}
+ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "slow": ("warn slow", "Slow"), "unknown": ("", "Not read yet")}
+ROUTE_WORD = {"open": "open", "paused": "paused"}
+
+def _route_tip(v, st):
+    """Tooltip for a route tag: a slow route keeps its last clear answer and its time."""
+    if st != "slow": return ""
+    if v["state"] in ROUTE_WORD and v.get("checked"):
+        t = time.strftime("%H:%M UTC", time.gmtime(v["checked"]))
+        return f' title="Not answering our reads right now. Last answered {t} ({ROUTE_WORD[v["state"]]})."'
+    return ' title="Not answering our reads right now."'
 CHECK = '<svg class="chk" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>'
 
 def _chip(text, cls): return f'<li class="chp {cls}">{CHECK if cls == "ok" else "<i></i>"}<span>{E(text)}</span></li>'
@@ -171,7 +180,7 @@ def upgrade_view():
     back = [k for k in rt if ds[k] in ("open", "responding")]; total = len(rt)
     allof = m["official"]["routes"]
     word = "back" if allof else "responding"
-    segs = "".join(f'<li class="seg" data-hroute="{k}" data-st="{ds[k]}"><i></i><span><b>{E(v["label"])}</b><em class="tag {ROUTE_TAG[ds[k]][0]}">{ROUTE_TAG[ds[k]][1]}</em></span></li>'
+    segs = "".join(f'<li class="seg" data-hroute="{k}" data-st="{ds[k]}"{_route_tip(v, ds[k])}><i></i><span><b>{E(v["label"])}</b><em class="tag {ROUTE_TAG[ds[k]][0]}">{ROUTE_TAG[ds[k]][1]}</em></span></li>'
                    for k, v in rt.items())
     meter = (f'<div class="mtr"><div class="mtr-h"><span class="lbl">Endpoints {word}</span><b class="mtr-n"><span class="green">{len(back)}</span> of {total}</b></div>'
              f'<ol class="segs" aria-label="Hosted routes">{segs}</ol></div>')
@@ -182,10 +191,14 @@ def upgrade_view():
     if M.join_state() == "open": ok.append("Joining open")
     ok.append("Self-custody mining")
     ok += [f'{rt[k]["label"]} {"open" if ds[k] == "open" else "responding"}' for k in back]
-    wait = [rt[k]["label"] for k in rt if ds[k] == "paused"] + [f'{rt[k]["label"]} (checking)' for k in rt if ds[k] == "unknown"]
+    wait = [rt[k]["label"] for k in rt if ds[k] == "paused"] + [f'{rt[k]["label"]} (not read yet)' for k in rt if ds[k] == "unknown"]   # slow routes are not paused
+    slow = [k for k in rt if ds[k] == "slow"]
     if M.join_state() == "paused": wait.append("Joining")
     grp = (f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>'
            + (f'<div class="grp wait" data-grp="paused"><h2><i></i>Still paused</h2><ul>{"".join(_chip(t, "wait") for t in wait)}</ul></div>' if wait else "")
+           + (f'<div class="grp wait slow" data-grp="slow"><h2><i></i>Slow to answer</h2><ul>'
+              + "".join(_chip(rt[k]["label"] + (f' · last answered {time.strftime("%H:%M", time.gmtime(rt[k]["checked"]))} UTC' if rt[k]["state"] in ROUTE_WORD and rt[k].get("checked") else ""), "wait") for k in slow)
+              + '</ul></div>' if slow else "")
            + '</div>')
     fr = M.back_phrase() if r["moved"] else ""
     sub = ((fr[:1].upper() + fr[1:] + ". ") if fr else "") + tail if r["moved"] else (aside.strip() + "." if aside else "")

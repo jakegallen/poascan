@@ -945,6 +945,7 @@ td a.mono{display:inline-block;min-width:24px}
 .seg i{display:block;height:14px;border-radius:7px;background:rgba(255,176,0,.14);border:1px solid rgba(255,176,0,.38)}
 .seg[data-st=responding] i,.seg[data-st=open] i{border-color:transparent;background:linear-gradient(90deg,#29b877,var(--green));box-shadow:0 0 16px rgba(61,220,151,.5);animation:upglow 2.8s ease-in-out infinite}
 .seg[data-st=unknown] i{background:rgba(143,163,184,.12);border-color:rgba(143,163,184,.3)}
+.seg[data-st=slow] i{border-style:dashed;background:rgba(255,176,0,.08)}.tag.slow{border-style:dashed}
 .seg span{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px;min-width:0}
 .seg b{font:600 var(--t13)/1.2 var(--ui);color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg em{font-style:normal;font-size:10px;padding:2px 6px}

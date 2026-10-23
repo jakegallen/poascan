@@ -13,7 +13,7 @@ fails = []
 def check(n, c): print(("ok   " if c else "FAIL ") + n); c or fails.append(n)
 
 ROOTHASH = "f77320b999ac91e10c89aba31e570c9186f4a2a0a2471a9e4975c3271dbccdbf"
-def seed(routes, notice=True):
+def seed(routes, notice=True, mining=None):
     now = int(time.time())
     db.put_blob("status", {"network": "PoA prototype", "K": 5, "supply": "1234828243.783275", "txs": 1, "final": 0, "invalid": 0, "agents_joined": 3673,
                            "epochs_closed": 10, "holders": 629, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 60)),
@@ -21,7 +21,11 @@ def seed(routes, notice=True):
     db.put_blob("notices", {"active": [{"id": "2026-10-21-hardening", "severity": "action", "issued_ts": 1792614261, "expires_ts": now + 86400}] if notice else []})
     db.put_blob("ballots", {"ballots": []})
     db.write("INSERT OR REPLACE INTO fetch_log(endpoint,last_ok,fails,next_at,bytes) VALUES('/api/explorer/txs',?,0,0,1)", (now,))
-    db.put_blob(R.BLOB, {"routes": {k: {"state": routes.get(k, "paused"), "since": now - 600, "checked": now - 120} for k, _, _ in R.ROUTES}, "ts": now - 120})
+    rr = {k: {"state": routes.get(k, "paused"), "since": now - 600, "checked": now - 120} for k, _, _ in R.ROUTES}
+    if mining: rr["mining"].update(mining)
+    db.put_blob(R.BLOB, {"routes": rr, "ts": now - 120})
+def reset_official():
+    db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts"); db.write("DELETE FROM blobs WHERE kind IN (?, ?)", (M.OFFICIAL_BLOB, "mining_back"))
 
 # ---- the route check, in process
 db.init()
@@ -50,7 +54,22 @@ check("job: the round after trouble is skipped", calls == [])
 m0 = M.MAINTENANCE; M.MAINTENANCE = False; calls.clear(); db.put_blob(R.BLOB, {}); R.job(now=time.time(), get=fake); M.MAINTENANCE = m0
 check("job: no requests at all with the maintenance switch off", calls == [])
 db.put_blob(R.BLOB, {"routes": {"mining": {"state": "paused", "since": 1, "checked": time.time() - 7200}}, "ts": 1})
-check("a route read older than an hour reads as unknown (Checking), not paused", R.current()["mining"]["state"] == "unknown")
+check("a clear read older than an hour keeps its state and time (flagged stale), never turns unknown", R.current()["mining"]["state"] == "paused"
+      and R.current()["mining"]["stale"] is True and R.current()["mining"]["since"] == 1 and R.current()["grading"]["state"] == "unknown")
+# unknown reads (timeout, network error, odd status) never change the shown state, its since or its checked time
+t0 = int(time.time()); db.put_blob(R.BLOB, {"routes": {"mining": {"state": "open", "since": t0 - 5000, "checked": t0 - 4000, "code": 401, "streak": 3}}, "ts": t0 - 4000})
+def boom(path): raise TimeoutError("timed out")
+R.job(now=t0, get=boom); a = R.current()["mining"]
+R.job(now=t0 + R.EVERY, get=lambda p: (404, b"<html>")); b = R.current()["mining"]
+R.job(now=t0 + 2 * R.EVERY, get=lambda p: (200, b"<html>maintenance</html>")); c = R.current()["mining"]
+check("unknown reads keep the last known state: timeout, 404 and an HTML 200 leave mining open with its since and checked",
+      all(x["state"] == "open" and x["since"] == t0 - 5000 and x["checked"] == t0 - 4000 and x["streak"] == 3 for x in (a, b, c)) and c["tried"] == t0 + 2 * R.EVERY)
+R.job(now=t0 + 3 * R.EVERY, get=fake); d1 = R.current()["mining"]; R.job(now=t0 + 4 * R.EVERY, get=fake); d2 = R.current()["mining"]
+R.job(now=t0 + 5 * R.EVERY, get=boom); d3 = R.current()["mining"]
+check("a timeout marks the route slow and keeps its last state; a clear read clears slow", a["slow"] and a["state"] == "open" and not d1["slow"] and d3["slow"])
+check("unknown reads that do answer (404, HTML 200) are not slow, and keep the state", not b["slow"] and not c["slow"] and b["state"] == "open")
+check("clear halted reads change it and count in a row; an unknown read in between neither resets nor adds",
+      (d1["state"], d1["streak"], d2["streak"], d3["streak"], d3["state"]) == ("paused", 1, 2, 2, "paused"))
 
 # ---- copy and live states, in process
 seed({})
@@ -81,10 +100,59 @@ check("hedged operator words, other authors and the hedged post body are not off
 comment(9003, OP, "Update: hosted mining is now re-enabled. Grading follows.")
 s = M.state()
 check(f"operator comment on 1357 says mining is re-enabled: official (post), headline {s['headline']!r}, route reads Open, maintenance stays on during the grace",
-      s["official"] == {"mining": True, "routes": False, "source": "post"} and s["headline"] == "Mining reopened: some endpoints are back. Grading still paused."
+      {k: s["official"][k] for k in ("mining", "routes", "source")} == {"mining": True, "routes": False, "source": "post"} and s["official"]["mining_at"]
+      and s["headline"] == "Mining reopened: some endpoints are back. Grading still paused."
       and s["headline_short"] == "Mining reopened. Grading paused." and s["hosted_routes_display"]["mining"] == "open" and s["active"] and s["mining_back_at"])
-seed({}); check("official post but the mining route paused again: no 'reopened', not back", not M.state()["headline"].startswith("Mining reopened") and M.state()["mining_back_at"] is None)
-db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts")
+back0 = M.state()["mining_back_at"]; oat = M.official()["mining_at"]
+seed({}, mining={"state": "unknown"}); db.put_blob(R.BLOB, {"routes": {}, "ts": 1}); s = M.state()
+check("official, then the mining route reads unknown: still Mining reopened, mining_back_at unchanged", s["headline"].startswith("Mining reopened") and s["mining_back_at"] == back0)
+db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts"); s = M.state()
+check("official persisted: a gap in the forum mirror does not clear it", s["official"]["mining"] is True and s["headline"].startswith("Mining reopened") and s["mining_back_at"] == back0)
+def fresh(code):
+    """Run code in a new process on the same database: a restart or deploy."""
+    r = subprocess.run([sys.executable, "-c", "import sys, json; sys.path.insert(0, %r)\nfrom poascan import db, maint as M, hosted as R\n" % ROOT + code],
+                       capture_output=True, text=True, env=dict(os.environ), timeout=60)
+    return json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {"err": r.stderr[-400:]}
+seed({"mining": "unknown"}); db.put_blob(R.BLOB, {"routes": {}, "ts": 1})
+rs = fresh("s = M.state(); print(json.dumps(dict(o=s['official']['mining'], at=s['mining_back_at'], h=s['headline'], hm=s['hosted_mining'])))")
+check(f"restart: the official signal and mining_back_at come back from the database, with no forum post and no route read ({rs})",
+      rs.get("o") is True and rs.get("at") == back0 and rs.get("h", "").startswith("Mining reopened") and rs.get("hm") == "back")
+saved = db.get_blob("mining_back")[0]
+db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", ("mining_back", M.BUG_CLEARED_TS, "{}"))
+db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (M.OFFICIAL_BLOB, M.BUG_CLEARED_TS + 600, json.dumps({"mining_at": M.BUG_CLEARED_TS + 600, "source": "post"})))
+rs = fresh("print(json.dumps(dict(at=M.state()['mining_back_at'])))")
+check(f"the empty blob 1.26.17 left at 00:16:36Z is restored to 23:45:49Z ({rs})", rs.get("at") == "2026-10-22T23:45:49Z")
+db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", ("mining_back", M.BUG_CLEARED_TS + 1, "{}"))
+rs = fresh("print(json.dumps(dict(at=M.state()['mining_back_at'])))")
+check("any other empty blob starts a fresh clock, never the restored time", rs.get("at") not in (None, "2026-10-22T23:45:49Z"))
+db.put_blob("mining_back", saved); db.put_blob(M.OFFICIAL_BLOB, {"mining_at": oat, "source": "post"})
+seed({}); s = M.state()
+check("a halted read from before the official time does not undo it", s["headline"].startswith("Mining reopened") and s["mining_back_at"] == back0)
+seed({}, mining={"since": oat + 5, "streak": 1}); s = M.state()
+check("one clear halted read after the official time: still Mining reopened", s["headline"].startswith("Mining reopened") and s["mining_back_at"] == back0)
+seed({}, mining={"since": oat + 5, "streak": 2}); s = M.state()
+check(f"two clear halted reads in a row after the official time: {s['headline']!r} / {s['headline_short']!r}, not back",
+      s["headline"] == "Mining paused again. Grading still paused." and db.get_blob("mining_back")[0].get("ended") and s["headline_short"] == "Mining paused again. Grading paused."
+      and s["mining_back_at"] is None and s["hosted_mining"] == "paused" and "reopened" not in s["headline"])
+seed({"mining": "open"}); s = M.state()
+check("an open read after that: Mining reopened again, a new mining_back_at", s["headline"].startswith("Mining reopened") and s["mining_back_at"] and not db.get_blob("mining_back")[0].get("ended"))
+# the live case of 00:24Z: mining and send time out (no answer at all), grading halted, the other three answering
+nw = int(time.time())
+db.put_blob(R.BLOB, {"routes": {"mining": {"state": "open", "since": nw - 9000, "checked": nw - 5000, "slow_since": nw - 3000},
+                                "send": {"state": "open", "since": nw - 9000, "checked": nw - 5000, "slow_since": nw - 3000},
+                                "grading": {"state": "paused", "since": nw - 9000, "checked": nw - 200},
+                                **{k: {"state": "open", "since": nw - 9000, "checked": nw - 200} for k in ("swap_offer", "vote", "export")}}, "ts": nw - 200})
+s = M.state(); from poascan import views2 as V2; uv = V2.upgrade_view()
+check(f"slow routes: {s['headline']!r} / {s['headline_short']!r}, mining and send Slow, grading Paused",
+      s["headline"] == "Mining reopened: some endpoints are slow. Grading still paused." and s["headline_short"] == "Mining reopened. Grading paused."
+      and s["hosted_routes_display"]["mining"] == "slow" and s["hosted_routes_display"]["send"] == "slow" and s["hosted_routes_display"]["grading"] == "paused"
+      and s["hosted_mining"] == "back" and s["mining_back_at"])
+paused_grp = uv.split('data-grp="paused"')[1].split("</div>")[0] if 'data-grp="paused"' in uv else ""
+check("/upgrade with slow routes: Slow tags with last answered, never Checking or offline, Still paused holds only Grading, meter counts 3 of 6 answering",
+      uv.count('<em class="tag warn slow">Slow</em>') == 2 and "Last answered" in uv and "Checking" not in uv and "offline" not in uv.lower()
+      and "Grading" in paused_grp and "Mining" not in paused_grp and "Send" not in paused_grp and 'data-grp="slow"' in uv
+      and '<span class="green">3</span> of 6' in uv)
+reset_official()
 seed({"send": "open", "export": "open"}); s = M.state()
 check(f"two of six open, not mining or grading: {s['headline']!r}", s["headline"] == "Recovery in progress: about a third of endpoints are back. Mining and grading reopen in stages."
       and s["headline_short"] == "Recovering. Mining still paused.")
@@ -97,7 +165,12 @@ check(f"official signal 1, notice gone: {s['headline']!r}, routes Open, source n
       and s["official"]["source"] == "notice" and s["hosted_routes_display"]["grading"] == "open" and s["active"] and "grading" not in s["paused"])
 db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60})
 check("6 hours after the official signal, maintenance ends (cleared_by mining_back)", M.state()["active"] is False and M.state()["cleared_by"] == "mining_back")
-seed({}, notice=False); check("notice gone but mining still paused: stays on, the grace clock resets", M.state()["active"] is True and M.state()["mining_back_at"] is None)
+reset_official(); seed({}, notice=False); s = M.state()
+check("notice gone (official) with one old halted read: mining reopened, a fresh grace clock, still on", s["active"] is True and s["mining_back_at"] and s["headline"].startswith("Mining reopened"))
+seed({}, notice=False, mining={"since": M.official()["mining_at"] + 5, "streak": 2}); s = M.state()
+check("notice gone but mining clearly halted twice since: paused again, stays on, the grace clock ends", s["active"] is True and s["mining_back_at"] is None
+      and s["headline"].startswith("Mining paused again"))
+reset_official()
 # /api/status answering without checkpoint_height, state_root and as_of: the newest snapshot that had them carries on
 seed({})
 db.add_snap("status", {"checkpoint_height": 33463, "state_root": ROOTHASH, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))})

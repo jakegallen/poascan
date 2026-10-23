@@ -2,8 +2,10 @@
 One keyless GET per route (no query string, no key, no redirects, first 2 KB only) every 15 minutes, spaced a second
 apart, only while the maintenance switch is on. A halted route answers 503 at once with a short body, so this adds
 almost no load to minepoa.com. Paused: 503 with the halt text. Open: the route answers as a live route does without
-a key (2xx, 400, 401, 403, 405, 422). Anything else (404, 429, other 5xx, timeouts) is unknown and keeps the last
-state; a 429 or a 5xx without the halt text also ends the round and skips the next one."""
+a key (2xx, 400, 401, 403, 405, 422). Anything else (404, 429, other 5xx, timeouts, network errors) is unknown: it never
+changes the shown state, which keeps the last clear read and its time however old it is (only a route never read clearly
+shows unknown). A 429 or a 5xx without the halt text also ends the round and skips the next one. Each route also counts
+its consecutive clear reads of the same state (streak), so a caller can wait for two halted reads in a row."""
 import os, time, logging, urllib.request, urllib.error
 from . import db
 
@@ -56,32 +58,37 @@ def job(now=None, get=None):
     routes = dict(prev.get("routes") or {}); skip = None
     for i, (rid, _, path) in enumerate(ROUTES):
         if i and get is _get: time.sleep(GAP)
+        old = routes.get(rid) or {}
         try: code, body = get(path)
         except Exception as e:
-            log.warning("hosted: %s unknown (%s)", rid, type(e).__name__); continue
+            log.warning("hosted: %s no answer (%s)", rid, type(e).__name__); routes[rid] = dict(old, tried=now, slow_since=old.get("slow_since") or now); continue
         st = classify(code, body)
         if st is None:
-            log.warning("hosted: %s unknown (HTTP %s)", rid, code)
+            log.warning("hosted: %s unknown (HTTP %s)", rid, code); routes[rid] = dict({k: v for k, v in old.items() if k != "slow_since"}, tried=now)   # it answered: not slow
             if code == 429 or code >= 500: skip = now + SKIP_S; break
             continue
-        old = routes.get(rid) or {}
-        routes[rid] = dict(state=st, since=old.get("since") if old.get("state") == st else now, checked=now, code=code)
+        same = old.get("state") == st
+        routes[rid] = dict(state=st, since=old.get("since") if same else now, checked=now, code=code, tried=now,
+                           streak=(old.get("streak") or 1) + 1 if same else 1)
     db.put_blob(BLOB, dict(routes=routes, ts=now, skip_until=skip))
 
 def current(now=None):
-    """{id: {label, state, since, checked}} for every route; state is paused, open or unknown (no fresh read)."""
+    """{id: {label, state, since, checked, streak, stale, tried}} for every route. state is the last clear read (paused or open),
+    kept however old it is; unknown only when the route was never read clearly. stale says the last clear read is over an hour old."""
     now = now or time.time(); d = (db.get_blob(BLOB)[0] or {}).get("routes") or {}
     out = {}
     for rid, lab, _ in ROUTES:
-        r = d.get(rid) or {}
-        fresh = r.get("checked") and now - r["checked"] <= STALE_S
-        out[rid] = dict(label=lab, state=r.get("state") if fresh else "unknown", since=r.get("since") if fresh else None, checked=r.get("checked"))
+        r = d.get(rid) or {}; known = r.get("state") in ("open", "paused") and r.get("checked")
+        out[rid] = dict(label=lab, state=r["state"] if known else "unknown", since=r.get("since") if known else None, checked=r.get("checked"),
+                        streak=int(r.get("streak") or 1) if known else 0, stale=bool(known and now - r["checked"] > STALE_S), tried=r.get("tried"),
+                        slow=bool(r.get("slow_since")), slow_since=r.get("slow_since"))   # slow: the newest read timed out or got no answer
     return out
 
 def state(rid): return current()[rid]["state"]
 def counts():
-    """(open, known) over the route list."""
-    c = current(); return sum(1 for v in c.values() if v["state"] == "open"), sum(1 for v in c.values() if v["state"] != "unknown")
+    """(open, known) over the route list. open counts only routes answering now: a slow route is not counted as open."""
+    c = current(); return sum(1 for v in c.values() if v["state"] == "open" and not v["slow"]), sum(1 for v in c.values() if v["state"] != "unknown" or v["slow"])
+def slow(): return [k for k, v in current().items() if v["slow"]]
 def any_known(): return any(r["state"] != "unknown" for r in current().values())
 def checked_at():
     t = [r["checked"] for r in current().values() if r.get("checked")]

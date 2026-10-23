@@ -55,8 +55,9 @@ def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "J
 def hosted_state():
     """paused, planned or back for hosted mining. Without tracker data the manual switch means paused."""
     from . import halts as H, hosted as R
+    if mining_back(): return "back"     # the official signal, kept in the database; only two clear halted reads after it undo it
     rs = R.state("mining")
-    if rs != "unknown": return "back" if rs == "open" and official()["mining"] else "paused"   # a responding route is not back until it is official
+    if rs != "unknown": return "paused"   # a responding route is not back until it is official
     pr = (H.current() or {}).get("probe") or {}
     if "Hosted mining" in pr: return pr["Hosted mining"]   # the live probe answers directly (hosted/challenge, hosted/me)
     g = _surfaces(); st = [g[k] for k in HOSTED if k in g]
@@ -94,6 +95,7 @@ def back_phrase():
     no fresh read at all says 'some endpoints are back' (public word that they return in stages); none open says nothing."""
     from . import hosted as R
     k, n = R.counts(); total = len(R.ROUTES)
+    if R.slow(): return "some endpoints are slow"   # reads timing out: say so, never a fraction that counts them either way
     if n == 0: return "some endpoints are back"
     if k == 0: return ""
     f = k / total
@@ -117,8 +119,11 @@ def _recovery_line():
     """(lead, tail) after the checkpoint moved. A route read alone says 'responding'; 'reopened' needs official() too. Never a reopen time."""
     from . import hosted as R
     rt = R.current(); of = official()
-    mo, go = rt["mining"]["state"] == "open", rt["grading"]["state"] == "open"
-    mof, gof = mo and of["mining"], go and of["routes"]
+    if paused_again():
+        return ("Mining paused again", "Grading still paused." if rt["grading"]["state"] == "paused" else "Grading reopens in stages.")
+    mof = mining_back()
+    mo, go = mof or rt["mining"]["state"] == "open", rt["grading"]["state"] == "open"
+    gof = go and of["routes"]
     rest = [k for k, v in rt.items() if k not in ("mining", "grading") and v["state"] != "open"]
     if mo and go:
         if mof and gof: return ("Mining and grading reopened", "Other routes reopen in stages." if rest else "All hosted routes open.")
@@ -130,6 +135,7 @@ def _recovery_line():
     return ("Recovery in progress", "Mining and grading reopen in stages.")
 
 MOBILE = {"Recovery in progress": ("Recovering", "Mining still paused."), "Mining reopened": ("Mining reopened", "Grading paused."),
+          "Mining paused again": ("Mining paused again", "Grading paused."),
           "Mining endpoint responding": ("Mining endpoint responding", "Grading paused."), "Grading reopened": ("Grading reopened", "Mining paused."),
           "Grading endpoint responding": ("Grading endpoint responding", "Mining paused."), "Mining and grading reopened": ("Mining and grading reopened", ""),
           "Mining and grading endpoints responding": ("Mining and grading responding", "")}
@@ -184,15 +190,32 @@ def official():
     source: notice, post, or None."""
     n = notice(); gone = n is not None and not n["active"]
     post = None if gone else official_post()
-    return dict(mining=gone or post is not None, routes=gone, source="notice" if gone else "post" if post else None, post=post)
+    live = dict(mining=gone or post is not None, routes=gone, source="notice" if gone else "post" if post else None, post=post)
+    return _persist_official(live)
+
+OFFICIAL_BLOB = "official_signal"
+def _persist_official(live):
+    """The official word, kept in the database: once seen it stays, whatever a later read of the notice or forum mirror says
+    (a mirror gap, a restart or a deploy never clears it). mining_at / routes_at: when POAScan first saw it."""
+    d = db.get_blob(OFFICIAL_BLOB)[0] or {}; now = int(time.time()); ch = False
+    if live["mining"] and not d.get("mining_at"): d.update(mining_at=now, source=live["source"]); ch = True
+    if live["routes"] and not d.get("routes_at"): d.update(routes_at=now); ch = True
+    if ch:
+        try: db.put_blob(OFFICIAL_BLOB, d)
+        except Exception: pass
+    return dict(mining=bool(live["mining"] or d.get("mining_at")), routes=bool(live["routes"] or d.get("routes_at")),
+                source=live["source"] or d.get("source"), post=live["post"], mining_at=d.get("mining_at"))
 
 def route_display():
-    """Route list states: open only when official, responding when our read says open but nothing official yet."""
+    """Route list states: open only when official, responding when our read says open but nothing official yet,
+    slow when the newest read got no answer (timeout or network error; never called paused or offline)."""
     from . import hosted as R
     of = official(); out = {}
     for k, v in R.current().items():
         st = v["state"]
-        if st == "open": st = "open" if (of["routes"] or (k == "mining" and of["mining"])) else "responding"
+        if v["slow"]: st = "slow"
+        elif k == "mining" and mining_back(): st = "open"   # officially back; an unknown or single halted read does not undo it
+        elif st == "open": st = "open" if of["routes"] else "responding"
         out[k] = st
     return out
 
@@ -260,10 +283,18 @@ def recovery():
                 status_fresh=age is not None and age <= STATUS_FRESH_S, status_stale_flag=bool(st.get("stale")),   # same rule as the pill: a stale flag on a read under 10 minutes old is not lag
                 txs=st.get("txs"), final=st.get("final"), epochs_closed=st.get("epochs_closed"), open_ballots=open_ballots())
 
-def mining_back():
-    """Mining back: our route read says the mining route answers and there is an official signal (official())."""
+PAUSED_AGAIN_READS = 2   # clear halted reads in a row on the mining route, after the official time, before "Mining paused again"
+
+def paused_again():
+    """True only after PAUSED_AGAIN_READS consecutive clear halted (503) reads of the mining route that started after the official
+    signal. Unknown reads (timeouts, network errors, odd codes) never count."""
     from . import hosted as R
-    return R.state("mining") == "open" and official()["mining"]
+    of = official(); m = R.current()["mining"]
+    return bool(of["mining"] and m["state"] == "paused" and m["streak"] >= PAUSED_AGAIN_READS and (m["since"] or 0) >= (of.get("mining_at") or 0))
+
+def mining_back():
+    """Mining back: the official signal (persisted) and no clear sign since that mining paused again."""
+    return bool(official()["mining"]) and not paused_again()
 
 def _paused_seen():
     from . import hosted as R
@@ -271,13 +302,21 @@ def _paused_seen():
 
 BACK_GRACE_S = 6 * 3600   # after the official signal the strip says "Mining reopened" this long, then maintenance ends
 
+# 1.26.17 cleared the stored time at 00:16:36Z when a stale route read turned 'unknown'. The value it held, restored once.
+BACK_RESTORE_AT = 1792712749   # 2026-10-22T23:45:49Z, as served by /api/v1/status before the bug
+BUG_CLEARED_TS = 1792714596    # the exact time the bug wrote the empty blob; the restore applies to that blob only
+
 def back_since():
-    """When mining_back() first held (kept in the database; reset when it stops holding), or None."""
-    d = db.get_blob("mining_back")[0] or {}
+    """When mining_back() first held, kept in the database. Never cleared by a route read; only a clear 'paused again'
+    (two halted reads in a row after the official time) ends it, and the next official return starts a new one."""
+    raw, bts = db.get_blob("mining_back"); d = raw or {}
     if not mining_back():
-        if d.get("at"): db.put_blob("mining_back", {})
-        return None
-    if not d.get("at"): d = {"at": int(time.time())}; db.put_blob("mining_back", d)
+        if d.get("at") and paused_again(): db.put_blob("mining_back", {"ended": int(time.time()), "prev": d.get("at")})
+        return d.get("at") if not paused_again() else None
+    if not d.get("at"):
+        of = official(); t = int(time.time())
+        if raw == {} and bts == BUG_CLEARED_TS and of.get("source") == "post": t = BACK_RESTORE_AT   # the empty blob the bug left
+        d = {"at": t}; db.put_blob("mining_back", d)
     return d["at"]
 
 def _cleared():
