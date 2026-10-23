@@ -9,6 +9,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.28] - 2026-10-23
+
+### Fixed
+- Home page blank below the header on iPhone (Brave, 390 px). `main` had a 160 ms entrance fade (opacity 0 plus a transform, fill-mode both) that kept the whole page content in one tall transformed layer that starts invisible. On iOS WebKit that layer could stay unpainted or stuck on its first frame (a slow load in a background tab, a back/forward restore), so only the sticky header showed. `main` now has no entrance animation: content is visible from the first paint, and the motion that is left (chart draw-in, digit roll, live rows) is enhancement only and still off under prefers-reduced-motion.
+- Phones, tablets and touch screens no longer draw the fixed full-screen grain layer (`body::before` with `mix-blend-mode`), which forced iOS to composite the whole page above it. Desktop keeps it.
+- Charts held back for the draw-in have a backstop: a chart on or above the screen is shown on the next scroll or pageshow if IntersectionObserver never fires.
+- `body` min-height falls back to `100dvh` (mobile toolbars).
+
+### Changed
+- Mobile spacing: one step between stacked sections (the grid gap only, no card margin on top of it), 12 px on phones (was 16 to 32 px). Desktop over 1240 px is unchanged.
+- Cache keys: style.css v90, app.js v44.
+
+### Tests
+- `tools/mobile_render_test.py` (in CI): static checks that main has no animation and is never opacity 0, the blend layer is off on mobile, the spacing rules and the chart backstop; with Playwright installed, WebKit and Chromium at 360, 390 and 430 wide check main is opaque with no transform, every section is visible at each scroll position, no horizontal overflow and gaps of 16 px or less.
+
 ## [1.26.27] - 2026-10-23
 
 ### Changed

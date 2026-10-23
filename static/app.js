@@ -130,6 +130,10 @@ function charts(){if(RM||!("IntersectionObserver" in W))return chartTips();
  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){var c=e.target;c.classList.remove("pre");void c.getBoundingClientRect();c.classList.add("in");io.unobserve(c)}})},{rootMargin:"0px 0px -40px 0px"});
  $$(".chart").forEach(function(c){if(c.getBoundingClientRect().top>innerHeight){c.classList.add("pre");io.observe(c)}});
  W.addEventListener("beforeprint",function(){$$(".chart.pre").forEach(function(c){c.classList.remove("pre")})});
+ /* backstop: if the observer never fires (seen on iOS after a background load or a back/forward restore), a chart that is on or
+    above the screen is shown on the next scroll or pageshow */
+ var rq=0;function rv(){rq=0;$$(".chart.pre").forEach(function(c){if(c.getBoundingClientRect().top<innerHeight){c.classList.remove("pre");c.classList.add("in");io.unobserve(c)}})}
+ W.addEventListener("scroll",function(){if(!rq){rq=1;setTimeout(rv,250)}},{passive:true});W.addEventListener("pageshow",rv);
  chartTips()}
 function chartTips(){
  $$(".chartbox").forEach(function(b){var svg=$("svg",b);if(!svg)return;var items=$$("[data-tip]",svg);if(!items.length)return;

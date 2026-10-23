@@ -116,11 +116,12 @@
 --lh-tight:1.15;--lh:1.5;--track-label:.08em;--r:10px;--fast:160ms;--ease:cubic-bezier(.2,.7,.2,1);
 --gold:linear-gradient(92deg,#FFD36B,#E3A33A 45%,#C8742B)}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip}
-body{margin:0;background:var(--bg);color:var(--txt);font:400 var(--t14)/var(--lh) var(--ui);min-height:100vh;overflow-x:clip;
+body{margin:0;background:var(--bg);color:var(--txt);font:400 var(--t14)/var(--lh) var(--ui);min-height:100vh;min-height:100dvh;overflow-x:clip;
 background-image:radial-gradient(rgba(255,236,200,.05) 1px,transparent 1.2px);background-size:22px 22px;font-feature-settings:"ss01"}
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
 background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 .75 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-main{animation:fadein var(--fast) var(--ease) both}
+/* main has no entrance animation: content is visible from the first paint. A fill-mode both fade (opacity 0 + transform) on all of main
+   left the whole page in one tall transformed layer and blank on iOS (1.26.28) */
 @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 a{color:var(--amber);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
 code,pre,.mono,.num,.addr,.hash,time{font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -1102,3 +1103,10 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:640px){.kpis{gap:8px;margin-bottom:12px}.kpis .stat{padding:14px 12px 12px}.kpis .sv{font-size:28px;margin-top:10px}
  .kpis .sl{align-items:flex-start;min-height:calc(2em * var(--lh-tight));letter-spacing:.06em}
  .kpis .stat::after{width:min(84px,46%);right:8px;bottom:8px;--wm-o:.1}.kpis .stat .spk{height:22px;margin-top:10px}.kmore .stat{padding:10px 12px}.kmore .sl{flex-basis:140px}}
+/* mobile render fix (1.26.28). Phones and tablets: no fixed full-screen blend layer (mix-blend-mode on a fixed layer behind the whole
+   page forces iOS WebKit to composite everything above it, and the content could stay unpainted). One spacing step between sections:
+   the grid gap only, no card margin on top of it. Desktop (over 1240px) is unchanged. */
+@media (max-width:1100px),(pointer:coarse){body::before{display:none}}
+@media (max-width:1240px){.herogrid>*{margin-bottom:0}}
+@media (max-width:1100px){.grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}}
+@media (max-width:640px){.grid2,.grid3,.herogrid{gap:12px}.herogrid,.card.trk,.grid2>.card:last-child,.grid3>.card:last-child,.mtile{margin-bottom:12px}.shero{margin:0 0 12px}}
