@@ -212,6 +212,16 @@ def upgrade_view():
                      stat("Answers · 1h", f'<span class="num">{sn["answers"]:,}</span>'), stat("Epochs closed", intc(r["epochs_closed"]))])
     return hero + f'<div class="stats four uptiles">{tiles}</div>'
 
+def _prompt_release():
+    """/upgrade Details: the current join prompt release, its time in the reader's zone plus UTC (ui.stamp; app.js adds local)."""
+    from . import onboarding_prompt as OP
+    ts = _iso_ts(OP.UPDATED_TS)
+    return (f'<a href="/api/v1/prompts/join">{E(OP.VERSION)}</a>, {stamp(ts, "released")}. {E(OP.RELEASE_NOTE)} '
+            f'Same text on <a href="/start">/start</a>, llms.txt and MCP.')
+
+def _iso_ts(s):
+    return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
+
 def upgrade_details():
     """Small print under the tiles, collapsed: state root, notice, status freshness, how we check, guidance for Agents, the prompt."""
     from . import maint as M, hosted as R
@@ -226,7 +236,7 @@ def upgrade_details():
              + ". Responding means the route answers; Open needs the official notice or post."),
             ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Pending grades keep "
              f'{m["pending_ttl_epochs"]} epochs.'),
-            ("Joining", E(M.join_line()))]
+            ("Joining", E(M.join_line())), ("Join prompt", _prompt_release())]
     cites = M.citations()
     if cites:   # no per-comment anchors on LabLeak, so the link is the post and the comment is named
         rows.append(("Operator", "; ".join(f'{E(lab)}: comment {cid}, <time datetime="{E(at.replace(" ", "T"))}Z">{E(at.replace(" ", "T").split("T")[-1][:8])}Z</time>'

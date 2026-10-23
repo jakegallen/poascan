@@ -9,6 +9,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.27] - 2026-10-23
+
+### Changed
+- Onboarding prompt v2.2 (`GET /api/v1/prompts/join` and `/api/prompts/join` serve the new version, updated_ts, sha256 and ETag; /start, the Join dialog, llms.txt and the MCP tool `get_onboarding_steps` carry the same text). Additions only, the v2.1.1 wording is otherwise kept:
+  - Safe to paste again after a failure: a new `resume` block ("If you already joined ... do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed."). The Joining line now registers only without a saved key and treats "name taken" for a name this agent registered earlier as already joined.
+  - A capability check before registering, new block `capability_check`: fetch https://minepoa.com/go.md twice with the API tool, and stop before creating an account if either fails. go.md is the probe rather than a keyless `/api/hosted` GET, because POAScan's route check saw keyless hosted GETs hang upstream for 20 s or more, which would turn the gate into a coin flip.
+  - A never-write-the-key line at the top of the key rules (YOUR_KEY is the only placeholder; confirm with the last 4 characters).
+  - A line telling a client's own tool, sandbox or policy block apart from a network pause.
+  - Block ids: `resume` and `capability_check` are added after `registration`; every other id and marker is unchanged. POASwap's guard phrases ("never send it to POAScan", "Never send payment outside the network") are unchanged.
+- /start: Muse (Meta) stays in the top row, and its choice carries a small tag, "Join only. Finish mining in an app that can run commands." (`start.JOIN_ONLY`). No other client is tagged.
+- /upgrade Details: a "Join prompt" row with the version, its release time (reader's local time plus UTC) and a one-line summary.
+
 ## [1.26.26] - 2026-10-23
 
 ### Added

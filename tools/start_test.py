@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.1.1" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.2" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -30,15 +30,29 @@ check("v2 key rule: never shown, confirmed only as the last 4 characters plus th
       "Never show it." in OP.TEMPLATE and "Confirm it to me only as the last 4 characters plus the store's name." in OP.TEMPLATE
       and "never send it to POAScan" in OP.TEMPLATE and "curl -K -" in OP.TEMPLATE and not any(c in OP.TEMPLATE for c in "\u2014\u2013")
       and "https://poascan.io/address/YOUR_POA1_ADDRESS" in OP.TEMPLATE and "reopened" not in OP.TEMPLATE.lower())
+V22 = ["Never write the key in any reply, code block, or example command, not even part of it. Always write YOUR_KEY as the placeholder. To confirm it, show only the last 4 characters.",
+       "Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before creating an account. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.",
+       "If your own browsing tool, sandbox, or policy blocks a request (for example a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, don't hand me commands containing the key, and suggest an app that can run commands.",
+       "If you already joined (you have a saved key or an agent name from earlier in this chat or on this machine), do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.",
+       "open the register link one time only, and only if you have no saved key.", "If it says the name is taken and you registered that name earlier, you already joined: continue with the saved key, or tell me if you have none."]
+check("v2.2: the key line, the capability check, tool block versus pause and the resume rule, verbatim; POASwap's guard phrases kept",
+      all(OP.TEMPLATE.count(x) == 1 for x in V22) and "never send it to POAScan" in OP.TEMPLATE and "Never send payment outside the network" in OP.TEMPLATE)
+T = OP.TEMPLATE
+check("v2.2 order: resume and the capability check come before the about and Joining lines; the key line opens the key rules before rule 1",
+      T.index(V22[3]) < T.index(V22[1]) < T.index("PoA is a free") < T.index("Joining:") and T.index("Your key (the api_key") < T.index(V22[0]) < T.index("\n1. Save it")
+      and T.index("- A paused route") < T.index(V22[2]) < T.index("- A 401 means"))
+check("v2.2: every key example uses YOUR_KEY; no other key-like placeholder (MY_KEY, API_KEY, pk_ + letters, $KEY)",
+      T.count("key=YOUR_KEY") == 4 and not re.search(r"MY_KEY|API_KEY|<key>|\$KEY|pk_[A-Za-z0-9]", T) and re.findall(r"key=([A-Z_]+)", T) == ["YOUR_KEY"] * 4)
 for nm in ("test-agent-7", "YOUR_NAME", "x" * 32):
     b = OP.blocks(S.prompt(nm))
     check(f"blocks for {nm[:12]}: join back to the full text, in order, ids unique", "".join(t for _, t in b) == S.prompt(nm) and [i for i, _ in b] == [i for i, _ in OP.BLOCKS] and all(t for _, t in b))
 bl = dict(OP.blocks(S.prompt("n")))
-check("blocks: registration has the link, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
+check("blocks: registration has the link, resume and capability_check follow it, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
       bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
       and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
       and bl["expectations"].startswith("The network is coming back") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
-      and list(bl) == ["registration", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
+      and bl["resume"].startswith("If you already joined") and bl["capability_check"].startswith("Before you join, fetch")
+      and list(bl) == ["registration", "resume", "capability_check", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
 NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
       ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
       ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32)."),
@@ -165,6 +179,11 @@ try:
           and len(allr) == len(J.APPS) + 1 + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
     check("/start: one primary button for the first client: 'Copy prompt and open Claude' (short form at 390px) with the Auto pill",
           len(re.findall(r"data-go[ >]", m)) == 1 and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em>' in m)
+    tags = re.findall(r'<input type="radio" name="client" value="([^"]+)"[^>]*><span class="clb">(?:(?!</label>).)*?<em class="cltag">([^<]+)</em>', m)
+    check(f"/start: Muse stays in the top row with the join only tag on its choice, styled like the Auto pill; only JOIN_ONLY clients tagged {tags}",
+          S.JOIN_ONLY == ("Muse",) and tags == [("Muse", "Join only. Finish mining in an app that can run commands.")] and m.count('class="cltag"') == 1
+          and m.index('value="Muse"') < i_more and '<label class="cl tagd"><input type="radio" name="client" value="Muse"' in m
+          and ".cltag{" in open(os.path.join(ROOT, "static", "style.css")).read() and "Join only" not in m[m.index("data-go "):])
     check("/start: a quiet Copy prompt button next to it; no helper or join lines under the button; the fallback box is hidden",
           '</a><button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' in m and '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>' in m
           and "stjl" not in m and "Opens Claude" not in m and "starts earning once" not in m[m.index("data-go "):]
@@ -205,6 +224,26 @@ try:
           '[data-go]' in js and 'ev("start."+(rg?"appreg":"app"))' in js and 'ev("mcp-poa.add")' in js and 'e.key==="Enter"' in js and "go.focus()" in js and "r.focus()" in js)
     check("css: visible focus rings on choices, button, name and summaries", ".cl input:focus-visible+.clb{outline" in css and ".gobtn:focus-visible{outline" in css
           and ".stin:focus{" in css and ".stview>summary:focus-visible" in css)
+
+    # ---- byte-identical text: API, /start (View prompt), llms.txt and MCP get_onboarding_steps
+    nm0 = re.search(r'id="stname" class="stin" name="label" value="([^"]+)"', m).group(1)
+    pre = unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', m, re.S).group(1))
+    api_n = json.loads(req("/api/v1/prompts/join?name=" + nm0)[2]); api_y = json.loads(req("/api/v1/prompts/join")[2])
+    ll = req("/llms.txt")[2]
+    H = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    def rpc(meth, params=None):
+        r = urllib.request.urlopen(urllib.request.Request(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": meth, "params": params or {}}).encode(), H), timeout=30)
+        return json.loads(r.read().decode())
+    rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "start_test", "version": "0"}})
+    mp = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]["prompt"]
+    sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
+    print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
+    check(f"byte-identical: /start View prompt == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
+          pre == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
+          and api_y["version"] == api_n["version"] == "v2.2" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
+    up = req("/upgrade")[2]
+    check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.2</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
 
     # ---- the endpoint
     u = "/api/v1/prompts/join?name=test-agent-7"
