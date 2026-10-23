@@ -1,0 +1,44 @@
+{
+ "_note": "POAScan /api/v1/swaps/de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953 as served by live 1.26.68 on 2026-10-23 (15:50 PDT): expired, with a swap-fill tx seen but never final. The page read Fill landing.",
+ "swap": {
+  "offer_id": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+  "maker": "poa18u1PiDvvzvKBocrErLFzfLNr4WXTWpc1sFePmLEePdEy",
+  "poa": 4000.0,
+  "chain": "solana",
+  "asset": "SOL",
+  "want": 0.00144,
+  "pay_to": "7uEbHLMfQD1VUmSidcMdJR54fZNntLpPkn9BHNbwsJHh",
+  "expires_ts": 1792793325,
+  "created_ts": 1792789727,
+  "status": "expired",
+  "taker": null,
+  "fill_txid": null,
+  "fill_ts": null,
+  "ext_ref": null,
+  "cancel_txid": null,
+  "cancel_ts": null,
+  "fee_bp": 100,
+  "memo": "",
+  "last_open_seen": 1792796110,
+  "updated": 1792796110,
+  "fill_usd": null
+ },
+ "events": [
+  {
+   "txid": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+   "kind": "swap-offer",
+   "addr": "poa18u1PiDvvzvKBocrErLFzfLNr4WXTWpc1sFePmLEePdEy",
+   "ts": 1792789727,
+   "final": true
+  },
+  {
+   "txid": "b994976f1127606f9a988d2ad3788753697c65b1d2423580aff64d7b9d47ecba",
+   "kind": "swap-fill",
+   "addr": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T",
+   "ts": 1792789857,
+   "final": false
+  }
+ ],
+ "api_status": "expired",
+ "poaswap_track_stage": "expired"
+}

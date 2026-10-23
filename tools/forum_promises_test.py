@@ -37,7 +37,7 @@ check("stage history: offered then filled, both final", h.index("Offered (escrow
 check("next steps for Filled: stop, don't take or pay again", "Filled and final: nothing left to do. Stop checking." in h and "Don&#x27;t take or pay this offer again." in h)
 check("names what POAScan can't see (nonce rent) and links the taker's verified Solana address", "durable nonce account" in h and "https://solscan.io/account/" + FX["chains"][SW["taker"]]["solana"]["addr"] in h)
 check("no fee on this page (it lives on the Swap Fee card)", not re.search(r"\bfee\b|9,900|1%", h, re.I))
-check("track and API links, read-only line", f"https://poaswap.io/track?offer={OID}" in h and f'href="/api/v1/swaps/{OID}"' in h and "never signs or sends anything" in h)
+check("track and API links, read-only line", f"https://poaswap.io/status/{OID}" in h and "track?offer=" not in h and f'href="/api/v1/swaps/{OID}"' in h and "never signs or sends anything" in h)
 check("no em or en dashes", nodash(h))
 tt, pp = PR.swap_status(OID)
 check("Ask agent prompt on the page (copy-ready, read only)", "data-ask=" in h and "Check this swap&#x27;s status" in h)

@@ -567,8 +567,10 @@ def swaps_card(a):
     rows = [[f'<a class="mono hash" href="/swap/{E(o["offer_id"])}" title="{E(o["offer_id"])}">{E(short(o["offer_id"], 6, 4))}</a>',
              "Maker" if o.get("maker") == a else "Taker", E(OF.LABEL.get(o.get("status") or "open", (o.get("status") or "").capitalize())),
              f'<span class="num">{plain(o.get("poa"), 2)}</span>',
-             f'<a href="{OF.TRACK}{E(o["offer_id"])}" target="_blank" rel="noopener noreferrer" title="Swap status on POASwap (read only)">Track ↗</a>'] for o in offs[:20]]
-    return card(f"Swaps · {len(offs)}", table(["Offer", "Role", "Status", "POA", "POASwap"], rows, cls="swps", pri=(0, 2, 4)), id="swaps")
+             (f'<a href="{E(su)}" target="_blank" rel="noopener noreferrer" title="This offer\'s status on POASwap (read only)">Status ↗</a>' if (su := OF.status_url(o["offer_id"])) else '<span class="na">···</span>')] for o in offs[:20]]
+    au = OF.addr_status_url(a)
+    hx = f'<a class="more" href="{E(au)}" target="_blank" rel="noopener noreferrer" title="Every swap of this address on POASwap (read only)">Status ↗</a>' if au else ""
+    return card(f"Swaps · {len(offs)}", table(["Offer", "Role", "Status", "POA", "POASwap"], rows, cls="swps", pri=(0, 2, 4)), hx, id="swaps")
 
 def SW_OFFERS():
     from . import swapclient as SCL
@@ -1090,7 +1092,10 @@ def network_overview(head):
         ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
         ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"]) or "···")])
     from . import signed as SG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
-    rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{SG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
+    vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
+    rtx = lambda x: (f' <a class="mono dim small reltx" href="/tx/{E(x["txid"])}" title="One of {vn[x.get("version")]} signed release txs named {E(x.get("version") or "")}">{E(x["txid"][:8])}</a>'
+                     if vn[x.get("version")] > 1 and x.get("txid") else "")
+    rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{SG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
     al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
     cap = sy["last_epoch_capped"]
     syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [

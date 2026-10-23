@@ -13,7 +13,18 @@ OID_RX = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 CHAIN = {"solana": "Solana", "base": "Base", "ethereum": "Ethereum"}
 EXPL = {"solana": ("https://solscan.io/account/", "https://solscan.io/tx/"), "base": ("https://basescan.org/address/", "https://basescan.org/tx/"),
         "ethereum": ("https://etherscan.io/address/", "https://etherscan.io/tx/")}
-TRACK = "https://poaswap.io/track?offer="
+STATUS = "https://poaswap.io/status/"            # POASwap's canonical per-offer status page (read only); replaces the older track page
+ADDR_STATUS = "https://poaswap.io/status?address="   # POASwap's status for every offer of one poa1 address
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+def status_url(oid):
+    """POASwap's canonical status URL for an offer id (64 hex, lowercase), or None for anything else."""
+    o = (oid or "").strip().lower()
+    return STATUS + o if HEX64.match(o) else None
+
+def addr_status_url(a):
+    """POASwap's status URL for a poa1 address, or None."""
+    return ADDR_STATUS + a if a and re.fullmatch(r"poa1[1-9A-HJ-NP-Za-km-z]{20,60}", a) else None
 CHECK = "https://poaswap.io/api/v1/check?offer="
 LABEL = {"open": "Open", "filled": "Filled", "cancelled": "Cancelled", "expired": "Expired", "delisted": "Delisted", "filling": "Fill landing"}
 TONE = {"open": "ok", "filled": "ok", "filling": "warn", "cancelled": "", "expired": "", "delisted": "warn"}
@@ -25,10 +36,16 @@ def _ext(chain, v, tx=False):
     if not e: return f'<span class="mono">{E(short(v, 6, 4))}</span>{copy(v)}'
     return f'<a class="mono" href="{e[1 if tx else 0]}{E(v)}" target="_blank" rel="noopener noreferrer">{E(short(v, 6, 4))} ↗</a>{copy(v)}'
 
+TERMINAL = ("filled", "cancelled", "expired")   # final per the API record: nothing inferred from events can override these
+
 def stage(d):
-    """Display stage from the offer row and its events: a fill or cancel tx seen but not yet final reads 'filling'."""
+    """Display stage. The status is the API record's (d is exactly what /api/v1/swaps/<offer_id> returns), and a
+    terminal status (filled, cancelled, expired) always wins. Only a live offer (open, or delisted before its expiry)
+    with a swap-fill tx seen but not yet final reads 'filling' (Fill landing); a fill that never finalized before the
+    offer expired or was cancelled is history, not an in-flight state."""
     o = d["offer"]; st = o.get("status") or "open"
-    if st not in ("filled", "cancelled") and any(e.get("kind") == "swap-fill" and not e.get("final") for e in d.get("events") or []): return "filling"
+    if st in TERMINAL: return st
+    if any(e.get("kind") == "swap-fill" and not e.get("final") for e in d.get("events") or []): return "filling"
     return st
 
 def next_steps(st, o):
@@ -54,12 +71,12 @@ def page_body(oid):
     o = d["offer"]; st = stage(d); ch = (o.get("chain") or "").lower(); asset = E(o.get("asset") or "")
     tag = f'<span class="tag {TONE.get(st, "")}">{E(LABEL.get(st, st.capitalize()))}</span>'
     ev = [e for e in d.get("events") or []]
-    hist = [[E(EVENT.get(e["kind"], e["kind"])), utc(e.get("ts")) + " · " + rel(e.get("ts")), tx_link(e["txid"], (10, 6)),
-             '<span class="ok">final</span>' if e.get("final") else '<span class="warn">pending</span>'] for e in ev]
+    hist = [[E("Fill attempt" if e["kind"] == "swap-fill" and not e.get("final") else EVENT.get(e["kind"], e["kind"])), utc(e.get("ts")) + " · " + rel(e.get("ts")), tx_link(e["txid"], (10, 6)),
+             '<span class="ok">final</span>' if e.get("final") else ('<span class="dim">never final</span>' if st in ("expired", "cancelled") else '<span class="warn">pending</span>')] for e in ev]
     if o.get("status") == "expired" and o.get("expires_ts"): hist.append(["Expired", utc(o["expires_ts"]) + " · " + rel(o["expires_ts"]), "···", "···"])
     pay_to = _ext(ch, o.get("pay_to"))
     rows = [("Offer id", f'<span class="mono wrap">{E(oid)}</span>{copy(oid)}'), ("Status", tag + (f' <span class="dim small">E{o["fill_epoch"]} fill</span>' if o.get("fill_epoch") is not None else "")
-             + f' <a class="small oftrack" href="{TRACK}{E(oid)}" target="_blank" rel="noopener noreferrer">Track on POASwap ↗</a>'),
+             + (f' <a class="small oftrack" href="{E(su)}" target="_blank" rel="noopener noreferrer" title="This offer\'s status on POASwap (read only)">Status on POASwap ↗</a>' if (su := status_url(oid)) else "")),
             ("Maker", addr_link(o.get("maker"), None, (48, 0))),
             ("Escrow", f'<span class="num">{plain(o.get("poa"), 6)}</span> <span class="unit">POA</span> locked by the maker' + (f' · offer tx {tx_link(oid, (10, 6))}' if any(e["txid"] == oid for e in ev) else "")),
             ("Wants", f'<span class="num">{plain(o.get("want"), 6)}</span> <span class="unit">{asset}</span> on {E(CHAIN.get(ch, ch.capitalize() or "···"))} to {pay_to}'),
@@ -75,7 +92,7 @@ def page_body(oid):
     unseen = ('<p class="dim small">Not in POAScan\'s data: anything on the external chain beyond the payment ref, such as a durable nonce account or its rent '
               'from a timed out take.' + (f' Check the taker\'s verified {E(CHAIN.get(ch, ch))} address: {_ext(ch, tv)}.' if tv else "") + '</p>')
     steps = "".join(f"<li>{E(s)}</li>" for s in next_steps(st, o))
-    links = f'<a class="more" href="/api/v1/swaps/{E(oid)}">API →</a>'   # Track on POASwap sits in the Status row, so the header fits one line at 390px
+    links = f'<a class="more" href="/api/v1/swaps/{E(oid)}">API →</a>'   # Status on POASwap sits in the Status row, so the header fits one line at 390px
     body = (f'<div class="sechead"><h1>Swap offer <span class="mono">{E(short(oid, 8, 6))}</span></h1></div>'
             + card("Offer", kv + unseen, PR.ask([ask(oid)]) + links)
             + card("Next steps", f'<ol class="ofs">{steps}</ol><p class="dim small">Read only: this page never signs or sends anything. Never send payment outside the network.</p>')

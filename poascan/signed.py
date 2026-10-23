@@ -279,14 +279,34 @@ def _rid(kind, txid, listing, body):
     if kind == "release": return (listing or {}).get("version") or body.get("version") or txid
     return "g0"
 
+BUSY_WAIT_S, BUSY_WAIT_MAX_S = 1200, 6 * 3600   # a tx whose read failed (5xx, timeout): 20 min, doubling to 6 h
+
+def _no_request(e):
+    """The indexer refused the read without asking minepoa (endpoint backing off, or an id it negative cached)."""
+    m = str(e)
+    return "backing off" in m or "(cached)" in m
+
+def pending_summary(recs=None):
+    """{pending, waiting, next_try_utc} over the stored records (for the feed): how many are still unread and when the next retry is due."""
+    recs = (state().get("records") or {}) if recs is None else recs
+    p = [r for r in recs.values() if r.get("kind") != "g0" and r.get("status") == "pending" and r.get("txid")]
+    nt = min((r.get("next_try") or 0 for r in p), default=None)
+    return dict(pending=len(p), retrying=sum(1 for r in p if (r.get("tries") or 0) + (r.get("fails") or 0) > 0),
+                next_try_utc=times(nt)["utc"] if nt else None, per_run=FETCH_PER_RUN, run_every_s=600)
+
 def refresh(fetch=True, now=None, fetch_tx=None):
     """Verify new or changed records; read at most FETCH_PER_RUN unread signed txs. Returns how many were read."""
     from . import indexer as I
     fetch_tx = fetch_tx or (lambda t: I.get_tx_detail(t, bg=I.BG_TX_EP))
     now = int(now or time.time()); old = dict(db.get_blob(BLOB)[0] or {}); recs = dict(old.get("records") or {}); reads = 0
     params = db.get_blob("params")[0] or {}
-    # never-tried txs first, then retries whose wait is over (a missing tx waits 1 h, doubling to 24 h)
-    want = sorted(wanted(), key=lambda w: (recs.get(w[1]) or {}).get("tries", 0))
+    # never-tried txs first, then retries whose wait is over: a missing tx (404) waits 1 h, doubling to 24 h; a tx whose
+    # read failed (5xx, timeout) waits BUSY_WAIT_S, doubling to 6 h, so one failing tx never holds the queue's head and
+    # the others still get their turn. Same budget: at most FETCH_PER_RUN real reads per run, and a failed read still
+    # ends the run (the shared endpoint backoff). A read skipped without a request (endpoint backing off, or an id
+    # negative cached by the indexer) costs no slot and no try.
+    want = sorted(wanted(), key=lambda w: ((recs.get(w[1]) or {}).get("tries", 0) + (recs.get(w[1]) or {}).get("fails", 0),
+                                           (recs.get(w[1]) or {}).get("next_try", 0)))
     for kind, txid, listing in want:
         if not txid:   # unsigned listing (no txid, or a server override): kept as Unverified, keyed by its notice id
             if kind != "notice" or not isinstance(listing, dict) or not listing.get("id"): continue
@@ -297,18 +317,24 @@ def refresh(fetch=True, now=None, fetch_tx=None):
                                  txid=None, severity=_sev(kind, listing, {}), signer=None, status=st, reason=why, countersigned=None, key=k,
                                  checked_at=now, listing=listing, first_seen=prev.get("first_seen", now), tries=0, next_try=0, source=listing.get("source"))
             continue
-        prev = recs.get(txid) or {}; tries, nxt = prev.get("tries", 0), prev.get("next_try", 0)
+        prev = recs.get(txid) or {}; tries, nxt, fails = prev.get("tries", 0), prev.get("next_try", 0), prev.get("fails", 0)
         detail = I.get_tx_detail(txid, allow_fetch=False)
         if not (detail and detail.get("body")) and fetch and reads < FETCH_PER_RUN and nxt <= now:
             reads += 1
-            try: detail = fetch_tx(txid)
-            except I.Missing: detail = None; tries += 1; nxt = now + min(86400, 3600 * 2 ** (tries - 1))   # unknown or redirected (307)
-            except I.Busy: fetch = False; detail = None   # 429, 5xx or backoff: no more reads this run (the endpoint backs off)
+            try: detail = fetch_tx(txid); fails = 0
+            except I.Missing as e:
+                detail = None
+                if _no_request(e): reads -= 1; nxt = now + 3600   # negative cached by the indexer: no request made, look again in 1 h
+                else: tries += 1; nxt = now + min(86400, 3600 * 2 ** (tries - 1))   # unknown or redirected (307)
+            except I.Busy as e:   # 429, 5xx or backoff: no more reads this run (the endpoint backs off)
+                fetch = False; detail = None
+                if _no_request(e): reads -= 1
+                else: fails += 1; nxt = now + min(BUSY_WAIT_MAX_S, BUSY_WAIT_S * 2 ** (fails - 1))
             if fetch: time.sleep(1.0)
         listing = listing if listing is not None else prev.get("listing")
         k = _key(listing, detail)
         if prev.get("key") == k:   # unchanged: checked once, kept
-            if (tries, nxt) != (prev.get("tries", 0), prev.get("next_try", 0)): recs[txid] = dict(prev, tries=tries, next_try=nxt)
+            if (tries, nxt, fails) != (prev.get("tries", 0), prev.get("next_try", 0), prev.get("fails", 0)): recs[txid] = dict(prev, tries=tries, next_try=nxt, fails=fails)
             continue
         body = (detail or {}).get("body") or {}
         if kind == "g0": st, why, cs = check_g0(detail, params)
@@ -317,7 +343,7 @@ def refresh(fetch=True, now=None, fetch_tx=None):
         recs[txid] = dict(kind=kind, id=_rid(kind, txid, listing, body), title=_title(kind, listing, body), ts=ts, txid=txid,
                           severity=_sev(kind, listing, body), signer=body.get("from"), status=st, reason=why, countersigned=cs, key=k,
                           checked_at=now,
-                          listing=listing if kind != "g0" else None, first_seen=prev.get("first_seen", now), tries=tries, next_try=nxt)
+                          listing=listing if kind != "g0" else None, first_seen=prev.get("first_seen", now), tries=tries, next_try=nxt, fails=fails)
     # a listing that left the mirror keeps its last result (expired notices stay on POAScan); oldest dropped past the cap
     if len(recs) > MAX_RECORDS:
         keep = sorted(recs.values(), key=lambda r: (r["kind"] == "g0", r.get("ts") or 0), reverse=True)[:MAX_RECORDS]
@@ -379,9 +405,13 @@ def feed():
     s = state(); recs = list((s.get("records") or {}).values())
     g0r = next((r for r in recs if r.get("kind") == "g0"), None)
     rows = []
-    for r in sorted((r for r in recs if r.get("kind") != "g0"), key=lambda r: (r.get("ts") or 0, r.get("txid") or ""), reverse=True):
-        t, c = times(r.get("ts")), times(r.get("checked_at")); tx = r.get("txid")
-        rows.append(dict(kind=r["kind"], id=r.get("id"), title=r.get("title"), severity=r.get("severity"), txid=tx, time_utc=t["utc"], time_pt=t["pt"],
+    body = [r for r in recs if r.get("kind") != "g0"]
+    same = {}   # (kind, id) -> how many distinct signed txs carry it (minepoa re-published some releases under one version name)
+    for r in body: same[(r["kind"], r.get("id"))] = same.get((r["kind"], r.get("id")), 0) + 1
+    for r in sorted(body, key=lambda r: (r.get("ts") or 0, r.get("txid") or ""), reverse=True):
+        t, c = times(r.get("ts")), times(r.get("checked_at")); tx = r.get("txid"); n = same[(r["kind"], r.get("id"))]
+        rows.append(dict(kind=r["kind"], id=r.get("id"), title=r.get("title"), severity=r.get("severity"), txid=tx, txid_short=tx[:8] if tx else None,
+                         same_id_count=n, label=f'{r.get("id")} · {tx[:8]}' if n > 1 and tx else r.get("id"), time_utc=t["utc"], time_pt=t["pt"],
                          signer=r.get("signer"), signer_fingerprint=fingerprint(r.get("signer") or ""), status=r.get("status"), reason=r.get("reason"),
                          informational_only=r.get("status") != "verified", notice_source=r.get("source"),
                          checked_at_utc=c["utc"], checked_at_pt=c["pt"], source_url=SOURCE + tx if tx else "https://minepoa.com/api/notices",
@@ -404,4 +434,4 @@ def feed():
                       unsigned="no on-ledger txid (for example a server-override notice) or no signature: Unverified, informational only, never Signed",
                       pending="the signed tx is not read yet; POAScan reads each one once. Treat as Unverified until then"),
         severities=dict(info="informational", action="asks Agents to change what they do", critical="stop and check; repeats until it expires"),
-        counts=counts, records=rows, updated_utc=times(s.get("ran_at"))["utc"], method=AG.BASE + "/about#signed")
+        counts=counts, backfill=pending_summary(s.get("records") or {}), records=rows, updated_utc=times(s.get("ran_at"))["utc"], method=AG.BASE + "/about#signed")

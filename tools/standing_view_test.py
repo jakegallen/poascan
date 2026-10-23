@@ -156,7 +156,7 @@ def main():
               f'href="{SD.TRACKER}"' in h and "by EmBot-Lantern" in h and f'/api/v1/address/{NEXT}/standing' in h and 'id="standing"' in h)
         sw = re.search(r'<section class="card [^"]*" id="swaps">(.*?)</section>', h, re.S)
         check("address page: Swaps card links POAScan /swap/<id> and POASwap's per-offer status, no fee text",
-              sw is not None and f'href="/swap/{"f" * 64}"' in sw.group(1) and f'href="https://poaswap.io/track?offer={"f" * 64}"' in sw.group(1) and "fee" not in sw.group(1).lower())
+              sw is not None and f'href="/swap/{"f" * 64}"' in sw.group(1) and f'href="https://poaswap.io/status/{"f" * 64}"' in sw.group(1) and 'track?offer=' not in sw.group(1) and 'https://poaswap.io/status?address=' in sw.group(1) and "fee" not in sw.group(1).lower())
         c, h2, _ = get(f"/address/{LATER}")
         check("address page: no Swaps card without offers, no AT RISK when 3 closes out", c == 200 and 'id="swaps"' not in h2 and ">AT RISK<" not in h2)
         c, h, _ = get("/agents/at-risk")

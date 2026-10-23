@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.70] - 2026-10-23
+
+### Fixed (swap page state, signed feed)
+- /swap/<offer_id>: a terminal status from the API record (filled, cancelled, expired) always wins. An expired offer with a swap-fill tx that never finalized (de1ddefb) read Fill landing; it now reads Expired, and the stage history lists that tx as a Fill attempt, never final. Fill landing shows only on a live offer (open, or delisted before expiry) with a fill tx not yet final. Every offer's page now matches /api/v1/swaps/<offer_id>.
+- POASwap links use the canonical https://poaswap.io/status/<offer_id>: "Status on POASwap" on /swap/<offer_id>, "Status" on each Swaps card row, and https://poaswap.io/status?address=<poa1> in the Swaps card header.
+- /api/v1/notices/verified: the repeated version names are distinct signed txs (no txid appears twice), all kept. Records add txid_short, same_id_count and label (the id plus the short txid when the name repeats); a backfill block counts pending records and the next retry. /network releases show the short txid under a repeated version name.
+- Signed backfill: a tx whose read fails (5xx, timeout) waits 20 min, doubling to 6 h, so one failing tx no longer blocks the others; a read skipped without a request costs no slot. Still at most 2 reads per 10 min run.
+- tools/swap_state_test.py in CI.
+
 ## [1.26.69] - 2026-10-23
 
 ### Added (development banner)
