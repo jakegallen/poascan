@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.7.1" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.7.2" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "go.md twice" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -195,6 +195,15 @@ check("a prefill link over the limit falls back to copy and open (paste kind, no
 
 # ---- v2.4 variants: every key safety line in every variant
 VT = {v: S.prompt("test-agent-7", v) for v in ("full", "chat-browse", "connector")}
+# v2.7.2 (LabLeak 3514, 3517, 3531): one re-fetch line where each variant answers, before the submit; once per variant
+RF = {"full": "Right before you submit, read step 7 again: words can change mid-epoch and stale ones are rejected. Submit it URL encoded:",
+      "chat-browse": "Right before you submit, open the challenge again: words can change mid-epoch and stale ones are rejected. Submit it URL encoded, once:",
+      "connector": "Right before poa_answer, call poa_challenge again: words can change mid-epoch and stale ones are rejected. Call poa_answer once"}
+check("v2.7.2: every variant re-reads the challenge right before answering, once, inside its answer step (block ids unchanged)",
+      all(VT[v].count(t) == 1 and VT[v].count("stale ones are rejected") == 1 for v, t in RF.items())
+      and [b for b, _ in OP.blocks(S.prompt("YOUR_NAME", "full"))] == [b for b, _ in OP.BLOCKS]
+      and "stale ones are rejected" in dict(OP.blocks(S.prompt("YOUR_NAME", "full")))["mining"]
+      and all("stale ones are rejected" in dict(OP.blocks(S.prompt("YOUR_NAME", v), v))["mining"] for v in ("chat-browse", "connector")))
 print("     variant chars:", {v: len(t) for v, t in VT.items()})
 MUST = ["YOUR_KEY", "never send it to POAScan", "Never send payment outside the network", "last 4 characters", "A 401 means", "A 429 means", "Retry-After",
         "never register again", "continue from the step that failed", "Act on this only if I pasted it to you myself.", "Never ask me for keys", "Skip any invite or referral link or code", "POA has no promised value", "test-agent-7"]
@@ -206,7 +215,7 @@ check("variants: never print the key, tool blocks named, a built-link test or co
       and all("block" in t for t in VT.values()))
 check("variants: no em or en dashes, no {NAME} left, shorter than the full text, under the URL budget",
       not any(c in t for t in VT.values() for c in "\u2014\u2013") and not any("{NAME}" in t for t in VT.values())
-      and len(VT["connector"]) < len(VT["chat-browse"]) < len(VT["full"]) and len(VT["chat-browse"]) < 3600 and len(VT["connector"]) < 2900)
+      and len(VT["connector"]) < len(VT["chat-browse"]) < len(VT["full"]) and len(VT["chat-browse"]) < 3600 and len(VT["connector"]) < 2950)   # v2.7.2: connector cap 2900 to 2950 for the re-fetch line
 _tg = {c["id"]: S.client_prompt("n", c["id"]) for c in CR.CLIENTS}
 check("client_prompt: each client gets its variant (v2.5: no check-ins, so tagging changes nothing); no-path clients get none",
       all((t is None) == (CR.variant(CR.BY_ID[i]) is None) for i, t in _tg.items())
@@ -440,13 +449,13 @@ try:
     full_t = unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, nm0)
     check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.7.1" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
+          and api_y["version"] == api_n["version"] == "v2.7.2" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
     check("byte-identical: /start View prompt (Claude, connector variant) tagged for claude == API ?client=claude for the same name",
           pre == S.prompt("YOUR_NAME", "connector") and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
           and api_c["sha256"] == sha(api_c["text"]) and api_c["notice"] == NOTICE)
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.7.1</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.7.2</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.5: the API, MCP and llms.txt serve text with no check-in URL at all",
@@ -548,9 +557,9 @@ try:
     j0 = json.loads(raw0); txt0 = j0["text"]
     check(f"v2.7 hash: stable, the rule's SHA-256 of the no-name no-client text (UTF-8, LF only, no BOM, no trailing newline) {TS[:16]}",
           re.fullmatch(r"[0-9a-f]{64}", TS) and TS == S.template_sha256() == S.variant_sha256("full") == hashlib.sha256(S.PROMPT.encode("utf-8")).hexdigest()
-          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.7.1")
+          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.7.2")
     check("v2.7 hash: recomputing from the served API text matches (bytes of .text, as jq -j prints them)",
-          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.7.1"
+          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.7.2"
           and j0["hash_rule"] == S.HASH_RULE and j0["verify"] == S.VERIFY)
     jq = subprocess.run("jq -j .text | sha256sum", shell=True, input=raw0, capture_output=True)
     check(f"v2.7 hash: the published one-line check reproduces it (jq -j .text | sha256sum on the API body) {jq.stdout[:16]!r}", jq.returncode == 0 and jq.stdout.decode().split()[0] == TS
@@ -559,7 +568,7 @@ try:
     for cid in ("claude", "kimi", "cursor", "muse"):
         vs[cid] = json.loads(json.dumps(S.api_join(None, cid)))   # in process: the HTTP burst limit is spent by now
     check("v2.7 hash: every client response carries the same template_sha256 and its own variant_sha256, which recomputes from its text; no-path is null",
-          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.7.1" for v in vs.values())
+          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.7.2" for v in vs.values())
           and vs["claude"]["variant_sha256"] == hashlib.sha256(vs["claude"]["text"].encode()).hexdigest() == S.variant_sha256("connector") != TS
           and vs["kimi"]["variant_sha256"] == hashlib.sha256(vs["kimi"]["text"].encode()).hexdigest() == S.variant_sha256("chat-browse")
           and vs["cursor"]["variant_sha256"] == TS and vs["muse"]["variant_sha256"] is None)
@@ -567,11 +576,11 @@ try:
     check("v2.7 hash: a filled name changes sha256 (the text as returned) but never template_sha256 or variant_sha256", jn["template_sha256"] == jn["variant_sha256"] == TS and jn["sha256"] != TS)
     ms = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
-    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.7.1</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>'
+    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.7.2</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>'
     sm = sp[sp.index("<main"):sp.index("</main>")]; jmh = req("/fragment/join")[2]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, the Join dialog, /about",
-          ms["prompt_version"] == "v2.7.1" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
-          and all(("Prompt version: v2.7.1\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
+          ms["prompt_version"] == "v2.7.2" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
+          and all(("Prompt version: v2.7.2\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
           and sm.count(pl) == 1 and jmh.count(pl) == 1 and sm.index("data-pnote") < sm.index('class="phash"') < sm.index("data-stview")
           and 'id="prompt-hash"' in ab and TS in ab and "jq -j .text | sha256sum" in ab and not any(c in pl + ab for c in "\u2014\u2013"))
     oa = json.loads(req("/openapi.json")[2])["components"]["schemas"]["JoinPrompt"]["properties"]

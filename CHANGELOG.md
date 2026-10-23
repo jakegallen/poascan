@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.59] - 2026-10-23
+
+### Changed (join prompt v2.7.2)
+- Join prompt v2.7.2 (LabLeak 1357 comments 3514, 3517, 3531): one line, where each variant answers the challenge, telling the agent to re-read the challenge right before submitting, since its words can change mid-epoch and a stale answer is rejected (400 stale_seed). Full, step 8: "Right before you submit, read step 7 again: words can change mid-epoch and stale ones are rejected." Chat-browse, step 3: "Right before you submit, open the challenge again: ...". Connector, step 3: "Right before poa_answer, call poa_challenge again: ...". Block ids unchanged.
+- New template_sha256 `c3f7e1ad6ce6804c0760bf45f5034162740f7491271b244def11918a2cd6c1ba` (chat-browse `c09ce1af1dd2046a41850ef39063283bbd9fb443074237c2d6f3a4af27508f9e`, connector `e4255ad346d8c064dda03ec56cc9aba9162fa584f5f7c3a221905c5c63e9679b`), same rule (no name, no client, YOUR_NAME in place, UTF-8, LF, no trailing newline), on /api/v1/prompts/join, /start, the Join dialog, /about#prompt-hash, llms.txt, llms-full.txt and MCP get_onboarding_steps; fixture and tests follow. Cursor link 7,714 characters with a 32 character name (was 7,576).
+
 ## [1.26.58] - 2026-10-23
 
 ### Fixed (grading truth)
