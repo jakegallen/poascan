@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.47"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T16:36:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "The open epoch Graders tile shows a Halted tag while grading is halted, with a tooltip giving the official graders served."
+VERSION = "1.26.48"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T17:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Swaps are live, and swap status now comes from POASwap: live, paused, coming soon or unknown."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -92,9 +92,11 @@ def _addr(args):
     if not ADDR_RX.match(a): raise ToolError("address must be a poa1... address")
     return a
 
-def _swap(r):
+def _swap(r, url):
     r = {k: v for k, v in r.items() if k not in ("fee_bp",)}
-    r["url"] = "https://poaswap.io/"; return r   # swapping lives on POASwap; the data stays on POAScan's API
+    r["url"] = url; return r   # swapping lives on POASwap (url from its status); the data stays on POAScan's API
+
+def _swap_url(sw=None): return (sw or SC.status()).get("url") or "https://poaswap.io/start"
 
 def t_summary(args):
     st = A.status(); o = A.open_epoch(); nw = A.networks(); ep = A.epoch_rows(); last = ep[-1] if ep else {}
@@ -205,13 +207,14 @@ def t_unlocks(args):
 def t_swaps(args):
     stt = str(args.get("status") or "open"); lim = _int(args, "limit", 20, 1, 200)
     rows = SC.offers(None if stt == "all" else stt)
-    return dict(status=stt, count=len(rows), offers=[_swap(r) for r in rows[:lim]], swaps_status=SC.status(), safety=SAFETY)
+    sw = SC.status()
+    return dict(status=stt, count=len(rows), offers=[_swap(r, _swap_url(sw)) for r in rows[:lim]], swaps_status=sw, safety=SAFETY)
 
 def t_swap(args):
     oid = str(args.get("offer_id") or "").strip().lower()
     d = SC.offer(oid) if re.fullmatch(r"[a-z0-9_-]{1,128}", oid) else None   # /api/v1/swaps/<offer_id>
     if not d: raise ToolError("offer not found")
-    return dict(offer=_swap(d["offer"]), events=d["events"], safety=SAFETY)
+    return dict(offer=_swap(d["offer"], _swap_url()), events=d["events"], safety=SAFETY)
 
 def t_census(args):
     s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100)
@@ -239,11 +242,13 @@ def _recon():
                 per_close=[p for p in d["per_close"] if p["state"] != "no_reads"], method=BASE + "/about#reconcile")
 
 def t_swap_status(args):
-    d = dict(SC.status())
-    d["note"] = ("Swaps are available." if d["available"] else
-                 "Swaps are coming soon. Don't call swap-offer or swap-take yet; tell the user they're coming soon and offer to help link an Emblem vault so they're ready."
-                 if d["state"] == "coming_soon" else
-                 "Swaps are being upgraded. Don't call swap-take now; tell the user to check back soon and offer to try again later.")
+    d = dict(SC.status()); u = _swap_url(d); st = d.get("status") or ("live" if d.get("available") else "unknown")
+    d["note"] = (f"Swaps are live on minepoa.com. POAScan only reads: offers are on {u} and every swap runs through the network's own flow (go.md SWAPS)."
+                 if st == "live" and d.get("available") else
+                 "Swaps are live but not taking swaps right now. Don't call swap-take; tell the user to check back soon." if st == "live" else
+                 "Swaps are paused. Don't call swap-offer or swap-take; tell the user to check back soon." if st == "paused" else
+                 f"Swaps are coming soon. Don't call swap-offer or swap-take yet; tell the user to watch {u}." if st == "coming_soon" else
+                 f"POAScan can't read POASwap's swap status right now. Don't call swap-take; tell the user to check {u}.")
     d["safety"] = SAFETY
     return d
 
@@ -365,7 +370,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it before trusting a number, when the node or POAScan looks stale, or to check whether mining is paused.",
      S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
     ("get_swap_status", "Swap status",
-     "Whether swaps are available, coming soon or being upgraded, the last good read of minepoa.com/api/swaps, the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
+     "Whether swaps are live, paused, coming soon or unknown (POASwap's status, source poaswap, with fetched_at), the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
      "Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals",
      "Groups of Agents sharing a pattern: near-duplicate answers, synchronized timing, a shared vault link or shared funding. Signals, not findings: a shared script or a busy minute can link unrelated Agents. "
@@ -543,8 +548,8 @@ def openapi():
                                  desc="Without client: the canonical untagged prompt, byte-identical to llms.txt, the MCP tool get_onboarding_steps and the Join dialog, with the name in the register link. blocks (v2.6: opener, registration, resume, capability_check, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; opener is the pasted-only line, id notice in 1.26.43; no check-in blocks since v2.5) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/prompts/clients": _op("The shared client registry for the join prompt: tier, prefill format and connector settings per app", ANY, oid="joinClients", tag="meta",
                                     desc="data/clients.json as is (schema 1): tiers (full, chat-browse, connector, none), the no-path panel line and alternatives, and clients[] with id, name, tier, row, open, prefill (URL prefix the prompt is appended to, URL encoded; empty when the app has none), auto_sends and connector (settings_url, prefills_url, where, cli). /start and POASwap read the same file. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET. No parameters."),
-        "/api/swaps/status": _op("Swap availability: available, coming soon or being upgraded, last good read, open offers", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
-                                 desc="Derived from POAScan's own scheduled read of minepoa.com/api/swaps (no extra upstream calls). state is one of available, coming_soon (before launch) or upgrading (the last read failed or the data is older than fresh_after_s). Agents: when available is false, don't call swap-take; try again later."),
+        "/api/swaps/status": _op("Swap status from POASwap (live, paused, coming_soon or unknown), open offers and market stats", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
+                                 desc="status, available, swaps_live, reason, message, open_offer_count, updated_at and url come from POASwap's https://poaswap.io/api/v1/swaps/status, the single source (source poaswap). POAScan reads it at most once a minute and never writes to it; fetched_at is its last good read. A copy older than 15 minutes reads as status unknown; until POASwap has answered once since boot, status follows POAScan's default (flag_basis fallback). state keeps the v1 values: available, upgrading (live but not available, or paused), coming_soon, plus unknown. last_good_read, open_offers and market come from POAScan's own read of minepoa.com/api/swaps. Agents: when available is false, don't call swap-take; try again later."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
@@ -646,9 +651,16 @@ def openapi():
                                            "paid_close": {"type": ["integer", "null"]}, "address_credited": {"type": ["boolean", "null"], "description": "author address in rewards at the settling close (address level)"},
                                            "reward_attributable": {"type": "null", "description": "always null: close records publish rewards per address, not per answer"},
                                            "vanished": {"type": "boolean", "description": "left pending with no settled record"}, "last_pending_close": {"type": ["integer", "null"]}}},
-                "SwapStatus": {"type": "object", "description": "Swap availability from POAScan's scheduled read of minepoa.com/api/swaps",
-                                           "properties": {"available": {"type": "boolean"}, "state": {"type": "string", "enum": ["available", "coming_soon", "upgrading"]},
-                                                          "message": {"type": ["string", "null"], "description": "Visitor-facing note when not available"},
+                "SwapStatus": {"type": "object", "description": "Swap status from POASwap (read only), plus POAScan's own read of minepoa.com/api/swaps for offers and market",
+                                           "properties": {"status": {"type": "string", "enum": ["live", "paused", "coming_soon", "unknown"], "description": "POASwap's status; unknown when POAScan's copy is older than 15 minutes"},
+                                                          "available": {"type": "boolean", "description": "POASwap's available: swaps can be taken right now"},
+                                                          "state": {"type": "string", "enum": ["available", "coming_soon", "upgrading", "unknown"], "description": "v1 value derived from status and available"},
+                                                          "message": {"type": ["string", "null"], "description": "One terse line: POASwap's message when clean, else POAScan's label"},
+                                                          "swaps_live": {"type": ["boolean", "null"]}, "reason": {"type": ["string", "null"]}, "open_offer_count": {"type": ["integer", "null"], "description": "POASwap's count"},
+                                                          "updated_at": {"type": ["string", "null"], "format": "date-time", "description": "POASwap's updated_at"},
+                                                          "source": {"type": "string", "enum": ["poaswap"]}, "fetched_at": {"type": ["string", "null"], "format": "date-time", "description": "POAScan's last good read of POASwap's status (200 or 304), ISO 8601 UTC"},
+                                                          "flag_basis": {"type": "string", "enum": ["poaswap", "expired", "fallback"], "description": "poaswap: copy at most 15 min old; expired: older (status unknown); fallback: POASwap not reached since boot"},
+                                                          "flag_version": {"type": ["integer", "null"]},
                                                           "last_good_read": {"type": ["string", "null"], "format": "date-time", "description": "last successful read, ISO 8601 UTC"},
                                                           "last_good_read_age_s": {"type": ["integer", "null"]}, "last_attempt": {"type": ["string", "null"], "format": "date-time"},
                                                           "last_attempt_status": {"type": ["string", "null"], "description": "HTTP status of the last read, e.g. 200 or 502"},
@@ -731,7 +743,7 @@ Tools ({len(TOOLS)}):
 - OpenAPI 3.1: {BASE}/openapi.json
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
-- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. state is available, coming_soon or upgrading. When available is false, swaps are coming soon (state coming_soon) or being upgraded (state upgrading): don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
+- Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded).
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
@@ -757,7 +769,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/epochs the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading)
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/token, {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
-- Swaps live on POASwap: https://poaswap.io/ (wallet setup: https://poaswap.io/start). POAScan keeps the swap data API above.
+- Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
 - {BASE}/network chain health (?tab=health) and charts (?tab=charts)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 
@@ -815,7 +827,7 @@ def agent_card():
                 sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
                 sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
                 sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
-                sk("swaps", "Swaps", "Open swap offers, fills and swap availability (available, coming soon or being upgraded) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
+                sk("swaps", "Swaps", "Open swap offers, fills and swap status (live, paused, coming soon or unknown, from POASwap) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
                 sk("onboarding", "Start mining", "The steps and copy-ready prompt to start mining PoA, from https://poascan.io/start.", ["onboarding", "mining"], ["How do I start mining PoA?"]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],

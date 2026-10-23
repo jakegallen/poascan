@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.48] - 2026-10-23
+
+### Changed
+- Swaps are live. POAScan reads POASwap's `https://poaswap.io/api/v1/swaps/status` as the single source: at most once a minute with If-None-Match, read only. A copy older than 15 minutes reads as unknown; until POASwap answers once after boot, POAScan assumes live.
+- `/api/v1/swaps/status`, the summary swaps block and MCP `get_swap_status`: `state` gains the value `unknown`.
+- Swap links (home Market card, MCP offer results, How to buy POA, llms.txt) now go to POASwap's `url` (https://poaswap.io/start).
+- How to buy POA, the MCP note, llms.txt, OpenAPI and the agent card cover live, paused, coming soon and unknown.
+- `/privacy`: "POAScan's server sends no visitor data to POASwap; it only reads POASwap's public swap status."
+
+### Added
+- `/api/v1/swaps/status` and the summary swaps block: `status`, `swaps_live`, `reason`, `open_offer_count`, `updated_at`, `source` (poaswap), `fetched_at`, `flag_basis` (poaswap, expired or fallback) and `flag_version`.
+
 ## [1.26.47] - 2026-10-23
 
 ### Changed

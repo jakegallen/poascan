@@ -6,20 +6,29 @@ from .host import stat, intc
 from .pages import ICON_SWAP
 
 PAY = "Never send payment outside the network."
+TILE = {"paused": "Paused", "coming_soon": "Coming soon", "unknown": "Unknown"}
+def _book(v): return '<a href="' + E(v["url"]) + '">' + C.LINK_LABEL + '</a>'
+
 def _swaps():
-    h = M.swap_health()
-    return stat("Swaps", '<span class="num">Available</span>' if h["available"] else ('<span class="num">Upgrading</span>' if C.SWAPS_LIVE else '<span class="num">Coming soon</span>'), "", ICON_SWAP) + stat("Open offers", intc(h["open_offers"]), "", ICON_SWAP)
+    v = M.swap_view()
+    word = "Available" if v["status"] == "live" and v["available"] else "Upgrading" if v["status"] == "live" else TILE[v["status"]]
+    return stat("Swaps", f'<span class="num">{word}</span>', "", ICON_SWAP) + stat("Open offers", intc(v["open_offers"]), "", ICON_SWAP)
 
 def _buy_now():
-    h = M.swap_health()
-    if not h["available"]: return (M.UPGRADE_MSG + ' Open offers show on <a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a> once swaps are back.') if C.SWAPS_LIVE else M.SOON_MSG + ' Preview them on <a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a>.'
-    return f'There are {h["open_offers"]} open offers right now. See <a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a> or https://minepoa.com/api/swaps.'
+    v = M.swap_view(); book = _book(v)
+    if v["status"] == "unknown": return "POAScan can't read the swap status right now. Check " + book + "."
+    if v["status"] == "coming_soon": return "Not yet. " + E(v["message"]) + " See " + book + "."
+    if v["status"] == "paused": return "Not right now. " + E(v["message"]) + " See " + book + "."
+    if not v["available"]: return M.UPGRADE_MSG + " Open offers show on " + book + " once swaps are back."
+    n = v["open_offers"]
+    if not n: return 'Yes. Swaps are live on minepoa.com. No offers are open right now; new ones show on ' + book + '.'
+    return f'Yes. Swaps are live on minepoa.com, with {n} open offer{"" if n == 1 else "s"} right now. See ' + book + ' or https://minepoa.com/api/swaps.'
 
 def _price():
     s = M.swap_stats()
     if s["last"] and s["last"][0][0] is not None:
-        return f'The last filled swap priced 1M POA at {s["last"][0][0]:.6g} {E(s["last"][1] or "")}. Prices come only from filled swaps; see <a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a>.'
-    return 'No swap has filled yet, so there is no trade price. Open offers are asks, not trades. A price shows on <a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a> after a fill.'
+        return f'The last filled swap priced 1M POA at {s["last"][0][0]:.6g} {E(s["last"][1] or "")}. Prices come only from filled swaps; see ' + _book(M.swap_view()) + '.'
+    return 'No swap has filled yet, so there is no trade price. Open offers are asks, not trades. A price shows on ' + _book(M.swap_view()) + ' after a fill.'
 
 
 PAGE_KEY = "/how-to-buy-poa"
@@ -36,7 +45,7 @@ PAGE = dict(
         ("What if a take times out?", "Re-call swap-take with the same offer. Re-calling is safe. Don't loop: if https://minepoa.com/api/swaps doesn't answer, swaps are being upgraded, so try again later."),
         ("Can a seller cancel?", "Yes, after expiry, with swap-cancel. Cancels and expired offers refund the seller in full."),
         ("Can I use my own wallet?", "Yes. Self-custody wallets use the coordinated flow in go.md: sign the payment without broadcasting, register it with swap-intent, wait for the seller's receipt, then broadcast and fill."),
-        ("Where do I find sellers?", 'The on-ledger offer book (<a href="' + C.LINK_URL + '">' + C.LINK_LABEL + '</a>) and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')])
+        ("Where do I find sellers?", lambda: 'The on-ledger offer book (' + _book(M.swap_view()) + ') and the marketplace forum at https://minepoa.com/lableak/#/a/sales.')])
 
 
 # ---------------- "How swaps work": one terse section shared by POAScan /about and any other host ----------------
@@ -61,7 +70,7 @@ def how_html(tx_base=""):
              ("Checked by Agents", "The fill carries the payment ref and the seller's receipt. Attesters must verify the external payment before they attest, and each ref can be used once."),
              ("Fee", "1% of the POA, charged only when a swap completes."),
              ("Expiry", "Every offer expires. After that the seller can cancel, and cancels and expired offers refund in full."),
-             ("Final", "After 5 independent attestations, or when a signed checkpoint anchored on Solana and Base covers the fill."),
+             ("Final", "After 5 attestations, or when a signed checkpoint anchored on Solana and Base covers the fill."),
              ("Pairs", "One-call takes pay native SOL or ETH. Token legs such as USDC on Solana use the coordinated flow in go.md.")]
     dl = '<dl class="hsf">' + "".join(f"<dt>{E(k)}</dt><dd>{v}</dd>" for k, v in facts) + "</dl>"
     ex = (f'<p class="hse">First mainnet fill: offer {tx(_FIRST_OFFER)} locked 10,000 POA for 0.001 SOL; fill {tx(_FIRST_FILL)} '

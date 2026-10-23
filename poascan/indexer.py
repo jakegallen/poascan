@@ -798,6 +798,7 @@ def start(seed_dir=None):
     try: seed(seed_dir)
     except Exception as e: log.exception("seed failed: %s", e)
     fast = [j for j in JOBS if j[0] in FAST]; slow = [j for j in JOBS if j[0] not in FAST]
+    from . import swapflag as _SF; _SF.start()   # the shared swap flag, read only, its own thread (never on the minepoa budget)
     threading.Thread(target=run_forever, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
     th = threading.Thread(target=run_forever, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
     return th

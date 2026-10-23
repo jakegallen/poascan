@@ -1,6 +1,6 @@
 """Optional wallet registry step for the wallet setup prompts (/swaps Add Wallet, /start step 8).
 The setup code is made in the visitor's browser (static/app.js: 's_' + 16 chars of a-z2-7, crypto.getRandomValues) and
-filled into the prompt there. POAScan's server never generates, receives, logs or stores it, never calls poaswap.io, and
+filled into the prompt there. POAScan's server never generates, receives, logs or stores it, never calls poaswap.io for it (the server's only poaswap.io read is the public swap status, swapflag.py), and
 never puts the code in a URL, cookie or local storage. Without JS the prompt shows without this step.
 Only public addresses: no created/sig/type fields, because those need the PoA key and prompts never handle the key."""
 from html import escape as E

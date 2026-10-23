@@ -42,7 +42,7 @@ try:
           and 'Swaps now live on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
           and 'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>' in pages["/privacy"])
     from poascan import agentapi as AG
-    check("MCP swap tool results point to poaswap.io", AG._swap({"id": "x"})["url"] == "https://poaswap.io/" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
+    check("MCP swap tool results point to poaswap.io", AG._swap({"id": "x"}, AG._swap_url())["url"] == "https://poaswap.io/start" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
 finally:
     p.terminate(); p.wait(10)
 print("all passed" if not fails else f"{len(fails)} failed")

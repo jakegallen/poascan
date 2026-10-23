@@ -62,6 +62,9 @@ def unit():
         for fn in fs:
             if not fn.endswith(".py"): continue
             s = open(os.path.join(dp, fn)).read()
+            if fn == "swapflag.py":   # the one allowed read: POASwap's public swap status, plain GET, nothing else
+                check("swapflag.py: only the public status URL, GET only, no regcode", "regcode" not in s and "data=" not in s and "method=" not in s
+                      and set(re.findall(r"https://poaswap\.io[^\s\"',)]*", s)) <= {"https://poaswap.io/api/v1/swaps/status", "https://poaswap.io/start"}); continue
             if "urlopen" in s or "http.client" in s or "socket" in s:
                 check(f"outbound module {fn} never names poaswap", "poaswap" not in s.lower() and "regcode" not in s)
     from poascan import indexer as IX
@@ -118,7 +121,7 @@ def live():
         check("llms.txt prompt has no registry step", all("registry/register" not in pages[r][2] and "SETUP_CODE" not in pages[r][2] for r in ("/llms-full.txt", "/llms.txt")))
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
         check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-23", bool(sec) and "Updated 2026-10-23." in pv
-              and "/swaps" not in sec.group(1) and "POAScan's pages no longer include a wallet setup prompt or setup code. Swaps and wallet setup are on <a href=\"https://poaswap.io/start\" rel=\"noopener noreferrer\">POASwap</a>." in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
+              and "/swaps" not in sec.group(1) and "POAScan's pages no longer include a wallet setup prompt or setup code. Swaps and wallet setup are on <a href=\"https://poaswap.io/start\" rel=\"noopener noreferrer\">POASwap</a>." in sec.group(1) and "POAScan's server sends no visitor data to POASwap; it only reads POASwap's public swap status." in sec.group(1))
         check("no em dashes in the pages", not any("\u2014" in h for r, (_, _, h) in pages.items() if r in ("/start", "/privacy")))
         time.sleep(1)
         bad = [h for h in px.hosts if "poaswap" in h.lower()]

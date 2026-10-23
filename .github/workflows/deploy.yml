@@ -75,6 +75,8 @@ jobs:
         run: python tools/start_test.py
       - name: swap cutover test
         run: python tools/swap_cutover_test.py
+      - name: POASwap swap flag (read only, 60 s with If-None-Match, 15 min keep, unknown after, boot fallback SWAPS_LIVE)
+        run: python tools/swapflag_test.py
       - name: Home headline row and Agents / hr (window and pause rule, own snapshots only, cached, /about#home, additive API fields)
         run: python tools/joins_test.py
       - name: Mobile render (main visible from the first paint, no blend layer on mobile, tight section spacing)

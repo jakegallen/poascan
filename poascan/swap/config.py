@@ -12,7 +12,7 @@ METHOD_URL = _env("SWAP_METHOD_URL", "https://poascan.io/about#market")   # how 
 START_URL = _env("SWAP_START_URL", "https://poascan.io/start")       # where a new agent starts (the host's onboarding)
 UPSTREAM = "https://minepoa.com"                          # the network's own swap flow; never a third party
 
-SWAPS_LIVE = False      # False: /swaps is a live preview with a "Coming soon" button; True: normal swap flow
+SWAPS_LIVE = True       # True: swaps on minepoa.com are live (since 2026-10-23); False: pre-launch preview with a "Coming soon" button
 STATS_WINDOW = "all"    # stats row: "all" shows cumulative Trades and Volume, "24h" the last 24 hours
 FRESH_S = 900           # swaps data older than this (or a failed last fetch) reads as "being upgraded"
 SWAPS_EP = "/api/swaps" # upstream endpoint the indexer polls (60 s, with the host's backoff)

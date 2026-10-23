@@ -13,6 +13,28 @@ def _up(name):
     f = getattr(H, "upstream_" + name, None)
     return f() if f else None
 
+def _flag():
+    """The host's swap flag (POAScan: POASwap's status, read only), or None when the host has none."""
+    f = getattr(H, "swap_flag", None)
+    return f() if f else None
+
+def _dot(m): return m if m[-1:] in ".!?" else m + "."
+
+def swap_view():
+    """What pages show. status: live, paused, coming_soon or unknown (the display keys off it); available: the button only;
+    url: where swap links go; message: one terse line. From the host's flag when it has one, else this module's own read."""
+    h = swap_health(); fl = _flag()
+    if fl is None:
+        return dict(status="live" if C.SWAPS_LIVE else "coming_soon", available=h["available"], url=C.LINK_URL,
+                    message=None if h["available"] else swap_msg(), open_offers=h["open_offers"], flag=None)
+    avail = fl["available"] if fl["available"] is not None else h["available"]   # flag never read since boot: own read
+    msg = fl["message"] if fl["basis"] != "fallback" or avail else swap_msg()   # fallback: POAScan's own read decides the line
+    return dict(status=fl["status"], available=bool(avail), url=fl["url"], message=_dot(msg), open_offers=h["open_offers"], flag=fl)
+
+def legacy_state(status, available):
+    """v1 state from status: available, upgrading (live but not available, or paused), coming_soon, or unknown."""
+    return {"live": "available" if available else "upgrading", "paused": "upgrading", "coming_soon": "coming_soon"}.get(status, "unknown")
+
 def swap_health():
     """Upstream /api/swaps health from the indexer's own fetch log. No extra upstream calls."""
     u = _up("health")
@@ -117,10 +139,17 @@ def _rates_ts():
 def swap_status_api():
     """/api/v1/swaps/status: availability plus market. The explorer reads swaps only through this, /price and /swaps."""
     h = swap_health(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
-    return dict(available=h["available"], state=h["state"], message=None if h["available"] else swap_msg(),
+    d = dict(available=h["available"], state=h["state"], message=None if h["available"] else swap_msg(),
                 last_good_read=iso(h["last_good_read"]), last_good_read_age_s=h["last_good_read_age_s"], last_attempt=iso(h["last_attempt"]),
                 last_attempt_status=h["last_attempt_status"], open_offers=h["open_offers"], fresh_after_s=h["fresh_after_s"],
-                upstream=C.UPSTREAM + C.SWAPS_EP, url=C.PAGE_URL, market=swap_market(), names=swap_names())
+                upstream=C.UPSTREAM + C.SWAPS_EP, url=C.LINK_URL if C.LINK_URL.startswith("https://") else C.PAGE_URL, market=swap_market(), names=swap_names())
+    fl = _flag()
+    if fl is None: return d
+    v = swap_view()   # POASwap's flag decides status, available, message and url; POAScan's own read stays in last_good_read and open_offers
+    d.update(status=v["status"], available=v["available"], state=legacy_state(v["status"], v["available"]), message=v["message"], url=v["url"],
+             swaps_live=fl["swaps_live"], reason=fl["reason"], open_offer_count=fl["open_offer_count"], updated_at=fl["updated_at"],
+             source=fl["source"], fetched_at=fl["fetched_at"], flag_basis=fl["basis"], flag_version=fl["version"])
+    return d
 
 def swap_names():
     """Agent names for the makers and takers in the book (so a mirror can link them without a names feed)."""

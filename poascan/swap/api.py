@@ -59,7 +59,8 @@ def _version():
              "(SELECT COALESCE(SUM(final), 0) FROM swap_events) AS f, (SELECT COALESCE(SUM(dropped), 0) FROM swap_events) AS d") or {}
     fl = H.fetch_log(C.SWAPS_EP)
     return (v.get("u"), v.get("n"), v.get("e"), v.get("f"), v.get("d"), fl.get("last_ok"), fl.get("last_err"), fl.get("fails"),
-            tuple(H.blob_ts(k) for k in ("fx", "chains", "status", "epochs")) if hasattr(H, "blob_ts") else None)
+            tuple(H.blob_ts(k) for k in ("fx", "chains", "status", "epochs")) if hasattr(H, "blob_ts") else None,
+            H.swap_flag_version() if hasattr(H, "swap_flag_version") else None)   # the host's swap flag (POAScan: each POASwap read)
 
 def _build(path):
     if path == "/api/swaps": return enrich(S.swaps_all()), True

@@ -55,6 +55,15 @@ def __getattr__(n):   # resolved on first use, so the host indexer can import th
 def blob_ts(kind):
     """When the host last stored a blob (no JSON parse)."""
     r = _db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,)); return r["ts"] if r else None
+def swap_flag():
+    """POASwap's swap flag as POAScan reads it (poascan/swapflag.py): status, available, url, message, source, fetched_at.
+    A host without this hook keeps the module's own minepoa.com read."""
+    from .. import swapflag as _F
+    from . import config as _C
+    return _F.current(live=_C.SWAPS_LIVE)
+def swap_flag_version():
+    from .. import swapflag as _F
+    return _F.version()
 def fetch_log(endpoint):
     """Last ok / last error of the host's scheduled read of an upstream endpoint (no extra upstream call)."""
     return _db.q1("SELECT last_ok, last_err, err, fails FROM fetch_log WHERE endpoint=?", (endpoint,)) or {}
