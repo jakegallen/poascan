@@ -357,6 +357,11 @@ SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noop
 def updot(state):
     return f'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"{"" if state == "up" else " hidden"}><i aria-hidden="true"></i></a>'
 
+# Site-wide development banner (1.26.69): the first thing in <body>, in normal flow above the sticky header, so it scrolls away and
+# never covers content or the header. Same look as POASwap's top banner (.devbar, amber tint); like POASwap's it has no dismiss button.
+DEV_BANNER = ('<div class="devbar" id="devbar" role="note"><div class="wrap devbar-in"><p><b>System development in progress.</b> '
+              'Follow <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">@Jakegallen</a> for updates.</p></div></div>')
+
 def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="on" aria-current="page">{n}</a>' if h == active else f'<a href="{h}" class="">{n}</a>' for h, n in NAV)
@@ -369,8 +374,8 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=103">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
-<header class="top"><div class="wrap hdr">
+<link rel="stylesheet" href="/static/style.css?v=104">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+{DEV_BANNER}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}

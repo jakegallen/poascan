@@ -1209,3 +1209,11 @@ code.brk{overflow-wrap:anywhere}
 .sigsev{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--line2);border-radius:4px;font:600 10px/15px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);vertical-align:1px}
 .sigsev.action{color:var(--amber);border-color:rgba(255,176,0,.35)}.sigsev.critical{color:var(--red);border-color:rgba(255,90,78,.45)}
 .sigl{display:block;margin-top:3px;line-height:1}.sigl .sigsev{margin-left:0}
+/* 1.26.69: site-wide development banner above the sticky header (ui.DEV_BANNER), normal flow, not dismissible. Same look as POASwap's .devbar */
+.devbar{border-bottom:1px solid rgba(227,163,58,.38);background:linear-gradient(90deg,rgba(227,163,58,.20),rgba(227,163,58,.10))}
+.devbar-in{display:flex;align-items:center;justify-content:center;padding-top:7px;padding-bottom:7px}
+.devbar p{margin:0;color:#F2D49A;font-size:var(--t13);line-height:1.4;text-align:center;text-wrap:balance}
+.devbar b{color:#FFC861;font-weight:700;letter-spacing:.02em}
+.devbar a{color:#FFC861;font-weight:600;text-decoration:underline;text-decoration-color:rgba(255,200,97,.45);text-underline-offset:2px}
+.devbar a:hover,.devbar a:focus-visible{color:#FFE2A6;text-decoration-color:currentColor}
+@media (max-width:640px){.devbar-in{padding-top:6px;padding-bottom:6px}.devbar p{font-size:var(--t12)}}

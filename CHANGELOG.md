@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.69] - 2026-10-23
+
+### Added (development banner)
+- Site-wide banner at the top of every page, above the sticky header and in normal page flow (it scrolls away and never covers content): "System development in progress. Follow @Jakegallen for updates." The handle links to x.com/Jakegallen in a new tab. Same thin amber strip as POASwap's top banner; like POASwap's, it can't be dismissed. The home and /start Upgrading strip stays steel, below the header. CSS v104. tools/devbar_test.py in CI. Join prompt v2.8 unchanged (6762aa1c).
+
 ## [1.26.68] - 2026-10-23
 
 ### Added (standing view, LabLeak 1357)

@@ -111,6 +111,8 @@ jobs:
         run: python tools/guidkey_test.py
       - name: Standing view and at-risk list (at risk within 2 closes, pending answers with panel and grades, marks, /standing and /agents/at-risk API, MCP get_standing and list_at_risk, Standing Watch credit, swap status links, L + 7 and marks on the real E0 to E11 records)
         run: python tools/standing_view_test.py
+      - name: Development banner (first in body above the sticky header, normal flow, exact text and X link, not dismissible, steel Upgrading strip, join prompt unchanged)
+        run: python tools/devbar_test.py
 
   deploy:
     needs: test
