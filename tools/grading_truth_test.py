@@ -57,6 +57,8 @@ check("/upgrade: per notice title, Not yet confirmed group", "Upgrade complete p
 wk = h.split('data-grp="working"', 1)[1].split("</ul>", 1)[0]
 check("/upgrade: Grading not in Working", "<span>Grading</span>" not in wk and "<span>Hosted mining</span>" in wk)
 check("/upgrade: Grade seals row and notice row label", "<dt>Grade seals</dt>" in h and "Grading reopened (notice)" in h and "0 since the notice" in h)
+gs = re.search(r"<dt>Grade seals</dt><dd>(.*?)</dd>", h, re.S)
+check("/upgrade: Grade seals counts Agents, not addresses", gs is not None and "from 0 Agents" in gs.group(1) and "address" not in gs.group(1))
 ogt = OG._upgrade()
 check("og: Grading Unconfirmed", ("Grading", "Unconfirmed") in ogt[3] and ogt[1] == "Upgrade complete per notice")
 check("og description", M.og_desc().startswith("Network upgrade complete per notice") and "grading not yet confirmed" in M.og_desc())

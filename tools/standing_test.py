@@ -59,6 +59,10 @@ def main():
     check("estimate is close L + estab_ttl + 1 (16)", f["established_expires_epoch_est"] == 16)
     check("basis says observed estimate, not official, with L and estab_ttl", "estimate" in f["established_expires_basis"] and "not an official rule" in f["established_expires_basis"]
           and "epoch 9" in f["established_expires_basis"] and "estab_ttl 6" in f["established_expires_basis"])
+    check("closes left counts the open epoch's close as 1 (6)", f["established_expires_closes_left"] == 6)
+    o = A.open_epoch()
+    check("estimated time is the open close plus a period per later close", o.get("est_close") and f["established_expires_ts_est"] == int(o["est_close"] + 5 * 21600))
+    check("closes left and time are null when unknown", A.established_expiry_est(NEVER)["established_expires_closes_left"] is None and A.established_expiry_est(NEVER)["established_expires_ts_est"] is None)
     check("the rule matches the fixture removals", all(A.last_eligible()[a] + 6 + 1 == n for n in (8, 10) for a in E[n]["basis"]["established_removed"]))
     for a, why in ((OLD, "removed (not established)"), (SEATED, "removed after a seat (seats don't refresh)"), (NEVER, "never eligible"),
                    (TRUST, "trusted grader"), (SEATONLY, "established from a seat, no eligible epoch on record")):
@@ -98,6 +102,9 @@ def main():
         sc = json.loads(j)["result"].get("structuredContent") or {}
         check("MCP get_address carries the estimate at the top and in established_history", sc.get("established_expires_epoch_est") == 16 and "estimate" in (sc.get("established_expires_basis") or "")
               and (sc.get("established_history") or {}).get("established_expires_epoch_est") == 16)
+        check("MCP get_address adds closes left and the estimated time", sc.get("established_expires_closes_left") == 6 and isinstance(sc.get("established_expires_ts_est"), int))
+        c, j = get(f"/api/v1/address/{FRESH}/established"); d = json.loads(j)
+        check("API established: closes left 6 and an estimated time", d.get("established_expires_closes_left") == 6 and isinstance(d.get("established_expires_ts_est"), int))
         c, j = get("/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode(), H)
         ga = [t["description"] for t in json.loads(j)["result"]["tools"] if t["name"] == "get_address"][0]
         check("MCP get_address description names the field as an estimate, null when unknown", "established_expires_epoch_est" in ga and "estimate" in ga and "null when unknown" in ga)
@@ -105,6 +112,9 @@ def main():
         row = re.search(r'<div class="kv"><span>Est\. expires</span><div>(.*?)</div></div>', h, re.S)
         check(f"address page ({c}): Est. expires row reads E16 close, labelled estimate, tooltip says not official",
               c == 200 and row is not None and "E16 close" in row.group(1) and "estimate" in row.group(1) and "not an official rule" in row.group(1))
+        check("address page: Est. expires gives closes left and an estimated time (tooltip from data-ts)", row is not None and "in 6 closes, " in row.group(1)
+              and re.search(r'<time class="t" data-ts="\d+">~(3[0-9]|2[0-9])h</time>', row.group(1)) is not None)
+        check("no em or en dashes on the Est. expires row", row is not None and not re.search("[\u2013\u2014]", row.group(1)))
         check("address page: a future close is plain text, not a link to a missing epoch page", row is not None and "/epoch/16" not in row.group(1))
         lc = re.search(r'<div class="kv"><span>Last cleared</span><div>(.*?)</div></div>', h, re.S)
         check("address page: Last cleared row names the last challenge_eligible epoch (E9) and the K=5 bar (LabLeak 1357 c3553)",

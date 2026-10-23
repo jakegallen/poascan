@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.64] - 2026-10-23
+
+### Added (Established history)
+- Address page Est. expires adds closes left and an estimated time: "E16 close · in 6 closes, ~33h · last cleared + 7, estimate". Closes left counts the open epoch's close as 1; the time is the open close plus `auto_epoch_seconds` per later close, with UTC and local in the tooltip. Still an estimate from observed behavior, not an official rule.
+- API and MCP: `/api/v1/address/<a>/established` and MCP `get_address` (top level and `established_history`) add `established_expires_closes_left` and `established_expires_ts_est` (unix seconds), null when unknown. OpenAPI, the MCP description and /about#established-expiry follow. tools/standing_test.py covers them. Join prompt v2.7.2 unchanged (c3f7e1ad).
+
+### Changed
+- Completed /upgrade: the Grade seals row reads "from 21 Agents", not "addresses". tools/grading_truth_test.py checks it.
+
 ## [1.26.63] - 2026-10-23
 
 ### Fixed

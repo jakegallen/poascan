@@ -255,14 +255,18 @@ def established_expiry_est(a):
     """When an established Agent's standing is expected to drop, under the observed rule in STANDING_NOTE (an estimate).
     established_expires_epoch_est is the close (epoch number) and established_expires_basis says how; both are None when
     unknown: not established, a trusted or system grader, no challenge_eligible epoch on record (standing from a seat,
-    testnet or off record), or the estimated close already passed while the Agent still reads established."""
+    testnet or off record), or the estimated close already passed while the Agent still reads established.
+    established_expires_closes_left counts closes from now (the open epoch's own close is 1); established_expires_ts_est is the
+    open epoch's estimated close plus auto_epoch_seconds per later close (None without a close time on record)."""
     L = last_eligible().get(a)
-    out = dict(established_expires_epoch_est=None, established_expires_basis=None, last_challenge_eligible_epoch=L)
+    out = dict(established_expires_epoch_est=None, established_expires_basis=None, last_challenge_eligible_epoch=L,
+               established_expires_closes_left=None, established_expires_ts_est=None)
     pp = params()
     if L is None or a not in established_set() or a in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or []): return out
-    ttl = int(pp.get("estab_ttl") or 6); n = L + ttl + 1; cur = open_epoch().get("epoch")
+    ttl = int(pp.get("estab_ttl") or 6); n = L + ttl + 1; o = open_epoch(); cur = o.get("epoch")
     if cur is None or n < cur: return out
-    out.update(established_expires_epoch_est=n,
+    out.update(established_expires_epoch_est=n, established_expires_closes_left=n - cur + 1,
+               established_expires_ts_est=int(o["est_close"] + (n - cur) * (o.get("period") or 21600)) if o.get("est_close") else None,
                established_expires_basis=f"observed estimate, not an official rule: last challenge_eligible epoch {L} + estab_ttl {ttl} + 1")
     return out
 

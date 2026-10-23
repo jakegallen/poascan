@@ -479,6 +479,17 @@ def _last_cleared(h):
     if L is not None: return f'{_ep_link(L)} <span class="dim">· cleared {bar} at the close</span>'
     return f'Never <span class="dim">· no close lists it as clearing {bar}</span>' if h["answers"] else "···"
 
+def _closes_left(h):
+    """'in 6 closes, ~33h · ' for the Est. expires row: closes from now (the open epoch's close is 1) and the estimated time
+    left (open close plus auto_epoch_seconds per later close; tooltip gives UTC and local). Empty when unknown."""
+    n = h.get("established_expires_closes_left")
+    if not n: return ""
+    s = f'in {n} close{"" if n == 1 else "s"}'; ts = h.get("established_expires_ts_est")
+    if ts:
+        d = max(0, int(ts - time.time())); v = f"{d // 60}m" if d < 3600 else f"{d // 3600}h" if d < 172800 else f"{d // 86400}d"
+        s += f', <time class="t" data-ts="{int(ts)}">~{v}</time>'
+    return s + " · "
+
 def established_card(a):
     """Established history: the public inputs behind standing (agents.established_history). Inputs only, never the rule."""
     h = G.established_history(a)
@@ -497,7 +508,7 @@ def established_card(a):
             ("Grading seats", f'{h["seated_closes"]} close{"" if h["seated_closes"] == 1 else "s"} <span class="dim">· last E{h["last_seat_epoch"]}</span>' if h["seated_closes"] else "···"),
             ("Last cleared", _last_cleared(h)),
             ("Est. expires", (f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
-                              f'<span class="dim">· last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
+                              f'<span class="dim">· {_closes_left(h)}last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
                              if h["established_expires_epoch_est"] is not None else "···")]
     if w["through"] is not None:
         rows.append((f"Last {t} closes", f'Answered {_eps(w["answered"])} · {w["passed"]} passed · seated {len(w["seated"])}'))
@@ -1082,7 +1093,7 @@ def about():
     from . import faq as FQ
     safety = card("Official links &amp; safety", V2.safety_html()) + '<div class="lzs">' + FQ.about_html(card) + "</div>"
     comm = card("Community tools", V2.community_html())
-    real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): an estimate from observed behavior, not an official rule. Standing has dropped at close L + 7 (L + <code>estab_ttl</code> + 1, <code>estab_ttl</code> 6), where L is the Agent's last <code>challenge_eligible</code> epoch (shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A); that fits all 57 removals at the E8 to E10 closes. Grading seats don't refresh standing. It is null when unknown: no <code>challenge_eligible</code> epoch on record, a trusted grader, or a close that already passed.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
+    real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: <code>established_after</code> adds minus <code>established_removed</code> drops over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Established is our estimate. minepoa's close records list only changes to standing, not the full set, and standing carried over from testnet is not published. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): an estimate from observed behavior, not an official rule. Standing has dropped at close L + 7 (L + <code>estab_ttl</code> + 1, <code>estab_ttl</code> 6), where L is the Agent's last <code>challenge_eligible</code> epoch (shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A); that fits all 57 removals at the E8 to E10 closes. The row also gives closes left and an estimated time (<code>auto_epoch_seconds</code> per close). Grading seats don't refresh standing. It is null when unknown: no <code>challenge_eligible</code> epoch on record, a trusted grader, or a close that already passed.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     # the long methodology sections render when scrolled near (content-visibility); the text stays in the HTML for search and anchors
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + '<div class="lzs">' + comm + real + _operators_method() + methods + '</div>'
     return page("About & methodology", body, "/about")

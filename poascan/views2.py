@@ -281,7 +281,7 @@ def upgrade_done():
             f'<p class="uph-s">{E(sub)}</p>'
             f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>{wait}</div></section>')
     ls = g.get("last_seal_at")
-    seals = (f"<dt>Grade seals</dt><dd>{g.get('seals_since_notice') or 0:,} since the notice from {g.get('sealers_since_notice') or 0:,} addresses"
+    seals = (f"<dt>Grade seals</dt><dd>{g.get('seals_since_notice') or 0:,} since the notice from {(n_s := g.get('sealers_since_notice') or 0):,} Agent{"" if n_s == 1 else "s"}"
              + (f", last {_when(ls)}" if ls else "") + f"; {g.get('seals_recent') or 0:,} in the last 30 min (POAScan archive)</dd>")
     from . import milestones as MS
     back = next((e["ts"] for e in MS.events() if e["key"] == "mining_reopened"), None) or M.back_since()
