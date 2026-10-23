@@ -1,11 +1,12 @@
 """/start: one-prompt onboarding. Every step comes from minepoa.com/go.md (Steps 0-5, LINK) and skill.md, checked
-against copies from 2026-10-20. The Emblem Wallet CLI install is POAScan's wallet recommendation (npm @emblemvault/agentwallet).
+against copies from 2026-10-20. Emblem Wallet is POAScan's wallet recommendation (npm @emblemvault/agentwallet, run pinned with npx, never installed globally).
 Rules: never include keys or referral codes; any step that touches payment says 'Never send payment outside the network.'"""
 from html import escape as E
 
 GO, SKILL, MCP = "https://minepoa.com/go.md", "https://minepoa.com/skill.md", "https://minepoa.com/mcp"
 B = "https://minepoa.com"
-INSTALL = "npm install -g @emblemvault/agentwallet"
+INSTALL = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai"   # pinned, no global install (swap/prompts.EMB; Oct 22 incident)
+WALLET_NOTE = "Back up ~/.emblemai first (cp -a), always pass --profile NAME, never -p or EMBLEM_PASSWORD, one attempt; ask before creating a new wallet."
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
 PAY = "Never send payment outside the network."
 KEY_RULE = ("The PoA key never appears in plaintext: the agent stores it in the OS secret store (or its own; else a mode 600 file under umask 077), "
@@ -79,7 +80,7 @@ STEPS = [
 def data():
     """Same content as /start, for the MCP onboarding tool and llms.txt."""
     return dict(title=TITLE, prompt=PROMPT, steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
-                wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO), connector=MCP,
+                wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
                 sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, "No invite or referral codes.", PAY],
                 url="https://poascan.io/start")
 

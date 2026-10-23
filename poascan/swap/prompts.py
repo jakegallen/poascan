@@ -1,19 +1,58 @@
 """Prompts the swap page hands to the visitor's agent. Nothing is signed or sent from here."""
+import os
 from . import config as C
 
 SAFE = "Never send payment outside the network."
 
 # Emblem Wallet CLI: npm @emblemvault/agentwallet (bin: emblemai); npm "repository" points at this repo.
+# Wallet steps follow POASwap's fix/wallet-prompt-safety wording (Oct 22 incident: 3.3.0 in --agent mode mints a new random
+# wallet when its profile has no password). Pinned CLI, no global install, backup first, file names only, always --profile.
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
-EMB_INSTALL = "npm install -g @emblemvault/agentwallet"
-WALLET_PROMPT = ("Install the Emblem Wallet CLI for me and link it to my PoA (Proof of Agent, minepoa.com) agent. "
-    f"Source: {EMB_REPO} (npm package @emblemvault/agentwallet).\n\n"
-    f"1. Install it (needs Node.js): {EMB_INSTALL} and check it runs: emblemai --help\n"
-    "2. Set up or log in to the vault: run emblemai (browser auth, recommended), or emblemai --agent for password auth. "
-    "Login and signup are the same action. If a password is generated, keep it encrypted on this machine and back it up with /auth > Backup Agent Auth to a file I store offline.\n"
-    "3. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
-    "then GET https://minepoa.com/api/link-auto?token=MY_AUTH_TOKEN. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
-    "Never paste or show passwords, keys or seed phrases in chat. Don't use any referral or invite code. Only use minepoa.com and the official Emblem tools, and report each step's result.")
+EMB = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai"   # pinned: 3.3.0's source was read for the Oct 22 incident
+ADDR_CMD = 'EMBLEMAI --profile PROFILE --agent -m "List my wallet addresses as JSON: solana, evm. Addresses only."'   # --profile: a missing profile exits, never mints
+CHECK_CMD = "find ~/.emblemai ~/.emblem-vault -maxdepth 3 -name '.env*' -o -name metadata.json -o -name .emblem-vault 2>/dev/null; echo END"   # no globs
+BACKUP_CMD = "cp -a ~/.emblemai ~/.emblemai.backup-$(date +%Y%m%d-%H%M%S)"
+MIGRATED_CMD = "grep -c migratedFrom ~/.emblemai/profiles/default/metadata.json"   # metadata.json holds no secrets
+BACKUP_RULE = "Emblem backup: tell me only where the file is; never open, cat or print it."
+# Same strings as POASwap's start_prompt.json registration blocks (install, find_wallet, case_*, addresses).
+W_INSTALL = "Only on my own computer: in a sandbox or container, stop and tell me. node -v under 20.18: stop, ask me to upgrade. Wallet CLI: only {emb} (EMBLEMAI below), never another version."
+W_FIND = ("Back up, then find my wallet by file names only. Never open, print, edit or delete anything in ~/.emblemai or ~/.emblem-vault. "
+          "Never use -p, --password or EMBLEM_PASSWORD. If ~/.emblemai exists, back it up: {backup_cmd}; check the copy exists. "
+          "Then run {check_cmd} (lines are files; END alone: none). Pick one case:\n{case_a}\n{case_b}\n"
+          "C. Anything else (a lone .env, an empty profile, ~/.emblem-vault, anything unclear): stop, tell me what you found and where the backup is, run nothing else.\n"
+          "D. Nothing found: ask me once, \"Do you already have an Emblem Wallet? (made by an AI on another computer / one you sign into at emblemvault.ai / no)\". "
+          "Another computer: I run EMBLEMAI --restore-auth with my backup file in Terminal; then redo this step. "
+          "emblemvault.ai: skip the next step; link that vault in the last step. "
+          "No: ask me to confirm a new wallet. Only on yes, run EMBLEMAI profile create default and use PROFILE default.")
+CASE_A = "A. ~/.emblemai/profiles/PROFILE has both .env and .env.keys: use it (several: ask me which)."
+CASE_B = "B. ~/.emblemai/.env and .env.keys at the top (old layout): ask me before moving it. On yes, run EMBLEMAI profile list once, check profiles/default has both files and {migrated_cmd} prints 1; PROFILE is default."
+CASE_A_HOLD = "A. ~/.emblemai/profiles/PROFILE has both .env and .env.keys: stop here. Don't run EMBLEMAI or npx; tell me the paths and ask me what to do."
+CASE_B_HOLD = "B. ~/.emblemai/.env and .env.keys at the top (old layout): stop here. Don't run EMBLEMAI or npx; tell me the paths and ask me what to do."
+W_ADDR = ("Read the addresses, one attempt only: {addr_cmd}\nCase A or B and it says \"created a new wallet identity\"? Stop: no retry, no other wallet command, "
+          "no change in ~/.emblemai; tell me it made a new wallet, not mine, and where the backup is. Other errors (500, 405, any): show the error, say my files are unchanged, stop. "
+          "Case D: tell me it is new and how to back it up: run EMBLEMAI in Terminal, type /auth, pick Backup Agent Auth, keep that file offline. {backup}")
+
+def wallet_hold():
+    """POASCAN_WALLET_HOLD (default on, like POASWAP_WALLET_HOLD): an existing wallet (cases A and B) stops and asks before emblemai runs."""
+    return os.environ.get("POASCAN_WALLET_HOLD", "on").strip().lower() != "off"
+
+def wallet_steps():
+    """Steps 1 to 3 in POASwap's wording: own machine, Node, pinned CLI; backup and file-name check, cases A to D; one read."""
+    h = wallet_hold()
+    return [W_INSTALL.format(emb=EMB),
+            W_FIND.format(backup_cmd=BACKUP_CMD, check_cmd=CHECK_CMD, case_a=CASE_A_HOLD if h else CASE_A,
+                          case_b=CASE_B_HOLD if h else CASE_B.format(migrated_cmd=MIGRATED_CMD)),
+            W_ADDR.format(addr_cmd=ADDR_CMD, backup=BACKUP_RULE)]
+
+def wallet_prompt():
+    a, b, c = wallet_steps()
+    return ("Set up my Emblem Wallet and link it to my PoA (Proof of Agent, minepoa.com) agent. "
+        f"Source: {EMB_REPO} (npm package @emblemvault/agentwallet).\n\n"
+        f"1. {a}\n2. {b}\n3. {c}\n"
+        "4. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
+        "then GET https://minepoa.com/api/link-auto?token=MY_AUTH_TOKEN. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
+        "Never paste or show passwords, keys or seed phrases in chat. Don't use any referral or invite code. Only use minepoa.com and the official Emblem tools, and report each step's result.")
+WALLET_PROMPT = wallet_prompt()
 _CHECK_LIVE = ("Before anything else, GET https://minepoa.com/api/swaps. If it doesn't answer with JSON (no response, a timeout or a non-200 status), "
           "tell me swaps are being upgraded, don't call swap-take or any other swap endpoint, don't retry in a loop, and offer to try again later. ")
 _CHECK_SOON = ("Swaps are coming soon. Until " + C.STATUS_URL + " shows available:true, don't call swap-offer, swap-take "
@@ -35,9 +74,9 @@ BUY_TOKEN = ("Buy POA (Proof of Agent, minepoa.com) with up to {IN} {ASSET} on {
 
 # Wallet setup prompt: the host may add an optional last step here (POAScan: the wallet registry step, filled in the
 # browser with a browser-made code; see poascan/regcode.py). lead starts the step, before is the line it goes above.
-WALLET_REG = dict(lead="4. Optional: ", before="Never paste or show passwords")
+WALLET_REG = dict(lead="5. Optional: ", before="Never paste or show passwords")
 
 def templates():
     c = _check()
-    return {"buy": c + BUY + _TAIL, "buy_token": c + BUY_TOKEN + _TAIL, "sell": c + SELL + _TAIL, "connect": WALLET_PROMPT}
+    return {"buy": c + BUY + _TAIL, "buy_token": c + BUY_TOKEN + _TAIL, "sell": c + SELL + _TAIL, "connect": wallet_prompt()}
 

@@ -96,6 +96,11 @@ def main():
         check("get_swap_status fields", {"available", "state", "last_good_read", "open_offers"} <= set(sc))
         c, b = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
         check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "Never show it." in sc.get("prompt", "") and "npm install" not in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
+        _w = json.dumps(sc.get("wallet") or {})
+        check("get_onboarding_steps wallet: pinned npx, no global install, safety note", "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai" in _w and "npm install -g " + "@emblemvault" not in _w and "--profile" in _w)
+        for _u in ("/about", "/llms.txt", "/llms-full.txt", "/start", "/api/v1/prompts/join"):
+            _b = req(base + _u)[1]
+            check(f"{_u}: no global Emblem CLI install, no bare agent-mode wallet command", b"npm install -g " + b"@emblemvault" not in _b and b"emblemai " + b"--agent" not in _b)
         for t in tools:
             args = {"address": "poa1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} if t == "get_address" else {"hash": "0" * 64} if t == "get_transaction" else \
                    {"offer_id": "x"} if t == "get_swap_offer" else {"query": "plus1"} if t == "search" else {}
