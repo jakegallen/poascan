@@ -21,9 +21,9 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3.2" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.4" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
-      and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
+      and "skill.md" not in OP.TEMPLATE and "go.md twice" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
       and "poaswap" not in OP.TEMPLATE.lower() and "guid=" not in OP.TEMPLATE)
 check("v2 key rule: never shown, confirmed only as the last 4 characters plus the store; never sent to POAScan; no em or en dashes",
@@ -31,13 +31,22 @@ check("v2 key rule: never shown, confirmed only as the last 4 characters plus th
       and "never send it to POAScan" in OP.TEMPLATE and "curl -K -" in OP.TEMPLATE and not any(c in OP.TEMPLATE for c in "\u2014\u2013")
       and "https://poascan.io/address/YOUR_POA1_ADDRESS" in OP.TEMPLATE and "reopened" not in OP.TEMPLATE.lower())
 V22 = ["Never write the key in any reply, code block, or example command, not even part of it. Always write YOUR_KEY as the placeholder. To confirm it, show only the last 4 characters.",
-       "Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before registering an agent. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.",
-       "If your own browsing tool, sandbox, or policy blocks a request (for example a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, don't hand me commands containing the key, and suggest an app that can run commands.",
-       "If you already joined (you have a saved key or an agent name from earlier in this chat or on this machine), do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.",
-       "open the register link one time only, and only if you have no saved key.", "If it says the name is taken and you registered that name earlier, you already joined: continue with the saved key, or tell me if you have none."]
-check("v2.2: the key line, the capability check, tool block versus pause and the resume rule, verbatim; POASwap's guard phrases kept",
+       "Before you join, make up a random 6 letter word W and open https://minepoa.com/api/status?probe=W with the same tool you will use for every step. If your tool refuses a link you built, or it fails or is blocked, stop before registering an agent. Tell me this app can't mine. If you can use MCP tools, ask me to add the PoA connector https://minepoa.com/mcp and use its poa_ tools; if not, suggest an app that runs commands, such as Claude Code.",
+       "If your own browsing tool, sandbox, or policy blocks a request (a crawl or policy error, or no internet), that's a limit on your side, not a network pause. Say so plainly, never hand me commands containing the key, and suggest an app that runs commands.",
+       "If you already joined or I paste this again (a saved key or agent name from earlier in this chat or on this machine), never register again. Reuse the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.",
+       "Joining: register one time only, and only if you have no saved key.", "If it says the name is taken and you registered that name earlier, you already joined: continue with the saved key, or tell me if you have none."]
+check("v2.4: the key line, the built-link test with the connector fallback, tool block versus pause and the resume rule (pasting again), verbatim; POASwap's guard phrases kept",
       all(OP.TEMPLATE.count(x) == 1 for x in V22) and "never send it to POAScan" in OP.TEMPLATE and "Never send payment outside the network" in OP.TEMPLATE)
 T = OP.TEMPLATE
+BARE = re.compile(r"(?:https?://|www\.|\bminepoa\.com/)\S*(?:register|[?&]key=)", re.I)
+check("v2.4 safety: no variant writes the register link or a key link as one clickable URL (nothing a chat app or crawler could unfurl or prefetch)",
+      not any(BARE.search(S.prompt("test-agent-7", v)) for v in OP.VARIANTS) and not any(BARE.search(t) for t in OP.VARIANTS.values()))
+check("v2.4 safety: the register link comes in pieces the agent joins and opens once; key links are paths after https://minepoa.com; the name prefill still lands in label=",
+      T.startswith("Join Proof of Agent for me. Register once by building this link yourself and opening it once: https:// + minepoa.com + /api/hosted/register?label={NAME}\n")
+      and "never show me it or a key link whole" in T and "Then: build each link below yourself as https://minepoa.com plus the path shown." in T
+      and all(x in T for x in ("7. Get your challenge: /api/hosted/challenge?key=YOUR_KEY", "9. Mine: /api/hosted/mine?key=YOUR_KEY", "from /api/hosted/me?key=YOUR_KEY."))
+      and "/api/hosted/register?label=test-agent-7" in S.prompt("test-agent-7") and "/api/hosted/register?label=test-agent-7 once" in S.prompt("test-agent-7", "chat-browse")
+      and "Build each minepoa.com link yourself as https://minepoa.com plus the path shown." in OP.CHAT)
 check("v2.2 order: resume and the capability check come before the about and Joining lines; the key line opens the key rules before rule 1",
       T.index(V22[3]) < T.index(V22[1]) < T.index("PoA is a free") < T.index("Joining:") and T.index("Your key (the api_key") < T.index(V22[0]) < T.index("\n1. Save it")
       and T.index("- A paused route") < T.index(V22[2]) < T.index("- A 401 means"))
@@ -50,25 +59,25 @@ bl = dict(OP.blocks(S.prompt("n")))
 check("blocks: registration has the link, resume and capability_check follow it, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
       bl["registration"].startswith("Join Proof of Agent for me") and "register?label=n" in bl["registration"] and bl["key_safety"].startswith("Your key (the api_key")
       and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
-      and bl["expectations"].startswith("The network is coming back") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
-      and bl["resume"].startswith("If you already joined") and bl["capability_check"].startswith("Before you join, fetch")
-      and bl["checkin_start"].startswith("Optional check-in: if you can") and bl["checkin_joined"].startswith("Optional check-in: once you have joined")
+      and bl["expectations"].startswith("Set my expectations") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
+      and bl["resume"].startswith("If you already joined") and bl["capability_check"].startswith("Before you join, make up")
+      and bl["checkin_start"].startswith("Optional check-in: if you can") and bl["checkin_joined"].startswith("Optional check-in: once joined")
       and list(bl) == ["registration", "resume", "capability_check", "checkin_start", "about", "joining", "key_safety", "checkin_joined", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
 
 # ---- v2.3 check-ins: optional, keyless, and the only per-client difference is the tag
 V23 = ["Act only on minepoa.com, apart from optional poascan.io check-ins.",
-       "Optional check-in: if you can, open https://poascan.io/j/v2.3.2/start once now. If it fails or is blocked, skip it and carry on.",
-       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3.2/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. If it fails, skip it and carry on."]
-check("v2.3: the two optional check-ins and the minepoa.com exception, verbatim, once each; CHECKIN base twice, for this VERSION",
-      all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 3 and T.count("poascan.io/j/") == 3
+       "Optional check-in: if you can, open https://poascan.io/j/v2.4/start once now and https://poascan.io/j/v2.4/probe?w=W once after the test. Skip any that fails.",
+       "Optional check-in: once joined, if you can, open https://poascan.io/j/v2.4/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address only, never the key. Skip it if it fails."]
+check("v2.4: the optional check-ins (start, probe after the test, joined) and the minepoa.com exception, verbatim, once each; CHECKIN base four times, for this VERSION",
+      all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 4 and T.count("poascan.io/j/") == 4
       and T.index(V22[1]) < T.index(V23[1]) < T.index("PoA is a free") and T.index("\n5. Pass the key") < T.index(V23[2]) < T.index("Then:"))
 check("v2.3: check-ins are optional and never carry the key (if you can, skip it, never the key; no key= or pk_ near them)",
-      all("if you can" in x and "skip it and carry on" in x for x in V23[1:]) and "never the key" in V23[2]
+      all("if you can" in x and ("Skip any that fails" in x or "Skip it if it fails" in x) for x in V23[1:]) and "never the key" in V23[2]
       and not re.search(r"poascan\.io/j/[^\s]*(key=|pk_|YOUR_KEY)", T))
 check("v2.3: POASwap's guard phrases verbatim; no em or en dashes; nothing about tags in the canonical text",
-      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3.2/start" in T and "/j/v2.3.2/none" not in T)
+      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.4/start" in T and "/j/v2.4/none" not in T)
 L429 = ("- A 429 means too many requests, often because many people share your tool's connection. Do not retry right away and do not try a new name. Honor any Retry-After; if there is none, wait about an hour, then retry only that one step, once. If you already have a key, never register again; check in with it instead. Tell me plainly that it's a rate limit and when you'll try again.")
-L429B = " Optional: if you can, open https://poascan.io/j/v2.3.2/rate?route=ROUTE once (register, challenge, answer, mine or me); never add the key, and skip it if it fails.\n"
+L429B = " Optional: if you can, open https://poascan.io/j/v2.4/rate?route=ROUTE once (register, challenge, answer, mine or me), never with the key; skip it if it fails.\n"
 check("v2.3.1: the 429 line verbatim, right after the 401 line in the expectations block, with the optional keyless rate check-in",
       T.count(L429 + L429B) == 1 and T.index("- A 401 means") < T.index(L429) < T.index("- If a submit returns 502") and L429 in dict(OP.blocks(T))["expectations"])
 import difflib
@@ -78,11 +87,13 @@ for c in CL:
         base_t = S.prompt(nm); tg = OP.tagged(base_t, c)
         ops = [o for o in difflib.SequenceMatcher(None, base_t, tg, autojunk=False).get_opcodes() if o[0] != "equal"]
         ins = [tg[j1:j2] for op, i1, i2, j1, j2 in ops if op == "insert"]
-        if not (tg != base_t and OP.untagged(tg, c) == base_t and all(o[0] == "insert" for o in ops) and len(tg) - len(base_t) == 3 * (len(c) + 1)
-                and tg.count(OP.CHECKIN + c + "/start") == 1 and tg.count(OP.CHECKIN + c + "/joined?addr=YOUR_POA1_ADDRESS") == 1 and tg.count(OP.CHECKIN + c + "/rate?route=ROUTE") == 1
+        if not (tg != base_t and OP.untagged(tg, c) == base_t and all(o[0] == "insert" for o in ops) and len(tg) - len(base_t) == 4 * (len(c) + 1)
+                and tg.count(OP.CHECKIN + c + "/start") == 1 and tg.count(OP.CHECKIN + c + "/probe?w=W") == 1 and tg.count(OP.CHECKIN + c + "/joined?addr=YOUR_POA1_ADDRESS") == 1 and tg.count(OP.CHECKIN + c + "/rate?route=ROUTE") == 1
                 and tg.replace(OP.CHECKIN + c + "/", OP.CHECKIN) == base_t): bad.append((c, nm, ins))
-check(f"tagged variants: every client ({len(CL)}) differs from the canonical text only by '<client>/' after the check-in base, three times {bad[:2]}", not bad and len(CL) >= 15)
-check("client ids: one per chat choice plus poaswap, all match TAG_RX, none is 'none'", set(CL) == {S.client_tag(x[0]) for x in J.APPS} | {"cursor", "poaswap"}
+check(f"tagged variants: every client ({len(CL)}) differs from the canonical text only by '<client>/' after the check-in base, four times {bad[:2]}", not bad and len(CL) >= 20)
+from poascan import clients as CR
+check("client ids: the registry (every /start choice), the Join modal apps and poaswap, all match TAG_RX, none is 'none'", set(CL) == set(CR.ids()) | {S.client_tag(x[0]) for x in J.APPS} | {"poaswap"}
+      and {S.client_tag(x[0]) for x in J.APPS} <= set(CR.ids())
       and all(OP.TAG_RX.match(c) for c in CL) and "none" not in CL and S.client_tag("Grok Bot") == "grok-bot" and S.client_tag("Z.ai") == "z-ai" and S.client_tag("Le Chat") == "le-chat")
 _bt = []
 for x in ("", "None ", "a/b", "A", "-a", "x" * 25, "a\nb"):
@@ -108,20 +119,90 @@ check("api_join: no setup code, referral or key in the text", "{SETUP_CODE}" not
 
 # ---- clients
 top, rest = S.chats()
-check("client order lives in one constant: Claude, ChatGPT, Grok, Muse; Grok Bot first under More", S.TOP == ("Claude", "ChatGPT", "Grok", "Muse") and [x[0] for x in top] == list(S.TOP)
-      and S.MORE_FIRST == ("Grok Bot",) and rest[0][0] == "Grok Bot" and [x[0] for x in rest[1:4]] == ["Perplexity", "Kimi", "Z.ai"])
-check("every chat app is offered once; Cursor's prompt deeplink is under More", len(top) + len(rest) == len(J.APPS) + 1 and len({x[0] for x in top + rest}) == len(top) + len(rest)
-      and ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=") in rest)
+check("client order comes from the registry: Claude, ChatGPT, Grok, Cursor; Grok Bot first under More; Muse is not in the first row",
+      [x["name"] for x in top] == ["Claude", "ChatGPT", "Grok", "Cursor"] and rest[0]["name"] == "Grok Bot" and "Muse" in [x["name"] for x in rest]
+      and [x["id"] for x in top + rest] == [c["id"] for c in CR.CLIENTS if c["row"] == "top"] + [c["id"] for c in CR.CLIENTS if c["row"] == "more"])
+check("every registry client is offered once; every Join modal app is in the registry", len(top) + len(rest) == len(CR.CLIENTS) and len({x["id"] for x in top + rest}) == len(CR.CLIENTS))
+_tiers = {c["id"]: c["tier"] for c in CR.CLIENTS}
+check("tiers: connector first for Claude, ChatGPT, Grok, Le Chat, Gemini (US), Perplexity Pro and Codex; no path for Muse, DeepSeek, Copilot, Gemini Gems, Qwen, Voice",
+      all(_tiers[i] == "connector" for i in ("claude", "chatgpt", "grok", "le-chat", "gemini", "perplexity", "codex"))
+      and [c["id"] for c in CR.CLIENTS if c["tier"] == "none"] == ["muse", "deepseek", "copilot", "gemini-gems", "qwen", "voice"]
+      and _tiers["cursor"] == "full" and _tiers["grok-bot"] == "full" and CR.BY_ID["perplexity"]["name"] == "Perplexity Pro" and CR.BY_ID["gemini"]["name"] == "Gemini (US)")
+check("registry: every connector client has a settings URL or a CLI line, the MCP URL is minepoa.com/mcp, no-path alternatives all work",
+      CR.MCP_URL == "https://minepoa.com/mcp" and all((c["connector"].get("settings_url") or c["connector"].get("cli")) for c in CR.CLIENTS if c["tier"] == "connector")
+      and all(CR.BY_ID[a]["tier"] != "none" for a in CR.NOPATH["alternatives"]) and CR.NOPATH["line"] == "This app can't mine yet. Use one of these:"
+      and CR.BY_ID["claude"]["connector"]["settings_url"].startswith("https://claude.ai/customize/connectors?modal=add-custom-connector") and CR.BY_ID["claude"]["connector"]["prefills_url"]
+      and CR.BY_ID["codex"]["connector"]["cli"] == "codex mcp add poa --url https://minepoa.com/mcp")
 from urllib.parse import quote
-check("Cursor deeplink stays under its 10,000 character limit with the longest name", len(S.CURSOR[3] + quote(S.prompt("x" * 32), safe="")) < 10000)
-check("every prefill URL fits its limit with the longest name, so no client falls back to copy only", all(S.fits(n, p) for n, k, b, p in top + rest if p)
-      and [x[:2] for x in top + rest] == [(n, k) for n, k, b, p in top + rest] and dict((x[0], x[1]) for x in top + rest)["Claude"] == "auto")
+LL = {c["id"]: S.link_len(c) for c in CR.CLIENTS if c["prefill"] and CR.variant(c)}
+print("     prefill link chars (32 char name):", LL)
+check(f"every prefill link stays under 8,000 characters with the longest name, its variant tagged (longest {max(LL.values())})", S.URL_MAX == 8000 and all(v < 8000 for v in LL.values())
+      and all(x["kind"] == "auto" for x in top + rest if x["prefill"] and x["tier"] != "none") and dict((x["id"], x["kind"]) for x in top + rest)["claude"] == "auto")
+check("the canonical prompt's Join modal links also fit (fits())", all(S.fits(n, p) for n, k, b, p in J.APPS if p) if J.APPS and len(J.APPS[0]) == 4 else True)
 _old = S.URL_MAX; S.URL_MAX = 100; t2, r2 = S.chats(); S.URL_MAX = _old
-check("a prefill URL over the limit falls back to copy and open (paste kind, no prefill), Cursor keeps its own limit",
-      dict((x[0], x[1:]) for x in t2)["Claude"] == ("paste", "https://claude.ai/new", "") and dict((x[0], x[1]) for x in r2)["Cursor"] == "auto")
+check("a prefill link over the limit falls back to copy and open (paste kind, no prefill); no-path clients stay none",
+      dict((x["id"], (x["kind"], x["pre"])) for x in t2)["claude"] == ("paste", "") and all(x["kind"] == "none" for x in r2 if x["tier"] == "none"))
+
+# ---- v2.4 variants: every key safety line in every variant
+VT = {v: S.prompt("test-agent-7", v) for v in ("full", "chat-browse", "connector")}
+print("     variant chars:", {v: len(t) for v, t in VT.items()})
+MUST = ["YOUR_KEY", "never send it to POAScan", "Never send payment outside the network", "last 4 characters", "A 401 means", "A 429 means", "Retry-After",
+        "never register again", "continue from the step that failed", OP.CHECKIN + "start", OP.CHECKIN + "joined?addr=YOUR_POA1_ADDRESS", OP.CHECKIN + "rate?route=",
+        "never the key", "Never ask me for keys", "Skip any invite or referral link or code", "POA has no promised value", "test-agent-7"]
+miss = {v: [m for m in MUST if m not in t] for v, t in VT.items()}
+check(f"variants: every one keeps YOUR_KEY, the never print and never send to POAScan rules, 401, 429, resume, tagged check-ins and POASwap's phrases {miss}", not any(miss.values()))
+check("variants: never print the key, tool blocks named, a built-link test or connector gate before registering",
+      all(re.search(r"[Nn]ever (write|print|show)", t) for t in VT.values()) and "probe=W" in VT["full"] and "probe=W" in VT["chat-browse"] and OP.CHECKIN + "probe?w=W" in VT["chat-browse"]
+      and "If you have no poa_ tools here, stop before registering an agent" in VT["connector"] and "add the PoA connector https://minepoa.com/mcp" in VT["full"]
+      and all("block" in t for t in VT.values()))
+check("variants: no em or en dashes, no {NAME} left, shorter than the full text, under the URL budget",
+      not any(c in t for t in VT.values() for c in "\u2014\u2013") and not any("{NAME}" in t for t in VT.values())
+      and len(VT["connector"]) < len(VT["chat-browse"]) < len(VT["full"]) and len(VT["chat-browse"]) < 3600 and len(VT["connector"]) < 2500)
+_tg = {c["id"]: S.client_prompt("n", c["id"]) for c in CR.CLIENTS}
+check("client_prompt: each client gets its variant tagged with its id; no-path clients get none",
+      all((t is None) == (CR.variant(CR.BY_ID[i]) is None) for i, t in _tg.items())
+      and all(OP.untagged(t, i) == S.prompt("n", CR.variant(CR.BY_ID[i])) for i, t in _tg.items() if t)
+      and _tg["claude"].count(OP.CHECKIN + "claude/") >= 3 and OP.CHECKIN + "start" not in _tg["claude"])
+check("blocks() splits every variant back into its text", all("".join(x[1] for x in OP.blocks(t, v)) == t for v, t in VT.items()))
+ac = S.api_join("test-agent-7", "claude"); an = S.api_join("test-agent-7", "muse"); ak = S.api_join(None, "kimi")
+check("api_join(client=): tagged variant text, tier, connector with the MCP URL, prefill and link length; no-path gives the panel and no text",
+      ac["text"] == S.client_prompt("test-agent-7", "claude") and ac["variant"] == "connector" and ac["tier"] == "connector" and ac["connector"]["url"] == "https://minepoa.com/mcp"
+      and ac["sha256"] == hashlib.sha256(ac["text"].encode()).hexdigest() and ac["prefill_ok"] and ac["link_chars"] < 8000
+      and an["text"] is None and an["tier"] == "none" and an["panel"]["line"] == CR.NOPATH["line"] and [x["id"] for x in an["panel"]["alternatives"]] == CR.NOPATH["alternatives"]
+      and ak["variant"] == "chat-browse" and ak["name"] == "YOUR_NAME" and "".join(x["text"] for x in ak["blocks"]) == ak["text"])
+_bc = []
+for x in ("nope", "", "Claude", "claude ", "none", "poaswap"):
+    try: S.api_join("n", x); _bc.append(x)
+    except ValueError: pass
+check(f"api_join: unknown clients refused {_bc}", not _bc)
+check("api_join without client is unchanged: canonical full text, variant full, clients_url", d["variant"] == "full" and d["clients_url"] == "https://poascan.io/api/v1/prompts/clients" and "client" not in d)
 import poascan.join as _J
 check("Coding agents one-liner carries key rules 1 to 4 in short form, no double quotes", all(x in _J.LINE for x in ("OS secret store", "never show it", "last 4 characters",
       "never put it on a command line", "send it only to minepoa.com, never to POAScan")) and '"' not in _J.LINE and "$" not in _J.LINE)
+check("Coding agents one-liner runs the v2.4 built-link test before registering, not go.md; the connector is the fallback; no Muse row",
+      _J.LINE.startswith("First make up a random 6 letter word W and open https://minepoa.com/api/status?probe=W") and "stop before registering an agent" in _J.LINE
+      and "go.md" not in _J.LINE and "https://minepoa.com/mcp" in _J.LINE and _J.LINE.index("probe=W") < _J.LINE.index("register once")
+      and [n for n, c in _J.CODERS] == ["Claude Code", "Codex", "Cursor CLI", "OpenClaw", "Hermes"] and all(_J.LINE in c or _J.CLINE in c for n, c in _J.CODERS)
+      and not any(x in _J.LINE + _J.CLINE for x in "\u2014\u2013"))
+_am = _J.ask_modal(); _mu = re.search(r'<button class="app cpy"[^>]*data-app="Muse"[^>]*>', _am).group(0)
+_js = open(os.path.join(ROOT, "static", "app.js")).read()
+check("Muse where it is still an open-app button (Ask dialog): iOS copies only with the Meta AI line and an App Store link, Android opens the Meta AI app by intent",
+      'data-ios="https://apps.apple.com/app/id1558240027"' in _mu and 'data-android="intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.stella;end"' in _mu
+      and 'data-iosmsg="Prompt copied. Open the Meta AI app and paste."' in _mu and _am.count("data-ios=") == 1
+      and "if(ios){pr.then(function(ok){toast(ok?co.dataset.iosmsg" in _js and "if(and)u=co.dataset.android" in _js and 'function toast(m,big,href,lt)' in _js and '"App Store"' in _js)
+_fx = [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
+_aa = "poa1" + "x" * 40
+_asks = _fx + [PR.answer_epoch(), PR.answer_epoch(1), PR.explain_epoch(1), PR.addr_rewards(_aa), PR.addr_send(_aa), PR.addr_invites(_aa), PR.explain_tx("0" * 64)]
+check(f"v2.4 safety: Ask your agent prompts ({len(_asks)}) never write a register or key link whole; every split one says how to join it",
+      len(_asks) >= 20 and not any(BARE.search(p) for t, p in _asks) and all(PR.SPLIT in p for t, p in _asks if " + /api/hosted/" in p)
+      and sum(" + /api/hosted/" in p for t, p in _asks) >= 8 and all(len(p) < 4000 for t, p in _asks))
+check("v2.4 safety: the /start All steps list (also MCP, llms.txt and the HowTo data) never writes a register or key link whole",
+      not any(v and BARE.search(v) for t, v, n in S.STEPS) and S.STEPS[0][1] == "https://minepoa.com + /api/hosted/register?label=YOUR_NAME"
+      and not BARE.search(S.steps_text() if hasattr(S, "steps_text") else json.dumps(S.data())))
+_jm = _J.modal(); _ja = re.findall(r'data-app="([^"]+)"', _jm)
+check(f"Join modal matches /start: no app that can't mine yet (registry tier none), no Muse anywhere; the Ask modal keeps every app {_ja}",
+      "Muse" not in _jm and "DeepSeek" not in _ja and all(CR.get(S.client_tag(n)) is None or CR.get(S.client_tag(n))["tier"] != "none" for n in _ja)
+      and set(_ja) == {n for n, *_ in J.APPS} - {"Muse", "DeepSeek"} and "Muse" in re.findall(r'data-app="([^"]+)"', _J.ask_modal()))
 check("beacon ids used by /start are on the /ops/e allowlist", all(i in PR.ids() for i in ("start.app", "start.appreg", "start.copy", "start.copyreg", "start.regshow", "mcp-poa.add")))
 
 # ---- the join modal banner: live state only, never 'reopened'
@@ -209,28 +290,40 @@ try:
           and 'id="stname"' in m and 'aria-labelledby="st1"' in m and 'enterkeyhint="next"' in m and "data-name" in m)
     i_more = m.index('class="morep')
     up = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m[:i_more]); allr = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m)
-    check(f"/start: one radio group, Claude first and checked, four up front {up}", up == list(S.TOP) and m.count('role="radiogroup"') == 1
-          and re.search(r'value="Claude" data-kind="auto"[^>]* checked>', m) and m.count(" checked>") == 1)
+    check(f"/start: one radio group, Claude first and checked, four up front {up}", up == ["Claude", "ChatGPT", "Grok", "Cursor"] and m.count('role="radiogroup"') == 1
+          and re.search(r'value="Claude" data-kind="auto" data-tier="connector"[^>]* checked>', m) and m.count(" checked>") == 1)
     check("/start: everything else behind the single More (other chats, 8 connectors, 7 commands)", m.count("data-more") == 1 and ">More<" in m
-          and len(allr) == len(J.APPS) + 1 + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
-    check("/start: one primary button for the first client: 'Copy prompt and open Claude' (short form at 390px) with the Auto pill",
-          len(re.findall(r"data-go[ >]", m)) == 1 and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em>' in m)
+          and len(allr) == len(CR.CLIENTS) + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
+    check("/start: connector first for Claude: step 1 adds the PoA connector (deep link, Auto), step 2 copies the prompt and opens Claude (short form at 390px, Auto)",
+          len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-conrow") < m.index("data-gorow")
+          and '<div class="gorow gocrow" data-conrow><a class="gobtn gocon" href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=PoA&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span class="gon" aria-hidden="true">1</span><span data-conlbl><span class="gll">Add PoA connector to Claude</span><span class="gls">Add connector</span></span><em class="gauto" data-conauto>Auto</em>' in m
+          and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span class="gon" data-gon aria-hidden="true">2</span><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em>' in m)
+    npn = m[m.index("data-nopath"):]; npn = npn[:npn.index("</div></div>")]
+    check("/start: the no-path panel is one terse line and the working alternatives (each picks that client), hidden until a no-path app is picked; no prompt, no warning",
+          '<div class="nopath" data-nopath role="status" hidden><p>This app can&#x27;t mine yet. Use one of these:</p>' in m and m.count("data-nopath") == 1
+          and re.findall(r'data-pick="([^"]+)"', npn) == [CR.BY_ID[a]["name"] for a in CR.NOPATH["alternatives"]] and "warn" not in npn.lower())
+    check("/start: the three variant templates are embedded for app.js, the full one is the canonical template",
+          [unescape(x) for x in re.findall(r'<pre hidden data-variant="([^"]+)">', m)] == ["full", "chat-browse", "connector"]
+          and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', m, re.S).group(1)) == OP.TEMPLATE
+          and unescape(re.search(r'<pre hidden data-variant="connector">(.*?)</pre>', m, re.S).group(1)) == OP.CONNECTOR)
+    check("/start: no-path clients sit under More; Muse is not in the first row", all(m.index(f'value="{c["name"]}"') > i_more for c in CR.CLIENTS if c["tier"] == "none")
+          and re.search(r'value="Muse" data-kind="none" data-tier="none"', m))
     css = open(os.path.join(ROOT, "static", "style.css")).read()
-    check("/start: no Join only tag on any client; Muse stays in the top row with its normal choice, no tag markup or CSS left",
+    check("/start: no Join only tag on any client, no tag markup or CSS left",
           "Join only" not in m and "cltag" not in m and "tagd" not in m and not hasattr(S, "JOIN_ONLY") and not hasattr(S, "JOIN_ONLY_TAG")
-          and m.index('value="Muse"') < i_more and '<label class="cl"><input type="radio" name="client" value="Muse"' in m
           and ".cltag" not in css and "tagd" not in css)
     check("/start: a quiet Copy prompt button next to it; no helper or join lines under the button; the fallback box is hidden",
           '</a><button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' in m and '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>' in m
           and "stjl" not in m and "Opens Claude" not in m and "starts earning once" not in m[m.index("data-go "):]
           and '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly' in m)
+    check("/start: the name pattern is valid under the v flag (hyphen escaped in the class)", 'pattern="[A-Za-z0-9_\\-]{1,32}"' in m and 'pattern="[A-Za-z0-9_-]' not in m)
     check("/start: name field is checked live, never cut: no maxlength, aria-invalid, aria-describedby, an assertive live error line",
           "maxlength" not in m[m.index('id="stname"'):m.index('id="stname"') + 600] and 'aria-describedby="stname-hint stname-err" aria-invalid="false"' in m
           and '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>' in m)
-    view = m[m.index('<details class="stview">'):]
-    check("/start: the prompt sits collapsed behind View prompt, with its Copy, and is the template text", '<details class="stview"><summary>View prompt</summary>' in m
+    view = m[m.index('<details class="stview" data-stview>'):]
+    check("/start: the prompt sits collapsed behind View prompt, with its Copy, and is the template text", '<details class="stview" data-stview><summary>View prompt</summary>' in m
           and "<details class=\"stview\" open" not in m and m.count("data-copy-prompt") == 1 and m.index("data-go") < m.index("stview") < m.index("data-copy-prompt")
-          and unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', view, re.S).group(1)).startswith("Join Proof of Agent for me"))
+          and unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', view, re.S).group(1)).startswith("Join Proof of Agent for me with the PoA connector"))
     check("/start: one short key line, no red warning and no repeat outside the prompt", m.count(S.KEYLINE) == 1 and 'class="kwarn"' not in m
           and "Treat a leaked key" not in m and "Never paste your pk_" not in m)
     check("/start: live status strip with the Updated stamp and responding wording, never reopened", m.count('<p class="upstrip stup" role="status" data-live>') == 1
@@ -240,7 +333,7 @@ try:
           "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
           and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
           and [x for x, _, _ in S.STEPS] == ["Register", "Store the key", "Read how grading works", "Answer the challenge", "Mine", "Check in"])
-    go3 = m[m.index('data-go '):m.index('<details class="stview">')]
+    go3 = m[m.index('data-go '):m.index('<details class="stview" data-stview>')]
     check("/start: Add a wallet on POASwap, low key, under the main and Copy buttons, new tab to https://poaswap.io/start",
           go3.index("data-gocopy") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
           and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
@@ -256,6 +349,9 @@ try:
     check("client: name messages, exact", 'return "Name your agent to continue."' in blk and '"Not allowed: "+' in blk and '". Use letters, numbers, _ or - (up to 32)."' in blk
           and '"Too long: up to 32 characters."' in blk and 'c===" "?"space":c==="."?"period":c' in blk and 'bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1]' in blk
           and "/^[A-Za-z0-9_-]{1,32}$/.test(v)" in js and 'replace(/[^A-Za-z0-9_-]/g,"")' not in js)
+    check("client v2.4: variant templates from pre[data-variant]; the connector button copies the MCP URL (or CLI) and opens the settings, in button feedback, start.add beacon; the no-path panel picks",
+          'pre[data-variant]' in blk and "[data-gocon]" in blk and "[data-nopath]" in blk and "[data-pick]" in blk and 'ev("start.add")' in blk and "dataset.ccopy" in blk and "dataset.cset" in blk
+          and '"Copied, opening "' in blk and "start.add" in PR.ids())
     check("client: one button handler with the existing beacons; Enter on the name moves to step 2, Enter on a choice to the button",
           '[data-go]' in js and 'ev("start."+(rg?"appreg":"app"))' in js and 'ev("mcp-poa.add")' in js and 'e.key==="Enter"' in js and "go.focus()" in js and "r.focus()" in js)
     check("css: visible focus rings on choices, button, name and summaries", ".cl input:focus-visible+.clb{outline" in css and ".gobtn:focus-visible{outline" in css
@@ -274,16 +370,20 @@ try:
     mp = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]["prompt"]
     sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
     print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
-    check(f"byte-identical: /start View prompt == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
-          pre == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.3.2" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
+    api_c = json.loads(req("/api/v1/prompts/join?client=claude&name=" + nm0)[2])
+    full_t = unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', m, re.S).group(1)).replace(OP.SLOT, nm0)
+    check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
+          full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
+          and api_y["version"] == api_n["version"] == "v2.4" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
+    check("byte-identical: /start View prompt (Claude, connector variant) tagged for claude == API ?client=claude for the same name",
+          pre == S.prompt(nm0, "connector") and OP.tagged(pre, "claude") == api_c["text"] == S.client_prompt(nm0, "claude") and api_c["sha256"] == sha(api_c["text"]))
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3.2</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.4</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.3: the API, MCP and llms.txt serve the untagged text (no client segment after the check-in base)",
-          all(OP.CHECKIN + c + "/" not in x for c in S.checkin_clients() for x in (api_y["text"], mp, ll)) and api_y["text"].count(OP.CHECKIN) == 3)
+          all(OP.CHECKIN + c + "/" not in x for c in S.checkin_clients() for x in (api_y["text"], mp, ll)) and api_y["text"].count(OP.CHECKIN) == 4)
     ci = api_y.get("checkin") or {}
     check("API checkin field: base, rule, client regex, the client list with poaswap, suggested poaswap",
           ci.get("base") == OP.CHECKIN and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"
@@ -291,11 +391,11 @@ try:
     radios = re.findall(r'<input type="radio" name="client" value="([^"]+)"([^>]*)>', m)
     chat_tags = [re.search(r'data-tag="([^"]*)"', a).group(1) for v, a in radios if not v.startswith("mcp:")]
     check(f"/start: every chat choice carries its tag ({len(chat_tags)}), connectors carry none, the card carries the check-in base",
-          len(chat_tags) == len(J.APPS) + 1 and all(t in S.checkin_clients() for t in chat_tags) and not any("data-tag" in a for v, a in radios if v.startswith("mcp:"))
+          len(chat_tags) == len(CR.CLIENTS) and chat_tags == [c["id"] for c in CR.CLIENTS if c["row"] == "top"] + [c["id"] for c in CR.CLIENTS if c["row"] == "more"] and all(t in S.checkin_clients() for t in chat_tags) and not any("data-tag" in a for v, a in radios if v.startswith("mcp:"))
           and f'data-checkin="{OP.CHECKIN}"' in m)
     hl = '<p class="sthelp"><a href="mailto:jakegallen@gmail.com?subject=PoA%20join%20got%20stuck">If it got stuck, share the chat with us</a></p>'
     check("/start: one 'If it got stuck' line, a mailto link only, after View prompt (not under the buttons), no helper text",
-          m.count(hl) == 1 and m.index('<details class="stview">') < m.index(hl) < m.index('</section>') and m.count("sthelp") == 1 and "If it got stuck" not in m.replace(hl, ""))
+          m.count(hl) == 1 and m.index('<details class="stview" data-stview>') < m.index(hl) < m.index('</section>') and m.count("sthelp") == 1 and "If it got stuck" not in m.replace(hl, ""))
     check("client: the copy text is tagged for the picked client (W.poaTag on txt() and the View prompt Copy); the base comes from data-checkin",
           'W.poaTag=function(c,t){' in js and 'function txt(){return W.poaTag(card,' in js and 'return c?W.poaTag(c,' in js and 'c.dataset.checkin' in js
           and 't.split(b).join(b+g+"/")' in js and ".sthelp{" in css)
@@ -316,6 +416,23 @@ try:
           and c6 == 400 and json.loads(b6)["error"] == "Not allowed: period. Use letters, numbers, _ or - (up to 32).")
     codes = [req("/api/v1/prompts/join?" + q)[0] for q in ("name=a%20b", "name=" + "x" * 33, "name=%3Cb%3E", "name=a&name=b", "name=%C3%A9")]
     check(f"bad names: 400 {codes}", codes == [400] * 5)
+    cc = [req("/api/v1/prompts/join?" + q)[0] for q in ("client=nope", "client=claude&client=grok", "client=Claude", "client=none")]
+    c7, _, b7 = req("/api/v1/prompts/join?client=muse"); c8, _, b8 = req("/api/v1/prompts/join?client=kimi&name=test-agent-7")
+    check(f"?client=: unknown, repeated, wrong case or 'none' 400 {cc}; an empty client= is no client, like name=; no-path 200 with the panel and no text; kimi tagged chat-browse",
+          cc == [400] * 4 and c7 == 200 and json.loads(b7)["text"] is None and json.loads(b7)["panel"]["line"] == CR.NOPATH["line"]
+          and json.loads(req("/api/v1/prompts/join?client=")[2])["text"] == S.PROMPT
+          and c8 == 200 and json.loads(b8)["text"] == S.client_prompt("test-agent-7", "kimi") and json.loads(b8)["variant"] == "chat-browse")
+    c9, h9, b9 = req("/api/v1/prompts/clients"); e9 = h9.get("ETag", "")
+    c10 = req("/api/v1/prompts/clients", {"If-None-Match": e9})[0]; c11 = req("/api/prompts/clients")[0]; c12 = req("/api/v1/prompts/clients?x=1")[0]
+    check(f"GET /api/v1/prompts/clients: the registry file as is, strong ETag, 304, alias, 400 on any param ({c9} {c10} {c11} {c12})",
+          c9 == 200 and b9 == CR.RAW and json.loads(b9)["clients"] == CR.CLIENTS and re.fullmatch(r'"[0-9a-f]{64}"', e9) is not None and c10 == 304 and c11 == 200 and c12 == 400
+          and h9.get("Cache-Control") == "public, max-age=600" and h9.get("Access-Control-Allow-Origin") == "*")
+    check("clients registry listed in OpenAPI and llms.txt, the client param documented", "/api/v1/prompts/clients" in req("/openapi.json")[2] and "&client=" in req("/llms.txt")[2]
+          and "/api/v1/prompts/clients" in req("/llms.txt")[2])
+    _pages = {u: req(u)[2] for u in ("/start", "/", "/llms.txt", "/llms-full.txt", "/epochs", "/about", "/api/v1/prompts/join", "/api/v1/prompts/join?client=kimi", "/api/v1/prompts/join?client=cursor", "/api/v1/prompts/join?client=claude")}
+    _pages["mcp"] = json.dumps(rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}))
+    _bp = {u: BARE.findall(unescape(b))[:2] for u, b in _pages.items() if BARE.search(unescape(b))}
+    check(f"v2.4 safety: no served page, prompt or MCP result has a register or key link whole (Ask data, All steps, HowTo, prompts) {_bp}", not _bp and all(_pages.values()))
     VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
     check("counted as its own API route (OpenAPI path), docs and llms list it, not an MCP tool",
           VS.api_route("/api/v1/prompts/join") == "/api/v1/prompts/join" and "/api/v1/prompts/join" in req("/openapi.json")[2] and "/prompts/join" in req("/llms.txt")[2]

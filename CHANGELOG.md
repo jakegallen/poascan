@@ -11,6 +11,28 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.36] - 2026-10-23
+
+### Added
+- Join prompt v2.4, one-click signup. `/api/v1/prompts/join` takes `?client=` (an id from the registry) with `&name=`: that app's prompt variant with its check-ins tagged, exactly what its /start button copies, plus tier, prefill link length and connector settings. A no-path app gets `text: null` and the panel. Without `client` the response is the canonical full text, unchanged for llms.txt, MCP and POASwap.
+- `/api/v1/prompts/clients`: the shared client registry (`data/clients.json`) as is, with a strong ETag. Each app has a tier (full, chat-browse, connector or none), its prefill link format and its connector settings URL.
+- Prompt variants: full (5,508 characters), chat-browse (3,089) and connector (2,389). Every variant keeps YOUR_KEY, never print the key, never send it to POAScan, the 401 and 429 rules, tool blocks, the resume rule and tagged check-ins.
+- /start connector first for Claude, ChatGPT, Grok, Le Chat, Gemini (US) and Perplexity Pro: step 1 copies https://minepoa.com/mcp and opens that app's connector settings (Claude opens its add-connector dialog prefilled), step 2 copies the short connector prompt and opens the app. Codex adds the connector from its command line first.
+- /start no-path panel for apps that cannot mine yet (Muse, DeepSeek, Copilot, Gemini Gems, Qwen, voice assistants): "This app can't mine yet. Use one of these:" with working apps to pick.
+- Probe check-in `/j/v2.4[/client]/probe?w=W`: counts only, the word is checked and never stored. The funnel adds probed and probe_rate. v2.3, v2.3.1 and v2.3.2 check-ins are still accepted.
+- `tools/stamp_release.py` sets the prompt and release times at ship.
+
+### Changed
+- Built-link test replaces the go.md check: the agent opens https://minepoa.com/api/status?probe=W with a word it made up, and stops before registering an agent if its tool refuses the link, pointing to the PoA connector or an app that runs commands.
+- /start first row is Claude, ChatGPT, Grok and Cursor; Grok Bot stays first under More; Muse moves under More.
+- Every prefill link stays under 8,000 characters with the longest name (longest: Cursor, 7,942). The Cursor 10,000 exception is gone.
+- Join modal matches /start: apps that cannot mine yet (Muse, DeepSeek) are left out of its Open in list; the Ask your agent dialog keeps every app. The Coding agents one-liner runs the built-link test first instead of reading go.md, with the PoA connector as the fallback, and the Muse row is gone.
+- No prompt variant writes the register link or a key link as one clickable URL, so chat apps and crawlers cannot unfurl or prefetch it (which could register an Agent and hand its key to a preview bot). The register link comes in pieces (https:// + minepoa.com + /api/hosted/register?label=NAME) that the agent joins and opens once; challenge, answer, mine and me are paths after https://minepoa.com. The name prefill and POASwap's register?label=NAME check still work.
+- The same split covers the Ask your agent prompts (key links read https://minepoa.com + /api/hosted/...?key=MY_KEY, with a line telling the agent to join them) and the /start All steps list, which also feeds MCP, llms.txt and the HowTo data. No served page or prompt has a whole register or key link.
+- Muse, where it is still an open-app button (Ask your agent): on iOS it copies only, with "Prompt copied. Open the Meta AI app and paste." and an App Store link; on Android it opens the Meta AI app.
+- The /start name field pattern escapes its hyphen, so it is valid under the browser's v flag (no more console error).
+- Cache keys app.js v49, style.css v96.
+
 ## [1.26.35] - 2026-10-23
 
 ### Changed

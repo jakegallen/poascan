@@ -474,7 +474,7 @@ class H(BaseHTTPRequestHandler):
             log.error("ops funnel: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
     def checkin(self, path, query):
-        """GET /j/<version>[/<client>]/start, .../joined?addr=<poa1> and (v2.3.1) .../rate?route=<route>: an optional, keyless signup check-in (poascan/checkin.py).
+        """GET /j/<version>[/<client>]/start, .../joined?addr=<poa1>, (v2.3.1) .../rate?route=<route> and (v2.4) .../probe?w=<word>: an optional, keyless signup check-in (poascan/checkin.py).
         Strict allowlist, else 400 with nothing stored. Rate limited per IP in memory; never cached, indexed or logged with its path."""
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Access-Control-Allow-Origin": "*"}
         ok, wait = CHECKIN_LIMIT.allow(self.client_ip())
@@ -623,12 +623,18 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/prompts/join":   # the /start prompt as data (start.api_join); keyless, read-only, cached 10 min
                     ok, wait = PROMPT_LIMIT.allow(self.client_ip())
                     if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
-                    nq = qs.get("name")
+                    nq = qs.get("name"); cq = qs.get("client")
                     if nq is not None and len(nq) != 1: return self.send(400, json.dumps({"error": "one name only"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
-                    try: d = ST.api_join(nq[0] if nq else None)
+                    if cq is not None and len(cq) != 1: return self.send(400, json.dumps({"error": "one client only"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
+                    try: d = ST.api_join(nq[0] if nq else None, cq[0] if cq else None)
                     except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                     body = json.dumps(d, ensure_ascii=False, separators=(",", ":"))
                     return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
+                                     {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
+                if p == "/api/prompts/clients":   # the shared client registry (data/clients.json) as is; static, keyless
+                    if qs: return self.send(400, json.dumps({"error": "no parameters"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                    from . import clients as CL
+                    return self.cond(CL.RAW, hashlib.sha256(CL.RAW.encode()).hexdigest(), "public, max-age=600",
                                      {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/agents/view":
                     try: body, etag = G.agents_view(qs.get("after", [""])[0], qint(qs, "limit", 100, 1, 500))

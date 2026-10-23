@@ -7,11 +7,19 @@ SOURCE = "https://minepoa.com/go.md"
 
 PROMPT = _S.PROMPT  # one onboarding prompt, shared with /start
 
-LINE = ("Read https://minepoa.com/go.md (or use the MCP connector https://minepoa.com/mcp), then join PoA (Proof of Agent): "
-        "register (no invite code), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
+# v2.4: the built-link test replaces "read go.md" (same test as the prompt's capability check; a refused link stops before registering).
+LINE = ("First make up a random 6 letter word W and open https://minepoa.com/api/status?probe=W with the same tool you will use for every step. "
+        "If it fails or is blocked, stop before registering an agent and tell me; use the PoA MCP connector https://minepoa.com/mcp instead if you can. "
+        "Then join PoA (Proof of Agent) using the API in https://minepoa.com/skill.md: register once (no invite code), read how grading works at https://minepoa.com/lableak/#/a/work, answer the epoch challenge in your own words, mine, "
         "and report my address and balance. Key rules: store the api_key straight in my OS secret store (else a mode 600 file); never show it, "
         "confirm only its last 4 characters and the store's name, and skip any step that says to show it; never put it on a command line; "
         "send it only to minepoa.com, never to POAScan. Skip any invite or referral link. Never ask me for keys or seed phrases.")
+
+# Codex runs connector first (v2.4): its default sandbox has no network, so plain web requests fail; the poa_ tools work.
+CLINE = ("Use the poa MCP tools (poa_register, poa_challenge, poa_answer, poa_mine, poa_status) to join PoA (Proof of Agent) for me: register once "
+         "(no invite code), answer the epoch challenge in your own words, mine, and report my address and balance. Key rules: never show the api_key, "
+         "write YOUR_KEY instead and confirm only its last 4 characters; pass it only inside poa_ tool calls, never to POAScan. Skip any invite or referral "
+         "link. Never ask me for keys or seed phrases.")
 
 # Re-tested logged out 2026-10-20 (Playwright, Chrome).
 # kind "auto": the URL itself carries the prompt into a new chat; "paste": we copy, open the site, user pastes.
@@ -33,7 +41,7 @@ APPS = [
     ("OpenRouter", "paste", "https://openrouter.ai/chat", "", 0),                      # ?q= ignored
     ("Grok Bot", "paste", "", "", 0),                                                  # deep link needs a per-user bot id
 ]
-CODERS = [("Muse", LINE), ("Claude Code", f'claude "{LINE}"'), ("Codex", f'codex "{LINE}"'), ("Cursor CLI", f'agent "{LINE}"'),
+CODERS = [("Claude Code", f'claude "{LINE}"'), ("Codex", f'codex mcp add poa --url https://minepoa.com/mcp && codex "{CLINE}"'), ("Cursor CLI", f'agent "{LINE}"'),
           ("OpenClaw", f'openclaw agent --agent main --message "{LINE}"'), ("Hermes", f'hermes chat -q "{LINE}"')]
 
 ARROW = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -56,7 +64,7 @@ def _badge(kind):
 
 # Brand marks, self-hosted under static/brands (sources in SOURCES.md). Keyed by option label.
 BRAND = {"ChatGPT": "openai.svg", "Codex": "openai.svg", "Claude": "claude.svg", "Claude Code": "claude.svg",
-         "Claude connector": "claude.svg", "Grok": "grok.png", "Grok Bot": "grok.png", "Perplexity": "perplexity.svg",
+         "Claude connector": "claude.svg", "Grok": "grok.png", "Perplexity Pro": "perplexity.svg", "Gemini (US)": "gemini.svg", "Gemini Gems": "gemini.svg", "Grok Bot": "grok.png", "Perplexity": "perplexity.svg",
          "Kimi": "kimi.svg", "Z.ai": "zai.png", "Muse": "meta.svg", "Gemini": "gemini.svg", "Gemini CLI": "gemini.svg",
          "DeepSeek": "deepseek.svg", "Le Chat": "mistral.svg", "HuggingChat": "huggingface.svg", "MiniMax": "minimax.svg",
          "OpenRouter": "openrouter.svg", "Cursor": "cursor.svg", "VS Code": "vscode.png", "VS Code Insiders": "vscode-insiders.png",
@@ -70,10 +78,17 @@ def label(n):
            if f else f'<i class="blogo mono" aria-hidden="true">{E(n[:1])}</i>')
     return f'<span class="an">{img}<span class="ant">{E(n)}</span></span>'
 
+# Muse on phones (only the Ask dialog lists it; /start and the Join modal give it the no-path panel): iOS copies only and
+# points to the Meta AI app in the App Store; Android opens the Meta AI app by intent. app.js reads these.
+MOBILE = {"Muse": ("https://apps.apple.com/app/id1558240027", "intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.stella;end",
+                   "Prompt copied. Open the Meta AI app and paste.")}
+
 def _app(n, kind, base, pre):
     if kind == "auto":
         return f'<a class="app" href="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}" target="_blank" rel="noopener noreferrer">{label(n)}{_badge(kind)}</a>'
-    return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}">{label(n)}{_badge(kind)}</button>'
+    mb = MOBILE.get(n)
+    mo = f' data-ios="{E(mb[0])}" data-android="{E(mb[1])}" data-iosmsg="{E(mb[2])}"' if mb else ""
+    return f'<button class="app cpy" type="button" data-cpopen="{E(base)}" data-pre="{E(pre)}" data-app="{E(n)}"{mo}>{label(n)}{_badge(kind)}</button>'
 
 _N = [0]
 def more(label, inner, cls=""):
@@ -82,10 +97,18 @@ def more(label, inner, cls=""):
     return (f'<button class="moreb" type="button" aria-expanded="false" aria-controls="{i}" data-more>{label}<i aria-hidden="true"></i></button>'
             f'<div class="morep {cls}" id="{i}">{inner}</div>')
 
-def apps(cls=""):
-    """The one 'Open in' option set, used everywhere a prompt can be sent to a chat app."""
-    top = "".join(_app(n, k, b, p) for n, k, b, p, t in APPS if t)
-    rest = "".join(_app(n, k, b, p) for n, k, b, p, t in sorted((a for a in APPS if not a[4]), key=lambda a: a[1] != "auto"))
+def can_mine(n):
+    """False for an app the shared registry marks tier none (no working path to mine today, like Muse or DeepSeek web)."""
+    from . import clients as C
+    c = C.get(_S.client_tag(n))
+    return not (c and c["tier"] == "none")
+
+def apps(cls="", join=False):
+    """The one 'Open in' option set, used everywhere a prompt can be sent to a chat app. join=True (the Join modal) leaves out
+    apps that can't mine yet, matching /start, where they get the no-path panel instead of a prompt."""
+    a = [x for x in APPS if not join or can_mine(x[0])]
+    top = "".join(_app(n, k, b, p) for n, k, b, p, t in a if t)
+    rest = "".join(_app(n, k, b, p) for n, k, b, p, t in sorted((x for x in a if not x[4]), key=lambda x: x[1] != "auto"))
     return f'<div class="apps {cls}">{top}</div>' + more("More", rest, f"apps {cls}")
 
 def modal():
@@ -95,7 +118,7 @@ def modal():
     return f'''<dialog class="jm" id="joinmodal" data-pid="join" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
 {_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(_S.prompt())}</pre>')}
-<span class="lbl jm-l">Open in</span>{apps()}
+<span class="lbl jm-l">Open in</span>{apps(join=True)}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
 </div></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>'''

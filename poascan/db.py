@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS checkin_addrs(addr TEXT PRIMARY KEY CHECK (addr LIKE 
 CREATE INDEX IF NOT EXISTS checkin_addrs_ts ON checkin_addrs(ts);
 CREATE TABLE IF NOT EXISTS checkin_rates(day TEXT NOT NULL, version TEXT NOT NULL CHECK (length(version) <= 8), client TEXT NOT NULL CHECK (length(client) <= 24),
   route TEXT NOT NULL CHECK (route IN ('register','challenge','answer','mine','me')), n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY(day, version, client, route)) WITHOUT ROWID;
+-- v2.4 probe check-ins (1.26.36): a count per day, version and client that an agent opened a link it built. The word is never stored.
+CREATE TABLE IF NOT EXISTS checkin_probes(day TEXT NOT NULL, version TEXT NOT NULL CHECK (length(version) <= 8), client TEXT NOT NULL CHECK (length(client) <= 24),
+  n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY(day, version, client)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT NULL CHECK (length(endpoint) <= 80), reason TEXT NOT NULL,
   n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, endpoint, reason)) WITHOUT ROWID;
 """

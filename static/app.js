@@ -149,7 +149,7 @@ function chartTips(){
 /* join modal */
 var jm=$("#joinmodal"),toastEl=$("#toast"),toastT;
 var KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘V":"Ctrl+V";
-function toast(m,big){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(jm&&jm.open)?jm:(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
+function toast(m,big,href,lt){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(jm&&jm.open)?jm:(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;if(href&&/^https:\/\//.test(href)){var la=D.createElement("a");la.href=href;la.target="_blank";la.rel="noopener noreferrer";la.textContent=lt||href;toastEl.appendChild(D.createTextNode(" "));toastEl.appendChild(la)}toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
 /* Prompt button counts: a fixed id only ('<card>.<action>'), first-party POST /ops/e, no cookie and nothing about the visitor. The server takes ids from its allowlist and drops the rest. */
 function ev(id){if(!id)return;try{var b=JSON.stringify({e:id});if(navigator.sendBeacon&&navigator.sendBeacon("/ops/e",b))return;fetch("/ops/e",{method:"POST",body:b,keepalive:true,credentials:"omit"}).catch(function(){})}catch(_){}}
 function pidOf(el){var c=el&&el.closest&&el.closest("[data-pid]");return c?c.dataset.pid:""}
@@ -197,7 +197,7 @@ if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
   if(!inCard&&(t===jm||t.closest("[data-jmclose]"))){jmClose();return}
   var P=PF(t),pc=inCard||jm,pi=pc.dataset.pid||pidOf(pc),rg=regOn(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));
   var cb=t.closest("[data-copy-prompt]");if(cb){ev(pi&&pi+(rg?".copyreg":".copy"));copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
-  var co=t.closest("[data-cpopen]");if(co){ev(pi&&pi+(rg?".appreg":".app"));var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P);if(pre)u=pre+encodeURIComponent(P);if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
+  var co=t.closest("[data-cpopen]");if(co){ev(pi&&pi+(rg?".appreg":".app"));var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P),ua=navigator.userAgent||"",ios=co.dataset.ios&&(/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)),and=co.dataset.android&&/Android/.test(ua);if(pre)u=pre+encodeURIComponent(P);if(ios){pr.then(function(ok){toast(ok?co.dataset.iosmsg:"Copy the prompt above, then paste it into the Meta AI app",1,co.dataset.ios,"App Store")});return}if(and)u=co.dataset.android;if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
   var au=t.closest("a.app[data-pre]");if(au){ev(pi&&pi+(rg?".appreg":".app"));copyText(P);toast("Opening "+au.dataset.app+" · prompt also copied");return}
  },true);
 }
@@ -207,6 +207,14 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    (prefilled where its link supports it) in the same gesture, so a popup blocker never fires and paste always works.
    Beacons as before: start.app / start.appreg for copy plus open, start.copy / start.copyreg for Copy prompt, mcp-poa.add for connectors. */
 (function(){var go=$("[data-go]");if(!go)return;var card=go.closest("[data-pcard]"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0="",T,nf=$("[data-name]",card),cpb=$("[data-gocopy]",card),fl=$("[data-gofail]",card);
+ /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's own templates; a connector client
+    gets step 1 (copy https://minepoa.com/mcp or its command, open the app's connector settings) above step 2 (the prompt);
+    a no-path client (tier none) gets the panel instead of a prompt. */
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),cap=$("[data-conauto]",card),gon=$("[data-gon]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0=["",""],CT;
+ $$("pre[data-variant]",card).forEach(function(p){TPL[p.dataset.variant]=p.textContent});
+ function render(r){var t=TPL[r.dataset.tier],v=nf?nf.value||"":"";if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
+ function hide(el,h){if(el)el.hidden=!!h}
+ function clab(a){if(!clb)return;var x=$(".gll",clb),y=$(".gls",clb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}
  function sel(){return $("input[name=client]:checked",card)||$("input[name=client]",card)}
  function txt(){return W.poaTag(card,($(".pc-text",card).textContent||"").trim())}
  function say(m,ok){fb.textContent=m;fb.classList.toggle("ok",!!ok)}
@@ -235,9 +243,12 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
  function check(){if(!nf||!er)return true;var v=nf.value||"",m=nameMsg(v),sg="";if(!m&&tk.taken&&tk.v===v){m="Taken: "+v+" is already an agent. Try another.";sg=tk.sug}var bad=!!m;
   er.textContent=m;if(sg){var u=D.createElement("button");u.type="button";u.className="stuse";u.textContent="Use "+sg;u.addEventListener("click",function(){setName(sg,false);nf.focus()});er.appendChild(D.createTextNode(" "));er.appendChild(u)}er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");
   $$("input[name=client]",card).forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;if(cpb)cpb.disabled=bad;
-  go.classList.toggle("off",bad);if(bad){go.setAttribute("aria-disabled","true");go.setAttribute("tabindex","-1")}else{go.removeAttribute("aria-disabled");go.removeAttribute("tabindex")}
+  go.classList.toggle("off",bad);if(con)con.classList.toggle("off",bad);if(bad){go.setAttribute("aria-disabled","true");go.setAttribute("tabindex","-1")}else{go.removeAttribute("aria-disabled");go.removeAttribute("tabindex")}
   card.classList.toggle("namebad",bad);return !bad}
- function setup(){var r=sel();if(!r)return;var k=r.dataset.kind,n=r.dataset.app,P=txt();go.dataset.kind=k;go.classList.remove("ok");if(fl)fl.hidden=true;
+ function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",cn=tier=="connector";render(r);
+  hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,!cn);hide(gon,!cn);if(none){if(fl)fl.hidden=true;say("");return}
+  if(cn&&con){clearTimeout(CT);con.classList.remove("ok");con.href=r.dataset.cset||"#";C0=r.dataset.cset?["Add PoA connector to "+r.dataset.app,"Add connector"]:["Copy connector command","Copy command"];clab(C0);hide(cap,!r.dataset.cauto)}
+  var k=r.dataset.kind,n=r.dataset.app,P=txt();go.dataset.kind=k;go.classList.remove("ok");if(fl)fl.hidden=true;
   var u=url(r,P);go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";
   clearTimeout(T);L0=k=="mcp"?["Add to "+n,"Add to "+n]:u?["Copy prompt and open "+n,"Copy and open "+n]:["Copy prompt for "+n,"Copy for "+n];lab(L0);if(ap)ap.hidden=k!="auto";say("")}
  /* feedback lives in the button: green, a short "Copied, opening X" (or "Copied"), then back to its label */
@@ -253,6 +264,14 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
   var c=copyNow(P);   /* copy first, synchronously in this click */
   if(u)W.open(u,"_blank","noopener,noreferrer");   /* then open, still inside the same gesture */
   c.then(function(ok){if(ok)done(u?"Copied, opening "+n:"Copied");else fail(P)})});
+ if(con)con.addEventListener("click",function(e){e.preventDefault();var r=sel();if(!r||!check())return;var n=r.dataset.app,u=r.dataset.cset,v=r.dataset.ccopy||"";ev("start.add");
+  var c=copyNow(v);if(u)W.open(u,"_blank","noopener,noreferrer");
+  c.then(function(ok){if(!ok){fail(v);return}clearTimeout(CT);con.classList.add("ok");var m=u?"Copied, opening "+n:"Copied";clab([m,m]);hide(cap,true);
+   CT=setTimeout(function(){con.classList.remove("ok");clab(C0);var q=sel();hide(cap,!(q&&q.dataset.cauto))},2600)})});
+ if(np)np.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-pick]");if(!b)return;
+  var r=$$("input[name=client]",card).filter(function(i){return i.value===b.dataset.pick})[0];if(!r)return;
+  var mp=r.closest(".morep");if(mp&&!mp.classList.contains("open")){var t=$("[data-more][aria-controls='"+mp.id+"']",card);if(t)t.click()}
+  r.checked=true;setup();(con&&!crow.hidden?con:go).focus()});
  if(cpb)cpb.addEventListener("click",function(){if(!check())return;var r=sel(),n=r?r.dataset.app:"your app",P=txt(),rg=regOn($(".pc-text",card));ev("start."+(rg?"copyreg":"copy"));
   copyNow(P).then(function(ok){if(ok){cpb.classList.add("ok");var o=cpb.textContent;cpb.textContent="Copied";setTimeout(function(){cpb.classList.remove("ok");cpb.textContent=o},1800);say("Prompt copied",1)}else fail(P)})});
  check();setup();if(nf)queue()})();

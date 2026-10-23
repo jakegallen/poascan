@@ -12,7 +12,6 @@ KEY_RULE = ("The PoA key never appears in plaintext: the agent stores it in the 
             "never echoes it or puts it on a command line, and confirms it only as ••••LAST4 plus the store's name.")
 
 TITLE = "Start mining PoA"
-REG = f"{B}/api/hosted/register?label="
 
 # A fresh default name per page view (and again in the browser), so visitors who keep the default do not collide.
 _ADJ = "amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split()
@@ -29,12 +28,19 @@ def clean_name(n):
     if KS.has_key(n): return default_name()   # a pasted key never lands in the prompt
     return re.sub(r"[^A-Za-z0-9_-]", "", n or "")[:32] or default_name()
 
-def prompt(name=None):
-    """The one onboarding prompt, from the template in poascan/onboarding_prompt.py with the agent name filled in.
-    It opens with the full register link so chat agents whose fetch tool only opens pasted URLs (Claude, for one)
-    can join without building a URL themselves. No invited_by, no referral."""
+def prompt(name=None, variant="full"):
+    """The onboarding prompt, from poascan/onboarding_prompt.py with the agent name filled in. variant "full" (default) is
+    the canonical TEMPLATE every untagged surface serves; "chat-browse" and "connector" are the v2.4 short variants.
+    No invited_by, no referral."""
     from . import onboarding_prompt as OP
-    return OP.TEMPLATE.replace(OP.SLOT, clean_name(name))
+    return OP.variant(variant).replace(OP.SLOT, clean_name(name))
+
+def client_prompt(name, cid):
+    """The text a /start button copies for one registry client: its variant, the name, check-ins tagged with its id.
+    None for a no-path client. KeyError for an unknown id."""
+    from . import onboarding_prompt as OP, clients as C
+    c = C.BY_ID[cid]; v = C.variant(c)
+    return OP.tagged(prompt(name, v), cid) if v else None
 
 # Prompt v2 is mining only: no wallet setup, so no wallet registry setup code goes into this prompt (no data-reg on its <pre>).
 # Wallet setup lives on POASwap (https://poaswap.io/start), linked as "Add a wallet on POASwap" under step 3.
@@ -52,20 +58,22 @@ def client_tag(name):
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]", "-", (name or "").lower())).strip("-")[:24].strip("-")
 EXTRA_TAGS = ("poaswap",)
 def checkin_clients():
-    """Every client id a check-in may carry: the /start chat choices (top row, More, Cursor) and EXTRA_TAGS."""
-    from . import join as J
-    return frozenset([client_tag(x[0]) for x in J.APPS] + [client_tag(CURSOR[0])] + list(EXTRA_TAGS))
+    """Every client id a check-in may carry: the shared registry (data/clients.json, every /start choice, no-path ones too,
+    so older tagged copies keep counting), the Join modal apps and EXTRA_TAGS."""
+    from . import join as J, clients as C
+    return frozenset(C.ids() + [client_tag(x[0]) for x in J.APPS] + list(EXTRA_TAGS))
 HELP_MAIL = "jakegallen@gmail.com"
 HELP_LINE = f'<p class="sthelp"><a href="mailto:{HELP_MAIL}?subject=PoA%20join%20got%20stuck">If it got stuck, share the chat with us</a></p>'
 
 # (title, copyable value or None, short note)
 STEPS = [
-    ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code."),
+    # v2.4: register and key links are split (host + path) so no chat app, crawler or HowTo reader unfurls or prefetches one.
+    ("Register", f"{B} + /api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent joins the pieces and opens it once."),
     ("Store the key", None, "OS secret store only. Never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
-    ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
-    ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
-    ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
+    ("Answer the challenge", f"{B} + /api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
+    ("Mine", f"{B} + /api/hosted/mine?key=YOUR_KEY", ""),
+    ("Check in", f"{B} + /api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
 ]
 
 def data():
@@ -112,15 +120,10 @@ def _stamp():
 
 KEYLINE = "Your agent stores its key privately. Never paste it anywhere."
 
-# Step 2: one set of client choices. The four most used first, every other chat app, connector and command behind one More.
-# Chat apps come from join.APPS (shared with the Join and Ask modals); Cursor's documented prompt deeplink
-# (cursor.com/docs/integrations/deeplinks, web form, max 10,000 characters) opens Cursor with the prompt prefilled.
-CURSOR = ("Cursor", "auto", "https://cursor.com/link/prompt", "https://cursor.com/link/prompt?text=")
-TOP = ("Claude", "ChatGPT", "Grok", "Muse")   # the four up front on /start, in order; everything else is under More
-MORE_FIRST = ("Grok Bot",)                    # first under More, in order; the rest follow as before
-# Chat-only clients that clearly can't make repeat requests to the hosted API: their choice carries a small tag, styled like
-# the Auto pill. Only Muse for now (its chat fetch does not repeat calls to minepoa.com/api/hosted). Add a name only when
-# that is clearly true; the prompt's own capability check (fetch go.md twice) covers every other client.
+# Step 2: one set of client choices from the shared registry (data/clients.json, poascan/clients.py): the four in row "top"
+# up front, every other app behind one More (registry order), then the connector install links and commands.
+# v2.4: Muse moved out of the first row (no working path today); Cursor took its place (shell agent, prompt deeplink,
+# cursor.com/docs/reference/deeplinks). Connector clients get two buttons in step 3: add the connector, then the prompt.
 LOCK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
         '<path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>')
 
@@ -136,46 +139,102 @@ def name_error(v):
             if w not in bad: bad.append(w)
     if bad: return "Not allowed: " + (bad[0] if len(bad) < 2 else ", ".join(bad[:-1]) + " and " + bad[-1]) + ". Use letters, numbers, _ or - (up to 32)."
     return "Too long: up to 32 characters." if len(v) > 32 else ""
-def api_join(name=None):
-    """GET /api/v1/prompts/join: the /start prompt as data, for other sites (POASwap) to reuse. No setup code, key or referral:
-    the optional registry step is browser-made on /start and is not part of this text. ValueError on a bad name."""
+CLIENTS_URL = "https://poascan.io/api/v1/prompts/clients"
+
+def api_join(name=None, client=None):
+    """GET /api/v1/prompts/join[?client=&name=]: the /start prompt as data, for other sites (POASwap) to reuse. No setup code,
+    key or referral. Without client: the canonical untagged text (unchanged since v2). With a registry client id (v2.4): that
+    client's variant with its check-ins tagged, exactly what its /start button copies, plus tier, prefill and connector
+    details; a no-path client gets text null and the panel. ValueError on a bad name or an unknown client."""
     import re, hashlib
     from . import onboarding_prompt as OP, keysafe as KS
     if name is None or name == "": nm = "YOUR_NAME"
     elif KS.has_key(name): raise ValueError("name: 1 to 32 of A-Z a-z 0-9 _ -")
     elif not re.fullmatch(NAME_RX, name): raise ValueError(name_error(name) or "name: 1 to 32 of A-Z a-z 0-9 _ -")
     else: nm = name
+    if client is not None: return _api_client(nm, client)
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
                 checkin=dict(base=OP.CHECKIN, tag_rule="replace every base with base + client + '/'; nothing else changes", client_rx=OP.TAG_RX.pattern,
                              clients=sorted(checkin_clients()), suggested_client="poaswap",
                              note="Optional and keyless. The text above is untagged; untagged check-ins count as client none."),
-                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request.")
+                variant="full", clients_url=CLIENTS_URL,
+                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant, tagged.")
 
-URL_MAX = 8000                        # a prefill URL longer than this (longest name) falls back to copy and open, no Auto pill
-URL_MAX_BY = {"Cursor": 10000}        # Cursor's prompt deeplink limit
+def _api_client(nm, cid):
+    import hashlib
+    from urllib.parse import quote
+    from . import onboarding_prompt as OP, clients as C
+    c = C.get(cid) if isinstance(cid, str) else None
+    if not c: raise ValueError("client: one of the ids in " + CLIENTS_URL)
+    v = C.variant(c)
+    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, client=cid, client_name=c["name"], tier=c["tier"], variant=v,
+                open=c["open"] or None, connector=dict(c["connector"], url=C.MCP_URL) if c.get("connector") else None, clients_url=CLIENTS_URL,
+                source="https://poascan.io/start")
+    if not v:
+        alt = [dict(id=a, name=C.BY_ID[a]["name"]) for a in C.NOPATH["alternatives"]]
+        return dict(base, text=None, sha256=None, blocks=[], prefill=None, prefill_ok=False, link_chars=None,
+                    panel=dict(line=C.NOPATH["line"], alternatives=alt),
+                    notes="No working path in this app today, so there is no prompt. Offer one of the alternatives.")
+    t = client_prompt(nm, cid)
+    ok = bool(c["prefill"]) and fits_client(c)
+    return dict(base, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(), blocks=[dict(id=b, text=x) for b, x in OP.blocks(t, v)],
+                prefill=c["prefill"] if ok else None, prefill_ok=ok, chars=len(t),
+                link_chars=len(c["prefill"] + quote(t, safe="")) if ok else None,
+                notes="text is exactly what the /start button for this client copies: the " + v + " variant with its check-ins tagged " + cid
+                      + ". Joining the blocks in order gives text.")
+
+URL_MAX = 8000                        # every prefill link stays under this (longest name, tagged); longer falls back to copy and open
+
+def link_len(c, name="x" * 32):
+    """Length of a registry client's prefill link with its variant, tagged, for this name (0 without a prefill or prompt)."""
+    from urllib.parse import quote
+    t = client_prompt(name, c["id"])
+    return len(c["prefill"] + quote(t, safe="")) if c["prefill"] and t else 0
+
+def fits_client(c):
+    return link_len(c) < URL_MAX
 
 def fits(n, pre):
-    """True when the prefill URL with the longest allowed name stays within the client's limit."""
+    """True when the canonical prompt's prefill URL, tagged for client name n, with the longest name stays under URL_MAX."""
     from urllib.parse import quote
     from . import onboarding_prompt as OP
-    return len(pre + quote(OP.tagged(prompt("x" * 32), client_tag(n) or "x"), safe="")) <= URL_MAX_BY.get(n, URL_MAX)
+    return len(pre + quote(OP.tagged(prompt("x" * 32), client_tag(n) or "x"), safe="")) < URL_MAX
 
 def chats():
-    from . import join as J
-    a = [(n, k, b, p) if not p or fits(n, p) else (n, "paste" if k == "auto" else k, b, "") for n, k, b, p, t in J.APPS + [CURSOR + (1,)]]
-    top = [x for n in TOP for x in a if x[0] == n]
-    rest = [x for n in MORE_FIRST for x in a if x[0] == n] + sorted((x for x in a if x[0] not in TOP + MORE_FIRST), key=lambda x: x[1] != "auto")
-    return top, rest
+    """/start step 2 choices from the shared registry, as dicts: top row, then More (registry order, Grok Bot first).
+    kind: auto (the link carries the prompt), paste (copy, then open) or none (no-path panel)."""
+    from . import clients as C
+    a = []
+    for c in C.CLIENTS:
+        v = C.variant(c)
+        k = "none" if not v else ("auto" if c["prefill"] and fits_client(c) else "paste")
+        a.append(dict(c, kind=k, pre=c["prefill"] if k == "auto" else "", variant=v))
+    return [x for x in a if x["row"] == "top"], [x for x in a if x["row"] == "more"]
 
 def _opt(value, shown, attrs, checked=False):
     from .join import label
     return (f'<label class="cl"><input type="radio" name="client" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
             f'<span class="clb">{label(shown)}</span></label>')
 
-def _chat(n, k, b, p, checked=False):
-    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}" data-tag="{E(client_tag(n))}"', checked)
+def _chat(c, checked=False):
+    co = c.get("connector") or {}
+    con = (f' data-cset="{E(co.get("settings_url") or "")}" data-ccopy="{E(co.get("cli") or MCP)}"' + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
+    return _opt(c["name"], c["name"], f' data-kind="{c["kind"]}" data-tier="{c["tier"]}" data-base="{E(c["open"])}" data-pre="{E(c["pre"])}" '
+                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}', checked)
+
+def nopath_panel():
+    """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
+    from . import clients as C
+    from .join import label
+    b = "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
+    return f'<div class="nopath" data-nopath role="status" hidden><p>{E(C.NOPATH["line"])}</p><div class="npg">{b}</div></div>'
+
+def variant_templates():
+    """The three variant templates, untagged with the {NAME} slot, for app.js to render the picked client's prompt."""
+    from . import onboarding_prompt as OP
+    return "".join(f'<pre hidden data-variant="{v}">{E(t)}</pre>' for v, t in OP.VARIANTS.items())
 
 def clients():
     """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked."""
@@ -187,10 +246,10 @@ def clients():
                        + (' data-web="1"' if k in OC.WEB else "")) for k, n in OC.BUTTONS)
     row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
                         f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
-    inner = (f'<div class="clg" role="presentation">{"".join(_chat(*x) for x in rest)}</div>'
+    inner = (f'<div class="clg" role="presentation">{"".join(_chat(x) for x in rest)}</div>'
              f'<p class="clh">Add the PoA connector</p><div class="clg">{con}</div>'
              f'<p class="clh">Command line and config</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
-    return (f'<div class="clg clt">{"".join(_chat(*x, checked=(i == 0)) for i, x in enumerate(top))}</div>'
+    return (f'<div class="clg clt">{"".join(_chat(x, checked=(i == 0)) for i, x in enumerate(top))}</div>'
             + more("More", inner, "clm"))
 
 def _step(n, title, body, cls=""):
@@ -212,19 +271,24 @@ def page(page_fn, card=None, apps=None):
     nm = default_name()
     # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
     field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" aria-labelledby="st1" aria-describedby="stname-hint stname-err" aria-invalid="false" '
-             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_-]{{1,32}}" required enterkeyhint="next" data-name>'
+             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_\\-]{{1,32}}" required enterkeyhint="next" data-name>'
              '<p class="sthint" id="stname-hint">Letters, numbers, - and _</p>'
              '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>')
     pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
-    n0, k0, b0, _ = chats()[0][0]
-    go = (f'<div class="gorow"><a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
+    c0 = chats()[0][0]; n0, k0, b0 = c0["name"], c0["kind"], c0["open"]; con0 = c0["tier"] == "connector"
+    co0 = c0.get("connector") or {}
+    con = (f'<div class="gorow gocrow" data-conrow{"" if con0 else " hidden"}><a class="gobtn gocon" href="{E(co0.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
+           f'<span class="gon" aria-hidden="true">1</span><span data-conlbl><span class="gll">Add PoA connector to {E(n0)}</span><span class="gls">Add connector</span></span>'
+           f'<em class="gauto" data-conauto{"" if co0.get("prefills_url") else " hidden"}>Auto</em>{ARROW}</a></div>')
+    go = (con + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(b0 or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{k0}">'
+          f'<span class="gon" data-gon aria-hidden="true"{"" if con0 else " hidden"}>2</span>'
           f'<span data-golbl><span class="gll">Copy prompt and open {E(n0)}</span><span class="gls">Copy and open {E(n0)}</span></span><em class="gauto"{"" if k0 == "auto" else " hidden"}>Auto</em>{ARROW}</a>'
-          '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>'
-          '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
+          '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' + nopath_panel()
+          + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
           '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
-          + WALLET_LINK + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
-          + '<details class="stview"><summary>View prompt</summary>'
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>') + '</details>' + HELP_LINE)
+          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>'
+          + '<details class="stview" data-stview><summary>View prompt</summary>'
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm, c0["variant"] or "full"))}</pre>') + '</details>' + variant_templates() + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
     hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
