@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.54] - 2026-10-23
+
+### Changed
+- The Join dialog loads on demand. Every page used to inline its markup and templates (about 49.7 KB of HTML, 7.7 KB gzipped); pages now carry only the empty dialog shell, and app.js fetches the content from `/fragment/join` once, on the first hover, focus or touch of a Join trigger or when it opens (also `/#join`), and keeps it for the page. The fragment is HTML with an ETag and `Cache-Control: no-cache`, so a repeat visit revalidates with a 304. If the load fails, Join goes to `/start`. app.js is `?v=54`, so a cached older app.js never meets the new markup.
+- Page weight, measured on a local build with the same data: homepage 80,570 to 30,898 bytes (14,237 to 7,119 gzipped); address page 70,331 to 20,659 bytes (12,072 to 4,978 gzipped). `/start` keeps the three variant templates once, outside main, for its own card.
+- The dialog is unchanged inside: the fragment is the same markup byte for byte, so the prompt text and template_sha256 `990e681f0dada4bc9bf65c032c9e8f8b0d8b459c7fdd67276c16bde172ffd60f` are the same. The button still copies and opens in one click for auto prefill apps (first click copies, second opens otherwise); order stays Claude, ChatGPT, Grok, Muse in the first row with Grok Bot first and Cursor under More; Muse keeps the can't-mine panel.
+- Swap state wording: the MCP `get_swap_status` description (and so llms.txt and llms-full.txt) and the agent card swaps skill now write the state value `coming_soon` ("live, paused, coming_soon or unknown"), matching POASwap's status values in the code, instead of "coming soon".
+
+### Added
+- `tools/lazyjoin_test.py` in CI: empty shell on pages, `/fragment/join` with ETag and 304, byte identical prompt and variant templates, button order, Muse panel, app.js load, fallback and prefetch, and the `coming_soon` wording.
+
+### Unchanged
+- Join prompt v2.7.1 text and template_sha256 (`onboarding_prompt.py` untouched). The Ask dialog stays inline. Swap status still follows POASwap.
+
 ## [1.26.53] - 2026-10-23
 
 ### Changed

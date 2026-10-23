@@ -176,20 +176,30 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s`]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
  function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
- var jp=$("#jm-prompt");fill(jp,nm);W.poaName=nm;
+ W.poaName=nm;W.poaJoinFill=function(){fill($("#jm-prompt"),W.poaName)};W.poaJoinFill();
  var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
- function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;W.poaName=v;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
+ function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;W.poaName=v;fill(pre,v);fill($("#jm-prompt"),v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
  f.value=nm;upd();f.addEventListener("input",upd)})();
 /* prompt v2.3 to v2.4 check-ins (v2.5 has none and no data-checkin, so this returns the text unchanged): on /start the copied text carries the picked client's tag in the two check-in URLs
    (data-checkin base + data-tag + "/"); everything else stays byte for byte. Elsewhere the text is untagged. */
 W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[type=radio]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
-if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
+/* 1.26.54: the dialog content loads on demand from data-src (/fragment/join, ETag, no-cache), once per page: prefetched on the
+   first hover, focus or touch of a [data-join] trigger, kept in the page after that. A failed load goes to /start instead. */
+if(jm){var P="",JL=!jm.dataset.src,JQ=null;
  function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?W.poaTag(c,($(".pc-text",c).textContent||"").trim()):P}
- $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});
+ function jmPrep(){var jp=$("#jm-prompt",jm);P=jp?(jp.textContent||"").trim():"";$$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))})}
+ function jmLoad(){if(JL)return Promise.resolve(true);if(JQ)return JQ;
+  JQ=fetch(jm.dataset.src,{credentials:"omit"}).then(function(r){if(!r.ok)throw new Error("join "+r.status);return r.text()}).then(function(h){if(JL)return true;
+   jm.innerHTML=h;JL=true;if(W.poaJoinFill)W.poaJoinFill();jmPrep();$$("[data-go]",jm).forEach(goInit);return true}).catch(function(){JQ=null;return false});return JQ}
+ W.poaJoinLoad=jmLoad;
+ if(JL)jmPrep();
  $$("[data-pcard] a[data-pre]").forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))});
- function jmOpen(){ev("join.open");var jc=$("[data-pcard]",jm);if(jc)jc.dispatchEvent(new Event("poa:refresh"));if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
+ function jmShow(){ev("join.open");var jc=$("[data-pcard]",jm);if(jc)jc.dispatchEvent(new Event("poa:refresh"));if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
+ function jmOpen(){if(JL){jmShow();return}jmLoad().then(function(ok){if(ok)jmShow();else location.href="/start"})}
  function jmClose(){if(jm.close)jm.close();else jm.removeAttribute("open")}
  jm.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")});
+ ["pointerover","focusin","touchstart"].forEach(function(n){D.addEventListener(n,function(e){if(!JL&&!JQ&&e.target.closest&&e.target.closest("[data-join]"))jmLoad()},{passive:true})});
+ if(W.location.hash==="#join")jmOpen();W.addEventListener("hashchange",function(){if(W.location.hash==="#join"&&!jm.open)jmOpen()});
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;
   if(t.closest("[data-join]")){e.preventDefault();e.stopPropagation();jmOpen();return}
   var inCard=!jm.open&&t.closest("[data-pcard]");
@@ -209,7 +219,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    No open URL (Grok Bot, Codex): one click copies, "Copied. Paste it into X". A connector app adds one small text link.
    Beacons: <pid>.app / .appreg for copy plus open, <pid>.copy / .copyreg for a copy alone, <pid>.add for the connector link,
    mcp-poa.add for the connector options under More. The second click of a paste app copies again but sends no beacon. */
-$$("[data-go]").forEach(function(go){var card=go.closest("[data-pcard]");if(!card)return;var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
+function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
  /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's templates (in the Join dialog,
     once per page); a no-path client (tier none) gets the panel instead of a prompt. */
@@ -282,7 +292,8 @@ $$("[data-go]").forEach(function(go){var card=go.closest("[data-pcard]");if(!car
   var r=radios().filter(function(i){return i.value===b.dataset.pick})[0];if(!r)return;
   var mp=r.closest(".morep");if(mp&&!mp.classList.contains("open")){var t=$("[data-more][aria-controls='"+mp.id+"']",card);if(t)t.click()}
   r.checked=true;setup();go.focus()});
- check();setup();if(nf)queue()});
+ check();setup();if(nf)queue()}
+$$("[data-go]").forEach(goInit);
 /* v2.7 prompt hash: the button copies the full template sha256 (also in its title) and says Copied for a moment */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-phash]");if(!b)return;var s=$("code",b),o=s.textContent;
  copyText(b.dataset.phash).then(function(ok){b.classList.add("ok");s.textContent=ok?"copied":b.dataset.phash.slice(0,12);setTimeout(function(){b.classList.remove("ok");s.textContent=o},1400)})});

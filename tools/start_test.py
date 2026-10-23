@@ -254,7 +254,7 @@ check(f"v2.5 safety: Ask your agent prompts ({len(_asks)}) write links whole, ke
 check("v2.5 safety: the /start All steps list (also MCP, llms.txt and the HowTo data) writes links whole with placeholders only (YOUR_NAME, YOUR_KEY); MCP data carries the notice",
       S.STEPS[0][1] == "https://minepoa.com/api/hosted/register?label=YOUR_NAME" and all("key=YOUR_KEY" in v for t, v, n in S.STEPS if v and "key=" in v)
       and not any(v and " + " in v for t, v, n in S.STEPS) and S.data()["notice"] == OP.NOTICE)
-_jm = _J.modal(); _jr = re.findall(r'<input type="radio" name="jclient" value="([^"]+)"', _jm)
+_jm = _J.modal_full(); _jr = re.findall(r'<input type="radio" name="jclient" value="([^"]+)"', _jm)
 check(f"Join modal (one button) is the /start picker and one button: the same choices in the same order (radios named jclient), Muse first row with the no-path panel, one data-go, no Open in grid, no client radios named client; the Ask modal keeps every app",
       _jr[:len(CR.CLIENTS)] == [c["name"] for c in CR.CLIENTS] and len(_jr) == len(CR.CLIENTS) + 8 and 'name="client"' not in _jm
       and len(re.findall(r"data-go[ >]", _jm)) == 1 and "data-nopath" in _jm and "Open in" not in _jm and 'class="apps' not in _jm and "data-gocopy" not in _jm
@@ -364,7 +364,7 @@ try:
     check("/start: the no-path panel is one terse line and the working alternatives (each picks that client), hidden until a no-path app is picked; no prompt, no warning",
           '<div class="nopath" data-nopath role="status" hidden><p>This app can&#x27;t mine yet. Use one of these:</p>' in m and m.count("data-nopath") == 1
           and re.findall(r'data-pick="([^"]+)"', npn) == [CR.BY_ID[a]["name"] for a in CR.NOPATH["alternatives"]] and "warn" not in npn.lower())
-    check("the three variant templates are embedded once per page (in the Join dialog) for app.js, the full one is the canonical template",
+    check("the three variant templates are embedded once on /start (outside main, the Join dialog loads its own) for app.js, the full one is the canonical template",
           [unescape(x) for x in re.findall(r'<pre hidden data-variant="([^"]+)">', h)] == ["full", "chat-browse", "connector"] and "data-variant" not in m
           and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)) == OP.TEMPLATE
           and unescape(re.search(r'<pre hidden data-variant="connector">(.*?)</pre>', h, re.S).group(1)) == OP.CONNECTOR)
@@ -568,7 +568,7 @@ try:
     ms = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
     pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.7.1</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>'
-    sm = sp[sp.index("<main"):sp.index("</main>")]; jmh = hp[hp.index('id="joinmodal"'):]; jmh = jmh[:jmh.index("</dialog>")]
+    sm = sp[sp.index("<main"):sp.index("</main>")]; jmh = req("/fragment/join")[2]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, the Join dialog, /about",
           ms["prompt_version"] == "v2.7.1" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
           and all(("Prompt version: v2.7.1\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))

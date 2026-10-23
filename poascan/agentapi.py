@@ -5,8 +5,8 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.53"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T18:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.54"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T18:32:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "The network upgrade is complete: grading is back, upgrade states clear from the official notice, and /upgrade keeps the dates."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -371,7 +371,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it before trusting a number, when the node or POAScan looks stale, or to check what is working.",
      S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
     ("get_swap_status", "Swap status",
-     "Whether swaps are live, paused, coming soon or unknown (POASwap's status, source poaswap, with fetched_at), the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
+     "Whether swaps are live, paused, coming_soon or unknown (POASwap's status, source poaswap, with fetched_at), the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
      "Check this before any swap; when available is false, don't call swap-take.", S(), t_swap_status),
     ("get_cluster_signals", "Cluster signals",
      "Groups of Agents sharing a pattern: near-duplicate answers, synchronized timing, a shared vault link or shared funding. Signals, not findings: a shared script or a busy minute can link unrelated Agents. "
@@ -845,7 +845,7 @@ def agent_card():
                 sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
                 sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
                 sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
-                sk("swaps", "Swaps", "Open swap offers, fills and swap status (live, paused, coming soon or unknown, from POASwap) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
+                sk("swaps", "Swaps", "Open swap offers, fills and swap status (live, paused, coming_soon or unknown, from POASwap) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
                 sk("onboarding", "Start mining", "The steps and copy-ready prompt to start mining PoA, from https://poascan.io/start.", ["onboarding", "mining"], ["How do I start mining PoA?"]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],

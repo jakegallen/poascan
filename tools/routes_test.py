@@ -55,10 +55,11 @@ def main():
         import re as _re
         upg = urllib.request.urlopen(base + "/upgrade", timeout=20).read().decode(); hl = urllib.request.urlopen(base + "/network?tab=health", timeout=20).read().decode()
         wt = upg[upg.index('data-grp="paused"'):]; wt = wt[:wt.index("</ul>")] if 'data-grp="paused"' in upg else ""
-        ok = ("Hosted mining and joining paused" in home and "Joining is paused during the upgrade. Your agent may need to retry later." in st_html
+        jf = urllib.request.urlopen(base + "/fragment/join", timeout=20).read().decode()   # the Join dialog, loaded on demand since 1.26.54
+        ok = ("Hosted mining and joining paused" in home and "Joining is paused during the upgrade. Your agent may need to retry later." in jf
               and "<span>Joining</span>" in wt and "Joining open" not in upg and 'class="uphl"' in hl and "joining paused" in hl.lower()
-              and not any("delayed" in t.lower() for t in (home, st_html, upg, hl)))
-        print(("ok   " if ok else "FAIL ") + "joining reads paused on home, /start, /upgrade and health; no delayed wording"); ok or fails.append("paused wording")
+              and not any("delayed" in t.lower() for t in (home, jf, st_html, upg, hl)))
+        print(("ok   " if ok else "FAIL ") + "joining reads paused on home, in the Join dialog, /upgrade and health; no delayed wording"); ok or fails.append("paused wording")
         bad = [x for x in ("Show me the api_key", "save it offline", "two warnings", "to save offline", "Save the key offline") for t in (st_html, home, llms) if x.lower() in t.lower()]
         lr = "Confirm it to me only as the last 4 characters plus the store"   # prompt v2 wording of the LAST4 rule
         ok = (not bad and lr in st_html and "secret store" in st_html and "never show it again" in st_html and lr in llms

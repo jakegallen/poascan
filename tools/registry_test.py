@@ -117,7 +117,9 @@ def live():
         sp = re.search(r'<pre class="pc-text jm-p" tabindex="0">([^<]*)</pre>', stt)
         check("/start prompt has no setup code slot (v2, mining only) and links Add a wallet to POASwap's /start", bool(sp) and "data-reg" not in stt
               and "SETUP_CODE" not in stt and '<a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a>' in stt and "/swaps#xemb" not in stt)
-        check("Start dialog on every page has no setup code slot", all('id="jm-prompt" tabindex="0">' in pages[r][2] for r in ("/", "/privacy")))
+        jfr = get("/fragment/join").read().decode()   # the Join dialog content, loaded on demand since 1.26.54
+        check("Start dialog (loaded from /fragment/join on every page) has no setup code slot", 'id="jm-prompt" tabindex="0">' in jfr and "data-reg" not in jfr
+              and "{SETUP_CODE}" not in unescape(jfr) and all('data-src="/fragment/join"></dialog>' in pages[r][2] for r in ("/", "/privacy")))
         check("llms.txt prompt has no registry step", all("registry/register" not in pages[r][2] and "SETUP_CODE" not in pages[r][2] for r in ("/llms-full.txt", "/llms.txt")))
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
         check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-23", bool(sec) and "Updated 2026-10-23." in pv

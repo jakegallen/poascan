@@ -95,6 +95,8 @@ jobs:
         run: python tools/upgrade_complete_test.py
       - name: Swap take wording (take again once on receipt_ready, status before any re-take, never loop; no re-call until filled)
         run: python tools/swap_retake_test.py
+      - name: Lazy Join dialog (empty shell on pages, /fragment/join once with ETag, byte identical prompt, button order, Muse panel) and coming_soon state wording
+        run: python tools/lazyjoin_test.py
 
   deploy:
     needs: test
