@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.57] - 2026-10-23
+
+### Changed
+- Pillow 12.3.0 to 13.0.0 (Dockerfile pin, the only place it is pinned). Picks up the 13.0.0 security fixes. No code changes needed: POAScan uses none of the removed or changed APIs (Image._show, get_child_images, fromarray mode changing dtype, I mode PNG saves, premultiplied getcolor, small ICO saves). Per-page og cards and the make_icons.py favicons and social card render pixel-identical to 12.3.0 on Python 3.12.
+
 ## [1.26.56] - 2026-10-23
 
 ### Fixed
