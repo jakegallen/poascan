@@ -20,8 +20,8 @@ BOT_NAMES = []                           # extra bot names (server.AI_BOTS), mat
 BOT_RX = re.compile(r"(?i)bot|crawl|spider|slurp|preview|monitor|uptime|headless|lighthouse|python|curl|wget|httpx|go-http|okhttp|java/|node-fetch|axios|libwww|scrapy")
 DOMAIN_RX = re.compile(r"^[a-z0-9.-]{1,64}$")
 ASSET_RX = re.compile(r"\.(?:js|css|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|map|webmanifest|xml)$")
-SKIP_PREFIX = ("/static/", "/fragment/", "/og/", "/ops/", "/favicon", "/apple-touch-icon")
-SKIP_EXACT = {"/ws", "/healthz", "/robots.txt", "/sitemap.xml", "/ops", "/site.webmanifest", "/BingSiteAuth.xml", "/.well-known/agentpeering-verify"}
+SKIP_PREFIX = ("/static/", "/fragment/", "/og/", "/ops/", "/j/", "/favicon", "/apple-touch-icon")   # /j/: check-ins have their own counts
+SKIP_EXACT = {"/ws", "/j", "/healthz", "/robots.txt", "/sitemap.xml", "/ops", "/site.webmanifest", "/BingSiteAuth.xml", "/.well-known/agentpeering-verify"}
 SKIP_RX = re.compile(r"^/(?:google[0-9a-f]{8,32}\.html|[0-9a-f]{32}\.txt)$")   # site-verification and IndexNow key files
 
 SEG = {"epochs": "epochs", "epoch": "epochs", "blocks": "epochs", "txs": "txs", "tx": "txs", "address": "address",

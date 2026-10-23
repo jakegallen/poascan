@@ -43,6 +43,21 @@ WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" target="_blank" rel="no
 
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
+# v2.3 check-in tags. Each /start chat choice carries data-tag; its copy buttons tag the two check-in URLs with it
+# (onboarding_prompt.tagged). The API, MCP and llms.txt serve the untagged text. POASwap renders the API prompt and may tag
+# it as "poaswap" itself (the API's checkin field says how). checkin.py accepts only these ids, plus "none" for untagged.
+def client_tag(name):
+    """'Grok Bot' -> 'grok-bot', 'Z.ai' -> 'z-ai': lower case a-z 0-9 and single hyphens, at most 24 characters."""
+    import re
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]", "-", (name or "").lower())).strip("-")[:24].strip("-")
+EXTRA_TAGS = ("poaswap",)
+def checkin_clients():
+    """Every client id a check-in may carry: the /start chat choices (top row, More, Cursor) and EXTRA_TAGS."""
+    from . import join as J
+    return frozenset([client_tag(x[0]) for x in J.APPS] + [client_tag(CURSOR[0])] + list(EXTRA_TAGS))
+HELP_MAIL = "jakegallen@gmail.com"
+HELP_LINE = f'<p class="sthelp"><a href="mailto:{HELP_MAIL}?subject=PoA%20join%20got%20stuck">If it got stuck, share the chat with us</a></p>'
+
 # (title, copyable value or None, short note)
 STEPS = [
     ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code."),
@@ -133,6 +148,9 @@ def api_join(name=None):
     t = prompt(nm)
     return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
+                checkin=dict(base=OP.CHECKIN, tag_rule="replace every base with base + client + '/'; nothing else changes", client_rx=OP.TAG_RX.pattern,
+                             clients=sorted(checkin_clients()), suggested_client="poaswap",
+                             note="Optional and keyless. The text above is untagged; untagged check-ins count as client none."),
                 notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request.")
 
 URL_MAX = 8000                        # a prefill URL longer than this (longest name) falls back to copy and open, no Auto pill
@@ -141,7 +159,8 @@ URL_MAX_BY = {"Cursor": 10000}        # Cursor's prompt deeplink limit
 def fits(n, pre):
     """True when the prefill URL with the longest allowed name stays within the client's limit."""
     from urllib.parse import quote
-    return len(pre + quote(prompt("x" * 32), safe="")) <= URL_MAX_BY.get(n, URL_MAX)
+    from . import onboarding_prompt as OP
+    return len(pre + quote(OP.tagged(prompt("x" * 32), client_tag(n) or "x"), safe="")) <= URL_MAX_BY.get(n, URL_MAX)
 
 def chats():
     from . import join as J
@@ -156,7 +175,7 @@ def _opt(value, shown, attrs, checked=False):
             f'<span class="clb">{label(shown)}</span></label>')
 
 def _chat(n, k, b, p, checked=False):
-    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}"', checked)
+    return _opt(n, n, f' data-kind="{k}" data-base="{E(b)}" data-pre="{E(p)}" data-app="{E(n)}" data-tag="{E(client_tag(n))}"', checked)
 
 def clients():
     """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked."""
@@ -188,7 +207,7 @@ def strip():
 def page(page_fn, card=None, apps=None):
     """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
     (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
-    from . import maint as M
+    from . import maint as M, onboarding_prompt as OP
     from .join import CLOSE, pbox, ARROW
     nm = default_name()
     # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
@@ -205,7 +224,7 @@ def page(page_fn, card=None, apps=None):
           '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
           + WALLET_LINK + f'<p class="stkey">{LOCK}<span>{KEYLINE}</span></p>'
           + '<details class="stview"><summary>View prompt</summary>'
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>') + '</details>')
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
     hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
@@ -216,7 +235,7 @@ def page(page_fn, card=None, apps=None):
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
-    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
+    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start" data-checkin="{E(OP.CHECKIN)}">{hero}{steps}</section>'
             f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
     return page_fn("Start", body, "/start")

@@ -55,6 +55,13 @@ CREATE TABLE IF NOT EXISTS network_first(addr TEXT PRIMARY KEY, ts INTEGER NOT N
 -- private ops counters (1.26.26, poascan/opsinternal.py): the hosted route check per read, and upstream reads POAScan chose not to send
 CREATE TABLE IF NOT EXISTS route_checks(ts INTEGER NOT NULL, route TEXT NOT NULL, code TEXT NOT NULL CHECK (length(code) <= 8), ms INTEGER, ok INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS route_checks_ts ON route_checks(ts);
+-- signup check-ins (1.26.31, poascan/checkin.py): allowlisted version, client and step; the public poa1 address and a time.
+-- No IP, user agent, URL, query string or key is ever stored.
+CREATE TABLE IF NOT EXISTS checkin_counts(day TEXT NOT NULL, version TEXT NOT NULL CHECK (length(version) <= 8), client TEXT NOT NULL CHECK (length(client) <= 24),
+  step TEXT NOT NULL CHECK (step IN ('start','joined')), n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY(day, version, client, step)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS checkin_addrs(addr TEXT PRIMARY KEY CHECK (addr LIKE 'poa1%' AND length(addr) <= 64), version TEXT NOT NULL CHECK (length(version) <= 8),
+  client TEXT NOT NULL CHECK (length(client) <= 24), ts INTEGER NOT NULL) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS checkin_addrs_ts ON checkin_addrs(ts);
 CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT NULL CHECK (length(endpoint) <= 80), reason TEXT NOT NULL,
   n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, endpoint, reason)) WITHOUT ROWID;
 """

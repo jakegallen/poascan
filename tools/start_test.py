@@ -9,7 +9,7 @@ from html import unescape
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 tmp = tempfile.mkdtemp(); os.environ.update(POASCAN_DB=os.path.join(tmp, "st.db"), POASCAN_MAINTENANCE="1", POA_BASE="http://127.0.0.1:9")
 sys.path.insert(0, ROOT)
-from poascan import db, start as S, onboarding_prompt as OP, join as J, prompts as PR, regcode as RC, visits as VS
+from poascan import db, start as S, onboarding_prompt as OP, join as J, prompts as PR, regcode as RC, visits as VS, agentapi as AG
 db.init()
 fails = []
 def check(n, c): print(("ok   " if c else "FAIL ") + n); c or fails.append(n)
@@ -21,7 +21,7 @@ check("template: one {NAME} slot inside the register link, identical to the froz
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.2" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.3" and "go.md LINK" not in OP.TEMPLATE and "following the swap steps in https://minepoa.com/go.md." in OP.TEMPLATE
       and "Use an Authorization header only if a test call with it actually succeeds." in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "MCP connector" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
       and not hasattr(S, "reg_attrs") and "{SETUP_CODE}" not in OP.TEMPLATE and "emblem" not in OP.TEMPLATE.lower() and "npm install" not in OP.TEMPLATE
@@ -52,7 +52,39 @@ check("blocks: registration has the link, resume and capability_check follow it,
       and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("7. Get your challenge") and "9. Mine:" in bl["mining"]
       and bl["expectations"].startswith("The network is coming back") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
       and bl["resume"].startswith("If you already joined") and bl["capability_check"].startswith("Before you join, fetch")
-      and list(bl) == ["registration", "resume", "capability_check", "about", "joining", "key_safety", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
+      and bl["checkin_start"].startswith("Optional check-in: if you can") and bl["checkin_joined"].startswith("Optional check-in: once you have joined")
+      and list(bl) == ["registration", "resume", "capability_check", "checkin_start", "about", "joining", "key_safety", "checkin_joined", "steps_intro", "grading", "mining", "check_in", "expectations", "receipts", "closing", "follow"])
+
+# ---- v2.3 check-ins: optional, keyless, and the only per-client difference is the tag
+V23 = ["Act only on minepoa.com, apart from two optional poascan.io check-ins.",
+       "Optional check-in: if you can, open https://poascan.io/j/v2.3/start once now. It only counts that a signup started. If it fails or is blocked, skip it and carry on.",
+       "Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address in place of YOUR_POA1_ADDRESS. Add nothing else, never the key. If it fails, skip it and carry on."]
+check("v2.3: the two optional check-ins and the minepoa.com exception, verbatim, once each; CHECKIN base twice, for this VERSION",
+      all(T.count(x) == 1 for x in V23) and OP.CHECKIN == "https://poascan.io/j/" + OP.VERSION + "/" and T.count(OP.CHECKIN) == 2 and T.count("poascan.io/j/") == 2
+      and T.index(V22[1]) < T.index(V23[1]) < T.index("PoA is a free") and T.index("\n5. Pass the key") < T.index(V23[2]) < T.index("Then:"))
+check("v2.3: check-ins are optional and never carry the key (if you can, skip it, never the key; no key= or pk_ near them)",
+      all("if you can" in x and "skip it and carry on" in x for x in V23[1:]) and "never the key" in V23[2]
+      and not re.search(r"poascan\.io/j/[^\s]*(key=|pk_|YOUR_KEY)", T))
+check("v2.3: POASwap's guard phrases verbatim; no em or en dashes; nothing about tags in the canonical text",
+      "never send it to POAScan" in T and "Never send payment outside the network" in T and not any(c in T for c in "\u2014\u2013") and "/j/v2.3/start" in T and "/j/v2.3/none" not in T)
+import difflib
+CL = sorted(S.checkin_clients()); bad = []
+for c in CL:
+    for nm in ("YOUR_NAME", "test-agent-7", "x" * 32):
+        base_t = S.prompt(nm); tg = OP.tagged(base_t, c)
+        ops = [o for o in difflib.SequenceMatcher(None, base_t, tg, autojunk=False).get_opcodes() if o[0] != "equal"]
+        ins = [tg[j1:j2] for op, i1, i2, j1, j2 in ops if op == "insert"]
+        if not (tg != base_t and OP.untagged(tg, c) == base_t and all(o[0] == "insert" for o in ops) and len(tg) - len(base_t) == 2 * (len(c) + 1)
+                and tg.count(OP.CHECKIN + c + "/start") == 1 and tg.count(OP.CHECKIN + c + "/joined?addr=YOUR_POA1_ADDRESS") == 1
+                and tg.replace(OP.CHECKIN + c + "/", OP.CHECKIN) == base_t): bad.append((c, nm, ins))
+check(f"tagged variants: every client ({len(CL)}) differs from the canonical text only by '<client>/' after the check-in base, twice {bad[:2]}", not bad and len(CL) >= 15)
+check("client ids: one per chat choice plus poaswap, all match TAG_RX, none is 'none'", set(CL) == {S.client_tag(x[0]) for x in J.APPS} | {"cursor", "poaswap"}
+      and all(OP.TAG_RX.match(c) for c in CL) and "none" not in CL and S.client_tag("Grok Bot") == "grok-bot" and S.client_tag("Z.ai") == "z-ai" and S.client_tag("Le Chat") == "le-chat")
+_bt = []
+for x in ("", "None ", "a/b", "A", "-a", "x" * 25, "a\nb"):
+    try: OP.tagged(T, x); _bt.append(x)
+    except ValueError: pass
+check(f"tagged(): refuses a client outside TAG_RX {_bt}", not _bt)
 NE = [("", "Name your agent to continue."), ("ok-name_1", ""), ("x" * 32, ""), ("x" * 33, "Too long: up to 32 characters."),
       ("a@b c", "Not allowed: @ and space. Use letters, numbers, _ or - (up to 32)."), ("a@b c!@", "Not allowed: @, space and !. Use letters, numbers, _ or - (up to 32)."),
       ("é", "Not allowed: é. Use letters, numbers, _ or - (up to 32)."), ("a b" + "x" * 40, "Not allowed: space. Use letters, numbers, _ or - (up to 32)."),
@@ -240,10 +272,29 @@ try:
     print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
     check(f"byte-identical: /start View prompt == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           pre == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.2" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
+          and api_y["version"] == api_n["version"] == "v2.3" and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(pre))
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.2</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.3</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+    check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
+          '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
+    check("v2.3: the API, MCP and llms.txt serve the untagged text (no client segment after the check-in base)",
+          all(OP.CHECKIN + c + "/" not in x for c in S.checkin_clients() for x in (api_y["text"], mp, ll)) and api_y["text"].count(OP.CHECKIN) == 2)
+    ci = api_y.get("checkin") or {}
+    check("API checkin field: base, rule, client regex, the client list with poaswap, suggested poaswap",
+          ci.get("base") == OP.CHECKIN and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"
+          and set(ci.get("clients", [])) == set(S.checkin_clients()))
+    radios = re.findall(r'<input type="radio" name="client" value="([^"]+)"([^>]*)>', m)
+    chat_tags = [re.search(r'data-tag="([^"]*)"', a).group(1) for v, a in radios if not v.startswith("mcp:")]
+    check(f"/start: every chat choice carries its tag ({len(chat_tags)}), connectors carry none, the card carries the check-in base",
+          len(chat_tags) == len(J.APPS) + 1 and all(t in S.checkin_clients() for t in chat_tags) and not any("data-tag" in a for v, a in radios if v.startswith("mcp:"))
+          and f'data-checkin="{OP.CHECKIN}"' in m)
+    hl = '<p class="sthelp"><a href="mailto:jakegallen@gmail.com?subject=PoA%20join%20got%20stuck">If it got stuck, share the chat with us</a></p>'
+    check("/start: one 'If it got stuck' line, a mailto link only, after View prompt (not under the buttons), no helper text",
+          m.count(hl) == 1 and m.index('<details class="stview">') < m.index(hl) < m.index('</section>') and m.count("sthelp") == 1 and "If it got stuck" not in m.replace(hl, ""))
+    check("client: the copy text is tagged for the picked client (W.poaTag on txt() and the View prompt Copy); the base comes from data-checkin",
+          'W.poaTag=function(c,t){' in js and 'function txt(){return W.poaTag(card,' in js and 'return c?W.poaTag(c,' in js and 'c.dataset.checkin' in js
+          and 't.split(b).join(b+g+"/")' in js and ".sthelp{" in css)
 
     # ---- the endpoint
     u = "/api/v1/prompts/join?name=test-agent-7"
@@ -261,7 +312,7 @@ try:
           and c6 == 400 and json.loads(b6)["error"] == "Not allowed: period. Use letters, numbers, _ or - (up to 32).")
     codes = [req("/api/v1/prompts/join?" + q)[0] for q in ("name=a%20b", "name=" + "x" * 33, "name=%3Cb%3E", "name=a&name=b", "name=%C3%A9")]
     check(f"bad names: 400 {codes}", codes == [400] * 5)
-    import poascan.agentapi as AG; VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
+    VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
     check("counted as its own API route (OpenAPI path), docs and llms list it, not an MCP tool",
           VS.api_route("/api/v1/prompts/join") == "/api/v1/prompts/join" and "/api/v1/prompts/join" in req("/openapi.json")[2] and "/prompts/join" in req("/llms.txt")[2]
           and "/api/v1/prompts/join" in req("/api")[2] and "prompts/join" not in json.dumps(AG.TOOLS, default=str))

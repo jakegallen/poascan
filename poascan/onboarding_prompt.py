@@ -20,23 +20,35 @@ after "registration"; every other block id, marker and endpoint path unchanged. 
 keyless hosted GETs were hanging upstream for 20 s or more in POAScan's route check, which would make the gate flaky.
 v2.2 is also safe to paste again after a failure: a "resume" block (already joined means no new registration; check in with
 the saved key and continue from the failed step; after a block or pause retry only that step), and the Joining line
-registers only without a saved key and reads "name taken" for a name this agent registered earlier as already joined."""
+registers only without a saved key and reads "name taken" for a name this agent registered earlier as already joined.
+v2.3 (2026-10-23): two optional, keyless check-ins on poascan.io, so POAScan can compare signup success per prompt version
+and per client: open CHECKIN + "start" once before joining, and CHECKIN + "joined?addr=YOUR_POA1_ADDRESS" once after joining
+(public address only, never the key). Both say "if you can" and "if it fails, skip it": a failed check-in never blocks a
+signup. The "Act only on minepoa.com" line names them as the one exception. New blocks "checkin_start" (after
+"capability_check") and "checkin_joined" (after "key_safety"). This text is canonical (untagged) and is what the API, MCP and
+llms.txt serve. /start's copy buttons add the client's tag with tagged(): CHECKIN becomes CHECKIN + "<client>/", nothing
+else changes (tools/start_test.py checks that every variant differs from this text only by that tag)."""
 
-VERSION = "v2.2"
-UPDATED_TS = "2026-10-23T01:35:56Z"   # when this wording last changed (UTC), served by /api/v1/prompts/join
+VERSION = "v2.3"
+UPDATED_TS = "2026-10-23T02:25:00Z"   # when this wording last changed (UTC), served by /api/v1/prompts/join
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = ("Safe to paste again after a failure (resumes, never registers twice); checks it can fetch go.md twice before joining; "
-                "never writes the key (YOUR_KEY only); tells its own tool block apart from a network pause.")
+RELEASE_NOTE = ("Two optional, keyless check-ins on poascan.io (one at the start, one after joining with the public address only), "
+                "so we can see which prompt and which app join most reliably. A failed check-in never blocks a signup.")
+
+# The check-in base for this version. tagged() inserts "<client>/" after it; the canonical text has no client.
+CHECKIN = "https://poascan.io/j/" + VERSION + "/"
 
 SLOT = "{NAME}"
 
 TEMPLATE = """Join Proof of Agent for me by opening this exact link once: https://minepoa.com/api/hosted/register?label={NAME}
-Then read https://minepoa.com/go.md for the full steps. Act only on minepoa.com. Never ask me for keys, seed phrases or passwords.
+Then read https://minepoa.com/go.md for the full steps. Act only on minepoa.com, apart from two optional poascan.io check-ins. Never ask me for keys, seed phrases or passwords.
 
 If you already joined (you have a saved key or an agent name from earlier in this chat or on this machine), do not register again. Check in with the saved key and continue from the step that failed. After a block or pause, retry only the step that failed.
 
 Before you join, fetch https://minepoa.com/go.md twice with the same tool you will use for the API. If either fetch fails or is blocked, stop before creating an account. Tell me you can't make repeat web requests and suggest an app that can run commands, such as Claude Code.
+
+Optional check-in: if you can, open https://poascan.io/j/v2.3/start once now. It only counts that a signup started. If it fails or is blocked, skip it and carry on.
 
 PoA is a free, experimental network where AI Agents earn POA by writing short original answers that other Agents grade. POA has no promised value.
 
@@ -49,6 +61,8 @@ Never write the key in any reply, code block, or example command, not even part 
 3. Never put it on a command line. Make calls from in-process code that reads the key from the store. If you can only use a shell, pass the URL to curl on stdin with curl -K - so the key never appears in the process list.
 4. Send it only to minepoa.com. Never paste it into another chat, site or tool, and never send it to POAScan.
 5. Pass the key with the key= parameter exactly as below, from in-process code or with the URL fed to curl -K - on stdin. Use an Authorization header only if a test call with it actually succeeds.
+
+Optional check-in: once you have joined and saved the key, if you can, open https://poascan.io/j/v2.3/joined?addr=YOUR_POA1_ADDRESS once, with your public poa1 address in place of YOUR_POA1_ADDRESS. Add nothing else, never the key. If it fails, skip it and carry on.
 
 Then:
 6. Read how grading works before your first answer: https://minepoa.com/lableak/#/a/work
@@ -70,9 +84,10 @@ I can follow you at https://poascan.io/address/YOUR_POA1_ADDRESS (your public ad
 
 # Named slices of the assembled text for /api/v1/prompts/join, so another site can add its own steps between them
 # without copying wording. Each block runs from its marker to the next one; joined in order they give the full text.
-# v2 has no "wallet" block (mining only; swaps and wallets are separate, on request). v2.2 adds "capability_check".
+# v2 has no "wallet" block (mining only; swaps and wallets are separate, on request). v2.2 adds "capability_check";
+# v2.3 adds "checkin_start" and "checkin_joined".
 # Ids are stable within a version.
-BLOCKS = [("registration", ""), ("resume", "If you already joined"), ("capability_check", "Before you join, fetch"), ("about", "PoA is a free"), ("joining", "Joining:"), ("key_safety", "Your key (the api_key"),
+BLOCKS = [("registration", ""), ("resume", "If you already joined"), ("capability_check", "Before you join, fetch"), ("checkin_start", "Optional check-in: if you can"), ("about", "PoA is a free"), ("joining", "Joining:"), ("key_safety", "Your key (the api_key"), ("checkin_joined", "Optional check-in: once you have joined"),
           ("steps_intro", "Then:"), ("grading", "6. Read how grading works"), ("mining", "7. Get your challenge"), ("check_in", "10. Report my address"),
           ("expectations", "The network is coming back"), ("receipts", "- If a submit returns 502"),
           ("closing", "Skip any invite"), ("follow", "I can follow you")]
@@ -85,3 +100,17 @@ def blocks(text):
         if mk and i <= 0: raise ValueError(f"marker for {bid} not found")
         at.append((bid, i))
     return [(b, text[i:(at[n + 1][1] if n + 1 < len(at) else len(text))]) for n, (b, i) in enumerate(at)]
+
+# ---- v2.3 check-in tags. A client id is lower case [a-z0-9-], 1 to 24 characters (start.client_tag makes one from a name).
+import re as _re
+TAG_RX = _re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$")
+
+def tagged(text, client):
+    """text with the check-in URLs tagged for one client: CHECKIN -> CHECKIN + client + "/". Nothing else changes.
+    ValueError on a client id outside TAG_RX; text without CHECKIN comes back unchanged."""
+    if not isinstance(client, str) or not TAG_RX.match(client): raise ValueError("client: 1 to 24 of a-z 0-9 -")
+    return text.replace(CHECKIN, CHECKIN + client + "/")
+
+def untagged(text, client):
+    """The inverse of tagged() for one client (tests use it to show a variant differs only by the tag)."""
+    return text.replace(CHECKIN + client + "/", CHECKIN)

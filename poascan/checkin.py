@@ -1,0 +1,148 @@
+"""Signup check-ins for join prompt v2.3 and later, and the private funnel built from them (GET /ops/funnel).
+
+The prompt asks an agent, optionally, to open two keyless URLs on poascan.io:
+  /j/<version>[/<client>]/start                     once, before joining
+  /j/<version>[/<client>]/joined?addr=<poa1 address> once, after joining (public address only)
+<client> is the tag a /start copy button adds (onboarding_prompt.tagged); without it the check-in is "none" (the canonical
+text from the API, MCP, llms.txt or the Join modal). Strict allowlist: a known version, a known client id, the step, and for
+joined exactly one addr parameter matching ADDR_RX. Anything else is a 400 and nothing is stored or counted; key-shaped input
+never gets here (server.key_guard answers 400 first). Server logs show /j/[check-in] only, never the path or query.
+
+Stored: daily counts per (version, client, step) and, for joined, the first (version, client, time) per public address.
+No IP, user agent, URL, query string or key. Addresses are kept ADDR_KEEP_DAYS, counts COUNT_KEEP_DAYS.
+
+The funnel matches tagged addresses to POAScan's own archive (txs: the join tx, then any answer tx within WINDOW_S of it;
+epoch close rewards for mined). Nothing here calls minepoa.com."""
+import datetime as dt, re, threading, time
+from . import db, onboarding_prompt as OP
+
+VERSIONS = ("v2.3",)                     # prompt versions that carry check-ins; add each new one here
+assert OP.VERSION in VERSIONS, "add the new prompt version to checkin.VERSIONS"
+STEPS = ("start", "joined")
+ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{38,50}$")
+PATH_RX = re.compile(r"^/j/(v\d{1,2}(?:\.\d{1,2}){1,2})(?:/([a-z0-9-]{1,24}))?/(start|joined)$")
+WINDOW_S = 6 * 3600                      # answered and mined count within this long after the on-chain join
+SKEW_S = 600                             # a joined check-in may arrive this long before our copy of the join tx's time
+ADDR_KEEP_DAYS, COUNT_KEEP_DAYS = 90, 400
+DAY_ADDR_CAP = 5000                      # new addresses stored per UTC day at most (abuse bound); counts still add up
+SINCE_BLOB = "checkin_since"
+MAX_DAYS, DEFAULT_DAYS = 31, 7
+OK_TEXT = "ok: check-in counted. Carry on with the steps.\n"
+BAD_TEXT = "Not counted. A check-in takes no parameters, or only addr= with a public poa1 address. Carry on with the steps.\n"
+
+_clients = [None]
+def clients():
+    if _clients[0] is None:
+        from . import start as S
+        _clients[0] = S.checkin_clients()
+    return _clients[0]
+
+def parse(path, query):
+    """(version, client, step, addr) for an allowed check-in, else ValueError. path has no trailing slash."""
+    m = PATH_RX.match(path or "")
+    if not m: raise ValueError("path")
+    ver, cl, step = m.group(1), m.group(2) or "none", m.group(3)
+    if ver not in VERSIONS: raise ValueError("version")
+    if cl != "none" and cl not in clients(): raise ValueError("client")
+    if m.group(2) == "none": raise ValueError("client")
+    q = query or ""
+    if step == "start":
+        if q: raise ValueError("params")
+        return ver, cl, step, None
+    parts = q.split("&")
+    if len(parts) != 1 or not parts[0].startswith("addr="): raise ValueError("params")
+    addr = parts[0][5:]
+    if not ADDR_RX.match(addr): raise ValueError("addr")
+    return ver, cl, step, addr
+
+def _day(t): return time.strftime("%Y-%m-%d", time.gmtime(t))
+_prune = [0.0]; _lk = threading.Lock()
+
+def record(ver, cl, step, addr, now=None):
+    """Count one check-in; for joined, keep the first (version, client, time) per address."""
+    t = int(now or time.time()); d = _day(t)
+    st = [("INSERT INTO checkin_counts(day,version,client,step,n) VALUES(?,?,?,?,1) ON CONFLICT(day,version,client,step) DO UPDATE SET n = n + 1",
+           (d, ver, cl, step), False)]
+    if step == "joined" and addr:
+        lo = t - t % 86400
+        if (db.q1("SELECT COUNT(*) AS n FROM checkin_addrs WHERE ts >= ?", (lo,)) or {}).get("n", 0) < DAY_ADDR_CAP:
+            st.append(("INSERT OR IGNORE INTO checkin_addrs(addr,version,client,ts) VALUES(?,?,?,?)", (addr, ver, cl, t), False))
+    db.write_tx(st)
+    with _lk:
+        if t - _prune[0] < 3600: return
+        _prune[0] = t
+    prune(t)
+
+def prune(now=None):
+    t = int(now or time.time())
+    db.write_tx([("DELETE FROM checkin_addrs WHERE ts < ?", (t - ADDR_KEEP_DAYS * 86400,), False),
+                 ("DELETE FROM checkin_counts WHERE day < ?", (_day(t - COUNT_KEEP_DAYS * 86400),), False)])
+
+def start(now=None):
+    """Record when check-ins began (once; kept across restarts)."""
+    if not (db.get_blob(SINCE_BLOB)[0] or {}).get("ts"): db.put_blob(SINCE_BLOB, {"ts": int(now or time.time())})
+
+# ---- the funnel
+DEFINITIONS = {
+    "started": "start check-ins (/j/<version>[/<client>]/start) on UTC days from..to",
+    "joined": "joined check-ins in the range whose address has an on-chain join tx at most window_s before the check-in (first check-in per address)",
+    "answered_6h": "joined, with an answer (challenge tx) from that address within window_s after its join tx",
+    "mined_6h": "joined, with a reward to that address in an epoch close within window_s after its join tx",
+    "pending_6h": "joined less than window_s ago and not yet both answered and mined (rates for recent days can still rise)",
+    "resumed": "joined check-ins whose address joined more than window_s earlier (pasted again after joining); not counted as joined",
+    "unmatched": "joined check-ins with no join tx for the address in POAScan's archive (indexer lag, or a wrong address)",
+    "join_rate": "joined / started", "answer_rate": "answered_6h / joined", "mine_rate": "mined_6h / joined",
+    "success_rate": "answered_6h / started: a started signup that joined and answered within window_s",
+    "client": "the /start tag (claude, muse, ...), poaswap when POASwap tags the API text, none for untagged text (API, MCP, llms.txt, Join modal)",
+    "baseline": "every on-chain join tx in the range by UTC day, next to joins matched to a check-in, so share_tagged is the share that came through a POAScan prompt"}
+
+def parse_range(qs, now=None):
+    """Same rules as /ops/internal: from and to as YYYY-MM-DD (UTC), default the last 7 days, at most 31."""
+    from . import opsinternal as OI
+    return OI.parse_range(qs, now)
+
+def _rate(a, b): return round(a / b, 4) if b else None
+def _row(): return dict(started=0, joined=0, answered_6h=0, mined_6h=0, pending_6h=0, resumed=0, unmatched=0)
+def _rates(r):
+    return dict(r, join_rate=_rate(r["joined"], r["started"]), answer_rate=_rate(r["answered_6h"], r["joined"]),
+                mine_rate=_rate(r["mined_6h"], r["joined"]), success_rate=_rate(r["answered_6h"], r["started"]))
+
+def _closes():
+    """epoch -> close time, and addr -> {epoch: reward}, from the archive's epoch records (no upstream call)."""
+    from . import analytics as A
+    return {int(e["epoch"]): int(e.get("ts") or 0) for e in A.epochs_raw()}, A.rewards_by_addr()
+
+def report(fr, to, now=None):
+    now = int(now or time.time())
+    lo = int(dt.datetime.fromisoformat(fr + "T00:00:00+00:00").timestamp()); hi = int(dt.datetime.fromisoformat(to + "T00:00:00+00:00").timestamp()) + 86400
+    rows = {}; days = {}
+    def R(v, c): return rows.setdefault((v, c), _row())
+    def D(d): return days.setdefault(d, dict(day=d, started=0, chain_joins=0, tagged_joins=0))
+    for r in db.q("SELECT day, version, client, SUM(n) AS n FROM checkin_counts WHERE step='start' AND day BETWEEN ? AND ? GROUP BY day, version, client", (fr, to)):
+        R(r["version"], r["client"])["started"] += int(r["n"] or 0); D(r["day"])["started"] += int(r["n"] or 0)
+    tags = db.q("SELECT addr, version, client, ts FROM checkin_addrs WHERE ts >= ? AND ts < ? ORDER BY ts", (lo, hi))
+    closes = rewards = None
+    for a in tags:
+        x = R(a["version"], a["client"])
+        j = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=?", (a["addr"],)); jt = j and j["t"]
+        if not jt: x["unmatched"] += 1; continue
+        if a["ts"] - jt > WINDOW_S or jt - a["ts"] > SKEW_S: x["resumed" if a["ts"] > jt else "unmatched"] += 1; continue
+        x["joined"] += 1
+        if lo <= jt < hi: D(_day(jt))["tagged_joins"] += 1
+        ans = db.q1("SELECT 1 AS x FROM txs WHERE type='challenge' AND from_addr=? AND ts >= ? AND ts <= ? LIMIT 1", (a["addr"], jt, jt + WINDOW_S))
+        if closes is None: closes, rewards = _closes()
+        mined = any(v > 0 and jt <= closes.get(e, 0) <= jt + WINDOW_S for e, v in (rewards.get(a["addr"]) or {}).items())
+        x["answered_6h"] += bool(ans); x["mined_6h"] += bool(mined)
+        if now < jt + WINDOW_S and not (ans and mined): x["pending_6h"] += 1
+    for r in db.q("SELECT ts / 86400 AS d, COUNT(*) AS n FROM txs WHERE type='join' AND ts >= ? AND ts < ? GROUP BY d", (lo, hi)):
+        D(_day(int(r["d"]) * 86400))["chain_joins"] += int(r["n"] or 0)
+    tot = _row()
+    for r in rows.values():
+        for k in tot: tot[k] += r[k]
+    out_rows = [dict(version=v, client=c, **_rates(r)) for (v, c), r in sorted(rows.items(), key=lambda kv: (kv[0][0], -kv[1]["started"], -kv[1]["joined"], kv[0][1]))]
+    cj = sum(d["chain_joins"] for d in days.values()); tj = sum(d["tagged_joins"] for d in days.values())
+    return {"from": fr, "to": to, "generated_ts": now, "since_ts": (db.get_blob(SINCE_BLOB)[0] or {}).get("ts"), "window_s": WINDOW_S,
+            "versions": list(VERSIONS), "totals": _rates(tot), "rows": out_rows,
+            "baseline": dict(chain_joins=cj, tagged_joins=tj, share_tagged=_rate(tj, cj),
+                             days=[days[k] for k in sorted(days, reverse=True)]),
+            "definitions": DEFINITIONS}

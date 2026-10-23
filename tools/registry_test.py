@@ -117,7 +117,7 @@ def live():
         check("Start dialog on every page has no setup code slot", all('id="jm-prompt" tabindex="0">' in pages[r][2] for r in ("/", "/privacy")))
         check("llms.txt prompt has no registry step", all("registry/register" not in pages[r][2] and "SETUP_CODE" not in pages[r][2] for r in ("/llms-full.txt", "/llms.txt")))
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
-        check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-22", bool(sec) and "Updated 2026-10-22." in pv
+        check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-23", bool(sec) and "Updated 2026-10-23." in pv
               and "/swaps" not in sec.group(1) and "POAScan's pages no longer include a wallet setup prompt or setup code. Swaps and wallet setup are on <a href=\"https://poaswap.io/start\" rel=\"noopener noreferrer\">POASwap</a>." in sec.group(1) and "POAScan's server sends nothing to POASwap." in sec.group(1))
         check("no em dashes in the pages", not any("\u2014" in h for r, (_, _, h) in pages.items() if r in ("/start", "/privacy")))
         time.sleep(1)

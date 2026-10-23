@@ -180,8 +180,11 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
  function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
  f.value=nm;upd();f.addEventListener("input",upd)})();
+/* prompt v2.3 check-ins: on /start the copied text carries the picked client's tag in the two check-in URLs
+   (data-checkin base + data-tag + "/"); everything else stays byte for byte. Elsewhere the text is untagged. */
+W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[name=client]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
 if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
- function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?($(".pc-text",c).textContent||"").trim():P}
+ function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?W.poaTag(c,($(".pc-text",c).textContent||"").trim()):P}
  $$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(P)});
  $$("[data-pcard] a[data-pre]").forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))});
  function jmOpen(){ev("join.open");if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
@@ -205,7 +208,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    Beacons as before: start.app / start.appreg for copy plus open, start.copy / start.copyreg for Copy prompt, mcp-poa.add for connectors. */
 (function(){var go=$("[data-go]");if(!go)return;var card=go.closest("[data-pcard]"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0="",T,nf=$("[data-name]",card),cpb=$("[data-gocopy]",card),fl=$("[data-gofail]",card);
  function sel(){return $("input[name=client]:checked",card)||$("input[name=client]",card)}
- function txt(){return ($(".pc-text",card).textContent||"").trim()}
+ function txt(){return W.poaTag(card,($(".pc-text",card).textContent||"").trim())}
  function say(m,ok){fb.textContent=m;fb.classList.toggle("ok",!!ok)}
  function url(r,P){var k=r.dataset.kind;if(k=="mcp")return r.dataset.href;var b=r.dataset.base,pre=r.dataset.pre;return pre?pre+encodeURIComponent(P):b||""}
  /* copy now: start navigator.clipboard.writeText, and also run the synchronous textarea copy in the same gesture, so the

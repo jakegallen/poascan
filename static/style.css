@@ -1029,6 +1029,7 @@ td a.mono{display:inline-block;min-width:24px}
 .stkey{display:flex;align-items:center;justify-content:center;gap:8px;margin:18px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font:500 var(--t13)/1.4 var(--ui);text-align:center}
 .stkey svg{width:15px;height:15px;flex:none;color:var(--amber)}
 .stview{margin-top:14px}
+.sthelp{margin:10px 0 0;text-align:center;font-size:var(--t12);color:var(--dim)}.sthelp a{color:var(--dim);text-decoration:underline;text-decoration-color:var(--line2,rgba(255,255,255,.2));text-underline-offset:3px}.sthelp a:hover{color:var(--text);text-decoration-color:currentColor}.sthelp a:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}
 .stview>summary{display:flex;align-items:center;justify-content:center;gap:7px;min-height:36px;color:var(--dim);font:600 var(--t13)/1 var(--ui);letter-spacing:.02em;cursor:pointer;list-style:none;border-radius:8px}
 .stview>summary::-webkit-details-marker{display:none}
 .stview>summary::after{content:"";width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform var(--fast) var(--ease)}

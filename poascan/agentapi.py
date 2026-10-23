@@ -5,7 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.30"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.31"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T02:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC
+RELEASE_LINE = "Join prompt v2.3 with optional signup check-ins; private signup funnel; /start help link."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -597,7 +599,10 @@ def openapi():
                             "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
                                 "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "text": {"type": "string"},
                                 "sha256": {"type": "string", "description": "sha256 of text (UTF-8)"}, "source": {"type": "string"}, "notes": {"type": "string"},
-                                "blocks": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}}}},
+                                "blocks": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}},
+                                "checkin": {"type": "object", "description": "v2.3: how a site that renders this text may tag its two optional check-in URLs with its own client id (text stays untagged)",
+                                            "properties": {"base": {"type": "string"}, "tag_rule": {"type": "string"}, "client_rx": {"type": "string"},
+                                                           "clients": {"type": "array", "items": {"type": "string"}}, "suggested_client": {"type": "string"}, "note": {"type": "string"}}}}},
                             "Concentration": {"type": "object", "description": "Holder concentration from the rich list. Shares are fractions of the total held balance (0 to 1).",
                                   "properties": {"holders": {"type": "integer"}, "total_balance": {"type": "number"}, "top1_share": {"type": ["number", "null"]}, "top5_share": {"type": ["number", "null"]},
                                                  "top10_share": {"type": ["number", "null"]}, "top20_share": {"type": ["number", "null"]}, "gini": {"type": ["number", "null"]}, "median_balance": {"type": ["number", "null"]},
@@ -725,7 +730,7 @@ Tools ({len(TOOLS)}):
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
 - Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
-- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
+- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). Since v2.3 the text asks the agent, optionally, to open two keyless check-in URLs on poascan.io; the checkin field says how a site that renders the text may tag them with its own client id. Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).

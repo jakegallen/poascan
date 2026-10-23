@@ -9,6 +9,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.31] - 2026-10-23
+
+### Added
+- Onboarding prompt v2.3: two optional, keyless check-ins on poascan.io. Before joining, "if you can, open https://poascan.io/j/v2.3/start once"; after joining, ".../j/v2.3/joined?addr=YOUR_POA1_ADDRESS" with the public poa1 address only, never the key. Both say to skip it and carry on if it fails, so a check-in never blocks a signup. The minepoa.com-only line names them as the one exception. New blocks `checkin_start` and `checkin_joined`; every other block, the key rules and both POASwap guard phrases are unchanged.
+- /start copy buttons tag the two check-in URLs with the picked client (`/j/v2.3/muse/start`); the View prompt text, the API, MCP and llms.txt stay untagged and byte-identical. `tools/start_test.py` checks that every client variant differs from the canonical text only by that tag. `/api/v1/prompts/join` gains an additive `checkin` field so POASwap can tag its copy as `poaswap`.
+- `GET /j/<version>[/<client>]/start|joined`: strict allowlist (known version, known client id, `addr=` with a poa1 address on joined, nothing else); anything else, including `pk_` and `key=`, is a 400 and nothing is stored. Rate limited per IP in memory, no-store, noindex, not in the sitemap, logged as `/j/[check-in]` only, not counted as page views. Stored: daily counts and the first (version, client, time) per public address (90 days). No IP, user agent, URL or query.
+- Private `GET /ops/funnel?from&to` (same Bearer token and 404 as /ops/internal, no-store, at most 31 days): started, joined (matched to the on-chain join tx), answered and mined within 6 h, pending, resumed, unmatched and rates per version and client, plus the untagged baseline of every on-chain join. POAScan's own database only, no minepoa.com call.
+- /start: a quiet "If it got stuck, share the chat with us" mailto link below View prompt.
+- /upgrade Details: a Release row (version and release time in the reader's zone plus UTC).
+
+### Changed
+- /privacy describes signup check-ins (what is kept, for how long, that the address is the one query value kept) and is dated 2026-10-23.
+- Cache keys app.js v45, style.css v93.
+
 ## [1.26.30] - 2026-10-23
 
 ### Fixed

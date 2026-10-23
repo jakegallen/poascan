@@ -8,6 +8,7 @@ from . import network as NW
 from . import keysafe as KS
 from . import names as NM
 from . import opsinternal as OI
+from . import checkin as CK
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -198,7 +199,8 @@ AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, neve
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
-OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network and /ops/internal: per IP, in memory, apart from MCP
+OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network, /ops/internal and /ops/funnel: per IP, in memory, apart from MCP
+CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in memory only (an agent sends two)
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
@@ -263,6 +265,7 @@ MPID = re.compile(rb'"mp\d+"')
 IMMUTABLE = "public, max-age=31536000, immutable"
 
 QS_RX = re.compile(r"\?[^\s\"']*")   # query strings (searches included) never reach the log
+J_RX = re.compile(r"(?<= )/j(?:/[^\s\"']*)?(?=[\s\"']|$)")   # check-in paths are logged as /j/[check-in] only
 
 class BadRequest(Exception): pass
 class NotFound(Exception): pass   # a known route with an unknown subject: 404 with the reason
@@ -283,7 +286,9 @@ class H(BaseHTTPRequestHandler):
     timeout = 20   # a slow or idle client cannot hold a request thread for longer than this
     server_version = "POASCAN/1.0"
     def log_message(self, fmt, *a):   # no address (on Fly the peer is the proxy) and no query string; paths pass the redaction filter
-        log.info("%s", QS_RX.sub("", fmt % a))
+        m = QS_RX.sub("", fmt % a)
+        if "/j" in m: m = J_RX.sub("/j/[check-in]", m)
+        log.info("%s", m)
     def parse_request(self):
         self._t0 = time.monotonic(); return super().parse_request()
     def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
@@ -456,6 +461,29 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             log.error("ops internal: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
+    def ops_funnel(self, path, qs):
+        """Private signup funnel by prompt version and client (poascan/checkin.py; gate: ops_gate). At most 31 days, default 7.
+        Only from and to are accepted. From POAScan's own database: no upstream call."""
+        g = self.ops_gate(path, qs, CK.parse_range)
+        if not g: return
+        hd, fr, to = g
+        if set(qs) - {"from", "to"}: return self.send(400, json.dumps({"error": "only from and to are accepted; send the token in the Authorization header"}), "application/json", hd)
+        try: out = json.dumps(CK.report(fr, to))
+        except Exception as e:
+            log.error("ops funnel: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
+    def checkin(self, path, query):
+        """GET /j/<version>[/<client>]/start and .../joined?addr=<poa1>: an optional, keyless signup check-in (poascan/checkin.py).
+        Strict allowlist, else 400 with nothing stored. Rate limited per IP in memory; never cached, indexed or logged with its path."""
+        hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Access-Control-Allow-Origin": "*"}
+        ok, wait = CHECKIN_LIMIT.allow(self.client_ip())
+        if not ok: return self.send(429, "Too many check-ins. Skip it and carry on with the steps.\n", TXT, dict(hd, **{"Retry-After": str(wait)}))
+        try: v, c, st, addr = CK.parse(path, query)
+        except ValueError: return self.send(400, CK.BAD_TEXT, TXT, hd)
+        if self.command == "GET":
+            try: CK.record(v, c, st, addr)
+            except Exception as e: log.warning("check-in: %s", type(e).__name__)   # never fails the agent
+        return self.send(200, CK.OK_TEXT, TXT, hd)
     def page_limited(self):
         """True after sending a 429 for an /address or /tx page over the per-client budget. Keyed on Fly-Client-IP only:
         without it (local runs) nothing is limited, since every request would share the proxy address. The IP is never logged."""
@@ -473,6 +501,7 @@ class H(BaseHTTPRequestHandler):
         if self.key_guard(): return
         if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        if path == "/j" or path.startswith("/j/"): return self.checkin(path, u.query)
         off = offsite(path)
         if off: return self.send(301, "", TXT, {"Location": off, "Cache-Control": "public, max-age=3600"})
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
@@ -482,6 +511,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/ops/visits": return self.ops_visits(path, qs)
         if path == "/ops/network": return self.ops_network(path, qs)
         if path == "/ops/internal": return self.ops_internal(path, qs)
+        if path == "/ops/funnel": return self.ops_funnel(path, qs)
         try:
             if path == "/ws":
                 return HUB.accept(self)
@@ -664,6 +694,8 @@ def main():
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
     VS.COUNTER.start()
+    try: CK.start()   # when signup check-ins began (since_ts on /ops/funnel)
+    except Exception as e: log.warning("check-in start: %s", type(e).__name__)
     try: OI.start()   # when the /ops/internal counters began (since_ts)
     except Exception as e: log.warning("ops internal start: %s", type(e).__name__)
     def _term(*_):   # flush the visit counts, then exit as before

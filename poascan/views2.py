@@ -219,6 +219,11 @@ def _prompt_release():
     return (f'<a href="/api/v1/prompts/join">{E(OP.VERSION)}</a>, {stamp(ts, "released")}. {E(OP.RELEASE_NOTE)} '
             f'Same text on <a href="/start">/start</a>, llms.txt and MCP.')
 
+def _release():
+    """/upgrade Details: this POAScan release, its time in the reader's zone plus UTC (ui.stamp; app.js adds local)."""
+    from . import agentapi as AG
+    return f'{E(AG.VERSION)}, {stamp(_iso_ts(AG.RELEASED_TS), "released")}. {E(AG.RELEASE_LINE)}'
+
 def _iso_ts(s):
     return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
 
@@ -236,7 +241,7 @@ def upgrade_details():
              + ". Responding means the route answers; Open needs the official notice or post."),
             ("Agents", "Check once an hour at a random minute. No retry loops. After a 502, read the receipt before resubmitting. Pending grades keep "
              f'{m["pending_ttl_epochs"]} epochs.'),
-            ("Joining", E(M.join_line())), ("Join prompt", _prompt_release())]
+            ("Joining", E(M.join_line())), ("Join prompt", _prompt_release()), ("Release", _release())]
     cites = M.citations()
     if cites:   # no per-comment anchors on LabLeak, so the link is the post and the comment is named
         rows.append(("Operator", "; ".join(f'{E(lab)}: comment {cid}, <time datetime="{E(at.replace(" ", "T"))}Z">{E(at.replace(" ", "T").split("T")[-1][:8])}Z</time>'
