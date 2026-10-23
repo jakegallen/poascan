@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.22] - 2026-10-23
+
+### Security
+- Build (audit SC-008): the Dockerfile base image is pinned to the `python:3.12-slim` digest `sha256:a0f57064cbdc...`, and `.github/dependabot.yml` opens weekly update PRs for the GitHub Actions and the Docker base image (small open-PR limits). The DB-IP Lite file keeps its gzip and MaxMind marker check but gets no fixed checksum: it is a new file each month and a fixed hash would break the monthly refresh. No app, API or MCP change.
+
 ## [1.26.21] - 2026-10-23
 
 ### Security

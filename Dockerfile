@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# python:3.12-slim, pinned to its multi-arch index digest (Dependabot proposes updates)
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 WORKDIR /app
 RUN pip install --no-cache-dir pillow==12.3.0
 # Offline IP to country file for the daily country count (DB-IP Lite, CC BY 4.0). GEOIP_MONTH busts the cache monthly.
