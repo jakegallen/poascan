@@ -9,6 +9,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.25] - 2026-10-23
+
+### Changed
+- Home: the headline row's Total mined and Circulating supply cards no longer show a USD figure (the reference rate rests on one small test fill, audit SC-020). USD stays on the Market card and /token. The row's Circulating supply card updates live under its own key `circ` in the live snapshot's `cards` (additive); `vest` is unchanged and keeps USD.
+
 ## [1.26.24] - 2026-10-23
 
 ### Added

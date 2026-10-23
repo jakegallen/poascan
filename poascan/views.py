@@ -82,6 +82,9 @@ def headline():
         "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
         "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
         "vest": stat("Circulating supply", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest"),
+        # home headline row: no USD on these two (the reference rate rests on one tiny test fill, audit SC-020); USD stays on Market and /token
+        "mined_hero": stat("Total mined", poa(sup, mined=True), "", ICON_PICK, "mined"),
+        "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ"),
         "joins_hr": stat("Agents / hr", intc(jr["agent_joins_per_hour"]) if jr else "···", "", ICON_CLOCK, "joins_hr"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
@@ -115,7 +118,7 @@ def live_snapshot():
     nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
-                cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags=SW.live(),
+                cards=dict({k: v for k, v in h.items() if k in ("vest", "circ")}, **_swap_cards()), frags=SW.live(),
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
                 feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live(), **joins_fields())
@@ -178,7 +181,7 @@ def home():
     """Search, then the headline row (Total mined, Circulating supply, Agents, Agents / hr; method on /about#home), the open epoch,
     Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
-    kpis = "".join(spark_in(h[k], sp.get(k)) for k in ("mined", "vest", "accounts", "joins_hr"))
+    kpis = "".join(spark_in(h[k], sp.get(sk)) for k, sk in (("mined_hero", "mined"), ("circ", "vest"), ("accounts", "accounts"), ("joins_hr", "joins_hr")))
     more = spark_in(h["holders"], sp.get("holders")) + h["height"] + h["checkpoint"]
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
