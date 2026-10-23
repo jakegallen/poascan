@@ -71,6 +71,8 @@ jobs:
         run: python tools/start_test.py
       - name: swap cutover test
         run: python tools/swap_cutover_test.py
+      - name: Home headline row and Agents / hr (window and pause rule, own snapshots only, cached, /about#home, additive API fields)
+        run: python tools/joins_test.py
 
   deploy:
     needs: test

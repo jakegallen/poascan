@@ -9,6 +9,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.24] - 2026-10-23
+
+### Added
+- Home: a headline row of four large numbers, Total mined, Circulating supply, Agents and the new Agents / hr, each with its trend line and the poascan.io watermark, one row at 1280 and 2 x 2 at 390. Holders, Chain height and Finalized height move beside the Burn meter. Method on /about#home.
+- API (additive): `agent_joins_per_hour` and `agent_joins_per_hour_window` (kind `24h` or `since_pause`, hours, joins, end_ts, paused_until_ts, trailing_per_hour for 1h, 6h and 24h) on `/api/v1/summary`, `/api/v1/status` and the MCP `get_network_summary` result; `nums.joins_hr` in the live snapshot. Computed from POAScan's own /api/status snapshots (no upstream call), cached 2 minutes. Agents / hr is joins over the trailing 24 h per hour, or since the latest pause ended when `agents_joined` stood still 2 h or more inside that window (at least 1 h).
+
 ## [1.26.23] - 2026-10-23
 
 ### Changed

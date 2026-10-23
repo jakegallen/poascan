@@ -446,3 +446,48 @@ def backlog():
             if c is not None: ex.append(x)
         exact = all(ex) if ex else None; basis = "grades" if mf is not None and n >= mf else "panel"
     return dict(closes=closes, hist=hist, exact=exact, basis=basis, merge_from=mf)
+
+# ---- Agents / hr: joins per hour from our own /api/status snapshots (agents_joined), no upstream call ----
+JOIN_RATE_WINDOW_S = 86400     # default window: trailing 24 h
+JOIN_PAUSE_S = 2 * 3600        # agents_joined flat this long reads as joining paused, not a slow spell
+JOIN_MIN_S = 3600              # never report over less than an hour
+
+def _join_points(since):
+    return [(r["ts"], int(r["a"])) for r in db.q(
+        "SELECT ts, json_extract(json, '$.agents_joined') AS a FROM snaps WHERE kind='status' AND ts >= ? ORDER BY ts", (since,)) if r["a"]]
+
+def _rate_since(pts, t0):
+    """Joins per hour from the last read at or before t0 (else the first read after it) to the newest read."""
+    if len(pts) < 2: return None
+    base = next((p for p in reversed(pts) if p[0] <= t0), pts[0]); end = pts[-1]
+    h = (end[0] - base[0]) / 3600
+    return dict(joins=max(0, end[1] - base[1]), hours=round(h, 2), per_hour=round(max(0, end[1] - base[1]) / h, 1) if h > 0 else None)
+
+def joins_rate_calc(pts, now=None):
+    """Pure: the homepage Agents / hr from (ts, agents_joined) reads, oldest first.
+    Default: joins over the trailing 24 h divided by its hours. If agents_joined stood still for JOIN_PAUSE_S or more inside
+    that window (joining paused, e.g. a network upgrade), the window starts where the latest pause ended, so a pause does not
+    drag the rate toward zero; it stays at least JOIN_MIN_S long."""
+    if len(pts) < 2: return None
+    end = pts[-1][0]; t0 = end - JOIN_RATE_WINDOW_S
+    win = [p for p in pts if p[0] >= t0]
+    start = t0; paused_until = None
+    i = 0
+    while i < len(win):            # runs of equal counts: first read to the last read before the count moved
+        j = i
+        while j + 1 < len(win) and win[j + 1][1] == win[i][1]: j += 1
+        if j + 1 < len(win) and win[j][0] - win[i][0] >= JOIN_PAUSE_S: paused_until = win[j][0]   # an ended pause (an ongoing one keeps 24 h)
+        i = j + 1
+    if paused_until is not None: start = min(paused_until, end - JOIN_MIN_S)
+    r = _rate_since(pts, start)
+    if not r or r["per_hour"] is None: return None
+    trailing = {k: _rate_since(pts, end - s) for k, s in (("1h", 3600), ("6h", 6 * 3600), ("24h", 86400))}
+    return dict(agent_joins_per_hour=int(round(r["per_hour"])), joins=r["joins"], window_hours=r["hours"],
+                window="since_pause" if paused_until is not None else "24h", window_end=end, paused_until=paused_until,
+                trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
+
+@cached("joins_rate", 120)
+def joins_rate():
+    """Cached 2 min: one indexed range read of about a day of status snapshots."""
+    now = int(time.time())
+    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now)

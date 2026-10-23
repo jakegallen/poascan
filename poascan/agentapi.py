@@ -5,7 +5,7 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.23"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.24"  # API, MCP server, server.json and agent card share this version
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -104,7 +104,11 @@ def t_summary(args):
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
-                open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], url=BASE + "/")
+                open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], **_joins(), url=BASE + "/")
+
+def _joins():
+    from . import views as V
+    return V.joins_fields()
 
 def t_epoch_now(args):
     o = dict(A.open_epoch()); p = A.params()
@@ -484,9 +488,9 @@ def openapi():
     P = {
         "/api/health": _op("Service and indexer health", oid="health", tag="meta", desc="HTTP 503 with the same JSON body when ok is false (live feed older than 5 min). Use /healthz for process liveness."),
         "/healthz": _op("Process liveness (200 while the server is up)", oid="healthz", tag="meta"),
-        "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed, swaps availability", oid="summary", desc="Includes a swaps block (schema SwapStatus)."),
+        "/api/summary": _op("Live snapshot: headline numbers, open epoch, last close, feed, swaps availability", oid="summary", desc="Includes a swaps block (schema SwapStatus)." + " agent_joins_per_hour (integer or null): Agents joined per hour from POAScan's own /api/status snapshots, trailing 24 h, or since the latest pause ended when joining stood still 2 h or more inside it (at least 1 h); agent_joins_per_hour_window: kind (24h or since_pause), hours, joins, end_ts, paused_until_ts, trailing_per_hour {1h, 6h, 24h}. Method: https://poascan.io/about#home"),
         "/api/live": _op("Live-feed (WebSocket hub) stats", oid="live", tag="meta"),
-        "/api/status": _op("Upstream endpoint health, incidents and anchors", oid="status", tag="meta"),
+        "/api/status": _op("Upstream endpoint health, incidents and anchors", oid="status", tag="meta", desc="Also carries the homepage Agents / hr." + " agent_joins_per_hour (integer or null): Agents joined per hour from POAScan's own /api/status snapshots, trailing 24 h, or since the latest pause ended when joining stood still 2 h or more inside it (at least 1 h); agent_joins_per_hour_window: kind (24h or since_pause), hours, joins, end_ts, paused_until_ts, trailing_per_hour {1h, 6h, 24h}. Method: https://poascan.io/about#home"),
         "/api/txs": _op("Archived transactions, newest first", ROWS, [_p("limit", "1 to 1000 (clamped; not an integer: 400)", {"type": "integer", "default": 100, "minimum": 1, "maximum": 1000}, "query", False),
                         _p("offset", "0 or more (clamped; not an integer: 400)", {"type": "integer", "default": 0, "minimum": 0}, "query", False), _p("type", "tx type, e.g. challenge, join, transfer", {"type": "string"}, "query", False),
                         _p("addr", "poa1 address (from or to)", {"type": "string"}, "query", False)], True, oid="listTxs"),

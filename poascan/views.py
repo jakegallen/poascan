@@ -73,14 +73,16 @@ def headline():
     anc = A.anchor_summary(); lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0) if nw else None
     sup = float(st.get("supply") or 0)
     tot_pool = sum(r["pool"] for r in ep)
+    jr = A.joins_rate()
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc and anc.get("last") else None
     return {
-        "mined": stat("POA mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
+        "mined": stat("Total mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
         "holders": stat("Holders", intc(st.get("holders")), "", ICON_USERS, "holders"),
         "accounts": stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT, "accounts"),
         "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
         "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
-        "vest": stat("Circulating", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest"),
+        "vest": stat("Circulating supply", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest"),
+        "joins_hr": stat("Agents / hr", intc(jr["agent_joins_per_hour"]) if jr else "···", "", ICON_CLOCK, "joins_hr"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
     }
@@ -108,14 +110,15 @@ def live_snapshot():
     nums = {"mined": [sup, "c2"], "holders": [st.get("holders"), "int"], "accounts": [st.get("agents_joined"), "int"],
             "last": [last.get("minted"), "c2"], "burn": [last.get("burn_pct"), "p1"], "height": [nw.get("height"), "int"],
             "checkpoint": [nw.get("checkpoint_height"), "int"], "answers": [o.get("answers"), "int"], "graders": [o.get("graders"), "int"],
-            "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"]}
+            "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"],
+            "joins_hr": [(A.joins_rate() or {}).get("agent_joins_per_hour"), "int"]}
     nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
                 cards=dict({k: v for k, v in h.items() if k == "vest"}, **_swap_cards()), frags=SW.live(),
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
-                feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live())
+                feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live(), **joins_fields())
 
 def _swap_cards():
     out = {}
@@ -127,7 +130,15 @@ def _swap_cards():
 def summary_json():
     h = headline(); o = A.open_epoch(); st = A.status()
     return dict(live=is_live(), pill=pill(), as_of=st.get("as_of"), stale=st.get("stale"), tracker=tracker_html(), feed=feed_rows(), cards=h,
-                open_epoch=o, supply=st.get("supply"), holders=st.get("holders"), accounts=st.get("agents_joined"))
+                open_epoch=o, supply=st.get("supply"), holders=st.get("holders"), accounts=st.get("agents_joined"), **joins_fields())
+
+def joins_fields():
+    """Additive API fields: agent_joins_per_hour and the window it was measured over (method: /about#home)."""
+    r = A.joins_rate()
+    if not r: return dict(agent_joins_per_hour=None, agent_joins_per_hour_window=None)
+    return dict(agent_joins_per_hour=r["agent_joins_per_hour"],
+                agent_joins_per_hour_window=dict(kind=r["window"], hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
+                                                 paused_until_ts=r["paused_until"], trailing_per_hour=r["trailing"]))
 
 
 def epochs_table(rows, link=True):
@@ -156,17 +167,24 @@ def home_epochs(ep):
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
-    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])])
+    hr = {}
+    for t, a in g["agents"]: hr[t // 3600] = a
+    ks = sorted(hr)[-49:]
+    joins = [(k * 3600, max(0, hr[k] - hr[j])) for j, k in zip(ks, ks[1:]) if k - j == 1]
+    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], joins_hr=joins)
 
 # ---------------- pages ----------------
 def home():
-    """Search first, then the open epoch, 4 key stats, the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
+    """Search, then the headline row (Total mined, Circulating supply, Agents, Agents / hr; method on /about#home), the open epoch,
+    Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
-    stats = "".join(spark_in(h[k], sp.get(k)) for k in ("mined", "accounts", "holders", "vest"))
+    kpis = "".join(spark_in(h[k], sp.get(k)) for k in ("mined", "vest", "accounts", "joins_hr"))
+    more = spark_in(h["holders"], sp.get("holders")) + h["height"] + h["checkpoint"]
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
+<section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
 <div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
-<div class="herogrid"><div class="stats four kstats">{stats}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
+<div class="herogrid"><div class="stats three kstats kmore">{more}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
 <div class="grid2">
 {card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/epochs" class="more">Full list →</a>')}
 {card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/txs" class="more">All txs →</a>')}
@@ -920,6 +938,10 @@ def about():
 <li>LabLeak communities and posts: hourly (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Wallet links: each <code>chains-update</code> tx once (up to 10 per 10 min). Census classifier: daily.</li>
 <li>Uptime: the first 1 KB of <code>/</code> and <code>/go.md</code> every 10 min. During the network upgrade only: one keyless GET of each hosted route (mine, grade, send, swap-offer, vote, export; first 2 KB, no key, no query) every 15 min, to show which are paused or open. USD reference: CoinGecko SOL and ETH every 15 min.</li>
 <li>Address and tx pages, the API and MCP fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached; failed ids cached 10 min; new ids limited per client and overall).</li></ul>
+<h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
+<li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
+<li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
+<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li><b>Holders</b>: /api/status, plus a rich list built from /api/agents and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
