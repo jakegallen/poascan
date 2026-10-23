@@ -33,13 +33,13 @@ check("body min-height has a dvh fallback for mobile toolbars", "min-height:100d
 mob = re.search(r"@media \(max-width:1100px\),\(pointer:coarse\)\{body::before\{display:none\}\}", flat)
 check("fixed blend layer is off on phones, tablets and touch screens", bool(mob))
 check("desktop keeps the grain layer", "body::before{content:\"\";position:fixed" in flat)
-check("single column grids: no card margin on top of the gap", ".grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}" in flat and ".herogrid>*{margin-bottom:0}" in flat)
+check("single column grids: no card margin on top of the gap", ".grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}" in flat and ".herogrid>*,.herogrid>.stats.three{margin-bottom:0}" in flat)
 check("phones: 12 px between sections", re.search(r"@media \(max-width:640px\)\{\.grid2,\.grid3,\.herogrid\{gap:12px\}", flat) is not None)
 check("chart draw-in has a scroll and pageshow backstop", 'W.addEventListener("pageshow",rv)' in js and "{passive:true}" in js and "chart.pre" in js)
 check("reduced motion turns the chart draw-in off", re.search(r"prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation-duration:\.001ms", flat) is not None
       and ".js .chart,.js .chart.pre{clip-path:none;animation:none}" in flat)
 v_css = int(re.search(r"style\.css\?v=(\d+)", ui).group(1)); v_js = int(re.search(r"app\.js\?v=(\d+)", ui).group(1))
-check("cache keys moved (style.css v90+, app.js v44+)", v_css >= 90 and v_js >= 44)
+check("cache keys moved (style.css v92+, app.js v44+)", v_css >= 92 and v_js >= 44)
 
 # ---------------- browser ----------------
 try:
@@ -65,7 +65,8 @@ if sync_playwright:
         PROBE = """()=>{const m=document.querySelector('main');const cs=getComputedStyle(m);
           const secs=[...m.children].filter(c=>c.getBoundingClientRect().height>1&&!c.classList.contains('sr-only'));
           const bad=secs.filter(c=>parseFloat(getComputedStyle(c).opacity)<1||getComputedStyle(c).visibility!=='visible').map(c=>c.className);
-          const blocks=[];secs.forEach(s=>{const g=getComputedStyle(s).display==='grid'&&[...s.children].some(k=>k.classList.contains('card'))?[...s.children]:[s];g.forEach(b=>{const r=b.getBoundingClientRect();if(r.height>1)blocks.push([r.top+scrollY,r.bottom+scrollY,b.className])})});
+          const blocks=[];const flat=e=>e.matches('.hero,.herogrid,.grid2,.grid3')?[...e.children].flatMap(flat):[e];
+          secs.flatMap(flat).forEach(b=>{const r=b.getBoundingClientRect();if(r.height>1)blocks.push([r.top+scrollY,r.bottom+scrollY,b.className])});
           blocks.sort((a,b)=>a[0]-b[0]);let maxgap=0,where='';for(let i=1;i<blocks.length;i++){const g=blocks[i][0]-blocks[i-1][1];if(g>maxgap){maxgap=g;where=blocks[i-1][2]+' -> '+blocks[i][2]}}
           return {op:cs.opacity,tf:cs.transform,anim:cs.animationName,bad,maxgap:Math.round(maxgap),where,ox:document.documentElement.scrollWidth-innerWidth,h:document.documentElement.scrollHeight}}"""
         with sync_playwright() as p:

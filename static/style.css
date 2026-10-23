@@ -1105,6 +1105,6 @@ td a.mono{display:inline-block;min-width:24px}
    page forces iOS WebKit to composite everything above it, and the content could stay unpainted). One spacing step between sections:
    the grid gap only, no card margin on top of it. Desktop (over 1240px) is unchanged. */
 @media (max-width:1100px),(pointer:coarse){body::before{display:none}}
-@media (max-width:1240px){.herogrid>*{margin-bottom:0}}
+@media (max-width:1240px){.herogrid>*,.herogrid>.stats.three{margin-bottom:0}}
 @media (max-width:1100px){.grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}}
 @media (max-width:640px){.grid2,.grid3,.herogrid{gap:12px}.herogrid,.card.trk,.grid2>.card:last-child,.grid3>.card:last-child,.mtile{margin-bottom:12px}.shero{margin:0 0 12px}}

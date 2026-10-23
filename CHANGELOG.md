@@ -9,6 +9,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.30] - 2026-10-23
+
+### Fixed
+- Mobile spacing follow-up to 1.26.28: the Holders and heights block kept a 16 px margin from `.stats.three` on top of the 12 px grid gap, so the Burn meter sat 28 px below it at 390. Below 1240 px it now gets the gap only (12 px on phones). Desktop is unchanged.
+- `tools/mobile_render_test.py` now measures the gaps inside the hero and hero grid too, which is how this was missed. Cache key style.css v92.
+
 ## [1.26.29] - 2026-10-23
 
 ### Changed
