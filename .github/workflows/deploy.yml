@@ -81,6 +81,8 @@ jobs:
         run: python tools/checkin_test.py
       - name: Chart pop-out (?chart= and ?range= allowlist in app.js, strict /fragment/chart params, ranges only where the data reaches, milestone grouping, no upstream call, no entrance fade)
         run: python tools/chartpop_test.py
+      - name: Private dashboard feed (/ops/dashboard is 404 without the token, no-store, 31-day range, 400 on other params, aggregate only, cached 60 s, no upstream call)
+        run: python tools/opsdash_test.py
 
   deploy:
     needs: test

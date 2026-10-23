@@ -9,6 +9,7 @@ from . import keysafe as KS
 from . import names as NM
 from . import opsinternal as OI
 from . import checkin as CK
+from . import opsdash as OD
 from . import chartpop as CP
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
@@ -200,7 +201,7 @@ AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, neve
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
-OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network, /ops/internal and /ops/funnel: per IP, in memory, apart from MCP
+OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network, /ops/internal, /ops/funnel and /ops/dashboard: per IP, in memory, apart from MCP
 CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in memory only (an agent sends two)
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
@@ -473,6 +474,20 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             log.error("ops funnel: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
+    def ops_dashboard(self, path, query):
+        """Private aggregate feed for the POAScan tab of POASwap's dashboard (poascan/opsdash.py; gate: ops_gate). At most 31 days,
+        default 7. Only from and to are accepted, once each; any other parameter, blank or not, is a 400. Cached 60 s in memory.
+        From POAScan's own database and memory: no upstream call."""
+        qs = urllib.parse.parse_qs(query or "", keep_blank_values=True)
+        g = self.ops_gate(path, qs, OI.parse_range)
+        if not g: return
+        hd, fr, to = g
+        if set(qs) - {"from", "to"}:
+            return self.send(400, json.dumps({"error": "only from and to are accepted; send the token in the Authorization header"}), "application/json", hd)
+        try: VS.COUNTER.flush(); out = OD.report(fr, to, AG.VERSION)
+        except Exception as e:
+            log.error("ops dashboard: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
     def checkin(self, path, query):
         """GET /j/<version>[/<client>]/start, .../joined?addr=<poa1>, (v2.3.1) .../rate?route=<route> and (v2.4) .../probe?w=<word>: an optional, keyless signup check-in (poascan/checkin.py).
         Strict allowlist, else 400 with nothing stored. Rate limited per IP in memory; never cached, indexed or logged with its path."""
@@ -513,6 +528,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/ops/network": return self.ops_network(path, qs)
         if path == "/ops/internal": return self.ops_internal(path, qs)
         if path == "/ops/funnel": return self.ops_funnel(path, qs)
+        if path == "/ops/dashboard": return self.ops_dashboard(path, u.query)
         try:
             if path == "/ws":
                 return HUB.accept(self)

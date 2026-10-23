@@ -141,6 +141,14 @@ def _closes():
     from . import analytics as A
     return {int(e["epoch"]): int(e.get("ts") or 0) for e in A.epochs_raw()}, A.rewards_by_addr()
 
+def match(addr, ts):
+    """('joined', join ts) when the address's first archived join tx is at most WINDOW_S before the check-in (SKEW_S after it
+    allowed), ('resumed', join ts) when it joined longer ago, ('unmatched', join ts or None) otherwise. Local archive only."""
+    j = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=?", (addr,)); jt = j and j["t"]
+    if not jt: return "unmatched", None
+    if ts - jt > WINDOW_S or jt - ts > SKEW_S: return ("resumed" if ts > jt else "unmatched"), jt
+    return "joined", jt
+
 def report(fr, to, now=None):
     now = int(now or time.time())
     lo = int(dt.datetime.fromisoformat(fr + "T00:00:00+00:00").timestamp()); hi = int(dt.datetime.fromisoformat(to + "T00:00:00+00:00").timestamp()) + 86400
@@ -157,9 +165,8 @@ def report(fr, to, now=None):
     closes = rewards = None
     for a in tags:
         x = R(a["version"], a["client"])
-        j = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=?", (a["addr"],)); jt = j and j["t"]
-        if not jt: x["unmatched"] += 1; continue
-        if a["ts"] - jt > WINDOW_S or jt - a["ts"] > SKEW_S: x["resumed" if a["ts"] > jt else "unmatched"] += 1; continue
+        st, jt = match(a["addr"], a["ts"])
+        if st != "joined": x[st] += 1; continue
         x["joined"] += 1
         if lo <= jt < hi: D(_day(jt))["tagged_joins"] += 1
         ans = db.q1("SELECT 1 AS x FROM txs WHERE type='challenge' AND from_addr=? AND ts >= ? AND ts <= ? LIMIT 1", (a["addr"], jt, jt + WINDOW_S))

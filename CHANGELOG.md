@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.37] - 2026-10-23
+
+### Added
+- Private `/ops/dashboard?from&to` for the POAScan tab of POASwap's dashboard (same Bearer token as the other /ops feeds, the normal 404 without it, no-store, no CORS, at most 31 days, default 7, a 400 for any other parameter). One aggregate response with traffic (daily uniques, human, bot and agent views, top pages, referrers, devices, countries, API and MCP calls, prompt button clicks), onchain (Agents registered through POAScan by prompt version and client next to every chain join, active Agents, supply, epochs and txs), offchain (the check-in funnel, failures by step and 429s by route, seconds from the join tx to the joined check-in as median and p90, day 1, 7 and 30 retention of POAScan-onboarded Agents from the archive), service (success rates, POAScan availability, restarts and latency buckets, 5xx and 404 counts, the minepoa route check p50 and p95 and error rates, probe uptime, upstream request errors), wallets (null: POAScan does not create wallets), one-sentence definitions and a list of what is not measurable. Counts only: no key, IP, user agent, query string, tx id or address. Cached 60 s in memory; read from POAScan's own database only, so no request to minepoa.com.
+
 ## [1.26.36] - 2026-10-23
 
 ### Added
