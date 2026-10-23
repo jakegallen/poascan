@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.41] - 2026-10-23
+
+### Changed
+- The Add Emblem Wallet prompt uses POASwap's wallet step v2 (POASwap main d26bd69, as served at poaswap.io/start/prompt.txt) word for word, except case D's emblemvault.ai line. Node 20.18+ with the install command per OS (macOS: brew install node; Linux: nvm install 22; Windows: winget install OpenJS.NodeJS.LTS), then check again; one retry with `npx --cache "$(mktemp -d)"` on a cache or permission error and one on a network error; no version check (emblemai has no --version); before the one read, `EMBLEMAI profile inspect PROFILE` must show Credentials: present in case A or B, else stop. The backup stamp is `$(date +%s)`. Pin and --hustle-url unchanged.
+- `get_onboarding_steps` / llms `wallet.note` and the /about FAQ wallet answer name Node 20.18+; the note adds the npx retries (Windows: any new empty folder) and the inspect check.
+- walletsafe_test checks the v2 steps. The join prompt is unchanged.
+
 ## [1.26.40] - 2026-10-23
 
 ### Fixed
