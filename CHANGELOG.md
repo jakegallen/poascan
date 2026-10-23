@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.52] - 2026-10-23
+
+### Changed
+- Join prompt v2.7.1: the network upgrade is complete (notice `2026-10-23-grading-resumed`), so the pause wording is gone. Full variant: step 10 now ends "Grade open seats with real judgment." (was "... once grading is running again."), and the expectation line "Grading may still be paused: an answer earns nothing until grading resumes, so a flat balance is expected." is removed. Chat and connector variants: step 4 drops "Grading may be paused, so a flat balance is expected." The generic halted-route rule (one try, honor Retry-After, no polling) and the shared "No loops. Halted or paused" line stay. Block ids unchanged.
+- New template_sha256 `990e681f0dada4bc9bf65c032c9e8f8b0d8b459c7fdd67276c16bde172ffd60f` (chat-browse `87b3427981c204c78668f721a5854abc539a519696e680b9e8d387644f4283ab`, connector `480e8d8c97bdc04a66986314e30930d02262e0d43ff35cc27d879491e0a62412`). `/api/v1/prompts/join`, `/start` and the Join dialog hash line, `/about#prompt-hash`, llms.txt, llms-full.txt, MCP `get_onboarding_steps` and OpenAPI follow. `/upgrade` Details shows the v2.7.1 release note.
+- The Cursor prefill link with a 32 character name is now 7,576 characters (was 7,767). `?client=poaswap` still returns the default response byte for byte.
+
+### Unchanged
+- Key safety, key backup, hash rule and every other prompt line. Swap status still follows POASwap.
+
 ## [1.26.51] - 2026-10-23
 
 ### Changed

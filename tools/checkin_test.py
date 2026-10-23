@@ -63,7 +63,7 @@ def unit():
         except ValueError: pass
     check(f"allowlist refuses {len(bad)} shapes (versions, clients, steps, params, addresses) {acc}", not acc)
     check("versions: v2.3 to v2.4 still accepted (copies still in chats); the current text (v2.5 and later) carries no check-in",
-          CK.VERSIONS == ("v2.3", "v2.3.1", "v2.3.2", "v2.4") and OP.VERSION == "v2.7" and OP.VERSION not in CK.VERSIONS
+          CK.VERSIONS == ("v2.3", "v2.3.1", "v2.3.2", "v2.4") and OP.VERSION == "v2.7.1" and OP.VERSION not in CK.VERSIONS
           and all("poascan.io/j/" not in t for t in OP.VARIANTS.values()) and OP.CHECKIN == "https://poascan.io/j/v2.4/")
     k4 = [CK.parse("/j/v2.4/start", ""), CK.parse("/j/v2.4/claude/joined", "addr=" + A[0]), CK.parse("/j/v2.4/kimi/rate", "route=answer"),
           CK.parse("/j/v2.4/kimi/probe", "w=qzxekd"), CK.parse("/j/v2.4/probe", "w=Wordy"), CK.parse("/j/v2.4/codex/start", ""), CK.parse("/j/v2.4/voice/start", "")]
