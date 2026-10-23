@@ -11,6 +11,23 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.51] - 2026-10-23
+
+### Changed
+- The network upgrade is complete. minepoa's notice `2026-10-23-grading-resumed` (on-ledger tx `a241efae`, issued 2026-10-23T16:57:36Z) says grading is back, all paths are open and the hardening pause is over. POAScan reads it from its existing `/api/notices` mirror and ends the upgrade by itself: no new flag and no extra request.
+- `meta.maintenance`: `active` false with `cleared_by: "upgrade_complete"`, `phase: "complete"`, new `completed_at` and `completed_by` (notice id and txid). `paused` is empty; `working` adds `hosted_mining` and `grading`. Notices issued before the completion notice (hardening, restored, grading-halted) are superseded: they no longer count as active, so `notice.active` is false (new `superseded_by`) and `surfaces` read back unless a live read finds a route halted again. Kept in the database, so it holds after the notice expires.
+- Graders tile: no Halted tag and `grading_halted` false on the open epoch (API and MCP `get_current_epoch`), since the grading-halted notice is superseded.
+- Challenge-pool payouts read live. The hosted route check stops once the upgrade is complete.
+- `/upgrade` stays as a record: "Upgrade complete" with the dates (started Oct 21, mining reopened Oct 22, grading reopened and upgrade complete Oct 23, all UTC), a link to the notice tx and LabLeak post 1357. og card and description follow.
+- `/about` methodology, MCP tool descriptions, llms.txt, llms-full.txt and OpenAPI describe the completed state (`phase` gains `complete`, `cleared_by` gains `upgrade_complete`).
+
+### Added
+- Milestones on Network > Charts: "Grading reopened" and "Upgrade complete" at the notice's official time, each its own labelled marker, linked to the notice tx. They replace the earlier live "Upgrade ends" marker. Marker labels on the inline charts now sit in lanes, so close labels never overlap at 390px.
+- `tools/upgrade_complete_test.py` in CI.
+
+### Unchanged
+- Join prompt v2.7 text and template_sha256. Swap status still follows POASwap.
+
 ## [1.26.50] - 2026-10-23
 
 ### Changed

@@ -15,6 +15,7 @@ CONFIRM_S = 600
 POST_ID = 1357
 POST = f"https://minepoa.com/lableak/#/post/{POST_ID}"
 def _tx(txid): return f"/tx/{txid}"
+DONE_TX = "a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000"   # notice 2026-10-23-grading-resumed
 
 # key, ts (UTC), label, url, source. Verified 2026-10-22 against the production database:
 SEED = [
@@ -31,13 +32,19 @@ SEED = [
     ("allclear", 1792711015, "All-clear", POST, "post 1357 comment 3121 by the post author, 2026-10-22 23:16:55 (forum mirror)"),
     ("grading_halted", 1792711349, "Grading still halted", POST, "post 1357 comment 3123 by the post author, 2026-10-22 23:22:29 (forum mirror)"),
     ("mining_reopened", 1792712749, "Mining reopened", POST, "official signal recorded by POAScan (mining_back_at)"),
+    # Verified 2026-10-23 against /api/notices and the on-ledger notice tx a241efae (G0): "GRADING IS BACK, all paths OPEN ...
+    # Hardening pause over, resume normal cadence." One notice, so both markers carry its issued_ts.
+    ("grading_reopened", 1792774656, "Grading reopened", _tx(DONE_TX), "notice 2026-10-23-grading-resumed issued_ts (/api/notices, on-ledger tx a241efae)"),
+    ("ended", 1792774656, "Upgrade complete", _tx(DONE_TX), "notice 2026-10-23-grading-resumed: hardening pause over (/api/notices, on-ledger tx a241efae)"),
 ]
 SEEDED = {k for k, *_ in SEED}
+# Keys that always get their own marker (never folded into a nearby group), so both real events stay labelled.
+SOLO = {"grading_reopened", "ended"}
 
 # Routes the route check covers: (route id, label). A route seen open gets "<label> responding" at its first open read.
 ROUTE_LABEL = {"mining": "Mining", "grading": "Grading", "send": "Send", "swap_offer": "Swap offers", "vote": "Voting", "export": "Export"}
 # Chart priority when markers are grouped: the group shows its most telling label (no count suffix).
-PRIORITY = ["ended", "mining_reopened", "grading_reopened", "notice_cleared", "allclear", "checkpoint", "begins", "route:mining", "grading_halted"]
+PRIORITY = ["ended", "grading_reopened", "mining_reopened", "notice_cleared", "allclear", "checkpoint", "begins", "route:mining", "grading_halted"]
 
 def _route_since():
     """{route: since} for routes whose newest route-check read is open (POAScan's own hosted_routes record)."""
@@ -54,14 +61,16 @@ def _flags():
     from . import maint as M
     out = []
     n = M.notice()
-    if n is not None and not n["active"]: out.append(("notice_cleared", "Notice cleared", None, None))
+    # a hardening notice superseded by the completion notice is not 'cleared': 'Upgrade complete' already marks that
+    if n is not None and not n["active"] and not n.get("superseded_by"): out.append(("notice_cleared", "Notice cleared", None, None))
     rs = _route_since(); gn = _grading_notice_active()
     if "grading" in rs and (M.official()["routes"] or gn is False): out.append(("grading_reopened", "Grading reopened", None, None))
     try: why = M._cleared()
     except Exception: why = None
     if why:
-        t = (M.back_since() or 0) + M.BACK_GRACE_S if why == "mining_back" and M.back_since() else None
-        out.append(("ended", "Upgrade ends", None, t))
+        c = M.complete() if why == "upgrade_complete" else None
+        t = c["at"] if c else (M.back_since() or 0) + M.BACK_GRACE_S if why == "mining_back" and M.back_since() else None
+        out.append(("ended", "Upgrade complete", _tx(c["txid"]) if c and c.get("txid") else None, t))
     return out
 
 def observe(now=None):
@@ -104,7 +113,7 @@ def group(evs, t0, t1, width=576, gap=64):
     span = max(1, t1 - t0); px = lambda t: width * (t - t0) / span
     evs = [e for e in evs if t0 <= e["ts"] <= t1]; groups = []
     for e in evs:
-        if groups and px(e["ts"]) - px(groups[-1][0]["ts"]) < gap: groups[-1].append(e)
+        if groups and e["key"] not in SOLO and px(e["ts"]) - px(groups[-1][0]["ts"]) < gap: groups[-1].append(e)
         else: groups.append([e])
     rank = lambda e: PRIORITY.index(e["key"]) if e["key"] in PRIORITY else len(PRIORITY)
     out = []

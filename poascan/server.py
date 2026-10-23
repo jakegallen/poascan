@@ -620,7 +620,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
-            if path == "/upgrade" and not MT.state()["active"]: return self.send(302, "", extra={"Location": "/network?tab=health"})
+            if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/network?tab=health"})
             loc = moved(path, qs)
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":

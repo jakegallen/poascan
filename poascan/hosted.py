@@ -51,7 +51,7 @@ def _get(path):
 def job(now=None, get=None):
     """Indexer job. Only while maintenance is switched on; a round after trouble is skipped."""
     from . import maint as M
-    if not ON or not M.MAINTENANCE: return
+    if not ON or not M.MAINTENANCE or M.complete(): return   # the upgrade is officially complete: no more route checks
     get = get or _get; now = int(now or time.time())
     prev = db.get_blob(BLOB)[0] or {}
     if (prev.get("skip_until") or 0) > now:

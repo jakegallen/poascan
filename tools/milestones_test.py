@@ -23,7 +23,8 @@ want = {"begins": ("2026-10-21T19:00:51Z", "Upgrade begins"), "paused": ("2026-1
         "route:mining": ("2026-10-22T22:35:21Z", "Mining responding"), "route:send": ("2026-10-22T23:16:36Z", "Send responding"),
         "route:swap_offer": ("2026-10-22T23:16:36Z", "Swap offers responding"), "route:vote": ("2026-10-22T23:16:36Z", "Voting responding"),
         "route:export": ("2026-10-22T23:16:36Z", "Export responding"), "allclear": ("2026-10-22T23:16:55Z", "All-clear"),
-        "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining reopened")}
+        "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining reopened"),
+        "grading_reopened": ("2026-10-23T16:57:36Z", "Grading reopened"), "ended": ("2026-10-23T16:57:36Z", "Upgrade complete")}
 for k, (t, lab) in want.items():
     check(f"{lab} at {t}", k in ev and iso(ev[k]["ts"]) == t and ev[k]["label"] == lab)
 check("upgrade begins at the post 1357 time (maint.STARTED)", ev["begins"]["ts"] == M.STARTED)
@@ -51,10 +52,11 @@ notices("2026-10-21-hardening")   # the grading halt notice is gone
 MS.observe(now + 60)
 st = db.get_blob(MS.BLOB)[0]
 check("a later open read never moves 'Grading responding'", st["events"]["route:grading"]["ts"] == now - 300)
-check("grading reopened is pending until a second look", "grading_reopened" in st["pending"] and "grading_reopened" not in st["events"])
+check("grading reopened is seeded at the official notice time, never re-added live", "grading_reopened" not in st["events"] and "grading_reopened" not in (st.get("pending") or {}))
 MS.observe(now + 60 + MS.CONFIRM_S)
 st = db.get_blob(MS.BLOB)[0]
-check("confirmed after CONFIRM_S, stored with the first-seen time", st["events"]["grading_reopened"]["ts"] == now + 60 and st["events"]["grading_reopened"]["label"] == "Grading reopened")
+check("live reads leave the seeded grading reopened alone", "grading_reopened" not in st["events"] and {e["key"]: e for e in MS.events()}["grading_reopened"]["ts"] == 1792774656)
+check("both completion markers link the on-ledger notice tx", all(ev[k]["url"] == "/tx/" + MS.DONE_TX for k in ("grading_reopened", "ended")))
 db.put_blob("notices", {"active": []})   # the hardening notice disappears for one read only
 MS.observe(now + 2000); db.put_blob("notices", {"active": [{"id": "2026-10-21-hardening", "expires_ts": now + 86400}]})
 MS.observe(now + 2000 + MS.CONFIRM_S)
@@ -66,18 +68,25 @@ st = db.get_blob(MS.BLOB)[0]
 check("hardening notice gone on two looks: 'Notice cleared' at the first", st["events"]["notice_cleared"]["ts"] == now + 5000)
 out = subprocess.run([sys.executable, "-c", "from poascan import milestones as MS; print(sorted(e['key'] for e in MS.events() if e['key'] not in MS.SEEDED))"],
                      cwd=ROOT, env=dict(os.environ), capture_output=True, text=True).stdout.strip()
-check(f"live events survive a restart ({out})", "route:grading" in out and "grading_reopened" in out and "notice_cleared" in out)
-# upgrade ends: mining back with the official signal (notice gone), BACK_GRACE_S later
-db.put_blob("mining_back", {"at": now - M.BACK_GRACE_S - 100}); routes(mining=("open", 1792708521), grading=("open", now - 300))
+check(f"live events survive a restart ({out})", "route:grading" in out and "notice_cleared" in out)
+# upgrade complete: a notice saying grading is back and the hardening is over supersedes the older ones; no 'Notice cleared' from that
+db.put_blob(MS.BLOB, {}); db.put_blob("notices", {"active": [{"id": "2026-10-21-hardening", "issued_ts": 1792614261, "expires_ts": now + 86400},
+    {"id": "2026-10-22-grading-halted", "issued_ts": 1792711337, "expires_ts": now + 86400, "msg": "Challenge GRADING is HALTED, grading + challenge-pool payouts paused until further notice."},
+    {"id": "2026-10-23-grading-resumed", "issued_ts": 1792774656, "expires_ts": now + 86400, "txid": MS.DONE_TX,
+     "msg": "GRADING IS BACK, all paths OPEN (answers, assignments, grades, swaps). Hardening pause over, resume normal cadence."}]})
 MS.observe(now + 9000); MS.observe(now + 9000 + MS.CONFIRM_S)
-st = db.get_blob(MS.BLOB)[0]
-check("upgrade ends at mining_back_at plus the grace period", st["events"].get("ended", {}).get("ts") == now - 100 and st["events"]["ended"]["label"] == "Upgrade ends")
+st = db.get_blob(MS.BLOB)[0] or {}
+check("completion: no live 'Notice cleared' or 'ended' marker (seeded instead)", not any(k in (st.get("events") or {}) for k in ("notice_cleared", "ended", "grading_reopened")))
+check("completion: the events list has no 'Notice cleared'", "notice_cleared" not in {e["key"] for e in MS.events()})
+check("a stale live 'Upgrade ends' never shows (the seed replaces it)", [e["label"] for e in MS.events() if e["key"] == "ended"] == ["Upgrade complete"])
 check("seeded keys are never replaced by live reads", ev["mining_reopened"]["ts"] == {e["key"]: e for e in MS.events()}["mining_reopened"]["ts"])
 
 # ---------------- grouping ----------------
-e7 = [e for e in MS.events() if e["key"] in want]
+e7 = [e for e in MS.events() if e["key"] in want and e["ts"] < 1792774656]
 t1 = 1792712749 + 3600; g = MS.group(e7, t1 - 7 * 86400, t1)
-check(f"7 days: two groups ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
+check(f"7 days: two groups before completion ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
+g2 = MS.group([e for e in MS.events() if e["key"] in want], 1792774656 + 3600 - 7 * 86400, 1792774656 + 3600)
+check(f"7 days with completion: both completion markers labelled ({[x[1] for x in g2]})", [x[1] for x in g2][-2:] == ["Upgrade complete", "Grading reopened"] and not any(re.search(r"\+\d", x[1]) for x in g2))
 check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for x in g))
 check("a group's tip lists every member", all(e["label"] in g[1][3] for e in e7 if e["ts"] >= 1792704843) and g[1][3].endswith("(UTC)"))
 check("a group links its lead event's source", g[1][2] == MS.POST)

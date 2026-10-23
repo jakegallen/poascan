@@ -513,11 +513,24 @@ def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None
     g = "".join(f'<line x1="{pl}" x2="{W}" y1="{Y(ymin+(y1-ymin)*i/4):.1f}" y2="{Y(ymin+(y1-ymin)*i/4):.1f}" class="grid"/><text x="{pl-6}" y="{Y(ymin+(y1-ymin)*i/4)+4:.1f}" class="ax" text-anchor="end">{fmt(ymin+(y1-ymin)*i/4)}</text>' for i in range(5))
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
     xs = f'<text x="{pl}" y="{H-6}" class="ax">{xl(x0)}</text><text x="{W-4}" y="{H-6}" class="ax" text-anchor="end">{xl(x1)} UTC</text>'
+    # Bottom labels (marks with a url or title) go in lanes, so two labels never overlap: each takes the lowest lane whose last
+    # label ends before it starts (12px mono is about 7.2 units a character). One that fits no lane keeps its line and its title.
+    lanes, ends, CW, NL = {}, [], 7.2, 4
+    for i, m in sorted(enumerate(marks or []), key=lambda im: im[1][0]):
+        if not (x0 <= m[0] <= x1) or not (len(m) > 2 and (m[2] or (len(m) > 3 and m[3]))): continue
+        w = CW * len(m[1]) + 2; mx = X(m[0]); lx = mx - 3 - w if mx + 3 + w > W - 2 else mx + 3
+        ln = next((q for q in range(NL) if q >= len(ends) or ends[q] + 6 <= lx), None)
+        if ln is not None:
+            if ln >= len(ends): ends.append(0)
+            ends[ln] = lx + w
+        lanes[i] = ln
     def _mk(i, m):   # (x, label) or (x, label, url, title): a url makes the marker a link, a title its hover tip; these label along the bottom
         x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
-        end = X(x) > W - 60 - (6 * len(l) if url or tip else 0)
-        g_ = (f'<g class="mk">{"<title>" + E(tip) + "</title>" if tip else ""}<line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/><text x="{(X(x)-3 if end else X(x)+3):.1f}" '
-              f'y="{(H-pb-6 - (i % 2) * 12) if url or tip else (pt+8 + (i % 2) * 11)}" class="ax mkl"{" text-anchor=\"end\"" if end else ""}>{E(l)}</text></g>')
+        low = i in lanes; ln = lanes.get(i)
+        end = X(x) + 3 + CW * len(l) + 2 > W - 2 if low else X(x) > W - 60
+        txt = "" if low and ln is None else (f'<text x="{(X(x)-3 if end else X(x)+3):.1f}" y="{(H-pb-6 - ln * 13) if low else (pt+8 + (i % 2) * 11)}" '
+                                             f'class="ax mkl"{" text-anchor=\"end\"" if end else ""}>{E(l)}</text>')
+        g_ = (f'<g class="mk">{"<title>" + E(tip) + "</title>" if tip else ""}<line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/>{txt}</g>')
         ext = url and url.startswith("http")
         return f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}>{g_}</a>' if url else g_
     mk = "".join(_mk(i, m) for i, m in enumerate(marks or []) if x0 <= m[0] <= x1)

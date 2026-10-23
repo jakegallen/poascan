@@ -145,7 +145,7 @@ def banner_line():
     now = time.time(); fresh = M._feed_fresh()
     seen = lambda typ: (lambda r: bool(fresh and r and r["t"] and now - r["t"] < LANDING_S))(db.q1("SELECT MAX(ts) AS t FROM txs WHERE type=?", (typ,)))
     joins = M.join_state() == "open" and seen("join"); answers = seen("challenge")
-    h = M.hosted_state(); grading_paused = R.state("grading") != "open"
+    h = M.hosted_state(); grading_paused = not M.grading_open()
     if joins and answers: lead = "Joining and answers are landing."
     elif answers: lead = "Answers are landing." + ("" if M.join_state() == "open" else " Joining is paused.")
     elif joins: lead = "New Agents are joining."

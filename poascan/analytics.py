@@ -145,12 +145,14 @@ HALT_MSG_RX = re.compile(r"\bgrading\b[^.]{0,40}?\bhalted\b", re.I)
 UNHALT_RX = re.compile(r"\b(?:no longer|unhalt\w*|resumed|lifted|reopened)\b", re.I)
 
 def grading_halt(now=None):
-    """Id of the active, unexpired notice in our /api/notices mirror that says challenge grading is halted, else None."""
+    """Id of the active, unexpired notice in our /api/notices mirror that says challenge grading is halted, else None.
+    A notice the official completion notice superseded (maint.superseded) no longer counts."""
+    from . import maint as M
     d = db.get_blob("notices")[0]
     if not isinstance(d, dict): return None
     now = time.time() if now is None else now
     for x in d.get("active") or []:
-        if not isinstance(x, dict): continue
+        if not isinstance(x, dict) or M.superseded(x): continue
         exp = x.get("expires_ts")
         if isinstance(exp, (int, float)) and exp < now: continue
         nid, msg = str(x.get("id") or ""), str(x.get("msg") or "")

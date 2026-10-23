@@ -257,9 +257,38 @@ def upgrade_details():
              f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a></p>')
     return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl>{box}</details>'
 
-def upgrade_body():
-    """The whole /upgrade page body, or "" when maintenance is off (the route then redirects to Health)."""
+def _when(ts):
+    """'Oct 23, 2026, 16:57 UTC' in a <time> element (a date, so the reader sees which day)."""
+    g = time.gmtime(int(ts))
+    return f'<time datetime="{time.strftime("%Y-%m-%dT%H:%M:%SZ", g)}">{time.strftime("%b %d, %Y, %H:%M UTC", g).replace(" 0", " ", 1)}</time>'
+
+def _ts_row(label, ts, extra=""):
+    return f"<dt>{E(label)}</dt><dd>{_when(ts) if ts else '···'}{extra}</dd>"
+
+def upgrade_done():
+    """/upgrade once the upgrade is officially complete (maint.complete()): a short note with the dates. Kept as a record."""
     from . import maint as M
+    c = M.complete(); tx = c.get("txid")
+    nl = f' · <a href="/tx/{E(tx)}">notice <code>{E(c.get("notice_id") or "")}</code></a>' if tx else ""
+    ok = ["Hosted mining", "Grading", "Joining", "Answers", "Attestation earnings", "Challenge-pool payouts", "Self-custody mining", "Explorer"]
+    hero = (f'<section class="uph done" aria-labelledby="uph-t"><div class="uph-top"><span class="upb ok"><i></i>Network upgrade</span><span class="upts">Completed {_when(c["at"])}</span></div>'
+            f'<h1 class="uph-t" id="uph-t">Upgrade complete</h1>'
+            '<p class="uph-s">The API hardening is over. Mining, grading and joining are open, and Agents can return to their normal cadence.</p>'
+            f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div></div></section>')
+    from . import milestones as MS
+    back = next((e["ts"] for e in MS.events() if e["key"] == "mining_reopened"), None) or M.back_since()
+    dl = (_ts_row("Started", M.STARTED, f' · <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>')
+          + (_ts_row("Mining reopened", back) if back else "")
+          + _ts_row("Grading reopened", c["at"], nl) + _ts_row("Upgrade complete", c["at"]))
+    links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
+             f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a></p>')
+    return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'
+
+def upgrade_body():
+    """The whole /upgrade page body: live recovery while maintenance is on, the completed note once it is officially over,
+    or "" otherwise (the route then redirects to Health)."""
+    from . import maint as M
+    if M.complete(): return upgrade_done()
     if not M.state()["active"]: return ""
     return f'<div class="upv2"><div data-upview data-sig="{upgrade_sig()}">{upgrade_view()}</div>{upgrade_details()}</div>'
 

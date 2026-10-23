@@ -6,7 +6,7 @@ MAX_S is a safety stop that only applies while no fresh route read shows a pause
 import os, re, time
 from . import db, analytics as A
 
-MAINTENANCE = os.environ.get("POASCAN_MAINTENANCE", "1") != "0"  # set the default to "0" once the hardening is over
+MAINTENANCE = os.environ.get("POASCAN_MAINTENANCE", "1") != "0"  # the switch; with it on, the official completion notice (complete()) ends maintenance by itself
 POST_ID = 1357
 POST_URL = f"https://minepoa.com/lableak/#/post/{POST_ID}"
 STARTED = 1792609251          # 2026-10-21 19:00:51 UTC, when the post went up
@@ -23,7 +23,12 @@ HOSTED = ("Hosted mining", "Answers", "Challenges")   # the groups behind "hoste
 
 def _surfaces():
     from . import halts as H
-    d = H.current(); return (d or {}).get("groups") or {}
+    d = H.current(); return _after_complete((d or {}).get("groups") or {}, (d or {}).get("probe") or {})
+
+def _after_complete(groups, probe):
+    """Once the upgrade is officially complete, tracker states read back; only a live probe read of a halted route stays paused."""
+    if not complete(): return groups
+    return {g: ("paused" if probe.get(g) == "paused" else "back") for g in groups}
 
 def join_open():
     if JOIN_ENV is not None: return JOIN_ENV != "0"
@@ -55,7 +60,7 @@ def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "J
 def hosted_state():
     """paused, planned or back for hosted mining. Without tracker data the manual switch means paused."""
     from . import halts as H, hosted as R
-    if mining_back(): return "back"     # the official signal, kept in the database; only two clear halted reads after it undo it
+    if complete() or mining_back(): return "back"     # the official signal, kept in the database; only two clear halted reads after it undo it
     rs = R.state("mining")
     if rs != "unknown": return "paused"   # a responding route is not back until it is official
     pr = (H.current() or {}).get("probe") or {}
@@ -70,17 +75,59 @@ POOL_PAUSED_RX = re.compile(r"pool payouts?\b[^.]*\b(?:paused|halted|resume afte
 ATTEST_PAUSED_RX = re.compile(r"attestation earnings?\b[^.]*\b(?:paused|halted)", re.I)
 
 def _active_notices():
+    """Active, unexpired notices in our /api/notices mirror, minus those the grading-resumed notice superseded."""
     d = db.get_blob("notices")[0]
     if not isinstance(d, dict): return []
     now = time.time()
-    return [x for x in d.get("active") or [] if isinstance(x, dict) and not (isinstance(x.get("expires_ts"), (int, float)) and x["expires_ts"] < now)]
+    return [x for x in d.get("active") or [] if isinstance(x, dict) and not (isinstance(x.get("expires_ts"), (int, float)) and x["expires_ts"] < now)
+            and not superseded(x)]
+
+# ---- upgrade complete: the official end, from the public notice list only (no extra request).
+# 2026-10-23-grading-resumed: "GRADING IS BACK, all paths OPEN (...). Hardening pause over, resume normal cadence." (on-ledger tx a241efae).
+# A notice that says grading is back AND that the hardening/upgrade pause is over ends the upgrade. Kept in the database once seen,
+# so it holds after that notice expires. Notices issued before it (the hardening, restored and grading-halted notices) are superseded:
+# they stop counting as active even while still listed. A newer notice that halts something again counts as usual.
+GRADING_BACK_RX = re.compile(r"\bgrading\b[^.]{0,24}?\b(?:is\s+back|back\s+online|resumed|reopened|re-?enabled|restored)\b", re.I)
+OVER_RX = re.compile(r"\b(?:hardening|upgrade|maintenance)\b[^.]{0,24}?\b(?:over|complete[d]?|done|ended|finished|closed)\b", re.I)
+COMPLETE_BLOB = "upgrade_complete"
+
+def _says_complete(msg): return bool(GRADING_BACK_RX.search(msg or "") and OVER_RX.search(msg or ""))
+
+def complete():
+    """dict(at, notice_id, txid) once an official notice says grading is back and the hardening is over, else None.
+    at is the notice's issued_ts (the official time). Persisted on first sight."""
+    d = db.get_blob(COMPLETE_BLOB)[0]
+    if isinstance(d, dict) and d.get("at"): return d
+    n = db.get_blob("notices")[0]
+    if not isinstance(n, dict): return None
+    now = time.time()
+    hit = [x for x in n.get("active") or [] if isinstance(x, dict) and isinstance(x.get("issued_ts"), (int, float))
+           and not (isinstance(x.get("expires_ts"), (int, float)) and x["expires_ts"] < now) and _says_complete(str(x.get("msg") or ""))]
+    if not hit: return None
+    x = min(hit, key=lambda x: x["issued_ts"])
+    d = dict(at=int(x["issued_ts"]), notice_id=x.get("id"), txid=x.get("txid"), seen_at=int(now))
+    try: db.put_blob(COMPLETE_BLOB, d)
+    except Exception: pass
+    return d
+
+def superseded(x):
+    """True for a notice issued at or before the official completion notice (and not that notice itself)."""
+    c = complete()
+    if not c or not isinstance(x, dict) or x.get("id") == c.get("notice_id"): return False
+    t = x.get("issued_ts")
+    return isinstance(t, (int, float)) and t <= c["at"]
+
+def grading_open():
+    """Grading is open: the upgrade is officially complete, or the grading route answers as open."""
+    from . import hosted as R
+    return bool(complete()) or R.state("grading") == "open"
 
 def pool_payouts():
     """paused or live for challenge-pool payouts: paused while an active notice says so, or while grading is not open
     (answers only earn from the pool once graded, so with grading paused the pool can't pay them)."""
     from . import hosted as R
     if any(POOL_PAUSED_RX.search(str(x.get("msg") or "")) for x in _active_notices()): return "paused"
-    return "live" if R.state("grading") == "open" else "paused"
+    return "live" if grading_open() else "paused"
 
 def attestation_earnings():
     """live unless an active notice says attestation earnings are paused."""
@@ -89,10 +136,10 @@ def attestation_earnings():
 # Only the hosted mining paths pause; self-custody miners (POST /api/submit plus /api/receipt) keep working.
 def paused():
     from . import hosted as R
-    return ((["hosted_mining"] if hosted_state() == "paused" else []) + ([] if R.state("grading") == "open" else ["grading"]) + ([] if join_open() else ["onboarding"])
+    return ((["hosted_mining"] if hosted_state() == "paused" else []) + ([] if grading_open() else ["grading"]) + ([] if join_open() else ["onboarding"])
             + (["challenge_pool_payouts"] if pool_payouts() == "paused" else []) + (["attestation_earnings"] if attestation_earnings() == "paused" else []))
 def working():
-    return ((["onboarding"] if join_open() else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
+    return ((["onboarding"] if join_open() else []) + (["hosted_mining"] if hosted_state() == "back" else []) + (["grading"] if grading_open() else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
             + (["challenge_pool_payouts"] if pool_payouts() == "live" else []) + ["balances", "explorer"])
 PAUSED = ["hosted_mining", "grading", "challenge_pool_payouts"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "attestation_earnings", "balances", "explorer"]   # defaults
 
@@ -241,6 +288,7 @@ def route_display():
     slow when the newest read got no answer (timeout or network error; never called paused or offline)."""
     from . import hosted as R
     of = official(); out = {}
+    if complete(): return {k: "open" for k in R.current()}   # officially complete: every hosted route is open
     for k, v in R.current().items():
         st = v["state"]
         if v["slow"]: st = "slow"
@@ -250,6 +298,7 @@ def route_display():
     return out
 
 def og_desc():
+    if complete(): return "Network upgrade complete: mining, grading and joining are open. Dates on POAScan."
     r = recovery()
     if r["moved"]:
         lead, tail = _recovery_line()
@@ -278,9 +327,11 @@ def notice():
     act = [x for x in d.get("active") or [] if isinstance(x, dict)]
     n = next((x for x in act if x.get("id") == NOTICE_ID), None) or next((x for x in act if "harden" in str(x.get("id", "")).lower()), None)
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if isinstance(t, (int, float)) else None
-    if not n: return dict(id=NOTICE_ID, active=False, issued_at=None, expires_at=None)
-    exp = n.get("expires_ts")
-    return dict(id=n.get("id"), active=not (isinstance(exp, (int, float)) and exp < time.time()), issued_at=iso(n.get("issued_ts")), expires_at=iso(exp))
+    c = complete()
+    if not n: return dict(id=NOTICE_ID, active=False, issued_at=None, expires_at=None, superseded_by=c["notice_id"] if c else None)
+    exp = n.get("expires_ts"); sup = superseded(n)
+    return dict(id=n.get("id"), active=not sup and not (isinstance(exp, (int, float)) and exp < time.time()), issued_at=iso(n.get("issued_ts")), expires_at=iso(exp),
+                superseded_by=c["notice_id"] if sup else None)
 
 def open_ballots():
     """Ballots still taking votes in our /api/ballots mirror, or None with no mirror yet."""
@@ -351,6 +402,7 @@ def back_since():
 
 def _cleared():
     if not MAINTENANCE: return "switch_off"
+    if complete(): return "upgrade_complete"
     t = back_since()
     if t and time.time() - t > BACK_GRACE_S: return "mining_back"
     if time.time() - STARTED > MAX_S and not _paused_seen(): return "expired"
@@ -361,19 +413,27 @@ def _active(): return _cleared() is None
 def state():
     from . import hosted as R
     cp = A.status().get("checkpoint_height"); cleared = _cleared(); active = cleared is None
-    lj = last_join(); rec = recovery(); rt = R.current(); ck = R.checked_at(); hl = strip_text(); hm = strip_mobile()
+    lj = last_join(); rec = recovery(); rt = R.current(); ck = R.checked_at(); hl = strip_text(); hm = strip_mobile(); c = complete()
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
+    head, short = (" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x), " ".join(x for x in (hm[0] + ".", hm[1]) if x))
+    if c: head, short = DONE_HEAD, "Upgrade complete."
     return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
                 expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=TTL_EPOCHS,
-                parked_checkpoint=PARKED, checkpoint=cp, auto_clear="6 hours after the mining route answers with an official signal that mining is back: the hardening notice is gone, or the author of LabLeak post 1357 says so",
+                parked_checkpoint=PARKED, checkpoint=cp, auto_clear="when an official notice says grading is back and the hardening is over (complete); before that, 6 hours after mining is officially back",
                 halted_list_public=False, url="https://poascan.io/upgrade",
-                phase="recovery" if rec["moved"] else "parked", headline=" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x),
-                headline_short=" ".join(x for x in (hm[0] + ".", hm[1]) if x), updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp_ts())) if stamp_ts() else None,
+                phase="complete" if c else "recovery" if rec["moved"] else "parked", headline=head, headline_short=short,
+                completed_at=iso(c and c["at"]), completed_by=dict(notice_id=c.get("notice_id"), txid=c.get("txid")) if c else None,
+                updated_at=iso(c["at"] if c else stamp_ts()),
                 hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(),
                 official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
                 notice=notice(), recovery=rec, **_hs())
 
+DONE_HEAD = "Upgrade complete. Mining, grading and joining are open."
+
 def _hs():
     from . import halts as H
-    return H.summary()
+    d = H.summary(); pr = (H.current() or {}).get("probe") or {}
+    if d.get("surfaces"): d["surfaces"] = _after_complete(d["surfaces"], pr)
+    return d

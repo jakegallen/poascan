@@ -91,6 +91,8 @@ jobs:
         run: python tools/opsdash_test.py
       - name: Feedback sweep (tx and receipt JSON 404s with found false, archive fallback, open epoch from tagged answers, payout status from the notice, receipt basis_state, established history)
         run: python tools/feedback_test.py
+      - name: Upgrade complete (official notice ends the upgrade, older notices superseded, no Halted tag, /upgrade dates, route check stops, milestones)
+        run: python tools/upgrade_complete_test.py
 
   deploy:
     needs: test

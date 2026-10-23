@@ -936,6 +936,9 @@ td a.mono{display:inline-block;min-width:24px}
  color:var(--amber);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase}
 .upb i,.grp h2 i{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 0 currentColor;animation:uppulse 2.4s ease-out infinite}
 .uph .upts{font-size:var(--t13);color:var(--steel)}
+.upb.ok{border-color:rgba(61,220,151,.45);background:rgba(61,220,151,.08);color:var(--green)}.upb.ok i{animation:none}
+.uph.done .uph-s{margin-bottom:16px}.uph.done .grps{grid-template-columns:1fr}.upg.updone{margin-top:4px;grid-template-columns:150px minmax(0,1fr)}
+@media (max-width:480px){.upg.updone{grid-template-columns:1fr}}
 .uph-t{margin:16px 0 4px;font:700 clamp(30px,4.2vw,46px)/1.05 var(--ui);letter-spacing:-.015em;background:var(--gold);-webkit-background-clip:text;background-clip:text;color:transparent}
 .uph-s{margin:0 0 20px;color:var(--steel);font:500 var(--t16,16px)/1.4 var(--ui)}
 .mtr{margin:0 0 18px}
