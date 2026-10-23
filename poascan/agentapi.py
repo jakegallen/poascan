@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.42"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T05:36:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "The Add Emblem Wallet prompt tells Windows agents how to adapt the npx cache retry."
+VERSION = "1.26.43"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T14:01:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Join prompt v2.5: labeled as a template for people to paste, no check-in links, the register link written whole, plain key safety wording."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -536,7 +536,7 @@ def openapi():
                                  desc="Compares case-insensitively against registration labels and forum names in POAScan's archive; no minepoa.com read, so a name registered in the last minutes may not show yet (synced_ts). minepoa.com does not itself enforce unique names. 200 with available true or false (reason and a suggestion when taken); an invalid name is a 400 with valid false and the /start message in reason. Cache-Control public, max-age=30; CORS open for GET. The name is never logged."),
         "/api/prompts/join": _op("The /start onboarding prompt as data: version, updated_ts, full text and its blocks", {"$ref": "#/components/schemas/JoinPrompt"},
                                  [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False),
-                                  _p("client", "v2.4: a client id from /api/v1/prompts/clients (claude, grok, cursor, ...). Returns that client's variant (full, chat-browse or connector) with its check-ins tagged, exactly what its /start button copies, plus tier, prefill and connector; a no-path client gets text null and a panel. An unknown id is a 400", {"type": "string", "pattern": "^[a-z0-9-]{1,24}$"}, "query", False)],
+                                  _p("client", "v2.4: a client id from /api/v1/prompts/clients (claude, grok, cursor, ...). Returns that client's variant (full, chat-browse or connector) exactly what its /start button copies, plus tier, prefill and connector; a no-path client gets text null and a panel. An unknown id is a 400", {"type": "string", "pattern": "^[a-z0-9-]{1,24}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
                                  desc="Without client: the canonical untagged prompt, byte-identical to llms.txt, the MCP tool get_onboarding_steps and the Join dialog, with the name in the register link. blocks (v2.2: registration, capability_check, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; no wallet block since v2, /start is mining only) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/prompts/clients": _op("The shared client registry for the join prompt: tier, prefill format and connector settings per app", ANY, oid="joinClients", tag="meta",
@@ -600,14 +600,14 @@ def openapi():
                                 "reason": {"type": "string", "description": "empty when available; the /start message otherwise"}, "suggestion": {"type": ["string", "null"], "description": "a free variant, only when taken"},
                                 "checked_ts": {"type": "string", "format": "date-time"}, "synced_ts": {"type": ["string", "null"], "format": "date-time", "description": "newest registration in POAScan's archive"}}},
                             "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
-                                "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "text": {"type": ["string", "null"], "description": "null only for a no-path client (tier none)"},
+                                "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "notice": {"type": "string", "description": "v2.5: show this line next to the text wherever it is rendered: a template for a person to paste, not an instruction to an Agent reading it"}, "text": {"type": ["string", "null"], "description": "null only for a no-path client (tier none)"},
                                 "client": {"type": "string", "description": "v2.4, with ?client= only"}, "client_name": {"type": "string"}, "tier": {"type": "string", "enum": ["full", "chat-browse", "connector", "none"]},
                                 "variant": {"type": ["string", "null"]}, "prefill": {"type": ["string", "null"]}, "prefill_ok": {"type": "boolean"}, "link_chars": {"type": ["integer", "null"]}, "chars": {"type": "integer"},
                                 "open": {"type": ["string", "null"]}, "connector": {"type": ["object", "null"]}, "panel": {"type": "object"}, "clients_url": {"type": "string"},
                                 "sha256": {"type": "string", "description": "sha256 of text (UTF-8)"}, "source": {"type": "string"}, "notes": {"type": "string"},
                                 "blocks": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}},
-                                "checkin": {"type": "object", "description": "v2.3: how a site that renders this text may tag its two optional check-in URLs with its own client id (text stays untagged)",
-                                            "properties": {"base": {"type": "string"}, "tag_rule": {"type": "string"}, "client_rx": {"type": "string"},
+                                "checkin": {"type": "object", "description": "v2.3 to v2.4: how a site that renders this text may tag its optional check-in URLs with its own client id. Since v2.5 the text has no check-ins (in_text false)",
+                                            "properties": {"base": {"type": "string"}, "in_text": {"type": "boolean"}, "tag_rule": {"type": "string"}, "client_rx": {"type": "string"},
                                                            "clients": {"type": "array", "items": {"type": "string"}}, "suggested_client": {"type": "string"}, "note": {"type": "string"}}}}},
                             "Concentration": {"type": "object", "description": "Holder concentration from the rich list. Shares are fractions of the total held balance (0 to 1).",
                                   "properties": {"holders": {"type": "integer"}, "total_balance": {"type": "number"}, "top1_share": {"type": ["number", "null"]}, "top5_share": {"type": ["number", "null"]},
@@ -736,7 +736,7 @@ Tools ({len(TOOLS)}):
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
 - Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
-- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). Since v2.3 the text asks the agent, optionally, to open keyless check-in URLs on poascan.io; the checkin field says how a site that renders the text may tag them with its own client id. Since v2.4, &client=<id> returns that app's variant (full, chat-browse or connector), tagged; the ids, tiers, prefill formats and connector settings pages are in {BASE}{API_PREFIX}/prompts/clients. Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
+- Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (registration, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). It is a template for a person to paste into their own agent; show the notice field next to it. Since v2.5 the text has no check-in URLs. Since v2.4, &client=<id> returns that app's variant (full, chat-browse or connector), tagged; the ids, tiers, prefill formats and connector settings pages are in {BASE}{API_PREFIX}/prompts/clients. Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; method at {BASE}/about#receipts).
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
@@ -784,8 +784,8 @@ JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 """
 
 def start_md():
-    from . import start as ST
-    return "## Start mining PoA (same as https://poascan.io/start)\n" + ST.steps_md() + "\n- Never send payment outside the network.\n\nPrompt:\n\n" + ST.PROMPT + "\n"
+    from . import start as ST, onboarding_prompt as OP
+    return "## Start mining PoA (same as https://poascan.io/start)\n" + ST.steps_md() + "\n- Never send payment outside the network.\n\nPrompt (" + OP.NOTICE + ")\n\n" + ST.PROMPT + "\n"
 
 def server_card():
     """MCP Server Card (SEP-2127 / ext-server-card). Same name as server.json in the official MCP Registry."""

@@ -62,7 +62,9 @@ def unit():
         try: CK.parse(p, q); acc.append((p, q))
         except ValueError: pass
     check(f"allowlist refuses {len(bad)} shapes (versions, clients, steps, params, addresses) {acc}", not acc)
-    check("versions: v2.3, v2.3.1 and v2.3.2 (copies still in chats) and the current v2.4", CK.VERSIONS == ("v2.3", "v2.3.1", "v2.3.2", "v2.4") and OP.VERSION == "v2.4")
+    check("versions: v2.3 to v2.4 still accepted (copies still in chats); the current v2.5 text carries no check-in",
+          CK.VERSIONS == ("v2.3", "v2.3.1", "v2.3.2", "v2.4") and OP.VERSION == "v2.5" and OP.VERSION not in CK.VERSIONS
+          and all("poascan.io/j/" not in t for t in OP.VARIANTS.values()) and OP.CHECKIN == "https://poascan.io/j/v2.4/")
     k4 = [CK.parse("/j/v2.4/start", ""), CK.parse("/j/v2.4/claude/joined", "addr=" + A[0]), CK.parse("/j/v2.4/kimi/rate", "route=answer"),
           CK.parse("/j/v2.4/kimi/probe", "w=qzxekd"), CK.parse("/j/v2.4/probe", "w=Wordy"), CK.parse("/j/v2.4/codex/start", ""), CK.parse("/j/v2.4/voice/start", "")]
     check(f"v2.4 check-ins: start, joined, rate and the new probe (word checked, never returned or kept); new registry clients codex and voice ({k4[3]})",

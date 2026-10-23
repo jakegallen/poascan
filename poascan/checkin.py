@@ -1,6 +1,7 @@
-"""Signup check-ins for join prompt v2.3 and later, and the private funnel built from them (GET /ops/funnel).
+"""Signup check-ins for join prompt v2.3 to v2.4, and the private funnel built from them (GET /ops/funnel).
+Since v2.5 the prompt carries no check-ins; this only counts copies of v2.3 to v2.4 still in chats.
 
-The prompt asks an agent, optionally, to open two keyless URLs on poascan.io:
+Those prompts asked an agent, optionally, to open two keyless URLs on poascan.io:
   /j/<version>[/<client>]/start                     once, before joining
   /j/<version>[/<client>]/joined?addr=<poa1 address> once, after joining (public address only)
   /j/<version>[/<client>]/rate?route=<route>        once, after a 429 (v2.3.1 and later)
@@ -20,8 +21,10 @@ epoch close rewards for mined). Nothing here calls minepoa.com."""
 import datetime as dt, re, threading, time
 from . import db, onboarding_prompt as OP
 
-VERSIONS = ("v2.3", "v2.3.1", "v2.3.2", "v2.4")   # prompt versions that carry check-ins; add each new one here (older copies stay in chats)
-assert OP.VERSION in VERSIONS, "add the new prompt version to checkin.VERSIONS"
+VERSIONS = ("v2.3", "v2.3.1", "v2.3.2", "v2.4")   # prompt versions that carry check-ins (older copies stay in chats)
+# v2.5 (LabLeak post 1398) and later carry no check-ins: copy-paste text never asks an agent to open a poascan.io URL.
+# This endpoint stays only so older pasted copies keep answering ok instead of failing a step.
+assert OP.VERSION in VERSIONS or OP.CHECKIN not in OP.TEMPLATE, "a prompt version with check-ins must be in checkin.VERSIONS"
 STEPS = ("start", "joined", "rate", "probe")
 PROBE_FROM = "v2.4"                      # the probe check-in starts with v2.4
 WORD_RX = re.compile(r"^[A-Za-z]{1,16}$")  # probe?w=: the random test word, letters only; checked, never stored

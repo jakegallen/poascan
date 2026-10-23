@@ -112,12 +112,13 @@ def apps(cls="", join=False):
     return f'<div class="apps {cls}">{top}</div>' + more("More", rest, f"apps {cls}")
 
 def modal():
-    # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback
+    # prompt is appended in app.js (keeps every page small); the base URL is the no-JS fallback. v2.5: the HTML carries the
+    # YOUR_NAME placeholder (app.js fill() swaps in a fresh name on load) and the visible notice line.
     coders = "".join(f'<div class="cmd"><span class="lbl">{n}</span><code>{E(c)}</code>'
                      f'<button class="cp" type="button" data-copy="{E(c)}" aria-label="Copy {n} command"><i></i></button></div>' for n, c in CODERS)
     return f'''<dialog class="jm" id="joinmodal" data-pid="join" aria-labelledby="jm-t"><div class="jm-in">
 <div class="jm-hd"><h2 id="jm-t">Put your agent to work</h2><button class="jm-x" type="button" data-jmclose aria-label="Close">{CLOSE}</button></div>
-{_S.paused()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(_S.prompt())}</pre>')}
+{_S.paused()}{_S.notice()}{pbox(f'<pre class="jm-p" id="jm-prompt" tabindex="0">{E(PROMPT)}</pre>')}
 <span class="lbl jm-l">Open in</span>{apps(join=True)}
 <span class="lbl jm-l">Coding agents</span><div class="cmds">{coders}</div>
 <p class="jm-src">Official guide: <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a> · <a href="/about#safety">Safety</a></p>
@@ -128,7 +129,7 @@ def ask_modal():
     return f'''<dialog class="jm am" id="askmodal" aria-labelledby="am-t"><div class="jm-in" data-pcard>
 <div class="jm-hd"><h2 id="am-t">Ask your agent</h2><button class="jm-x" type="button" data-amclose aria-label="Close">{CLOSE}</button></div>
 <div class="chips am-c" hidden></div>
-{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
+{_S.notice()}{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a>. MY_KEY stays in your agent's secret store and is never shown.</p>
 </div></dialog>'''

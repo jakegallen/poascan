@@ -71,18 +71,20 @@ HELP_LINE = f'<p class="sthelp"><a href="mailto:{HELP_MAIL}?subject=PoA%20join%2
 
 # (title, copyable value or None, short note)
 STEPS = [
-    # v2.4: register and key links are split (host + path) so no chat app, crawler or HowTo reader unfurls or prefetches one.
-    ("Register", f"{B} + /api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent joins the pieces and opens it once."),
+    # v2.5: links are written whole. The register one carries the YOUR_NAME placeholder, so a crawler or HowTo reader that
+    # fetched it could only hit a placeholder name, never a real one; key links carry YOUR_KEY.
+    ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent opens it once."),
     ("Store the key", None, "OS secret store only. Never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
-    ("Answer the challenge", f"{B} + /api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
-    ("Mine", f"{B} + /api/hosted/mine?key=YOUR_KEY", ""),
-    ("Check in", f"{B} + /api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
+    ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Own words, 120-600 characters, all 3 words."),
+    ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
+    ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day."),
 ]
 
 def data():
     """Same content as /start, for the MCP onboarding tool and llms.txt."""
-    return dict(title=TITLE, prompt=PROMPT, steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
+    from . import onboarding_prompt as OP
+    return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
                 wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
                 sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, "No invite or referral codes.", PAY],
                 url="https://poascan.io/start")
@@ -124,6 +126,11 @@ def _stamp():
 
 KEYLINE = "Your agent stores its key privately. Never paste it anywhere."
 
+def notice():
+    """v2.5 (LabLeak post 1398): the visible line next to every copy of a prompt, in the fetched HTML too."""
+    from . import onboarding_prompt as OP
+    return f'<p class="pnote" data-pnote>{E(OP.NOTICE)}</p>'
+
 # Step 2: one set of client choices from the shared registry (data/clients.json, poascan/clients.py): the four in row "top"
 # up front, every other app behind one More (registry order), then the connector install links and commands.
 # v2.4: Muse moved out of the first row (no working path today); Cursor took its place (shell agent, prompt deeplink,
@@ -158,13 +165,13 @@ def api_join(name=None, client=None):
     else: nm = name
     if client is not None: return _api_client(nm, client)
     t = prompt(nm)
-    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
+    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
-                checkin=dict(base=OP.CHECKIN, tag_rule="replace every base with base + client + '/'; nothing else changes", client_rx=OP.TAG_RX.pattern,
+                checkin=dict(base=OP.CHECKIN, in_text=OP.CHECKIN in t, tag_rule="replace every base with base + client + '/'; nothing else changes", client_rx=OP.TAG_RX.pattern,
                              clients=sorted(checkin_clients()), suggested_client="poaswap",
-                             note="Optional and keyless. The text above is untagged; untagged check-ins count as client none."),
+                             note="None since v2.5: the text never asks an Agent to open a poascan.io URL, so tagging changes nothing."),
                 variant="full", clients_url=CLIENTS_URL,
-                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant, tagged.")
+                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant. Show notice next to the text wherever you render it.")
 
 def _api_client(nm, cid):
     import hashlib
@@ -173,7 +180,7 @@ def _api_client(nm, cid):
     c = C.get(cid) if isinstance(cid, str) else None
     if not c: raise ValueError("client: one of the ids in " + CLIENTS_URL)
     v = C.variant(c)
-    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, client=cid, client_name=c["name"], tier=c["tier"], variant=v,
+    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, client=cid, client_name=c["name"], tier=c["tier"], variant=v,
                 open=c["open"] or None, connector=dict(c["connector"], url=C.MCP_URL) if c.get("connector") else None, clients_url=CLIENTS_URL,
                 source="https://poascan.io/start")
     if not v:
@@ -186,8 +193,8 @@ def _api_client(nm, cid):
     return dict(base, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(), blocks=[dict(id=b, text=x) for b, x in OP.blocks(t, v)],
                 prefill=c["prefill"] if ok else None, prefill_ok=ok, chars=len(t),
                 link_chars=len(c["prefill"] + quote(t, safe="")) if ok else None,
-                notes="text is exactly what the /start button for this client copies: the " + v + " variant with its check-ins tagged " + cid
-                      + ". Joining the blocks in order gives text.")
+                notes="text is exactly what the /start button for this client copies: the " + v + " variant (no check-ins since v2.5)"
+                      + ". Joining the blocks in order gives text. Show notice next to the text wherever you render it.")
 
 URL_MAX = 8000                        # every prefill link stays under this (longest name, tagged); longer falls back to copy and open
 
@@ -290,9 +297,11 @@ def page(page_fn, card=None, apps=None):
           '<button class="gocp" type="button" data-gocopy>Copy prompt</button></div>' + nopath_panel()
           + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
           '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>'
-          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>'
+          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice()
           + '<details class="stview" data-stview><summary>View prompt</summary>'
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt(nm, c0["variant"] or "full"))}</pre>') + '</details>' + variant_templates() + HELP_LINE)
+          # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so a crawler
+          # that pulled the register link out of the page text could only hit the placeholder, never a fresh name each hour.
+          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + variant_templates() + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
     hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
@@ -303,7 +312,7 @@ def page(page_fn, card=None, apps=None):
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
-    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start" data-checkin="{E(OP.CHECKIN)}">{hero}{steps}</section>'
+    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
             f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
     return page_fn("Start", body, "/start")

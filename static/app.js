@@ -173,14 +173,14 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
 (function(){function op(){if(W.location.hash!=="#xemb")return;var d=D.getElementById("xemb");if(d&&!d.open){d.open=true;d.scrollIntoView({block:"center"})}}op();W.addEventListener("hashchange",op)})();
 /* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
- R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s]*/;W.poaNewName=gen;
+ R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s`]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
  function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
  var jp=$("#jm-prompt");fill(jp,nm);
  var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
  function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;fill(pre,v);fill(jp,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
  f.value=nm;upd();f.addEventListener("input",upd)})();
-/* prompt v2.3 check-ins: on /start the copied text carries the picked client's tag in the two check-in URLs
+/* prompt v2.3 to v2.4 check-ins (v2.5 has none and no data-checkin, so this returns the text unchanged): on /start the copied text carries the picked client's tag in the two check-in URLs
    (data-checkin base + data-tag + "/"); everything else stays byte for byte. Elsewhere the text is untagged. */
 W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[name=client]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
 if(jm){var P=($("#jm-prompt",jm).textContent||"").trim();
