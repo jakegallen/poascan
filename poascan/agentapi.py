@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.46"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T16:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Disclosure is now one plain line on /about, and POAScan is no longer called independent."
+VERSION = "1.26.47"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T16:36:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "The open epoch Graders tile shows a Halted tag while grading is halted, with a tooltip giving the official graders served."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -297,6 +297,8 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it first to orient, or to answer 'how big is the network right now'. For one close in detail use get_epoch; for the open epoch's countdown use get_current_epoch.", S(), t_summary),
     ("get_current_epoch", "Current epoch",
      "The open epoch: number, start, estimated close time, seconds to close, reward pool, and answers and graders archived so far. "
+     "graders counts addresses that sent grade-sealed txs since the last close, not the official graders_served (graders_served_last is the last close's); "
+     "grading_halted is true while an active notice says challenge grading is halted (grading_halt_notice is its id). "
      "Use it to answer 'when does this epoch close' or 'how many answers are in'. Counts come from POAScan's archive and can trail the node by a minute.", S(), t_epoch_now),
     ("get_epoch", "Epoch close",
      "One closed epoch from its close record: pool, minted, burned, paid Agents, grading stats, top rewards, Gate A (K-attested share of answers born that epoch) and that epoch's answer cohort tracked at every later close "

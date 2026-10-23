@@ -42,6 +42,19 @@ def ring(o, big=False):
     return (f'<span class="ring{" big" if big else ""}" data-start="{start or ""}" data-close="{close or ""}" aria-hidden="true"><svg viewBox="0 0 40 40">'
             f'<circle class="rt" cx="20" cy="20" r="17"/><circle class="rp" cx="20" cy="20" r="17" pathLength="100" stroke-dasharray="{frac*100:.2f} 100"/></svg></span>')
 
+def graders_tip(o):
+    """Tooltip for the open epoch's Graders count: what it counts, the official count, and the halt when one is on."""
+    prev = (o.get("epoch") or 1) - 1; sv = o.get("graders_served_last")
+    t = f"Addresses that sealed a grade since the epoch {prev} close, from POAScan's archive. Official graders served at that close: {f'{sv:,}' if sv is not None else 'unknown'}."
+    if o.get("grading_halted"): t += f" Grading is halted (notice {o.get('grading_halt_notice')}): seals can land on chain but are not settled or credited."
+    return t
+
+def graders_tile(o):
+    """Label, count and, while grading is halted, a Halted tag. Terse: the detail lives in the tooltip."""
+    tag = ' <span class="tag warn">Halted</span>' if o.get("grading_halted") else ""
+    return (f'<span class="lbl" title="{E(graders_tip(o))}">Graders{tag}</span>'
+            f'<b class="num" data-live="graders" title="{E(graders_tip(o))}">{intc(o.get("graders"))}</b>')
+
 def tracker_html():
     o = A.open_epoch(); now = time.time()
     left = (o["est_close"] - now) if o["est_close"] else None
@@ -49,7 +62,7 @@ def tracker_html():
     return (f'<div class="tracker">{ring(o)}<div class="tk"><span class="lbl">Epoch</span><b class="num ep" data-live="epoch">{o["epoch"]}</b></div>'
             f'<div class="tk"><span class="lbl">Closes in</span>{cd}</div><span class="sp"></span>'
             f'<div class="tk"><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
-            f'<div class="tk"><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
+            f'<div class="tk">{graders_tile(o)}</div>'
             f'{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/epochs">More →</a></div>')
 
 def burnmeter_html():
@@ -561,7 +574,7 @@ def live_hero():
     return (f'<section class="card livehero" id="tracker"><div class="lh-ring">{ring(o, big=True)}<div class="lh-ep"><span class="lbl">Epoch</span><b class="num" data-live="epoch">{o["epoch"]}</b></div></div>'
             f'<div class="lh-cd"><span class="lbl">Closes in</span>{cd}</div>'
             f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
-            f'<div><span class="lbl">Graders</span><b class="num" data-live="graders">{intc(o["graders"])}</b></div>'
+            f'<div>{graders_tile(o)}</div>'
             f'<div><span class="lbl">Pool</span><b>{poa(o["pool"], dec=2)}</b></div></div></section>')
 
 def epochs_page(qs=None):

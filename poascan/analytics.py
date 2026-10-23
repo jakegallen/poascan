@@ -1,5 +1,5 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
-import json, time, threading, statistics, collections, csv, os, datetime as dt
+import json, time, threading, statistics, collections, csv, os, re, datetime as dt
 from . import db
 
 _cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
@@ -120,9 +120,31 @@ def open_epoch():
     e0 = float(p.get("E0") or 1e9); halv = int(p.get("halving_epochs") or 720)
     pool = e0 / (2 ** (closed // halv))
     answers = db.q1("SELECT COUNT(*) AS n FROM txs WHERE type='challenge' AND ts > ?", (last_close or 0,))["n"] if last_close else None
+    # graders: distinct senders of grade-sealed txs archived since the last close. Not the official count: that is
+    # basis.graders_served, published per close (graders_served_last). Seals still land while grading is halted.
     graders = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE type='grade-sealed' AND ts > ?", (last_close or 0,))["n"] if last_close else None
+    halt = grading_halt()
     return dict(epoch=closed, last_close=last_close, est_close=(last_close + period) if last_close else None,
-                period=period, pool=pool, answers=answers, graders=graders)
+                period=period, pool=pool, answers=answers, graders=graders, graders_basis="grade-sealed senders since the last close",
+                graders_served_last=rows[-1].get("graders") if rows else None, grading_halted=bool(halt), grading_halt_notice=halt)
+
+HALT_ID_RX = re.compile(r"grading[-_ ]halt", re.I)
+HALT_MSG_RX = re.compile(r"\bgrading\b[^.]{0,40}?\bhalted\b", re.I)
+UNHALT_RX = re.compile(r"\b(?:no longer|unhalt\w*|resumed|lifted|reopened)\b", re.I)
+
+def grading_halt(now=None):
+    """Id of the active, unexpired notice in our /api/notices mirror that says challenge grading is halted, else None."""
+    d = db.get_blob("notices")[0]
+    if not isinstance(d, dict): return None
+    now = time.time() if now is None else now
+    for x in d.get("active") or []:
+        if not isinstance(x, dict): continue
+        exp = x.get("expires_ts")
+        if isinstance(exp, (int, float)) and exp < now: continue
+        nid, msg = str(x.get("id") or ""), str(x.get("msg") or "")
+        if UNHALT_RX.search(msg): continue
+        if HALT_ID_RX.search(nid) or HALT_MSG_RX.search(msg): return nid or "notice"
+    return None
 
 @cached("rewards_by_addr", 60)
 def rewards_by_addr():

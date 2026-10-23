@@ -57,6 +57,8 @@ jobs:
         run: python tools/audit_test.py
       - name: Established set
         run: python tools/established_test.py
+      - name: Graders tile (distinct sealers, official served, Halted state)
+        run: python tools/graders_tile_test.py
       - name: Halts
         run: python tools/halts_test.py
       - name: Pulse

@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.47] - 2026-10-23
+
+### Changed
+- Open epoch Graders tile (home and `/epochs`): a Halted tag while an active notice says challenge grading is halted. Tooltip: what it counts (addresses that sealed a grade since the last close, from POAScan's archive), the official graders served at that close, and the halt notice id.
+
+### Added
+- `open_epoch` in `/api/summary` and MCP `get_current_epoch`: `graders_basis`, `graders_served_last`, `grading_halted`, `grading_halt_notice`.
+- `tools/graders_tile_test.py` in CI.
 ## [1.26.46] - 2026-10-23
 
 ### Changed
