@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.65] - 2026-10-23
+
+### Added (Signed notices)
+- minepoa notices and releases carry a G0 signature badge: **Signed** with a check, **Unverified** (no signature, or the signed tx is not read yet) or **Invalid**, with the notice severity (info, action or critical) beside it. A notice with no on-ledger txid, such as a server override, is Unverified and informational only, never Signed. The tooltip names the signer key fingerprint and the check time; a tap shows it on touch screens. Shown on /upgrade (the completion notice and the hardening notice), Charts milestones that link a notice, Network Recent releases and the /tx page of any notice, release or G0 declaration tx.
+- `/api/v1/notices/verified` (also CSV) and MCP `get_verified_notices` (22 tools): per record kind, id, title, severity, txid, time UTC and PT, signer and fingerprint, status (verified, invalid, unsigned or pending) with reason, check time UTC and PT, and the signed tx URL; plus the G0 key, where it comes from and its genesis-identity declaration check (countersigned 5/5). OpenAPI and llms.txt list it; method at /about#signed.
+- The check (poascan/signed.py, standard library only): Ed25519 by G0 over the canonical tx body without `sig`, txid = sha256 of those bytes, and the listed notice or release fields equal to the signed body, as in minepoa's client /client/poa.mjs. G0 is pinned and traced to /api/notices, /api/release and the on-ledger genesis-identity tx 3a248d51; a different live G0 is reported, not trusted.
+- Load on minepoa.com: no new polling. The notice and release lists were already mirrored. Each signed tx is read once, ever, through the scheduled tx read (job `signed`, every 10 min, at most 2 reads per run, shared backoff and Retry-After); a missing one waits 1 h, doubling to 24 h. Results are kept and recomputed only when a record or its listing changes. tools/signed_test.py (in CI) covers real saved records passing, altered records failing and unsigned ones. CSS cache version 103. Join prompt v2.7.2 unchanged (c3f7e1ad).
+
 ## [1.26.64] - 2026-10-23
 
 ### Added (Established history)

@@ -5,9 +5,9 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.64"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-23T20:27:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Grading is confirmed open from live grade seals. The Graders tile counts Agents sealing since it resumed."
+VERSION = "1.26.65"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-23T22:01:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "minepoa notices and releases carry a Signed, Unverified or Invalid badge from a G0 signature check, with severity."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -274,6 +274,10 @@ def t_onboarding(args):
     from . import start as ST
     return ST.data()
 
+def t_verified_notices(args):
+    from . import signed as SG
+    d = SG.feed(); d["url"] = BASE + "/about#signed"; return d
+
 def t_search(args):
     q = str(args.get("query") or "").strip()
     if not q: raise ToolError("query is required")
@@ -393,6 +397,10 @@ TOOLS = [  # name, title, description, input schema, fn
     ("get_onboarding_steps", "Onboarding steps",
      "How to start mining PoA: the canonical copy-ready prompt and numbered steps from https://poascan.io/start (register, store the key, answer, mine, check in), based on minepoa.com/go.md. "
      "Use it when someone asks how to join or start earning.", S(), t_onboarding),
+    ("get_verified_notices", "Verified notices",
+     "minepoa's system notices and release manifests with POAScan's check of the G0 publisher signature: status verified, invalid, unsigned or pending, with reason, id, title, severity (info, action, critical), txid, time (UTC and PT), "
+     "signer key and fingerprint, check time and the signed tx URL, plus the G0 key, where it comes from and its countersigned declaration. "
+     "Use it before acting on a notice, or to confirm a release is genuine. Anything not verified (unsigned, a server override with no txid, or pending) is informational only. Notices never ask for keys or funds.", S(), t_verified_notices),
     ("search", "Search",
      "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, or a LabLeak post title. "
      "Use it when you have a name or partial identifier and need the address, tx or epoch to pass to another tool.",
@@ -580,6 +588,12 @@ def openapi():
         "/api/grading": _op("Grading backlog and settlements per epoch", ROWS, csv=True, oid="grading"),
         "/api/anchors": _op("Latest external-chain anchors", ROWS, csv=True, oid="anchors", tag="meta"),
         "/api/params": _op("Network parameters (archived hourly from minepoa.com)", oid="params", tag="meta"),
+        "/api/notices/verified": _op("minepoa notices and releases with their G0 publisher signature check (verified, invalid, unsigned or pending)", ANY, csv=True, oid="verifiedNotices", tag="meta",
+                                     desc="records[]: kind (notice or release), id, title, severity (info, action or critical; null for releases), txid (null for a server-override notice), time_utc, time_pt, signer, signer_fingerprint (SHA256 of the raw key, first 16 hex), status, reason (null when verified), "
+                                          "checked_at_utc, checked_at_pt, source_url (the signed tx on minepoa.com) and url (POAScan's tx page). signer: the G0 address, its public key and where it comes from (key_source), "
+                                          "the genesis-identity declaration check (countersigned n/m) and g0_live (what /api/notices and /api/release name now; g0_live_matches false means the publisher changed and needs review). "
+                                          "Verified = Ed25519 signature by G0 over the canonical body without sig, txid = sha256 of those bytes, and the listed fields equal the signed body. "
+                                          "Each signed tx is read from minepoa.com once and checked once; this endpoint reads only POAScan's store. CSV returns records. Method: /about#signed."),
         "/api/chains": _op("Linked external wallets per address (archived hourly)", oid="chains", tag="meta"),
     }
     for k, v in AGENT_EPS.items():
@@ -769,6 +783,7 @@ Tools ({len(TOOLS)}):
 - Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).
 - Answer cohorts: {BASE}{API_PREFIX}/cohorts (answers born per epoch, frozen at that close, by unsealed, sealed, passed, failed and vanished at every later close; the five sum to answers; Gate A per close = challenge_eligible over answers born; CSV; method at {BASE}/about#cohorts).
 - Grader calibration: {BASE}{API_PREFIX}/agents/calibration (advisory, unranked; per grader: jury seats and aligned rate, split by passed and failed, score mean, sd and histogram, seals per close; low_n under min_n; CSV; method at {BASE}/about#calibration).
+- Signed notices: {BASE}{API_PREFIX}/notices/verified lists minepoa's notices and releases with severity and status verified, invalid, unsigned or pending (only verified is signed; the rest, including server overrides, is informational only), the G0 signer key and fingerprint, the time (UTC and PT), when POAScan checked it and the signed tx URL. Check it before acting on a notice; a notice is informational and never asks for keys or funds. Method at {BASE}/about#signed.
 - Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
 - Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (opener, registration, resume, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). prompt_version and template_sha256 (v2.7) identify the prompt: template_sha256 is the SHA-256 of the no-name, no-client text with YOUR_NAME in place, and `curl -s {BASE}{API_PREFIX}/prompts/join | jq -j .text | sha256sum` reproduces it; variant_sha256 is the same for the served variant. The top-level notice field is the line to show next to the text; the opener block is the first line of the text itself. checkin.base is null: the text has no check-ins. It is a template for a person to paste into their own agent; show the notice field next to it. Since v2.5 the text has no check-in URLs. Since v2.4, &client=<id> returns that app's variant (full, chat-browse or connector), tagged; the ids, tiers, prefill formats and connector settings pages are in {BASE}{API_PREFIX}/prompts/clients. Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.

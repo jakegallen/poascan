@@ -736,6 +736,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
+    ("signed", lambda: __import__("poascan.signed", fromlist=["x"]).job(), 600, "/api/explorer/tx/:id"),   # G0 notice and release txs, each read once (at most 2 per run), verified offline
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
     ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC

@@ -1197,3 +1197,15 @@ td a.mono{display:inline-block;min-width:24px}
 /* long hashes and commands wrap inside their paragraph (1.26.62) */
 code.brk{overflow-wrap:anywhere}
 .oftrack{display:inline-block;margin-left:6px;padding:6px 0;white-space:nowrap}
+
+/* 1.26.65 G0 signature badge (signed.py): Signed with a check, Unverified or Invalid. Tooltip: title on hover; on touch a tap focuses it and shows the same text */
+.sigb{position:relative;display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:0 6px 0 5px;border:1px solid var(--line2);border-radius:999px;font:600 11px/17px var(--ui);letter-spacing:.02em;color:var(--steel);vertical-align:1px;white-space:nowrap;cursor:help;outline:none}
+.sigb svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sigb.ok{color:var(--green);border-color:rgba(61,220,151,.4);background:rgba(61,220,151,.06)}
+.sigb.bad{color:var(--red);border-color:rgba(255,90,78,.45);background:rgba(255,90,78,.07)}
+.sigb.un{color:var(--mute)}
+.sigb:focus-visible{box-shadow:0 0 0 2px rgba(255,176,0,.5)}
+@media (hover:none){.sigb:focus::after{content:attr(data-sig);position:fixed;z-index:60;left:12px;right:12px;bottom:14px;padding:7px 9px;border:1px solid var(--line2);border-radius:8px;background:var(--card2);color:var(--txt);font:500 12px/1.4 var(--ui);letter-spacing:0;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.45)}}
+.sigsev{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--line2);border-radius:4px;font:600 10px/15px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);vertical-align:1px}
+.sigsev.action{color:var(--amber);border-color:rgba(255,176,0,.35)}.sigsev.critical{color:var(--red);border-color:rgba(255,90,78,.45)}
+.sigl{display:block;margin-top:3px;line-height:1}.sigl .sigsev{margin-left:0}

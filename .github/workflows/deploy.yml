@@ -103,6 +103,8 @@ jobs:
         run: python tools/grading_truth_test.py
       - name: Standing expiry estimate (observed rule, close L + estab_ttl + 1 from the last challenge_eligible epoch; null when unknown; labelled an estimate)
         run: python tools/standing_test.py
+      - name: Signed notices (G0 signature on real saved records passes, altered fails, unsigned is Unverified; each tx read once, checked once; /api/v1/notices/verified, badge, /about line)
+        run: python tools/signed_test.py
 
   deploy:
     needs: test

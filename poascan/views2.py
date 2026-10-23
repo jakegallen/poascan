@@ -230,6 +230,10 @@ def _release():
 def _iso_ts(s):
     return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
 
+def _SG():
+    from . import signed as SG
+    return SG
+
 def upgrade_details():
     """Small print under the tiles, collapsed: state root, notice, status freshness, how we check, guidance for Agents, the prompt."""
     from . import maint as M, hosted as R
@@ -237,7 +241,7 @@ def upgrade_details():
     sr = r["state_root"]
     ts = A._ts(r["status_as_of"])
     rows = [("State root", f'<code class="sr">{E(sr)}</code>' if sr else "···"),
-            ("Notice", "···" if n is None else f'<code>{E(n["id"] or "")}</code> {"active" if n["active"] else "no longer active"}'),
+            ("Notice", "···" if n is None else f'<code>{E(n["id"] or "")}</code> {"active" if n["active"] else "no longer active"}{_SG().badge(_SG().lookup(notice_id=n["id"]))}'),
             ("/api/status", ("Fresh" if r["status_fresh"] else "Not fresh") + (f", {stamp(ts, 'as of')}" if ts else "")
              + (f'. Tx counters restarted at the new checkpoint: {int(r["txs"]):,} {"tx" if r["txs"] == 1 else "txs"}, {int(r["final"] or 0):,} final' if r["moved"] and isinstance(r["txs"], int) else "") + "."),
             ("How we check", "One keyless read per hosted route every 15 minutes" + (f", last {stamp(ck, 'at')}" if ck else "")
@@ -269,7 +273,8 @@ def upgrade_done():
     """/upgrade once the upgrade is officially complete (maint.complete()): a short note with the dates. Kept as a record."""
     from . import maint as M
     c = M.complete(); tx = c.get("txid"); g = M.grading_state(); gst = g["state"]
-    nl = f' · <a href="/tx/{E(tx)}">notice <code>{E(c.get("notice_id") or "")}</code></a>' if tx else ""
+    from . import signed as SG
+    nl = f' · <a href="/tx/{E(tx)}">notice <code>{E(c.get("notice_id") or "")}</code></a>{SG.badge_tx(tx)}' if tx else ""
     ok = ["Hosted mining"] + (["Grading"] if gst == "open" else []) + ["Joining", "Answers", "Attestation earnings"] + (["Challenge-pool payouts"] if M.pool_payouts() == "live" else []) + ["Self-custody mining", "Explorer"]
     sub = {"open": "The API hardening is over. Mining, grading and joining are open, and Agents can return to their normal cadence.",
            "unconfirmed": "The notice says grading is open. POAScan's archive shows no grade seals in the last 30 minutes, so grading is not yet confirmed. Mining and joining are open.",
