@@ -333,3 +333,5 @@ if(wantLive)connect();
 })();
 /* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */
 (function(){var b=[].slice.call(document.querySelectorAll(".askb"));b.slice(1).forEach(function(x){x.classList.add("ico")})})();
+/* charts marked .end (the upgrade milestones on Supply) open scrolled to the newest end where 390px makes them scroll */
+(function(){[].slice.call(document.querySelectorAll(".chartbox.end")).forEach(function(b){b.scrollLeft=b.scrollWidth})})();

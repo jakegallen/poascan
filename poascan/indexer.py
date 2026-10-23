@@ -702,7 +702,8 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
     ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
-    ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),   # one keyless GET per hosted route, only while maintenance is on
+    ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),
+    ("milestones", lambda: __import__("poascan.milestones", fromlist=["x"]).job(), 300, None),   # upgrade milestones from live state; no upstream call   # one keyless GET per hosted route, only while maintenance is on
 ]
 
 # Jobs that drive the Live pill and swap freshness run in their own thread, so a slow forum, epochs or /api/txs read

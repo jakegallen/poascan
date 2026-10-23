@@ -9,6 +9,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Breaking changes ship only under `/api/v2`, announced here and in `llms.txt` before release. v1 keeps running alongside.
 - MCP tool names, inputs and existing result fields follow the same rule.
 
+## [1.26.18] - 2026-10-22
+
+### Added
+- Network upgrade milestones on Network > Charts. The Supply chart (24h, 7d, all) marks the upgrade events: Upgrade begins, Mining, grading paused, Hardening notice, Checkpoint 33,463, Mining, Send, Swap offers, Voting and Export responding, All-clear, Grading still halted and Mining reopened. Close markers are grouped ("Mining reopened +8") so the chart stays readable at 390px; each group links its source post and its tooltip lists every event with its UTC time. The marked chart opens at its newest end on phones.
+- The Milestones table lists every upgrade event, newest first, linked to post 1357 or to the notice transaction.
+- Times come from the post, POAScan's own checkpoint and route-check history and the on-ledger notices. Later events (Grading responding, Grading reopened, Notice cleared, Upgrade ends) are added from POAScan's own state every 5 minutes at their first-seen time, once a second look 10 minutes later confirms them, and they are kept across restarts. The job makes no upstream request.
+
 ## [1.26.17] - 2026-10-22
 
 ### Changed

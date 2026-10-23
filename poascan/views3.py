@@ -187,11 +187,17 @@ def charts_body(rng=""):
     H = 140
     ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am)
     hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em)
-    sc = line(cut(g["supply"]), height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0)
+    from . import milestones as MS   # network upgrade markers (LabLeak post 1357), grouped so they stay readable at 390px
+    up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])
+    um = MS.group(up, sp[0][0], sp[-1][0]) if len(sp) > 1 else []
+    sc = line(sp, height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0, marks=um)
+    if um: sc = sc.replace('<div class="chartbox">', '<div class="chartbox end">', 1)   # 390px: open at the newest end, where the markers are
     th = None if rng == "all" else line([(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0], height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
     ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
     tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
-    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])] for t, l, k in reversed(g["ms"]) if t >= t0])
+    lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>') if e["url"] else E(e["label"])
+    rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0] + [(e["ts"], 1, lk(e)) for e in up]
+    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
     chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
     return f'''<div class="stats three">{st}</div><div class="chips rng" role="group" aria-label="Range">{chips}</div>
 <div class="grid3 smalls">{card(ICON_BOT + "Agents", ac)}{card(ICON_USERS + "Holders", hc)}{card("Supply", sc)}{card("Txs" + (" / day" if rng == "all" else " / hour"), tc)}{card(ICON_CUBE + "Answers / epoch", ec)}{card("Milestones", ml, cls="mls")}</div>'''

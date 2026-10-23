@@ -486,7 +486,7 @@ def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=com
     return '<div class="chartbox">' + "".join(out) + "</div>" + lg
 
 def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None):
-    """marks: [(x, label)] dashed markers. proj_from: x after which the line is drawn dashed (projection)."""
+    """marks: [(x, label)] or [(x, label, url, title)] dashed markers. proj_from: x after which the line is drawn dashed (projection)."""
     pts = [(x, y) for x, y in points if y is not None]
     if len(pts) < 2: return chart_skel(640, height)
     W, H, pl, pb, pt = 640, height, 56, 24, 14
@@ -501,7 +501,14 @@ def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None
     g = "".join(f'<line x1="{pl}" x2="{W}" y1="{Y(ymin+(y1-ymin)*i/4):.1f}" y2="{Y(ymin+(y1-ymin)*i/4):.1f}" class="grid"/><text x="{pl-6}" y="{Y(ymin+(y1-ymin)*i/4)+4:.1f}" class="ax" text-anchor="end">{fmt(ymin+(y1-ymin)*i/4)}</text>' for i in range(5))
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
     xs = f'<text x="{pl}" y="{H-6}" class="ax">{xl(x0)}</text><text x="{W-4}" y="{H-6}" class="ax" text-anchor="end">{xl(x1)} UTC</text>'
-    mk = "".join(f'<g class="mk"><line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/><text x="{(X(x)-3 if X(x) > W-60 else X(x)+3):.1f}" y="{pt+8 + (i % 2) * 11}" class="ax mkl"{" text-anchor=\"end\"" if X(x) > W-60 else ""}>{E(l)}</text></g>' for i, (x, l) in enumerate(marks or []) if x0 <= x <= x1)
+    def _mk(i, m):   # (x, label) or (x, label, url, title): a url makes the marker a link, a title its hover tip; these label along the bottom
+        x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
+        end = X(x) > W - 60 - (6 * len(l) if url or tip else 0)
+        g_ = (f'<g class="mk">{"<title>" + E(tip) + "</title>" if tip else ""}<line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/><text x="{(X(x)-3 if end else X(x)+3):.1f}" '
+              f'y="{(H-pb-6 - (i % 2) * 12) if url or tip else (pt+8 + (i % 2) * 11)}" class="ax mkl"{" text-anchor=\"end\"" if end else ""}>{E(l)}</text></g>')
+        ext = url and url.startswith("http")
+        return f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}>{g_}</a>' if url else g_
+    mk = "".join(_mk(i, m) for i, m in enumerate(marks or []) if x0 <= m[0] <= x1)
     step = max(1, len(pts) // 60)
     circ = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="2.6" fill="{color}" data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-cx="{X(x):.1f}"/>' for x, y in pts[::step])
     pb_ = f'<path d="{path(b)}" fill="none" stroke="{color}" stroke-width="2" stroke-dasharray="5 4" opacity=".7"/>' if len(b) > 1 else ""
