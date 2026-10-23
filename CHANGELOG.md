@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.46] - 2026-10-23
+
+### Changed
+- Disclosure: one plain line on `/about`; drop "independent". "POAScan is built by Jake Gallen, who also built POASwap and is part of the team behind Plus1. The PoA operators don't run it."
+- FAQ "Is it official?": "No. The PoA operators don't run it. The source is on GitHub (MIT)." "What is POAScan?" and the FAQ meta description drop "independent".
+- Ownership asides removed outside the Disclosure section: the `/forum` Top authors note, the `/privacy` Setup code section and the README byline.
+
 ## [1.26.45] - 2026-10-23
 
 The join prompt text is unchanged (still v2.6).
