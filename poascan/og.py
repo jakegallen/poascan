@@ -96,7 +96,11 @@ ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
 
 def _upgrade():
     from . import maint as M
-    if M.complete(): return ("Network upgrade", "Upgrade complete", ["Mining, grading and joining open"], [("Mining", "Open"), ("Grading", "Open"), ("Joining", "Open")])
+    if M.complete():
+        g = M.grading_state()["state"]
+        if g == "open": return ("Network upgrade", "Upgrade complete", ["Mining, grading and joining open"], [("Mining", "Open"), ("Grading", "Open"), ("Joining", "Open")])
+        return ("Network upgrade", "Upgrade complete per notice", ["Grading not yet confirmed" if g == "unconfirmed" else "Grading halted"],
+                [("Mining", "Open"), ("Grading", "Unconfirmed" if g == "unconfirmed" else "Halted"), ("Joining", "Open")])
     lead = M.strip_text()[0]; jp = M.join_state() == "paused"   # a paused join is already in the lead; no second row saying so
     r = M.recovery()
     if r["moved"]:

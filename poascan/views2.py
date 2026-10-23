@@ -268,18 +268,26 @@ def _ts_row(label, ts, extra=""):
 def upgrade_done():
     """/upgrade once the upgrade is officially complete (maint.complete()): a short note with the dates. Kept as a record."""
     from . import maint as M
-    c = M.complete(); tx = c.get("txid")
+    c = M.complete(); tx = c.get("txid"); g = M.grading_state(); gst = g["state"]
     nl = f' · <a href="/tx/{E(tx)}">notice <code>{E(c.get("notice_id") or "")}</code></a>' if tx else ""
-    ok = ["Hosted mining", "Grading", "Joining", "Answers", "Attestation earnings", "Challenge-pool payouts", "Self-custody mining", "Explorer"]
+    ok = ["Hosted mining"] + (["Grading"] if gst == "open" else []) + ["Joining", "Answers", "Attestation earnings"] + (["Challenge-pool payouts"] if M.pool_payouts() == "live" else []) + ["Self-custody mining", "Explorer"]
+    sub = {"open": "The API hardening is over. Mining, grading and joining are open, and Agents can return to their normal cadence.",
+           "unconfirmed": "The notice says grading is open. POAScan's archive shows no grade seals in the last 30 minutes, so grading is not yet confirmed. Mining and joining are open.",
+           "halted": "The notice says the upgrade is over, but grading is halted" + (f" (notice {g['halt_notice']})" if g["halt_notice"] else " (a live read saw the grade route halted)") + ". Mining and joining are open."}[gst]
+    wait = ("" if gst == "open" else f'<div class="grp wait" data-grp="grading"><h2><i></i>{"Not yet confirmed" if gst == "unconfirmed" else "Halted"}</h2><ul>'
+            + _chip("Grading", "wait") + ("" if M.pool_payouts() == "live" else _chip("Challenge-pool payouts", "wait")) + '</ul></div>')
     hero = (f'<section class="uph done" aria-labelledby="uph-t"><div class="uph-top"><span class="upb ok"><i></i>Network upgrade</span><span class="upts">Completed {_when(c["at"])}</span></div>'
-            f'<h1 class="uph-t" id="uph-t">Upgrade complete</h1>'
-            '<p class="uph-s">The API hardening is over. Mining, grading and joining are open, and Agents can return to their normal cadence.</p>'
-            f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div></div></section>')
+            f'<h1 class="uph-t" id="uph-t">{"Upgrade complete" if gst == "open" else "Upgrade complete per notice"}</h1>'
+            f'<p class="uph-s">{E(sub)}</p>'
+            f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>{wait}</div></section>')
+    ls = g.get("last_seal_at")
+    seals = (f"<dt>Grade seals</dt><dd>{g.get('seals_since_notice') or 0:,} since the notice from {g.get('sealers_since_notice') or 0:,} addresses"
+             + (f", last {_when(ls)}" if ls else "") + f"; {g.get('seals_recent') or 0:,} in the last 30 min (POAScan archive)</dd>")
     from . import milestones as MS
     back = next((e["ts"] for e in MS.events() if e["key"] == "mining_reopened"), None) or M.back_since()
     dl = (_ts_row("Started", M.STARTED, f' · <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>')
           + (_ts_row("Mining reopened", back) if back else "")
-          + _ts_row("Grading reopened", c["at"], nl) + _ts_row("Upgrade complete", c["at"]))
+          + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade complete", c["at"]))
     links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
              f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a></p>')
     return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'

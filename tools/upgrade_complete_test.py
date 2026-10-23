@@ -30,6 +30,9 @@ check("a notice that only says grading resumes after a fix is not completion", n
 
 # ---------------- the completion notice ----------------
 notices(HARD, REST, HALT, DONE)
+# 1.26.58: the notice alone no longer shows grading open; grade seals landing in the archive confirm it (tools/grading_truth_test.py)
+db.write("INSERT OR REPLACE INTO fetch_log(endpoint, last_ok) VALUES('/api/explorer/txs', ?)", (now,))
+for i in range(3): db.write("INSERT INTO txs (id, type, from_addr, ts) VALUES (?, 'grade-sealed', ?, ?)", (f"{0xc0de00 + i:064x}", "poa1" + "S" * 40, now - 60 * (i + 1)))
 c = M.complete()
 check("complete at the notice's issued time, with its id and txid", c and c["at"] == 1792774656 and c["notice_id"] == DONE["id"] and c["txid"] == DONE["txid"])
 check("older notices are superseded", all(M.superseded(x) for x in (HARD, REST, HALT)) and not M.superseded(DONE))

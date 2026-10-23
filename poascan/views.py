@@ -46,12 +46,18 @@ def graders_tip(o):
     """Tooltip for the open epoch's Graders count: what it counts, the official count, and the halt when one is on."""
     prev = (o.get("epoch") or 1) - 1; sv = o.get("graders_served_last")
     t = f"Addresses that sealed a grade since the epoch {prev} close, from POAScan's archive. Official graders served at that close: {f'{sv:,}' if sv is not None else 'unknown'}."
-    if o.get("grading_halted"): t += f" Grading is halted (notice {o.get('grading_halt_notice')}): seals can land on chain but are not settled or credited."
+    if o.get("grading_halted"):
+        t += (f" Grading is halted (notice {o.get('grading_halt_notice')}): seals can land on chain but are not settled or credited." if o.get("grading_halt_notice")
+              else " Grading is halted: a live read since the completion notice saw the grade route halted.")
+    elif o.get("grading_state") == "unconfirmed":
+        lt = o.get("last_seal_at")
+        t += " The notice says grading is open, but no grade seals have landed in the last 30 minutes" + (f" (last {time.strftime('%H:%M UTC', time.gmtime(lt))})" if lt else "") + "."
     return t
 
 def graders_tile(o):
     """Label, count and, while grading is halted, a Halted tag. Terse: the detail lives in the tooltip."""
-    tag = ' <span class="tag warn">Halted</span>' if o.get("grading_halted") else ""
+    tag = (' <span class="tag warn">Halted</span>' if o.get("grading_halted") else
+           ' <span class="tag warn">Unconfirmed</span>' if o.get("grading_state") == "unconfirmed" else "")
     return (f'<span class="lbl" title="{E(graders_tip(o))}">Graders{tag}</span>'
             f'<b class="num" data-live="graders" title="{E(graders_tip(o))}">{intc(o.get("graders"))}</b>')
 
@@ -212,20 +218,39 @@ def upgrade_strip():
     """Home only, while the network upgrade is on (maint.py): one quiet steel line to /upgrade. It carries the Upgrading status
     (the header pill hides while maintenance is on) next to the hosted mining and joining line."""
     from . import maint as M
+    if _grading_strip():
+        return (f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Grading</b></span><span data-upline>{upline()}</span>'
+                f'<span data-upstamp>{stamp(_grading_stamp())}</span><a href="/upgrade">Details</a></p>')
     if not M.state()["active"]: return ""
     return (f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span data-upline>{upline()}</span>'
             f'<span data-upstamp>{stamp(M.stamp_ts())}</span><a href="/upgrade">Details</a></p>')
 
+def _grading_strip():
+    """After the completion notice the strip stays only while grading is not confirmed open (maint.grading_state)."""
+    from . import maint as M
+    return bool(M.complete()) and M.grading_state()["state"] != "open"
+
+def _grading_stamp():
+    """The strip's time after completion: the newest archived tx (what the seal check read), else now."""
+    r = db.q1("SELECT MAX(ts) AS t FROM txs"); return int(r["t"]) if r and r["t"] else int(time.time())
+
+GRADING_STRIP = {"unconfirmed": (("Notice says open", ", not yet confirmed", "No grade seals in the last 30 min."), ("Grading not yet confirmed", "No recent seals.")),
+                 "halted": (("Halted", "", "Mining and joining open."), ("Grading halted", "Mining open."))}
+
 def upline():
     """The strip's text: the full line, and a shorter one for 390px (CSS shows one). The live snapshot re-sends it, so it updates in place."""
     from . import maint as M
-    lead, aside, tail = M.strip_text(); ml, mt = M.strip_mobile()
+    if _grading_strip():
+        (lead, aside, tail), (ml, mt) = GRADING_STRIP[M.grading_state()["state"]]
+    else:
+        lead, aside, tail = M.strip_text(); ml, mt = M.strip_mobile()
     t = f" {E(tail)}" if tail else ""; m = f" {E(mt)}" if mt else ""
     return f'<span class="upd"><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><span class="upm"><b>{E(ml)}</b>.{m}</span>'
 
 def upgrade_live():
     """Snapshot fields for the strip and the /upgrade route list; empty strings when maintenance is off (app.js hides the strip)."""
     from . import maint as M, hosted as R
+    if _grading_strip(): return dict(upline=upline(), upstamp=stamp(_grading_stamp()), routes=M.route_display(), upsig="")
     if not M.state()["active"]: return dict(upline="", upstamp="", routes={}, upsig="")
     return dict(upline=upline(), upstamp=stamp(M.stamp_ts()), routes=M.route_display(), upsig=V2.upgrade_sig())
 

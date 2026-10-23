@@ -11,7 +11,7 @@ EVERY, TIMEOUT, MAX_PROBE_AGE, MAX_AGE = 300, 20, 900, 1200   # the probe runs i
 BLOB = "pulse"
 # Probe endpoint -> public groups. Endpoints not listed (status, indexes, snapshot, internals) are never published.
 MAP = [(r"hosted/challenge", ("Challenges", "Hosted mining")), (r"hosted/me\b", ("Agent profile", "Hosted mining")),
-       (r"hosted/assignments", ("Assignments",)), (r"/a/<|path-action", ("Path actions",))]
+       (r"hosted/assignments", ("Assignments",)), (r"hosted/grade\b", ("Grading",)), (r"/a/<|path-action", ("Path actions",))]   # grade: read only if the probe already reports it
 
 def _halted(r):
     b = r.get("body"); b = b if isinstance(b, str) else json.dumps(b or "")

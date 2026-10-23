@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.58] - 2026-10-23
+
+### Fixed (grading truth)
+- The completion notice alone no longer shows grading as open. Grading now has three states, from data POAScan already keeps (no new request to minepoa.com): **open** (the notice plus at least 2 grade seals in POAScan's archive in the last 30 minutes, feed fresh), **unconfirmed** (the notice says open, no recent seals: "Grading: notice says open, not yet confirmed") and **halted** (a newer official halt notice, or a live read since the notice saw the grade route halted: the private probe's Grading group or a halted grading route read).
+- Home status strip: while grading is unconfirmed or halted after completion, a Grading strip shows ("Notice says open, not yet confirmed. No grade seals in the last 30 min." / 390px "Grading not yet confirmed. No recent seals."; halted: "Grading halted. Mining open.").
+- `/upgrade`: "Upgrade complete per notice" with Grading in a Not yet confirmed (or Halted) group instead of Working, a Grade seals row (since the notice, last seal, last 30 min) and "Grading reopened (notice)".
+- Graders tile: an Unconfirmed tag while unconfirmed; the Halted tag (1.26.47) also covers an observed halt; the tooltip says which.
+- og card and description follow the same state.
+
+### Added
+- `meta.maintenance.grading` (state, label, basis, seals_since_notice, sealers_since_notice, last_seal_at, seals_recent, recent_window_s, min_seals, feed_fresh) and `meta.maintenance.unconfirmed`. `hosted_routes_display.grading` and `surfaces.Grading` read unconfirmed or paused unless confirmed; `paused` and `working` list grading only when halted or confirmed. Challenge-pool payouts follow the notice unless grading is seen halted.
+- `open_epoch` (API and MCP `get_current_epoch`): `grading_state`, `grading_basis`, `last_seal_at`; `grading_halted` is also true on an observed halt.
+- The live probe maps a grade endpoint to the Grading group if the probe already reports one (no new probing).
+- `tools/grading_truth_test.py` in CI.
+
 ## [1.26.57] - 2026-10-23
 
 ### Changed

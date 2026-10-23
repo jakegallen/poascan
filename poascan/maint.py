@@ -28,7 +28,8 @@ def _surfaces():
 def _after_complete(groups, probe):
     """Once the upgrade is officially complete, tracker states read back; only a live probe read of a halted route stays paused."""
     if not complete(): return groups
-    return {g: ("paused" if probe.get(g) == "paused" else "back") for g in groups}
+    gs = {"open": "back", "unconfirmed": "unconfirmed", "halted": "paused"}[grading_state()["state"]] if "Grading" in groups else None
+    return {g: ("paused" if probe.get(g) == "paused" else gs if g == "Grading" else "back") for g in groups}
 
 def join_open():
     if JOIN_ENV is not None: return JOIN_ENV != "0"
@@ -117,16 +118,54 @@ def superseded(x):
     t = x.get("issued_ts")
     return isinstance(t, (int, float)) and t <= c["at"]
 
-def grading_open():
-    """Grading is open: the upgrade is officially complete, or the grading route answers as open."""
+# ---- grading truth (1.26.58): the completion notice alone never shows grading as open. After it, grading is
+# open only once POAScan's archive shows grade seals landing; an observed halt (the live probe's Grading group,
+# a halted read of the grading route after the notice) or a newer official halt notice reads halted.
+# No new request: the archive, the probe blob and the notices mirror are already kept.
+GRADE_RECENT_S = 1800   # seals landed this recently (tx time) count as confirmation
+GRADE_MIN_SEALS = 2     # at least this many in that window
+GRADING_LABEL = {"open": "Grading open", "unconfirmed": "Grading: notice says open, not yet confirmed", "halted": "Grading halted"}
+GRADING_SHORT = {"open": "Grading open.", "unconfirmed": "Grading not yet confirmed.", "halted": "Grading halted."}
+
+def _observed_halt(c):
+    """'probe' or 'route' when a live read since the completion notice saw grading halted, else None."""
+    from . import pulse as P, hosted as R
+    pr = P.current() or {}
+    if (pr.get("groups") or {}).get("Grading") == "paused" and (pr.get("ts") or 0) >= c["at"]: return "probe"
+    g = R.current().get("grading") or {}
+    if g.get("state") == "paused" and (g.get("checked") or 0) >= c["at"]: return "route"
+    return None
+
+def grading_state(now=None):
+    """dict(state=open|unconfirmed|halted, basis, ...) with the evidence behind it. Before the completion notice the
+    pre-1.26.58 rule stands (open when the grading route answers as open, else halted)."""
     from . import hosted as R
-    return bool(complete()) or R.state("grading") == "open"
+    now = int(now or time.time()); c = complete(); halt = A.grading_halt(now)
+    ev = dict(notice_id=c.get("notice_id") if c else None, notice_at=c["at"] if c else None, halt_notice=halt,
+              window_s=GRADE_RECENT_S, min_seals=GRADE_MIN_SEALS, feed_fresh=_feed_fresh())
+    if c:
+        r = db.q1("SELECT COUNT(*) AS n, COUNT(DISTINCT from_addr) AS g, MAX(ts) AS t FROM txs WHERE type='grade-sealed' AND ts >= ?", (c["at"],)) or {}
+        rr = db.q1("SELECT COUNT(*) AS n, COUNT(DISTINCT from_addr) AS g FROM txs WHERE type='grade-sealed' AND ts >= ? AND ts > ?", (c["at"], now - GRADE_RECENT_S)) or {}
+        ev.update(seals_since_notice=r["n"] or 0, sealers_since_notice=r["g"] or 0, last_seal_at=r["t"], seals_recent=rr["n"] or 0, sealers_recent=rr["g"] or 0)
+    if halt: return dict(ev, state="halted", basis="notice")
+    if not c:
+        rs = R.state("grading")   # unknown before any clear read: not open, but nothing observed halted either (basis none)
+        return dict(ev, state="open" if rs == "open" else "halted", basis="route" if rs != "unknown" else "none")
+    ob = _observed_halt(c)
+    if ob: return dict(ev, state="halted", basis=ob)
+    if ev["feed_fresh"] and ev["seals_recent"] >= GRADE_MIN_SEALS: return dict(ev, state="open", basis="notice+seals")
+    return dict(ev, state="unconfirmed", basis="notice")
+
+def grading_open():
+    """Grading is open: confirmed by grade seals after the completion notice (grading_state), or, before it, the route answers as open."""
+    return grading_state()["state"] == "open"
 
 def pool_payouts():
     """paused or live for challenge-pool payouts: paused while an active notice says so, or while grading is not open
     (answers only earn from the pool once graded, so with grading paused the pool can't pay them)."""
     from . import hosted as R
     if any(POOL_PAUSED_RX.search(str(x.get("msg") or "")) for x in _active_notices()): return "paused"
+    if complete(): return "paused" if grading_state()["state"] == "halted" else "live"   # pool payouts follow the notice unless grading is seen halted
     return "live" if grading_open() else "paused"
 
 def attestation_earnings():
@@ -136,11 +175,12 @@ def attestation_earnings():
 # Only the hosted mining paths pause; self-custody miners (POST /api/submit plus /api/receipt) keep working.
 def paused():
     from . import hosted as R
-    return ((["hosted_mining"] if hosted_state() == "paused" else []) + ([] if grading_open() else ["grading"]) + ([] if join_open() else ["onboarding"])
+    return ((["hosted_mining"] if hosted_state() == "paused" else []) + (["grading"] if grading_state()["state"] == "halted" else []) + ([] if join_open() else ["onboarding"])
             + (["challenge_pool_payouts"] if pool_payouts() == "paused" else []) + (["attestation_earnings"] if attestation_earnings() == "paused" else []))
 def working():
     return ((["onboarding"] if join_open() else []) + (["hosted_mining"] if hosted_state() == "back" else []) + (["grading"] if grading_open() else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
             + (["challenge_pool_payouts"] if pool_payouts() == "live" else []) + ["balances", "explorer"])
+def unconfirmed(): return ["grading"] if grading_state()["state"] == "unconfirmed" else []   # the notice says open, the archive shows no recent seals
 PAUSED = ["hosted_mining", "grading", "challenge_pool_payouts"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "attestation_earnings", "balances", "explorer"]   # defaults
 
 def payouts_phrase():
@@ -288,7 +328,9 @@ def route_display():
     slow when the newest read got no answer (timeout or network error; never called paused or offline)."""
     from . import hosted as R
     of = official(); out = {}
-    if complete(): return {k: "open" for k in R.current()}   # officially complete: every hosted route is open
+    if complete():   # officially complete: every hosted route is open, except grading, which needs seals landing (grading_state)
+        g = {"open": "open", "unconfirmed": "unconfirmed", "halted": "paused"}[grading_state()["state"]]
+        return {k: (g if k == "grading" else "open") for k in R.current()}
     for k, v in R.current().items():
         st = v["state"]
         if v["slow"]: st = "slow"
@@ -298,7 +340,10 @@ def route_display():
     return out
 
 def og_desc():
-    if complete(): return "Network upgrade complete: mining, grading and joining are open. Dates on POAScan."
+    if complete():
+        g = grading_state()["state"]
+        if g == "open": return "Network upgrade complete: mining, grading and joining are open. Dates on POAScan."
+        return f"Network upgrade complete per notice. Mining and joining open; {GRADING_SHORT[g][:-1].lower()}. Live status on POAScan."
     r = recovery()
     if r["moved"]:
         lead, tail = _recovery_line()
@@ -416,7 +461,8 @@ def state():
     lj = last_join(); rec = recovery(); rt = R.current(); ck = R.checked_at(); hl = strip_text(); hm = strip_mobile(); c = complete()
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
     head, short = (" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x), " ".join(x for x in (hm[0] + ".", hm[1]) if x))
-    if c: head, short = DONE_HEAD, "Upgrade complete."
+    gs = grading_state()
+    if c: head, short = DONE_LINE[gs["state"]]
     return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
@@ -428,9 +474,19 @@ def state():
                 updated_at=iso(c["at"] if c else stamp_ts()),
                 hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(),
                 official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
-                notice=notice(), recovery=rec, **_hs())
+                notice=notice(), recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), **_hs())
 
 DONE_HEAD = "Upgrade complete. Mining, grading and joining are open."
+DONE_LINE = {"open": (DONE_HEAD, "Upgrade complete."),
+             "unconfirmed": ("Upgrade complete per notice. Grading not yet confirmed: no recent grade seals.", "Grading not yet confirmed."),
+             "halted": ("Upgrade complete per notice, but grading is halted.", "Grading halted.")}
+
+def _grading_public(g):
+    """meta.maintenance.grading: state, label, basis and the archive evidence (times as ISO UTC)."""
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
+    return dict(state=g["state"], label=GRADING_LABEL[g["state"]], basis=g["basis"], notice_id=g["notice_id"], halt_notice=g["halt_notice"],
+                seals_since_notice=g.get("seals_since_notice"), sealers_since_notice=g.get("sealers_since_notice"), last_seal_at=iso(g.get("last_seal_at")),
+                seals_recent=g.get("seals_recent"), recent_window_s=g["window_s"], min_seals=g["min_seals"], feed_fresh=g["feed_fresh"])
 
 def _hs():
     from . import halts as H
