@@ -31,7 +31,7 @@ STRAIN_HEADERS = (("x-poa-strain", re.compile(r".+")), ("x-poa-notice", re.compi
 REQUIRED = {
     "/api/status": ("dict", ("as_of", "supply", "txs", "epochs_closed", "checkpoint_height")),
     "/api/networks": ("dict", ("chains",)),
-    "/api/explorer/txs": ("list", ("id", "type")),
+    "/api/explorer/txs": ("list", ("id",)),   # the feed needs only id (live_txs skips rows without one)
     "/api/explorer/tx/:id": ("dict", ("id",)),
     "/api/explorer/address/:addr": ("dict", ("address", "balance", "txs")),
     "/api/txs": ("dict", ("valid",)),

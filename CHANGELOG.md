@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.80] - 2026-10-23
+
+### Added (strain notice guard)
+- minepoa.com can answer a strained endpoint at once with a notice in place of data. Every minepoa.com read now passes poascan/strain.py before anything is stored: a hit (the documented system_notice with the data fields missing or naming strain, a notice or message field where data is expected, a strain key or wording, a strain header, or a schema mismatch per endpoint) is never written to the database, the address cache or an ETag; the last real values stay and the endpoint backs off.
+- A plain notice strip under the development banner shows the notice text, sanitized. meta.upstream_notice (schema UpstreamNotice; null otherwise) and meta.stale true on every object response and MCP result; balance_stale on /api/v1/address and MCP get_address, with balance_as_of and balance_source naming the last real copy. OpenAPI, llms.txt.
+- The hosted route check never reads a stand-in as reopened. The exact notice format is not published yet; the patterns live in one block for an exact sample. tools/strain_notice_test.py (synthetic fixtures) in CI.
+
 ## [1.26.79] - 2026-10-23
 
 ### Added (opt-in kin groups)
