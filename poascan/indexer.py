@@ -322,7 +322,13 @@ def upsert_txs(rows, source):
             hosted = memo.lower().startswith("hosted join")
             labs.append((fr, re.sub(r"^hosted join:?\s*", "", memo).strip(), "hosted" if hosted else "non-hosted join (likely self-custody)", "join memo", int(t.get("ts") or 0)))
     if labs:
-        db.write("INSERT OR REPLACE INTO labels VALUES(?,?,?,?,?)", labs, many=True)
+        # A later copy of the same join without its memo (some reads omit it) must not blank a known name or custody.
+        db.write("""INSERT INTO labels(addr,label,custody,source,ts) VALUES(?,?,?,?,?)
+          ON CONFLICT(addr) DO UPDATE SET
+            custody=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.custody ELSE labels.custody END,
+            source=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.source ELSE labels.source END,
+            ts=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.ts ELSE labels.ts END,
+            label=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.label ELSE labels.label END""", labs, many=True)
     return len(out)
 
 def _known(ids):

@@ -100,6 +100,15 @@ for qs in ({}, {"q": [""]}, {"q": ["a", "b"]}, {"q": ["x" * 121]}):
     try: SV.api("/api/search", qs); ok = False
     except SV.BadRequest: ok = True
     check(f"/api/v1/search rejects {list(qs.values()) or 'no q'}"[:80], ok)
+# Live 1.26.75 gap: the archive held both join txs with their memos, yet the labels rows were blank, so search found nothing.
+I.upsert_txs([{"id": "a1" * 32, "type": "join", "from_addr": T1, "ts": now - 999, "final": 1}], "explorer/address")   # same join, memo omitted
+check("a later memo-less copy of a join keeps its label and custody",
+      dict(db.q1("SELECT label, custody FROM labels WHERE addr=?", (T1,))) == {"label": "poaswap-test-1", "custody": "hosted"})
+T3 = "poa1" + "R" * 40
+I.upsert_txs([{"id": "a5" * 32, "type": "join", "from_addr": T3, "memo": "hosted join: blank-label-agent", "ts": now - 995, "final": 1}], "test")
+db.write("UPDATE labels SET label='', custody='non-hosted join (likely self-custody)' WHERE addr=?", (T3,))   # a row blanked before this fix
+res = AG.t_search({"query": "blank-label-agent"})["results"]
+check("a blank labels row still finds the name from the archived join tx memo", res and res[0]["id"] == T3 and res[0]["name"] == "blank-label-agent" and res[0]["name_source"] == "join")
 check("llms.txt lists /api/v1/search", "/api/v1/search?q=" in AG.llms_txt() and "/api/v1/search" in spec)
 
 # ---------------- over HTTP: /search redirect, /api/v1/search, /api/v1/address ----------------

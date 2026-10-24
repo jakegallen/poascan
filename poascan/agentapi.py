@@ -305,7 +305,15 @@ def join_names(q, limit=40):
     pat = "%" + ql.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     rows = db.q("SELECT addr, label FROM labels WHERE source='join memo' AND label != '' AND lower(label) LIKE ? ESCAPE '\\' "
                 "ORDER BY (lower(label) = ?) DESC, length(label), ts DESC LIMIT ?", (pat, ql, limit))
-    return [(r["addr"], r["label"]) for r in rows if ADDR_RX.match(r["addr"] or "")]
+    out = [(r["addr"], r["label"]) for r in rows if ADDR_RX.match(r["addr"] or "")]
+    # The archived join txs themselves (txs.memo keeps the first memo seen), for addresses whose labels row is blank or missing.
+    have = {a for a, _ in out}
+    for r in db.q("SELECT from_addr AS addr, memo, MAX(ts) AS ts FROM txs WHERE type='join' AND memo IS NOT NULL AND lower(memo) LIKE 'hosted join%' "
+                  "AND lower(memo) LIKE ? ESCAPE '\\' GROUP BY from_addr ORDER BY ts DESC LIMIT ?", (pat, limit)):
+        nm = re.sub(r"^hosted join:?\s*", "", r["memo"], flags=re.I).strip()
+        if nm and r["addr"] not in have and ADDR_RX.match(r["addr"] or "") and ql in nm.lower(): out.append((r["addr"], nm)); have.add(r["addr"])
+    out.sort(key=lambda x: (x[1].lower() != ql, len(x[1])))
+    return out[:limit]
 
 def t_search(args):
     q = str(args.get("query") or "").strip()
