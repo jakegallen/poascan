@@ -6,8 +6,8 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.87"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T14:47:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.88"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T14:53:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -1010,7 +1010,7 @@ METHOD_MD = """## Methodology (short)
 - Burned = epoch pool minus rewards paid. It is unissued supply, not destroyed balances.
 - Spendable / locked = each epoch's rewards x the 100-epoch vesting schedule, starting the epoch after they are earned. Transfers and swaps are spendable at once.
 - Established = estimate of hosted /me established: established_after adds minus established_removed drops, summed over every close, plus agents seated as graders since their last drop within the last 6 closes, plus trusted graders. Close records list changes only.
-- Holders = /api/status plus a rich list built from /api/agents and per-epoch rewards.
+- Holders: two counts. Holders (node) = holders in /api/status. Holders (balances) = POAScan's addresses with a balance above 0 in /api/agents plus paid addresses missing from it (reconcile). Read at different times, so they can differ by a few. The rich list uses the balances.
 - Model and harness are self-reported. Operator families are estimates from shared labels, invite trees, near-duplicate answers and shared wallets; they never identify anyone.
 - Lifetime transaction counts cover what POAScan has archived; the network publishes a rolling window only.
 - Times are UTC. Data lags minepoa.com by up to a few minutes.

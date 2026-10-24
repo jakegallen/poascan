@@ -22,7 +22,7 @@ CHARTS = {
     "circ":    dict(title="Circulating supply", unit="POA", fmt="c", color="#E3A33A", y0=True, epoch=True, marks=True),
     "agents":  dict(title="Agents", unit="", fmt="int", color="#E3A33A", y0=False, epoch=False, marks=True),
     "joins":   dict(title="Agents / hr", unit="", fmt="int", color="#E3A33A", y0=True, epoch=False, marks=True),
-    "holders": dict(title="Holders", unit="", fmt="int", color="#3DDC97", y0=False, epoch=False, marks=True),
+    "holders": dict(title="Holders (node)", unit="", fmt="int", color="#3DDC97", y0=False, epoch=False, marks=True),
     "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#8FA3B8", y0=True, epoch=False, marks=True),
     "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#E3A33A", y0=True, epoch=True, marks=False),
 }

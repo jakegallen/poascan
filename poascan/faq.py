@@ -10,7 +10,7 @@ PAY = "Never send payment outside the network."
 
 def _live():
     st = A.status(); o = A.open_epoch() or {}
-    return "".join([stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT), stat("Holders", intc(st.get("holders")), "", ICON_USERS),
+    return "".join([stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT), stat("Holders (node)", intc(st.get("holders")), "", ICON_USERS),
                     stat("Epoch", intc(o.get("epoch")), "", ICON_CUBE)])
 
 PAGES = {

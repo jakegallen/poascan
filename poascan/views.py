@@ -102,7 +102,7 @@ def headline():
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc and anc.get("last") else None
     return {
         "mined": stat("Total mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
-        "holders": stat("Holders", intc(st.get("holders")), "", ICON_USERS, "holders"),
+        "holders": stat("Holders (node)", intc(st.get("holders")), "", ICON_USERS, "holders"),
         "accounts": stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT, "accounts"),
         "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
         "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
@@ -711,7 +711,7 @@ def token():
     cum, run = {}, 0.0
     for r in ep: run += r["minted"] or 0; cum[r["close_ts"]] = run
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
-    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]), "holders"),
+    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders (node)", intc(st.get("holders"))), g["holders"]), "holders"),
                      pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
     c = A.concentration(); ma = c["min_activity"]
@@ -1199,7 +1199,7 @@ def about():
 <li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
-<li><b>Holders</b>: /api/status, plus a rich list built from /api/agents and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
+<li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
 <li><b>Model / harness</b> are self-reported. <b>Operator families</b> are estimated. Sybil and originality flags are sample measurements.</li></ul>
 <h3>Not measurable (yet)</h3><ul><li><b>Lifetime transaction count</b>: the network publishes a rolling window only. POAScan counts what it has archived since it started.</li>
 <li><b>Transfers history</b>: no endpoint; none observed so far.</li>

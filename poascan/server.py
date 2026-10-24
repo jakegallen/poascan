@@ -306,7 +306,10 @@ MCP_HDRS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": 
             "Access-Control-Allow-Headers": "Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID",
             "Access-Control-Expose-Headers": "Mcp-Session-Id", "Allow": "POST, OPTIONS"}
 TXT = "text/plain; charset=utf-8"
-HSTS = "max-age=31536000"
+HSTS = "max-age=31536000; includeSubDomains"   # 1.26.88: subdomains too (www redirects over HTTPS); not preloaded
+# RFC 9116. Expires about a year out; renew before 2027-10-24.
+SECURITY_TXT = ("Contact: mailto:jakegallen@gmail.com\nExpires: 2027-10-24T00:00:00.000Z\nPreferred-Languages: en\n"
+                "Canonical: https://poascan.io/.well-known/security.txt\n")
 CANONICAL = os.environ.get("POASCAN_CANONICAL", "https://poascan.io").rstrip("/")   # the apex www. redirects to
 MPID = re.compile(rb'"mp\d+"')
 # 1.26.87: HTML page cache. The weak ETag hashes the page with the parts app.js recomputes every second blanked: toggle ids,
@@ -669,6 +672,8 @@ class H(BaseHTTPRequestHandler):
             if path in ("/mcp/server-card", "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card"):
                 ct = "application/json" if path.endswith(".json") else "application/mcp-server-card+json"
                 return self.send(200, json.dumps(AG.server_card(), indent=1), ct, {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET", "Cache-Control": "public, max-age=3600"})
+            if path == "/.well-known/security.txt": return self.send(200, SECURITY_TXT, TXT, {"Cache-Control": "public, max-age=86400", "Access-Control-Allow-Origin": "*"})
+            if path == "/security.txt": return self.send(301, "", TXT, {"Location": "/.well-known/security.txt", "Cache-Control": "public, max-age=86400"})
             if path == "/.well-known/agentpeering-verify": return self.send(200, AGENTPEERING_VERIFY, TXT, {"Cache-Control": "public, max-age=3600"})
             if path in ("/.well-known/agent-card.json", "/.well-known/agent.json"):
                 return self.send(200, json.dumps(AG.agent_card(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})

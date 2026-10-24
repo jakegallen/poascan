@@ -132,17 +132,19 @@ def recon_card():
     from . import reconcile as RE
     from .views import rel_t
     d = RE.reconcile()
-    def v(x, unit, at):
+    def v(x, unit, at, src=""):
         if x is None: return '<span class="na">···</span>'
         n = num(x, 2) if unit == "poa" else intc(x)
-        return f'{n}<small title="read {dt.datetime.fromtimestamp(int(at), dt.timezone.utc):%Y-%m-%d %H:%M} UTC">{rel_t(at)}</small>' if at else n
+        s = f"{src} · " if src else ""   # 1.26.88: the two holder counts are labelled by source (balances, node); method on /about#holders
+        return f'{n}<small title="read {dt.datetime.fromtimestamp(int(at), dt.timezone.utc):%Y-%m-%d %H:%M} UTC">{s}{rel_t(at)}</small>' if at else (f'{n}<small>{src}</small>' if src else n)
+    HS = {"holders": ("balances", "node")}
     def tag(st): c, t = RECON_TAG[st]; return f'<span class="tag {c}">{t}</span>'
     def sub(r):
         dv = None if r["diff"] in (None, 0) else (f'Δ {"+" if r["diff"] > 0 else "-"}{compact(abs(r["diff"]), 2)}' if r["unit"] == "poa" else f'Δ {r["diff"]:+,}')
         t = " · ".join(E(x) for x in (dv, r["reason"]) if x)
         return f'<tr class="rwhy"><td colspan="4">{t}</td></tr>' if t else ""
-    trs = "".join(f'<tr class="{"rx" if sub(r) else ""}"><td><b>{E(r["label"])}</b></td><td class="r">{v(r["poascan"], r["unit"], r["poascan_as_of"])}</td>'
-                  f'<td class="r">{v(r["node"], r["unit"], r["node_as_of"])}</td><td class="r">{tag(r["state"])}</td></tr>' + sub(r) for r in d["rows"])
+    trs = "".join(f'<tr class="{"rx" if sub(r) else ""}"><td><b>{E(r["label"])}</b></td><td class="r">{v(r["poascan"], r["unit"], r["poascan_as_of"], HS.get(r["key"], ("", ""))[0])}</td>'
+                  f'<td class="r">{v(r["node"], r["unit"], r["node_as_of"], HS.get(r["key"], ("", ""))[1])}</td><td class="r">{tag(r["state"])}</td></tr>' + sub(r) for r in d["rows"])
     tb = f'<div class="tw"><table class="hist rec"><thead><tr><th>Figure</th><th class="r">POAScan</th><th class="r">Node</th><th class="r">State</th></tr></thead><tbody>{trs}</tbody></table></div>'
     pc = [p for p in d["per_close"] if p["state"] != "no_reads"]
     pt = "".join(f'<tr><td><a class="mono" href="/epoch/{p["epoch"]}">E{p["epoch"]}</a></td><td class="r">{num(p["record_mint"], 2)}</td><td class="r">{num(p["supply_step"], 2)}</td><td class="r">{tag(p["state"])}</td></tr>' for p in pc)

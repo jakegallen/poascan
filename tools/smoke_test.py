@@ -267,10 +267,15 @@ def headers(base, check):
     c, h, _ = raw(base, "/static/style.css?v=1"); check("versioned asset is immutable", c == 200 and h.get("cache-control") == "public, max-age=31536000, immutable")
     c, h, _ = raw(base, "/static/style.css"); check("unversioned asset keeps a short cache", "immutable" not in h.get("cache-control", ""))
     c, h, _ = raw(base, "/token"); et = h.get("etag")
-    check("HTML has HSTS (no preload) and an ETag", h.get("strict-transport-security") == "max-age=31536000" and et and h.get("cache-control") == "public, max-age=15, s-maxage=30, stale-while-revalidate=15")
+    check("HTML has HSTS with includeSubDomains (no preload) and an ETag", h.get("strict-transport-security") == "max-age=31536000; includeSubDomains" and et and h.get("cache-control") == "public, max-age=15, s-maxage=30, stale-while-revalidate=15")
     c2, _, b2 = raw(base, "/token", {"If-None-Match": et}); check(f"HTML ETag revalidates -> {c2}", c2 == 304 and not b2)
     c, h, _ = raw(base, "/live?a=1&b=2", {"Host": "www.poascan.io"}); check("www redirects to the apex with path and query", c == 301 and h.get("location") == "https://poascan.io/live?a=1&b=2")
     c, _, b = raw(base, "/healthz", {"Host": "172.19.0.2:8080"}); check("health check unaffected", c == 200 and b == b"ok\n")
+    c, h, b = raw(base, "/.well-known/security.txt"); t = b.decode()
+    check("security.txt (RFC 9116): Contact mailto, Expires about a year out, Canonical, text/plain, HSTS",
+          c == 200 and h.get("content-type", "").startswith("text/plain") and "Contact: mailto:jakegallen@gmail.com\n" in t and "Canonical: https://poascan.io/.well-known/security.txt\n" in t
+          and re.search(r"^Expires: 2027-\d\d-\d\dT00:00:00\.000Z$", t, re.M) is not None and h.get("strict-transport-security") == "max-age=31536000; includeSubDomains")
+    c, h, _ = raw(base, "/security.txt"); check("/security.txt redirects to the well-known path", c == 301 and h.get("location") == "/.well-known/security.txt")
 
 def og_images(base, check):
     """Detail pages point og:image and twitter:image at a rendered 1200x630 PNG; everything else keeps og-card.png."""

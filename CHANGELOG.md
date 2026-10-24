@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.88] - 2026-10-24
+
+### Changed (holder count labels)
+- The two holder counts are labelled by source. Tiles and charts that show the node's own count (/api/status holders: home, /token, the FAQ stats, Network charts and the pop-out) read Holders (node). On Network > Health the Holders row marks POAScan's cell balances (addresses above zero in /api/agents plus paid addresses missing from it) and the other node. The method is on /about#holders and in llms.txt. tools/holders_label_test.py in CI.
+
+### Added (security)
+- /.well-known/security.txt (RFC 9116): Contact mailto:jakegallen@gmail.com, Expires 2027-10-24, Canonical https://poascan.io/.well-known/security.txt. /security.txt redirects there.
+- HSTS now max-age=31536000; includeSubDomains (not preloaded).
+
 ## [1.26.87] - 2026-10-24
 
 ### Changed (HTML page cache)

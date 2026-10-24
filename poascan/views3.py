@@ -204,4 +204,4 @@ def charts_body(rng=""):
     pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out
     tn = "Txs" + (" / day" if rng == "all" else " / hour")
     return f'''<div class="stats three">{st}</div><div class="chips rng" role="group" aria-label="Range">{chips}</div>
-<div class="grid3 smalls">{pc(ICON_BOT + "Agents", "Agents", "agents", ac)}{pc(ICON_USERS + "Holders", "Holders", "holders", hc)}{pc("Supply", "Supply", "supply", sc)}{pc(tn, tn, "txs", tc)}{pc(ICON_CUBE + "Answers / epoch", "Answers / epoch", "answers", ec)}{card("Milestones", ml, cls="mls")}</div>'''
+<div class="grid3 smalls">{pc(ICON_BOT + "Agents", "Agents", "agents", ac)}{pc(ICON_USERS + "Holders (node)", "Holders (node)", "holders", hc)}{pc("Supply", "Supply", "supply", sc)}{pc(tn, tn, "txs", tc)}{pc(ICON_CUBE + "Answers / epoch", "Answers / epoch", "answers", ec)}{card("Milestones", ml, cls="mls")}</div>'''
