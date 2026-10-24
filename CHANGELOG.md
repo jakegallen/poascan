@@ -22,6 +22,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Dropped at close: answers pending at one close that the next close lists neither as pending nor settled. Epoch rows (/api/v1/epochs, /api/v1/epoch/<n>, /api/v1/grading) carry dropped (null for the first close); the epoch view shows a Dropped at close row when it is not zero; receipts and cohorts label them Dropped at close and Dropped (API status vanished unchanged). Method on /about#dropped.
 - From the E14 close minepoa omits since (origin epoch) on pending rows. POAScan read that as E0, so E14's 1,252 new answers showed as stale E0 answers expiring at close 16. since now comes from the archived answer tx's epoch, else the first close the answer sat in (epoch rows, pending by origin, backlog, cohorts, receipts, grading history). Close records are unchanged.
 - tools/halt_test.py in CI. style.css v107.
+- Follow-up (same version): the txid in the not-available state wraps at 390 px (it used the page container class and overflowed the card).
 
 ## [1.26.88] - 2026-10-24
 

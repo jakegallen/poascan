@@ -304,7 +304,7 @@ def _sig_badge(d):
 def tx_unavailable(tid, paused):
     """No archived copy and no node read: a clean state with the txid and a retry link, never an error page."""
     why = ST.HALT_NONE if paused else "Not available right now: minepoa.com is busy. POAScan has not indexed this transaction yet."
-    body = (f'<p>{E(why)}</p><p class="mono wrap">{E(tid)}</p>'
+    body = (f'<p>{E(why)}</p><p class="mono" style="word-break:break-all">{E(tid)}</p>'
             f'<p><a class="more" href="/tx/{E(tid)}" rel="nofollow">Try again later</a></p>')
     return page("Tx not available", card("Transaction", na(body), id="txna"), "/txs")
 
