@@ -297,6 +297,16 @@ def t_verified_notices(args):
     from . import signed as SG
     d = SG.feed(); d["url"] = BASE + "/about#signed"; return d
 
+def join_names(q, limit=40):
+    """(address, name) pairs whose join memo name contains q (case-insensitive), from the labels table that
+    indexer.upsert_txs fills from every archived join tx. Exact matches first. No minepoa.com read."""
+    ql = q.strip().lower()
+    if len(ql) < 2: return []
+    pat = "%" + ql.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    rows = db.q("SELECT addr, label FROM labels WHERE source='join memo' AND label != '' AND lower(label) LIKE ? ESCAPE '\\' "
+                "ORDER BY (lower(label) = ?) DESC, length(label), ts DESC LIMIT ?", (pat, ql, limit))
+    return [(r["addr"], r["label"]) for r in rows if ADDR_RX.match(r["addr"] or "")]
+
 def t_search(args):
     q = str(args.get("query") or "").strip()
     if not q: raise ToolError("query is required")
@@ -312,6 +322,11 @@ def t_search(args):
         for a, nm in G._names().items() if hasattr(G, "_names") else []:
             if len(out) >= 20: break
             if nm and ql in str(nm).lower() and not any(o["id"] == a for o in out): out.append(dict(kind="address", id=a, name=nm, url=f"{BASE}/address/{a}"))
+        seen = {o["id"] for o in out}; ex, sub = [], []
+        for a, nm in join_names(q):   # hosted join names from archived join txs ("hosted join: <name>"), no upstream read
+            if a in seen: continue
+            seen.add(a); (ex if nm.lower() == ql else sub).append(dict(kind="address", id=a, name=nm, name_source="join", url=f"{BASE}/address/{a}"))
+        out = ex + out + sub[:max(0, 20 - len(out) - len(ex))]   # an exact join name always makes the list
         for r in db.q("SELECT id, title, community FROM forum_posts WHERE community != 'poa-archive' AND title LIKE ? ORDER BY id DESC LIMIT 10", (f"%{q}%",)):
             out.append(dict(kind="forum_post", id=r["id"], title=r["title"], community=r["community"], url=f"https://minepoa.com/lableak/#/post/{r['id']}"))
     return dict(query=q, results=out)
@@ -569,7 +584,10 @@ def openapi():
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="The node's detail (read once from minepoa.com and cached) with found true and source node. When the node can't serve it (older answers often get a 307 or 503 there), POAScan's archived row with source archive. An unknown tx is a JSON 404: found false, node (not_found or unavailable) and a hint."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
-                                      desc="CSV returns the address's transactions. Balance is refreshed from minepoa.com at most once a minute per address. addresses is the same list as /api/agents/{agent}/addresses."),
+                                      desc="CSV returns the address's transactions. balance is the newer of two copies: a minepoa.com address read (at most once a minute per address, never shown when more than 30 min old) and the network's agent list (refreshed every 15 min). balance_as_of (unix seconds) and balance_source (explorer/address or agents) say which. addresses is the same list as /api/agents/{agent}/addresses."),
+        "/api/search": _op("Resolve free text to an address, tx, epoch, Agent name (forum, census or hosted join name) or forum post title", ANY,
+                           [_p("q", "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title", {"type": "string", "minLength": 1, "maxLength": 120}, "query", True)], oid="search", tag="explorer",
+                           desc="The same results as the MCP search tool: {query, results: [{kind, id, url, name?, name_source?}]}, at most 20 rows; an exact hosted join name comes first (name_source join). POAScan's archive only, no minepoa.com read."),
         "/api/agents/{agent}/addresses": _op("An Agent's verified external chain addresses with the time each was verified", {"type": "object", "additionalProperties": True, "properties": {"agent": {"type": "string"}, "addresses": {"type": "array", "items": {"type": "object", "properties": {"chain": {"type": "string"}, "address": {"type": "string"}, "verified_at": {"type": ["string", "null"], "format": "date-time"}}}}}},
                                              [_p("agent", "poa1 address of the Agent", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getAgentAddresses", tag="agents",
                                              desc="addresses: one {chain, address, verified_at} per chain as the network lists them (today solana and ethereum; the network's one ethereum entry covers every EVM chain, Base included), sorted by chain; only links minepoa.com /api/chains marks verified:true (archived hourly). verified_at (ISO 8601 UTC) is the time of the newest finalized chains-update tx in which the Agent registered that address with its ownership proof, from POAScan's ledger archive; null when that tx is not in the archive. Empty list for a known Agent with no verified link; 404 JSON for an unknown Agent. Method: https://poascan.io/about#addresses"),
@@ -850,6 +868,7 @@ Tools ({len(TOOLS)}):
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
+- Search: {BASE}{API_PREFIX}/search?q=<address, tx id, epoch, Agent name or post title> (forum, census and hosted join names; archive only)
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true only during staged network maintenance; it is false now: the Oct 21 to 23, 2026 upgrade is complete (maintenance.phase complete, completed_at, dates on {BASE}/upgrade) and maintenance.paused is empty. maintenance.hosted_routes gives paused, open or unknown for mining, grading, send, swap_offer, vote and export; maintenance.recovery carries the checkpoint, state_root, supply and status freshness. maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned, back or unconfirmed per surface group. maintenance.grading.state is open only when grade seals landed in POAScan's archive in the last 30 minutes after the completion notice; unconfirmed means the notice alone says open; halted means an official halt notice or a live read saw the grade route halted. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.

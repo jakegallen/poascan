@@ -373,7 +373,7 @@ def _addr_load(a):
         d = I.fetch_ondemand(f"/api/explorer/address/{a}", I.ADDR_EP, a)
         empty = isinstance(d, dict) and not d.get("txs") and float(d.get("balance") or 0) == 0
         with _addr_lock:
-            _addr_cache[a] = (time.time() + (ADDR_EMPTY_TTL - ADDR_TTL if empty else 0), d)
+            now = time.time(); _addr_cache[a] = (now + (ADDR_EMPTY_TTL - ADDR_TTL if empty else 0), d, now)   # (freshness stamp, copy, read at)
             if len(_addr_cache) > ADDR_MAX:
                 for k, _ in sorted(_addr_cache.items(), key=lambda kv: kv[1][0])[:len(_addr_cache) - ADDR_MAX]: _addr_cache.pop(k, None)
         if isinstance(d, dict): I.upsert_txs(d.get("txs", []), "explorer/address")
@@ -384,24 +384,45 @@ def _addr_load(a):
         with _addr_lock: ev = _addr_inflight.pop(a, None)
         if ev: ev.set()
 
-def fetch_address(a):
+def address_read(a):
+    """(copy, error, read_at): the minepoa.com address copy and when it was read. A cached copy read more than
+    ADDR_STALE s ago is dropped and never returned, so a failed or refused live read cannot surface an old balance."""
     now = time.time()
     with _addr_lock:
-        hit = _addr_cache.get(a); ev = _addr_inflight.get(a); age = now - hit[0] if hit else None
-        if hit and age < ADDR_TTL: return hit[1], None
+        hit = _addr_cache.get(a)
+        if hit and now - hit[2] >= ADDR_STALE: _addr_cache.pop(a, None); hit = None   # too old to show: drop it
+        ev = _addr_inflight.get(a); age = now - hit[0] if hit else None
+        if hit and age < ADDR_TTL: return hit[1], None, hit[2]
         mine = ev is None
         if mine: ev = _addr_inflight[a] = threading.Event()
     if hit and age < ADDR_STALE:                      # stale-while-revalidate
         if mine: threading.Thread(target=_addr_load, args=(a,), daemon=True).start()
-        return hit[1], None
+        return hit[1], None, hit[2]
     if not mine:                                      # someone else is fetching this address: wait for it
         ev.wait(I.ONDEMAND_TIMEOUT + 2)
         with _addr_lock: hit2 = _addr_cache.get(a)
-        if hit2 and hit2 is not hit: return hit2[1], None
-        return (hit[1] if hit else None), "upstream fetch failed"
+        if hit2 and hit2 is not hit: return hit2[1], None, hit2[2]
+        return (hit[1] if hit else None), "upstream fetch failed", (hit[2] if hit else None)
     d, err = _addr_load(a)
-    if err: return (hit[1] if hit else None), err
-    return d, None
+    if err: return (hit[1] if hit else None), err, (hit[2] if hit else None)
+    with _addr_lock: h = _addr_cache.get(a)
+    return d, None, (h[2] if h else now)
+
+def fetch_address(a):
+    d, err, _ = address_read(a); return d, err
+
+def address_balance(a, d=None, at=None, acc=None):
+    """The newer of two balance copies: the minepoa.com address read (d, read at `at`) and the stored agent-list row
+    (accounts, written by the 15 min agents job at last_seen). Returns dict(balance (text), as_of (unix s), source)."""
+    if acc is None: acc = db.q1("SELECT balance_s, balance, last_seen FROM accounts WHERE addr=?", (a,))
+    live = (d or {}).get("balance") if isinstance(d, dict) else None
+    stored = None
+    if acc: stored = acc["balance_s"] if acc["balance_s"] is not None else (None if acc["balance"] is None else f'{float(acc["balance"]):.6f}')
+    sat = acc["last_seen"] if acc and stored is not None else None
+    if live is not None and (stored is None or not sat or (at or 0) >= sat):
+        return dict(balance=live, as_of=int(at) if at else None, source="explorer/address")
+    if stored is not None: return dict(balance=stored, as_of=sat, source="agents")
+    return dict(balance=None, as_of=None, source=None)
 
 _chains = {"ts": None, "v": frozenset()}
 def chains_linked():
@@ -413,9 +434,9 @@ def chains_linked():
 
 def address(a):
     if not ADDR_RX.match(a): return page("Bad address", card("Address", na("That is not a poa1… address.")), "/")
-    d, err = fetch_address(a); nm = names(); p = G.profile(a)
+    d, err, at = address_read(a); nm = names(); p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
-    bal = float(d["balance"]) if d and d.get("balance") is not None else (acc["balance"] if acc else None)
+    bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None
     n = A.status().get("epochs_closed") or 0
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
     rsum = sum(rb.values()); est = a in A.established_set()

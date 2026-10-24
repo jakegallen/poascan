@@ -77,6 +77,11 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return SD.standing(a), False
+    if path == "/api/search":   # agentapi.t_search: POAScan's archive only, no upstream read; the query is never logged
+        q = qs.get("q") or []
+        if len(q) != 1 or not q[0].strip(): raise BadRequest("q is required (one value)")
+        if len(q[0]) > 120: raise BadRequest("q is at most 120 characters")
+        return AG.t_search({"query": q[0]}), False
     if path == "/api/agents/at-risk":
         if set(qs) - {"format"}: raise BadRequest("no parameters")
         return SD.at_risk(), False
@@ -94,12 +99,9 @@ def api(path, qs):
     if m:
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
-        p = G.profile(a); d, err = V.fetch_address(a)
-        bal = (d or {}).get("balance")
-        if bal is None:   # no fresh read (budget, backoff or busy): the balance from the network's agent list, 15 min old at most
-            acc = db.q1("SELECT balance_s, balance FROM accounts WHERE addr=?", (a,))
-            if acc: bal = acc["balance_s"] if acc["balance_s"] is not None else acc["balance"]
-        return dict(address=a, balance=bal, rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
+        p = G.profile(a); d, err, at = V.address_read(a)
+        bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
+        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
