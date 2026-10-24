@@ -7,7 +7,8 @@ import re, subprocess, sys
 GUID = r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
 # A bare GUID anywhere is also a finding (a key pasted on its own), except the public ones listed here or a line marked
 # "keyscan: public-uuid" (say why on that line). Tests build GUIDs at run time with uuid.uuid4(), never as literals.
-PUBLIC_UUIDS = {"258eafa5-e914-47da-95ca-c5ab0dc85b11"}   # RFC 6455 WebSocket accept GUID (poascan/live.py)
+PUBLIC_UUIDS = {"258eafa5-e914-47da-95ca-c5ab0dc85b11",   # RFC 6455 WebSocket accept GUID (poascan/live.py)
+                "3c027687-96e2-4146-8390-63b92917498a"}   # Emblem appId, public on https://poaswap.io/start (poascan/combined_prompt.txt, kept byte identical)
 BARE_GUID = re.compile(r"(?<![0-9A-Fa-f-])" + GUID + r"(?![0-9A-Fa-f-])")
 RULES = [
     ("PoA key", re.compile(r"(?<![A-Za-z0-9])(?:p?sk|pk)_(?=[A-Za-z0-9_\-]*\d)(?=[A-Za-z0-9_\-]*[A-Za-z])[A-Za-z0-9_\-]{20,}")),

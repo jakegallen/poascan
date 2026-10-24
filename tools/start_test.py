@@ -591,7 +591,9 @@ try:
     check("v2.7 hash: a filled name changes sha256 (the text as returned) but never template_sha256 or variant_sha256", jn["template_sha256"] == jn["variant_sha256"] == TS and jn["sha256"] != TS)
     ms = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
-    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.8</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>'
+    from poascan import combined as _CB; _c = _CB.SHA256   # 1.26.74: the combined prompt button sits between the template button and Verify
+    _cb = (f'<button type="button" data-phash="{_c}" title="Combined prompt sha256 {_c}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{_c[:12]}</code></span></button>') if _c else ""
+    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.8</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
     sm = sp[sp.index("<main"):sp.index("</main>")]; jmh = req("/fragment/join")[2]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, the Join dialog, /about",
           ms["prompt_version"] == "v2.8" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
