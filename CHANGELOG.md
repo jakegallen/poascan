@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.95] - 2026-10-24
+
+### Changed
+- Network > Health: a Feeds card with the headline (OK, Partial or Degraded), the chain state (Live, Stalled or Stale) and one row per feed (Status, Networks, Explorer txs, Epochs, Close records, Tx lookup, Address lookup, Swaps, Tx window, Anchors, Agents, Notices, Ballots, Release, Params, Forum), each OK, Degraded or Down with when it was last OK. The Upstream card shows the same headline. Partial whenever any feed is not OK; Degraded when the chain is not live.
+- /api/health: `ok` is true only when every feed is OK, and the response adds `state`, `chain` and `feeds` (same source as Health). The header pill reads Partial (amber) when the chain is live and a feed is not OK, and its title names those feeds.
+- API meta `fetched_at` and `stale` use the last good read of the live network (status, networks or tx feed), so a failing tx feed alone no longer marks fresh status data stale.
+
+### Tests
+- tools/netoverview_test.py covers feed states, Close records, the Health card, /api/health and meta. tools/smoke_test.py accepts Partial after maintenance clears.
+
 ## [1.26.94] - 2026-10-24
 
 ### Fixed

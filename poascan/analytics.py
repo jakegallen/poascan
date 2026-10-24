@@ -516,10 +516,59 @@ def freshness():
     elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
     elif up: state, why = "up", ("Network upgrade: " + M.state()["headline"]) if M.recovery()["moved"] else "Network upgrade: hosted mining paused, finalized height parked on purpose"
     elif cp_lag: state, why = "lag", f"Finalized height unchanged {cp_age // 3600}h"
-    else: state, why = "live", "Live" + (": tx feed read failing, status current" if tx_down else "")
-    return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
+    elif (fd := feeds())["state"] != "OK": state, why = "partial", "Chain live. Not OK: " + ", ".join(fd["not_ok"])
+    else: state, why = "live", "Live"
+    return dict(state=state, label={"live": "Live", "partial": "Partial", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
                 href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
                 fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up, tx_feed_down=tx_down)
+
+# ---- per-feed state: one source for Network > Health, /api/health and the header pill (1.26.94)
+FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Explorer txs", ("/api/explorer/txs",)), ("Epochs", ("/api/epochs",)),
+         ("Close records", ()), ("Tx lookup", ("/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id")), ("Address lookup", ("/api/explorer/address/:addr",)),
+         ("Swaps", ("/api/swaps", "/api/explorer/tx/:id (swaps)")), ("Tx window", ("/api/txs",)), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
+         ("Notices", ("/api/notices",)), ("Ballots", ("/api/ballots",)), ("Release", ("/api/release",)), ("Params", ("/api/params",)),
+         ("Forum", ("/lableak/api/communities", "/lableak/api/posts"))]
+FEED_RANK = {"OK": 0, "Degraded": 1, "Down": 2}
+FEED_VIEW_DOWN = 5          # an on-view read (no schedule) with this many failures in a row is Down
+
+def _feed_state(r, every, now):
+    """OK, Degraded or Down for one fetch_log row. Scheduled: fresh when the last good read is within 3 cadences (5 min
+    at least); a fresh read with failures since is Degraded; no fresh read is Down. On view: failures in a row decide."""
+    lo, fails = r.get("last_ok"), r.get("fails") or 0
+    if every:
+        if not lo or now - lo > max(3 * every, 300): return "Down"
+        return "Degraded" if fails else "OK"
+    if not fails: return "OK"
+    if fails >= FEED_VIEW_DOWN or not lo or now - lo > 3600: return "Down"
+    return "Degraded"
+
+@cached("feeds", 15)
+def feeds():
+    """Chain state, one row per upstream feed (label, state, last_ok) and the headline: OK only when every feed is OK,
+    Partial when the chain is live and any feed is not, Degraded when the chain is not live."""
+    from . import indexer as I
+    now = time.time(); rows = {r["endpoint"]: r for r in db.q("SELECT endpoint, last_ok, last_err, fails FROM fetch_log")}
+    out = []
+    for label, eps in FEEDS:
+        if not eps:   # Close records: this segment's records cover every close the live network counts
+            closed = status().get("epochs_closed")
+            with S.use(S.CURRENT): have = len(epochs_raw()); ts = epochs_ts()
+            if not isinstance(closed, (int, float)): continue
+            st = "OK" if have >= closed else "Degraded" if have else "Down"
+            out.append(dict(label=label, state=st, last_ok=ts if have else None, served=have, closed=int(closed))); continue
+        got = [(rows[e], I.EVERY.get(e)) for e in eps if e in rows]
+        if not got:
+            if any(I.EVERY.get(e) for e in eps): out.append(dict(label=label, state="Down", last_ok=None))
+            continue
+        st = max((_feed_state(r, ev, now) for r, ev in got), key=FEED_RANK.get)
+        out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
+    live = [r.get("last_ok") for e, r in rows.items() if e in ("/api/status", "/api/networks") and r.get("last_ok")]
+    fresh = bool(live) and now - max(live) <= LIVE_S
+    moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S
+    chain = "Live" if fresh and not stalled else "Stalled" if fresh else "Stale"
+    bad = [f["label"] for f in out if f["state"] != "OK"]
+    head = "Degraded" if chain != "Live" else "Partial" if bad else "OK"
+    return dict(state=head, chain=chain, feeds=out, not_ok=bad, ok=head == "OK")
 
 def anchors_latest(n=20, segment=None):
     """Newest anchors first, current segment first (heights restart at a genesis cut); segment= keeps one segment."""

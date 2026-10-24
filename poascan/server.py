@@ -54,9 +54,8 @@ TXS_MAX, OFFSET_MAX = 1000, 10_000_000
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
     if path == "/api/health":
-        h = A.health(); st = A.status()
-        ok = bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300)
-        return dict(ok=ok, started=STARTED, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
+        h = A.health(); st = A.status(); fd = A.feeds()   # ok, state, chain and feeds: the same per-feed state as Network > Health and the pill
+        return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], feeds=fd["feeds"], started=STARTED, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
                     txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], endpoints=h["endpoints"]), False
     if path == "/api/summary":
         s = V.summary_json(); return s, False

@@ -322,13 +322,25 @@ def status_page(title="Network upgrade"):
     from . import views
     return views.page(title, upgrade_body(), "/network")
 
+FEED_TAG = {"OK": "ok", "Partial": "warn", "Degraded": "warn", "Down": "bad", "Live": "ok", "Stalled": "warn", "Stale": "bad"}
+
+def feeds_html(fd=None):
+    """Health headline, chain state and one row per feed (OK, Degraded or Down, last OK), from A.feeds() like /api/health."""
+    fd = fd or A.feeds()
+    li = "".join(f'<li data-feed="{E(f["label"])}"><b>{E(f["label"])}</b><span class="tag {FEED_TAG[f["state"]]}">{f["state"]}</span>'
+                 f'<span class="fdt">{rel(f["last_ok"]) if f["last_ok"] else "never"}</span></li>' for f in fd["feeds"])
+    head = (f'<div class="fdh"><span class="lbl">Health</span><span class="tag {FEED_TAG[fd["state"]]}" data-health="{fd["state"]}">{fd["state"]}</span>'
+            f'<span class="lbl">Chain</span><span class="tag {FEED_TAG[fd["chain"]]}">{fd["chain"]}</span></div>')
+    return card("Feeds", head + f'<ul class="feeds" aria-label="Feeds">{li}</ul>' )
+
 def status_body():
     """Network → Health (was /status)."""
     d = status_data(); now = time.time()
     core = [e for e in d["eps"] if e["ep"].startswith("probe")] or d["eps"]
     s1 = [e["s1"] for e in core if e["s1"] is not None]
     up = min(s1) if s1 else None
-    state = ('<span class="tag ok">OPERATIONAL</span>' if up is not None and up >= .95 else '<span class="tag warn">DEGRADED</span>' if up is not None and up >= .5 else '<span class="tag bad">DOWN</span>' if up is not None else "···")
+    fd = A.feeds()
+    state = f'<span class="tag {FEED_TAG[fd["state"]]}">{fd["state"]}</span>'   # same headline as /api/health and the pill
     ongoing = [i for i in d["inc"] if i[1] is None or now - i[1] < 600]
     lagv = d["lag"][-1][1] if d["lag"] else None
     anc = {a["chain"]: a for a in d["anchors"]}
@@ -349,7 +361,7 @@ def status_body():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
-    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}<div class="stats eight">{st}</div>
+    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return body
 

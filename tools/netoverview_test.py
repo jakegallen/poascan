@@ -55,7 +55,25 @@ check("a lag at or over LAG_BLOCKS is flagged Behind", A.LAG_BLOCKS == 2000 and 
 db.write("INSERT INTO fetch_log(endpoint,last_ok,last_err,fails,next_at,err) VALUES('/api/explorer/txs',?,?,5,?,'HTTP 404')", (now - 1800, now - 30, now + 600))
 db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/status',?,0,0)", (now - 20,))
 f = A.freshness.__wrapped__() if hasattr(A.freshness, "__wrapped__") else A.freshness()
-check(f"tx feed down, status fresh: Live ({f['state']}, {f['why']})", f["state"] == "live" and f["tx_feed_down"])
+check(f"tx feed down, status fresh: Partial, not Stale ({f['state']}, {f['why']})", f["state"] == "partial" and f["label"] == "Partial" and f["tx_feed_down"] and "Explorer txs" in f["why"])
+A._cache.clear() if hasattr(A, "_cache") else None
+fd = A.feeds()
+st = {x["label"]: x["state"] for x in fd["feeds"]}
+check(f"feeds: chain Live, headline Partial, Explorer txs Down, Status OK ({fd['chain']}, {fd['state']}, {st})",
+      fd["chain"] == "Live" and fd["state"] == "Partial" and not fd["ok"] and st.get("Explorer txs") == "Down" and st.get("Status") == "OK")
+check(f"Close records Down when the live network counts a close we do not hold ({st.get('Close records')})", st.get("Close records") == "Down")
+from poascan import views2 as V2
+hb = V2.status_body()
+check("Health shows the Feeds card with the same headline and chain", 'data-health="Partial"' in hb and 'data-feed="Explorer txs"' in hb and ">Live<" in hb)
+check("Health never says healthy or operational", "healthy" not in hb.lower() and "OPERATIONAL" not in hb)
+check("Health copy: no resync, operator or expected changes", not any(w in hb.lower() for w in ("resync", "re-sync", "operator", "expected")))
+from poascan import server as SV
+ah = SV.api("/api/health", {})[0]
+check(f"/api/health carries the same state ({ah.get('ok')}, {ah.get('state')}, {ah.get('chain')})", ah["ok"] is False and ah["state"] == fd["state"] and ah["chain"] == fd["chain"] and [x["label"] for x in ah["feeds"]] == [x["label"] for x in fd["feeds"]])
+from poascan import agentapi as AA
+AA._META[0] = 0; m = AA.meta()
+check(f"API meta: not stale when status was read 20 s ago while the tx feed fails ({m['stale']}, {m['fetched_at']})", m["stale"] is False)
+check("no em or en dash on Health", "\u2014" not in hb and "\u2013" not in hb)
 db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/status'", (now - 900,))
 f = A.freshness.__wrapped__() if hasattr(A.freshness, "__wrapped__") else A.freshness()
 check(f"no fresh read anywhere: Stale ({f['state']})", f["state"] == "stale")

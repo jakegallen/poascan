@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.94"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T22:41:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.95"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T22:53:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -24,7 +24,7 @@ def meta():
     now = time.time()
     if now - _META[0] > 5 or _META[1] is None:
         st, nw, h, o = A.status(), A.networks(), A.health(), A.open_epoch() or {}
-        live = h.get("live_last_ok")
+        live = A.freshness()["fetched_at"]   # 1.26.94: last good read of the live network (status, networks or tx feed), not the tx feed alone
         _META[1] = dict(api_version=VERSION, network=nw.get("chain_id") or "poa-mainnet-1", source_height=nw.get("height"),
                         checkpoint=nw.get("checkpoint_height"), epoch=o.get("epoch"), node_as_of=st.get("as_of"), fetched_at=_iso(live),
                         stale=bool(st.get("stale")) or not live or now - live > STALE_AFTER_S, stale_after_s=STALE_AFTER_S,

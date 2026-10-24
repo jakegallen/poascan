@@ -639,7 +639,7 @@ def maintenance(base, root, env, check):
     o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
     check(f"maintenance: Stale still wins; a moved checkpoint keeps it on (recovery); mining open with the notice gone clears it after the grace {o}",
           o.get("up") == "up" and o.get("stale") == "stale" and o.get("moved") == "up" and o.get("cleared") is None
-          and o.get("open_noticed") is None and o.get("grace") is None and o.get("mining_back") == "mining_back" and o.get("back_state") in ("live", "lag"))
+          and o.get("open_noticed") is None and o.get("grace") is None and o.get("mining_back") == "mining_back" and o.get("back_state") in ("live", "lag", "partial"))
 
 def fixture_pages(check):
     """Every nav and sitemap page must render (no 500) against seeded data with 12 epochs."""
