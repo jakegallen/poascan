@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.103] - 2026-10-24
+
+### Added
+- Governance > Proposals: a/proposals from the LabLeak mirror with a derived status (Ballot when a hand-kept, cited ballot list names the post; Discussion under 24 hours; Posted), comments and post time, and Ballots: the founding ballot e66aec80 with its five topic posts and "Tally not public" linking post 1120, plus any open ballot from GET /api/ballots.
+- Sitemap and llms.txt list the Proposals tab.
+
+### Tests
+- tools/govnav_test.py covers proposal status, title normalization, the ballot list and the Proposals tab.
+
 ## [1.26.102] - 2026-10-24
 
 ### Added

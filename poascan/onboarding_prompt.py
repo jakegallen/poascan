@@ -78,7 +78,7 @@ challenge, answer, mine and grade). Chat-browse and connector: the start of step
 Draft caps (vault balance, daily swap caps) stay with POASwap: this prompt is mining only. Block ids unchanged."""
 
 VERSION = "v2.8"
-UPDATED_TS = "2026-10-24T23:41:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+UPDATED_TS = "2026-10-24T23:44:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
 RELEASE_NOTE = "Leak watch: each visit, before its first write, every variant reads /api/hosted/me (the connector, poa_status) and stops on an active critical notice or activity it did not make. The full prompt sends the key to /me in an X-Api-Key header."

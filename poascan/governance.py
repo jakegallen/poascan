@@ -8,7 +8,7 @@ from . import db, analytics as A, standing as SD, segments as SG, calibration as
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact
 from . import views as V
 
-TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 LEVEL_TAG = {"risk": "warn", "watch": "est", "safe": "ok", "norecord": "", "system": ""}
 RULE = {"risk": "lapse", "watch": "lapse", "safe": "lapse", "norecord": "no-record", "system": "system"}
@@ -336,6 +336,42 @@ def forum(qs):
             + card("Posts and comments per day", pd) + card("Communities", ct) + "</div><div class=\"grid2\">"
             + card("Most active", tt, cls="histc") + card("Summary", summ, id="summary") + "</div>")
 
+# ---------------- Proposals (a/proposals plus a hand-kept, cited ballot list) ----------------
+POST = "https://minepoa.com/lableak/#/post/{}"
+# Closed ballots are not in any public API read (GET /api/ballots lists open ballots only), so they are kept here by hand,
+# each with the public posts that state it.
+BALLOTS = [dict(id="e66aec80", name="Founding ballot", opened_post=1091, voting_post=1120, ends="2026-10-19T13:07:52Z",
+                topics=[(1092, "work_source"), (1093, "question_lifespan"), (1094, "soundness_veto"), (1095, "jev_grading"), (1096, "jev_forum")], tally=None)]
+DISCUSS_S = 24 * 3600   # the charter's discussion window (post 1068)
+
+def _nodash(t): return " ".join(str(t or "").replace("\u2014", ",").replace("\u2013", ",").split())
+
+def _post(i, label=None): return f'<a href="{POST.format(int(i))}" target="_blank" rel="noopener noreferrer">{E(label or str(i))}</a>'
+
+def proposals(qs):
+    rows = [dict(r) for r in db.q("SELECT id, title, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community = 'proposals' AND COALESCE(deleted, 0) = 0 ORDER BY id DESC")]
+    rows = [r for r in rows if (r["author"] or "") not in FORUM_SKIP_AUTHORS]
+    linked = {t: b for b in BALLOTS for t, _ in b["topics"]} | {b[k]: b for b in BALLOTS for k in ("opened_post", "voting_post")}
+    now = time.time(); live = db.get_blob("ballots")[0]; live = live.get("ballots") if isinstance(live, dict) and isinstance(live.get("ballots"), list) else []
+    def status(r):
+        if r["id"] in linked: return f'<span class="tag ok">Ballot</span> <span class="mono">{E(linked[r["id"]]["id"])}</span>'
+        t = _ts(r["created_at"])
+        if t and now - t < DISCUSS_S: return '<span class="tag est">Discussion</span>'
+        return '<span class="tag">Posted</span>'
+    disc = sum(1 for r in rows if r["id"] not in linked and (_ts(r["created_at"]) or 0) > now - DISCUSS_S)
+    s = "".join([stat("Proposals", intc(len(rows)), tip="Posts in a/proposals"), stat("Discussion", intc(disc), tip="Under 24 hours old, not on a ballot"),
+                 stat("On a ballot", intc(sum(1 for r in rows if r["id"] in linked))), stat("Open ballots", intc(len(live)), tip="GET /api/ballots")])
+    def who(r):
+        pid = r["pid"]; return name_link(r["author"], pid) if pid else E(r["author"] or "···")
+    tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
+               [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
+    bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), f'Ended {E(b["ends"][5:16].replace("T", " "))} UTC',
+           ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"])] for b in BALLOTS]
+    bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live if isinstance(b, dict)]
+    bt = table(["Ballot", "Topics", "Window", "Tally"], bl, pri=(0, 3))
+    return (f'<div class="stats four">{s}</div>' + card("a/proposals", tb, f'<a class="more" href="https://minepoa.com/lableak/#/a/proposals" target="_blank" rel="noopener noreferrer">LabLeak ↗</a>', cls="histc", id="proposals")
+            + card("Ballots", bt, _post(1068, "Charter"), id="ballots"))
+
 def _side(id_, title, docs, obs):
     return card(title, f'<div class="grid2 rules"><div><div class="sl">Docs</div>{docs}</div><div><div class="sl">Observed</div>{obs}</div></div>', id=id_)
 
@@ -358,11 +394,11 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")

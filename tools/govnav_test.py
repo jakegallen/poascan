@@ -64,6 +64,20 @@ def forum_unit():
           f["posts"] == 2 and f["comments"] == 2 and f["reply_rate"] == 0.5 and 3500 <= (f["median_wait"] or 0) <= 3700 and f["operator_replied"] == 1
           and all(r["name"] != "Live-GrokBot" for r in f["top"]) and [c[0] for c in f["communities"]] == ["general", "proposals"])
 
+def proposals_unit():
+    """Proposals: derived status (Ballot from the cited list, Discussion under 24 h, Posted), no dashes in titles, Live-GrokBot left out."""
+    from poascan import db, governance as GV
+    now = time.time(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+    db.write("INSERT OR REPLACE INTO forum_posts(id, community, title, author, author_public_id, created_at, comment_count, deleted) VALUES(?,?,?,?,?,?,?,0)",
+             [(1092, "proposals", "TOPIC 1 \u2014 work_source", "agent_14YNP29q", "poa1" + "G" * 40, iso(now - 9 * 86400), 4),
+              (9101, "proposals", "Fresh idea", "Gamma", "poa1" + "S" * 40, iso(now - 3600), 1),
+              (9102, "proposals", "Older idea", "Delta", "poa1" + "T" * 40, iso(now - 3 * 86400), 0),
+              (9103, "proposals", "Bot idea", "Live-GrokBot", "poa1" + "U" * 40, iso(now - 600), 0)], many=True)
+    h = GV.proposals({})
+    check("proposals: Ballot, Discussion and Posted status; no dash; Live-GrokBot left out; Tally not public with post 1120",
+          '<span class="tag ok">Ballot</span> <span class="mono">e66aec80</span>' in h and '<span class="tag est">Discussion</span>' in h and '<span class="tag">Posted</span>' in h
+          and "\u2014" not in h and "Bot idea" not in h and "Tally not public" in h and "#/post/1120" in h and "TOPIC 1 , work_source" in h)
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
@@ -112,13 +126,13 @@ def live():
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
         tabs = {}
-        for t in ("", "at-risk", "payouts", "graders", "directory", "forum", "charts", "rules"):
+        for t in ("", "at-risk", "payouts", "graders", "directory", "forum", "proposals", "charts", "rules"):
             u = "/governance" + (f"?tab={t}" if t else ""); c, b, _ = get(u); tabs[t] = b
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
         check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Forum", "Charts", "Rules")))
+              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Forum", "Proposals", "Charts", "Rules")))
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
@@ -136,6 +150,8 @@ def live():
         fo = tabs["forum"]
         check("Forum: range chips, stat cards, communities, most active, empty summary slot", all(f'>{x}</a>' in fo for x in ("24h", "7d", "30d", "All"))
               and all(x in fo for x in (">Reply rate<", ">First reply<", ">Operator replies<", "Communities</h2>", "Most active</h2>", 'id="summary"', "No summary yet.")) and "Live-GrokBot" not in fo)
+        pr = tabs["proposals"]
+        check("Proposals: a/proposals table and the cited ballot list", 'id="proposals"' in pr and 'id="ballots"' in pr and "e66aec80" in pr and "Tally not public" in pr)
         cs = tabs["charts"]
         check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
@@ -146,11 +162,11 @@ def live():
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
         check("sitemap: /chain, /chain/txs, /network?tab=token, /governance; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
-        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=token)" in ll
+        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=proposals)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)
     finally:
         p.terminate()
 
 if __name__ == "__main__":
-    unit(); fresh(); payout_unit(); forum_unit(); live()
+    unit(); fresh(); payout_unit(); forum_unit(); proposals_unit(); live()
     print(f"{len(FAILS)} failed" if FAILS else "all passed"); sys.exit(1 if FAILS else 0)
