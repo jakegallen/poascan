@@ -31,7 +31,9 @@ def classify(code, body=b""):
     block page (HTML 403, challenge) never reads as a reopened route."""
     b = (body or b"")[:2048].decode("utf-8", "replace").strip().lower()
     if code == 503 and "halted" in b: return "paused"
-    if code in OPEN_CODES and b[:1] in ("{", "[") and "halted" not in b: return "open"
+    if code in OPEN_CODES and b[:1] in ("{", "[") and "halted" not in b:
+        from . import strain as _ST   # a strain stand-in (notice in place of the route's answer) never reads as reopened
+        return None if _ST.text_hit(b) else "open"
     return None
 
 def _get(path):

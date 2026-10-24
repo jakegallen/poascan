@@ -1,6 +1,6 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
 import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
-from . import db
+from . import db, strain as _ST
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
 UA = "POAScan-indexer/1.0 (+https://poascan.io; read-only)"
@@ -44,6 +44,9 @@ class Missing(Busy):
     """The node does not know this id (HTTP 404, or a detail answer without an id). Never an endpoint failure."""
 class Limited(Busy):
     """An on-demand read was refused by the upstream budget (per client or global); retry is in seconds."""
+class Notice(Busy):
+    """minepoa answered with a notice in place of data (strain.py). Nothing from it is stored; callers keep their last real copy."""
+NOTICE_RETRY_S = _ei("POASCAN_NOTICE_RETRY_S", 300, 60)   # back-off floor after a notice response (polite to a strained endpoint)
 
 NOT_MODIFIED = object()            # fetch(..., cond=True) result when the node answered 304 to our If-None-Match
 MAX_BODY = 96 * 1024 * 1024        # decoded size cap (the epochs list is about 11 MB)
@@ -84,10 +87,15 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     try:
         with (_NOREDIR.open(req, timeout=timeout) if soft else urllib.request.urlopen(req, timeout=timeout)) as r:
             wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag")
-        _probe(ep, True, t0, "200"); count(ep, 200)
         if raw[:1] not in (b"{", b"["):
+            _probe(ep, True, t0, "200"); count(ep, 200)
             raise Busy("non-JSON response (load page?)")
         data = json.loads(raw)
+        hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
+        if hit:
+            _ST.record(path, hit); _probe(ep, False, t0, "notice"); count(ep, "notice")
+            raise Notice("upstream notice instead of data: " + ";".join(hit["signals"])[:120], NOTICE_RETRY_S)
+        _probe(ep, True, t0, "200"); count(ep, 200); _ST.clear(path)
         if cond:
             if et: _etags[path] = et
             else: _etags.pop(path, None)
@@ -103,9 +111,16 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
                      "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0", (ep, now))
             return NOT_MODIFIED
         retry = retry_after(e.headers.get("Retry-After"))
+        body = None
         try:
             body = json.loads(_decode(e.read() or b"{}", e.headers.get("Content-Encoding")) or b"{}")
             retry = max(retry or 0, float(body.get("retry_after_seconds") or 0)) or None
+        except Exception:
+            pass
+        try:
+            if isinstance(body, dict):
+                hit = _ST.detect(path, body, e.headers)
+                if _ST.strong(hit): _ST.record(path, hit)   # an error that names a notice: show its text; the read already failed
         except Exception:
             pass
         if soft and e.code in MISSING_CODES:
@@ -115,7 +130,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         _fail(ep, f"HTTP {e.code}", retry)
         raise Busy(f"HTTP {e.code}", retry)
     except Busy as e:
-        _fail(ep, str(e), None); raise
+        _fail(ep, str(e), e.retry); raise
     except Exception as e:
         count(ep, "err"); _probe(ep, False, t0, type(e).__name__); _fail(ep, type(e).__name__ + ": " + str(e)[:120], None)
         raise Busy(str(e))
@@ -208,7 +223,7 @@ def _last_try(ep):
 UPSTREAM_KEEP_DAYS = 8
 _ctr = collections.Counter(); _ctr_lock = threading.Lock(); _ctr_flushed = [0.0]
 def _code_class(code):
-    if code in (200, 304, 404, 429): return str(code)
+    if code in (200, 304, 404, 429, "notice"): return str(code)
     if isinstance(code, int): return f"{code // 100}xx"
     return "err"
 def count(ep, code, now=None):

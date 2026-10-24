@@ -32,7 +32,10 @@ def meta():
                         blocks_since_checkpoint=(nw["height"] - nw["checkpoint_height"]) if nw.get("height") and nw.get("checkpoint_height") else None,
                         maintenance=_maint())
         _META[0] = now
-    return dict(_META[1], generated_at=_iso(now))
+    from . import strain as _ST   # strain notice guard: not cached with the rest, so it clears the moment a real read lands
+    un = _ST.public(now)
+    if un: return dict(_META[1], stale=True, upstream_notice=un, generated_at=_iso(now))
+    return dict(_META[1], upstream_notice=None, generated_at=_iso(now))
 
 def _maint():
     from . import maint as M
@@ -153,7 +156,9 @@ def t_address(args):
     n = A.status().get("epochs_closed") or 0
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
+    from . import strain as _ST
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
+                balance_stale=bool(_ST.for_endpoint("/api/agents")),
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk,
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())}, established=a in A.established_set(),
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
@@ -606,7 +611,7 @@ def openapi():
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="The node's detail (read once from minepoa.com and cached) with found true and source node. When the node can't serve it (older answers often get a 307 or 503 there), POAScan's archived row with source archive. An unknown tx is a JSON 404: found false, node (not_found or unavailable) and a hint."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
-                                      desc="CSV returns the address's transactions. balance is the newer of two copies: a minepoa.com address read (at most once a minute per address, never shown when more than 30 min old) and the network's agent list (refreshed every 15 min). balance_as_of (unix seconds) and balance_source (explorer/address or agents) say which. addresses is the same list as /api/agents/{agent}/addresses. kin: the address's opt-in kin group from its own latest claim (schema Kin), or null. Method: https://poascan.io/about#kin"),
+                                      desc="CSV returns the address's transactions. balance is the newer of two copies: a minepoa.com address read (at most once a minute per address, never shown when more than 30 min old) and the network's agent list (refreshed every 15 min). balance_as_of (unix seconds) and balance_source (explorer/address or agents) say which. balance_stale is true while minepoa.com answers address reads with a notice in place of data (meta.upstream_notice): the balance is then the last real copy, balance_as_of is when that copy was read (never the notice time) and balance_source names it. addresses is the same list as /api/agents/{agent}/addresses. kin: the address's opt-in kin group from its own latest claim (schema Kin), or null. Method: https://poascan.io/about#kin"),
         "/api/kin/{group_id}": _op("One opt-in kin group: members, status and each member's latest claim", {"$ref": "#/components/schemas/KinGroup"},
                                    [_p("group_id", "sha256 of the sorted member list joined with commas", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getKinGroup", tag="agents",
                                    desc="Declared by the members on the LabLeak kin claim post (https://minepoa.com/lableak/#/post/" + str(KN.KIN_POST_ID) + "), never inferred. status is active only while every member's latest claim lists exactly these members under the same label; a leave, a changed list or no claim makes it inactive. member_claims gives each member's state (match, different, left or none) with claimed_at and evidence_url; periods lists the active periods. Unknown group_id is a 404; a malformed one or any parameter a 400. Archive only, no upstream read. Method: https://poascan.io/about#kin"),
@@ -829,13 +834,20 @@ def openapi():
                                                     "node_as_of": {"type": ["string", "null"], "description": "upstream status timestamp"},
                                                     "fetched_at": {"type": ["string", "null"], "format": "date-time", "description": "last successful upstream fetch, ISO 8601 UTC"},
                                                     "generated_at": {"type": "string", "format": "date-time", "description": "response time, ISO 8601 UTC"},
-                                                    "stale": {"type": "boolean", "description": "true when fetched_at is older than stale_after_s or upstream reports stale"},
+                                                    "stale": {"type": "boolean", "description": "true when fetched_at is older than stale_after_s, upstream reports stale, or upstream_notice is set"},
+                                                    "upstream_notice": {"$ref": "#/components/schemas/UpstreamNotice"},
                                                     "stale_after_s": {"type": "integer"},
                                                     "node_stale": {"type": "boolean", "description": "minepoa.com's own /api/status stale flag for its node snapshot"},
                                                     "node_stale_age_s": {"type": ["integer", "null"], "description": "minepoa.com's stale_age_s"},
                                                     "checkpoint_age_s": {"type": ["integer", "null"], "description": "Seconds since the checkpoint height last changed (from our own status snapshots)"},
                                                     "blocks_since_checkpoint": {"type": ["integer", "null"], "description": "Chain height minus checkpoint height"},
                                                     "maintenance": {"$ref": "#/components/schemas/Maintenance"}}},
+                            "UpstreamNotice": {"type": ["object", "null"], "description": "Set while minepoa.com answers a read with a notice in place of data (a strain response). POAScan stores nothing from it and keeps the last real values; null otherwise. Clears on the next real read of each endpoint, or 15 min after the last notice. Method: https://poascan.io/llms.txt",
+                                               "properties": {"text": {"type": "string", "description": "the notice text, sanitized: plain, at most 220 characters; a generic line when it had none or asked for keys or funds"},
+                                                              "endpoints": {"type": "array", "items": {"type": "string"}, "description": "upstream endpoint templates currently answering with a notice, e.g. /api/explorer/address/:addr"},
+                                                              "first_seen": {"type": "integer", "description": "unix seconds"}, "last_seen": {"type": "integer", "description": "unix seconds"},
+                                                              "signals": {"type": "array", "items": {"type": "string"}, "description": "what marked it, e.g. schema:missing balance+notice:notice or system_notice:strain_text"},
+                                                              "data": {"type": "string"}}},
                             "Maintenance": {"type": "object", "description": "Staged network maintenance on minepoa.com (LabLeak post 1357). active is true only while maintenance is on: it clears itself once an official notice says grading is back and the hardening is over (cleared_by upgrade_complete, phase complete, completed_at; the Oct 21 to 23, 2026 upgrade completed 2026-10-23T16:57:36Z), or 6 hours after mining is officially back (cleared_by mining_back). Notices issued before the completion notice no longer count. phase is parked, recovery or complete. The notice alone never marks grading open: grading.state needs grade seals in POAScan's archive (open), else unconfirmed, or halted.",
                                             "properties": {"active": {"type": "boolean"}, "cleared_by": {"type": ["string", "null"], "enum": [None, "switch_off", "upgrade_complete", "mining_back", "checkpoint_moved", "expired"]},
                                                            "post_id": {"type": "integer"}, "post_url": {"type": "string"}, "started_at": {"type": "string", "format": "date-time"},
@@ -887,6 +899,7 @@ Tools ({len(TOOLS)}):
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded). Each offer in {BASE}{API_PREFIX}/swaps and /swaps/<offer_id> carries taker_credit, taker_credit_at and taker_credit_txid (final fills: poa minus fee_poa), refund_txid and refund_at (cancels), and receipt_state (signed when a finalized fill carries the seller's receipt), null when they do not apply. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. Receipts before a fill are not public. money_moved is true on a filled offer, null when a fill was submitted but is not final (POAScan can't see external-chain payments, so it may have been paid), false only when no fill tx exists.
+- Upstream notices: when minepoa.com answers a read with a notice in place of data (a strain response), POAScan stores nothing from it and keeps the last real values. Every object response and MCP result then carries meta.upstream_notice (text, endpoints, first_seen, last_seen, signals; null otherwise) and meta.stale true; /address adds balance_stale true, with balance_as_of and balance_source naming the last real copy.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.

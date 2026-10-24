@@ -362,6 +362,12 @@ def updot(state):
 DEV_BANNER = ('<div class="devbar" id="devbar" role="note"><div class="wrap devbar-in"><p><b>System development in progress.</b> '
               'Follow <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">@Jakegallen</a> for updates.</p></div></div>')
 
+def _strain_bar():
+    """Notice strip under the development banner while minepoa.com answers with a notice in place of data (strain.py)."""
+    try:
+        from . import strain as _ST; return _ST.banner()
+    except Exception: return ""
+
 def layout(title, body, active="/", live=None, head=""):
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="on" aria-current="page">{n}</a>' if h == active else f'<a href="{h}" class="">{n}</a>' for h, n in NAV)
@@ -374,8 +380,8 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=104">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
-{DEV_BANNER}<header class="top"><div class="wrap hdr">
+<link rel="stylesheet" href="/static/style.css?v=105">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+{DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}

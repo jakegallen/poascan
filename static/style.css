@@ -1217,3 +1217,9 @@ code.brk{overflow-wrap:anywhere}
 .devbar a{color:#FFC861;font-weight:600;text-decoration:underline;text-decoration-color:rgba(255,200,97,.45);text-underline-offset:2px}
 .devbar a:hover,.devbar a:focus-visible{color:#FFE2A6;text-decoration-color:currentColor}
 @media (max-width:640px){.devbar-in{padding-top:6px;padding-bottom:6px}.devbar p{font-size:var(--t12)}}
+/* Strain notice strip (strain.banner): under the development banner while minepoa.com answers with a notice in place of data. Plain, not dismissible */
+.ntbar{border-bottom:1px solid rgba(110,168,254,.34);background:linear-gradient(90deg,rgba(110,168,254,.16),rgba(110,168,254,.07))}
+.ntbar p{margin:0;color:#C9DCFF;font-size:var(--t13);line-height:1.4;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
+.ntbar b{color:#E1ECFF;font-weight:700;letter-spacing:.02em}
+.ntbar .ntk{color:#9FBCEB}
+@media (max-width:640px){.ntbar p{font-size:var(--t12)}}

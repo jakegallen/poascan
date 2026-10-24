@@ -110,7 +110,9 @@ def api(path, qs):
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         p = G.profile(a); d, err, at = V.address_read(a)
         bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
-        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
+        from . import strain as _ST   # a notice in place of the address read: the balance shown is the last real copy
+        stale = bool(_ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
+        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale, rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
