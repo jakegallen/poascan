@@ -3,12 +3,12 @@
 Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close records POAScan already archives
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
-import time, datetime as dt
-from . import analytics as A, standing as SD, segments as SG, calibration as CA
-from .ui import E, card, stat, intc, pct, short, name_link, line, table
+import time, datetime as dt, collections
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA
+from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact
 from . import views as V
 
-TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("graders", "Graders"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("graders", "Graders"), ("directory", "Directory"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 LEVEL_TAG = {"risk": "warn", "watch": "est", "safe": "ok", "norecord": "", "system": ""}
 RULE = {"risk": "lapse", "watch": "lapse", "safe": "lapse", "norecord": "no-record", "system": "system"}
@@ -122,8 +122,88 @@ def at_risk(qs):
     top = "" if SG.has_cut() else V.at_risk_body(qs, href("at-risk"))
     return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows) + foot, cls="histc", id="standing")
 
+def jury_series():
+    """Per close of the selected segment: jury seats aligned and not aligned (settled[].jury[]), queue and empty panels."""
+    out = []
+    for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))):
+        b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]
+        pend = b.get("pending") or {}; pend = pend if isinstance(pend, dict) else {}
+        out.append(dict(epoch=int(e.get("epoch", 0)), aligned=sum(1 for j in js if j.get("aligned")), other=sum(1 for j in js if not j.get("aligned")),
+                        queue=len(pend), empty=sum(1 for v in pend.values() if not (v or {}).get("panel"))))
+    return out
+
+def seals_since_close():
+    """grade-sealed txs after the selected segment's last close, per grader (archived tx stream, this segment)."""
+    ep = A.epoch_rows(); t = ep[-1]["close_ts"] if ep else 0
+    w, a = SG.sql()
+    rows = db.q("SELECT from_addr AS g, COUNT(*) AS n FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL AND ts > ?" + w + " GROUP BY from_addr ORDER BY n DESC", (t,) + a)
+    return t, [(r["g"], r["n"]) for r in rows]
+
 def graders(qs):
-    return V.graders_body(qs, href("graders"))
+    js = jury_series(); t, ss = seals_since_close(); nm = A.forum_names(); last = js[-1] if js else None
+    seats = sum(x["aligned"] + x["other"] for x in js); al = sum(x["aligned"] for x in js)
+    cov = (1 - last["empty"] / last["queue"]) if last and last["queue"] else None
+    s = "".join([stat("Graders now", intc(len(ss)), tip="Agents with a grade-sealed tx since the last close"), stat("Seals now", intc(sum(n for _, n in ss)), tip="grade-sealed txs since the last close"),
+                 stat("Queue", intc(last["queue"]) if last else "···", tip="Pending answers at the last close"), stat("Coverage", pct(cov) if cov is not None else "···", tip="Pending answers with a panel at the last close"),
+])
+    ch = bars([(f'E{x["epoch"]}', [x["aligned"], x["other"]]) for x in js], height=150, colors=("#3DDC97", "#FF5A4E"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else '<p class="na">No settled jury seats in this segment yet.</p>'
+    def ag(g):
+        a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
+        return (name_link(nm[g], g) + f"<small>{a}</small>") if nm.get(g) else a
+    st = table(["Agent", "Seals"], [[ag(g), intc(n)] for g, n in ss[:10]]) if ss else '<p class="na">No seals since the last close.</p>'
+    return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Jury seats per close", ch) + card("Seals since close", st) + "</div>"
+            + V.graders_body(qs, href("graders")))
+
+DIR_SORTS = [("rewards", "Rewards"), ("eligible", "Eligible closes"), ("seals", "Seals"), ("atts", "Attestations")]
+DIR_FILTERS = [("", "All"), ("established", "Established"), ("graders", "Graders"), ("attesters", "Attesters")]
+DIR_PAGE = 100
+
+@A.cached("gov_directory", 300)
+def directory_rows():
+    """Every Agent seen in the selected segment's close records or archived txs, with this segment's rewards, last paid
+    close, eligible closes, seals, attestations, grading seats and established flag."""
+    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
+    est, le = segment_standing(); nm = A.forum_names()
+    rw, lp, el, at, seat = collections.Counter(), {}, collections.Counter(), collections.Counter(), collections.Counter()
+    for e in eps:
+        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
+        for a, v in (e.get("rewards") or {}).items():
+            try: rw[a] += float(v); lp[a] = n
+            except (TypeError, ValueError): pass
+        for a in b.get("challenge_eligible", []) or []: el[a] += 1
+        for a, v in (b.get("attestations") or {}).items():
+            try: at[a] += int(v)
+            except (TypeError, ValueError): pass
+        for a in (b.get("graders_served") or {}): seat[a] += 1
+    w, args = SG.sql()
+    seals = {r["g"]: r["n"] for r in db.q("SELECT from_addr AS g, COUNT(*) AS n FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL" + w + " GROUP BY from_addr", args)}
+    addrs = set(rw) | set(el) | set(at) | set(seat) | set(seals) | est
+    return [dict(address=a, name=nm.get(a), established=a in est, rewards=rw.get(a, 0.0), last_paid=lp.get(a), eligible=el.get(a, 0),
+                 seals=seals.get(a, 0), atts=at.get(a, 0), seats=seat.get(a, 0)) for a in addrs if a and a.startswith("poa1")]
+
+def directory(qs):
+    rows = directory_rows(); by = _q(qs, "sort", "rewards"); by = by if by in dict(DIR_SORTS) else "rewards"
+    f = _q(qs, "filter"); f = f if f in dict(DIR_FILTERS) else ""
+    keep = {"": lambda r: True, "established": lambda r: r["established"], "graders": lambda r: r["seats"] or r["seals"], "attesters": lambda r: r["atts"]}[f]
+    rs = sorted((r for r in rows if keep(r)), key=lambda r: (-r[by], (r["name"] or "~").lower(), r["address"]))
+    try: pg = max(1, int(_q(qs, "page", "1")))
+    except ValueError: pg = 1
+    pages = max(1, -(-len(rs) // DIR_PAGE)); pg = min(pg, pages); cur = rs[(pg - 1) * DIR_PAGE: pg * DIR_PAGE]
+    kw = lambda **o: dict(dict(sort=by if by != "rewards" else "", filter=f), **o)
+    sc = "".join(f'<a href="{href("directory", **kw(sort=k if k != "rewards" else ""))}" class="chip {"on" if k == by else ""}">{t}</a>' for k, t in DIR_SORTS)
+    fc = "".join(f'<a href="{href("directory", **kw(filter=k))}" class="chip {"on" if k == f else ""}">{t}</a>' for k, t in DIR_FILTERS)
+    tags = lambda r: (' <span class="tag ok">Established</span>' if r["established"] else "") + (' <span class="tag">Grader</span>' if r["seats"] or r["seals"] else "")
+    trs = "".join(f'<tr><td>{_agent(r)}{tags(r)}</td><td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>0</span>"}</td><td class="r dk">{_ep(r["last_paid"])}</td>'
+                  f'<td class="r">{r["eligible"]:,}</td><td class="r">{r["seals"]:,}</td><td class="r dk">{r["atts"]:,}</td></tr>' for r in cur)
+    tb = (f'<div class="tw"><table class="hist cal gov"><thead><tr><th>Agent</th><th class="r">Rewards</th><th class="r dk">Last paid</th><th class="r">Eligible</th><th class="r">Seals</th><th class="r dk">Attestations</th></tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=6 class=na>No Agents in this segment yet.</td></tr>"}</tbody></table></div>')
+    nav = ""
+    if pages > 1:
+        nav = ('<div class="chips">' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg - 1) if pg > 2 else ""))}">Newer</a>' if pg > 1 else "")
+               + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg + 1)))}">More</a>' if pg < pages else "") + "</div>")
+    s = "".join([stat("Agents", intc(len(rows))), stat("Established", intc(sum(1 for r in rows if r["established"]))),
+                 stat("Graders", intc(sum(1 for r in rows if r["seats"] or r["seals"]))), stat("Attesters", intc(sum(1 for r in rows if r["atts"])))])
+    return f'<div class="stats four">{s}</div>' + card(f"Directory · {len(rs):,}", f'<div class="chips">{fc}</div><div class="chips">{sc}</div>' + tb + nav, cls="histc", id="directory")
 
 def charts(qs):
     rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
@@ -167,11 +247,11 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "directory": "Governance · Directory", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "graders": graders, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "graders": graders, "directory": directory, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")

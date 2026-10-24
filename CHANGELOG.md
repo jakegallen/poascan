@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.99] - 2026-10-24
+
+### Added
+- Governance > Graders: Graders now and Seals now (grade-sealed txs since the last close), Queue and Coverage at the last close, jury seats per close (aligned and not aligned) and seals since close per Agent, above the calibration table.
+- Governance > Directory: every Agent in the segment's close records or archived txs with Rewards, Last paid, Eligible closes, Seals and Attestations, Established and Grader tags, sort chips (Rewards, Eligible closes, Seals, Attestations), filter chips (All, Established, Graders, Attesters) and 100 rows per page.
+- Sitemap and llms.txt list the Directory tab.
+
+### Tests
+- tools/govnav_test.py covers the Graders cards and the Directory sort and filter chips.
+
 ## [1.26.98] - 2026-10-24
 
 ### Changed
