@@ -513,8 +513,9 @@ def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=com
     if legend: lg = '<div class="legend">' + "".join(f'<span><i style="background:{colors[j % len(colors)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
     return '<div class="chartbox">' + "".join(out) + "</div>" + lg
 
-def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None):
-    """marks: [(x, label)] or [(x, label, url, title)] dashed markers. proj_from: x after which the line is drawn dashed (projection)."""
+def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None):
+    """marks: [(x, label)] or [(x, label, url, title)] dashed markers. proj_from: x after which the line is drawn dashed (projection).
+    breaks: x values the line is not drawn across (a counter that restarted at a genesis cut)."""
     pts = [(x, y) for x, y in points if y is not None]
     if len(pts) < 2: return chart_skel(640, height)
     W, H, pl, pb, pt = 640, height, 56, 24, 14
@@ -525,7 +526,9 @@ def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None
         a = [p for p in pts if p[0] <= proj_from]; b = [p for p in pts if p[0] >= proj_from]
         if a and b and a[-1] != b[0]: b = [a[-1]] + b
     else: a, b = pts, []
-    path = lambda ps: " ".join(f"{'M' if i == 0 else 'L'}{X(x):.1f},{Y(y):.1f}" for i, (x, y) in enumerate(ps))
+    bk = sorted(breaks or [])
+    gap = lambda a, b: any(a < k <= b for k in bk)
+    path = lambda ps: " ".join(f"{'M' if i == 0 or gap(ps[i - 1][0], x) else 'L'}{X(x):.1f},{Y(y):.1f}" for i, (x, y) in enumerate(ps))
     g = "".join(f'<line x1="{pl}" x2="{W}" y1="{Y(ymin+(y1-ymin)*i/4):.1f}" y2="{Y(ymin+(y1-ymin)*i/4):.1f}" class="grid"/><text x="{pl-6}" y="{Y(ymin+(y1-ymin)*i/4)+4:.1f}" class="ax" text-anchor="end">{fmt(ymin+(y1-ymin)*i/4)}</text>' for i in range(5))
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
     xs = f'<text x="{pl}" y="{H-6}" class="ax">{xl(x0)}</text><text x="{W-4}" y="{H-6}" class="ax" text-anchor="end">{xl(x1)} UTC</text>'

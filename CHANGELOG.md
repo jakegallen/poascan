@@ -25,6 +25,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed
 - Open epoch, pending queue, standing expiry estimate, reconcile (Closes, Txs, Final, Checkpoint) and recovery read the current segment; vesting, lifetime rewards and established standing span both (standing carried over with balances). A new segment's low checkpoint is not read as parked.
 - /api/v1/epoch/<n>/record is cached immutable only with ?segment= (a bare n names a different close after a cut); 300 s otherwise.
+- Follow-up: agents_joined and holders restarted at the cut (5,341 to 4,941 Agents), so the Agents and Holders lines are not drawn across it, New · 24h and Agents / hr count from the cut, and an empty segment's Cadence says so.
 
 ## [1.26.89] - 2026-10-24
 

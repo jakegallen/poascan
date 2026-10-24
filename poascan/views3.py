@@ -195,7 +195,8 @@ def charts_body(rng=""):
     am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap", "cut") and t >= t0]
     em = [(t, l) for t, l, k in g["ms"] if k in ("close", "cut") and t >= t0]
     la = g["agents"][-1][1] if g["agents"] else None
-    a24 = next((a for t, a in g["agents"] if t >= now - DAY), None)
+    c = _SG.cut(); brk = [c["ts"]] if c else []   # agents_joined and holders restarted at the genesis cut: no line or delta across it
+    a24 = next((a for t, a in g["agents"] if t >= max([now - DAY] + brk)), None)
     tday = g["day"][-1]["n"] if g["day"] else None
     pe = g["per_ep"]; closes = {_SG.gkey(r["epoch"], n): r["close_ts"] for n in _SG.NUMBERS for r in _ep_rows(n)}
     pe_r = [x for x in pe if (closes.get(x[0]) or now) >= t0]
@@ -203,8 +204,8 @@ def charts_body(rng=""):
                   stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
                   stat("Answerers", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None)), tip="Agents who answered in the last closed epoch")])
     H = 140
-    ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am)
-    hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em)
+    ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, breaks=brk)
+    hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, breaks=brk)
     from . import milestones as MS   # network upgrade markers (LabLeak post 1357), grouped so they stay readable at 390px
     up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])
     um = MS.group(up, sp[0][0], sp[-1][0]) if len(sp) > 1 else []

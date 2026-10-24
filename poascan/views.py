@@ -815,7 +815,7 @@ def epochs_page(qs=None):
         cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
         hist = epochs_table(ep) if ep or not SG.has_cut() else na(f"No closes in {SG.label(SG.CURRENT)} yet.")
         inner = (card("History", f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>', X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
-                 + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
+                 + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", (cad if ep else na(f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
     body = f'<div class="sechead"><h1>Epochs</h1>{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 

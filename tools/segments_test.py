@@ -103,6 +103,14 @@ rr = RC.reconcile(); rows = rr.get("rows", rr) if isinstance(rr, dict) else rr
 ep_row = [r for r in rows if isinstance(r, dict) and r.get("key") == "epochs"]
 check("reconcile Closes: 2 in segment 2 against epochs_closed 2", bool(ep_row) and ep_row[0]["poascan"] == 2 and ep_row[0]["node"] == 2 and ep_row[0]["state"] == "match")
 
+from poascan import ui as U
+svg = U.line([(CUT - 7200, 5300), (CUT - 3600, 5341), (CUT + 600, 4941), (CUT + 1800, 4950)], breaks=[CUT])
+check("chart line is not drawn across the cut (agents_joined restarted)", svg.count(" M") + svg.count('"M') >= 2 and U.line([(1, 1), (2, 2), (3, 3)]).count("M") == 1)
+pts = [(CUT - 3600 * 5, 5000), (CUT - 600, 5341), (CUT + 600, 4941), (CUT + 3000, 4960)]
+db.write("DELETE FROM snaps WHERE kind='status'")
+for t, a in pts: db.write("INSERT INTO snaps(kind, ts, json) VALUES('status', ?, ?)", (t, json.dumps({"agents_joined": a})))
+check("join points start at the cut (no negative delta across it)", [t for t, _ in A._join_points(CUT - 86400)] == [CUT + 600, CUT + 3000])
+
 # ---- 5. HTTP: pages and API with ?segment ----
 def free():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p

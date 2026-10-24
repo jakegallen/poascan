@@ -8,7 +8,7 @@ from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
 VERSION = "1.26.91"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T21:48:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASED_TS = "2026-10-24T21:58:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Genesis cut: segment 2 from h44003, segment 1 archived and readable, segment on epochs, checkpoints and nonces."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"

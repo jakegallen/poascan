@@ -648,6 +648,7 @@ JOIN_PAUSE_S = 2 * 3600        # agents_joined flat this long reads as joining p
 JOIN_MIN_S = 3600              # never report over less than an hour
 
 def _join_points(since):
+    if S.has_cut() and time.time() >= S.CUT_TS: since = max(since, S.CUT_TS)   # agents_joined restarted at the genesis cut: never a delta across it
     return [(r["ts"], int(r["a"])) for r in db.q(
         "SELECT ts, json_extract(json, '$.agents_joined') AS a FROM snaps WHERE kind='status' AND ts >= ? ORDER BY ts", (since,)) if r["a"]]
 
