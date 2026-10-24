@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.87] - 2026-10-24
+
+### Changed (HTML page cache)
+- HTML pages carry a weak ETag that ignores what app.js recomputes every second (toggle ids, countdown text, the ring and vessel fill, relative times). Two renders with the same data share it, so a revalidation is a 304; any data change gives a new one. If-None-Match uses weak comparison (W/ or not, lists, *).
+- Cache-Control on pages: public, max-age=15, s-maxage=30, stale-while-revalidate=15. A browser reuses a page for 15 s and a shared cache for 30 s plus 15 s while it revalidates: 45 s at most, inside the 60 s live feed cadence. Vary: Accept-Encoding, sent once.
+- /ops stays no-store and private; JSON, fragments, assets, health and error pages keep their own headers. tools/page_cache_test.py in CI.
+
 ## [1.26.86] - 2026-10-24
 
 ### Changed (key examples and the Join dialog)

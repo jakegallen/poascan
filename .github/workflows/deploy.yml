@@ -133,6 +133,8 @@ jobs:
         run: python tools/accuracy_test.py
       - name: Re-admission flag (back in established_after one close after removal, no eligibility record; history, standing state, address card)
         run: python tools/readmit_test.py
+      - name: HTML page cache (weak ETag ignores what app.js recomputes, 304 on a match, 15 s browser and 30 s plus 15 s shared reuse, Vary once; /ops stays no-store)
+        run: python tools/page_cache_test.py
 
   deploy:
     needs: test

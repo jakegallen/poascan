@@ -309,6 +309,21 @@ TXT = "text/plain; charset=utf-8"
 HSTS = "max-age=31536000"
 CANONICAL = os.environ.get("POASCAN_CANONICAL", "https://poascan.io").rstrip("/")   # the apex www. redirects to
 MPID = re.compile(rb'"mp\d+"')
+# 1.26.87: HTML page cache. The weak ETag hashes the page with the parts app.js recomputes every second blanked: toggle ids,
+# countdown text (.cd/.xcd data-close), the ring and vessel fill, and relative times (time.rel data-ts). Two renders with the
+# same data share one ETag, so a revalidation is a 304; any data change changes it. Fresh 15 s in a browser, 30 s in a shared
+# cache plus 15 s stale-while-revalidate: at most 45 s, inside the 60 s live feed cadence. /ops never gets it (no-store).
+PAGE_VOLATILE = [(MPID, b""), (re.compile(rb'(data-close="[\d.]+">)[^<]*'), rb"\1"), (re.compile(rb'( pathLength="100" stroke-dasharray=")[\d.]+'), rb"\1"),
+                 (re.compile(rb'(<i class="molten" style="width:)[\d.]+'), rb"\1"), (re.compile(rb'(<span class="vp num">)\d+'), rb"\1"),
+                 (re.compile(rb'(<time class="t rel" data-ts="\d+">)[^<]*'), rb"\1")]
+PAGE_CACHE = "public, max-age=15, s-maxage=30, stale-while-revalidate=15"
+def page_etag(b):
+    for r, k in PAGE_VOLATILE: b = r.sub(k, b)
+    return 'W/"' + hashlib.sha1(b).hexdigest()[:16] + '"'
+def etag_match(inm, tag):
+    """Weak comparison (RFC 9110 13.1.2): W/ prefixes ignored; * matches."""
+    t = tag.removeprefix("W/"); xs = [x.strip().removeprefix("W/") for x in (inm or "").split(",") if x.strip()]
+    return t in xs or "*" in xs
 IMMUTABLE = "public, max-age=31536000, immutable"
 
 QS_RX = re.compile(r"\?[^\s\"']*")   # query strings (searches included) never reach the log
@@ -387,11 +402,12 @@ class H(BaseHTTPRequestHandler):
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))
         hdr = dict(extra or {})
-        if code == 200 and ctype.startswith("text/html") and "Cache-Control" not in hdr:
-            tag = 'W/"' + hashlib.sha1(MPID.sub(b"", b)).hexdigest()[:16] + '"'  # toggle ids count up per render; ignore them
-            hdr.update({"ETag": tag, "Cache-Control": "no-cache"})
-            if tag in (self.headers.get("If-None-Match") or ""):
-                self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", "no-cache"); self.send_header("Strict-Transport-Security", HSTS)
+        if code == 200 and ctype.startswith("text/html") and "Cache-Control" not in hdr and not (self.path or "").startswith("/ops"):
+            tag = page_etag(b)
+            hdr.update({"ETag": tag, "Cache-Control": PAGE_CACHE, "Vary": "Accept-Encoding"})
+            if etag_match(self.headers.get("If-None-Match"), tag):
+                self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", PAGE_CACHE); self.send_header("Vary", "Accept-Encoding")
+                self.send_header("Strict-Transport-Security", HSTS)
                 self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.end_headers(); return
         if gz:
             if pre is not None and len(pre) > 2 and pre[2] is not None: b = pre[2]
@@ -399,7 +415,9 @@ class H(BaseHTTPRequestHandler):
                 b = gzip.compress(b, 5)
                 if pre is not None and len(pre) > 2: pre[2] = b   # a micro cache entry keeps its gzip copy
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
-        if gz: self.send_header("Content-Encoding", "gzip"); self.send_header("Vary", "Accept-Encoding")
+        if gz:
+            self.send_header("Content-Encoding", "gzip")
+            if "Vary" not in hdr: self.send_header("Vary", "Accept-Encoding")
         self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("Strict-Transport-Security", HSTS)
         self.send_header("Content-Security-Policy", CSP); self.send_header("X-Frame-Options", "DENY"); self.send_header("Permissions-Policy", PERMS)
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")

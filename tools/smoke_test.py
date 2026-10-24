@@ -267,7 +267,7 @@ def headers(base, check):
     c, h, _ = raw(base, "/static/style.css?v=1"); check("versioned asset is immutable", c == 200 and h.get("cache-control") == "public, max-age=31536000, immutable")
     c, h, _ = raw(base, "/static/style.css"); check("unversioned asset keeps a short cache", "immutable" not in h.get("cache-control", ""))
     c, h, _ = raw(base, "/token"); et = h.get("etag")
-    check("HTML has HSTS (no preload) and an ETag", h.get("strict-transport-security") == "max-age=31536000" and et and h.get("cache-control") == "no-cache")
+    check("HTML has HSTS (no preload) and an ETag", h.get("strict-transport-security") == "max-age=31536000" and et and h.get("cache-control") == "public, max-age=15, s-maxage=30, stale-while-revalidate=15")
     c2, _, b2 = raw(base, "/token", {"If-None-Match": et}); check(f"HTML ETag revalidates -> {c2}", c2 == 304 and not b2)
     c, h, _ = raw(base, "/live?a=1&b=2", {"Host": "www.poascan.io"}); check("www redirects to the apex with path and query", c == 301 and h.get("location") == "https://poascan.io/live?a=1&b=2")
     c, _, b = raw(base, "/healthz", {"Host": "172.19.0.2:8080"}); check("health check unaffected", c == 200 and b == b"ok\n")
