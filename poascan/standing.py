@@ -80,7 +80,11 @@ def standing(a):
     """The per-address standing view: the 1.26.55+ estimate plus the at-risk flag, pending answers and marks."""
     x = A.established_expiry_est(a); o = A.open_epoch(); e = _latest()
     est = a in A.established_set()
+    from . import agents as G
+    h = G.established_history(a)
     return dict(address=a, established=est, trusted=a in _trusted(),
+                state="readmitted" if est and h.get("readmitted") else "established" if est else "not_established",
+                readmitted_epoch=h.get("readmitted_epoch"),
                 last_challenge_eligible_epoch=x["last_challenge_eligible_epoch"],
                 established_expires_epoch_est=x["established_expires_epoch_est"], established_expires_closes_left=x["established_expires_closes_left"],
                 established_expires_ts_est=x["established_expires_ts_est"], established_expires_basis=x["established_expires_basis"],

@@ -489,18 +489,27 @@ def established_history(addr):
         changes.append(dict(epoch=n, close_ts=int(e.get("ts") or 0) or None, change=ch, answered=[k for k in w if addr in ans.get(k, ())],
                             passed=sum(passed[k] for k in w), settled=sum(settled[k] for k in w), seated=[k for k in w if k in seated]))
         listed = changes[-1]
+    # Re-admission (build only): back in established_after one close after an established_removed, with no
+    # challenge_eligible record at either close. Standing then came back without the eligibility that earns it.
+    elig = {int(e.get("epoch", 0)): addr in ((e.get("basis") or {}).get("challenge_eligible") or []) for e in ep}
+    for i, c in enumerate(changes):
+        p = changes[i - 1] if i else None
+        c["readmitted"] = bool(c["change"] == "added" and p and p["change"] == "removed" and p["epoch"] == c["epoch"] - 1
+                               and not elig.get(c["epoch"]) and not elig.get(c["epoch"] - 1))
+    readm = [dict(epoch=c["epoch"], close_ts=c["close_ts"], removed_epoch=c["epoch"] - 1) for c in changes if c["readmitted"]]
     last = int(ep[-1].get("epoch", 0)) if ep else None
     w = range(last - ttl + 1, last + 1) if last is not None else range(0)
     trusted = addr in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
     seat_eps = sorted(seated)
     est = addr in A.established_set()
-    basis = ("trusted" if trusted else "listed" if listed and listed["change"] == "added" else
+    basis = ("trusted" if trusted else "readmitted" if listed and listed.get("readmitted") else "listed" if listed and listed["change"] == "added" else
              "seat" if est and seat_eps else "removed" if listed else "none")
     answered = sorted(k for k, s in ans.items() if addr in s)
     n_ans = db.q1("SELECT COUNT(*) AS n FROM txs WHERE from_addr=? AND type='challenge'", (addr,))["n"]
     f = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=? OR to_addr=?", (addr, addr))["t"]
     paid = sorted(k for k, v in rb.items() if v > 0)
-    return dict(established=est, basis=basis, basis_epoch=(listed or {}).get("epoch") if basis in ("listed", "removed") else (seat_eps[-1] if basis == "seat" else None),
+    return dict(established=est, basis=basis, basis_epoch=(listed or {}).get("epoch") if basis in ("listed", "removed", "readmitted") else (seat_eps[-1] if basis == "seat" else None),
+                readmitted=basis == "readmitted", readmitted_epoch=readm[-1]["epoch"] if readm else None, readmissions=readm[::-1],
                 first_seen_ts=f, answers=n_ans, epochs_answered=len(answered), first_answer_epoch=answered[0] if answered else None,
                 last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()),
                 epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,

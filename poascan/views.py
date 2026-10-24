@@ -536,8 +536,10 @@ def established_card(a):
     if not (h["answers"] or h["changes"] or h["established"]): return ""
     n = h["basis_epoch"]
     why = {"trusted": "Trusted grader", "listed": f"Added at the E{n} close", "seat": f"Grading seat at E{n}",
-           "removed": f"Removed at the E{n} close", "none": "Not in any close record"}[h["basis"]]
+           "removed": f"Removed at the E{n} close", "none": "Not in any close record",
+           "readmitted": f"Re-admitted at the E{n} close"}[h["basis"]]
     tag = '<span class="tag ok">YES</span>' if h["established"] else '<span class="tag">NO</span>'
+    if h.get("readmitted"): tag += ' <span class="tag warn" title="Back in established_after one close after removal, with no challenge_eligible record at either close">RE-ADMITTED</span>'
     w = h["window"]; t = h["window_closes"]
     rows = [("Established", f'{tag} {E(why)} <span class="dim">· our estimate</span>'),
             ("First seen", _pt_day(h["first_seen_ts"]) if h["first_seen_ts"] else "···"),
@@ -546,6 +548,8 @@ def established_card(a):
             ("Settled", f'{h["passed"]} passed of {h["settled"]}' if h["settled"] else "···"),
             ("Paid", f'{h["epochs_paid"]} epoch{"" if h["epochs_paid"] == 1 else "s"} <span class="dim">· last E{h["last_paid_epoch"]}</span>' if h["epochs_paid"] else "···"),
             ("Grading seats", f'{h["seated_closes"]} close{"" if h["seated_closes"] == 1 else "s"} <span class="dim">· last E{h["last_seat_epoch"]}</span>' if h["seated_closes"] else "···"),
+            ("Re-admitted", (f'<a href="/epoch/{h["readmitted_epoch"]}">E{h["readmitted_epoch"]} close</a> <span class="dim">· removed at E{h["readmitted_epoch"] - 1}, '
+                             f'no eligibility record</span>') if h.get("readmitted_epoch") is not None else "···"),
             ("Last cleared", _last_cleared(h)),
             ("Est. expires", (_risk_tag(h) + f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
                               f'<span class="dim">· {_closes_left(h)}last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
@@ -555,7 +559,7 @@ def established_card(a):
     if w["through"] is not None:
         rows.append((f"Last {t} closes", f'Answered {_eps(w["answered"])} · {w["passed"]} passed · seated {len(w["seated"])}'))
     rows += [(f'<a href="/epoch/{c["epoch"]}">E{c["epoch"]} close</a>',
-              f'{"Added" if c["change"] == "added" else "Removed"} <span class="dim">· answered {len(c["answered"])} of {t} · {c["passed"]} passed · seated {len(c["seated"])}</span>')
+              f'{"Re-admitted" if c.get("readmitted") else "Added" if c["change"] == "added" else "Removed"} <span class="dim">· answered {len(c["answered"])} of {t} · {c["passed"]} passed · seated {len(c["seated"])}</span>')
              for c in h["changes"][:8]]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows if not _empty(v))
     links = (f'<a href="{SD.TRACKER}" target="_blank" rel="noopener noreferrer" title="Independent tracker by {SD.TRACKER_BY} (LabLeak post 1357, comment 3747)">Standing Watch ↗</a> '

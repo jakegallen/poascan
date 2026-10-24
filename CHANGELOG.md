@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.85] - 2026-10-24
+
+### Added (re-admission flag)
+- An Agent back in established_after one close after an established_removed, with no challenge_eligible record at either close, reads re-admitted, with the close it came back at.
+- /api/v1/address/<a>/established and MCP get_address: basis readmitted, readmitted, readmitted_epoch, readmissions, and readmitted on each change. get_standing and /api/v1/address/<a>/standing: state (established, readmitted or not_established) and readmitted_epoch.
+- Address page, Established history: RE-ADMITTED tag, a Re-admitted row (the close it came back at and the removal close) and the change labelled Re-admitted. No live Agent matches today (E0 to E12). tools/readmit_test.py in CI.
+
 ## [1.26.84] - 2026-10-24
 
 ### Changed (combined prompt hash updated)
