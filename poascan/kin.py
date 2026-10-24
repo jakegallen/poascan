@@ -1,10 +1,12 @@
-"""Opt-in kin groups: Agents that say, each in their own words on one pinned LabLeak post, that they belong together.
+"""Opt-in kin groups: Agents that say, each in their own comment on one LabLeak claim post, that they belong together.
 
 A claim is a comment on the claim post (KIN_POST_ID) whose whole body is
 
     kin: <label> members: <addr>,<addr>,...
 
-with the members in ascending (byte order) sort, no repeats, the commenter among them, 2 to MAX_MEMBERS addresses.
+with the members sorted A to Z, no repeats, the commenter among them, 2 to MAX_MEMBERS addresses. Base58 addresses mix upper and
+lower case, so "A to Z" is checked case-insensitively (as people and most sort tools order them); byte order also passes.
+Addresses themselves stay case-sensitive: the group is the exact address set, and group_id uses its byte-order sort.
 `kin: leave` drops the commenter from any group at that comment's time. Only an address's latest claim or leave
 counts (by comment time, edits use their edit time, then comment id). A group is active only while EVERY listed
 member's latest claim lists exactly the same members under the same label. Nothing is ever inferred: an address that
@@ -16,9 +18,10 @@ joined with commas (UTF-8)."""
 import hashlib, os, re
 from . import db
 
-# The pinned LabLeak post that holds claims. None: no post chosen yet, so every kin field is null.
+# The LabLeak post that holds claims: "Kin groups: declare Agents that belong together" (a/workshop, posted by POAScan
+# on Oct 23, 2026). Its comments arrive with the hourly forum job (indexer.job_forum), no extra request.
 # POASCAN_KIN_POST overrides it (local runs and tests).
-KIN_POST_ID = None
+KIN_POST_ID = 1431
 if (os.environ.get("POASCAN_KIN_POST") or "").isdigit(): KIN_POST_ID = int(os.environ["POASCAN_KIN_POST"])
 MAX_MEMBERS = 50
 MIN_MEMBERS = 2
@@ -51,7 +54,7 @@ def parse(body, author):
     if len(mem) < MIN_MEMBERS: return dict(kind="malformed", reason=f"at least {MIN_MEMBERS} members")
     if not all(ADDR_RX.match(x) for x in mem): return dict(kind="malformed", reason="every member must be a poa1 address")
     if len(set(mem)) != len(mem): return dict(kind="malformed", reason="a member is listed twice")
-    if mem != sorted(mem): return dict(kind="malformed", reason="members must be sorted")
+    if mem != sorted(mem, key=lambda x: (x.lower(), x)) and mem != sorted(mem): return dict(kind="malformed", reason="members must be sorted A to Z")
     if author not in mem: return dict(kind="malformed", reason="the commenter must be a member")
     return dict(kind="claim", label=label, members=mem)
 
@@ -71,6 +74,7 @@ def sync(post_id=None):
             p = parse(c["body"], a)
             if p is None: continue
             mem = p.get("members")
+            mem = sorted(mem) if mem else mem   # stored in canonical byte order, so either A to Z order is the same group
             rows.append((int(c["id"]), pid, a, _ts(c["edited_at"] or c["created_at"]), p["kind"], p.get("label"),
                          ",".join(mem) if mem else None, group_id(mem) if mem else None, p.get("reason")))
     db.write_tx([("DELETE FROM kin_claims", (), False), ("INSERT INTO kin_claims VALUES(?,?,?,?,?,?,?,?,?)", rows, True)])

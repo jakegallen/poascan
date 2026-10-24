@@ -1,4 +1,4 @@
-"""Opt-in kin groups: mutual claims on one pinned LabLeak post. No request leaves the box (fetch is replaced and counted)
+"""Opt-in kin groups: mutual claims on one LabLeak claim post. No request leaves the box (fetch is replaced and counted)
 and no comment is ever posted: POAScan only reads its own forum archive.
 
 * A group is active only while EVERY listed member's latest claim lists exactly the same sorted members and label.
@@ -97,6 +97,19 @@ fifty = sorted([C] + [ad(200 + i) for i in range(49)])
 claim(C, "fifty", fifty, T0 + 91)
 check("cap: exactly 50 members is accepted", KN.kin(C)["group_id"] == gid(fifty) and len(KN.kin(C)["members"]) == 50 and KN.kin(C)["status"] == "inactive")
 
+# ---------------- A to Z with mixed case ----------------
+U1 = "poa1" + "Zq" + "k" * 38; L1 = "poa1" + "aq" + "k" * 38; U2 = "poa1" + "Bq" + "k" * 38   # base58 mixes cases
+check("byte order and A to Z differ for mixed case", sorted([U1, L1, U2]) == [U2, U1, L1] and sorted([U1, L1, U2], key=str.lower) == [L1, U2, U1])
+AZ = [L1, U2, U1]; BY = [U2, U1, L1]
+claim(L1, "mixed", AZ, T0 + 95); claim(U2, "mixed", BY, T0 + 96); claim(U1, "mixed", AZ, T0 + 97)
+k = KN.kin(L1)
+check("A to Z (case-insensitive) and byte order both pass, and are the same group", k and k["status"] == "active" and k["group_id"] == gid(AZ) == gid(BY) and k["members"] == BY
+      and KN.kin(U2)["group_id"] == k["group_id"])
+cid = say(L1, f"kin: mixed members: {U1},{L1},{U2}", T0 + 98)
+check("an order that is neither A to Z nor byte order is still malformed", db.q1("SELECT kind FROM kin_claims WHERE comment_id=?", (cid,))["kind"] == "malformed" and KN.kin(L1)["status"] == "active")
+check("addresses stay case-sensitive: a case variant is a different member", KN.parse(f"kin: x members: {'poa1' + 'Aq' + 'k' * 38},{L1}", L1)["kind"] == "claim"
+      and gid([L1, "poa1" + "Aq" + "k" * 38]) != gid([L1, "poa1" + "aQ" + "k" * 38]))
+
 # ---------------- malformed ----------------
 bad = {"unsorted": f"kin: x members: {AB[1]},{AB[0]}", "commenter missing": f"kin: x members: {','.join(sorted([D, H]))}",
        "duplicate": f"kin: x members: {A},{A}", "bad address": f"kin: x members: {A},poa1bad", "one member": f"kin: x members: {A}",
@@ -177,11 +190,28 @@ I.ingest_post({"id": POST, "community": "poa", "title": "Kin claims", "author": 
                             {"id": 7002, "author_public_id": J, "created_at": at(T0 + 301), "body": f"kin: duo members: {','.join(HJ)}"}]})
 check("ingesting the claim post rebuilds kin claims from its comments", KN.kin(H)["status"] == "active" and KN.kin(H)["label"] == "duo")
 check("kin made no upstream request", UP == [])
+# The hourly forum job reads the claim post's comments only when its comment count changes; nothing else is added.
+calls = []
+def fake(path, *a, **k):
+    calls.append(path)
+    if path.endswith("/communities"): return [{"slug": "workshop"}]
+    if "/posts?" in path: return [{"id": POST, "community": "workshop", "title": "Kin groups", "author": "POAScan", "author_public_id": A, "created_at": at(T0), "comment_count": NC[0]}]
+    if path.endswith(f"/posts/{POST}"): return {"id": POST, "community": "workshop", "title": "Kin groups", "author": "POAScan", "author_public_id": A, "created_at": at(T0),
+                                                "comments": [{"id": 7101, "author_public_id": H, "created_at": at(T0 + 400), "body": f"kin: trio members: {','.join(HJ)}"},
+                                                             {"id": 7102, "author_public_id": J, "created_at": at(T0 + 401), "body": f"kin: trio members: {','.join(HJ)}"}][:NC[0]]}
+    raise AssertionError(path)
+db.write("DELETE FROM forum_posts WHERE id=?", (POST,)); db.write("DELETE FROM forum_comments WHERE post_id=?", (POST,))   # a new post, as 1431 was
+NC = [2]; I.fetch = fake; _sleep = I.time.sleep; I.time.sleep = lambda s: None
+try:
+    I.job_forum(); first = list(calls); calls.clear(); I.job_forum(); second = list(calls)
+finally: I.time.sleep = _sleep; I.fetch = _nofetch
+check("forum job: a changed comment count fetches the claim post once and rebuilds kin", first.count(f"/lableak/api/posts/{POST}") == 1 and KN.kin(H)["label"] == "trio" and KN.kin(H)["status"] == "active")
+check("forum job: an unchanged post is not fetched again (communities plus one list per community only)", f"/lableak/api/posts/{POST}" not in second and len(second) == 2)
 KN.KIN_POST_ID = None; KN.sync()
 check("no claim post set: kin is null and the table is empty", KN.kin(H) is None and KN.group(gid(HJ)) is None and db.q1("SELECT COUNT(*) AS n FROM kin_claims")["n"] == 0)
 check("no claim post set: /about#kin says none is chosen", "not chosen yet" in V.kin_method())
 import importlib; os.environ.pop("POASCAN_KIN_POST"); importlib.reload(KN)
-check("shipped default: no live claim post id", KN.KIN_POST_ID is None)
+check("shipped default: the live claim post 1431", KN.KIN_POST_ID == 1431 and KN.POST_URL.format(pid=KN.KIN_POST_ID) == "https://minepoa.com/lableak/#/post/1431")
 
 print("\n" + ("ALL OK" if not fails else f"{len(fails)} FAILED"))
 sys.exit(1 if fails else 0)
