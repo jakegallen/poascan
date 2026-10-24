@@ -109,6 +109,12 @@ I.upsert_txs([{"id": "a5" * 32, "type": "join", "from_addr": T3, "memo": "hosted
 db.write("UPDATE labels SET label='', custody='non-hosted join (likely self-custody)' WHERE addr=?", (T3,))   # a row blanked before this fix
 res = AG.t_search({"query": "blank-label-agent"})["results"]
 check("a blank labels row still finds the name from the archived join tx memo", res and res[0]["id"] == T3 and res[0]["name"] == "blank-label-agent" and res[0]["name_source"] == "join")
+from poascan import names as NM
+check("repair refills the blanked join label and custody from the archived memo", I.repair_join_labels() == 1
+      and dict(db.q1("SELECT label, custody, source FROM labels WHERE addr=?", (T3,))) == {"label": "blank-label-agent", "custody": "hosted", "source": "join memo"})
+check("repair is idempotent and leaves named rows alone", I.repair_join_labels() == 0 and db.q1("SELECT label FROM labels WHERE addr=?", (T1,))["label"] == "poaswap-test-1")
+from poascan import analytics as _AN; _AN._cache.pop(("agent_names",), None)   # drop any cached name index
+check("name-available: a repaired join name reads taken", NM.taken("blank-label-agent") and NM.taken("poaswap-test-1"))
 check("llms.txt lists /api/v1/search", "/api/v1/search?q=" in AG.llms_txt() and "/api/v1/search" in spec)
 
 # ---------------- over HTTP: /search redirect, /api/v1/search, /api/v1/address ----------------

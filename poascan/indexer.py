@@ -799,8 +799,24 @@ def _purge_keys():
     except Exception as e:
         log.warning("key scrub failed: %s", type(e).__name__)
 
+def repair_join_labels():
+    """Idempotent, local data only: refill join labels that a memo-less copy of the join blanked before 1.26.77,
+    from the archived join tx memo (txs.memo keeps the first memo seen). Rows with a name are left alone. No upstream read."""
+    rows = db.q("""SELECT t.from_addr AS addr, t.memo, t.ts FROM txs t LEFT JOIN labels l ON l.addr = t.from_addr
+                   WHERE t.type='join' AND t.from_addr IS NOT NULL AND COALESCE(t.memo, '') != '' AND COALESCE(l.label, '') = ''
+                   ORDER BY t.ts""")
+    fix = {}
+    for r in rows:   # newest join memo per address wins
+        memo = r["memo"]; hosted = memo.lower().startswith("hosted join")
+        nm = re.sub(r"^hosted join:?\s*", "", memo, flags=re.I).strip()
+        if nm: fix[r["addr"]] = (r["addr"], nm, "hosted" if hosted else "non-hosted join (likely self-custody)", "join memo", int(r["ts"] or 0))
+    if fix: db.write("INSERT OR REPLACE INTO labels VALUES(?,?,?,?,?)", list(fix.values()), many=True)
+    return len(fix)
+
 def start(seed_dir=None):
     db.init()
+    try: log.info("join labels repaired: %d", repair_join_labels())
+    except Exception as e: log.warning("join label repair: %s", type(e).__name__)
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()
     try: seed(seed_dir)
     except Exception as e: log.exception("seed failed: %s", e)
