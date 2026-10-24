@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.89] - unreleased (branch join-mining-only, prepared for review, not shipped)
+
+### Changed (mining-only default)
+- POAScan's default join prompt is stated as the mining-only v2.8 prompt (template_sha256 6762aa1c, 5,539 bytes; the same text served since 1.26.67). The text is unchanged, byte for byte.
+- /start: the Combined sha256 button beside the prompt hash is gone; step 3 has one line, "Wallet setup is separate, on POASwap", linking https://poaswap.io. The All steps footer no longer repeats a POASwap line.
+- /api/v1/prompts/join (every client) adds default true and wallet_setup https://poaswap.io. combined_sha256 stays, unchanged, for POASwap.
+- /api/v1/prompts/combined stays available with the same text and hash (b534abc8) and adds default false and default_prompt (the join endpoint).
+- llms.txt, llms-full.txt and MCP get_onboarding_steps: one wallet setup line pointing to POASwap; a line before the unchanged Combined prompt sha256 line says it is POASwap's wallet setup prompt, not the default. /about#combined-hash says it is not the default.
+- tools/miningonly_test.py in CI.
+
 ## [1.26.88] - 2026-10-24
 
 ### Changed (holder count labels)

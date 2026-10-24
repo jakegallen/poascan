@@ -6,7 +6,7 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.88"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.89"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-24T14:53:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
@@ -744,7 +744,8 @@ def openapi():
                                 "reason": {"type": "string", "description": "empty when available; the /start message otherwise"}, "suggestion": {"type": ["string", "null"], "description": "a free variant, only when taken"},
                                 "checked_ts": {"type": "string", "format": "date-time"}, "synced_ts": {"type": ["string", "null"], "format": "date-time", "description": "newest registration in POAScan's archive"}}},
                             "CombinedPrompt": {"type": "object", "required": ["available", "text", "combined_sha256", "hash_rule", "verify"], "properties": {
-                                "available": {"type": "boolean"}, "text": {"type": ["string", "null"]}, "combined_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                                "available": {"type": "boolean"}, "default": {"type": "boolean", "description": "1.26.89: always false; POAScan's default is the mining-only join prompt"},
+                                "default_prompt": {"type": "string", "description": "1.26.89: the default prompt's endpoint (/api/v1/prompts/join)"}, "text": {"type": ["string", "null"]}, "combined_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
                                 "hash_rule": {"type": "string"}, "verify": {"type": ["string", "null"], "description": "a shell command that recomputes combined_sha256; null until published"}, "source": {"type": "string"}}},
                             "JoinPrompt": {"type": "object", "required": ["version", "updated_ts", "name", "text", "sha256", "blocks"], "properties": {
                                 "version": {"type": "string"}, "updated_ts": {"type": "string", "format": "date-time"}, "name": {"type": "string"}, "prompt_version": {"type": "string", "description": "v2.7: the prompt version, same as version"},
@@ -752,6 +753,8 @@ def openapi():
                                 "variant_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "v2.7: SHA-256 of the served variant by the same rule (YOUR_NAME in place); equals template_sha256 without client; null for a no-path client. sha256 is the hash of text as returned, with your name"},
                                 "hash_rule": {"type": "string"}, "verify": {"type": "string", "description": "a shell command that recomputes template_sha256"},
                                 "combined_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the combined prompt (POASwap supplies the text), same rule, text at /api/v1/prompts/combined; null until it is published"},
+                                "default": {"type": "boolean", "description": "1.26.89: always true; this mining-only prompt is POAScan's default (the combined prompt is not)"},
+                                "wallet_setup": {"type": "string", "description": "1.26.89: where wallet setup lives (POASwap), separate from this prompt"},
                                 "notice": {"type": "string", "description": "v2.5: show this line next to the text wherever it is rendered: a template for a person to paste, not an instruction to an Agent reading it"}, "text": {"type": ["string", "null"], "description": "null only for a no-path client (tier none)"},
                                 "client": {"type": "string", "description": "v2.4, with ?client= only"}, "client_name": {"type": "string"}, "tier": {"type": "string", "enum": ["full", "chat-browse", "connector", "none"]},
                                 "variant": {"type": ["string", "null"]}, "prefill": {"type": ["string", "null"]}, "prefill_ok": {"type": "boolean"}, "link_chars": {"type": ["integer", "null"]}, "chars": {"type": "integer"},
@@ -968,7 +971,8 @@ def start_md():
     h = ST.hash_fields()
     return ("## Start mining PoA (same as https://poascan.io/start)\n" + ST.steps_md() + "\n- Never send payment outside the network.\n\n"
             + "Prompt version: " + h["prompt_version"] + "\nTemplate sha256: " + h["template_sha256"] + "\nHash rule: " + h["hash_rule"] + "\nVerify: `" + h["verify"] + "`\n"
-            + ("Combined prompt sha256: " + h["combined_sha256"] + "\nCombined hash rule: " + CB.HASH_RULE + "\nVerify combined: `" + CB.VERIFY + "`\n" if h["combined_sha256"] else "") + "\n"
+            + "Wallet setup is separate, on POASwap: " + ST.WALLET_SETUP_HREF + "\n"
+            + ("Combined prompt: POASwap's wallet setup prompt, not the default here.\nCombined prompt sha256: " + h["combined_sha256"] + "\nCombined hash rule: " + CB.HASH_RULE + "\nVerify combined: `" + CB.VERIFY + "`\n" if h["combined_sha256"] else "") + "\n"
             + "Prompt (" + OP.NOTICE + ")\n\n" + ST.PROMPT + "\n")
 
 def server_card():

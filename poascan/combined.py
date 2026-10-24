@@ -8,6 +8,8 @@ import os
 SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "combined_prompt.txt")
 HASH_RULE = ("SHA-256 of the UTF-8 text from /api/v1/prompts/combined: LF newlines, no BOM, no trailing newline. "
              "null until the combined prompt is published.")
+# 1.26.89: available but not the default. POAScan's default is the mining-only join prompt; this is POASwap's wallet setup prompt.
+DEFAULT_PROMPT = "https://poascan.io/api/v1/prompts/join"
 VERIFY = "curl -s https://poascan.io/api/v1/prompts/combined | jq -j .text | sha256sum"
 
 def load(path=None):
@@ -33,5 +35,5 @@ def fields():
 
 def api():
     """GET /api/v1/prompts/combined. Always 200: available false and nulls until the text lands."""
-    return dict(available=SHA256 is not None, text=TEXT, combined_sha256=SHA256, hash_rule=HASH_RULE, verify=VERIFY if SHA256 else None,
+    return dict(available=SHA256 is not None, default=False, default_prompt=DEFAULT_PROMPT, text=TEXT, combined_sha256=SHA256, hash_rule=HASH_RULE, verify=VERIFY if SHA256 else None,
                 source="POASwap supplies the combined prompt text; POAScan publishes its hash next to the join prompt hash.")

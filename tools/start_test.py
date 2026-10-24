@@ -380,11 +380,11 @@ try:
     st = m[m.index('<details class="card stepsd">'):]
     check("/start: collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
           "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
-          and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
+          and "Never send payment outside the network." not in st and "poaswap" not in st.lower()   # 1.26.89: the one POASwap line is under step 3
           and [x for x, _, _ in S.STEPS] == ["Register", "Store the key", "Read how grading works", "Answer the challenge", "Mine", "Check in"])
     go3 = m[m.index('data-go '):m.index('<details class="stview" data-stview>')]
-    check("/start: Add a wallet on POASwap, low key, under the button and the connector link, new tab to https://poaswap.io/start",
-          go3.index("data-conrow") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
+    check("/start: one wallet setup line, low key, under the button and the connector link, new tab to https://poaswap.io",
+          go3.index("data-conrow") < go3.index('<p class="stwal">Wallet setup is separate, on <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>') < go3.index('class="stkey"')
           and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
     check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
@@ -553,8 +553,7 @@ try:
     check("v2.7 hash: a filled name changes sha256 (the text as returned) but never template_sha256 or variant_sha256", jn["template_sha256"] == jn["variant_sha256"] == TS and jn["sha256"] != TS)
     ms = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"]
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
-    from poascan import combined as _CB; _c = _CB.SHA256   # 1.26.74: the combined prompt button sits between the template button and Verify
-    _cb = (f'<button type="button" data-phash="{_c}" title="Combined prompt sha256 {_c}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{_c[:12]}</code></span></button>') if _c else ""
+    _cb = ""   # 1.26.89: no combined prompt button on /start (it was between the template button and Verify since 1.26.74)
     pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.8</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
     sm = sp[sp.index("<main"):sp.index("</main>")]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, /about",

@@ -1171,8 +1171,8 @@ def _combined_about(h):
     """/about#prompt-hash: one paragraph for the combined prompt hash, only once poascan/combined_prompt.txt exists."""
     if not h.get("combined_sha256"): return ""
     from . import combined as CB
-    return ('<p id="combined-hash"><b>combined_sha256</b> is the SHA-256 of the combined prompt POASwap publishes, by the same rule, served with its text at '
-            '<code>/api/v1/prompts/combined</code> and next to <code>template_sha256</code> on every surface above. To check it: <code class="brk">' + E(CB.VERIFY)
+    return ('<p id="combined-hash"><b>combined_sha256</b> is the SHA-256 of the combined prompt POASwap publishes for wallet setup, by the same rule, served with its text at '
+            '<code>/api/v1/prompts/combined</code> and next to <code>template_sha256</code> in the API, MCP and llms.txt. It is not POAScan\'s default: /start copies the mining-only prompt above. To check it: <code class="brk">' + E(CB.VERIFY)
             + '</code> should print <code class="brk">' + h["combined_sha256"] + '</code>.</p>')
 
 def kin_method():

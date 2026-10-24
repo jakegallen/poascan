@@ -100,9 +100,15 @@ try:
     check("present: the same combined_sha256 on /prompts/join (no client, claude, muse) and MCP", all(x["combined_sha256"] == H for x in (d["join"], d["claude"], d["muse"], d["mcp"])))
     btn = f'<button type="button" data-phash="{H}" title="Combined prompt sha256 {H}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{H[:12]}</code></span></button>'
     sm = d["start"][d["start"].index("<main"):d["start"].index("</main>")]
-    check("present: /start shows the combined button once, after the template button, before Verify",
-          sm.count(btn) == 1 and sm.index(f'data-phash="{TS}"') < sm.index(btn) < sm.index('href="/about#prompt-hash"'))
-    check("present: /about#prompt-hash has the combined paragraph with the hash and verify command", 'id="combined-hash"' in d["about"] and H in d["about"] and "prompts/combined | jq -j .text | sha256sum" in d["about"])
+    check("present: /start shows no combined button (1.26.89: not the default; only the template hash, then Verify)",
+          btn not in sm and f'data-phash="{H}"' not in sm and sm.index(f'data-phash="{TS}"') < sm.index('href="/about#prompt-hash"'))
+    check("present: /about#prompt-hash has the combined paragraph with the hash and verify command, marked not the default", 'id="combined-hash"' in d["about"] and H in d["about"] and "prompts/combined | jq -j .text | sha256sum" in d["about"]
+          and any(("It is not POAScan" + q + "s default") in d["about"] for q in ("'", "&#x27;", "&#39;")))
+    check("present: /api/v1/prompts/combined default false, default_prompt the join endpoint; join default true, wallet_setup POASwap",
+          c["default"] is False and c["default_prompt"] == "https://poascan.io/api/v1/prompts/join"
+          and all(x["default"] is True and x["wallet_setup"] == "https://poaswap.io" for x in (d["join"], d["claude"], d["muse"])))
+    check("present: llms.txt says the combined prompt is not the default, right before its hash line",
+          all(("Combined prompt: POASwap's wallet setup prompt, not the default here.\nCombined prompt sha256: " + H) in x for x in (d["llms"], d["llmsf"])))
     check("present: llms.txt and llms-full.txt carry Combined prompt sha256 after the template hash",
           all(("Template sha256: " + TS) in x and ("Combined prompt sha256: " + H) in x and x.index(TS) < x.index(H) for x in (d["llms"], d["llmsf"])))
     check("present: the MCP tool description names combined_sha256", "combined_sha256" in d["tl"])
@@ -115,8 +121,8 @@ if os.path.exists(CB.SLOT):
         d = surfaces(base); c = json.loads(d["comb"][1])
         check("shipped: /api/v1/prompts/combined available, text 9,572 characters, combined_sha256 b534abc8, same on /prompts/join, claude and MCP",
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
-        check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
-              f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
+        check("shipped: /start has no Combined sha256 button (1.26.89); llms.txt keeps the hash line; join hashes unchanged",
+              f'data-phash="{SHIPPED}"' not in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
               and d["join"]["template_sha256"] == TS and S.variant_sha256("chat-browse").startswith("0e8281f4") and S.variant_sha256("connector").startswith("c323d1f2"))
     finally:
         p.terminate(); p.wait(10)

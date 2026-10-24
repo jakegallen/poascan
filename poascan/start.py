@@ -52,9 +52,13 @@ def client_prompt(name, cid):
     return OP.tagged(prompt(name, v), cid) if v else None
 
 # Prompt v2 is mining only: no wallet setup, so no wallet registry setup code goes into this prompt (no data-reg on its <pre>).
-# Wallet setup lives on POASwap (https://poaswap.io/start), linked as "Add a wallet on POASwap" under step 3.
+# Wallet setup lives on POASwap. 1.26.89: the default join prompt is mining only (v2.8, template 6762aa1c); POASwap's combined
+# wallet prompt is not the default here (text and hash stay at /api/v1/prompts/combined). /start points to POASwap in one line
+# under step 3 and nowhere else. WALLET_HREF is POASwap's own start page, kept for the API notes and tests.
 WALLET_HREF = "https://poaswap.io/start"
-WALLET_LINK = f'<p class="stwal"><a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>'
+WALLET_SETUP_HREF = "https://poaswap.io"
+WALLET_LINE = "Wallet setup is separate, on"
+WALLET_LINK = f'<p class="stwal">{WALLET_LINE} <a href="{WALLET_SETUP_HREF}" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>'
 
 PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages render prompt() with a real default name
 
@@ -89,14 +93,12 @@ def hash_fields(variant="full"):
 
 def phash():
     """The small line beside the widget on /start: version and a 12 character hash prefix; the button
-    copies the full value (also in its title), Verify goes to the /about method. A second button for the combined prompt hash
-    renders only once poascan/combined_prompt.txt exists."""
-    from . import onboarding_prompt as OP, combined as CB
-    h = template_sha256(); c = CB.SHA256
-    cb = (f'<button type="button" data-phash="{c}" title="Combined prompt sha256 {c}" aria-label="Copy the combined prompt sha256">'
-          f'<span>Combined</span><span>sha256 <code>{c[:12]}</code></span></button>') if c else ""   # nothing until the text lands
+    copies the full value (also in its title), Verify goes to the /about method. 1.26.89: only the mining-only template hash;
+    the combined prompt (POASwap's wallet setup, not the default) keeps its hash on /api/v1/prompts/combined and /about."""
+    from . import onboarding_prompt as OP
+    h = template_sha256()
     return (f'<p class="phash"><button type="button" data-phash="{h}" title="Template sha256 {h}" aria-label="Copy the template sha256">'
-            f'<span>Prompt {E(OP.VERSION)}</span><span>sha256 <code>{h[:12]}</code></span></button>{cb}<a href="/about#prompt-hash">Verify</a></p>')
+            f'<span>Prompt {E(OP.VERSION)}</span><span>sha256 <code>{h[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>')
 
 # v2.3 check-in tags. Each /start chat choice carries data-tag; its copy buttons tag the two check-in URLs with it
 # (onboarding_prompt.tagged). The API, MCP and llms.txt serve the untagged text. POASwap renders the API prompt and may tag
@@ -170,6 +172,8 @@ CLIENTS_URL = "https://poascan.io/api/v1/prompts/clients"
 # /ops/dashboard offchain.setup_signals. They are not registry clients: never on /start, in the Ask buttons, llms.txt or
 # /api/v1/prompts/clients, and they get exactly the no-client response (the plain untagged full text).
 INTERNAL_CLIENTS = frozenset({"poaswap"})
+# 1.26.89: /api/v1/prompts/join is POAScan's default prompt (mining only); wallet setup is POASwap's, not part of it.
+DEFAULT_FIELDS = dict(default=True, wallet_setup=WALLET_SETUP_HREF)
 
 def api_join(name=None, client=None):
     """GET /api/v1/prompts/join[?client=&name=]: the /start prompt as data, for other sites (POASwap) to reuse. No setup code,
@@ -184,7 +188,7 @@ def api_join(name=None, client=None):
     else: nm = name
     if client is not None and client not in INTERNAL_CLIENTS: return _api_client(nm, client)
     t = prompt(nm)
-    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(), text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
+    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(), **DEFAULT_FIELDS, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
                 # 1.26.44: base is null because the text has no check-ins (since v2.5). The v2.4 base stays as legacy_base, only
                 # for copies of older prompts still in chats; /j/ keeps answering those.
@@ -201,7 +205,7 @@ def _api_client(nm, cid):
     c = C.get(cid) if isinstance(cid, str) else None
     if not c: raise ValueError("client: one of the ids in " + CLIENTS_URL)
     v = C.variant(c)
-    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(v), client=cid, client_name=c["name"], tier=c["tier"], variant=v,
+    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(v), **DEFAULT_FIELDS, client=cid, client_name=c["name"], tier=c["tier"], variant=v,
                 open=c["open"] or None, connector=dict(c["connector"], url=C.MCP_URL) if c.get("connector") else None, clients_url=CLIENTS_URL,
                 source="https://poascan.io/start")
     if not v:
@@ -356,8 +360,7 @@ def page(page_fn, card=None, apps=None):
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
-           f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
-           f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
+           f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>')
     body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
             f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
