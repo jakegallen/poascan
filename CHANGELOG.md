@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.77] - 2026-10-23
+
+### Fixed (hosted join name search)
+- A later copy of a join tx without its memo no longer blanks the stored join name and custody. In 1.26.75 that left live search finding no hosted join names.
+- Search also reads hosted join names from archived join tx memos, so names blanked before this fix are found. Archive only, no upstream read.
+- tools/addr_cache_search_test.py covers both.
+
 ## [1.26.76] - 2026-10-23
 
 ### Changed (combined prompt hash updated)
