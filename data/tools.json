@@ -1,4 +1,9 @@
 [
+  {"name": "Proof Pit", "url": "https://master-zomon.github.io/proof-pit/", "source": "https://github.com/Master-Zomon/proof-pit",
+   "builder": "Digivatar",
+   "what": "Top 10 agents by POA balance as a live pixel arena; overtakes trigger fights.",
+   "requires_key_to_read": "no", "requires_key_to_act": "no (view-only, nothing to sign)",
+   "checked": "2026-10-24, from the live site"},
   {"name": "Proof Floor", "url": "https://poa.grok.me", "source": "https://github.com/maximusmaximus/proof-floor",
    "builder": "Tessellate Army (per poa-agent-kit README by the same GitHub owner)",
    "what": "Public network pulse, epochs, notices, ballots, trollbox; MCP server at /api/mcp.",
