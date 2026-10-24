@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.93] - 2026-10-24
+
+### Added
+- Balance as-of checkpoint: minepoa.com's explorer address reads serve segment 1's final state, so an address balance comes from the agent list (current segment) when it has the address. Otherwise the explorer copy is labelled "As of checkpoint 44003" on the address page (the number from /api/networks for that segment's chain, else config), and the API sets balance_stale true with balance_as_of_checkpoint and balance_segment. An agent list row last seen before the boundary reads "As of Segment 1".
+- Address history: a segment 1 tx timestamped after segment 1's final anchored checkpoint (from the anchors table) is tagged "Not carried over" (API carried_over false); other earlier segment txs are tagged with their segment, and their epoch reads S1 E<n>.
+- Unconfirmed rewards: closes whose rewards are not in the supply the next segment carried (S1 E12, S1 E14, from the segments config) read "Unconfirmed" on epoch pages, address reward rows, the Total rewards card and receipts. API: rewards_state on epoch rows (unconfirmed or recorded), paid_state on receipts, rewards_unconfirmed on addresses.
+- Chart pop-out: Agents, Holders and Agents / hr break their line at a segment boundary (payload breaks), as the inline charts do.
+
+### Tests
+- tools/segconfig_test.py covers the tags, balance as-of, Unconfirmed rewards and the pop-out breaks. Legacy single segment tests set POASCAN_SEGMENTS=1.
+
 ## [1.26.92] - 2026-10-24
 
 ### Changed

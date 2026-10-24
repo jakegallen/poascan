@@ -26,7 +26,30 @@ def txs_page(a, cursor=None, limit=50, typ=None):
            "ORDER BY ts DESC, id DESC LIMIT ?")
     rows = db.q(sql, tuple([a] + args + [limit + 1] + [a] + args + [limit + 1, limit + 1]))
     nxt = enc(rows[limit - 1]["ts"], rows[limit - 1]["id"]) if len(rows) > limit else None
-    return rows[:limit], nxt
+    return mark(rows[:limit]), nxt
+
+_cut = {}
+def carry_cutoff(n):
+    """Unix time segment n's final checkpoint (config cut_height) was first anchored, from the anchors table; None when
+    the segment is current, has no cut height or no anchor of it is stored. A tx of that segment after it is not in the
+    state the next segment continued from."""
+    if n == S.CURRENT: return None
+    h = (S.BY_N.get(n) or {}).get("cut_height")
+    if h is None: return None
+    if n not in _cut or _cut[n][0] < time.time() - 300:
+        r = db.q1("SELECT MIN(anchored_at) AS t FROM anchors WHERE segment = ? AND height = ?", (n, h))
+        _cut[n] = (time.time(), S.iso_ts(r["t"]) if r and r["t"] else None)
+    return _cut[n][1]
+
+def mark(rows):
+    """Tx rows as dicts with carried_over: null for the current segment, and for an earlier segment's tx false when it is
+    timestamped after that segment's final anchored checkpoint (carry_cutoff), else null (in that segment's history)."""
+    out = []
+    for r in rows:
+        d = dict(r); n = d.get("segment") or S.CURRENT; c = carry_cutoff(n) if n != S.CURRENT else None
+        d["carried_over"] = False if c is not None and d.get("ts") is not None and int(d["ts"]) > c else None
+        out.append(d)
+    return out
 
 def type_counts(a):
     r = db.q("SELECT type, COUNT(*) AS n FROM (SELECT id, type FROM txs WHERE from_addr = ? UNION SELECT id, type FROM txs WHERE to_addr = ?) GROUP BY type ORDER BY n DESC", (a, a))

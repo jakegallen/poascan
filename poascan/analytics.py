@@ -162,6 +162,7 @@ def epoch_rows():
         rs = sorted(r, reverse=True)
         out.append(dict(
             epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=pool - m,
+            rewards_state="unconfirmed" if S.unconfirmed(int(e["epoch"]), seg) else "recorded",
             burn_pct=(100 * (1 - m / pool)) if pool else None, cum_supply=cum, paid=len(r),
             challengers=len(e.get("challenges", {})), challenge_eligible=len(b.get("challenge_eligible", [])),
             attesters=len(b.get("attestations", {})), attestations=sum(b.get("attestations", {}).values()),

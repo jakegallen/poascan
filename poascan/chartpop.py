@@ -112,11 +112,13 @@ def _thin(pts, n=MAX_PTS):
     step = len(pts) / n
     return [pts[int(i * step)] for i in range(n)] + [pts[-1]]
 
+BREAK_AT_CUT = ("agents", "holders", "joins")
+
 @A.cached("chartpop", 60)
 def payload(key, rng, w):
     cfg = CHARTS[key]; now = time.time(); have = ranges(key, now); r = pick(rng, have)
     out = dict(c=key, title=cfg["title"], unit=cfg["unit"], fmt=cfg["fmt"], color=cfg["color"], ranges=have, range=r, kind="line",
-               y0=cfg["y0"], pts=[], bars=[], legend=[], colors=[], marks=[])
+               y0=cfg["y0"], pts=[], bars=[], legend=[], colors=[], marks=[], breaks=[])
     if not r: return out
     if key == "txs" and _daily(_growth(), r): out["title"] = "Txs / day"
     if key == "answers" or r == "epoch":
@@ -131,6 +133,9 @@ def payload(key, rng, w):
     if SPAN[r]: pts = window(pts, now - SPAN[r])
     pts = _thin(pts)
     out["pts"] = [[t, round(float(v), 6)] for t, v in pts]
+    if key in BREAK_AT_CUT and len(pts) > 1:   # counters that restart at a segment boundary: no line across it (as the inline charts)
+        from . import segments as SG
+        out["breaks"] = [c["ts"] for c in SG.cuts() if pts[0][0] < c["ts"] <= pts[-1][0]]
     if cfg["marks"] and len(pts) > 1:
         from . import milestones as MS
         x0, x1 = pts[0][0], pts[-1][0]

@@ -136,5 +136,40 @@ if out:
     check("ops network: checkpoint_advance null across the boundary, checkpoint_segment set",
           out[-1].get("checkpoint_advance") is None and out[-1].get("checkpoint_segment") == 2 and out[0].get("checkpoint_segment") == 1)
 
+# ---- 7. Not carried over, balance as of checkpoint, Unconfirmed rewards, pop-out breaks ----
+h = BASE["segments"][0]["cut_height"]
+out = run(BASE, f"""
+import time
+from poascan import db, history as HI, views as V, analytics as A, chartpop as CP, segments as S; db.init()
+iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+db.put_blob("epochs:s1", [dict(epoch=k, ts={CUT} - 90000 + k * 100, rewards=dict(poa1x="1")) for k in range(15)])
+db.write("INSERT INTO anchors(height, chain, tx, state_root, anchored_by, memo, anchored_at, segment) VALUES(?,?,?,?,?,?,?,?)", ({h}, "base-mainnet", "0x1", "r", "g", "m", iso({CUT} - 70000), 1))
+for i, ts in (("a1", {CUT} - 80000), ("a2", {CUT} - 60000), ("a3", {CUT} + 600)):
+    db.write("INSERT INTO txs(id, type, from_addr, to_addr, amount, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?,?)", (i, "transfer", "poa1x", "poa1y", "1", ts, 5, 5, 1))
+rows, _ = HI.txs_page("poa1x")
+co = {{r["id"]: [r["segment"], r["carried_over"]] for r in rows}}
+html = V.hist_rows(rows)
+db.write("INSERT INTO accounts(addr, balance, balance_s, first_seen, last_seen) VALUES(?,?,?,?,?)", ("poa1y", 5.0, "5.000000", 1, {CUT} + 100))
+db.put_blob("networks", dict(chains=[dict(chain_id="poa-mainnet-1-segment1", status="halted", checkpoint_height={h})]))
+b1 = V.address_balance("poa1x", dict(balance="9.000000"), {CUT} + 900, None)
+b2 = V.address_balance("poa1y", dict(balance="9.000000"), {CUT} + 900, None)
+db.write("INSERT INTO accounts(addr, balance, balance_s, first_seen, last_seen) VALUES(?,?,?,?,?)", ("poa1z", 7.0, "7.000000", 1, {CUT} - 100))
+b3 = V.address_balance("poa1z", None, None, None); b3["label"] = V.bal_asof(b3); b1["label"] = V.bal_asof(b1)
+with S.use(1): rs = {{r["epoch"]: r["rewards_state"] for r in A.epoch_rows()}}
+print(json.dumps(dict(co=co, html=html, b1=b1, b2=b2, b3=b3, rs=[rs.get(11), rs.get(12), rs.get(13), rs.get(14)], g12=S.unconfirmed_g(12), brk=CP.BREAK_AT_CUT)))
+""")
+check("tags: run", out is not None)
+if out:
+    check("tags: segment 1 tx after the final anchored checkpoint is not carried over", out["co"]["a2"] == [1, False] and out["co"]["a1"] == [1, None] and out["co"]["a3"] == [2, None])
+    check("tags: Not carried over and Segment 1 tags on the address history", out["html"].count("Not carried over") == 1 and ">Segment 1<" in out["html"])
+    check("balance: explorer-only copy is stale, as of checkpoint from networks", out["b1"]["stale"] is True and out["b1"]["as_of_checkpoint"] == h and out["b1"]["segment"] == 1)
+    check("balance: agent list copy (current segment) wins when present", out["b2"]["source"] == "agents" and out["b2"]["balance"] == "5.000000" and out["b2"]["stale"] is False)
+    check("balance: agent row last seen before the boundary is stale, labelled with its segment", out["b3"]["stale"] is True and out["b3"]["segment"] == 1 and out["b3"]["label"] == "As of Segment 1")
+    check("balance: page label As of checkpoint", out["b1"]["label"] == f"As of checkpoint {h}")
+    check("rewards: S1 E12 and E14 unconfirmed, E11 and E13 recorded", out["rs"] == ["recorded", "unconfirmed", "recorded", "unconfirmed"] and out["g12"] is True)
+    check("pop-out: Agents, Holders and Agents / hr break at a boundary", sorted(out["brk"]) == ["agents", "holders", "joins"])
+js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
+check("pop-out: app.js draws one subpath per run between breaks", "d.breaks" in js and "runs.push([])" in js)
+
 print("all segment config checks passed" if not fails else f"{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

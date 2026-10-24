@@ -7,6 +7,7 @@ in this process and search reads POAScan's archive only.
   (302 to the address page). Exact names come first; LIKE wildcards in q are literal; no upstream read.
 Usage: python3 tools/addr_cache_search_test.py"""
 import json, os, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
+os.environ["POASCAN_SEGMENTS"] = "1"   # one segment: the explorer serves the current state
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -67,7 +68,7 @@ put(P1, NEW, 10); acc(P1, OLD, now - 600)
 r, _ = SV.api(f"/api/address/{P1}", {})
 check("API: a fresh address read beats an older agent list row", r["balance"] == NEW and r["balance_source"] == "explorer/address" and abs(r["balance_as_of"] - (now - 10)) < 5)
 b = V.address_balance(ODD)
-check("no copy at all: balance null, no source", b == dict(balance=None, as_of=None, source=None))
+check("no copy at all: balance null, no source", b["balance"] is None and b["as_of"] is None and b["source"] is None)
 with V._addr_lock: V._addr_cache.pop(T1, None)
 acc(T1, "20000.000000", now - 60); UPBAL[T1] = "0.000000"; MODE["addr"] = "ok"
 r, _ = SV.api(f"/api/address/{T1}", {})

@@ -435,6 +435,11 @@ def address_read(a):
 def fetch_address(a):
     d, err, _ = address_read(a); return d, err
 
+def bal_asof(bb):
+    """The fixed point a balance from an earlier segment's source stands at: "As of checkpoint 44003", else "As of Segment 1"."""
+    if not bb.get("stale") or not bb.get("segment") or bb["segment"] == SG.CURRENT: return None
+    return f"As of checkpoint {bb['as_of_checkpoint']}" if bb.get("as_of_checkpoint") is not None else f"As of {SG.BY_N[bb['segment']]['label']}"
+
 def address_balance(a, d=None, at=None, acc=None):
     """The newer of two balance copies: the minepoa.com address read (d, read at `at`) and the stored agent-list row
     (accounts, written by the 15 min agents job at last_seen). Returns dict(balance (text), as_of (unix s), source)."""
@@ -443,10 +448,20 @@ def address_balance(a, d=None, at=None, acc=None):
     stored = None
     if acc: stored = acc["balance_s"] if acc["balance_s"] is not None else (None if acc["balance"] is None else f'{float(acc["balance"]):.6f}')
     sat = acc["last_seen"] if acc and stored is not None else None
+    xs = SG.source_segment("explorer")   # the segment minepoa.com's explorer serves (segments config sources)
+    if xs != SG.CURRENT:   # explorer state is that segment's final checkpoint: the agent list (current segment) wins when present
+        st0 = (SG.BY_N[SG.CURRENT].get("start_ts") or 0)
+        if stored is not None and (sat or 0) >= st0: return dict(balance=stored, as_of=sat, source="agents", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
+        if live is not None:
+            return dict(balance=live, as_of=int(at) if at else None, source="explorer/address", stale=True,
+                        as_of_checkpoint=SG.checkpoint_of(xs, db.get_blob("networks")[0]), segment=xs)
+        if stored is not None:   # last seen in an earlier segment's agent list, not in the current one
+            return dict(balance=stored, as_of=sat, source="agents", stale=True, as_of_checkpoint=None, segment=SG.of_ts(sat))
+        return dict(balance=None, as_of=None, source=None, stale=False, as_of_checkpoint=None, segment=None)
     if live is not None and (stored is None or not sat or (at or 0) >= sat):
-        return dict(balance=live, as_of=int(at) if at else None, source="explorer/address")
-    if stored is not None: return dict(balance=stored, as_of=sat, source="agents")
-    return dict(balance=None, as_of=None, source=None)
+        return dict(balance=live, as_of=int(at) if at else None, source="explorer/address", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
+    if stored is not None: return dict(balance=stored, as_of=sat, source="agents", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
+    return dict(balance=None, as_of=None, source=None, stale=False, as_of_checkpoint=None, segment=None)
 
 _chains = {"ts": None, "v": frozenset()}
 def chains_linked():
@@ -483,7 +498,7 @@ def address(a):
     kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v))
     eps = sorted(rb.items())
     rew = bars([(SG.ep_label(k), [v]) for k, v in eps], colors=("#E3A33A",)) if eps else '<p class="na">No rewards yet.</p>'
-    rew += table(["Epoch", "Reward"], [[f'<a href="{SG.ep_href(k)}">{SG.ep_label(k)}</a>', poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
+    rew += table(["Epoch", "Reward"], [[f'<a href="{SG.ep_href(k)}">{SG.ep_label(k)}</a>' + (' <span class="tag warn">Unconfirmed</span>' if SG.unconfirmed_g(k) else ""), poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
     qs = getattr(REQ, "qs", {}) or {}
     typ = qs.get("type", [""])[0] or ""
     tab = qs.get("tab", [""])[0] or ("txs" if typ else "overview")
@@ -493,7 +508,7 @@ def address(a):
     title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
     head = (f'<div class="addrhead">{idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
             f'{addr_meta(a, bal, p)}'
-            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···")}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum))}'
+            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), asof_text="Includes Unconfirmed" if any(SG.unconfirmed_g(k) for k in rb) else None)}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp))}{stat("Locked", poa(lk) + X.usd_of(lk))}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
     tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng)]
@@ -646,9 +661,20 @@ HIST_PAGE = 25
 def hlink(t, n=(6, 4)):
     return f'<a class="mono hash" href="/tx/{E(t)}" title="{E(t)}">{E(short(t, *n))}</a>'
 
+def seg_tx_tag(t):
+    """Tag for a tx of an earlier segment: Not carried over (after that segment's final anchored checkpoint), else its segment."""
+    n = t.get("segment") or SG.CURRENT
+    if not SG.has_cut() or n == SG.CURRENT: return ""
+    if t.get("carried_over") is False:
+        return f'<span class="ep tag warn" title="After {E(SG.BY_N[n]["label"].lower())}\'s final anchored checkpoint">Not carried over</span>'
+    return f'<span class="ep tag">{E(SG.BY_N[n]["label"])}</span>'
+
 def hist_rows(rows):
-    return "".join(f'<tr><td>{hlink(t["id"])} {seal(t["final"])}</td><td>{badge(t["type"])}</td>'
-                   f'<td class="r">{E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"])))}</td><td class="r">{rel_t(t["ts"])}</td></tr>' for t in rows)
+    def ep(t):
+        n = t.get("segment") or SG.CURRENT; v = str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))
+        return (f"S{n} " if SG.has_cut() and n != SG.CURRENT else "") + v
+    return "".join(f'<tr><td>{hlink(t["id"])} {seal(t["final"])}{seg_tx_tag(t)}</td><td>{badge(t["type"])}</td>'
+                   f'<td class="r">{E(ep(t))}</td><td class="r">{rel_t(t["ts"])}</td></tr>' for t in rows)
 
 def rel_t(ts):
     if not ts: return '<span class="na">···</span>'
@@ -832,14 +858,22 @@ def seg_about():
         return (f'{E(n["label"])} (chain <code>{E(n.get("chain_id") or "")}</code>) began at {utc(c["ts"], "%Y-%m-%d %H:%M")} UTC'
                 + (f', continuing from checkpoint h{c["from_height"]} of {E(a["label"])}' if c.get("from_height") is not None else "")
                 + f'; {E(a["label"])} is kept as <code>{E(a.get("chain_id") or "")}</code>{arc}.')
+    uc = SG.unconfirmed_list()
+    ucs = (" Rewards of " + ", ".join(f'{E(SG.BY_N[x["segment"]]["label"])} E{x["epoch"]}' for x in uc)
+           + " read <b>Unconfirmed</b> (API <code>rewards_state</code>): they are in the close record but not in the supply the next segment carried, so no total that includes them is shown as settled.") if uc else ""
+    exs = SG.source_segment("explorer")
+    exp = (f" minepoa.com's explorer address reads serve {E(SG.BY_N[exs]['label'])}'s final state, so an address page uses the agent list (current segment) when it "
+           f"has the address, and otherwise labels the explorer balance <b>As of checkpoint</b> (<code>balance_as_of_checkpoint</code>, <code>balance_stale</code> true).") if exs != SG.CURRENT else ""
     return (f'<h3 id="segments">Segments</h3><p>{" ".join(one(c) for c in cs)} Balances carried over. Segment boundaries, start heights and per segment '
             'flags are configuration (<code>poascan/segments.json</code>), not code. Epoch numbers, heights and nonces restart in each segment, so every epoch, checkpoint '
             'and nonce is read with its segment: Segment 1 E3 and Segment 2 E3 are different closes. A transaction belongs to the segment whose time span holds it; an '
             "anchor belongs to the earlier segment if it is that segment's final anchored root or was anchored before the boundary. The epoch list, epoch pages, open "
             'epoch, pending queue, standing expiry and reconcile counters follow the current segment; add <code>?segment=1</code> to a page or API call (or '
             '<code>segment: 1</code> to an MCP tool) to read an earlier one. Lifetime figures (rewards, vesting, established standing) span all segments in close order. '
-            'Address pages and <code>coverage</code> show the nonce per segment, so a nonce that restarts is not a gap. Swap offers still open at a boundary read <b>Refunded</b> with <code>refund_basis</code> naming the boundary notice; <code>refund_txid</code> stays null unless a refund tx is public. '
-            'In the API, <code>rewards_by_epoch</code> keeps lifetime keys and <code>rewards_by_segment</code> gives segment and epoch.</p>')
+            'Address pages and <code>coverage</code> show the nonce per segment, so a nonce that restarts is not a gap. A transaction from an earlier segment is tagged '
+            "with it; one timestamped after that segment's final anchored checkpoint is tagged <b>Not carried over</b> (API <code>carried_over</code> false), since the next segment continued from that checkpoint. "
+            'Swap offers still open at a boundary read <b>Refunded</b> with <code>refund_basis</code> naming the boundary notice; <code>refund_txid</code> stays null unless a refund tx is public. '
+            'In the API, <code>rewards_by_epoch</code> keeps lifetime keys and <code>rewards_by_segment</code> gives segment and epoch.' + ucs + exp + '</p>')
 
 def epochs_archived():
     """An archived segment's closes: History and Cadence from its own close records, labelled, read only."""
@@ -895,10 +929,12 @@ def epoch(n):
            f'<a class="more epn" href="/epoch/{n+1}" aria-label="Epoch {n+1}" title="Epoch {n+1}">›</a>')
     t = _pt(r["close_ts"])
     sgt = (f'<a class="tag{" warn" if arch else ""} segt" href="/epochs{SG.qs()}">{E(SG.label())}</a> ') if SG.has_cut() else ""
+    unc = SG.unconfirmed(n)   # rewards not confirmed in later balances (segments config)
+    sgt += '<span class="tag warn" title="Rewards not confirmed in later balances">Unconfirmed</span> ' if unc else ""
     line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
             f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
     body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
-            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", rt, X.usd_toggle())}</div>')
+            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", (note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt, X.usd_toggle())}</div>')
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
 # ---------------- The Agents ----------------

@@ -97,6 +97,7 @@ def _receipt(tid, fetch, row):
                 seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q,
                 settled_close=st["close"] if st else None, passed=st["passed"] if st else None,
                 paid_close=paid_close, address_credited=paid, reward_attributable=None,
+                paid_state=("unconfirmed" if S.unconfirmed(paid_close, (row or {}).get("segment") or S.selected()) else "recorded") if paid_close is not None else None,
                 vanished=status == "vanished", last_pending_close=r.get("last"),
                 basis_state=bs, challenge_eligible=ce, challenges_amount=ca,
                 paid_via_challenge_eligible=(bs == "absent" and bool(ce) and (_num(ca) or 0) > 0) if have and bs else None)
@@ -131,7 +132,7 @@ def seals_txt(r):
 
 def paid_txt(r):
     if r.get("paid_via_challenge_eligible"): return f'{_e(r, r["epoch"])} <span class="dim">· challenge-eligible, not in basis</span>'
-    if r["address_credited"] is True: return _e(r, r["paid_close"])
+    if r["address_credited"] is True: return _e(r, r["paid_close"]) + (' <span class="tag warn">Unconfirmed</span>' if r.get("paid_state") == "unconfirmed" else "")
     if r["passed"] is True: return f'No credit at {_e(r, r["settled_close"])}'
     if r["passed"] is False: return "No"
     return '<span class="dim">Not settled</span>'

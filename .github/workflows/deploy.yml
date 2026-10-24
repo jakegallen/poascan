@@ -95,7 +95,7 @@ jobs:
         run: python tools/feedback_test.py
       - name: Genesis cut segments (1.26.89 database migrates to segment 1, new E0 and E1 never collide with segment 1 closes, height 2 anchors kept per segment, nonce restart is not a gap, ?segment pages and API)
         run: python tools/segments_test.py
-      - name: Segment config (a third segment or a moved boundary by config only, current segment from /api/networks, boundary refunds, balance-shown fill, carried supply baseline)
+      - name: Segment config (a third segment or a moved boundary by config only, current segment from /api/networks, boundary refunds, balance-shown fill, carried supply baseline, carried_over tags, balance as of checkpoint, Unconfirmed rewards, pop-out breaks)
         run: python tools/segconfig_test.py
       - name: Upgrade complete (official notice ends the upgrade, older notices superseded, no Halted tag, /upgrade dates, route check stops, milestones)
         run: python tools/upgrade_complete_test.py

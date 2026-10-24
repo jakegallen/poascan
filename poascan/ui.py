@@ -393,7 +393,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=86" defer></script></body></html>'''
+<script src="/static/app.js?v=87" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -413,13 +413,14 @@ def _sig3(value):
     else: return value
     return value[:m.start(3)] + new + value[m.end(3):]
 
-def stat(label, value, sub="", icon="", key=None, asof=None, tip=None):
+def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text=None):
     """Terse stat card: label + value (3 significant figures). `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read.
     `tip`: the definition, shown on hover (methodology stays on /about)."""
     value = _sig3(value)
     if tip: label = f'<span title="{E(tip)}">{label}</span>'
     k = f' data-live="{key}"' if key else ""
     a = f'<div class="asof">as of {rel(asof)}</div>' if asof else ""
+    if asof_text: a = f'<div class="asof">{E(asof_text)}</div>'   # a fixed point, e.g. "As of checkpoint 44003"
     if 'class="usd"' in value:   # number, unit and ≈$ share one line; the number shrinks to fit (style.css .sv.fit)
         k += _fit(value)
         ku = " ku" if 'class="unit"' in value and not re.search(r'<span class="unit">POA</span>', value) else ""   # keep SOL/ETH units

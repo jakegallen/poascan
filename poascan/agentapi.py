@@ -7,9 +7,9 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.92"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T22:24:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Configurable segment boundaries, current segment from /api/networks, boundary refunds on swap offers, carried supply baseline."
+VERSION = "1.26.93"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T22:32:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -163,8 +163,10 @@ def t_address(args):
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
     from . import strain as _ST
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
-                balance_stale=bool(_ST.for_endpoint("/api/agents")),
+                balance_stale=bool(_ST.for_endpoint("/api/agents")) or bool(acc and (acc["last_seen"] or 0) < (SG.BY_N[SG.CURRENT].get("start_ts") or 0)),
+                balance_as_of_checkpoint=None, balance_segment=SG.of_ts(acc["last_seen"]) if acc and acc["last_seen"] else None,
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk,
+                rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(rb) if SG.unconfirmed_g(k)],
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())},   # lifetime close numbers: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15
                 rewards_by_segment={str(n): {str(k): v for k, v in sorted(A.rewards_in_segment(rb, n).items())} for n in SG.NUMBERS},
                 established=a in A.established_set(),
@@ -915,7 +917,7 @@ Tools ({len(TOOLS)}):
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded). Each offer in {BASE}{API_PREFIX}/swaps and /swaps/<offer_id> carries taker_credit, taker_credit_at and taker_credit_txid (final fills: poa minus fee_poa), refund_txid and refund_at (cancels), and receipt_state (signed when a finalized fill carries the seller's receipt), null when they do not apply. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. Receipts before a fill are not public. money_moved is true on a filled offer, null when a fill was submitted but is not final (POAScan can't see external-chain payments, so it may have been paid), false only when no fill tx exists.
-- Segments: the chain is read in segments (configured boundaries; /about#segments). Epoch numbers, checkpoint heights and nonces restart in each segment, so epochs, checkpoints and nonces carry a segment field. Add ?segment=<n> (REST) or segment: <n> (MCP get_epoch, get_epoch_record) to read an earlier segment. rewards_by_epoch keeps lifetime close numbers; rewards_by_segment gives segment and epoch. Address coverage has by_segment with each segment's highest_nonce. Swap offers open at a boundary read refunded with refund_basis. Method: https://poascan.io/about#segments
+- Segments: the chain is read in segments (configured boundaries; /about#segments). Epoch numbers, checkpoint heights and nonces restart in each segment, so epochs, checkpoints and nonces carry a segment field. Add ?segment=<n> (REST) or segment: <n> (MCP get_epoch, get_epoch_record) to read an earlier segment. rewards_by_epoch keeps lifetime close numbers; rewards_by_segment gives segment and epoch. Address coverage has by_segment with each segment's highest_nonce. Txs from an earlier segment carry segment and carried_over (false when timestamped after that segment's final anchored checkpoint). Balances read from a source that serves an earlier segment carry balance_stale true, balance_as_of_checkpoint and balance_segment; the agent list (current segment) is used when it has the address. Rewards of a close listed as unconfirmed carry rewards_state unconfirmed (epochs), paid_state (receipts) and rewards_unconfirmed (addresses). Swap offers open at a boundary read refunded with refund_basis. Method: https://poascan.io/about#segments
 - Upstream notices: when minepoa.com answers a read with a notice in place of data (a strain response), POAScan stores nothing from it and keeps the last real values. Every object response and MCP result then carries meta.upstream_notice (text, endpoints, first_seen, last_seen, signals; null otherwise) and meta.stale true; /address adds balance_stale true, with balance_as_of and balance_source naming the last real copy.
 - Paused lookups: while minepoa.com has a lookup halted (HTTP 503, endpoint temporarily halted), /tx/<hash>, /chains, /agents/<addr>/addresses and /notices/verified (and their MCP tools) serve indexed or last-known data with upstream_notice (kind halt, text, endpoint, retry_after_ts, data, as_of); /address/<addr> carries it as addresses_notice. A tx POAScan never indexed is a 200 with found false, available false, node paused. Pending answers that leave a close neither pending nor settled are dropped (epoch rows: dropped). Method: {BASE}/about#halts and {BASE}/about#dropped
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).

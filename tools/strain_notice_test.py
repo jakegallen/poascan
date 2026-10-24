@@ -11,6 +11,7 @@ system_notice object and plain notice or message fields. When an exact sample ar
 * Real shapes (as read live Oct 23, 2026, values replaced) and the node's unknown-id answers are not notices.
 Usage: python3 tools/strain_notice_test.py"""
 import json, os, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
+os.environ["POASCAN_SEGMENTS"] = "1"   # one segment: the explorer serves the current state
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

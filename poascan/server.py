@@ -112,8 +112,10 @@ def api(path, qs):
         p = G.profile(a); d, err, at = V.address_read(a)
         bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
         from . import strain as _ST   # a notice in place of the address read: the balance shown is the last real copy
-        stale = bool(_ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
-        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale, rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
+        stale = bool(bb.get("stale") or _ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
+        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
+                    balance_as_of_checkpoint=bb.get("as_of_checkpoint"), balance_segment=bb.get("segment"),
+                    rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(p["rewards"]) if SG.unconfirmed_g(k)], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
