@@ -380,7 +380,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=106">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=107">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -475,6 +475,11 @@ def table(headers, rows, cls="", pri=None, usd=None):
 def note(t): return ""  # caveat notes removed site-wide; methodology lives on /about
 
 def na(why): return f'<div class="naBox">{why}</div>'   # empty and error states: say what is missing, no stock label
+
+def upnote(text):
+    """1.26.89: one line, in the site notice palette, where a page serves indexed or last-known data because minepoa.com
+    paused the lookup it would have made (strain.HALT_NOTE). Method on /about#halts."""
+    return f'<p class="ntin" role="status">{E(text)}</p>'
 
 # ---------- SVG charts ----------
 def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):

@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.89] - 2026-10-24
+
+### Fixed (paused minepoa lookups)
+- minepoa.com's API hardening halt answers /api/explorer/tx/<id>, /api/notices and /api/chains with HTTP 503, Retry-After 3600 and "endpoint temporarily halted". strain.detect() now names that a halt (strong signal); fetch stores nothing, logs HTTP 503 halted and backs off at least 300 s (Retry-After honoured, so an hour). A halt is kept apart from strain: no site strip, meta.upstream_notice unchanged.
+- /tx/<hash>: an indexed tx shows under one line, "minepoa.com paused this lookup. Showing indexed data."; a tx POAScan never indexed shows "Not available while minepoa.com has this lookup paused." with the txid and a Try again later link, as a 200 (was "Tx not found ... node is busy").
+- upstream_notice (kind halt, text, endpoint, retry_after_ts, data indexed or last_known, as_of) on /api/v1/tx/<hash>, /api/v1/chains (only while paused), /api/v1/agents/<addr>/addresses, /api/v1/notices/verified, MCP get_tx and get_verified_notices; addresses_notice on /api/v1/address/<addr> and MCP get_address. A never-indexed tx while paused is a 200 with found false, available false, node paused.
+
+### Fixed (dropped answers)
+- Dropped at close: answers pending at one close that the next close lists neither as pending nor settled. Epoch rows (/api/v1/epochs, /api/v1/epoch/<n>, /api/v1/grading) carry dropped (null for the first close); the epoch view shows a Dropped at close row when it is not zero; receipts and cohorts label them Dropped at close and Dropped (API status vanished unchanged). Method on /about#dropped.
+- From the E14 close minepoa omits since (origin epoch) on pending rows. POAScan read that as E0, so E14's 1,252 new answers showed as stale E0 answers expiring at close 16. since now comes from the archived answer tx's epoch, else the first close the answer sat in (epoch rows, pending by origin, backlog, cohorts, receipts, grading history). Close records are unchanged.
+- tools/halt_test.py in CI. style.css v107.
+
 ## [1.26.88] - 2026-10-24
 
 ### Changed (holder count labels)

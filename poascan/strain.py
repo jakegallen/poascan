@@ -24,6 +24,14 @@ STRAIN_KEYS = ("strain", "strained", "under_strain", "load_shed", "shed", "fake"
 # Notice text that names strain or a stand-in. Deliberately narrow: real notices say "return instantly with status".
 STRAIN_TEXT = re.compile(r"\bstrain(?:ed)?\b|\boverload(?:ed)?\b|\bload[\s_-]?shed(?:ding)?\b|\bhigh load\b|\bplaceholder\b|"
                          r"\bnot (?:real|live) data\b|\bstand[\s-]?in\b|\bfake (?:response|data)\b|\binstant (?:fake|placeholder|stand[\s-]?in) response\b", re.I)
+# 1.26.89 (confirmed Oct 24, 2026): minepoa's API hardening halt answers a read with HTTP 503, Retry-After 3600 and
+# {"error": "endpoint temporarily halted, API hardening in progress", "notice": {...}, "system_notice": {...}} on
+# /api/explorer/tx/<id> (and /api/tx/<id>), /api/notices and /api/chains. A halt is not strain: the data is not faked, the
+# lookup is off. It is kept apart (halted(), never the site strip or meta.upstream_notice) and shown per lookup.
+HALT_TEXT = re.compile(r"\b(?:endpoint|lookup|route|surface)s? (?:is |are )?(?:temporarily )?(?:halted|paused|disabled)\b|\btemporarily halted\b", re.I)
+HALT_KEYS = ("error", "message", "msg", "detail", "status")
+HALT_NOTE = "minepoa.com paused this lookup. Showing indexed data."
+HALT_NONE = "Not available while minepoa.com has this lookup paused."
 # Response headers: (name, value pattern). Live reads carry x-poa-edge: read-node-primary; any other value is a guess.
 STRAIN_HEADERS = (("x-poa-strain", re.compile(r".+")), ("x-poa-notice", re.compile(r".+")),
                   ("x-poa-edge", re.compile(r"strain|notice|shed|fallback|instant", re.I)))
@@ -113,7 +121,23 @@ def detect(path, data, headers=None):
         if gap and carriers: sig.append("schema:" + gap + "+notice:" + carriers[0])
         elif text and STRAIN_TEXT.search(text): sig.append("text:strain")
     if gap and tpl not in SOFT_MISSING and not any(s.startswith("schema:") for s in sig): sig.append("schema:" + gap)
+    halt = _halt_text(data) if (gap or tpl not in REQUIRED) else None   # a body that has its data fields is never a halt
+    if halt:
+        sig.insert(0, "halt:" + halt[0]); text = halt[1]
+        return dict(signals=sig, text=text, endpoint=tpl, kind="halt")
     return dict(signals=sig, text=text, endpoint=tpl) if sig else None
+
+def _halt_text(data):
+    """(key, text) when the body says the endpoint is halted ('endpoint temporarily halted'), else None."""
+    if not isinstance(data, dict): return None
+    for k in HALT_KEYS:
+        t = data.get(k)
+        if isinstance(t, str) and HALT_TEXT.search(t): return k, t
+    n = data.get("notice")
+    if isinstance(n, dict) and HALT_TEXT.search(_text_of(n)): return "notice", _text_of(n)
+    return None
+
+def is_halt(hit): return bool(hit) and hit.get("kind") == "halt"
 
 def strong(hit):
     """A hit that names a notice outright (header, strain key, system_notice text or strain wording), not shape alone."""
@@ -140,17 +164,44 @@ def sanitize(text):
 # ---- state (memory only: the indexer threads run in the server process) ---------------------------------------------
 _lock = threading.Lock(); _active = {}   # endpoint template -> dict(text, signals, first_seen, last_seen, count)
 
-def record(path, hit, now=None):
+def record(path, hit, now=None, retry=None):
     now = int(now or time.time()); tpl = template(path)
+    if is_halt(hit): return record_halt(path, hit, now, retry)
     with _lock:
         cur = _active.get(tpl) or dict(first_seen=now, count=0)
         _active[tpl] = dict(cur, text=sanitize(hit.get("text")), signals=list(hit.get("signals") or [])[:6], last_seen=now, count=cur["count"] + 1)
 
 def clear(path):
-    with _lock: _active.pop(template(path), None)
+    with _lock: _active.pop(template(path), None); _halts.pop(template(path), None)
 
 def reset():
-    with _lock: _active.clear()
+    with _lock: _active.clear(); _halts.clear()
+
+# ---- halts (memory only): endpoint template -> dict(text, first_seen, last_seen, until, count) --------------------------
+_halts = {}
+
+def record_halt(path, hit, now=None, retry=None):
+    """A halted lookup. Held until the later of NOTICE_TTL_S after the last sighting and the upstream Retry-After, so the
+    note stays up while POAScan is backing off and never reads the endpoint; a real read of the endpoint clears it."""
+    now = int(now or time.time()); tpl = template(path)
+    with _lock:
+        cur = _halts.get(tpl) or dict(first_seen=now, count=0)
+        _halts[tpl] = dict(cur, text=sanitize(hit.get("text")), last_seen=now, until=now + max(NOTICE_TTL_S, int(retry or 0) + 60), count=cur["count"] + 1)
+
+def halted(tpl, now=None):
+    """The halt record for an endpoint template ('/api/explorer/tx/:id', '/api/notices', '/api/chains'), or None."""
+    now = now or time.time()
+    with _lock:
+        v = _halts.get(tpl)
+        if v and now > v["until"]: _halts.pop(tpl, None); v = None
+        return dict(v) if v else None
+
+def halt_notice(tpl, data="indexed", as_of=None, now=None, h=None):
+    """The upstream_notice object for one API response while its upstream lookup is halted, else None."""
+    h = h or halted(tpl, now)
+    if not h: return None
+    return dict(kind="halt", text=HALT_NOTE, upstream_text=h["text"], endpoint=tpl, first_seen=h["first_seen"], last_seen=h["last_seen"],
+                retry_after_ts=h["until"], data=data, as_of=as_of)
 
 def active(now=None):
     """{endpoint template: notice} seen within NOTICE_TTL_S."""

@@ -310,9 +310,9 @@ def receipts(base, check):
     lst = json.loads(req(base + "/api/v1/receipts?address=" + a1)[1]); csv_ = req(base + "/api/v1/receipts.csv?address=" + a1)
     check("receipts list for an address (+ CSV)", len(lst) == 4 and {r["status"] for r in lst} == {"passed", "pending", "vanished", "awaiting_close"} and csv_[0] == 200)
     tn, tp, tv = (req(base + "/tx/" + t)[1].decode() for t in (RN, RP, RV))
-    check("/tx receipt: Pending neutral, Passed green, Vanished amber, unknown shown as Unknown",
+    check("/tx receipt: Pending neutral, Passed green, Dropped at close amber, unknown shown as Unknown",
           '<span class="tag ">Pending</span>' in tn and "Unknown" in tn and ">Receipt<" in tn and '<span class="tag ok">Passed · E10</span>' in tp
-          and tp.count("61ada059") == 1 and '<span class="tag warn">Vanished · E8</span>' in tv and "\u2014" not in tn)
+          and tp.count("61ada059") == 1 and '<span class="tag warn">Dropped at close · E8</span>' in tv and "\u2014" not in tn)
     ad = req(base + "/address/" + a1)[1].decode()
     check("/address compact receipt list", "Answers · 4" in ad and ad.count('class="rcpt"') == 1 and "Seals / 3" in ad and ad.count("Not settled") == 0)
     spec = json.loads(req(base + "/openapi.json")[1])

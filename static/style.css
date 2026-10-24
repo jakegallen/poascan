@@ -1219,3 +1219,7 @@ code.brk{overflow-wrap:anywhere}
 .ntbar b{color:#E1ECFF;font-weight:700;letter-spacing:.02em}
 .ntbar .ntk{color:#9FBCEB}
 @media (max-width:640px){.ntbar p{font-size:var(--t12)}}
+
+/* 1.26.89: in-page note while minepoa.com has a lookup paused (ui.upnote), same palette as .ntbar */
+.ntin{margin:0 0 12px;padding:8px 12px;border:1px solid rgba(110,168,254,.34);border-radius:10px;background:linear-gradient(90deg,rgba(110,168,254,.16),rgba(110,168,254,.07));color:#C9DCFF;font-size:var(--t13);line-height:1.4;overflow-wrap:anywhere}
+.ntin a{color:#E1ECFF}

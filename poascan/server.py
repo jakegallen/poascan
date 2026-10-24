@@ -113,12 +113,12 @@ def api(path, qs):
         from . import strain as _ST   # a notice in place of the address read: the balance shown is the last real copy
         stale = bool(_ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale, rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
-                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
         a = m.group(1)
         if not V.ADDR_RX.match(a) or not LK.known(a): raise NotFound("unknown agent")
-        return dict(agent=a, addresses=LK.addresses(a)), False
+        return dict(agent=a, addresses=LK.addresses(a), upstream_notice=chains_notice()), False
     m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
     if m:
         tid = m.group(1).lower(); r = RC.receipt(tid, fetch=True)
@@ -134,7 +134,7 @@ def api(path, qs):
     if path == "/api/notices/verified":   # signed.feed: G0 signature results from POAScan's own store; no upstream read here
         if qs: raise BadRequest("no parameters")
         from . import signed as SG
-        return SG.feed(), False
+        return dict(SG.feed(), upstream_notice=notices_notice()), False
     if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
@@ -164,10 +164,13 @@ def api(path, qs):
     if path == "/api/forum":
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/pending-by-epoch": return A.pending_by_epoch(), False
-    if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
+    if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "dropped", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
     if path == "/api/anchors": return A.anchors_latest(500), True
     if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False
-    if path == "/api/chains": return db.get_blob("chains")[0] or {}, False
+    if path == "/api/chains":   # address map; upstream_notice is added only while minepoa has /api/chains paused (keys stay addresses otherwise)
+        d = dict(db.get_blob("chains")[0] or {}); n = chains_notice()
+        if n: d["upstream_notice"] = n
+        return d, False
     if path == "/api/agents/health": return G.network_health(), False
     if path == "/api/agents/leaderboard": return G.leaderboard()["by_family"], True
     if path == "/api/agents/leaderboard-harness": return G.leaderboard()["by_harness"], True
@@ -361,22 +364,35 @@ def archived_tx(tid):
     return dict(row, body=body, found=True, source="archive",
                 note="From POAScan's archive. Parents, nonce and signature are not archived; Source JSON on minepoa.com has them when the node serves this tx.")
 
+def chains_notice():
+    """upstream_notice while minepoa has /api/chains paused: wallet links are the last mirrored copy (as_of its last good read)."""
+    return I.halt_notice(I.CHAINS_TPL, data="last_known", as_of=I.last_ok("/api/chains"))
+
+def notices_notice():
+    return I.halt_notice(I.NOTICES_TPL, data="last_known", as_of=I.last_ok("/api/notices"))
+
 def tx_api(tid):
     """/api/v1/tx/<hash>: the node's detail when it answers, else POAScan's archive, else a JSON 404 with found false.
-    A spent upstream budget or a busy node never turns an archived tx into an error."""
+    A spent upstream budget or a busy node never turns an archived tx into an error. 1.26.89: while minepoa has the tx
+    lookup paused, upstream_notice says so (null otherwise), and a tx POAScan never indexed is a 200 with found false,
+    available false and node paused (not a 404 or a 5xx: whether it exists is unknown until the lookup is back)."""
     tid = tid.lower(); node = "unavailable"
+    un = lambda: I.halt_notice(I.TX_TPL, data="indexed")
     try:
         d = I.get_tx_detail(tid)
-        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, source="node")
+        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, source="node", upstream_notice=None if d.get("final") else un())
         node = "not_found"
     except I.Missing: node = "not_found"
     except I.Limited as e:
         a = archived_tx(tid)
-        if a: return a
+        if a: return dict(a, upstream_notice=un())
         raise TooMany(str(e), e.retry)
     except I.Busy: pass
     a = archived_tx(tid)
-    if a: return a
+    if a: return dict(a, upstream_notice=un())
+    n = un()
+    if n and node != "not_found":
+        return dict(found=False, available=False, tx=tid, node="paused", source=None, upstream_notice=n, hint=I._ST.HALT_NONE + " Try again after retry_after_ts.")
     raise NotFound("transaction not found", found=False, tx=tid, node=node, hint=TX_HINT)
 
 class H(BaseHTTPRequestHandler):

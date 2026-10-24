@@ -21,8 +21,8 @@ def cohorts():
         if not isinstance(p, dict): p = {}
         for s in b.get("settled", []) or []:
             if s.get("answer"): settled[s["answer"]] = (n, bool(s.get("passed")))
-        new = [k for k, v in p.items() if k not in born and (v or {}).get("since") == n]
-        late |= {k for k, v in p.items() if k not in born and (v or {}).get("since") != n}   # first seen after its birth close: no frozen cohort
+        new = [k for k, v in p.items() if k not in born and A.since_of(k, v or {}) == n]   # 1.26.89: since filled when minepoa omits it (E14 on)
+        late |= {k for k, v in p.items() if k not in born and A.since_of(k, v or {}) != n}   # first seen after its birth close: no frozen cohort
         for k in new: born[k] = n
         snaps.append((n, p, dict(settled)))
         el = len(b.get("challenge_eligible") or [])

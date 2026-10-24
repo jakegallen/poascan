@@ -137,6 +137,8 @@ jobs:
         run: python tools/page_cache_test.py
       - name: Holder count labels (Holders (node) on tiles and charts, balances and node on the Health row, method on /about#holders)
         run: python tools/holders_label_test.py
+      - name: Paused lookups and dropped answers (503 endpoint halted on tx, notices, chains: indexed or last-known data with upstream_notice, 300 s floor backoff; Dropped at close counted apart from settled; since-less pending rows take the archived epoch)
+        run: python tools/halt_test.py
 
   deploy:
     needs: test

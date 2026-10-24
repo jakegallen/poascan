@@ -61,7 +61,7 @@ def grading_index():
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}
         for t, p in (b.get("pending") or {}).items():
             gr = {x.get("grader"): x.get("ts") for x in p.get("grades") or []} if "grades" in p else None
-            r = rec.setdefault(t, {}); r["p"] = (n, p.get("kind"), p.get("since"), frozenset(p.get("panel") or []), gr)
+            r = rec.setdefault(t, {}); r["p"] = (n, p.get("kind"), A.since_of(t, p), frozenset(p.get("panel") or []), gr)
             for g in list(p.get("panel") or []) + list(gr or {}): by.setdefault(g, set()).add(t)
         for s in b.get("settled") or []:
             t = s.get("answer")

@@ -73,6 +73,34 @@ def epochs_raw():
         _epochs["v"] = db.get_blob("epochs")[0] or []; _epochs["ts"] = ts
     return _epochs["v"]
 
+# 1.26.89: from the E14 close minepoa's pending rows carry no "since" (origin epoch); before, every row had it. Reading a
+# missing since as 0 put E14's 1,252 new answers under E0 (stale, expiring at close 16). since_of() fills it from POAScan's
+# archived challenge tx epoch, else the first close the answer sat in. The raw blob is never changed (close records hash it).
+_sf = {"ts": None, "v": {}}
+def since_fill():
+    """{answer id: origin epoch} for pending rows without since, rebuilt only when a new epochs blob lands."""
+    r = db.q1("SELECT ts FROM blobs WHERE kind='epochs'"); ts = r["ts"] if r else None
+    if ts is not None and ts == _sf["ts"]: return _sf["v"]
+    first = {}
+    for e in epochs_raw():
+        n = int(e.get("epoch", 0))
+        for t, v in ((e.get("basis") or {}).get("pending") or {}).items():
+            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n
+    out, ids = {}, list(first)
+    for i in range(0, len(ids), 500):
+        ch = ids[i:i + 500]
+        for row in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)):
+            if row["epoch"] is not None: out[row["id"]] = int(row["epoch"])
+    for t, n in first.items(): out.setdefault(t, n)
+    _sf["v"] = out; _sf["ts"] = ts
+    return out
+
+def since_of(tid, v):
+    """A pending row's origin epoch: its own since, else since_fill()."""
+    s = v.get("since") if isinstance(v, dict) else None
+    if s is not None: return int(s)
+    return since_fill().get(tid, 0)
+
 def epochs_count():
     return len(epochs_raw())
 
@@ -92,14 +120,19 @@ def grade_counts(e, prev_ts=None):
 
 @cached("epoch_rows", 60)
 def epoch_rows():
-    out = []; prev = None; cum = 0.0
+    out = []; prev = None; cum = 0.0; pprev = None
     for e in epochs_raw():
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         pool = float(e.get("pool") or 0); m = sum(r); cum += m; t = int(e["ts"])
         pend = b.get("pending", {}) or {}
         kinds = collections.Counter(v.get("kind") for v in pend.values())
-        by_origin = collections.Counter(int(v.get("since", 0)) for v in pend.values())
+        by_origin = collections.Counter(since_of(t, v) for t, v in pend.items())
         st = b.get("settled", []) or []
+        # Dropped at close: in the previous close's pending, in neither this close's pending nor its settled list. Not
+        # settled, graded or rejected; null for the first close (nothing to compare).
+        sids = {s.get("answer") for s in st if s.get("answer")}
+        dropped = None if pprev is None else sum(1 for t in pprev if t not in pend and t not in sids)
+        pprev = pend
         rs = sorted(r, reverse=True)
         out.append(dict(
             epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=pool - m,
@@ -111,7 +144,7 @@ def epoch_rows():
             pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
             pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")),
             pending_by_origin=dict(sorted(by_origin.items())),
-            settled=len(st), settled_passed=sum(1 for s in st if s.get("passed")),
+            settled=len(st), settled_passed=sum(1 for s in st if s.get("passed")), dropped=dropped,
             graders=len(gc := grade_counts(e, prev)), grades=sum(gc.values()),
             graders_official=len(b.get("graders_served", {}) or {}), grades_official=sum((b.get("graders_served", {}) or {}).values()),
             slashed=len(b.get("slashed", [])), established=len(b.get("established_after", [])),
@@ -459,7 +492,7 @@ def pending_by_epoch():
     for i, e in enumerate(raw): starts[int(e["epoch"]) + 1] = int(e["ts"])      # epoch k opens when k-1 closes
     groups = collections.defaultdict(lambda: dict(n=0, short=0, appeal=0, ids=[]))
     for tid, v in pend.items():
-        g = groups[int(v.get("since", 0))]; g["n"] += 1; g["ids"].append(tid)
+        g = groups[since_of(tid, v)]; g["n"] += 1; g["ids"].append(tid)
         if v.get("kind") in ("short", "appeal"): g[v["kind"]] += 1
     rows = []
     if raw and 0 not in starts:
@@ -526,14 +559,14 @@ def backlog():
             for i in range(0, len(miss), 500):
                 ch = miss[i:i + 500]
                 for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)): tep[r["id"]] = r["epoch"]
-            for t in st: org[pp[t].get("since") if t in pp else tep.get(t, "unknown")] += 1
+            for t in st: org[since_of(t, pp[t]) if t in pp else tep.get(t, "unknown")] += 1
             for t, v in pend.items():
                 if t not in pp: continue
                 a, _ = _seals(pp[t], pn, mf); c, _ = _seals(v, n, mf)
                 if a is None or c is None: unk += 1
-                elif c > a: grew[int(v.get("since", 0))] += 1
+                elif c > a: grew[since_of(t, v)] += 1
             for t, v in pp.items():
-                if t not in pend and t not in sset: drop[int(v.get("since", 0))] += 1
+                if t not in pend and t not in sset: drop[since_of(t, v)] += 1
             closes.append(dict(close=n, settled=len(st), settled_by_origin=[dict(epoch=k, count=org[k]) for k in sorted(org, key=lambda k: (isinstance(k, str), k))],
                                carried=sum(1 for t in pend if t in pp), grew=sum(grew.values()), grew_unknown=unk, dropped=sum(drop.values()),
                                grew_by_epoch=dict(grew), dropped_by_epoch=dict(drop)))
@@ -541,8 +574,8 @@ def backlog():
     hist = {}; exact = None; basis = None
     if raw:
         n = int(raw[-1]["epoch"]); ex = []
-        for v in ((raw[-1].get("basis") or {}).get("pending") or {}).values():
-            c, x = _seals(v, n, mf); ep = int(v.get("since", 0)); h = hist.setdefault(ep, {k: 0 for k in SEAL_KEYS})
+        for t, v in ((raw[-1].get("basis") or {}).get("pending") or {}).items():
+            c, x = _seals(v, n, mf); ep = since_of(t, v); h = hist.setdefault(ep, {k: 0 for k in SEAL_KEYS})
             h["unknown" if c is None else "4+" if c >= 4 else str(c)] += 1
             if c is not None: ex.append(x)
         exact = all(ex) if ex else None; basis = "grades" if mf is not None and n >= mf else "panel"

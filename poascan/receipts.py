@@ -17,7 +17,7 @@ def index():
         elig[n] = set(b.get("challenge_eligible") or []); chal[n] = dict(e.get("challenges") or {})
         for t, p in (b.get("pending") or {}).items():
             r = out.setdefault(t, {}); r.setdefault("first", n); r["last"] = n
-            r.update(since=p.get("since"), panel=len(p.get("panel") or []), kind=p.get("kind"),
+            r.update(since=A.since_of(t, p), panel=len(p.get("panel") or []), kind=p.get("kind"),
                      graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)   # grades: the live seal list, from the merge on
         for s in b.get("settled") or []:
             t = s.get("answer")
@@ -104,7 +104,7 @@ from .ui import dur, short, table
 UNK = '<span class="na">Unknown</span>'
 TAG = {"passed": "ok", "failed": "bad", "vanished": "warn", "refused": "bad"}
 LABEL = {"passed": "Passed", "failed": "Failed", "pending": "Pending", "awaiting_close": "Awaiting close",
-         "vanished": "Vanished", "unrecorded": "No record", "refused": "Refused"}
+         "vanished": "Dropped at close", "unrecorded": "No record", "refused": "Refused"}
 
 def status_tag(r):
     s = r["status"]; c = r.get("settled_close") if s in ("passed", "failed") else r.get("last_pending_close") if s == "vanished" else None

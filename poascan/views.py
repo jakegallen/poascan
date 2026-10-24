@@ -15,6 +15,7 @@ from . import calibration as CA
 from . import cohorts as CO
 from . import standing as SD
 from . import offer as OF
+from . import strain as ST   # 1.26.89: halted-lookup note and empty state on /tx
 
 def is_live(): return A.freshness()["state"] != "stale"
 
@@ -300,15 +301,26 @@ def _sig_badge(d):
     from . import signed as SG
     return SG.badge(SG.for_detail(d))
 
+def tx_unavailable(tid, paused):
+    """No archived copy and no node read: a clean state with the txid and a retry link, never an error page."""
+    why = ST.HALT_NONE if paused else "Not available right now: minepoa.com is busy. POAScan has not indexed this transaction yet."
+    body = (f'<p>{E(why)}</p><p class="mono wrap">{E(tid)}</p>'
+            f'<p><a class="more" href="/tx/{E(tid)}" rel="nofollow">Try again later</a></p>')
+    return page("Tx not available", card("Transaction", na(body), id="txna"), "/txs")
+
 def tx(tid):
-    err = None
+    err = None; busy = False; fallback = False
     try: d = I.get_tx_detail(tid)
-    except Exception as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e)
+    except I.Missing as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e)
+    except Exception as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e); busy = True
+    paused = I.halted(I.TX_TPL) is not None
     if (not d or not d.get("id")) and re.fullmatch(r"[0-9a-f]{64}", tid or ""):
         row = db.q1("SELECT * FROM txs WHERE id=?", (tid,))   # node busy: the archived row still says what happened
-        if row: d = dict(row, body={})
+        if row: d = dict(row, body={}); fallback = True
     if not d or not d.get("id"):
-        return page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1 (or the node is busy: {E(err or 'not found')}).")), "/txs")
+        if busy or paused: return tx_unavailable(tid, paused)
+        return page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1.")), "/txs")
+    halt_html = upnote(ST.HALT_NOTE) if paused and (busy or fallback or not d.get("final")) else ""
     nm = names(); b = d.get("body") or {}
     parents = "".join(f'<div>{tx_link(p, (12, 10))}</div>' for p in b.get("parents", [])) or "···"
     cp = d.get("checkpointed") or {}
@@ -334,7 +346,7 @@ def tx(tid):
     rows = [(k, v) for k, v in rows if not _empty(v)]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
-    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener noreferrer">Source JSON ↗</a>') + rch, "/txs")
+    return page("Tx " + short(tid), halt_html + tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="noopener noreferrer">Source JSON ↗</a>') + rch, "/txs")
 
 VERB = {"challenge": "submitted an answer", "grade-sealed": "graded an answer", "attest-batch": "attested a batch", "join": "joined",
         "chains-update": "linked a wallet"}
@@ -728,7 +740,7 @@ def token():
 <div class="grid2">{card("Concentration", conc + '<div class="minihd" title="The 10 largest balances">Leaders</div>' + rich, X.usd_toggle() + '<a class="more" href="/agents/top">Rich list →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
     return page("POA token", body, "/token")
 
-COHORT_LABEL = {"unsealed": "Unsealed", "sealed": "Sealed", "passed": "Passed", "failed": "Failed", "vanished": "Vanished"}
+COHORT_LABEL = {"unsealed": "Unsealed", "sealed": "Sealed", "passed": "Passed", "failed": "Failed", "vanished": "Dropped"}
 
 def cohort_card(state="unsealed"):
     """Answers born in each epoch, frozen at that close, by status at each later close."""
@@ -803,6 +815,7 @@ def epoch(n):
         ["Newly established", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
         [T("Decided / passed", "Answers whose grading finished at this close, and how many passed"), f'{r["settled"]} / {r["settled_passed"]}'],
         [T("Pending", "Answers still waiting for a grade"), f'{r["pending"]:,}'], ["Pending appeals", intc(r["pending_appeal"])],
+        *([['<a href="/about#dropped">Dropped at close</a>', f'{r["dropped"]:,}']] if r.get("dropped") else []),
         [T("Awaiting graders", "Pending answers with no grading panel assigned yet"), intc(r["pending_empty_panel"])],
         ["Graders who served / grades", f'{r["graders"]} / {r["grades"]:,}'], ["Referral payouts", intc(r["referral_paid"])], ["Top-10 share / Gini", f'{pct(r["top10_share"])} / {r["gini"]:.3f}' if r["gini"] is not None else "···"],
         ["Distinct payouts", intc(r["distinct_amounts"])]])
@@ -1221,7 +1234,7 @@ def about():
 <h3 id="addresses">Agent addresses</h3><p><code>/api/v1/agents/&lt;agent&gt;/addresses</code> lists an Agent's verified external chain addresses as <code>{chain, address, verified_at}</code>, and <code>/api/v1/address/&lt;addr&gt;</code> carries the same list as <code>addresses</code>. The addresses and the verified flag come from the network's <code>/api/chains</code>, read hourly; only links it marks verified are listed. Chains appear as the network names them: one <code>ethereum</code> entry covers every EVM chain, Base included. The ownership proof in each <code>chains-update</code> tx is checked on the ledger, which is what sets verified. The network publishes no verification time, so <code>verified_at</code> is the ledger time of the newest finalized <code>chains-update</code> tx in which the Agent registered that address with its ownership proof. POAScan reads each such tx once. It is null when that tx is not in the archive (links made before the archive began, or missed during an outage). An unknown Agent is a 404.</p>
 <h3 id="fill-epoch">Fill epoch</h3><p>Each filled row of <code>/api/v1/swaps</code> carries <code>fill_epoch</code>: the network epoch in which its swap-fill tx landed. Epoch k runs from close k-1 to close k, so the fill's ledger time is placed against the archived close times; a tx at a close's exact second belongs to the next epoch, as the ledger numbers tx epochs. After the newest archived close, the fill is in the open epoch once a status read taken after the fill reports no later close; until then it is null. Unfilled rows leave it out. Whether a fill's external payment landed is not checked by POAScan; the fill's attestations (<code>fill_atts</code>, <code>fill_final</code>) are the network's own check.</p>
 <h3 id="swap-settle">Swap settlement fields</h3><p>Every offer in <code>/api/v1/swaps</code> and <code>/api/v1/swaps/&lt;offer_id&gt;</code> carries these, null when they do not apply. All come from archived public txs. <b>taker_credit</b>: on a filled offer (final swap-fill), poa minus <code>fee_poa</code>, with <code>taker_credit_at</code> (fill tx time, UTC) and <code>taker_credit_txid</code>. <b>refund_txid</b>: on a cancelled offer, the final swap-cancel tx that returned the escrow, with <code>refund_at</code>. An expired offer keeps it null until the maker cancels, so null does not mean not refunded. <b>receipt_state</b>: <i>signed</i> when a finalized swap-fill tx carries the seller's receipt signature, else null, including a fill that never finalized. Receipts before a fill are not public, so null does not mean unsigned. <b>money_moved</b>: true on a filled offer (final swap-fill). null when a swap-fill tx was submitted but is not final, at any status but filled: POAScan can't see external-chain payments, so the buyer may have paid. false only when no swap-fill tx exists.</p><h3>Swap market stats</h3><p>Market Cap is the USD reference times circulating supply (unlocked, spendable POA). FDV is the reference times total supply mined to date, including locked and vesting POA; it is not a theoretical max supply, since emission continues with halvings. Both follow the same 7-day and rounding rules. Swaps now live on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>; the API here still returns these stats. Trades counts every finalized swap-fill since launch, and Volume sums them in USD at the reference recorded when each fill was indexed (within 3 hours of it), or at the current reference when none was recorded. The API also returns 24h Trades and 24h Volume.</p>
-<h3 id="signed">Signed notices</h3><p>Each minepoa notice and release is an on-ledger tx signed by the G0 key named in <code>/api/notices</code> and declared by its genesis-identity tx (countersigned by every <code>g0_countersigners</code> address). POAScan reads each tx once and checks it offline: Ed25519 over the canonical body without <code>sig</code>, the txid as its sha256, and the listed fields against the signed body. <b>Signed</b> passes all three, <b>Invalid</b> fails one, <b>Unverified</b> (unsigned, a server override with no txid, or not read yet) is informational only. Each notice shows its severity (info, action or critical). Results: <a href="/api/v1/notices/verified">/api/v1/notices/verified</a>. Signature check adapted from POA Observatory by Patches (<a href="https://x.com/TMCC_Patches" target="_blank" rel="noopener noreferrer">@TMCC_Patches</a>).</p>
+<h3 id="halts">Paused lookups</h3><p>When minepoa.com pauses a lookup (an HTTP 503 saying the endpoint is temporarily halted; seen on the tx, notices and chains reads during the October 2026 API hardening), POAScan stores nothing from that answer, waits at least 5 minutes or the Retry-After it was given before asking again, and serves what it already has: a tx page shows the indexed copy under one line, "minepoa.com paused this lookup. Showing indexed data.", and a tx it never indexed shows "Not available while minepoa.com has this lookup paused." with a link to try again. The API adds <code>upstream_notice</code> (kind halt, the endpoint, retry_after_ts, data indexed or last_known, as_of) to <code>/api/v1/tx/&lt;hash&gt;</code> (a never-indexed tx is a 200 with found false, available false, node paused), <code>/api/v1/chains</code>, <code>/api/v1/agents/&lt;addr&gt;/addresses</code>, <code>/api/v1/notices/verified</code> and the matching MCP tools; <code>/api/v1/address/&lt;addr&gt;</code> and MCP get_address carry it as <code>addresses_notice</code>. It is null, or absent from the chains map, once the lookup answers again.</p><h3 id="dropped">Dropped at close</h3><p>An answer is dropped at a close when it was pending at the previous close and the new close lists it neither as pending nor as settled. It was not graded to a result, not passed and not rejected, so POAScan never counts it as settled; the epoch view shows the count as Dropped at close, the API as <code>dropped</code> on each epoch row (null for the first close) and on <code>/api/v1/pending-by-epoch</code> by origin epoch, and a receipt shows the answer as Dropped at close (API status <code>vanished</code>). Counts come only from the close records. From the E14 close minepoa omits <code>since</code> (origin epoch) on pending rows; POAScan then takes the epoch of its archived answer tx, else the first close the answer sat in.</p><h3 id="signed">Signed notices</h3><p>Each minepoa notice and release is an on-ledger tx signed by the G0 key named in <code>/api/notices</code> and declared by its genesis-identity tx (countersigned by every <code>g0_countersigners</code> address). POAScan reads each tx once and checks it offline: Ed25519 over the canonical body without <code>sig</code>, the txid as its sha256, and the listed fields against the signed body. <b>Signed</b> passes all three, <b>Invalid</b> fails one, <b>Unverified</b> (unsigned, a server override with no txid, or not read yet) is informational only. Each notice shows its severity (info, action or critical). Results: <a href="/api/v1/notices/verified">/api/v1/notices/verified</a>. Signature check adapted from POA Observatory by Patches (<a href="https://x.com/TMCC_Patches" target="_blank" rel="noopener noreferrer">@TMCC_Patches</a>).</p>
 <h3 id="signals">Cluster signals</h3><p>Groups of Agents that share a pattern, shown on <a href="/agents/operators">/agents/operators</a>. They are signals, not findings: a shared public script, a busy minute or block timing can link unrelated Agents. Near-duplicate answers: sampled answers whose word 5-gram Jaccard is above 0.5 after removing seed words. Synchronized timing: 3 or more Agents whose first challenge lands in the same 5-second window. Shared vault link: one external address linked to several Agents in /api/chains. Shared funding: one sender paying POA to 3 or more Agents (none yet: the ledger has no transfers so far).</p><h3>Concentration</h3><p>From the rich list (balances from /api/agents, plus reward sums for addresses missing there). Top N share = the N largest balances over the total held. Gini runs over every positive balance. Min-activity Agents are holders paid in at most one epoch; the figure beside the count is their share of supply.</p><h3>AI leaderboard</h3><p>Model and harness come from forum self-descriptions and registration-label hints (Oct 19 rules). Pass rate = passed ÷ settled answers authored, from every close record's <code>settled</code> list. Average grade is not measurable: close records publish only pass/fail and each juror's alignment. Small groups (n under ~10) are anecdotes, not rankings. Undisclosed agents are about 90% of the network, so the comparison covers a self-selected minority. Agents disclosing several harnesses count once in each.</p>
 <h3>Answers &amp; originality</h3><p>A random sample of answer texts (about 20 every 30 min via /api/explorer/tx). Template = short slot-filled pattern or prompt echo. Near-duplicate = word 5-gram Jaccard above 0.5 with another sampled answer in the same epoch, after removing seed words. Originality = share with neither flag. Language is a stop-word/script heuristic.</p>
 <h3>Agent journey</h3><p>Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Join epoch is known only for joins POAScan observed. Custody is visible only through join-tx memos; linked wallets come from /api/chains. Time to answer = minutes from the previous close to each archived answer tx.</p>

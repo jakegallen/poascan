@@ -93,7 +93,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         data = json.loads(raw)
         hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
         if hit:
-            _ST.record(path, hit); _probe(ep, False, t0, "notice"); count(ep, "notice")
+            _ST.record(path, hit, retry=NOTICE_RETRY_S); _probe(ep, False, t0, "notice"); count(ep, "notice")
             raise Notice("upstream notice instead of data: " + ";".join(hit["signals"])[:120], NOTICE_RETRY_S)
         _probe(ep, True, t0, "200"); count(ep, 200); _ST.clear(path)
         if cond:
@@ -117,17 +117,21 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
             retry = max(retry or 0, float(body.get("retry_after_seconds") or 0)) or None
         except Exception:
             pass
+        halt = False
         try:
             if isinstance(body, dict):
                 hit = _ST.detect(path, body, e.headers)
-                if _ST.strong(hit): _ST.record(path, hit)   # an error that names a notice: show its text; the read already failed
+                halt = _ST.is_halt(hit)
+                if halt: retry = max(retry or 0, NOTICE_RETRY_S)   # 1.26.89: a halted lookup backs off at least the notice floor
+                if _ST.strong(hit): _ST.record(path, hit, retry=retry)   # an error that names a notice: show its text; the read already failed
         except Exception:
             pass
         if soft and e.code in MISSING_CODES:
             _probe(ep, True, t0, str(e.code)); raise Missing("not found")
         _probe(ep, False, t0, str(e.code))
         if e.code == 429: _hold[0] = max(_hold[0], time.time() + min(RETRY_AFTER_MAX_S, retry or BACKOFF_BASE_S))
-        _fail(ep, f"HTTP {e.code}", retry)
+        _fail(ep, f"HTTP {e.code}" + (" halted" if halt else ""), retry)
+        if halt: raise Notice(f"HTTP {e.code} endpoint halted", retry)
         raise Busy(f"HTTP {e.code}", retry)
     except Busy as e:
         _fail(ep, str(e), e.retry); raise
@@ -307,6 +311,26 @@ def upstream_daily(frm, to):
         day = _dt.datetime.fromtimestamp(r["d"] * 86400, _dt.timezone.utc).date().isoformat(); t = template(r["endpoint"])
         out.setdefault(day, {})[t] = out.get(day, {}).get(t, 0) + r["n"]
     return out
+
+# 1.26.89: halted lookups. strain.py holds the live record (memory); fetch_log keeps "HTTP 503 halted" with next_at, so a
+# restart or deploy during a halt still knows the lookup is paused while POAScan is backing off (no read to re-detect it).
+TX_TPL, NOTICES_TPL, CHAINS_TPL = "/api/explorer/tx/:id", "/api/notices", "/api/chains"
+def halted(tpl, now=None):
+    h = _ST.halted(tpl, now)
+    if h: return h
+    now = now or time.time()
+    r = db.q1("SELECT MAX(next_at) AS n, MIN(last_err) AS f, MAX(last_err) AS l FROM fetch_log WHERE (endpoint = ? OR endpoint LIKE ?) "
+              "AND err LIKE '% halted' AND next_at > ?", (tpl, tpl + " (%", int(now)))
+    if r and r["n"]: return dict(text="endpoint temporarily halted", first_seen=r["f"], last_seen=r["l"], until=r["n"], count=None)
+    return None
+
+def halt_notice(tpl, data="indexed", as_of=None, now=None):
+    """upstream_notice for an API response that serves indexed or last-known data while tpl is halted; None otherwise."""
+    h = halted(tpl, now)
+    return _ST.halt_notice(tpl, data, as_of, now, h=h) if h else None
+
+def last_ok(ep):
+    r = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint=?", (ep,)); return r["last_ok"] if r and r["last_ok"] else None
 
 def can_fetch(ep):
     row = db.q1("SELECT next_at FROM fetch_log WHERE endpoint=?", (ep,))
