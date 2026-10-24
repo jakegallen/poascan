@@ -269,7 +269,7 @@ MOVED = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/gr
          **FQ.REDIRECTS}
 # The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
-OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
+OFFSITE = {"/swaps": "https://poaswap.io/start?path=trade", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
 def moved(path, qs):
     if path == "/find":

@@ -38,10 +38,10 @@ def get(path):
 try:
     j = json.loads(get("/api/v1/prompts/join")[1]); cl = json.loads(get("/api/v1/prompts/join?client=claude")[1])
     c = json.loads(get("/api/v1/prompts/combined")[1])
-    check("/api/v1/prompts/join: the v2.8 text byte for byte, default true, wallet_setup https://poaswap.io",
+    check("/api/v1/prompts/join: the v2.8 text byte for byte, default true, wallet_setup https://poaswap.io/start?path=trade",
           j["text"] == S.prompt("YOUR_NAME") and hashlib.sha256(j["text"].encode()).hexdigest() == PINNED["full"][1] and len(j["text"].encode()) == PINNED["full"][0]
-          and j["default"] is True and j["wallet_setup"] == "https://poaswap.io" and j["prompt_version"] == "v2.8")
-    check("/api/v1/prompts/join?client=claude: default true too", cl["default"] is True and cl["wallet_setup"] == "https://poaswap.io")
+          and j["default"] is True and j["wallet_setup"] == "https://poaswap.io/start?path=trade" and j["prompt_version"] == "v2.8")
+    check("/api/v1/prompts/join?client=claude: default true too", cl["default"] is True and cl["wallet_setup"] == "https://poaswap.io/start?path=trade")
     check("/api/v1/prompts/join keeps combined_sha256 (POASwap reads it)", "combined_sha256" in j and j["combined_sha256"] == CB.SHA256)
     check("/api/v1/prompts/combined: still available when the slot ships, default false, default_prompt the join endpoint",
           c["default"] is False and c["default_prompt"] == "https://poascan.io/api/v1/prompts/join" and c["available"] is (CB.SHA256 is not None) and c["combined_sha256"] == CB.SHA256)
@@ -49,16 +49,25 @@ try:
     pre = unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">([^<]*)</pre>', m).group(1))
     check("/start: the prompt it renders is one of the pinned mining-only variants",
           hashlib.sha256(pre.encode()).hexdigest()[:8] in {h[:8] for _, h in PINNED.values()})
-    check("/start: exactly one POASwap line (wallet setup, https://poaswap.io), no combined button or combined text",
-          m.lower().count("poaswap") == 2 and m.count("class=\"stwal\"") == 1 and '<p class="stwal">Wallet setup is separate, on <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>' in m
+    check("/start: exactly one POASwap line (wallet setup, https://poaswap.io/start?path=trade), no combined button or combined text",
+          m.lower().count("poaswap") == 2 and m.count("class=\"stwal\"") == 1 and '<p class="stwal">Wallet setup is separate, on <a href="https://poaswap.io/start?path=trade" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>' in m
           and "<span>Combined</span>" not in m and (CB.SHA256 or "x" * 64) not in m and "Be my Agent on POASwap" not in m and "Emblem" not in m)
     hm = get("/")[1]
     check("home: no combined prompt text or hash, header Start goes to /start", "Be my Agent on POASwap" not in hm and (CB.SHA256 or "x" * 64) not in hm and 'href="/start"' in hm)
     ll = get("/llms.txt")[1]
     check("llms.txt: the mining-only prompt in full, one wallet setup line, combined marked not the default",
-          ("\n" + S.PROMPT + "\n") in ll and ll.count("Wallet setup is separate, on POASwap: https://poaswap.io\n") == 1
+          ("\n" + S.PROMPT + "\n") in ll and ll.count("Wallet setup is separate, on POASwap: https://poaswap.io/start?path=trade\n") == 1
           and (not CB.SHA256 or "Combined prompt: POASwap's wallet setup prompt, not the default here.\nCombined prompt sha256: " + CB.SHA256 in ll)
           and "Be my Agent on POASwap" not in ll)
+    rq = urllib.request.Request(base + "/mcp", data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_onboarding_steps", "arguments": {}}}).encode(),
+                                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
+    with urllib.request.urlopen(rq, timeout=10) as r: ms = json.loads(r.read().decode())["result"]["structuredContent"]
+    check("MCP get_onboarding_steps: the v2.8 prompt and wallet_setup on the trade path", ms["prompt"] == S.PROMPT and ms["template_sha256"] == PINNED["full"][1]
+          and ms["wallet_setup"] == "https://poaswap.io/start?path=trade")
+    sw = json.loads(get("/api/v1/swaps/status")[1]); fq = get("/about")[1]
+    check("swap status url and /swaps redirect go to the trade path when POASwap is not reached", sw["url"] == "https://poaswap.io/start?path=trade")
+    check("no POAScan page or text links bare poaswap.io/start for wallet or trading",
+          not any(re.search(r'https://poaswap\.io/start(?![?\w])', x) for x in (get("/")[1], get("/start")[1], fq, get("/privacy")[1], ll, get("/llms-full.txt")[1])))
     oa = json.loads(get("/openapi.json")[1])["components"]["schemas"]
     check("OpenAPI documents default and wallet_setup on JoinPrompt, default and default_prompt on CombinedPrompt",
           {"default", "wallet_setup"} <= set(oa["JoinPrompt"]["properties"]) and {"default", "default_prompt"} <= set(oa["CombinedPrompt"]["properties"]))

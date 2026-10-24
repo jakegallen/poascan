@@ -383,8 +383,8 @@ try:
           and "Never send payment outside the network." not in st and "poaswap" not in st.lower()   # 1.26.89: the one POASwap line is under step 3
           and [x for x, _, _ in S.STEPS] == ["Register", "Store the key", "Read how grading works", "Answer the challenge", "Mine", "Check in"])
     go3 = m[m.index('data-go '):m.index('<details class="stview" data-stview>')]
-    check("/start: one wallet setup line, low key, under the button and the connector link, new tab to https://poaswap.io",
-          go3.index("data-conrow") < go3.index('<p class="stwal">Wallet setup is separate, on <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>') < go3.index('class="stkey"')
+    check("/start: one wallet setup line, low key, under the button and the connector link, new tab to https://poaswap.io/start?path=trade",
+          go3.index("data-conrow") < go3.index('<p class="stwal">Wallet setup is separate, on <a href="https://poaswap.io/start?path=trade" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>') < go3.index('class="stkey"')
           and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
     check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))

@@ -130,9 +130,9 @@ def main():
         c, b = req(base + "/epoch/1"); check("epoch breadcrumbs", b"BreadcrumbList" in b)
         c, b = req(base + "/api/v1/swaps/status"); sw = json.loads(b) if c == 200 else {}
         check(f"swaps status -> {c}", c == 200 and {"available", "state", "last_good_read", "open_offers", "meta"} <= set(sw))
-        check("swaps status live: never coming soon; with no fresh read it is upgrading, url is POASwap", sw.get("state") in ("available", "upgrading") and "coming soon" not in (sw.get("message") or "").lower() and (sw.get("available") or sw.get("message") == "Swaps are being upgraded. Check back soon.") and sw.get("url") == "https://poaswap.io/start" and sw.get("source") == "poaswap" and sw.get("flag_basis") == "fallback" and sw.get("status") == "live")
+        check("swaps status live: never coming soon; with no fresh read it is upgrading, url is POASwap", sw.get("state") in ("available", "upgrading") and "coming soon" not in (sw.get("message") or "").lower() and (sw.get("available") or sw.get("message") == "Swaps are being upgraded. Check back soon.") and sw.get("url") == "https://poaswap.io/start?path=trade" and sw.get("source") == "poaswap" and sw.get("flag_basis") == "fallback" and sw.get("status") == "live")
         c, b = req(base + "/api/v1/summary"); check("summary swaps block", json.loads(b).get("swaps", {}).get("state") in ("available", "upgrading"))
-        check("/swaps (HTML) 301s to POASwap; swap data stays in the API", req0(base + "/swaps") == (301, "https://poaswap.io/") and req0(base + "/swaps/?a=1") == (301, "https://poaswap.io/"))
+        check("/swaps (HTML) 301s to POASwap; swap data stays in the API", req0(base + "/swaps") == (301, "https://poaswap.io/start?path=trade") and req0(base + "/swaps/?a=1") == (301, "https://poaswap.io/start?path=trade"))
         c, b = req(base + "/api/v1/concentration"); cj = json.loads(b) if c == 200 else {}
         check(f"concentration -> {c}", c == 200 and {"top1_share", "top5_share", "top10_share", "top20_share", "gini", "min_activity", "meta"} <= set(cj))
         check("summary concentration + openapi", "concentration" in json.loads(req(base + "/api/v1/summary")[1]) and "/api/v1/concentration" in spec["paths"] and "Concentration" in spec["components"]["schemas"])
@@ -191,10 +191,10 @@ def main():
         _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
         _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
         check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
-              and b'<a class="more mswap" href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
+              and b'<a class="more mswap" href="https://poaswap.io/start?path=trade" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
         check("/about price history points to POASwap; /privacy says swaps and wallet setup are on POASwap, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
-              and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
+              and b'Swaps and wallet setup are on <a href="https://poaswap.io/start?path=trade" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
         check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
               and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/about", "/privacy")))
         check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])

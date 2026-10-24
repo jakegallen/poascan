@@ -21,6 +21,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - llms.txt, llms-full.txt and MCP get_onboarding_steps: one wallet setup line pointing to POASwap; a line before the unchanged Combined prompt sha256 line says it is POASwap's wallet setup prompt, not the default. /about#combined-hash says it is not the default.
 - tools/miningonly_test.py in CI.
 
+### Changed (POASwap Mine and trade path)
+- Every POAScan link meant for wallet setup or trading now goes to https://poaswap.io/start?path=trade (POASwap's Mine and trade path; its default Just mine path serves this same v2.8 prompt): the /start step 3 wallet line, the llms.txt and llms-full.txt wallet setup and swap lines, MCP get_onboarding_steps (new wallet_setup field), wallet_setup on /api/v1/prompts/join, the swap status url and every swap link built from it (home Market link, MCP swap notes, the FAQ buy answer, swap offer urls), the /privacy and /about swap lines, and the /swaps 301.
+- The swap status url is still POASwap's; when POASwap sends its bare site or /start, POAScan serves the trade path instead. Other POASwap links (header POASwap button, price history, Track and status pages, offer checks, /how-to-buy-poa to the FAQ) are unchanged.
+
 ## [1.26.88] - 2026-10-24
 
 ### Changed (holder count labels)

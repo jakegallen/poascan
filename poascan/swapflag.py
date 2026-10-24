@@ -10,7 +10,14 @@ import json, os, re, threading, time, urllib.error, urllib.request
 URL = os.environ.get("SWAP_FLAG_URL", "https://poaswap.io/api/v1/swaps/status").strip()   # empty: never read (fallback only)
 POLL_S, KEEP_S, TIMEOUT = 60, 900, 3
 STATUSES = ("live", "paused", "coming_soon")
-DEFAULT_URL = "https://poaswap.io/start"
+# 1.26.89: POASwap's /start has two paths, Just mine (default) and Mine and trade. Every POAScan link for wallet setup or
+# trading goes to the trade path: the fallback here, and POASwap's own url when it is the bare site or /start.
+TRADE_URL = "https://poaswap.io/start?path=trade"
+DEFAULT_URL = TRADE_URL
+_BARE = re.compile(r"https://(www\.)?poaswap\.io(/|/start/?)?")
+def trade(u):
+    """POASwap's status url, with the bare site or /start (no query) sent to the trade path; anything else as is."""
+    return TRADE_URL if isinstance(u, str) and _BARE.fullmatch(u) else u
 UA = "POAScan/1 (+https://poascan.io/about)"
 
 # POAScan's own terse labels, used when POASwap sends no message or one that isn't clean.
@@ -81,7 +88,7 @@ def current(now=None, live=True):
         st = "live" if live else "coming_soon"
         return dict(base, status=st, available=None, swaps_live=bool(live), reason="poaswap_not_reached", message=LABEL[st],
                     open_offer_count=None, updated_at=None, url=DEFAULT_URL, version=None, basis="fallback")
-    url = _https(d.get("url")) or DEFAULT_URL
+    url = trade(_https(d.get("url"))) or DEFAULT_URL
     if now - ok > KEEP_S:
         return dict(base, status="unknown", available=False, swaps_live=None, reason="poaswap_stale", message=LABEL["unknown"],
                     open_offer_count=None, updated_at=d.get("updated_at"), url=url, version=d.get("version"), basis="expired")

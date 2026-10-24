@@ -106,7 +106,7 @@ try:
           and any(("It is not POAScan" + q + "s default") in d["about"] for q in ("'", "&#x27;", "&#39;")))
     check("present: /api/v1/prompts/combined default false, default_prompt the join endpoint; join default true, wallet_setup POASwap",
           c["default"] is False and c["default_prompt"] == "https://poascan.io/api/v1/prompts/join"
-          and all(x["default"] is True and x["wallet_setup"] == "https://poaswap.io" for x in (d["join"], d["claude"], d["muse"])))
+          and all(x["default"] is True and x["wallet_setup"] == "https://poaswap.io/start?path=trade" for x in (d["join"], d["claude"], d["muse"])))
     check("present: llms.txt says the combined prompt is not the default, right before its hash line",
           all(("Combined prompt: POASwap's wallet setup prompt, not the default here.\nCombined prompt sha256: " + H) in x for x in (d["llms"], d["llmsf"])))
     check("present: llms.txt and llms-full.txt carry Combined prompt sha256 after the template hash",

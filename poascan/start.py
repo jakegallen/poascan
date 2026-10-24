@@ -54,9 +54,10 @@ def client_prompt(name, cid):
 # Prompt v2 is mining only: no wallet setup, so no wallet registry setup code goes into this prompt (no data-reg on its <pre>).
 # Wallet setup lives on POASwap. 1.26.89: the default join prompt is mining only (v2.8, template 6762aa1c); POASwap's combined
 # wallet prompt is not the default here (text and hash stay at /api/v1/prompts/combined). /start points to POASwap in one line
-# under step 3 and nowhere else. WALLET_HREF is POASwap's own start page, kept for the API notes and tests.
-WALLET_HREF = "https://poaswap.io/start"
-WALLET_SETUP_HREF = "https://poaswap.io"
+# under step 3 and nowhere else. Both go to the Mine and trade path of POASwap's /start (its default path, Just mine, serves
+# this same v2.8 prompt).
+WALLET_HREF = "https://poaswap.io/start?path=trade"
+WALLET_SETUP_HREF = WALLET_HREF
 WALLET_LINE = "Wallet setup is separate, on"
 WALLET_LINK = f'<p class="stwal">{WALLET_LINE} <a href="{WALLET_SETUP_HREF}" target="_blank" rel="noopener noreferrer" data-wallet>POASwap</a></p>'
 
@@ -135,7 +136,7 @@ def data():
     return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, **hash_fields(), steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
                 wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
                 sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, WATCH_RULE, "No invite or referral codes.", PAY],
-                url="https://poascan.io/start")
+                url="https://poascan.io/start", wallet_setup=WALLET_SETUP_HREF)   # 1.26.89: the one wallet setup pointer, POASwap's Mine and trade path
 
 def steps_md():
     return "\n".join(f"{i}. {t}" + (f": {v}" if v else "") + (f" ({n})" if n else "") for i, (t, v, n) in enumerate(STEPS, 1))

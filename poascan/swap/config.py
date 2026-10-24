@@ -21,8 +21,8 @@ PAGE_URL = BASE_URL + PAGE_PATH
 PAGE_LABEL = PAGE_PATH if PAGE_PATH != "/" else BASE_URL.split("//", 1)[-1].rstrip("/")   # link text: /swaps, or the site's host at a site root
 STATUS_URL = BASE_URL + API_PATH + "/swaps/status"
 # Where swap links point. POAScan's /swaps page moved to POASwap on 2026-10-22 (the host 301s the old path), so on POAScan
-# the links go to poaswap.io; a standalone site keeps its own page.
-LINK_URL = _env("SWAP_LINK_URL", "https://poaswap.io/" if PAGE_URL == "https://poascan.io/swaps" else PAGE_PATH)
+# the links go to POASwap's Mine and trade path (1.26.89); a standalone site keeps its own page.
+LINK_URL = _env("SWAP_LINK_URL", "https://poaswap.io/start?path=trade" if PAGE_URL == "https://poascan.io/swaps" else PAGE_PATH)
 LINK_LABEL = _env("SWAP_LINK_LABEL", "POASwap" if LINK_URL.startswith("https://poaswap.io") else PAGE_LABEL)
 
 def link(url):

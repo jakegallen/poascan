@@ -21,7 +21,7 @@ try:
     for _ in range(100):
         try: urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2); break
         except Exception: time.sleep(0.2)
-    cases = [("/swaps", "https://poaswap.io/"), ("/swaps/", "https://poaswap.io/"), ("/swaps?pair=SOL&x=1", "https://poaswap.io/"),
+    cases = [("/swaps", "https://poaswap.io/start?path=trade"), ("/swaps/", "https://poaswap.io/start?path=trade"), ("/swaps?pair=SOL&x=1", "https://poaswap.io/start?path=trade"),
              ("/how-to-buy-poa", "https://poaswap.io/about#faq"), ("/how-to-buy-poa/", "https://poaswap.io/about#faq"), ("/how-to-buy-poa?a=b", "https://poaswap.io/about#faq")]
     got = [(m, u, h, raw(m, u, h)) for m in ("GET", "HEAD") for u, _ in cases for h in (None, "www.poascan.io")]
     exp = {u: t for u, t in cases}
@@ -39,10 +39,10 @@ try:
     left = {u: v for u, v in left.items() if v}
     check(f"no internal /swaps or /swaps#xemb link in pages, llms or sitemap {left}", not left)
     check("sitemap drops /swaps; /about and /privacy say swaps live on POASwap", "poascan.io/swaps" not in pages["/sitemap.xml"]
-          and 'Swaps now live on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
-          and 'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>' in pages["/privacy"])
+          and 'Swaps now live on <a href="https://poaswap.io/start?path=trade" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
+          and 'Swaps and wallet setup are on <a href="https://poaswap.io/start?path=trade" rel="noopener noreferrer">POASwap</a>' in pages["/privacy"])
     from poascan import agentapi as AG
-    check("MCP swap tool results point to poaswap.io", AG._swap({"id": "x"}, AG._swap_url())["url"] == "https://poaswap.io/start" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
+    check("MCP swap tool results point to poaswap.io", AG._swap({"id": "x"}, AG._swap_url())["url"] == "https://poaswap.io/start?path=trade" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
 finally:
     p.terminate(); p.wait(10)
 print("all passed" if not fails else f"{len(fails)} failed")
