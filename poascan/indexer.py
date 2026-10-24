@@ -438,26 +438,54 @@ def _ok_within(ep, s):
 
 _txlist_every = [TXLIST_S]   # current /api/txs cadence: TXLIST_S after new rows, TXLIST_IDLE_S after a 304 or no new rows
 
+_txlist_events = collections.deque(maxlen=500)   # (ts, "fallback" | "backfill"): /api/txs reads, for /api/health load_1h
+
+def txlist_events_1h(now=None):
+    t = (now or time.time()) - 3600
+    return {k: sum(1 for ts, e in list(_txlist_events) if ts >= t and e == k) for k in ("fallback", "backfill")}
+
+def _txs_read(kind):
+    """One conditional /api/txs read (fallback or backfill). Returns the number of new rows, or None on a 304."""
+    d = fetch("/api/txs", timeout=60, cond=True)
+    _txlist_events.append((time.time(), kind))
+    if d is NOT_MODIFIED: return None
+    ids = [t["id"] for t in d.get("valid", []) if isinstance(t, dict) and t.get("id")]
+    new = len(ids) - sum(len(_known(ids[i:i + 500])) for i in range(0, len(ids), 500)); _store_window(d)
+    return new
+
+def _explorer_read():
+    """One /api/explorer/txs page (the newest LIVE_LIMIT rows, ~14 KB). When none of its rows is stored yet and the page
+    is full, more than LIVE_LIMIT txs landed since the last read: one /api/txs read fills the gap (1.26.105)."""
+    batch = fetch(f"/api/explorer/txs?limit={LIVE_LIMIT}", cond=True, endpoint="/api/explorer/txs")
+    if not isinstance(batch, list): return 0
+    fresh = [t for t in batch if isinstance(t, dict) and t.get("id")]
+    seen = _known([t["id"] for t in fresh]); had = bool(db.q1("SELECT 1 AS x FROM txs LIMIT 1"))
+    upsert_txs(fresh, "explorer/txs")
+    if had and fresh and not seen and len(batch) >= LIVE_LIMIT and can_fetch("/api/txs"):
+        try: _txs_read("backfill")
+        except Busy as e: log.warning("/api/txs backfill: %s", e)
+    return len(fresh) - len(seen)
+
 def live_list():
-    """The tx list (1.26.98): minepoa's keyless /api/txs first, read once per TXLIST_S with If-None-Match; when it fails,
-    the older /api/explorer/txs feed (with its gap fill) takes over until /api/txs answers again. Returns the path used."""
+    """The tx list (1.26.105): /api/explorer/txs first, once per TXLIST_S (2 min). While it fails, /api/txs is the
+    fallback: conditional (If-None-Match), every TXLIST_S after new rows and TXLIST_IDLE_S (5 min) after a 304 or no
+    new rows. The explorer path is tried again every TXLIST_S during fallback (a 429 hold still applies) and takes
+    over the moment it answers. Returns the path read, or None when nothing was due or every read failed."""
     now = time.time()
-    if can_fetch("/api/txs"):
-        if now - _last_try("/api/txs") < _txlist_every[0] - 5 and _ok_within("/api/txs", 3 * TXLIST_IDLE_S): return "/api/txs"
+    if now - _last_try("/api/explorer/txs") < TXLIST_S - 5 and _ok_within("/api/explorer/txs", 3 * TXLIST_S): return None
+    if can_fetch("/api/explorer/txs") or now - _last_try("/api/explorer/txs") >= TXLIST_S - 5:
         try:
-            d = fetch("/api/txs", timeout=60, cond=True)
-            new = 0
-            if d is not NOT_MODIFIED:
-                ids = [t["id"] for t in d.get("valid", []) if isinstance(t, dict) and t.get("id")]
-                new = len(ids) - sum(len(_known(ids[i:i + 500])) for i in range(0, len(ids), 500)); _store_window(d)
-            _txlist_every[0] = TXLIST_S if new else TXLIST_IDLE_S   # 1.26.100: 304 or no new rows -> every 5 min
-            return "/api/txs"
-        except Busy as e: log.warning("/api/txs: %s", e)
-    else: skip_backoff("/api/txs")
-    if can_fetch("/api/explorer/txs"):
-        try: live_txs(); return "/api/explorer/txs"
+            _explorer_read(); _txlist_every[0] = TXLIST_S
+            return "/api/explorer/txs"
         except Busy as e: log.warning("/api/explorer/txs: %s", e)
     else: skip_backoff("/api/explorer/txs")
+    if not can_fetch("/api/txs"): skip_backoff("/api/txs"); return None
+    if now - _last_try("/api/txs") < _txlist_every[0] - 5: return None
+    try:
+        new = _txs_read("fallback")
+        _txlist_every[0] = TXLIST_S if new else TXLIST_IDLE_S   # 304 or no new rows -> 5 min while on fallback
+        return "/api/txs"
+    except Busy as e: log.warning("/api/txs: %s", e)
     return None
 
 def job_live():
@@ -488,7 +516,9 @@ def _live_networks(nw):
             db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height"), "segment": _SG.CURRENT})
 
 def job_window():
-    if _ok_within("/api/txs", 300): return   # the live job already reads /api/txs (live_list)
+    # 1.26.105: the live job's explorer read (and its /api/txs fallback and backfill) covers the list; this read runs only
+    # when neither path has answered for 5 minutes
+    if _ok_within("/api/explorer/txs", 300) or _ok_within("/api/txs", 300): return
     d = fetch("/api/txs", timeout=90, cond=True)
     if d is NOT_MODIFIED: return
     _store_window(d)
@@ -883,7 +913,7 @@ def seed(seed_dir):
 
 # ---------------- scheduler ----------------
 # How often each upstream source is read when healthy (for the /status freshness table).
-EVERY = {"/api/explorer/txs": LIVE_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
+EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S}
 

@@ -122,14 +122,28 @@ except I.Busy: r = "busy"
 check(f"an id the chain path says is unknown is Missing even when the old path errors ({r})", r == "missing")
 MODE2.clear()
 db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
-check(f"live_list reads /api/txs first and stores it ({used}, {CALLS})", used == "/api/txs" and CALLS == ["/api/txs"] and db.q1("SELECT 1 AS x FROM txs WHERE id=?", ("d" * 64,)))
-db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0) ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0", (int(time.time()),))
+check(f"1.26.105: live_list reads the explorer page first ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200"])
+db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/explorer/txs',?,0,0)", (int(time.time()),))   # the fake fetch writes no log
 CALLS.clear(); used = I.live_list()
-check(f"inside TXLIST_S no second read ({used}, {CALLS})", used == "/api/txs" and CALLS == [])
-MODE2["/api/txs"] = "busy"; db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
-check(f"/api/txs failing: the explorer feed takes over ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS[0] == "/api/txs" and CALLS[1].startswith("/api/explorer/txs"))
-MODE2.clear()
-check("TXLIST_S floor 60 s, Tx list cadence in EVERY", I.TXLIST_S >= 60 and I.EVERY["/api/txs"] == I.TXLIST_S)
+check(f"inside TXLIST_S no second read ({used}, {CALLS})", used is None and CALLS == [])
+MODE2["/api/explorer/txs"] = "busy"; db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
+check(f"explorer failing: /api/txs fallback ({used}, {CALLS})", used == "/api/txs" and CALLS == ["/api/explorer/txs?limit=200", "/api/txs"] and I.txlist_events_1h()["fallback"] >= 1)
+check("fallback stored the /api/txs rows", db.q1("SELECT 1 AS x FROM txs WHERE id=?", ("d" * 64,)))
+MODE2.clear(); db.write("DELETE FROM fetch_log"); db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at) VALUES('/api/explorer/txs',?,4,?)", (int(time.time()) - 130, int(time.time()) + 600)); CALLS.clear(); used = I.live_list()
+check(f"explorer answers again (probed despite a longer backoff): it takes over at once ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200"])
+db.write("DELETE FROM fetch_log")
+# gap over 200 rows: a full explorer page with no stored row triggers one /api/txs backfill
+I.LIVE_LIMIT = 1; CALLS.clear()
+_orig = fake2
+def fake3(path, **k):
+    if path.startswith("/api/explorer/txs"): CALLS.append(path); return [{"id": "9" * 64, "type": "challenge", "from_addr": "poa1x", "ts": now}]
+    return _orig(path, **k)
+I.fetch = fake3; used = I.live_list()
+check(f"a gap larger than one page backfills from /api/txs once ({CALLS})", CALLS == ["/api/explorer/txs?limit=1", "/api/txs"] and I.txlist_events_1h()["backfill"] == 1)
+CALLS.clear(); I.live_list()
+check(f"no backfill when the page overlaps stored rows ({CALLS})", CALLS == ["/api/explorer/txs?limit=1"])
+I.LIVE_LIMIT = 200; I.fetch = fake2
+check("TXLIST_S floor 60 s, Tx list cadence in EVERY for both paths", I.TXLIST_S >= 60 and I.EVERY["/api/txs"] == I.TXLIST_S == I.EVERY["/api/explorer/txs"])
 # feed rows after the move
 t = int(time.time())
 db.write("DELETE FROM fetch_log")

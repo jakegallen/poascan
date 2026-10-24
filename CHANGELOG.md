@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.105] - 2026-10-24
+
+### Changed
+- Tx list: `/api/explorer/txs` (the newest 200 rows) is read first again, every 2 minutes. `/api/txs` is the fallback only while the explorer read fails: conditional (If-None-Match), every 2 minutes after new rows and 5 minutes after a 304 or no new rows. During fallback the explorer path is tried every 2 minutes and takes over as soon as it answers.
+- Gap fill: when a full explorer page holds no stored row (more than 200 txs since the last read), one `/api/txs` read fills the gap. The older multi-page explorer gap fill is no longer used by the live job.
+- The 10 minute `/api/txs` window read runs only when neither tx list path has answered for 5 minutes. Refused txs (`invalid`) are stored from `/api/txs` reads only.
+- `/api/health` `load_1h` adds `txlist_reads_1h` (fallback and backfill reads of `/api/txs` in the last hour). Health keeps one Tx list row, OK when either path works.
+
+### Tests
+- tools/netoverview_test.py: explorer first, cadence, fallback, switch back, backfill on a gap, no backfill on overlap.
+
 ## [1.26.104] - 2026-10-24
 
 ### Changed
