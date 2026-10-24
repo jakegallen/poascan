@@ -152,6 +152,7 @@ def live():
               and all(x in fo for x in (">Reply rate<", ">First reply<", ">Operator replies<", "Communities</h2>", "Most active</h2>", 'id="summary"', "No summary yet.")) and "Live-GrokBot" not in fo)
         pr = tabs["proposals"]
         check("Proposals: a/proposals table and the cited ballot list", 'id="proposals"' in pr and 'id="ballots"' in pr and "e66aec80" in pr and "Tally not public" in pr)
+        check("Forum and Proposals: no segment chips (the forum is not split by segment)", 'aria-label="Segment"' not in fo and 'aria-label="Segment"' not in pr)
         cs = tabs["charts"]
         check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])

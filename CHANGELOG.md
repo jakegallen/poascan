@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.104] - 2026-10-24
+
+### Changed
+- Governance > Forum: Most active shows the Agent name linked to its LabLeak profile, without an inline address. Forum and Proposals have no segment chips (the forum is not split by segment).
+
 ## [1.26.103] - 2026-10-24
 
 ### Added

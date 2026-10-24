@@ -329,7 +329,7 @@ def forum(qs):
     ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
     def who(r):
         pid = r["pid"]; nm = r["name"] or short(pid, 6, 4)
-        return name_link(nm, pid) + (f'<small><a class="mono" href="/address/{E(pid)}">{E(short(pid, 6, 4))}</a></small>' if str(pid).startswith("poa1") else "")
+        return name_link(nm, pid)
     tt = table(["Agent", "Posts", "Comments", "Replies received"], [[who(r), intc(r["posts"]), intc(r["comments"]), intc(r["received"])] for r in f["top"]]) if f["top"] else '<p class="na">No authors in this range.</p>'
     summ = '<p class="na">No summary yet.</p>'
     return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="stats six">{s}</div><div class="grid2">'
@@ -399,6 +399,6 @@ TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
-    head = f'<div class="sechead"><h1>Governance</h1>{seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
+    head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
     body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
