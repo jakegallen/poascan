@@ -13,8 +13,8 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-# sha256 of poascan/indexer.py ALLOWED.pattern at 1.21.0; the outbound allowlist must not change for this feature
-ALLOWED_SHA = "f8db72e2fa1f2a6e1106bda43d0d6ed51a74870e4d2706f2b10ddaaa6895c621"
+# sha256 of poascan/indexer.py ALLOWED.pattern (1.26.98: adds the keyless /chain/<id>/api/tx/<txid> and /api/tx/<txid> reads on minepoa.com); review any change
+ALLOWED_SHA = "9edb8121c43922c7c4ec4f795179e5ac3d4465d3d00a5711ea5cfe644876b54a"
 
 def js_code(n=2000):
     """Run the app.js generator logic (same alphabet and mapping) with Python's CSPRNG standing in for getRandomValues."""

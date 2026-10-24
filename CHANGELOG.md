@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.98] - 2026-10-24
+
+### Changed
+- Tx list: the indexer reads minepoa.com's keyless `/api/txs` first (every 2 min, with If-None-Match). `/api/explorer/txs` is the fallback, used with its gap fill while `/api/txs` fails.
+- Single tx reads (tx pages, the answer sample, wallet links, G0 signed txs and swap fills) try `/chain/<chain id>/api/tx/<txid>` first, then `/api/explorer/tx/<txid>`. The chain id is the live chain in /api/networks, checked against the segments config. An id the chain path calls unknown stays not found.
+- Network > Health: one Tx list row (OK when either path serves it), Epochs judged by its failures (it is read only when a close record is missing), Close records Degraded rather than Down while the close count comes from /api/status. On-view reads not tried for an hour no longer carry old failures.
+
+### Fixed
+- The live pill, API `indexer_live` and the derived join check count `/api/txs` reads as tx list reads.
+
+### Tests
+- tools/registry_test.py: allowlist hash updated for the two tx paths. tools/netoverview_test.py: path order and fallback, unknown ids, the tx list cadence and fallback, chain id checks, and the new Health rows.
+
 ## [1.26.97] - 2026-10-24
 
 ### Fixed

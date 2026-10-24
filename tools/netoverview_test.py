@@ -55,16 +55,16 @@ check("a lag at or over LAG_BLOCKS is flagged Behind", A.LAG_BLOCKS == 2000 and 
 db.write("INSERT INTO fetch_log(endpoint,last_ok,last_err,fails,next_at,err) VALUES('/api/explorer/txs',?,?,5,?,'HTTP 404')", (now - 1800, now - 30, now + 600))
 db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/status',?,0,0)", (now - 20,))
 f = A.freshness.__wrapped__() if hasattr(A.freshness, "__wrapped__") else A.freshness()
-check(f"tx feed down, status fresh: Partial, not Stale ({f['state']}, {f['why']})", f["state"] == "partial" and f["label"] == "Partial" and f["tx_feed_down"] and "Explorer txs" in f["why"])
+check(f"tx feed down, status fresh: Partial, not Stale ({f['state']}, {f['why']})", f["state"] == "partial" and f["label"] == "Partial" and f["tx_feed_down"] and "Tx list" in f["why"])
 A._cache.clear() if hasattr(A, "_cache") else None
 fd = A.feeds()
 st = {x["label"]: x["state"] for x in fd["feeds"]}
-check(f"feeds: chain Live, headline Partial, Explorer txs Down, Status OK ({fd['chain']}, {fd['state']}, {st})",
-      fd["chain"] == "Live" and fd["state"] == "Partial" and not fd["ok"] and st.get("Explorer txs") == "Down" and st.get("Status") == "OK")
-check(f"Close records Down when the live network counts a close we do not hold ({st.get('Close records')})", st.get("Close records") == "Down")
+check(f"feeds: chain Live, headline Partial, Tx list Down, Status OK ({fd['chain']}, {fd['state']}, {st})",
+      fd["chain"] == "Live" and fd["state"] == "Partial" and not fd["ok"] and st.get("Tx list") == "Down" and st.get("Status") == "OK")
+check(f"Close records Degraded when the live network counts a close we do not hold ({st.get('Close records')})", st.get("Close records") == "Degraded")
 from poascan import views2 as V2
 hb = V2.status_body()
-check("Health shows the Feeds card with the same headline and chain", 'data-health="Partial"' in hb and 'data-feed="Explorer txs"' in hb and ">Live<" in hb)
+check("Health shows the Feeds card with the same headline and chain", 'data-health="Partial"' in hb and 'data-feed="Tx list"' in hb and ">Live<" in hb)
 check("Health never says healthy or operational", "healthy" not in hb.lower() and "OPERATIONAL" not in hb)
 check("Health copy: no resync, operator or expected changes", not any(w in hb.lower() for w in ("resync", "re-sync", "operator", "expected")))
 from poascan import server as SV
@@ -93,5 +93,59 @@ check("the live job is not gated on the tx feed backoff", {j[0]: j[3] for j in I
 db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at,err) VALUES('/api/explorer/txs',?,3,?,'HTTP 404')", (now, now + 600))
 SEEN.clear(); I.job_live()
 check("a backing-off tx feed is skipped inside the job", not any(p.startswith("/api/explorer/txs") for p in SEEN))
+
+# ---------------- 1.26.98: moved read paths ----------------
+check(f"tx_paths: chain-scoped path from the live chain first, explorer fallback ({I.tx_paths('a' * 64)})",
+      I.tx_paths("a" * 64) == ["/chain/poa-mainnet-1/api/tx/" + "a" * 64, "/api/explorer/tx/" + "a" * 64])
+db.put_blob("networks", {"chains": [{"chain_id": "poa-mainnet-1", "status": "live", "default": True}, {"chain_id": "bad/../x", "status": "live"}]})
+check("a chain id that is not a plain id is never put in a path", all(".." not in p for p in I.tx_paths("b" * 64)))
+db.put_blob("networks", NW)
+check("allowlist: chain tx path yes, traversal no", I.ALLOWED.match("/chain/poa-mainnet-1/api/tx/" + "c" * 64) and not I.ALLOWED.match("/chain/../api/tx/" + "c" * 64))
+CALLS = []; MODE2 = {}
+def fake2(path, timeout=60, endpoint=None, cond=False, soft=False):
+    CALLS.append(path); m = next((v for k, v in MODE2.items() if path.startswith(k)), None)
+    if m == "busy": raise I.Busy("HTTP 404")
+    if m == "missing": raise I.Missing("not found")
+    if path.startswith("/api/txs"): return {"valid": [{"id": "d" * 64, "type": "challenge", "from": "poa1x", "ts": now, "final": 1}], "invalid": []}
+    if path.startswith("/api/explorer/txs"): return [{"id": "e" * 64, "type": "challenge", "from_addr": "poa1x", "ts": now}]
+    if "/api/tx/" in path or "/api/explorer/tx/" in path: return {"id": path[-64:], "type": "challenge", "final": 1}
+    return NW
+I.fetch = fake2
+CALLS.clear(); d = I.fetch_tx("f" * 64, I.TX_EP, 5)
+check(f"fetch_tx reads the chain path first ({CALLS})", d["id"] == "f" * 64 and CALLS == ["/chain/poa-mainnet-1/api/tx/" + "f" * 64])
+MODE2["/chain/poa-mainnet-1/api/tx"] = "busy"; CALLS.clear(); d = I.fetch_tx("f" * 64, I.TX_EP, 5)
+check(f"fetch_tx falls back to /api/explorer/tx when the chain path fails ({CALLS})", d["id"] == "f" * 64 and len(CALLS) == 2 and CALLS[1].startswith("/api/explorer/tx/"))
+MODE2["/chain/poa-mainnet-1/api/tx"] = "missing"; MODE2["/api/explorer/tx/"] = "busy"
+try: I.fetch_tx("f" * 64, I.TX_EP, 5); r = None
+except I.Missing: r = "missing"
+except I.Busy: r = "busy"
+check(f"an id the chain path says is unknown is Missing even when the old path errors ({r})", r == "missing")
+MODE2.clear()
+db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
+check(f"live_list reads /api/txs first and stores it ({used}, {CALLS})", used == "/api/txs" and CALLS == ["/api/txs"] and db.q1("SELECT 1 AS x FROM txs WHERE id=?", ("d" * 64,)))
+db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0) ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0", (int(time.time()),))
+CALLS.clear(); used = I.live_list()
+check(f"inside TXLIST_S no second read ({used}, {CALLS})", used == "/api/txs" and CALLS == [])
+MODE2["/api/txs"] = "busy"; db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
+check(f"/api/txs failing: the explorer feed takes over ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS[0] == "/api/txs" and CALLS[1].startswith("/api/explorer/txs"))
+MODE2.clear()
+check("TXLIST_S floor 60 s, Tx list cadence in EVERY", I.TXLIST_S >= 60 and I.EVERY["/api/txs"] == I.TXLIST_S)
+# feed rows after the move
+t = int(time.time())
+db.write("DELETE FROM fetch_log")
+for ep, lo, le, f in (("/api/status", t - 20, None, 0), ("/api/networks", t - 20, None, 0), ("/api/txs", t - 30, None, 0), ("/api/explorer/txs", t - 3000, t - 30, 8),
+                      ("/api/epochs", t - 2300, t - 3200, 0), ("/api/explorer/tx/:id (swaps)", t - 50000, t - 8000, 38), ("/api/swaps", t - 30, None, 0),
+                      ("/api/explorer/tx/:id (on demand)", t - 60, t - 300, 0)):
+    db.write("INSERT INTO fetch_log(endpoint,last_ok,last_err,fails,next_at) VALUES(?,?,?,?,0)", (ep, lo, le, f))
+A._cache.clear() if hasattr(A, "_cache") else None
+st = {x["label"]: x["state"] for x in A.feeds()["feeds"]}
+check(f"Tx list OK on /api/txs while the explorer feed fails ({st.get('Tx list')})", st.get("Tx list") == "OK")
+check(f"Epochs OK when it is not needed and not failing ({st.get('Epochs')})", st.get("Epochs") == "OK")
+check(f"Swaps OK: book fresh, swap tx reads idle for 2h ({st.get('Swaps')})", st.get("Swaps") == "OK")
+check(f"Tx lookup OK after a recent good read ({st.get('Tx lookup')})", st.get("Tx lookup") == "OK")
+db.write("UPDATE fetch_log SET fails=3, last_err=? WHERE endpoint='/api/epochs'", (t - 60,))
+A._cache.clear() if hasattr(A, "_cache") else None
+st = {x["label"]: x["state"] for x in A.feeds()["feeds"]}
+check(f"Epochs Degraded while a needed read fails ({st.get('Epochs')})", st.get("Epochs") == "Degraded")
 
 print(f"\n{len(fails)} failed" if fails else "\nall ok"); sys.exit(1 if fails else 0)

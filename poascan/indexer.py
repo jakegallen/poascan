@@ -23,6 +23,7 @@ LIVE_DEGRADED_S = _ei("POASCAN_LIVE_DEGRADED_S", 120, 30)      # /api/explorer/t
 STATUS_S = _ei("POASCAN_STATUS_S", 60, 60)                     # /api/status, one shared read for every feature
 STATUS_DEGRADED_S = _ei("POASCAN_STATUS_DEGRADED_S", 120, 60)
 NETWORKS_S = _ei("POASCAN_NETWORKS_S", 120, 60)                # /api/networks (height, checkpoint)
+TXLIST_S = _ei("POASCAN_TXLIST_S", 120, 60)                  # /api/txs, the keyless tx list (1.26.98); /api/explorer/txs is its fallback
 SWAPS_S = _ei("POASCAN_SWAPS_S", 60, 30, 120)                  # /api/swaps (swap mirrors read our cached copy, never minepoa.com)
 FORUM_S = _ei("POASCAN_FORUM_S", 3600, 900)                    # communities plus one posts list per community
 META_S = _ei("POASCAN_META_S", 300, 120)                       # anchors, notices, ballots
@@ -34,7 +35,7 @@ BACKOFF_MAX_S = _ei("POASCAN_BACKOFF_MAX_S", 900, 60)
 RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After beyond this is treated as this
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
-ALLOWED = re.compile(r"^/(api/(status|networks|txs|explorer/txs|explorer/tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
+ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
                      r"epochs|agents|anchors|params|release|notices|ballots|chains|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
@@ -396,16 +397,42 @@ def live_txs(get=None):
         batch = get(f"/api/explorer/txs?limit={LIVE_LIMIT}&before={oldest + 1}", False); pages += 1   # +1: same-second txs past the cut
     return pages
 
+def _store_window(d):
+    """One /api/txs read: valid rows into txs, refused ones into invalid_txs."""
+    upsert_txs(d.get("valid", []), "txs-window")
+    now = int(time.time())
+    db.write("INSERT OR IGNORE INTO invalid_txs(txid,error,first_seen) VALUES(?,?,?)",
+             [(x.get("txid"), x.get("error"), now) for x in d.get("invalid", []) if x.get("txid")], many=True)
+
+def _ok_within(ep, s):
+    r = db.q1("SELECT last_ok, fails FROM fetch_log WHERE endpoint=?", (ep,))
+    return bool(r and r["last_ok"] and not r["fails"] and time.time() - r["last_ok"] < s)
+
+def live_list():
+    """The tx list (1.26.98): minepoa's keyless /api/txs first, read once per TXLIST_S with If-None-Match; when it fails,
+    the older /api/explorer/txs feed (with its gap fill) takes over until /api/txs answers again. Returns the path used."""
+    now = time.time()
+    if can_fetch("/api/txs"):
+        if now - _last_try("/api/txs") < TXLIST_S - 5 and _ok_within("/api/txs", 3 * TXLIST_S): return "/api/txs"
+        try:
+            d = fetch("/api/txs", timeout=60, cond=True)
+            if d is not NOT_MODIFIED: _store_window(d)
+            return "/api/txs"
+        except Busy as e: log.warning("/api/txs: %s", e)
+    else: skip_backoff("/api/txs")
+    if can_fetch("/api/explorer/txs"):
+        try: live_txs(); return "/api/explorer/txs"
+        except Busy as e: log.warning("/api/explorer/txs: %s", e)
+    else: skip_backoff("/api/explorer/txs")
+    return None
+
 def job_live():
     # Each read stands alone: a slow /api/networks must not hold back the tx feed that drives the Live pill.
     # /api/status is read here once per STATUS_S (STATUS_DEGRADED_S while degraded) and shared: every feature reads
     # the stored copy (db blob "status"), never minepoa.com.
     # 1.26.94: a failing tx feed read (it 401/404ed after the genesis cut) no longer skips the status and networks reads,
     # which froze chain height, checkpoint and finality lag at the last good read.
-    if can_fetch("/api/explorer/txs"):
-        try: live_txs()
-        except Busy as e: log.warning("/api/explorer/txs: %s", e)
-    else: skip_backoff("/api/explorer/txs")
+    live_list()
     now = time.time(); slow = degraded(now)
     for path, fn, every in (("/api/status", _live_status, STATUS_DEGRADED_S if slow else STATUS_S), ("/api/networks", _live_networks, NETWORKS_S)):
         if not can_fetch(path): skip_backoff(path); continue
@@ -427,12 +454,10 @@ def _live_networks(nw):
             db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height"), "segment": _SG.CURRENT})
 
 def job_window():
+    if _ok_within("/api/txs", 300): return   # the live job already reads /api/txs (live_list)
     d = fetch("/api/txs", timeout=90, cond=True)
     if d is NOT_MODIFIED: return
-    upsert_txs(d.get("valid", []), "txs-window")
-    now = int(time.time())
-    db.write("INSERT OR IGNORE INTO invalid_txs(txid,error,first_seen) VALUES(?,?,?)",
-             [(x.get("txid"), x.get("error"), now) for x in d.get("invalid", []) if x.get("txid")], many=True)
+    _store_window(d)
 
 def job_meta():
     for kind, path in (("anchors", "/api/anchors"), ("notices", "/api/notices"), ("ballots", "/api/ballots")):
@@ -646,6 +671,34 @@ def neg_put(key, missing, ttl=None):
         while len(_neg) > NEG_MAX: _neg.popitem(last=False)
 def neg_size(): return len(_neg)
 
+CHAIN_RX = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
+def live_chain_id():
+    """The live network's chain id: /api/networks' live default chain when the segments config knows it, else the
+    configured current segment's chain id. None when neither is a plain id."""
+    lc = _SG.live_chain(db.get_blob("networks")[0])
+    known = [x.get("chain_id") for x in _SG.SEGMENTS]
+    cid = lc if lc in known else (_SG.BY_N.get(_SG.CURRENT) or {}).get("chain_id") or lc
+    return cid if cid and CHAIN_RX.match(cid) else None
+
+def tx_paths(tid):
+    """Single-tx reads in order (1.26.98): the chain-scoped keyless path, then the older explorer path as the fallback."""
+    cid = live_chain_id()
+    return ([f"/chain/{cid}/api/tx/{tid}"] if cid else []) + [f"/api/explorer/tx/{tid}"]
+
+def fetch_tx(tid, endpoint, timeout):
+    """One tx detail by tx_paths(): the first path that returns the tx wins. Missing when a path says the id is unknown
+    and none returns it; otherwise the last failure. A 429 hold (Limited) stops at once."""
+    missing = last = None
+    for p in tx_paths(tid):
+        try:
+            d = fetch(p, timeout=timeout, endpoint=endpoint, soft=True)
+            if isinstance(d, dict) and d.get("id"): return d
+            missing = Missing("not found")
+        except Limited: raise
+        except Missing as e: missing = e
+        except Busy as e: last = e
+    raise missing or last or Missing("not found")
+
 def fetch_ondemand(path, endpoint, key):
     """One visitor-triggered read (see the block comment above). key is the tx id or address."""
     if not (TX_ID.match(key) if endpoint == TX_EP else ADDR_ID.match(key)): raise Missing("not a valid id")
@@ -666,8 +719,8 @@ def fetch_ondemand(path, endpoint, key):
     if not ok: deny(endpoint, "visitor_cap:global"); raise Limited("upstream budget spent; try again shortly", wait)
     if not _ondemand.acquire(timeout=0.5): deny(endpoint, "visitor_cap:inflight"); raise Busy("upstream busy")
     try:
-        d = fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint, soft=True)
-        if endpoint == TX_EP and not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
+        if endpoint == TX_EP: d = fetch_tx(key, endpoint, ONDEMAND_TIMEOUT)
+        else: d = fetch(path, timeout=ONDEMAND_TIMEOUT, endpoint=endpoint, soft=True)
         return d
     except Missing: neg_put(endpoint + key, True); raise
     except Limited: raise
@@ -680,8 +733,7 @@ def _bg_fetch_tx(tid, endpoint):
     if neg_get(endpoint + tid): raise Missing("not found (cached)")
     if not can_fetch(endpoint): skip_backoff(endpoint); raise Busy("backing off")
     try:
-        d = fetch(f"/api/explorer/tx/{tid}", timeout=20, endpoint=endpoint, soft=True)
-        if not (isinstance(d, dict) and d.get("id")): raise Missing("not found")
+        d = fetch_tx(tid, endpoint, 20)
     except Missing: neg_put(endpoint + tid, True, NEG_BG_TTL); raise
     return d
 
@@ -797,7 +849,7 @@ def seed(seed_dir):
 
 # ---------------- scheduler ----------------
 # How often each upstream source is read when healthy (for the /status freshness table).
-EVERY = {"/api/explorer/txs": LIVE_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": 600,
+EVERY = {"/api/explorer/txs": LIVE_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S}
 

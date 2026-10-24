@@ -67,7 +67,8 @@ MAX_TEXT = 220
 GENERIC = "minepoa.com sent a notice instead of data."
 # ---------------------------------------------------------------------------------------------------------------------
 
-_TPL = ((re.compile(r"^/api/explorer/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/api/explorer/address/poa1\w+$"), "/api/explorer/address/:addr"),
+_TPL = ((re.compile(r"^/api/explorer/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/chain/[a-z0-9\-]+/api/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"),
+        (re.compile(r"^/api/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/api/explorer/address/poa1\w+$"), "/api/explorer/address/:addr"),
         (re.compile(r"^/lableak/api/posts/\d+$"), "/lableak/api/posts/:id"))
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 SECRET_RX = re.compile(r"api[_\s-]?key|private key|seed phrase|mnemonic|password|send (?:poa|funds)|\bpk_|\bsk_", re.I)

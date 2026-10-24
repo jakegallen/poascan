@@ -474,7 +474,8 @@ def accounts_series():
 def health():
     fl = db.q("SELECT * FROM fetch_log ORDER BY endpoint")
     jobs = {r["kind"][4:]: json.loads(r["json"]).get("ran") for r in db.q("SELECT kind, json FROM blobs WHERE kind LIKE 'job:%'")}
-    live = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint='/api/explorer/txs'")
+    # the tx list: /api/txs since 1.26.98, /api/explorer/txs as its fallback; whichever read last
+    live = db.q1("SELECT MAX(last_ok) AS last_ok FROM fetch_log WHERE endpoint IN ('/api/txs', '/api/explorer/txs')")
     return dict(endpoints=fl, jobs=jobs, live_last_ok=live["last_ok"] if live else None)
 
 # ---- freshness: one state for the header pill, /api/live and /status
@@ -482,7 +483,7 @@ LIVE_S = 300            # our own last good read of the live feed
 LAG_NODE_S = 600        # minepoa's node snapshot flagged stale and at least this old
 LAG_CP_S = 6 * 3600     # checkpoint height unchanged this long
 LAG_BLOCKS = 2000       # finality lag (blocks) flagged on Network > Overview; segment 2 anchors every 400 to 700 blocks
-FEED_LIVE = ("/api/explorer/txs", "/api/status", "/api/networks")   # any fresh read of the live network counts as live
+FEED_LIVE = ("/api/txs", "/api/explorer/txs", "/api/status", "/api/networks")   # any fresh read of the live network counts as live
 
 def _ts(iso):
     try: return int(dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp())
@@ -523,11 +524,15 @@ def freshness():
                 fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up, tx_feed_down=tx_down)
 
 # ---- per-feed state: one source for Network > Health, /api/health and the header pill (1.26.94)
-FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Explorer txs", ("/api/explorer/txs",)), ("Epochs", ("/api/epochs",)),
+# 1.26.98: a row with "best" is one feed with alternative paths (OK when either path serves it); the others take the
+# worst of their callers. Tx lookup and swap tx reads try /chain/<id>/api/tx/<txid> first, so their keys cover both paths.
+FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Tx list", ("/api/txs", "/api/explorer/txs"), "best"), ("Epochs", ("/api/epochs",)),
          ("Close records", ()), ("Tx lookup", ("/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id")), ("Address lookup", ("/api/explorer/address/:addr",)),
-         ("Swaps", ("/api/swaps", "/api/explorer/tx/:id (swaps)")), ("Tx window", ("/api/txs",)), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
+         ("Swaps", ("/api/swaps", "/api/explorer/tx/:id (swaps)")), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
          ("Notices", ("/api/notices",)), ("Ballots", ("/api/ballots",)), ("Release", ("/api/release",)), ("Params", ("/api/params",)),
          ("Forum", ("/lableak/api/communities", "/lableak/api/posts"))]
+FEED_ON_NEED = ("/api/epochs",)   # read only when a close record is missing: judged by its failures, like an on-view read
+FEED_IDLE_S = 3600                # an on-view read not tried for this long is idle: old failures no longer count
 FEED_RANK = {"OK": 0, "Degraded": 1, "Down": 2}
 FEED_VIEW_DOWN = 5          # an on-view read (no schedule) with this many failures in a row is Down
 
@@ -549,18 +554,23 @@ def feeds():
     from . import indexer as I
     now = time.time(); rows = {r["endpoint"]: r for r in db.q("SELECT endpoint, last_ok, last_err, fails FROM fetch_log")}
     out = []
-    for label, eps in FEEDS:
+    for label, eps, *mode in FEEDS:
         if not eps:   # Close records: this segment's records cover every close the live network counts
             closed = status().get("epochs_closed")
             with S.use(S.CURRENT): have = len(epochs_raw()); ts = epochs_ts()
             if not isinstance(closed, (int, float)): continue
-            st = "OK" if have >= closed else "Degraded" if have else "Down"
+            st = "OK" if have >= closed else "Degraded"   # the count still shows (from /api/status); the record is missing
             out.append(dict(label=label, state=st, last_ok=ts if have else None, served=have, closed=int(closed))); continue
-        got = [(rows[e], I.EVERY.get(e)) for e in eps if e in rows]
-        if not got:
-            if any(I.EVERY.get(e) for e in eps): out.append(dict(label=label, state="Down", last_ok=None))
+        every = lambda e: None if e in FEED_ON_NEED else I.EVERY.get(e)
+        seen = [(rows[e], every(e)) for e in eps if e in rows]
+        if not seen:
+            if any(every(e) for e in eps): out.append(dict(label=label, state="Down", last_ok=None))
             continue
-        st = max((_feed_state(r, ev, now) for r, ev in got), key=FEED_RANK.get)
+        tried = lambda r: max(r.get("last_ok") or 0, r.get("last_err") or 0)
+        got = [(r, ev) for r, ev in seen if ev or now - tried(r) < FEED_IDLE_S]   # idle on-view reads drop out
+        states = [_feed_state(r, ev, now) for r, ev in got] or ["OK"]
+        st = (min if mode == ["best"] else max)(states, key=FEED_RANK.get)
+        got = got or seen
         out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
     live = [r.get("last_ok") for e, r in rows.items() if e in ("/api/status", "/api/networks") and r.get("last_ok")]
     fresh = bool(live) and now - max(live) <= LIVE_S

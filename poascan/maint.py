@@ -42,7 +42,7 @@ def last_join():
 
 def _feed_fresh():
     """Our ledger feed is current, so a missing join is real and not a gap in our own reads."""
-    r = db.q1("SELECT last_ok FROM fetch_log WHERE endpoint='/api/explorer/txs'")
+    r = db.q1("SELECT MAX(last_ok) AS last_ok FROM fetch_log WHERE endpoint IN ('/api/txs', '/api/explorer/txs')")   # 1.26.98: /api/txs is the tx list
     return bool(r and r["last_ok"] and time.time() - r["last_ok"] < 900)
 
 def join_quiet():
