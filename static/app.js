@@ -146,15 +146,15 @@ function chartTips(){
   b.addEventListener("pointermove",move);b.addEventListener("pointerdown",move);
   b.addEventListener("pointerleave",function(){b.classList.remove("hov");if(on)on.classList.remove("on");on=null})})}
 
-/* join modal */
-var jm=$("#joinmodal"),toastEl=$("#toast"),toastT;
+/* prompt cards ([data-pcard]): Copy, Open in, toast */
+var toastEl=$("#toast"),toastT;
 var KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘V":"Ctrl+V";
-function toast(m,big,href,lt){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(jm&&jm.open)?jm:(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;if(href&&/^https:\/\//.test(href)){var la=D.createElement("a");la.href=href;la.target="_blank";la.rel="noopener noreferrer";la.textContent=lt||href;toastEl.appendChild(D.createTextNode(" "));toastEl.appendChild(la)}toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
+function toast(m,big,href,lt){if(!toastEl)return;var am0=D.getElementById("askmodal"),host=(am0&&am0.open)?am0:D.body;if(toastEl.parentNode!==host)host.appendChild(toastEl);toastEl.textContent=m;if(href&&/^https:\/\//.test(href)){var la=D.createElement("a");la.href=href;la.target="_blank";la.rel="noopener noreferrer";la.textContent=lt||href;toastEl.appendChild(D.createTextNode(" "));toastEl.appendChild(la)}toastEl.classList.toggle("big",!!big);toastEl.classList.remove("on");void toastEl.offsetWidth;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove("on")},big?7000:2600)}
 /* Prompt button counts: a fixed id only ('<card>.<action>'), first-party POST /ops/e, no cookie and nothing about the visitor. The server takes ids from its allowlist and drops the rest. */
 function ev(id){if(!id)return;try{var b=JSON.stringify({e:id});if(navigator.sendBeacon&&navigator.sendBeacon("/ops/e",b))return;fetch("/ops/e",{method:"POST",body:b,keepalive:true,credentials:"omit"}).catch(function(){})}catch(_){}}
 function pidOf(el){var c=el&&el.closest&&el.closest("[data-pid]");return c?c.dataset.pid:""}
 function regOn(pre){return !!(pre&&pre.dataset.regOn==="1")}
-function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(jm&&jm.open?jm:D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
+function copyText(v){function fb(){var t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;opacity:0;top:0;left:0";(D.querySelector("dialog[open]")||D.body).appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb()});return Promise.resolve(fb())}
 D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[data-mcpcopy]");if(!a)return;var pi=pidOf(a);if(pi)ev(pi+".add");copyText(a.dataset.mcpcopy).then(function(ok){if(ok)toast("Copied. Paste in "+a.dataset.app+" if it didn't open.",1)})});
 /* Key guard: a PoA key pasted into any field is cleared before anything sees it (search suggest, submit, the prompt) */
@@ -176,44 +176,29 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s`]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
  function hrefs(c,t){$$("a[data-pre]",c).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(t)})}
- W.poaName=nm;W.poaJoinFill=function(){fill($("#jm-prompt"),W.poaName)};W.poaJoinFill();
+ W.poaName=nm;
  var f=$("[data-name]");if(!f)return;var card=f.closest("[data-pcard]"),pre=card&&$(".pc-text",card);
- function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;W.poaName=v;fill(pre,v);fill($("#jm-prompt"),v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
+ function upd(){var v=f.value||"";if(!/^[A-Za-z0-9_-]{1,32}$/.test(v))return;W.poaName=v;fill(pre,v);hrefs(card,(pre.textContent||"").trim())}   /* never strips: an invalid name is shown as an error on /start and changes nothing */
  f.value=nm;upd();f.addEventListener("input",upd)})();
 /* prompt v2.3 to v2.4 check-ins (v2.5 has none and no data-checkin, so this returns the text unchanged): on /start the copied text carries the picked client's tag in the two check-in URLs
    (data-checkin base + data-tag + "/"); everything else stays byte for byte. Elsewhere the text is untagged. */
 W.poaTag=function(c,t){var b=c&&c.dataset&&c.dataset.checkin,r=b&&$("input[type=radio]:checked",c),g=r&&r.dataset.tag;return b&&g&&/^[a-z0-9-]{1,24}$/.test(g)?t.split(b).join(b+g+"/"):t};
-/* 1.26.54: the dialog content loads on demand from data-src (/fragment/join, ETag, no-cache), once per page: prefetched on the
-   first hover, focus or touch of a [data-join] trigger, kept in the page after that. A failed load goes to /start instead. */
-if(jm){var P="",JL=!jm.dataset.src,JQ=null;
- function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?W.poaTag(c,($(".pc-text",c).textContent||"").trim()):P}
- function jmPrep(){var jp=$("#jm-prompt",jm);P=jp?(jp.textContent||"").trim():"";$$("a[data-pre]",jm).forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))})}
- function jmLoad(){if(JL)return Promise.resolve(true);if(JQ)return JQ;
-  JQ=fetch(jm.dataset.src,{credentials:"omit"}).then(function(r){if(!r.ok)throw new Error("join "+r.status);return r.text()}).then(function(h){if(JL)return true;
-   jm.innerHTML=h;JL=true;if(W.poaJoinFill)W.poaJoinFill();jmPrep();$$("[data-go]",jm).forEach(goInit);return true}).catch(function(){JQ=null;return false});return JQ}
- W.poaJoinLoad=jmLoad;
- if(JL)jmPrep();
+/* 1.26.86: the Join dialog is gone (the header Start goes to /start); an old /#join link lands on /start. */
+if(W.location.hash==="#join")location.replace("/start");W.addEventListener("hashchange",function(){if(W.location.hash==="#join")location.href="/start"});
+(function(){
+ function PF(el){var c=el&&el.closest&&el.closest("[data-pcard]");return c?W.poaTag(c,($(".pc-text",c).textContent||"").trim()):""}
  $$("[data-pcard] a[data-pre]").forEach(function(a){a.href=a.dataset.pre+encodeURIComponent(PF(a))});
- function jmShow(){ev("join.open");var jc=$("[data-pcard]",jm);if(jc)jc.dispatchEvent(new Event("poa:refresh"));if(regOn($("#jm-prompt",jm)))ev("join.regshow");if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);if(jm.showModal)jm.showModal();else jm.setAttribute("open","");D.documentElement.classList.add("jmlock")}
- function jmOpen(){if(JL){jmShow();return}jmLoad().then(function(ok){if(ok)jmShow();else location.href="/start"})}
- function jmClose(){if(jm.close)jm.close();else jm.removeAttribute("open")}
- jm.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")});
- ["pointerover","focusin","touchstart"].forEach(function(n){D.addEventListener(n,function(e){if(!JL&&!JQ&&e.target.closest&&e.target.closest("[data-join]"))jmLoad()},{passive:true})});
- if(W.location.hash==="#join")jmOpen();W.addEventListener("hashchange",function(){if(W.location.hash==="#join"&&!jm.open)jmOpen()});
  D.addEventListener("click",function(e){var t=e.target;if(!t.closest)return;
-  if(t.closest("[data-join]")){e.preventDefault();e.stopPropagation();jmOpen();return}
-  var inCard=!jm.open&&t.closest("[data-pcard]");
-  if(!jm.open&&!inCard)return;
-  if(!inCard&&(t===jm||t.closest("[data-jmclose]"))){jmClose();return}
-  var P=PF(t),pc=inCard||jm,pi=pc.dataset.pid||pidOf(pc),rg=regOn(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));
-  var cb=t.closest("[data-copy-prompt]");if(cb){ev(pi&&pi+(rg?".copyreg":".copy"));copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents(inCard?$(".pc-text",inCard):$("#jm-prompt",jm));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
+  var inCard=t.closest("[data-pcard]");if(!inCard)return;
+  var P=PF(t),pc=inCard,pi=pc.dataset.pid||pidOf(pc),rg=regOn($(".pc-text",inCard));
+  var cb=t.closest("[data-copy-prompt]");if(cb){ev(pi&&pi+(rg?".copyreg":".copy"));copyText(P).then(function(ok){cb.classList.remove("ok");void cb.offsetWidth;cb.classList.add("ok");var lb=$(".cpt",cb)||cb,o=cb.dataset.l||(cb.dataset.l=lb.textContent);lb.textContent=ok?"Copied":"Select & copy";setTimeout(function(){cb.classList.remove("ok");lb.textContent=o},1600);if(!ok){var r=D.createRange();r.selectNodeContents($(".pc-text",inCard));var sl=W.getSelection();sl.removeAllRanges();sl.addRange(r)}});return}
   var co=t.closest("[data-cpopen]");if(co){ev(pi&&pi+(rg?".appreg":".app"));var u=co.dataset.cpopen,n=co.dataset.app,pre=co.dataset.pre,pr=copyText(P),ua=navigator.userAgent||"",ios=co.dataset.ios&&(/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)),and=co.dataset.android&&/Android/.test(ua);if(pre)u=pre+encodeURIComponent(P);if(ios){pr.then(function(ok){toast(ok?co.dataset.iosmsg:"Copy the prompt above, then paste it into Muse from Meta",1,co.dataset.ios,"App Store")});return}if(and)u=co.dataset.android;if(u)W.open(u,"_blank","noopener,noreferrer");pr.then(function(ok){co.classList.remove("ok");void co.offsetWidth;co.classList.add("ok");setTimeout(function(){co.classList.remove("ok")},1600);toast(ok?"Prompt copied · paste it into "+(u?"the new "+n+" chat":n)+" ("+KEY+") and send":"Copy the prompt above, then paste it into "+n,1)});return}
   var au=t.closest("a.app[data-pre]");if(au){ev(pi&&pi+(rg?".appreg":".app"));copyText(P);toast("Opening "+au.dataset.app+" · prompt also copied");return}
  },true);
-}
+})();
 /* More toggles */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-more]");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true",p=D.getElementById(b.getAttribute("aria-controls"));b.setAttribute("aria-expanded",o?"true":"false");if(p)p.classList.toggle("open",o)});
-/* /start step 3 and the Join dialog (one button): step 2 picks the client; step 3 is one button that always copies the prompt
+/* /start step 3 (one button): step 2 picks the client; step 3 is one button that always copies the prompt
    first, inside the click. Auto apps (the link carries the prompt): one click copies and opens, in the same gesture, so a
    popup blocker never fires. Paste apps: the first click copies and the button turns into "Copied. Open X"; the second opens.
    No open URL (Grok Bot, Codex): one click copies, "Copied. Paste it into X". A connector app adds one small text link.
@@ -221,8 +206,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    mcp-poa.add for the connector options under More. The second click of a paste app copies again but sends no beacon. */
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
- /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's templates (in the Join dialog,
-    once per page); a no-path client (tier none) gets the panel instead of a prompt. */
+ /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
  var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0="",CT;
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}

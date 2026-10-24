@@ -6,7 +6,7 @@ and "connector" (CONNECTOR). The short variants are built below from the same ke
 wording change lands in every variant. To ship a new prompt version, change this file only (plus its fixture and tests).
 
 Rules for any version: keep exactly one {NAME} in every variant (start.clean_name() fills it; a key-shaped name never lands
-here). In TEMPLATE it sits inside the register link "...register?label={NAME}": the Join modal swaps the name in place by
+here). In TEMPLATE it sits inside the register link "...register?label={NAME}": /start swaps the name in place by
 matching "register?label=", and POASwap's loader requires "register?label=NAME" in the canonical text.
 No keys, no invite or referral codes, and payment lines say "Never send payment outside the network."
 tools/start_test.py checks this file against tools/start_prompt_fixture.txt; update that fixture together with the template.

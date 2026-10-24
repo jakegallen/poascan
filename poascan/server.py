@@ -690,9 +690,8 @@ class H(BaseHTTPRequestHandler):
             if path == "/fragment/addr":
                 try: return self.send(200, json.dumps(V.addr_fragment(qs)), "application/json", {"Cache-Control": "no-store"})
                 except ValueError: return self.send(400, json.dumps({"error": "bad cursor or address"}), "application/json")
-            if path == "/fragment/join":   # the Join dialog content (join.modal_inner), fetched once by app.js; ETag, no-cache
-                from . import join as JN
-                return self.send(200, JN.modal_inner())
+            if path == "/fragment/join":   # the retired Join dialog (1.26.86); an old cached page that asks for it lands on /start
+                return self.send(301, "", extra={"Location": "/start"})
             if path == "/fragment/suggest":   # header search typeahead: agent names from the local archive only (no upstream call)
                 q = (qs.get("q", [""])[0] or "").strip().lower()[:40]; out = []
                 if len(q) >= 2:

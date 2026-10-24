@@ -43,7 +43,7 @@ tt, pp = PR.swap_status(OID)
 check("Ask agent prompt on the page (copy-ready, read only)", "data-ask=" in h and "Check this swap&#x27;s status" in h)
 check("prompt: poaswap check and POAScan offer reads, safe rules", f"https://poaswap.io/api/v1/check?offer={OID}" in pp and f"https://poascan.io/api/v1/swaps/{OID}" in pp
       and "Stop at Filled, Expired or Failed" in pp and "Check status before any re-take" in pp and "Never loop" in pp and "Never send payment outside the network." in pp and "Read-only" in pp)
-check("prompt: no key, no referral, no fee, no dashes", "MY_KEY" not in pp and "pk_" not in pp and "referral" not in pp.lower() and "invite" not in pp.lower() and "fee" not in pp.lower() and nodash(pp))
+check("prompt: no key, no referral, no fee, no dashes", "SAVED_KEY" not in pp and "pk_" not in pp and "referral" not in pp.lower() and "invite" not in pp.lower() and "fee" not in pp.lower() and nodash(pp))
 check("prompt id is registered for click counts", PR.pid(tt) in {PR.pid(x) for x in PR.titles()})
 
 # ---------------- other stages ----------------

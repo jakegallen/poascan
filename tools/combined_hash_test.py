@@ -1,6 +1,6 @@
 """Combined prompt hash slot (poascan/combined.py). Absent slot (poascan/combined_prompt.txt, as shipped today): combined_sha256 is null on
 /api/v1/prompts/join (with and without ?client=), /api/v1/prompts/combined and MCP get_onboarding_steps, and nothing new renders on /start,
-the Join dialog, /about, llms.txt or the MCP tool list. Present (a test file via POASCAN_COMBINED_PROMPT): one SHA-256 by the join rule, the
+/about, llms.txt or the MCP tool list. Present (a test file via POASCAN_COMBINED_PROMPT): one SHA-256 by the join rule, the
 same on every surface, recomputable from the served text. Bad files (CR, BOM, empty, extra newline) publish nothing. Join prompt unchanged.
 Usage: python3 tools/combined_hash_test.py"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
@@ -67,7 +67,7 @@ def surfaces(base):
     rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "combined_test", "version": "0"}})
     d = dict(join=json.loads(get("/api/v1/prompts/join")[1]), claude=json.loads(get("/api/v1/prompts/join?client=claude")[1]),
              muse=json.loads(get("/api/v1/prompts/join?client=muse")[1]), comb=get("/api/v1/prompts/combined"), alias=get("/api/prompts/combined"),
-             bad=get("/api/v1/prompts/combined?x=1")[0], start=get("/start")[1], frag=get("/fragment/join")[1], about=get("/about")[1],
+             bad=get("/api/v1/prompts/combined?x=1")[0], start=get("/start")[1], about=get("/about")[1],
              llms=get("/llms.txt")[1], llmsf=get("/llms-full.txt")[1], oa=json.loads(get("/openapi.json")[1]),
              mcp=rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}})["result"]["structuredContent"],
              tl=[t for t in rpc("tools/list")["result"]["tools"] if t["name"] == "get_onboarding_steps"][0]["description"])
@@ -86,8 +86,8 @@ try:
     check("absent: combined_sha256 null on /prompts/join (no client, claude, no-path muse) and MCP get_onboarding_steps",
           all("combined_sha256" in x and x["combined_sha256"] is None for x in (d["join"], d["claude"], d["muse"], d["mcp"])))
     check("absent: /api/v1/prompts/combined available false, text, combined_sha256 and verify null", c["available"] is False and c["text"] is None and c["combined_sha256"] is None and c["verify"] is None)
-    check("absent: nothing new renders on /start, the Join dialog, /about, llms.txt or the MCP tool description; llms-full.txt has no hash line",
-          not any(re.search(r"combined_sha256|[Cc]ombined prompt|combined-hash|prompts/combined|<span>Combined</span>", x) for x in (d["start"], d["frag"], d["about"], d["llms"], d["tl"]))
+    check("absent: nothing new renders on /start, /about, llms.txt or the MCP tool description; llms-full.txt has no hash line",
+          not any(re.search(r"combined_sha256|[Cc]ombined prompt|combined-hash|prompts/combined|<span>Combined</span>", x) for x in (d["start"], d["about"], d["llms"], d["tl"]))
           and "Combined prompt sha256" not in d["llmsf"])   # llms-full.txt lists every OpenAPI path, so it names the (null) endpoint
 finally:
     p.terminate(); p.wait(10)
@@ -100,8 +100,8 @@ try:
     check("present: the same combined_sha256 on /prompts/join (no client, claude, muse) and MCP", all(x["combined_sha256"] == H for x in (d["join"], d["claude"], d["muse"], d["mcp"])))
     btn = f'<button type="button" data-phash="{H}" title="Combined prompt sha256 {H}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{H[:12]}</code></span></button>'
     sm = d["start"][d["start"].index("<main"):d["start"].index("</main>")]
-    check("present: /start and the Join dialog show the combined button once, after the template button, before Verify",
-          sm.count(btn) == 1 and d["frag"].count(btn) == 1 and sm.index(f'data-phash="{TS}"') < sm.index(btn) < sm.index('href="/about#prompt-hash"'))
+    check("present: /start shows the combined button once, after the template button, before Verify",
+          sm.count(btn) == 1 and sm.index(f'data-phash="{TS}"') < sm.index(btn) < sm.index('href="/about#prompt-hash"'))
     check("present: /about#prompt-hash has the combined paragraph with the hash and verify command", 'id="combined-hash"' in d["about"] and H in d["about"] and "prompts/combined | jq -j .text | sha256sum" in d["about"])
     check("present: llms.txt and llms-full.txt carry Combined prompt sha256 after the template hash",
           all(("Template sha256: " + TS) in x and ("Combined prompt sha256: " + H) in x and x.index(TS) < x.index(H) for x in (d["llms"], d["llmsf"])))
@@ -115,8 +115,8 @@ if os.path.exists(CB.SLOT):
         d = surfaces(base); c = json.loads(d["comb"][1])
         check("shipped: /api/v1/prompts/combined available, text 9,572 characters, combined_sha256 b534abc8, same on /prompts/join, claude and MCP",
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
-        check("shipped: /start and the Join dialog carry the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
-              f'data-phash="{SHIPPED}"' in d["start"] and f'data-phash="{SHIPPED}"' in d["frag"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
+        check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
+              f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
               and d["join"]["template_sha256"] == TS and S.variant_sha256("chat-browse").startswith("0e8281f4") and S.variant_sha256("connector").startswith("c323d1f2"))
     finally:
         p.terminate(); p.wait(10)

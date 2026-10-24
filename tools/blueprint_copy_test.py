@@ -16,7 +16,7 @@ db.init()
 a = "poa1" + "x" * 40
 writes = [PR.answer_epoch(), PR.answer_epoch(3), PR.GRADE, PR.addr_send(a)]
 check("WATCH: /me before the first write, address and next_nonce, fail closed, stop on a moved nonce, critical notice stop",
-      all(s in PR.WATCH for s in ("Before your first write this visit", "/api/hosted/me?key=MY_KEY", "next_nonce", "No answer: don't write.",
+      all(s in PR.WATCH for s in ("Before your first write this visit", "/api/hosted/me?key=SAVED_KEY", "next_nonce", "No answer: don't write.",
                                   "stop all writes and tell me", "https://minepoa.com/api/notices", "critical notice")))
 check("WATCH on every write prompt, before the key rules", all(PR.WATCH + PR.SAFE in p for _, p in writes))
 reads = [PR.TXS, PR.NETWORK, PR.GROWTH, PR.BURN, PR.SPENDABLE, PR.FIND, PR.API, PR.MCP, PR.explain_epoch(1), PR.explain_tx("0" * 64), PR.swap_status("0" * 64)]
@@ -25,7 +25,7 @@ check("UPGRADE: critical notice means stop", "If one is critical, stop and tell 
 check("BACKOFF: /me no answer means no write", "If /me doesn't answer either, don't write; try later." in PR.BACKOFF[1])
 _, sp = PR.swap_status("0" * 64)
 check("swap status prompt: pending_receipt is held, not paid; lag is not failure; still no fee, key or referral",
-      "pending_receipt means held, not paid" in sp and "lag is not failure" in sp and "fee" not in sp.lower() and "MY_KEY" not in sp and "referral" not in sp.lower())
+      "pending_receipt means held, not paid" in sp and "lag is not failure" in sp and "fee" not in sp.lower() and "SAVED_KEY" not in sp and "referral" not in sp.lower())
 allp = [p for _, p in writes + reads + [PR.UPGRADE, PR.BACKOFF, PR.GRADE_BETTER, PR.CLIMB, PR.LABLEAK]]
 check("every prompt: no dashes, under 4000 characters", all(nodash(p) and len(p) < 4000 for p in allp))
 qa = dict((q, x) for q, x in F.PAGE["qa"] if isinstance(x, str))
@@ -50,7 +50,7 @@ tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]
 check("OpenAPI swaps status: pending_receipt is held, not paid", len(_sp) == 1 and "pending_receipt is held, not paid" in str(_sp[0]))
-check("SAFE: X-Api-Key header preferred on /me, key= only as fallback, token= per go.md", "X-Api-Key header (/api/hosted/me does), send MY_KEY there instead of in the link; use key= only if that fails." in PR.SAFE
+check("SAFE: X-Api-Key header preferred on /me, key= only as fallback, token= per go.md", "X-Api-Key header (/api/hosted/me does), send SAVED_KEY there instead of in the link; use key= only if that fails." in PR.SAFE
       and "go.md now calls key= legacy" in PR.SAFE and "token=" in PR.SAFE)
 check("llms.txt Safety: key shapes, token=AUTH_TOKEN main, key= legacy, header preferred", "PoA keys (pk_ or GUID)" in safety and "token=AUTH_TOKEN is the main one and key= is legacy" in safety
       and "X-Api-Key header" in safety and "pk_/psk_" not in ll)

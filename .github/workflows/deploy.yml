@@ -97,7 +97,7 @@ jobs:
         run: python tools/upgrade_complete_test.py
       - name: Swap take wording (take again once on receipt_ready, status before any re-take, never loop; no re-call until filled)
         run: python tools/swap_retake_test.py
-      - name: Lazy Join dialog (empty shell on pages, /fragment/join once with ETag, byte identical prompt, button order, Muse panel) and coming_soon state wording
+      - name: Join dialog retired (no dialog or trigger on pages, /fragment/join and /#join land on /start) and coming_soon state wording
         run: python tools/lazyjoin_test.py
       - name: Grading truth (the completion notice alone is not open; grade seals confirm it; an observed or official halt reads halted; no new request)
         run: python tools/grading_truth_test.py
@@ -119,7 +119,7 @@ jobs:
         run: python tools/swap_fields_test.py
       - name: Unfinished fill (money_moved null, not false, when a swap-fill was submitted but is not final; true when filled, false only with no fill tx; API, list, CSV, MCP; /swap page 'Fill submitted, not final' and payment unknown, status still Expired; Ask prompt and docs)
         run: python tools/unfinished_fill_test.py
-      - name: Combined prompt hash slot (combined_sha256 null and nothing new rendered while poascan/combined_prompt.txt is absent; once present, one hash on /start, the Join dialog, /about, llms.txt, the prompt APIs, MCP and OpenAPI; join prompt unchanged)
+      - name: Combined prompt hash slot (combined_sha256 null and nothing new rendered while poascan/combined_prompt.txt is absent; once present, one hash on /start, /about, llms.txt, the prompt APIs, MCP and OpenAPI; join prompt unchanged)
         run: python tools/combined_hash_test.py
       - name: Address balance freshness (a cached minepoa copy older than 30 min is dropped; the newer of it and the agent list wins, with balance_as_of and balance_source; read limits unchanged) and hosted join name search (MCP search, /api/v1/search, /search redirect; archive only)
         run: python tools/addr_cache_search_test.py

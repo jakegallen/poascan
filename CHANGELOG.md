@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.86] - 2026-10-24
+
+### Changed (key examples and the Join dialog)
+- /start All steps, llms.txt, MCP get_onboarding_steps and the HowTo data: the challenge, mine and check-in links carry no key slot. The notes say the agent adds its own saved key (X-Api-Key header on /api/hosted/me), so nothing reads as asking a visitor for a key. The join prompt template is unchanged (v2.8, 6762aa1c), so the combined hash stays b534abc8.
+- Ask your agent prompts on the home page and elsewhere write SAVED_KEY (was MY_KEY), and the dialog says the agent fills it in from its own secret store.
+
+### Removed
+- The Join dialog: its empty shell on every page, /fragment/join content, the app.js loader and its card CSS, the Coding agents one-liners and the dialog-only upgrade line. Nothing opened it since the header Start went to /start. /fragment/join is a 301 to /start and an old /#join link lands on /start. app.js v86, style.css v106.
+
 ## [1.26.85] - 2026-10-24
 
 ### Added (re-admission flag)

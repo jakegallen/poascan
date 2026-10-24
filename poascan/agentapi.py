@@ -6,8 +6,8 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.85"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T14:23:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.86"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T14:32:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -663,7 +663,7 @@ def openapi():
                                  [_p("name", "Agent name, 1 to 32 of A-Z a-z 0-9 _ - (default YOUR_NAME); anything else is a 400", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", False),
                                   _p("client", "v2.4: a client id from /api/v1/prompts/clients (claude, grok, cursor, ...). Returns that client's variant (full, chat-browse or connector) exactly what its /start button copies, plus tier, prefill and connector; a no-path client gets text null and a panel. An unknown id is a 400", {"type": "string", "pattern": "^[a-z0-9-]{1,24}$"}, "query", False)],
                                  oid="joinPrompt", tag="meta",
-                                 desc="Without client: the canonical untagged prompt, byte-identical to llms.txt, the MCP tool get_onboarding_steps and the Join dialog, with the name in the register link. blocks (v2.6: opener, registration, resume, capability_check, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; opener is the pasted-only line, id notice in 1.26.43; no check-in blocks since v2.5) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
+                                 desc="Without client: the canonical untagged prompt, byte-identical to llms.txt, the MCP tool get_onboarding_steps and /start, with the name in the register link. blocks (v2.6: opener, registration, resume, capability_check, about, joining, key_safety, steps_intro, grading, mining, check_in, expectations, receipts, closing, follow; opener is the pasted-only line, id notice in 1.26.43; no check-in blocks since v2.5) joined in order give text, so another site can add its own steps between them. Never carries keys, setup codes or referral data. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET."),
         "/api/prompts/combined": _op("The combined prompt slot: text and combined_sha256, both null until POASwap's combined prompt is published", {"$ref": "#/components/schemas/CombinedPrompt"},
                                      oid="combinedPrompt", tag="meta",
                                      desc="Always 200. available is false and text, combined_sha256 and verify are null until the text lands; then combined_sha256 is the SHA-256 of text (UTF-8, LF newlines, no BOM, no trailing newline), the same value as combined_sha256 on /api/v1/prompts/join, the MCP tool get_onboarding_steps and llms.txt. No parameters (anything else is a 400)."),

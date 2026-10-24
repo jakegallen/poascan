@@ -9,7 +9,7 @@ Those prompts asked an agent, optionally, to open two keyless URLs on poascan.io
                                                     the agent's random test word: checked for shape, never stored. The
                                                     probe proves the client opened a link it built itself.
 <client> is the tag a /start copy button adds (onboarding_prompt.tagged); without it the check-in is "none" (the canonical
-text from the API, MCP, llms.txt or the Join modal). Strict allowlist: a known version, a known client id, the step, and for
+text from the API, MCP, llms.txt). Strict allowlist: a known version, a known client id, the step, and for
 joined exactly one addr parameter matching ADDR_RX. Anything else is a 400 and nothing is stored or counted; key-shaped input
 never gets here (server.key_guard answers 400 first). Server logs show /j/[check-in] only, never the path or query.
 
@@ -122,7 +122,7 @@ DEFINITIONS = {
     "unmatched": "joined check-ins with no join tx for the address in POAScan's archive (indexer lag, or a wrong address)",
     "join_rate": "joined / started", "answer_rate": "answered_6h / joined", "mine_rate": "mined_6h / joined",
     "success_rate": "answered_6h / started: a started signup that joined and answered within window_s",
-    "client": "the /start tag (claude, muse, ...), poaswap when POASwap tags the API text, none for untagged text (API, MCP, llms.txt, Join modal)",
+    "client": "the /start tag (claude, muse, ...), poaswap when POASwap tags the API text, none for untagged text (API, MCP, llms.txt)",
     "rate_429": "rate check-ins (/j/<version>[/<client>]/rate?route=...) on UTC days from..to: an agent reporting a 429, from v2.3.1",
     "rate_429_by_route": "rate_429 split by route (register, challenge, answer, mine, me)",
     "baseline": "every on-chain join tx in the range by UTC day, next to joins matched to a check-in, so share_tagged is the share that came through a POAScan prompt"}

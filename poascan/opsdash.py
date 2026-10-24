@@ -119,7 +119,7 @@ def _dist(xs):
 
 def setup_signals(vs):
     """1.26.44: intent signals that survive without check-ins (prompt v2.5 and later): copies of the join prompt from /start
-    and the Join dialog, Join dialog opens, /api/v1/prompts/join fetches by client and MCP get_onboarding_steps calls.
+    (and the Join dialog until 1.26.86), Join dialog opens (until 1.26.86), /api/v1/prompts/join fetches by client and MCP get_onboarding_steps calls.
     Daily counts from visits.py only (no IP, user agent, name or address). They show someone took the prompt, not a join."""
     days, by_c = [], {}
     tot = dict(prompt_copies=dict(start=0, join=0), join_opens=0, prompt_fetches=0, mcp_onboarding_calls=0)
@@ -252,8 +252,8 @@ DEFINITIONS = {
     "onchain.network.txs_total": "Archived txs with a ledger time in the range.",
     "onchain.network.txs_by_type": "The same split by tx type.",
     "offchain.setup_signals": "Intent signals, not joins: someone took the join prompt. Daily counts only, from POAScan's own aggregate counters; no IP, user agent, name or address. Since prompt v2.5 has no check-ins, these and onchain.network.chain_joins are what is left to watch.",
-    "offchain.setup_signals.prompt_copies": "Copy and open clicks on the join prompt by card: start (/start step 3 and View prompt) and join (the Join dialog). Human browsers only. A copy is not a signup.",
-    "offchain.setup_signals.join_opens": "Join dialog opens by human browsers. Intent only.",
+    "offchain.setup_signals.prompt_copies": "Copy and open clicks on the join prompt by card: start (/start step 3 and View prompt) and join (the Join dialog, retired in 1.26.86). Human browsers only. A copy is not a signup.",
+    "offchain.setup_signals.join_opens": "Join dialog opens by human browsers. Intent only. The dialog was retired in 1.26.86, so 0 after.",
     "offchain.setup_signals.prompt_fetches_by_client": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant asked for (an app id from /api/v1/prompts/clients, none without one, other for anything else). The client is the variant, not the site that fetched it, with one exception: poaswap is POASwap's own server fetch (about every 10 minutes), not a visitor, and gets the plain default text. Responses are cacheable for 10 minutes, so this counts fetches, not people or joins.",
     "offchain.setup_signals.mcp_onboarding_calls": "MCP get_onboarding_steps calls. An agent or app asked for the steps; not a join.",
     "offchain.funnel.started": "Start check-ins from the prompt, by version and client (v2.3 to v2.4 only; v2.5 and later have no check-ins, so this flattens).",

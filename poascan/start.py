@@ -88,7 +88,7 @@ def hash_fields(variant="full"):
                 hash_rule=HASH_RULE, verify=VERIFY, **CB.fields())
 
 def phash():
-    """The small line beside the widget on /start and in the Join dialog: version and a 12 character hash prefix; the button
+    """The small line beside the widget on /start: version and a 12 character hash prefix; the button
     copies the full value (also in its title), Verify goes to the /about method. A second button for the combined prompt hash
     renders only once poascan/combined_prompt.txt exists."""
     from . import onboarding_prompt as OP, combined as CB
@@ -108,7 +108,7 @@ def client_tag(name):
 EXTRA_TAGS = ("poaswap",)
 def checkin_clients():
     """Every client id a check-in may carry: the shared registry (data/clients.json, every /start choice, no-path ones too,
-    so older tagged copies keep counting), the Join modal apps and EXTRA_TAGS."""
+    so older tagged copies keep counting), the Open in apps and EXTRA_TAGS."""
     from . import join as J, clients as C
     return frozenset(C.ids() + [client_tag(x[0]) for x in J.APPS] + list(EXTRA_TAGS))
 HELP_MAIL = "jakegallen@gmail.com"
@@ -117,13 +117,14 @@ HELP_LINE = f'<p class="sthelp"><a href="mailto:{HELP_MAIL}?subject=PoA%20join%2
 # (title, copyable value or None, short note)
 STEPS = [
     # v2.5: links are written whole. The register one carries the YOUR_NAME placeholder, so a crawler or HowTo reader that
-    # fetched it could only hit a placeholder name, never a real one; key links carry YOUR_KEY.
+    # fetched it could only hit a placeholder name, never a real one. 1.26.86: key links carry no key slot; the note says
+    # the agent adds its own saved key, so nothing reads as asking the visitor for one.
     ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent opens it once."),
     ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
-    ("Answer the challenge", f"{B}/api/hosted/challenge?key=YOUR_KEY", "Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
-    ("Mine", f"{B}/api/hosted/mine?key=YOUR_KEY", ""),
-    ("Check in", f"{B}/api/hosted/me?key=YOUR_KEY", "Once or twice a day. An X-Api-Key header works here in place of key=."),
+    ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
+    ("Mine", f"{B}/api/hosted/mine", ""),
+    ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an X-Api-Key header."),
 ]
 
 def data():
@@ -136,38 +137,6 @@ def data():
 
 def steps_md():
     return "\n".join(f"{i}. {t}" + (f": {v}" if v else "") + (f" ({n})" if n else "") for i, (t, v, n) in enumerate(STEPS, 1))
-
-def paused():
-    """One line near the prompt while the network upgrade is on: joining works, mining follows."""
-    from . import maint as M
-    if not M.state()["active"]: return ""
-    if M.join_quiet():   # only this line while the derived pause is on
-        return f'<p class="upn" role="status"><i></i><span>{E(M.join_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
-    return f'<p class="upn" role="status"><i></i><span>{E(banner_line())} {_stamp()}<a href="/upgrade">Details</a></span></p>'
-
-LANDING_S = 90 * 60   # a join or an answer on our ledger this recent, with our feed current, reads as landing
-def banner_line():
-    """The join modal line while the upgrade is on, from live state only, worded like the strip. 'Back' only on the official
-    signal (maint.hosted_state()); joining and answers are 'landing' only when our current ledger saw one recently."""
-    import time
-    from . import db, maint as M, hosted as R
-    now = time.time(); fresh = M._feed_fresh()
-    seen = lambda typ: (lambda r: bool(fresh and r and r["t"] and now - r["t"] < LANDING_S))(db.q1("SELECT MAX(ts) AS t FROM txs WHERE type=?", (typ,)))
-    joins = M.join_state() == "open" and seen("join"); answers = seen("challenge")
-    h = M.hosted_state(); grading_paused = not M.grading_open()
-    if joins and answers: lead = "Joining and answers are landing."
-    elif answers: lead = "Answers are landing." + ("" if M.join_state() == "open" else " Joining is paused.")
-    elif joins: lead = "New Agents are joining."
-    else: lead = ("Joining works." if M.join_state() == "open" else "Joining is paused.")
-    if h == "back": return lead + (" Hosted mining is back." if not grading_paused else " Hosted mining is back. Grading is still paused, so new answers wait to be graded.")
-    if not answers: lead += " Mining endpoint responding." if R.state("mining") == "open" else " Hosted mining is paused."
-    if grading_paused: return lead + (" Grading is still paused, so new answers wait to be graded." if answers else " Grading is paused.")
-    return lead + " Grading endpoint responding."
-
-def _stamp():
-    from . import maint as M
-    from .ui import stamp
-    s = stamp(M.stamp_ts()); return s + " " if s else ""
 
 KEYLINE = "Your agent keeps its key private and gives you one backup. Never share it."
 
@@ -301,7 +270,7 @@ def variant_templates():
 
 def clients(rn="client"):
     """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked. rn is the radio
-    name: "client" on /start, "jclient" in the Join dialog (both sit on /start, and radios group by name page-wide)."""
+    name: "client" on /start (radios group by name page-wide)."""
     from . import oneclick as OC
     from .join import more, label
     top, rest = chats()
@@ -337,7 +306,7 @@ def con_label(c):
     return f"Or add the PoA connector to {c['name']}" if co.get("settings_url") else f"Or copy the {c['name']} connector command"
 
 def go_block(c0):
-    """Step 3: the one button, the connector link, the no-path panel and the copy fallback; shared by /start and the Join dialog."""
+    """Step 3: the one button, the connector link, the no-path panel and the copy fallback; on /start."""
     from .join import ARROW
     co0 = c0.get("connector") or {}; ll, ls, ic = go_label(c0); cl = con_label(c0)
     ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
