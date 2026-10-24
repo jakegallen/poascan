@@ -509,7 +509,7 @@ import json, sys, time
 from poascan import analytics as A, maint as M
 def fresh(): A._cache.clear(); return A.freshness()
 out = dict(up=fresh()["state"])
-h0 = A.health; A.health = lambda: dict(h0(), live_last_ok=time.time() - 3600); out["stale"] = fresh()["state"]; A.health = h0
+h0 = A.health; A.health = lambda: dict(h0(), live_last_ok=time.time() - 3600, endpoints=[]); out["stale"] = fresh()["state"]; A.health = h0
 s0 = A.status; A.status = lambda: dict(s0(), checkpoint_height=M.PARKED + 1); out["moved"] = fresh()["state"]; out["cleared"] = M.state()["cleared_by"]
 from poascan import db, hosted as R
 db.put_blob("notices", {"active": [{"id": M.NOTICE_ID, "expires_ts": time.time() + 3600}]})

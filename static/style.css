@@ -1229,3 +1229,8 @@ code.brk{overflow-wrap:anywhere}
 .cutnote{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 14px;font-size:13px;color:var(--steel)}
 .cutnote a{white-space:nowrap}
 .ephd .segt{vertical-align:middle;margin-right:6px;text-decoration:none}
+/* Network > Overview cards: rows size to their own content (no cross-row 1fr stretch); long values clip with a title */
+.stats.netov{grid-auto-rows:auto}
+.netov .sv .clip{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.netov .sv .na{color:var(--dim)}
+.netov .sv .ver{display:block;font-size:.68em;line-height:1.25;overflow-wrap:anywhere}

@@ -11,6 +11,22 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.94] - 2026-10-24
+
+### Fixed
+- Network > Overview cards are compact again. The Signers card showed the whole genesis import anchor memo (it has no `:sigs` part), which made one card very tall, and equal row heights stretched every card to match. Signers now counts only checkpoint anchors (`sigsN`, shown as N with a title), long values clip or wrap inside their card, and the overview rows size to their own content.
+- Closes counts the live network's closes (minepoa.com /api/status `epochs_closed`, or /api/networks) when POAScan's close records for the segment are not listed yet. Epoch cadence shows `-` until the segment has 2 closes.
+- Version shows `None yet` (with the node's note as the title) while the ledger has no release manifest, in place of `···`.
+- Anchoring wallets skip anchors without a signer address (the genesis import anchor).
+- Indexer: a failing tx feed read (/api/explorer/txs answered 401 and 404) no longer skips the /api/status and /api/networks reads in the same job. Chain height, finalized height and finality lag had stopped at the last good read. The tx feed backs off on its own.
+- Freshness pill: Live when any read of the live network (tx feed, status or networks) is under 5 minutes old; Health says when the tx feed read is failing. Finality moved compares checkpoints within the current segment only.
+
+### Added
+- Finality lag is flagged Behind at 2,000 blocks or more (segment 2 anchors every 400 to 700 blocks).
+
+### Tests
+- tools/netoverview_test.py (in CI): compact grid, live segment values, Closes fallback, cadence dash, Signers, Version fallback, freshness and the live job. tools/smoke_test.py: the Stale case now fails every live read.
+
 ## [1.26.93] - 2026-10-24
 
 ### Added

@@ -481,6 +481,8 @@ def health():
 LIVE_S = 300            # our own last good read of the live feed
 LAG_NODE_S = 600        # minepoa's node snapshot flagged stale and at least this old
 LAG_CP_S = 6 * 3600     # checkpoint height unchanged this long
+LAG_BLOCKS = 2000       # finality lag (blocks) flagged on Network > Overview; segment 2 anchors every 400 to 700 blocks
+FEED_LIVE = ("/api/explorer/txs", "/api/status", "/api/networks")   # any fresh read of the live network counts as live
 
 def _ts(iso):
     try: return int(dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp())
@@ -492,14 +494,18 @@ def cp_moved():
     cur = status().get("checkpoint_height")
     if not cur: return None
     since = int(time.time()) - 3 * 86400; ex = "CAST(json_extract(json, '$.checkpoint_height') AS INTEGER)"
-    r = db.q1(f"SELECT MAX(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {ex} IS NOT NULL AND {ex} != ?", (since, int(cur)))
-    r = db.q1(f"SELECT MIN(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {ex} = ?", (r["t"] or since, int(cur)))
+    sg = f"COALESCE(CAST(json_extract(json, '$.segment') AS INTEGER), 1) = {int(S.CURRENT)}"   # current segment only (heights restart at a cut)
+    r = db.q1(f"SELECT MAX(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {sg} AND {ex} IS NOT NULL AND {ex} != ?", (since, int(cur)))
+    r = db.q1(f"SELECT MIN(ts) AS t FROM snaps WHERE kind='status' AND ts > ? AND {sg} AND {ex} = ?", (r["t"] or since, int(cur)))
     return r["t"]
 
 @cached("freshness", 15)
 def freshness():
     """live: our live fetch is current. lag: it is, but minepoa's node is stale or its checkpoint stalled. stale: our fetch failed."""
-    now = time.time(); st = status(); live = health().get("live_last_ok")
+    now = time.time(); st = status(); h = health(); tx_live = h.get("live_last_ok")
+    # 1.26.94: live when any read of the live network (tx feed, status, networks) is fresh, not the tx feed alone
+    live = max([r["last_ok"] for r in h.get("endpoints") or [] if r.get("endpoint") in FEED_LIVE and r.get("last_ok")] + [tx_live or 0]) or None
+    tx_down = bool(live and now - live <= LIVE_S and (not tx_live or now - tx_live > LIVE_S))
     node_t = _ts(st.get("as_of")); node_age = int(now - node_t) if node_t else None
     node_lag = bool(st.get("stale")) and (node_age or 0) >= LAG_NODE_S
     moved = cp_moved(); cp_age = int(now - moved) if moved else None
@@ -510,10 +516,10 @@ def freshness():
     elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
     elif up: state, why = "up", ("Network upgrade: " + M.state()["headline"]) if M.recovery()["moved"] else "Network upgrade: hosted mining paused, finalized height parked on purpose"
     elif cp_lag: state, why = "lag", f"Finalized height unchanged {cp_age // 3600}h"
-    else: state, why = "live", "Live"
+    else: state, why = "live", "Live" + (": tx feed read failing, status current" if tx_down else "")
     return dict(state=state, label={"live": "Live", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
                 href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
-                fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up)
+                fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up, tx_feed_down=tx_down)
 
 def anchors_latest(n=20, segment=None):
     """Newest anchors first, current segment first (heights restart at a genesis cut); segment= keeps one segment."""
@@ -525,7 +531,8 @@ def anchor_summary():
     sg = S.selected()
     r = db.q1("SELECT COUNT(DISTINCT height) AS heights, COUNT(*) AS n, MAX(height) AS top, MAX(anchored_at) AS last, MIN(anchored_at) AS first FROM anchors WHERE segment=?", (sg,))
     r["signers"] = db.q("SELECT DISTINCT chain, anchored_by FROM anchors WHERE segment=?", (sg,))
-    r["sigs"] = db.q("SELECT substr(memo, instr(memo,':sigs')+1) AS s, COUNT(*) AS n FROM anchors WHERE segment=? GROUP BY s", (sg,))
+    # only checkpoint anchors carry ":sigsN"; the genesis import anchor's memo has none (it showed the whole memo)
+    r["sigs"] = db.q("SELECT substr(memo, instr(memo,':sigs')+1) AS s, COUNT(*) AS n FROM anchors WHERE segment=? AND instr(memo,':sigs')>0 GROUP BY s", (sg,))
     r["segment"] = sg
     return r
 

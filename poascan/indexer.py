@@ -400,7 +400,12 @@ def job_live():
     # Each read stands alone: a slow /api/networks must not hold back the tx feed that drives the Live pill.
     # /api/status is read here once per STATUS_S (STATUS_DEGRADED_S while degraded) and shared: every feature reads
     # the stored copy (db blob "status"), never minepoa.com.
-    live_txs()
+    # 1.26.94: a failing tx feed read (it 401/404ed after the genesis cut) no longer skips the status and networks reads,
+    # which froze chain height, checkpoint and finality lag at the last good read.
+    if can_fetch("/api/explorer/txs"):
+        try: live_txs()
+        except Busy as e: log.warning("/api/explorer/txs: %s", e)
+    else: skip_backoff("/api/explorer/txs")
     now = time.time(); slow = degraded(now)
     for path, fn, every in (("/api/status", _live_status, STATUS_DEGRADED_S if slow else STATUS_S), ("/api/networks", _live_networks, NETWORKS_S)):
         if not can_fetch(path): skip_backoff(path); continue
@@ -798,7 +803,7 @@ EVERY = {"/api/explorer/txs": LIVE_S, "/api/status": STATUS_S, "/api/networks": 
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
-    ("live", job_live, live_every, "/api/explorer/txs"),   # LIVE_S, or LIVE_DEGRADED_S while upstream is degraded
+    ("live", job_live, live_every, None),   # LIVE_S, or LIVE_DEGRADED_S while upstream is degraded; each read backs off on its own
     _SWAP_JOBS[0][:2] + (SWAPS_S,) + _SWAP_JOBS[0][3:],   # swaps: open-offer book, SWAPS_S (60 s)
     ("probe", job_probe, 600, None),
     _SWAP_JOBS[1],   # fx: SOL/ETH USD reference, 15 min

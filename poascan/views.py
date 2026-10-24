@@ -1234,21 +1234,36 @@ def network(tab="", rng="", title=None):
     return network_overview(head)
 
 def network_overview(head):
+    """Network > Overview. Every card reads the live network (current segment): networks/status blobs, this segment's
+    close records and anchors."""
     ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}; p = A.params(); p_t = db.get_blob("params")[1]; st = A.status(); sy = A.sybil(); h = A.health()
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
+    # Closes: our close records for this segment, else the live network's own count (the epoch list can trail a close)
+    closes = max([len(ep)] + [int(x) for x in (st.get("epochs_closed"), nw.get("epochs_closed")) if isinstance(x, (int, float))])
     gaps = [r["gap_s"] for r in ep if r["gap_s"]]
+    cad = f'<span class="num">{sum(gaps)/len(gaps)/3600:.2f}h</span>' if closes >= 2 and gaps else '<span class="na" title="Needs 2 closes in this segment">-</span>'
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc.get("last") else None
-    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"), stat("Finality lag", intc(lag), tip="Blocks between the chain height and the finalized height"),
-                 stat("Epoch cadence", f'<span class="num">{(sum(gaps)/len(gaps)/3600 if gaps else 0):.2f}h</span>'), stat("Closes", intc(len(ep))),
+    sigs = [(x["s"], x["n"]) for x in anc["sigs"] if x.get("s")]
+    sig_v = " · ".join(E(s[4:] if s.startswith("sigs") and s[4:].isdigit() else s) for s, _ in sigs)
+    sig_t = "; ".join(f"{s} on {n} anchors" for s, n in sigs)
+    signers = f'<span class="clip" title="{E("Signatures per checkpoint anchor: " + sig_t)}">{sig_v}</span>' if sigs else '<span class="na">-</span>'
+    cur = rel_.get("current") or {}
+    ver = (f'<span class="mono ver" title="{E(cur["version"])}">{E(cur["version"])}</span>' if cur.get("version")
+           else f'<span class="na" title="{E(rel_.get("note") or "No release manifest on the ledger yet")}">None yet</span>')
+    lag_flag = '<div class="asof amber">Behind</div>' if lag >= A.LAG_BLOCKS else ""
+    lag_card = stat("Finality lag", intc(lag), tip=f"Blocks between the chain height and the finalized height. Flagged at {A.LAG_BLOCKS:,}")
+    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"),
+                 lag_card[:-len("</div>")] + lag_flag + "</div>",
+                 stat("Epoch cadence", cad, tip="Mean time between closes in this segment"), stat("Closes", intc(closes), tip="Epoch closes in this segment"),
                  stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
-                 stat("Signers", " · ".join(E(x["s"]) for x in anc["sigs"]) or "···"), stat("K", intc(p.get("K")), asof=p_t),
-                 stat("Version", f'<span class="mono">{E((rel_.get("current") or {}).get("version","···"))}</span>', asof=rel_t), stat("Releases", intc(len(rel_.get("history",[])))), V2.cp_stat()])
+                 stat("Signers", signers), stat("K", intc(p.get("K")), asof=p_t),
+                 stat("Version", ver, asof=rel_t), stat("Releases", intc(len(rel_.get("history",[])))), V2.cp_stat()])
     g0 = rel_.get("g0") or {}
     dep = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in [
         ("G0", addr_link(g0.get("addr"), names())), ("Powers", ", ".join(E(x) for x in g0.get("powers", [])) or "···"),
         ("Trusted graders", len(p.get("trusted_graders", []))), ("System graders", len(p.get("system_grader_accounts", []))),
         ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
-        ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"]) or "···")])
+        ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"] if x.get("anchored_by")) or "···")])
     from . import signed as _SIG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
     vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
     rtx = lambda x: (f' <a class="mono dim small reltx" href="/tx/{E(x["txid"])}" title="One of {vn[x.get("version")]} signed release txs named {E(x.get("version") or "")}">{E(x["txid"][:8])}</a>'
@@ -1261,7 +1276,7 @@ def network_overview(head):
         ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
         ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
-    body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
+    body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
 <div class="grid2">{card("Latest anchors", al)}{card("Recent", rels)}</div>'''
     return page("Network", head + body, "/network")
 

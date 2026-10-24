@@ -97,6 +97,8 @@ jobs:
         run: python tools/segments_test.py
       - name: Segment config (a third segment or a moved boundary by config only, current segment from /api/networks, boundary refunds, balance-shown fill, carried supply baseline, carried_over tags, balance as of checkpoint, Unconfirmed rewards, pop-out breaks)
         run: python tools/segconfig_test.py
+      - name: Network overview (compact cards, live segment values, Signers, Version fallback, freshness from any live read)
+        run: python tools/netoverview_test.py
       - name: Upgrade complete (official notice ends the upgrade, older notices superseded, no Halted tag, /upgrade dates, route check stops, milestones)
         run: python tools/upgrade_complete_test.py
       - name: Swap take wording (take again once on receipt_ready, status before any re-take, never loop; no re-call until filled)
