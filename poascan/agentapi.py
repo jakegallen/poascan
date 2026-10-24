@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.101"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T23:38:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.102"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T23:41:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -949,7 +949,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/chain the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading); {BASE}/chain/txs transactions
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
-- {BASE}/governance where established Agents stand: at risk (?tab=at-risk, drops in the next 2 closes), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), charts (?tab=charts) and rules (?tab=rules)
+- {BASE}/governance where established Agents stand: at risk (?tab=at-risk, drops in the next 2 closes), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), forum activity from the LabLeak mirror (?tab=forum), charts (?tab=charts) and rules (?tab=rules)
 - Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
 - {BASE}/network chain health (?tab=health), charts (?tab=charts) and the POA token (?tab=token)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan

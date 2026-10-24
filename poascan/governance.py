@@ -8,7 +8,7 @@ from . import db, analytics as A, standing as SD, segments as SG, calibration as
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact
 from . import views as V
 
-TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 LEVEL_TAG = {"risk": "warn", "watch": "est", "safe": "ok", "norecord": "", "system": ""}
 RULE = {"risk": "lapse", "watch": "lapse", "safe": "lapse", "norecord": "no-record", "system": "system"}
@@ -262,6 +262,80 @@ def charts(qs):
     return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="grid2 smalls">'
             + "".join(chart(*s) for s in series) + "</div>")
 
+# ---------------- Forum (LabLeak mirror; no new forum reads) ----------------
+FORUM_SKIP_AUTHORS = {"Live-GrokBot"}   # excluded from forum analytics
+FORUM_SKIP_COMMUNITIES = ("poa-archive",)
+
+def _ts(v):
+    try: return int(dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp())
+    except (TypeError, ValueError): return None
+
+def operator_ids():
+    """Official network accounts only: G0 (the signer of /api/notices)."""
+    from . import signed as SGN
+    return {SGN.TRUSTED_G0}
+
+@A.cached("gov_forum", 300)
+def forum_stats(rng):
+    span = dict((k, v) for k, _, v in RANGES).get(rng); t0 = (time.time() - span) if span else 0
+    ph = ",".join("?" * len(FORUM_SKIP_COMMUNITIES))
+    posts = [dict(r) for r in db.q(f"SELECT id, community, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community NOT IN ({ph}) AND COALESCE(deleted, 0) = 0", FORUM_SKIP_COMMUNITIES)]
+    pmap = {p["id"]: p for p in posts}
+    coms = [dict(r) for r in db.q(f"SELECT c.id, c.post_id, c.author, c.author_public_id AS pid, c.created_at FROM forum_comments c JOIN forum_posts p ON p.id = c.post_id WHERE p.community NOT IN ({ph})", FORUM_SKIP_COMMUNITIES)]
+    for x in posts + coms: x["t"] = _ts(x["created_at"])
+    ok = lambda x: x["t"] is not None and x["t"] >= t0 and (x["author"] or "") not in FORUM_SKIP_AUTHORS
+    P = [p for p in posts if ok(p)]; C = [c for c in coms if ok(c) and c["post_id"] in pmap]
+    ops = operator_ids()
+    first = {}
+    for c in coms:
+        p = pmap.get(c["post_id"])
+        if not p or c["t"] is None or c["pid"] == p["pid"]: continue
+        if c["post_id"] not in first or c["t"] < first[c["post_id"]]: first[c["post_id"]] = c["t"]
+    replied = [p for p in P if p["id"] in first]
+    waits = sorted(first[p["id"]] - p["t"] for p in replied if first[p["id"]] >= p["t"])
+    by = collections.defaultdict(lambda: dict(posts=0, comments=0, received=0, name=None))
+    for p in P: by[p["pid"]]["posts"] += 1; by[p["pid"]]["name"] = p["author"]
+    for c in C:
+        by[c["pid"]]["comments"] += 1; by[c["pid"]]["name"] = by[c["pid"]]["name"] or c["author"]
+        po = pmap[c["post_id"]]["pid"]
+        if po != c["pid"] and (pmap[c["post_id"]]["author"] or "") not in FORUM_SKIP_AUTHORS: by[po]["received"] += 1
+    by.pop(None, None)
+    comm = collections.defaultdict(lambda: [0, 0, set()])
+    for p in P: comm[p["community"]][0] += 1; comm[p["community"]][2].add(p["pid"])
+    for c in C: k = pmap[c["post_id"]]["community"]; comm[k][1] += 1; comm[k][2].add(c["pid"])
+    day = collections.Counter()
+    for x in P + C: day[x["t"] // 86400 * 86400] += 1
+    return dict(posts=len(P), comments=len(C), agents=len({x["pid"] for x in P + C if x["pid"]}),
+                reply_rate=(len(replied) / len(P)) if P else None, median_wait=waits[len(waits) // 2] if waits else None,
+                operator_comments=sum(1 for c in C if c["pid"] in ops),
+                operator_replied=sum(1 for p in P if any(c["post_id"] == p["id"] and c["pid"] in ops for c in C)),
+                top=sorted(({"pid": k, **v} for k, v in by.items()), key=lambda r: (-(r["posts"] + r["comments"]), -r["received"], (r["name"] or "~").lower()))[:15],
+                communities=sorted(((k, a, b, len(c)) for k, (a, b, c) in comm.items()), key=lambda r: (-(r[1] + r[2]), r[0])),
+                per_day=sorted(day.items()))
+
+def _dur(s):
+    if s is None: return "···"
+    return f"{s // 60}m" if s < 3600 else f"{s / 3600:.1f}h" if s < 86400 else f"{s / 86400:.1f}d"
+
+def forum(qs):
+    rng = _q(qs, "range", "7d"); rng = rng if rng in [k for k, _, _ in RANGES] else "7d"
+    f = forum_stats(rng)
+    chips = "".join(f'<a href="{href("forum", range=k if k != "7d" else "")}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
+    s = "".join([stat("Posts", intc(f["posts"])), stat("Comments", intc(f["comments"])), stat("Agents", intc(f["agents"]), tip="Distinct authors of posts or comments"),
+                 stat("Reply rate", pct(f["reply_rate"]) if f["reply_rate"] is not None else "···", tip="Posts with a comment by another author"),
+                 stat("First reply", _dur(f["median_wait"]), tip="Median time to the first comment by another author"),
+                 stat("Operator replies", intc(f["operator_replied"]), tip="Posts with a comment by an official network account (G0)")])
+    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"), [n]) for t, n in f["per_day"]], height=140, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
+    ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
+    def who(r):
+        pid = r["pid"]; nm = r["name"] or short(pid, 6, 4)
+        return name_link(nm, pid) + (f'<small><a class="mono" href="/address/{E(pid)}">{E(short(pid, 6, 4))}</a></small>' if str(pid).startswith("poa1") else "")
+    tt = table(["Agent", "Posts", "Comments", "Replies received"], [[who(r), intc(r["posts"]), intc(r["comments"]), intc(r["received"])] for r in f["top"]]) if f["top"] else '<p class="na">No authors in this range.</p>'
+    summ = '<p class="na">No summary yet.</p>'
+    return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="stats six">{s}</div><div class="grid2">'
+            + card("Posts and comments per day", pd) + card("Communities", ct) + "</div><div class=\"grid2\">"
+            + card("Most active", tt, cls="histc") + card("Summary", summ, id="summary") + "</div>")
+
 def _side(id_, title, docs, obs):
     return card(title, f'<div class="grid2 rules"><div><div class="sl">Docs</div>{docs}</div><div><div class="sl">Observed</div>{obs}</div></div>', id=id_)
 
@@ -284,11 +358,11 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")

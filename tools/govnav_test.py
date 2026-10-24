@@ -50,6 +50,20 @@ def payout_unit():
     finally:
         A.epoch_rows = sv
 
+def forum_unit():
+    """Forum analytics from the mirror: Live-GrokBot left out, reply rate and first reply from other authors, G0 replies."""
+    from poascan import db, governance as GV, signed as SGN
+    db.init(); now = time.time(); iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)); G0 = SGN.TRUSTED_G0
+    db.write("INSERT OR REPLACE INTO forum_posts(id, community, title, author, author_public_id, created_at, comment_count, deleted) VALUES(?,?,?,?,?,?,?,0)",
+             [(9001, "general", "a", "Alpha", "poa1" + "P" * 40, iso(now - 7200), 2), (9002, "general", "b", "Live-GrokBot", "poa1" + "Q" * 40, iso(now - 7000), 0),
+              (9003, "proposals", "c", "Beta", "poa1" + "R" * 40, iso(now - 6000), 0), (9004, "poa-archive", "d", "Alpha", "poa1" + "P" * 40, iso(now - 5000), 0)], many=True)
+    db.write("INSERT OR REPLACE INTO forum_comments(id, post_id, parent_id, author, author_public_id, created_at) VALUES(?,?,?,?,?,?)",
+             [(8001, 9001, None, "agent_14YNP29q", G0, iso(now - 3600)), (8002, 9001, None, "Alpha", "poa1" + "P" * 40, iso(now - 3000))], many=True)
+    f = GV.forum_stats.__wrapped__("7d") if hasattr(GV.forum_stats, "__wrapped__") else GV.forum_stats("7d")
+    check(f"forum: posts {f['posts']}, comments {f['comments']}, reply rate {f['reply_rate']}, first reply {f['median_wait']}, operator {f['operator_replied']}",
+          f["posts"] == 2 and f["comments"] == 2 and f["reply_rate"] == 0.5 and 3500 <= (f["median_wait"] or 0) <= 3700 and f["operator_replied"] == 1
+          and all(r["name"] != "Live-GrokBot" for r in f["top"]) and [c[0] for c in f["communities"]] == ["general", "proposals"])
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
@@ -98,13 +112,13 @@ def live():
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
         tabs = {}
-        for t in ("", "at-risk", "payouts", "graders", "directory", "charts", "rules"):
+        for t in ("", "at-risk", "payouts", "graders", "directory", "forum", "charts", "rules"):
             u = "/governance" + (f"?tab={t}" if t else ""); c, b, _ = get(u); tabs[t] = b
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
         check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Charts", "Rules")))
+              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Forum", "Charts", "Rules")))
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
@@ -119,6 +133,9 @@ def live():
         pa = tabs["payouts"]
         check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
               and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox"' in pa)
+        fo = tabs["forum"]
+        check("Forum: range chips, stat cards, communities, most active, empty summary slot", all(f'>{x}</a>' in fo for x in ("24h", "7d", "30d", "All"))
+              and all(x in fo for x in (">Reply rate<", ">First reply<", ">Operator replies<", "Communities</h2>", "Most active</h2>", 'id="summary"', "No summary yet.")) and "Live-GrokBot" not in fo)
         cs = tabs["charts"]
         check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
@@ -129,11 +146,11 @@ def live():
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
         check("sitemap: /chain, /chain/txs, /network?tab=token, /governance; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
-        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=token)" in ll
+        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)
     finally:
         p.terminate()
 
 if __name__ == "__main__":
-    unit(); fresh(); payout_unit(); live()
+    unit(); fresh(); payout_unit(); forum_unit(); live()
     print(f"{len(FAILS)} failed" if FAILS else "all passed"); sys.exit(1 if FAILS else 0)

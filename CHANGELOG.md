@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.102] - 2026-10-24
+
+### Added
+- Governance > Forum: posts, comments, Agents, reply rate (posts with a comment by another author), median time to first reply and posts with an operator reply (official network account G0), posts and comments per day, communities and the most active Agents, over 24h, 7d, 30d or All. Read from the LabLeak mirror POAScan already keeps; no new forum requests. A summary slot stays empty until a summary is approved.
+- Sitemap and llms.txt list the Forum tab.
+
+### Tests
+- tools/govnav_test.py covers the forum counts, reply rate, first reply, operator replies and the Forum tab.
+
 ## [1.26.101] - 2026-10-24
 
 ### Changed
