@@ -72,6 +72,15 @@ def reconcile():
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")
     tx = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs") or {}
     inv = (db.q1("SELECT COUNT(*) AS n FROM invalid_txs") or {}).get("n")
+    # The node's txs and final counters restart at a recovery checkpoint (seen Oct 23, 2026): when its txs count is the
+    # archive's newest N txs and their final count matches the node's within 1%, both rows read explained with that time.
+    nt, nf, reset = st.get("txs"), st.get("final"), None
+    if nt and nf and (tx.get("n") or 0) > nt:
+        r = db.q1("SELECT ts FROM txs ORDER BY ts DESC LIMIT 1 OFFSET ?", (int(nt) - 1,))
+        f = (db.q1("SELECT SUM(final) AS f FROM txs WHERE ts >= ?", (r["ts"],)) or {}).get("f") or 0 if r and r.get("ts") else None
+        if f is not None and abs(f - nf) <= max(5, nf * 0.01): reset = int(r["ts"])
+    rs_txt = (f"the node's counters restart at a recovery checkpoint: its count matches the archive's txs since "
+              f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(reset))}, and their final count matches within 1%") if reset else None
     anc = db.q1("SELECT MAX(height) AS h FROM anchors") or {}
     pend_rec = len(((E[-1].get("basis") or {}).get("pending") or {})) if E else None
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None
@@ -92,9 +101,11 @@ def reconcile():
         _row("checkpoint", "Checkpoint", anc.get("h"), st.get("checkpoint_height"), "highest anchored height in /api/anchors", (db.get_blob("anchors")[1]), "/api/status checkpoint_height", node_at,
              reason="the checkpoint is ahead of its anchors" if anc.get("h") is not None and st.get("checkpoint_height") and anc["h"] < st["checkpoint_height"] else "an anchor beyond the node's checkpoint"),
         _row("txs", "Txs", tx.get("n"), st.get("txs"), "txs archived", tx_t, "/api/status txs", node_at,
-             reason="the node counts fewer txs than the archive holds; which txs it counts is not published" if (tx.get("n") or 0) > (st.get("txs") or 0) else "txs missed during outages or bursts"),
+             reason=rs_txt or ("the node counts fewer txs than the archive holds; which txs it counts is not published" if (tx.get("n") or 0) > (st.get("txs") or 0) else "txs missed during outages or bursts"),
+             explained=(tx["n"] - nt) if reset else None),
         _row("final", "Final", tx.get("f"), st.get("final"), "archived txs marked final", tx_t, "/api/status final", node_at,
-             reason="moves with Txs; finality is updated only while a tx is still in a feed POAScan reads"),
+             reason=rs_txt or "moves with Txs; finality is updated only while a tx is still in a feed POAScan reads",
+             explained=((tx.get("f") or 0) - nf) if reset else None),
         _row("invalid", "Invalid", inv, st.get("invalid"), "invalid txs seen in /api/txs", (db.get_blob("job:window")[0] or {}).get("ran"), "/api/status invalid", node_at,
              reason="POAScan keeps every invalid tx it has seen; the node figure looks like a current count"),
         _row("pending", "Pending", pend_ours, pend_rec, "Pending panel, carried forward", ep_t, "basis.pending, latest close", ep_t,

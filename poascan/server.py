@@ -238,7 +238,7 @@ VS.BOT_NAMES = AI_BOTS
 from . import prompts as _PR
 VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN); VS.PROMPT_IDS = _PR.ids()
 from . import clients as _CL
-VS.PJOIN_KEYS = frozenset(_CL.ids()) | ST.INTERNAL_CLIENTS | {"none"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
+VS.PJOIN_KEYS = frozenset(_CL.ids()) | ST.INTERNAL_CLIENTS | {"none", "poaswap-server"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
@@ -560,7 +560,7 @@ class H(BaseHTTPRequestHandler):
         return self.send(200, out, "application/json", hd)
     def ops_dashboard(self, path, query):
         """Private aggregate feed for the POAScan tab of POASwap's dashboard (poascan/opsdash.py; gate: ops_gate). At most 31 days,
-        default 7. Only from and to are accepted, once each; any other parameter, blank or not, is a 400. Cached 60 s in memory.
+        default 7. Only from and to are accepted, once each; any other parameter, blank or not, is a 400. Fresh 300 s, then stale while one rebuild runs; prebuilt on a timer.
         From POAScan's own database and memory: no upstream call."""
         qs = urllib.parse.parse_qs(query or "", keep_blank_values=True)
         g = self.ops_gate(path, qs, OI.parse_range)
@@ -568,7 +568,7 @@ class H(BaseHTTPRequestHandler):
         hd, fr, to = g
         if set(qs) - {"from", "to"}:
             return self.send(400, json.dumps({"error": "only from and to are accepted; send the token in the Authorization header"}), "application/json", hd)
-        try: VS.COUNTER.flush(); out = OD.report(fr, to, AG.VERSION)
+        try: out = OD.report(fr, to, AG.VERSION)   # the build flushes the visit counter itself; a cached read takes no write path
         except Exception as e:
             log.error("ops dashboard: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
@@ -732,7 +732,8 @@ class H(BaseHTTPRequestHandler):
                     try: d = ST.api_join(nq[0] if nq else None, cq[0] if cq else None)
                     except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                     body = json.dumps(d, ensure_ascii=False, separators=(",", ":"))
-                    if self.command == "GET": VS.COUNTER.event("pjoin", (cq[0] if cq else "") or "none")   # the client id only, never the name
+                    if self.command == "GET":   # the client id only, never the name; POASwap's own server reads (its User-Agent) are poaswap-server, not visitor fetches
+                        VS.COUNTER.event("pjoin", "poaswap-server" if (self.headers.get("User-Agent") or "").startswith("POASwap") else (cq[0] if cq else "") or "none")
                     return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
                                      {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/prompts/combined":   # combined prompt slot (poascan/combined.py): nulls until the text lands; static, keyless
@@ -858,6 +859,7 @@ def main():
     signal.signal(signal.SIGINT, _term)   # Fly's default stop signal; fly.toml sets SIGTERM, this is the second safeguard
     if os.environ.get("POASCAN_INDEXER", "1") == "1":
         I.start(os.environ.get("POASCAN_SEED_DIR"))
+        if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))
     HUB.start()
     srv = Server((host, port), H)

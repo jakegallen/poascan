@@ -6,8 +6,8 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.81"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T05:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.82"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T05:37:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -365,7 +365,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it first to orient, or to answer 'how big is the network right now'. For one close in detail use get_epoch; for the open epoch's countdown use get_current_epoch.", S(), t_summary),
     ("get_current_epoch", "Current epoch",
      "The open epoch: number, start, estimated close time, seconds to close, reward pool, and answers and graders archived so far. "
-     "graders counts Agents that sent grade-sealed txs since the last close, or since grading reopened when that was inside this epoch (graders_reopened_at; graders_epoch keeps every sealer since the close); it is not the official graders_served (graders_served_last is the close graders_served_last_epoch's); "
+     "graders counts Agents that sent grade-sealed txs since the last close, or since grading reopened when that was inside this epoch (graders_reopened_at; graders_epoch keeps every sealer since the close); graders_served_last is the graders at close graders_served_last_epoch, counted from its grade rows (settled jury seats plus pending grades sealed in that epoch); graders_served_last_official is the close record's graders_served, which undercounts (E12: 16 named, 63 in the rows); "
      "grading_state is open (grade seals landed in POAScan's archive in the last 30 minutes, after the notice that ended the upgrade), unconfirmed (that notice says open, no recent seals yet) or halted; "
      "grading_halted is true while it is halted: an active notice says so (grading_halt_notice is its id) or a live read since the notice saw the grade route halted (grading_basis probe or route); last_seal_at is the newest archived seal since that notice. "
      "Use it to answer 'when does this epoch close' or 'how many answers are in'. Counts come from POAScan's archive and can trail the node by a minute.", S(), t_epoch_now),

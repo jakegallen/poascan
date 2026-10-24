@@ -782,6 +782,8 @@ def _ran(name):
     try: return int((db.get_blob("job:" + name)[0] or {}).get("ran") or 0)
     except Exception: return 0
 
+JOB_RETRY_S = _ei("POASCAN_JOB_RETRY_S", 300, 30)   # 1.26.82: failed hourly reads waited an hour (chains, params, release 2 h old)
+
 def run_forever(stop=None, jobs=None):
     jobs = JOBS if jobs is None else jobs
     t0 = time.time()
@@ -797,14 +799,16 @@ def run_forever(stop=None, jobs=None):
             if now - last.get(name, 0) < every: continue
             if ep and not can_fetch(ep): skip_backoff(ep); continue
             last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
+            ok = False
             try:
-                fn()
+                fn(); ok = True
             except Busy as e:
                 log.warning("job %s busy: %s", name, e)
             except Exception as e:
                 _etags.clear()   # the job may not have stored what it read: the next reads are plain GETs
                 log.exception("job %s failed: %s", name, e)
-            db.put_blob("job:" + name, {"ran": int(time.time())})
+            if ok: db.put_blob("job:" + name, {"ran": int(time.time())})
+            elif every > JOB_RETRY_S: last[name] = now - every + JOB_RETRY_S   # a failed run retries soon (endpoint backoff still applies), not a full interval later
             time.sleep(2)  # spacing between jobs
         time.sleep(5 if len(jobs) > 2 else 1)
 

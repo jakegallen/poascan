@@ -76,6 +76,20 @@ def epochs_raw():
 def epochs_count():
     return len(epochs_raw())
 
+def grade_counts(e, prev_ts=None):
+    """grader -> grades at one close, counted from its grade rows: every settled jury seat plus every pending grade
+    sealed inside this epoch (prev close < ts <= this close). basis.graders_served undercounts (E12: it names 16
+    graders and 79 grades; the rows hold 63 graders and 1,570 grades), so it is kept only as the *_official fields."""
+    b = e.get("basis", {}) or {}; t1 = int(e.get("ts") or 0); c = collections.Counter()
+    for s in b.get("settled") or []:
+        for j in s.get("jury") or []:
+            if j.get("grader"): c[j["grader"]] += 1
+    for v in (b.get("pending") or {}).values():
+        for g in (v.get("grades") or []) if isinstance(v, dict) else []:
+            ts = g.get("ts") if isinstance(g, dict) else None
+            if isinstance(g, dict) and g.get("grader") and isinstance(ts, (int, float)) and (prev_ts is None or ts > prev_ts) and (not t1 or ts <= t1): c[g["grader"]] += 1
+    return c
+
 @cached("epoch_rows", 60)
 def epoch_rows():
     out = []; prev = None; cum = 0.0
@@ -98,11 +112,13 @@ def epoch_rows():
             pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")),
             pending_by_origin=dict(sorted(by_origin.items())),
             settled=len(st), settled_passed=sum(1 for s in st if s.get("passed")),
-            graders=len(b.get("graders_served", {})), grades=sum(b.get("graders_served", {}).values()),
+            graders=len(gc := grade_counts(e, prev)), grades=sum(gc.values()),
+            graders_official=len(b.get("graders_served", {}) or {}), grades_official=sum((b.get("graders_served", {}) or {}).values()),
             slashed=len(b.get("slashed", [])), established=len(b.get("established_after", [])),
             established_removed=len(b.get("established_removed", [])),
             audit_sampled=(b.get("audit") or {}).get("sampled"), audit_slashed=len((b.get("audit") or {}).get("slashed", [])),
             ceiling_capped=len((b.get("final_payout") or {}).get("capped", {})),
+            paid_at_max=sum(1 for v in r if rs and round(v, 6) == round(rs[0], 6)) if r else 0,   # from the rewards row, not final_payout (E12: 152 at the top tier, 210 capped)
             referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {}))))
         prev = t
     return out
@@ -131,8 +147,9 @@ def open_epoch():
     e0 = float(p.get("E0") or 1e9); halv = int(p.get("halving_epochs") or 720)
     pool = e0 / (2 ** (closed // halv))
     answers = db.q1("SELECT COUNT(*) AS n FROM txs WHERE type='challenge' AND ts > ?", (last_close or 0,))["n"] if last_close else None
-    # graders: distinct senders of grade-sealed txs archived since the last close. Not the official count: that is
-    # basis.graders_served, published per close (graders_served_last). Seals still land while grading is halted, so when
+    # graders: distinct senders of grade-sealed txs archived since the last close. graders_served_last is the last
+    # close's count from its grade rows (settled juries plus pending grades in that epoch); basis.graders_served,
+    # which undercounts, is graders_served_last_official. Seals still land while grading is halted, so when
     # the completion notice reopened grading inside this epoch only seals since the notice count (graders_reopened_at);
     # graders_epoch keeps every sealer since the close.
     from . import maint as M
@@ -145,7 +162,7 @@ def open_epoch():
                 period=period, pool=pool, answers=answers, graders=graders,
                 graders_basis="grade-sealed senders since grading reopened" if reopened else "grade-sealed senders since the last close",
                 graders_epoch=graders_epoch, graders_reopened_at=reopened,
-                graders_served_last=rows[-1].get("graders") if rows else None, graders_served_last_epoch=rows[-1]["epoch"] if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
+                graders_served_last=rows[-1].get("graders") if rows else None, graders_served_last_official=rows[-1].get("graders_official") if rows else None, graders_served_last_epoch=rows[-1]["epoch"] if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
                 grading_state=gs["state"], grading_basis=gs["basis"], last_seal_at=gs.get("last_seal_at"),
                 start_estimated=est)
 

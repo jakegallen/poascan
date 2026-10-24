@@ -5,14 +5,19 @@ counters (poascan/opsinternal.py, poascan/indexer.py) and the daily network roll
 
 Read only from POAScan's own database and memory: nothing here calls minepoa.com. Aggregates only: no key, IP, user
 agent, query string, tx id or address leaves this module; addresses are only ever counted. Responses are cached per
-(from, to) in memory for CACHE_TTL seconds.
+(from, to) in memory: fresh for CACHE_TTL seconds, then served stale (up to STALE_MAX) while one background rebuild
+runs, so a request never waits on a build once a copy exists. A timer (start()) prebuilds the default 7 and 31 day
+ranges and every range read in the last hour, every CACHE_TTL seconds (1.26.82: cold builds took 20 to 37 s under CPU
+throttling and once ran past POASwap's timeout).
 
 Sections: traffic, onchain, offchain, service, wallets (always null: POAScan does not create wallets), definitions,
 not_measurable. UTC days; times are unix seconds; rates are 0..1 with 4 decimals, null when the base is 0."""
 import collections, datetime as dt, json, threading, time
 from . import db, visits as VS, checkin as CK, opsinternal as OI, network as NW
 
-CACHE_TTL, CACHE_MAX = 60, 8
+CACHE_TTL, CACHE_MAX = 300, 8
+STALE_MAX = 1800           # a copy older than this is rebuilt inline
+WARM_KEEP = 3600           # ranges read within this long are prebuilt by the timer
 TOP_N = 10                 # top pages, referrers, API routes listed by name; the rest fold into 'other'
 COUNTRY_N = 20
 RETENTION_DAYS = (1, 7, 30)
@@ -69,6 +74,12 @@ def _cohort(lo, hi, now):
         if st == "joined" and lo <= jt < hi: out.append((a["addr"], a["version"], a["client"], int(jt), int(a["ts"])))
     return out
 
+# Which network fields are sums over the requested range and which are one point in time (1.26.82: POASwap labelled
+# txs_total 'Txs 30d' while the archive starts 2026-10-19, so a 30 day range holds nearly every tx ever archived).
+NETWORK_BASIS = {"range": ["chain_joins", "agents_new", "active_agents", "epochs_closed", "epochs_minted", "txs_total", "txs_by_type"],
+                 "point_in_time": ["agents_total", "supply"],
+                 "note": "range fields count only days in [from, to] that are on or after archive_from; point_in_time fields are the newest daily snapshot in the range"}
+
 def onchain(fu, nw, lo, hi):
     by_v, by_c = {}, {}
     for r in fu["rows"]:
@@ -88,7 +99,8 @@ def onchain(fu, nw, lo, hi):
         network=dict(chain_joins=bl["chain_joins"], agents_new=sum(d["agents"]["new"] or 0 for d in days), agents_total=latest and latest["agents"]["total"],
                      active_agents=act, supply=sup, epochs_closed=sum(d["epochs"]["closed"] for d in days),
                      epochs_minted=round(sum(float(d["epochs"]["minted"] or 0) for d in days), 6), txs_total=sum(d["txs"]["total"] for d in days),
-                     txs_by_type=dict(sorted(by_type.items(), key=lambda kv: (-kv[1], kv[0])))),
+                     txs_by_type=dict(sorted(by_type.items(), key=lambda kv: (-kv[1], kv[0]))),
+                     archive_from=(nw.get("snapshot") or {}).get("history_from"), basis=NETWORK_BASIS),
         days=[dict(day=d["day"], chain_joins=d["agents"]["join_txs"], active_agents=d["agents"]["active"], agents_total=d["agents"]["total"],
                    supply=d["supply"], epochs_closed=d["epochs"]["closed"], txs=d["txs"]["total"],
                    tagged_joins=next((b["tagged_joins"] for b in bl["days"] if b["day"] == d["day"]), 0)) for d in days])
@@ -284,7 +296,9 @@ NOT_MEASURABLE = {
     "untagged_signups": "agents that join from POAScan text without a check-in (every v2.5 and later signup) cannot be told apart from other joins; offchain.setup_signals shows intent only",
     "poascan_outside_uptime": "POAScan has no outside monitor of itself; availability is the share of non 5xx responses it served, plus restarts per day",
     "retention_beyond_90_days": "check-in addresses are kept 90 days, so cohorts older than that are gone",
-    "wallets": "POAScan does not create wallets; that data comes from POASwap",
+    "wallets": "Always null: POAScan does not create wallets, so it has no wallet signups to report. Wallet links seen on chain are in /ops/network days[].wallets (solana_new, ethereum_new, totals)",
+    "onchain.network.archive_from": "First UTC day in POAScan's archive (2026-10-19). A range starting earlier counts from here, so a 30 day txs_total is close to all time",
+    "onchain.network.basis": "Which network fields are sums over the range (range) and which are the newest snapshot (point_in_time)",
 }
 
 def _compute(fr, to, version, now):
@@ -298,16 +312,58 @@ def _compute(fr, to, version, now):
     del cohort
     return out
 
+_building = set(); _seen = {}   # keys with a rebuild in flight; key -> last read time
+
+def _build(k, version, now=None):
+    try: VS.COUNTER.flush()
+    except Exception: pass
+    v = json.dumps(_compute(k[0], k[1], version, int(now or time.time())), separators=(",", ":"))
+    with _lock:
+        _cache[k] = (time.time(), v); _cache.move_to_end(k)
+        while len(_cache) > CACHE_MAX: _cache.popitem(last=False)
+    return v
+
+def _rebuild_bg(k, version):
+    def run():
+        try: _build(k, version)
+        except Exception: pass
+        finally:
+            with _lock: _building.discard(k)
+    with _lock:
+        if k in _building: return
+        _building.add(k)
+    threading.Thread(target=run, daemon=True, name="opsdash-build").start()
+
 def report(fr, to, version, now=None):
-    """JSON text for [fr, to], cached per range for CACHE_TTL seconds."""
+    """JSON text for [fr, to]: fresh for CACHE_TTL s, then the stale copy at once while one rebuild runs in the background."""
     k = (fr, to); t = time.time()
     with _lock:
-        hit = _cache.get(k)
-        if hit and t - hit[0] < CACHE_TTL: return hit[1]
-        v = json.dumps(_compute(fr, to, version, int(now or t)), separators=(",", ":"))
-        _cache[k] = (t, v); _cache.move_to_end(k)
-        while len(_cache) > CACHE_MAX: _cache.popitem(last=False)
-        return v
+        _seen[k] = t; hit = _cache.get(k)
+    if hit and t - hit[0] < CACHE_TTL: return hit[1]
+    if hit and t - hit[0] < STALE_MAX:
+        _rebuild_bg(k, version); return hit[1]
+    return _build(k, version, now)
+
+def warm(version, now=None):
+    """Prebuild the default ranges and every range read within WARM_KEEP seconds (the timer calls this)."""
+    t = now or time.time()
+    keys = [OI.parse_range({}, now=t), OI.parse_range({"from": [(dt.datetime.fromtimestamp(t, dt.timezone.utc).date() - dt.timedelta(days=30)).isoformat()]}, now=t)]
+    with _lock:
+        for k in [k for k, ts in _seen.items() if t - ts > WARM_KEEP]: _seen.pop(k, None)
+        keys += [k for k in _seen if k not in keys]
+    for k in keys[:CACHE_MAX]:
+        try: _build(k, version)
+        except Exception: pass
+    return keys[:CACHE_MAX]
+
+def start(version, delay=90):
+    """Timer: first build after delay seconds (the indexer settles first), then every CACHE_TTL seconds."""
+    def loop():
+        time.sleep(delay)
+        while True:
+            t0 = time.time(); warm(version)
+            time.sleep(max(30, CACHE_TTL - 30 - (time.time() - t0)))
+    threading.Thread(target=loop, daemon=True, name="opsdash-warm").start()
 
 def clear_cache():
     with _lock: _cache.clear()

@@ -3,7 +3,7 @@
 * Numbers from a fixture: views, check-in funnel, matched joins next to every chain join, failures, time from the join tx
   to the joined check-in (median, p90), day 1, 7 and 30 retention from the archive, route check p50/p95, 5xx and 404.
 * Privacy: no address, IP, user agent, tx id, key or query string in the response; addresses only as counts.
-* Cached 60 s per range; no upstream request (urllib trapped in the unit run, POA_BASE a counter that must see zero).
+* Fresh 300 s per range, then the stale copy at once while one background rebuild runs (older than 30 min: inline); a timer prebuilds; no upstream request (urllib trapped in the unit run, POA_BASE a counter that must see zero).
 * Auth as /ops/internal: the normal 404 without the token, a wrong one or another scheme; ?token= is the key guard's 400;
   any other parameter (blank too) is a 400; at most 31 days; no-store, noindex, no CORS. Not in public docs or MCP.
 * No em or en dash in the module or the response.
@@ -77,7 +77,7 @@ def unit():
     fixture(db, CK, NOW)
     fr, to = iso(NOW - 6 * D), iso(NOW)
     t0 = time.time(); s = OD.report(fr, to, "9.9.9", now=NOW); ms = (time.time() - t0) * 1000; o = json.loads(s)
-    check(f"top-level shape ({ms:.0f} ms)", set(o) == TOP and o["wallets"] is None and o["version"] == "9.9.9" and o["cache_ttl_s"] == 60 and o["from"] == fr and o["to"] == to)
+    check(f"top-level shape ({ms:.0f} ms)", set(o) == TOP and o["wallets"] is None and o["version"] == "9.9.9" and o["cache_ttl_s"] == 300 and o["from"] == fr and o["to"] == to)
     tr = o["traffic"]
     check(f"traffic: uniques, views by kind, top pages, api, mcp, prompt clicks ({tr['totals']})", tr["totals"]["views"] == {"human": 70, "bot": 9, "agent": 31}
           and tr["days"][0]["uniques"] == 77 and tr["top_pages"]["home"]["human"] == 50 and tr["referrers"] == {"x.com": 12} and tr["devices"] == {"mobile": 40}
@@ -134,9 +134,18 @@ def unit():
     src = open(os.path.join(ROOT, "poascan", "opsdash.py"), encoding="utf-8").read()
     check("no em or en dash in the module or the response", not any(c in raw or c in src for c in DASHES))
     db.write("INSERT INTO txs(id,type,from_addr,ts) VALUES(?,?,?,?)", ("j9", "join", A[6], NOW - H))
-    check("cached: a second read inside 60 s is the same text", OD.report(fr, to, "9.9.9", now=NOW) == s)
-    OD._cache[(fr, to)] = (time.time() - 61, s)
-    check("after 60 s it is recomputed", json.loads(OD.report(fr, to, "9.9.9", now=NOW))["onchain"]["network"]["chain_joins"] == 4)
+    check("cached: a second read inside 300 s is the same text", OD.report(fr, to, "9.9.9", now=NOW) == s)
+    OD._cache[(fr, to)] = (time.time() - 301, s)
+    t0 = time.time(); st = OD.report(fr, to, "9.9.9", now=NOW)
+    check("after 300 s the stale copy is served at once while one rebuild runs", st == s and time.time() - t0 < 0.5)
+    for _ in range(100):
+        if (fr, to) not in OD._building: break
+        time.sleep(0.05)
+    check("the background rebuild lands for the next read", json.loads(OD.report(fr, to, "9.9.9", now=NOW))["onchain"]["network"]["chain_joins"] == 4)
+    OD._cache[(fr, to)] = (time.time() - 1801, s)
+    check("older than 30 min it is rebuilt inline", json.loads(OD.report(fr, to, "9.9.9", now=NOW))["onchain"]["network"]["chain_joins"] == 4)
+    OD.clear_cache(); ks = OD.warm("9.9.9")
+    check("warm prebuilds the default 7 and 31 day ranges and recently read ranges", len(ks) >= 2 and all(k in OD._cache for k in ks) and (fr, to) in ks)
     check(f"no upstream call ({len(calls)})", not calls)
     urllib.request.urlopen = orig
 

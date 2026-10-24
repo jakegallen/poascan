@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.82] - 2026-10-23
+
+### Fixed (accuracy, restarts and feeds)
+- Grader counts come from each close's grade rows (settled jury seats plus pending grades sealed in that epoch). basis.graders_served undercounts (E12: 16 graders and 79 grades named; the rows hold 63 graders and 1,570 grades); it stays as graders_official, grades_official and open_epoch graders_served_last_official. /epochs, the Graders tooltip and /ops/network epochs.grades follow.
+- Max reward on epoch pages counts Agents paid the close's top reward from its rewards row (paid_at_max; E12: 152), not final_payout.capped (210).
+- A failed indexer job is no longer recorded as ran: it retries after 5 min instead of a full interval (chains, params and release were 2 h old after one timeout).
+- The guard treats 30% steal as CPU throttling (was 50%), so a throttled VM is not restarted as hung (43 same image restarts since Oct 22, exit 70, no OOM).
+- /ops/dashboard: fresh 5 min, then the stale copy at once while one background rebuild runs; a timer prebuilds the default 7 and 31 day ranges and recently read ranges; a cached read takes no DB write. onchain.network adds archive_from and basis (range or point in time); wallets is documented as always null.
+- Prompt fetches: POASwap's own server reads of /api/v1/prompts/join count as poaswap-server; /ops/visits setup adds prompt_fetches without them.
+- Reconciliation: the node's txs and final counters restart at a recovery checkpoint; when they match the archive since that time the rows read explained with it.
+- Address Pending table says No panel yet instead of None. tools/accuracy_test.py in CI.
+
 ## [1.26.81] - 2026-10-23
 
 ### Fixed (slow pages and outages under load)

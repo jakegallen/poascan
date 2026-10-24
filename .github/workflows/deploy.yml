@@ -129,6 +129,8 @@ jobs:
         run: python tools/strain_notice_test.py
       - name: Request cost under load (grading state memo per db write, API micro cache with gzip reuse, no health or search caching, plainjson fast path)
         run: python tools/perf_test.py
+      - name: Accuracy and resilience (grader counts from grade rows, Max reward from the rewards row, failed jobs retry soon, node counter restart explained, guard steal threshold)
+        run: python tools/accuracy_test.py
 
   deploy:
     needs: test

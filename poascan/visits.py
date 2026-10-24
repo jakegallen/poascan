@@ -38,7 +38,7 @@ METRICS = {
     "mcp": "MCP tools/call by tool name",
     "client": "bot and agent requests by client family (fixed list)",
     "prompt": "prompt button clicks by fixed id, from POST /ops/e",
-    "pjoin": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant id from the shared registry or start.INTERNAL_CLIENTS (none without one); never the name",
+    "pjoin": "GET /api/v1/prompts/join answered 200 or 304, by the ?client= variant id from the shared registry or start.INTERNAL_CLIENTS (none without one); POASwap's own server reads (User-Agent POASwap) count as poaswap-server; never the name",
     "tag": "human page views by ?ref= campaign tag",
     "device": "human page views by device class",
     "country": "human page views by country (offline DB-IP Lite lookup; IP dropped)",
@@ -393,7 +393,7 @@ def report(frm, to):
                  # 1.26.44: setup intent signals (copies of the join prompt, prompt fetches by client, MCP onboarding
                  # calls). Daily counts only; these say someone took the prompt, not that an Agent joined.
                  setup=dict(prompt_copies=dict(start=cp("start"), join=cp("join")), join_opens=pr.get("join.open", 0),
-                            prompt_fetches_by_client=srt(e.get("pjoin", {})), mcp_onboarding_calls=e.get("mcp", {}).get("get_onboarding_steps", 0)),
+                            prompt_fetches_by_client=srt(e.get("pjoin", {})), prompt_fetches=sum(v for k, v in e.get("pjoin", {}).items() if k != "poaswap-server"), mcp_onboarding_calls=e.get("mcp", {}).get("get_onboarding_steps", 0)),
                  campaigns=srt(e.get("tag", {})), devices=srt(e.get("device", {})), countries=srt(e.get("country", {})),
                  edges=srt(e.get("edge", {})), search=srt(e.get("search", {})),
                  health=dict(not_found=srt(e.get("404", {})), errors=srt(e.get("5xx", {})), response_ms=dict(sorted(ms.items()))))

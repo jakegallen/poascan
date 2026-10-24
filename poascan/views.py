@@ -50,7 +50,7 @@ def graders_tip(o):
     ep = o.get("epoch") or 1; prev = o.get("graders_served_last_epoch") or ep - 1; sv = o.get("graders_served_last"); ro = o.get("graders_reopened_at")
     t = (f"Agents that sealed a grade in epoch {ep}" + (f" since grading reopened at {time.strftime('%H:%M UTC', time.gmtime(ro))}" if ro else f" since the E{prev} close")
          + ", from POAScan's archive" + (f" ({o['graders_epoch']:,} counting seals sent while it was halted)" if ro and o.get("graders_epoch") not in (None, o.get("graders")) else "")
-         + f". The official count comes with the E{ep} close. E{prev} close: " + (f"{sv:,} served" if sv is not None else "unknown")
+         + f". The close count comes with the E{ep} close. E{prev} close: " + (f"{sv:,} graders in its grade rows" if sv is not None else "unknown")
          + (", grading was halted." if ro and sv == 0 else "."))
     if o.get("grading_halted"):
         t += (f" Grading is halted (notice {o.get('grading_halt_notice')}): seals can land on chain but are not settled or credited." if o.get("grading_halt_notice")
@@ -585,7 +585,7 @@ def _pending_table(pd):
     if not pd["answers"]: return ""
     q = pd["quorum"]
     rows = [[f'<a class="mono hash" href="/tx/{E(x["tx"])}" title="{E(x["tx"])}">{E(short(x["tx"], 4, 4))}</a>', f'E{x["since"]}' if x["since"] is not None else "···",
-             (f'<span class="num">{x["panel"]}</span>' if x["has_panel"] else '<span class="dim">None</span>'),
+             (f'<span class="num">{x["panel"]}</span>' if x["has_panel"] else '<span class="dim">No panel yet</span>'),
              f'<span class="num">{x["grades"]}</span> <span class="dim">/ {q}</span>'] for x in pd["answers"]]
     more = f'<p class="cov dim small">{pd["count"] - len(pd["answers"]):,} more in the Standing API</p>' if pd["count"] > len(pd["answers"]) else ""
     return table(["Pending answer", "Since", "Panel", "Grades"], rows, cls="rcpt pend") + more
@@ -789,7 +789,7 @@ def epoch(n):
     # Burned amount and burn share are one fact: the amount is a card, the share is in the header line. Paid Agents is in the header line too.
     s = "".join([stat("Pool", poa(r["pool"]) + X.usd_of(r["pool"])), stat("Minted", poa(r["minted"], mined=True) + X.usd_of(r["minted"])),
                  stat("Burned", f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"])}</span>' + X.usd_of(r["burned"]))]
-                + rew + [stat("Max reward", intc(r["ceiling_capped"]), tip="Agents paid the per-epoch maximum"),
+                + rew + [stat("Max reward", intc(r.get("paid_at_max", 0)), tip="Agents paid this close's top reward, from its rewards row"),
                  stat("Attestations", intc(r["attestations"])), stat("Attesters", intc(r["attesters"])),
                  stat("Slashed", f'<span class="num{" red" if unp > 0 else ""}">{r["slashed"]}</span>', tip="Graders slashed at this close; red when some were not pardoned"),
                  stat("Audit sampled", intc(r["audit_sampled"]), tip="Answers drawn for audit at this close")])
