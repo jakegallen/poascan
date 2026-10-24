@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.75] - 2026-10-23
+
+### Fixed (address balance freshness and hosted join name search)
+- Address balances: a cached minepoa.com copy older than 30 min is dropped. The address page and /api/v1/address/<a> show the newer of the address read and the agent list row, with new fields balance_as_of (unix s) and balance_source (explorer/address or agents). Read limits unchanged.
+- Search finds Agents by hosted join name from the labels table: MCP search, new /api/v1/search?q= (400 unless exactly one q, max 120 characters) and /search (302 to the address page). Exact names first; archive only, no upstream read.
+- tools/addr_cache_search_test.py in CI.
+
 ## [1.26.74] - 2026-10-23
 
 ### Added (combined prompt hash published)
