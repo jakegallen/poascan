@@ -24,6 +24,28 @@ def href(tab, **kw):
     q = ([] if tab == "overview" else [("tab", tab)]) + [(k, v) for k, v in kw.items() if v] + ([("segment", str(SG.selected()))] if SG.archived() else [])
     return "/governance" + ("?" + "&amp;".join(f"{k}={E(v)}" for k, v in q) if q else "")
 
+def segment_standing():
+    """(established set, last challenge_eligible close per address) from the selected segment's own close records only.
+    Governance shows standing fresh at a genesis cut (segment 1 standing stays under Segment 1). Same fold as
+    analytics.established_set: established_after adds, established_removed drops, a grading seat within estab_ttl
+    closes after the last removal counts, plus trusted and system graders."""
+    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
+    pp = A.params(); ttl = int(pp.get("estab_ttl") or 6); tr = SD._trusted()
+    est, seat, removed, le = set(), {}, {}, {}
+    for e in eps:
+        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
+        seated = set(b.get("graders_served", {}) or {}) | {j.get("grader") for x in (b.get("settled") or []) for j in (x.get("jury") or []) if j.get("grader")}
+        for a in seated: seat[a] = n
+        gone = set(b.get("established_removed", []) or [])
+        for a in gone: removed[a] = n
+        est = (est - gone) | set(b.get("established_after", []) or [])
+        for a in b.get("challenge_eligible", []) or []: le[a] = n
+    if eps:
+        last = int(eps[-1].get("epoch", 0))
+        est |= {a for a, n in seat.items() if n > removed.get(a, -1) and n > last - ttl}
+        est |= tr & (set(seat) | est)
+    return est, le
+
 def level_of(left):
     return "risk" if left <= SD.AT_RISK_CLOSES else "watch" if left == SD.AT_RISK_CLOSES + 1 else "safe"
 
@@ -33,9 +55,9 @@ def standing_rows():
     ep = A.epoch_rows(); ttl = int(A.params().get("estab_ttl") or 6)
     if SG.archived(): cur = (ep[-1]["epoch"] + 1) if ep else None
     else: cur = A.open_epoch().get("epoch")
-    le = A.last_eligible(); tr = SD._trusted(); nm = A.forum_names(); last = ep[-1]["epoch"] if ep else None
+    est, le = segment_standing(); tr = SD._trusted(); nm = A.forum_names(); last = ep[-1]["epoch"] if ep else None
     rows = []
-    for a in A.established_set():
+    for a in est:
         L = le.get(a)
         if a in tr: lv, drop, left = "system", None, None
         elif L is None or cur is None: lv, drop, left = "norecord", None, None
@@ -95,7 +117,9 @@ def at_risk(qs):
     chips = f'<a href="{href("at-risk")}#standing" class="chip {"on" if not f else ""}">All</a>' + "".join(
         f'<a href="{href("at-risk", level=k)}#standing" class="chip {"on" if k == f else ""}">{t} <small>{c[k]:,}</small></a>' for k, t in LEVELS if c[k] or k == f)
     foot = f'<p class="cov dim small">Reference E{d["open_epoch"]} · <a href="{href("rules")}#lapse">Rule</a></p>' if d["open_epoch"] is not None else ""
-    top = "" if SG.archived() else V.at_risk_body(qs, href("at-risk"))
+    # One segment (no cut): the two-close list as on the address page first. With a cut, standing starts fresh in each
+    # segment, so the level chips on the one table are the at-risk view.
+    top = "" if SG.has_cut() else V.at_risk_body(qs, href("at-risk"))
     return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows) + foot, cls="histc", id="standing")
 
 def graders(qs):

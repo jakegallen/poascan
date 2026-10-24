@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.97] - 2026-10-24
+
+### Fixed
+- Governance: standing starts fresh in each segment. Established, levels and last cleared closes read only the selected segment's own close records; segment 1 standing stays under Segment 1. With a genesis cut, the At risk tab is the one Standing table with level chips.
+
+### Tests
+- tools/govnav_test.py covers segment-only standing.
+
 ## [1.26.96] - 2026-10-24
 
 ### Changed

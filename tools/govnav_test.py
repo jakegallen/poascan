@@ -23,6 +23,22 @@ def unit():
     check("sitemap routes: new homes in, old list URLs out", all(p in S.STATIC_ROUTES for p in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=rules"))
           and not any(p in S.STATIC_ROUTES for p in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
 
+def fresh():
+    """Standing starts fresh in each segment: only the selected segment's own close records count."""
+    from poascan import governance as GV, analytics as A, standing as SD
+    recs = [{"epoch": 0, "basis": {"established_after": [], "challenge_eligible": ["poa1X"]}},
+            {"epoch": 1, "basis": {"established_after": ["poa1X"], "established_removed": [], "challenge_eligible": ["poa1X", "poa1Y"], "graders_served": {"poa1S": 2}}}]
+    sv = (A.segment_closes, A.params, SD._trusted)
+    try:
+        A.segment_closes = lambda n: recs; A.params = lambda: {"estab_ttl": 6}; SD._trusted = lambda: {"poa1S", "poa1T"}
+        est, le = GV.segment_standing()
+        check(f"segment standing: adds and seats from this segment only, seen system graders, last eligible per close {sorted(est)} {le}",
+              est == {"poa1X", "poa1S"} and le == {"poa1X": 1, "poa1Y": 1})
+        A.segment_closes = lambda n: [{"epoch": 0, "basis": {}}]
+        check("segment standing: a new segment with no entries starts empty", GV.segment_standing()[0] == set())
+    finally:
+        A.segment_closes, A.params, SD._trusted = sv
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
@@ -82,15 +98,13 @@ def live():
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
         gr = tabs["graders"]; check("Graders: the calibration table, sort keeps the tab", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;sort=n"' in gr)
-        cs = tabs["charts"]; print([x for x in ("24h", "7d", "30d", "All") if f">{x}</a>" not in cs], cs.count("class=\"chartbox"))
+        cs = tabs["charts"]
         check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
         ru = tabs["rules"]; check("Rules: anchors for every rule link", all(f'id="{a}"' in ru for a in ("earn", "lapse", "removal", "no-record", "system", "seats", "votes", "carryover")))
         check("Governance segment chips keep the tab", 'href="/governance?tab=at-risk&amp;segment=' in r or "segs" not in r)
         # sitemap and llms.txt
         sm = get("/sitemap.xml")[1]; ll = get("/llms.txt")[1]
-        _i = ll.find("poascan.io/agents/at-risk"); print(ll[max(0, _i - 150):_i + 60] if _i >= 0 else "")
-        print([k for k in ("/chain the open epoch", "/governance where established Agents stand", "(?tab=token)") if k not in ll], [m for m in ("/epochs the", "poascan.io/agents/at-risk") if m in ll])
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
         check("sitemap: /chain, /chain/txs, /network?tab=token, /governance; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
@@ -100,5 +114,5 @@ def live():
         p.terminate()
 
 if __name__ == "__main__":
-    unit(); live()
+    unit(); fresh(); live()
     print(f"{len(FAILS)} failed" if FAILS else "all passed"); sys.exit(1 if FAILS else 0)
