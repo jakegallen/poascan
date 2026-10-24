@@ -67,10 +67,10 @@ db.put_blob("notices", {"active": [{"id": "old", "msg": "grading + challenge-poo
 db.put_blob("hosted_routes", {"routes": {"grading": {"state": "open", "checked": now, "since": now}}})
 from poascan import hosted as R
 real_state = R.state
-R.state = lambda rid: "open" if rid == "grading" else real_state(rid)
+R.state = lambda rid: "open" if rid == "grading" else real_state(rid); M.grading_memo_clear()
 check("payouts: expired notice and grading open: pool payouts working, rewards paying",
       M.pool_payouts() == "live" and "challenge_pool_payouts" in M.working() and "rewards paying" in M.og_desc())
-R.state = lambda rid: "paused" if rid == "grading" else real_state(rid)
+R.state = lambda rid: "paused" if rid == "grading" else real_state(rid); M.grading_memo_clear()   # a patch, not a db write
 check("payouts: no notice but grading paused: pool payouts paused", M.pool_payouts() == "paused" and "challenge_pool_payouts" in M.paused())
 R.state = real_state
 db.put_blob("notices", {"active": [{"id": "x", "msg": "grading + challenge-pool payouts paused", "expires_ts": now + 3600}]})

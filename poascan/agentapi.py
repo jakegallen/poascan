@@ -6,8 +6,8 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.80"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T04:08:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.81"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T05:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -41,10 +41,11 @@ def _maint():
     from . import maint as M
     return M.state()
 
+_JSCI = re.compile(r"[:,\[]\s*-?\d+(?:\.\d+)?[eE][-+]?\d")
 _JTOK = re.compile(r'"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?[eE][-+]?\d+')
 def plainjson(t):
     """Rewrite JSON numbers like 1.059e-05 as 0.00001059. Same value, no scientific notation. Strings are left alone."""
-    if not isinstance(t, str) or not re.search(r"\d[eE][-+]?\d", t): return t
+    if not isinstance(t, str) or not _JSCI.search(t): return t   # a JSON number in e-notation follows : , or [ (hex ids in strings no longer trigger the full pass)
     return _JTOK.sub(lambda m: m.group(0) if m.group(0)[0] == '"' else format(decimal.Decimal(m.group(0)), "f"), t)
 
 META_HEADERS = ["X-API-Version", "X-Source-Height", "X-Checkpoint", "X-Epoch", "X-Fetched-At", "X-Stale"]

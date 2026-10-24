@@ -114,10 +114,12 @@ def _clean(a):
     if isinstance(a, (list, tuple)): return type(a)(_clean(x) for x in a)
     return _KS.redact(a) if isinstance(a, str) else a
 
+GEN = [0]   # bumped on every write; short read memos (maint.grading_state) key on it so a write is seen at once
+
 def write(sql, args=(), many=False):
     args = [_clean(r) for r in args] if many else _clean(args)
     with _wlock:
-        c = conn()
+        GEN[0] += 1; c = conn()
         if many: c.executemany(sql, args)
         else: c.execute(sql, args)
         c.commit()
@@ -125,7 +127,7 @@ def write(sql, args=(), many=False):
 def write_tx(stmts):
     """Several statements in one transaction under the write lock: [(sql, args, many), ...]."""
     with _wlock:
-        c = conn()
+        GEN[0] += 1; c = conn()
         try:
             for sql, args, many in stmts:
                 if many:

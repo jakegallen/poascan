@@ -136,7 +136,21 @@ def _observed_halt(c):
     if g.get("state") == "paused" and (g.get("checked") or 0) >= c["at"]: return "route"
     return None
 
+GRADING_MEMO_S = float(os.environ.get("POASCAN_GRADING_MEMO_S", "20"))   # one page or meta build asks up to ~15 times
+_GMEMO = [0.0, None, -1]   # time, value, db.GEN at compute
+
 def grading_state(now=None):
+    """grading state, memoized when called without now, for GRADING_MEMO_S seconds and until the next db write (1.26.81: two COUNT DISTINCT scans over
+    the grade-sealed rows, blob decodes and the probe read ran up to ~15 times per page, 38% of live CPU)."""
+    if now is not None or GRADING_MEMO_S <= 0: return _grading_state(now)
+    t = time.time(); m = _GMEMO; g = db.GEN[0]
+    if m[1] is not None and m[2] == g and 0 <= t - m[0] < GRADING_MEMO_S: return dict(m[1])
+    d = _grading_state(); m[0], m[1], m[2] = t, d, g
+    return dict(d)
+
+def grading_memo_clear(): _GMEMO[1] = None   # for a state change that is not a db write (tests patch hosted.state)
+
+def _grading_state(now=None):
     """dict(state=open|unconfirmed|halted, basis, ...) with the evidence behind it. Before the completion notice the
     pre-1.26.58 rule stands (open when the grading route answers as open, else halted)."""
     from . import hosted as R

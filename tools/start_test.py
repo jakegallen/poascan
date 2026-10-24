@@ -295,7 +295,7 @@ def banner(fresh=True, join="open", hosted="paused", grading="closed", mining="o
         if joins: cx.execute("INSERT INTO txs(id, type, ts) VALUES('bn1', 'join', ?)", (now - 60,))
         if answers: cx.execute("INSERT INTO txs(id, type, ts) VALUES('bn2', 'challenge', ?)", (now - 60,))
     M._feed_fresh = lambda: fresh; M.join_state = lambda: join; M.hosted_state = lambda: hosted
-    HR.state = lambda rid: {"grading": grading, "mining": mining}.get(rid, "unknown")
+    HR.state = lambda rid: {"grading": grading, "mining": mining}.get(rid, "unknown"); M.grading_memo_clear()   # patches, not db writes
     try: return S.banner_line()
     finally: M._feed_fresh, M.join_state, M.hosted_state, HR.state = _sv
 B = {"landing": banner(), "stale feed": banner(fresh=False), "no answers": banner(answers=False), "answers only, joining paused": banner(join="paused", joins=False),

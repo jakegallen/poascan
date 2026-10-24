@@ -369,15 +369,19 @@ class H(BaseHTTPRequestHandler):
         log.info("%s", m)
     def parse_request(self):
         self._t0 = time.monotonic(); return super().parse_request()
-    def send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
+    @staticmethod
+    def prep(body, ctype):
+        """Text body to bytes: no dashes, plain JSON numbers, no key-shaped token (forum text, memos, errors)."""
+        if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
+        if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
+        if isinstance(body, str): body = KS.redact(body)
+        return body.encode() if isinstance(body, str) else body
+    def send(self, code, body, ctype="text/html; charset=utf-8", extra=None, pre=None):
         try:
             ms = (time.monotonic() - self._t0) * 1000 if getattr(self, "_t0", None) else None
             VS.COUNTER.hit(self.command, code, self.path, self.headers.get("User-Agent"), self.headers.get("Referer"), self.client_ip, ms, self.headers.get("Fly-Region"))
         except Exception: pass   # counting never breaks a response
-        if isinstance(body, str) and ("html" in ctype or "json" in ctype or ctype.startswith("text/")): body = nodash(body)
-        if isinstance(body, str) and "json" in ctype: body = AG.plainjson(body)
-        if isinstance(body, str): body = KS.redact(body)   # no key-shaped token in any text response (forum text, memos, errors)
-        b = body.encode() if isinstance(body, str) else body
+        b = self.prep(body, ctype)
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))
         hdr = dict(extra or {})
@@ -387,7 +391,11 @@ class H(BaseHTTPRequestHandler):
             if tag in (self.headers.get("If-None-Match") or ""):
                 self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", "no-cache"); self.send_header("Strict-Transport-Security", HSTS)
                 self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.end_headers(); return
-        if gz: b = gzip.compress(b, 5)
+        if gz:
+            if pre is not None and len(pre) > 2 and pre[2] is not None: b = pre[2]
+            else:
+                b = gzip.compress(b, 5)
+                if pre is not None and len(pre) > 2: pre[2] = b   # a micro cache entry keeps its gzip copy
         self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
         if gz: self.send_header("Content-Encoding", "gzip"); self.send_header("Vary", "Accept-Encoding")
         self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("Strict-Transport-Security", HSTS)
@@ -747,6 +755,9 @@ class H(BaseHTTPRequestHandler):
                     if etag in inm or etag.replace('W/', '') in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
+                ck = (p, urllib.parse.urlsplit(self.path).query, fmt)
+                hit = _micro_get(ck)
+                if hit: return self.send(200, hit[0], "application/json", hit[1], pre=hit)
                 try: data, is_list = api(p, qs)
                 except NotFound as e: return self.send(404, json.dumps(dict({"error": str(e)}, **getattr(e, "extra", {}))), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
@@ -768,7 +779,10 @@ class H(BaseHTTPRequestHandler):
                     rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
-                return self.send(200, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"}))
+                hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})
+                b = self.prep(json.dumps(data, default=str), "application/json")
+                if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
+                return self.send(200, b, "application/json", hd)
             html = page(path, qs)
             if html is None: return self.send(404, V.not_found(path=path))
             if isinstance(html, tuple): return self.send(*html)   # (status, html): a known route with an unknown subject
@@ -779,6 +793,29 @@ class H(BaseHTTPRequestHandler):
             log.error("error on %s: %s\n%s", self.path.split("?", 1)[0], e, traceback.format_exc())
             try: self.send(500, V.page("Error", V.card("Something went wrong", V.na("This page failed to render. The indexer may still be loading data.")), "/") if not path.startswith("/api/") else json.dumps({"error": "internal"}), "text/html; charset=utf-8" if not path.startswith("/api/") else "application/json")
             except Exception: pass
+
+# API micro cache (1.26.81): the same JSON answer is served for MICRO_S seconds, so a client polling /api/v1/txs or
+# swap detail several times a second costs one build, one plainjson/redact pass and one gzip. Within the 15 s the
+# responses already allow clients to cache (Cache-Control max-age=15); meta.generated_at is the build time.
+MICRO_S = float(os.environ.get("POASCAN_API_MICRO_S", "5"))
+MICRO_MAX = 64; MICRO_MAX_BYTES = 1_500_000
+MICRO_SKIP = ("/api/health", "/api/search")
+_micro = {}; _micro_lock = __import__("threading").Lock()
+def _micro_get(key):
+    if MICRO_S <= 0: return None
+    with _micro_lock:
+        e = _micro.get(key)
+        if not e: return None
+        if time.time() - e[0] >= MICRO_S: _micro.pop(key, None); return None
+        return e[1]
+def _micro_put(key, b, hd):
+    if MICRO_S <= 0 or len(b) > MICRO_MAX_BYTES: return
+    with _micro_lock:
+        if len(_micro) >= MICRO_MAX:
+            now = time.time()
+            for k in [k for k, v in _micro.items() if now - v[0] >= MICRO_S]: _micro.pop(k, None)
+            while len(_micro) >= MICRO_MAX: _micro.pop(next(iter(_micro)))
+        _micro[key] = (time.time(), [b, dict(hd), None])
 
 # Strict CSP: own scripts plus the one inline class toggle (by hash), own fonts and images, same-origin fetch and WebSocket.
 CSP = ("default-src 'self'; script-src 'self' 'sha256-cvlem2Rlcb+inScVb7910PMAU98gRDEfAIUVUKXOWd4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "

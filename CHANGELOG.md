@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.81] - 2026-10-23
+
+### Fixed (slow pages and outages under load)
+- The machine sat CPU throttled (70% steal and more) and pages took 1 to 60 seconds, with restarts. maint.grading_state (1.26.58) ran two COUNT DISTINCT scans over the grade-sealed rows plus blob decodes up to about 15 times per page and meta build: 38% of live CPU. It is now computed once per database write and at most every 20 seconds.
+- /api/v1 JSON answers are served from a 5 second micro cache (inside the max-age=15 clients already get), so a client polling /api/v1/txs or swap detail several times a second costs one build, one plainjson and redact pass and one gzip. /api/health and /api/search are never cached; errors are never cached.
+- plainjson runs its full pass only when a JSON number is in e-notation; hex ids inside strings no longer trigger it. tools/perf_test.py in CI.
+
 ## [1.26.80] - 2026-10-23
 
 ### Added (strain notice guard)
