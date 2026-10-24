@@ -470,6 +470,8 @@ def ingest_post(p):
     db.write("INSERT OR REPLACE INTO forum_comments(id,post_id,parent_id,author,author_public_id,created_at,score,body,edited_at) VALUES(?,?,?,?,?,?,?,?,?)",
              [(int(c["id"]), pid, (int(c["parent_id"]) if c.get("parent_id") not in (None, "None", "") else None), c.get("author"),
                c.get("author_public_id"), c.get("created_at"), int(c.get("score") or 0), c.get("body"), c.get("edited_at") or None) for c in cs], many=True)
+    from . import kin as _KN
+    if _KN.KIN_POST_ID is not None and pid == _KN.KIN_POST_ID: _KN.sync()   # kin claims: rebuilt from this post's archived comments, no extra read
 
 # ---------------- swaps (on-ledger escrow offers, fills, cancels) ----------------
 # Swap offers, swap tx details and the SOL/ETH USD reference: poascan/swap/indexer.py (its JOBS are spliced in below).
@@ -815,6 +817,8 @@ def repair_join_labels():
 
 def start(seed_dir=None):
     db.init()
+    try: __import__("poascan.kin", fromlist=["x"]).sync()   # kin claims from the archive (clears them when no claim post is set)
+    except Exception as e: log.warning("kin sync: %s", type(e).__name__)
     try: log.info("join labels repaired: %d", repair_join_labels())
     except Exception as e: log.warning("join label repair: %s", type(e).__name__)
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()

@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS forum_comments(id INTEGER PRIMARY KEY, post_id INTEGE
   author_public_id TEXT, created_at TEXT, score INTEGER, body TEXT);
 CREATE TABLE IF NOT EXISTS answers(id TEXT PRIMARY KEY, from_addr TEXT, epoch INTEGER, ts INTEGER, len INTEGER,
   slot_template INTEGER, prompt_echo INTEGER, prefix4 TEXT, sampled_at INTEGER, text TEXT, lang TEXT);
+-- opt-in kin groups (poascan/kin.py): one row per kin comment on the pinned claim post, rebuilt from forum_comments
+CREATE TABLE IF NOT EXISTS kin_claims(comment_id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, addr TEXT NOT NULL,
+  ts INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('claim','leave','malformed')), label TEXT, members TEXT, group_id TEXT, reason TEXT);
+CREATE INDEX IF NOT EXISTS kin_claims_addr ON kin_claims(addr, ts);
 CREATE TABLE IF NOT EXISTS labels(addr TEXT PRIMARY KEY, label TEXT, custody TEXT, source TEXT, ts INTEGER);
 CREATE TABLE IF NOT EXISTS probes(ts INTEGER, endpoint TEXT, ok INTEGER, ms INTEGER, code TEXT);
 CREATE INDEX IF NOT EXISTS probes_ep ON probes(endpoint, ts);

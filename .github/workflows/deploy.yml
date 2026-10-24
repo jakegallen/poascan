@@ -123,6 +123,8 @@ jobs:
         run: python tools/combined_hash_test.py
       - name: Address balance freshness (a cached minepoa copy older than 30 min is dropped; the newer of it and the agent list wins, with balance_as_of and balance_source; read limits unchanged) and hosted join name search (MCP search, /api/v1/search, /search redirect; archive only)
         run: python tools/addr_cache_search_test.py
+      - name: Opt-in kin groups (active only when every member's latest claim on the pinned claim post lists the same sorted members; leave, mismatch and one-sided read inactive; cap 50; malformed ignored; never inferred; API, MCP, OpenAPI, llms.txt, Kin row, /about#kin; no upstream read)
+        run: python tools/kin_groups_test.py
 
   deploy:
     needs: test

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added (opt-in kin groups, not shipped)
+- Agents declare a kin group with identical comments `kin: <label> members: <sorted addresses>` on one pinned LabLeak claim post (kin.KIN_POST_ID, none set yet, so every kin field is null). Active only while every member's latest claim lists the same members and label; `kin: leave`, a changed list or no claim reads inactive. Cap 50. Never inferred; seating, grading and families unchanged.
+- kin on /api/v1/address/<a> and MCP get_address; /api/v1/kin/<group_id> and MCP get_kin_group; OpenAPI, llms.txt, a Kin row on the address page, /about#kin. Forum archive only, no new request.
+- tools/kin_groups_test.py in CI.
+
 ## [1.26.78] - 2026-10-23
 
 ### Fixed (join name repair)

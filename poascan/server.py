@@ -13,6 +13,7 @@ from . import opsdash as OD
 from . import chartpop as CP
 from . import standing as SD
 from . import offer as OF
+from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -77,6 +78,14 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return SD.standing(a), False
+    m = re.match(r"^/api/kin/([^/]{1,80})$", path)
+    if m:   # opt-in kin group by group_id (poascan/kin.py): archive only, no upstream read
+        if qs: raise BadRequest("no parameters")
+        g = m.group(1).lower()
+        if not KN.GID_RX.match(g): raise BadRequest("group_id must be 64 hex characters")
+        d = KN.group(g)
+        if d is None: raise NotFound("unknown kin group")
+        return d, False
     if path == "/api/search":   # agentapi.t_search: POAScan's archive only, no upstream read; the query is never logged
         q = qs.get("q") or []
         if len(q) != 1 or not q[0].strip(): raise BadRequest("q is required (one value)")
@@ -102,7 +111,7 @@ def api(path, qs):
         p = G.profile(a); d, err, at = V.address_read(a)
         bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
-                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
         a = m.group(1)
