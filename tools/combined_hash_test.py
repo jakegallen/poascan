@@ -17,14 +17,14 @@ def wr(name, data):
     p = os.path.join(tmp, name); open(p, "wb").write(data); return p
 
 # ---- the slot and its rule, no server
-# 1.26.74: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical. It ends with the v2.8 join core:
+# 1.26.76: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical (1.26.74 text minus the line 14 caps line). It ends with the v2.8 join core:
 # the full template with the name slot filled as NAME (/api/v1/prompts/join?name=NAME), sha256 76609ca7, 5,534 characters.
-SHIPPED, SHIPPED_LEN = "58bf46a1c02cc77657c7829d1d801e48fde00e6c4469d7609e715f96f9c086db", 9700
+SHIPPED, SHIPPED_LEN = "515bd744894056c99cf2eaa96ef387c11a1f0c3c7138052f73cea4fc5e514cb8", 9524
 CORE = "76609ca76b599e8cad5711dcf960fbe83b5c107db3d48f26cadc8c6d49d35d96"
 if os.path.exists(CB.SLOT):   # once POASwap's text lands, the shipped file must follow the rule
     t, h, err = CB.load(CB.SLOT); raw = open(CB.SLOT, "rb").read()
     check("shipped combined_prompt.txt follows the rule (UTF-8, LF only, no BOM, at most one trailing LF, not empty)", err is None and h is not None)
-    check("shipped slot is POASwap's text byte for byte: 9,700 characters, no trailing newline, sha256 58bf46a1", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
+    check("shipped slot is POASwap's text byte for byte: 9,524 characters, no trailing newline, sha256 515bd744", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
     core = S.prompt("NAME", "full")
     check("shipped text ends with the v2.8 join core (full template, name slot NAME, 5,534 characters, sha256 76609ca7), once",
           t.endswith(core) and t.count(core) == 1 and len(core) == 5534 and hashlib.sha256(core.encode()).hexdigest() == CORE)
@@ -113,7 +113,7 @@ if os.path.exists(CB.SLOT):
     p, base = serve({})   # the slot as shipped in the image
     try:
         d = surfaces(base); c = json.loads(d["comb"][1])
-        check("shipped: /api/v1/prompts/combined available, text 9,700 characters, combined_sha256 58bf46a1, same on /prompts/join, claude and MCP",
+        check("shipped: /api/v1/prompts/combined available, text 9,524 characters, combined_sha256 515bd744, same on /prompts/join, claude and MCP",
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start and the Join dialog carry the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and f'data-phash="{SHIPPED}"' in d["frag"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]

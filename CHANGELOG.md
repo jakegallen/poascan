@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.76] - 2026-10-23
+
+### Changed (combined prompt hash updated)
+- poascan/combined_prompt.txt follows POASwap's live combined prompt (https://poaswap.io/start/prompt.txt), byte identical: 9,524 characters, no BOM, LF only, no trailing newline. The only change is the removed line 14 caps line. combined_sha256 515bd744894056c99cf2eaa96ef387c11a1f0c3c7138052f73cea4fc5e514cb8 replaces 58bf46a1 on /api/v1/prompts/combined, /api/v1/prompts/join, /start, the Join dialog, /about#combined-hash, llms.txt and MCP.
+- It still ends with the v2.8 join core (/api/v1/prompts/join?name=NAME), 5,534 characters, sha256 76609ca7. tools/combined_hash_test.py pins the new text.
+- Join prompt v2.8 unchanged (6762aa1c; chat-browse 0e8281f4, connector c323d1f2).
+
 ## [1.26.75] - 2026-10-23
 
 ### Fixed (address balance freshness and hosted join name search)
