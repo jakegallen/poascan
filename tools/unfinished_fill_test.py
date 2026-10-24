@@ -9,6 +9,7 @@ yet the offer read as if nothing was paid. POAScan can't see external-chain paym
   final and POAScan can't see external-chain payments. No em or en dashes.
 Real records: tools/swap_fields_fixture.json. Usage: python3 tools/unfinished_fill_test.py (temp database, no network)."""
 import importlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ["POASCAN_SWAP_EVIDENCE"] = ""   # ledger-only states: no balance evidence applied
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, HERE)
 fails = []

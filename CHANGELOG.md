@@ -11,6 +11,23 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.92] - 2026-10-24
+
+### Changed
+- Configurable segment boundaries: segments come from `poascan/segments.json` (boundary time, start checkpoint, chain id, labels, per close flags). A new segment or a moved boundary is one config entry; on boot, stored txs, answers, anchors and close records are regrouped to match. Milestones, /about#segments and the archived epoch hints are built from the config.
+- The current segment is the configured segment whose chain /api/networks lists as live and default.
+- Epochs: when /api/status counts a close that /api/epochs does not list yet, the History card says so ("E0 closed. Record not listed by /api/epochs yet.") and the Closed chip counts it.
+- recovery.supply_intact compares the first status read of the new segment with a baseline from the segments config: the last read of the earlier segment less the rewards of `cut.excluded_closes` (S1 E12, S1 E14), cross checked by the read at checkpoint h44003 plus the rewards of `cut.carried_closes` (S1 E13). previous_checkpoint is the earlier segment's final checkpoint. New fields: supply_before_basis, supply_after_cut, supply_cross_check, previous_segment. The /upgrade tile reads "Supply carried".
+- The maintenance block names the active segment boundary notice (segment_notice), and the headline leads with it while it is active.
+- /ops/network: checkpoint_height is the current segment's (/api/networks, as meta.checkpoint); checkpoint_advance is null between days in different segments, with checkpoint_segment.
+
+### Fixed
+- Swap offers the book still listed just before a segment boundary, never filled or cancelled, read `refunded` at the boundary, with refund_basis (notice id and tx), refund_at and money_moved false. refund_txid stays null: no per offer refund tx is public. They no longer read expired or delisted with escrow implied. The offer page shows a Refund row and the market history a REFUNDED event.
+- Offer de1ddefba3 reads filled: its swap-fill tx b994976f never read final, but the taker's balance (23,910 POA) equals every indexed tx plus this fill's 3,960 POA credit, and the maker's balance shows the escrow spent. fill_basis "balances", fill_evidence, fill_final_ledger false. Evidence lives in `poascan/swap_evidence.json`.
+
+### Tests
+- tools/segconfig_test.py: a third segment and a moved boundary by config only, current segment from /api/networks, boundary refunds, the balance-shown fill and the carried supply baseline.
+
 ## [1.26.91] - 2026-10-24
 
 ### Added (genesis cut, segments)

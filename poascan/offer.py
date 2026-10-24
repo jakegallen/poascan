@@ -26,8 +26,8 @@ def addr_status_url(a):
     """POASwap's status URL for a poa1 address, or None."""
     return ADDR_STATUS + a if a and re.fullmatch(r"poa1[1-9A-HJ-NP-Za-km-z]{20,60}", a) else None
 CHECK = "https://poaswap.io/api/v1/check?offer="
-LABEL = {"open": "Open", "filled": "Filled", "cancelled": "Cancelled", "expired": "Expired", "delisted": "Delisted", "filling": "Fill landing"}
-TONE = {"open": "ok", "filled": "ok", "filling": "warn", "cancelled": "", "expired": "", "delisted": "warn"}
+LABEL = {"open": "Open", "filled": "Filled", "cancelled": "Cancelled", "expired": "Expired", "delisted": "Delisted", "filling": "Fill landing", "refunded": "Refunded"}
+TONE = {"open": "ok", "filled": "ok", "filling": "warn", "cancelled": "", "expired": "", "delisted": "warn", "refunded": ""}
 EVENT = {"swap-offer": "Offered (escrow locked)", "swap-fill": "Filled", "swap-cancel": "Cancelled"}
 
 def _ext(chain, v, tx=False):
@@ -36,7 +36,7 @@ def _ext(chain, v, tx=False):
     if not e: return f'<span class="mono">{E(short(v, 6, 4))}</span>{copy(v)}'
     return f'<a class="mono" href="{e[1 if tx else 0]}{E(v)}" target="_blank" rel="noopener noreferrer">{E(short(v, 6, 4))} ↗</a>{copy(v)}'
 
-TERMINAL = ("filled", "cancelled", "expired")   # final per the API record: nothing inferred from events can override these
+TERMINAL = ("filled", "cancelled", "expired", "refunded")   # final per the API record: nothing inferred from events can override these
 
 def stage(d):
     """Display stage. The status is the API record's (d is exactly what /api/v1/swaps/<offer_id> returns), and a
@@ -57,7 +57,9 @@ UNSEEN_PAY = "Unknown: a fill was submitted but is not final, and POAScan can't 
 
 def next_steps(st, o, pend=False):
     """Plain next steps for this stage, under the safe swap rules. Terse."""
+    if st == "filled" and o.get("fill_basis") == "balances": return ["Filled: public balances show this fill settled. Stop checking.", "Don't take or pay this offer again."]
     if st == "filled": return ["Filled and final: nothing left to do. Stop checking.", "Don't take or pay this offer again."]
+    if st == "refunded": return [f'Refunded to the maker at the {(o.get("refund_basis") or {}).get("label") or "segment boundary"}: stop. Don\'t take or pay this offer.']
     if st == "filling": return ["A fill tx is landing. Wait for it to finalize; check this page once more in a few minutes.", "Don't re-take or pay again while it lands."]
     sub = ("A fill was submitted but is not final. The payment may have landed on the external chain; POAScan can't see it. "
            "Check status on POASwap with your ref before anything else, then ask on LabLeak. Never loop.")
@@ -84,20 +86,27 @@ def page_body(oid):
     hist = [[E("Fill submitted, not final" if e["kind"] == "swap-fill" and not e.get("final") else EVENT.get(e["kind"], e["kind"])), utc(e.get("ts")) + " · " + rel(e.get("ts")), tx_link(e["txid"], (10, 6)),
              '<span class="ok">final</span>' if e.get("final") else ('<span class="dim">not final</span>' if st in ("expired", "cancelled") else '<span class="warn">pending</span>')] for e in ev]
     if o.get("status") == "expired" and o.get("expires_ts"): hist.append(["Expired", utc(o["expires_ts"]) + " · " + rel(o["expires_ts"]), "···", "···"])
+    rb = o.get("refund_basis") if st == "refunded" else None
+    if rb: hist.append([E(f'Refunded · {rb.get("label") or "Segment boundary"}'), utc(rb["ts"]) + " · " + rel(rb["ts"]), tx_link(rb["notice_txid"], (10, 6)) if rb.get("notice_txid") else "···", "···"])
+    bal = o.get("fill_basis") == "balances"
+    if bal: hist = [[("Filled · balances" if h[2] and o["fill_txid"][:10] in h[2] else h[0]), *h[1:]] for h in hist]
     pay_to = _ext(ch, o.get("pay_to"))
     rows = [("Offer id", f'<span class="mono wrap">{E(oid)}</span>{copy(oid)}'), ("Status", tag + (f' <span class="dim small">E{o["fill_epoch"]} fill</span>' if o.get("fill_epoch") is not None else "")
              + (f' <a class="small oftrack" href="{E(su)}" target="_blank" rel="noopener noreferrer" title="This offer\'s status on POASwap (read only)">Status on POASwap ↗</a>' if (su := status_url(oid)) else "")),
             ("Maker", addr_link(o.get("maker"), None, (48, 0))),
-            ("Escrow", f'<span class="num">{plain(o.get("poa"), 6)}</span> <span class="unit">POA</span> locked by the maker' + (f' · offer tx {tx_link(oid, (10, 6))}' if any(e["txid"] == oid for e in ev) else "")),
+            ("Escrow", f'<span class="num">{plain(o.get("poa"), 6)}</span> <span class="unit">POA</span> ' + ("returned to the maker" if rb else "locked by the maker") + (f' · offer tx {tx_link(oid, (10, 6))}' if any(e["txid"] == oid for e in ev) else "")),
             ("Wants", f'<span class="num">{plain(o.get("want"), 6)}</span> <span class="unit">{asset}</span> on {E(CHAIN.get(ch, ch.capitalize() or "···"))} to {pay_to}'),
             ("Created", utc(o.get("created_ts"))), ("Expires", utc(o.get("expires_ts")) + (" · " + rel(o["expires_ts"]) if o.get("expires_ts") else "")),
             ("Taker", addr_link(o.get("taker"), None, (48, 0)) if o.get("taker") else '<span class="na">···</span>'),
             ("Payment ref", (_ext(ch, o.get("ext_ref"), tx=True) + (' <span class="dim small">taker\'s payment on the external chain</span>' if o.get("ext_ref") else ""))
                             if o.get("ext_ref") or not pend else f'<span class="dim">{E(UNSEEN_PAY)}</span>'),
             ("Fill", (tx_link(o["fill_txid"], (10, 6)) + " · " + utc(o.get("fill_ts")) + (f' · {o["fill_atts"]} attestations' if o.get("fill_atts") is not None else "")
-                      + (' · <span class="ok">final</span>' if o.get("fill_final") else "")) if o.get("fill_txid")
+                      + (' · <span class="ok">final</span>' if o.get("fill_final") else "")
+                      + (f' · <span class="tag ok" title="{E((o.get("fill_evidence") or {}).get("basis") or "")}">Settled by balances</span>' if bal else "")) if o.get("fill_txid")
              else ("Submitted, not final · " + tx_link(pend[-1]["txid"], (10, 6)) + " · " + utc(pend[-1].get("ts"))) if pend else '<span class="na">···</span>'),
             ("Cancel", tx_link(o["cancel_txid"], (10, 6)) + " · " + utc(o.get("cancel_ts")) if o.get("cancel_txid") else None),
+            ("Refund", (E(rb.get("label") or "Segment boundary") + " · " + utc(rb["ts"]) + (f' · notice tx {tx_link(rb["notice_txid"], (10, 6))}' if rb.get("notice_txid") else "")
+                        + ' <span class="dim small">no per-offer refund tx</span>') if rb else None),
             ("Memo", E(o["memo"]) if o.get("memo") else None)]
     kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows if v)
     tv = (o.get("taker_chains") or {}).get(ch)

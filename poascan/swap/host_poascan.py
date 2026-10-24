@@ -52,6 +52,22 @@ def __getattr__(n):   # resolved on first use, so the host indexer can import th
         from .. import indexer as _I
         return getattr(_I, n)
     raise AttributeError(n)
+def segment_cuts():
+    """Segment boundaries from the segments config (poascan/segments.py)."""
+    from .. import segments as _S
+    return _S.cuts()
+
+_EVID = {}
+def fill_evidence():
+    """offer_id -> evidence entry from poascan/swap_evidence.json (fills shown settled by public balances)."""
+    if not _EVID:
+        import json as _j, os as _o
+        p = _o.environ.get("POASCAN_SWAP_EVIDENCE", _o.path.join(_o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))), "swap_evidence.json"))
+        if not p: return _EVID   # set empty: no evidence file (tests of the ledger-only states)
+        try: _EVID.update({x["offer_id"]: x for x in (_j.load(open(p, encoding="utf-8")).get("fills") or [])})
+        except (OSError, ValueError): pass
+    return _EVID
+
 def blob_ts(kind):
     """When the host last stored a blob (no JSON parse)."""
     r = _db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,)); return r["ts"] if r else None

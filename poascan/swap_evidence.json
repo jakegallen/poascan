@@ -1,0 +1,11 @@
+{
+  "about": "Swap fills shown settled by public balances, for offers the ledger feed left unfinished. Each entry names the fill tx and the arithmetic: the taker's balance equals every indexed tx of the taker plus this fill's credit. The API reads the offer as filled with fill_basis balances; fill_final_ledger stays false.",
+  "fills": [
+    {"offer_id": "de1ddefba3bb90cc3b67f1ee7a79616d48e28e5a0aee797db76e155a4bdfe953",
+     "fill_txid": "b994976f1127606f9a988d2ad3788753697c65b1d2423580aff64d7b9d47ecba",
+     "taker": "poa1BNtYRYUrZwqfjb9BFxagFJcEsnYFsvDfgEixYKavFG2T", "fill_ts": 1792789857,
+     "taker_balance": "23910.000000", "taker_balance_source": "/api/agents",
+     "basis": "taker balance 23,910 = 20,000 received - 5,000 escrow (offer 24403dc0, filled) - 3,000 escrow + 3,000 refund (offer c4e566fa, cancelled) + 4,950 credit (fill 68e123b9) + 3,960 credit (this fill: 4,000 less the 1% fee); maker balance 0 = 20,000 - 5,000 escrow + 3,960 credit - 4,000 escrow (this offer, not returned) - 14,960 sent",
+     "checked_at": "2026-10-24T22:20:00Z"}
+  ]
+}

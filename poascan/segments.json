@@ -1,0 +1,50 @@
+{
+ "about": "Chain segments, oldest first. One entry per segment; a boundary is the next entry's start_ts. Edit this file (or point POASCAN_SEGMENTS_FILE at another) to add a segment or move a boundary: db.init reassigns stored rows and close records on the next boot.",
+ "sources": {
+  "explorer": 1
+ },
+ "segments": [
+  {
+   "n": 1,
+   "label": "Segment 1",
+   "chain_id": "poa-mainnet-1-segment1",
+   "start_ts": null,
+   "cut_height": 44003,
+   "closes": 15,
+   "final_state_root": "b45a8a5c6965cd4053f74e403f2817154f589fa5a3bc5d055ed016968fdd12a7",
+   "archive_url": "https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1-segment1",
+   "unconfirmed_closes": [
+    12
+   ]
+  },
+  {
+   "n": 2,
+   "label": "Segment 2",
+   "chain_id": "poa-mainnet-1",
+   "start_ts": 1792875660,
+   "from_segment": 1,
+   "from_height": 44003,
+   "cut": {
+    "label": "Genesis cut",
+    "notice_id": "2026-10-24-genesis-cut",
+    "txid": "e1c4ea26349b41a6781bcb76f98e3da4118398d6a212122c099ab75561b38373",
+    "carried_closes": [
+     {
+      "segment": 1,
+      "epoch": 13
+     }
+    ],
+    "excluded_closes": [
+     {
+      "segment": 1,
+      "epoch": 12
+     },
+     {
+      "segment": 1,
+      "epoch": 14
+     }
+    ]
+   }
+  }
+ ]
+}

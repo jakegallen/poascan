@@ -189,7 +189,7 @@ def upgrade_view():
     meter = (f'<div class="mtr"><div class="mtr-h"><span class="lbl">Endpoints {word}</span><b class="mtr-n"><span class="green">{len(back)}</span> of {total}</b></div>'
              f'<ol class="segs" aria-label="Hosted routes">{segs}</ol></div>')
     ok = []
-    if r["supply_intact"]: ok += ["Balances intact", "Supply unchanged"]
+    if r["supply_intact"]: ok += ["Balances intact"] + (["Supply carried"] if r.get("previous_segment") else ["Supply unchanged"])
     if r["checkpoint"]: ok.append(f'Checkpoint {r["checkpoint"]:,}')
     if A.freshness()["state"] != "stale": ok.append("Explorer live")
     if M.join_state() == "open": ok.append("Joining open")
@@ -215,7 +215,7 @@ def upgrade_view():
     cp = (f'<span class="from">{r["previous_checkpoint"]:,} →</span> <span class="num">{r["checkpoint"]:,}</span>' if r["moved"] else intc(r["checkpoint"] or m["parked_checkpoint"]))
     try: sv = f'<span class="num" title="{E(r["supply"])} POA">{compact3(float(r["supply"]))}</span><span class="unit">POA</span>'
     except Exception: sv = "···"
-    tiles = "".join([stat("Checkpoint", cp), stat("Supply unchanged" if r["supply_intact"] else "Supply", sv),
+    tiles = "".join([stat("Checkpoint", cp), stat(("Supply carried" if r.get("previous_segment") else "Supply unchanged") if r["supply_intact"] else "Supply", sv),
                      stat("Answers · 1h", f'<span class="num">{sn["answers"]:,}</span>'), stat("Epochs closed", intc(r["epochs_closed"]))])
     return hero + f'<div class="stats four uptiles">{tiles}</div>'
 

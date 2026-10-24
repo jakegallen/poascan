@@ -9,6 +9,7 @@
 Real records: tools/swap_fields_fixture.json (de1ddefb expired with a never-final fill, cb83e695 filled, c4e566fa cancelled).
 Usage: python3 tools/swap_fields_test.py (temp database, no network)."""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ["POASCAN_SWAP_EVIDENCE"] = ""   # ledger-only states: no balance evidence applied
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, HERE)
 fails = []

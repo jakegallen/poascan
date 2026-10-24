@@ -10,6 +10,7 @@
   holds the head of the queue, a read skipped without a request costs no slot.
 Usage: python3 tools/swap_state_test.py (temp database, no network)."""
 import json, os, re, sys, tempfile, time
+os.environ["POASCAN_SWAP_EVIDENCE"] = ""   # ledger-only states: no balance evidence applied
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, HERE)
 fails = []

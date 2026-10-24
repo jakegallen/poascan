@@ -114,54 +114,82 @@ SEGMENT_INDEXES = ("CREATE INDEX IF NOT EXISTS txs_seg_type ON txs(segment, type
                    "CREATE INDEX IF NOT EXISTS txs_seg_from ON txs(segment, from_addr, ts DESC)")
 
 def seg_case(col):
-    """SQL CASE giving the segment of a UTC time column (segments.of_ts in SQL)."""
+    """SQL CASE giving the segment of a UTC time column (segments.of_ts in SQL), from the segments config."""
     from . import segments as S
     parts = []
     for x in S.SEGMENTS[:-1]:
+        if x.get("end_ts") is None: continue
         parts.append(f"WHEN COALESCE({col}, 0) != 0 AND {col} < {int(x['end_ts'])} THEN {int(x['n'])}")
     return "CASE " + " ".join(parts) + f" ELSE {int(S.CURRENT)} END" if parts else str(int(S.CURRENT))
 
 def _segments():
-    """1.26.91 genesis cut (poascan/segments.py). Idempotent, in one transaction per table, every row kept:
-    * txs and answers get a segment column set from ts (before the cut: 1); an insert trigger fills it for writers that omit it.
-    * anchors is rebuilt with segment in its key, PRIMARY KEY(segment, height, chain): a new segment's height 2 must not
-      be ignored as a duplicate of segment 1's height 2.
-    * the close records blob: records from before the cut move to "epochs:s1" (written once), later ones stay in "epochs"."""
+    """Segments (poascan/segments.py, boundaries from segments.json). Idempotent, every row kept, run on every boot so a
+    config change (a new segment or a moved boundary) is applied to what is already stored:
+    * txs and answers carry a segment column, set from ts; rows whose segment no longer matches the config are reassigned.
+      An insert trigger fills it for writers that omit it.
+    * anchors is keyed PRIMARY KEY(segment, height, chain) (heights restart per segment); each row's segment follows
+      segments.of_anchor.
+    * close records: every record in the epochs blobs is regrouped by segments.of_record into its segment's blob
+      ("epochs" for the current segment, "epochs:s<n>" for an archived one). Nothing is dropped: records are merged by
+      (epoch, ts) and a blob is rewritten only when its set changes."""
     from . import segments as S
     c = conn(); c.commit()
+    case = seg_case("ts")
     for t in ("txs", "answers"):
         if "segment" not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
-            c.executescript(f"BEGIN IMMEDIATE; ALTER TABLE {t} ADD COLUMN segment INTEGER; UPDATE {t} SET segment = CASE WHEN COALESCE(ts, 0) >= {int(S.CUT_TS)} AND {int(S.has_cut())} THEN {int(S.CURRENT)} ELSE 1 END; COMMIT;")
+            c.executescript(f"BEGIN IMMEDIATE; ALTER TABLE {t} ADD COLUMN segment INTEGER; COMMIT;")
+        c.executescript(f"BEGIN IMMEDIATE; UPDATE {t} SET segment = {case} WHERE segment IS NOT {case}; COMMIT;")
         # an insert that names no segment (every writer but the indexer, tests, seeds) gets it from its ts, rebuilt each boot
         c.executescript(f"DROP TRIGGER IF EXISTS {t}_segment; CREATE TRIGGER {t}_segment AFTER INSERT ON {t} WHEN NEW.segment IS NULL "
                         f"BEGIN UPDATE {t} SET segment = {seg_case('NEW.ts')} WHERE rowid = NEW.rowid; END;")
     for x in SEGMENT_INDEXES: c.execute(x)
+    cols = ("height", "chain", "tx", "state_root", "anchored_by", "memo", "anchored_at")
     r = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='anchors'").fetchone()
     if r and "segment" not in r[0]:
-        rows = [dict(zip(("height", "chain", "tx", "state_root", "anchored_by", "memo", "anchored_at"), x)) for x in
-                c.execute("SELECT height, chain, tx, state_root, anchored_by, memo, anchored_at FROM anchors").fetchall()]
+        rows = [dict(zip(cols, x)) for x in c.execute("SELECT " + ", ".join(cols) + " FROM anchors").fetchall()]
         c.execute("BEGIN IMMEDIATE")
         try:
             c.execute("DROP TABLE IF EXISTS anchors_new")
             c.execute("CREATE TABLE anchors_new(height INTEGER, chain TEXT, tx TEXT, state_root TEXT, anchored_by TEXT, memo TEXT, anchored_at TEXT, "
                       "segment INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(segment, height, chain))")
             c.executemany("INSERT OR IGNORE INTO anchors_new(height, chain, tx, state_root, anchored_by, memo, anchored_at, segment) VALUES(?,?,?,?,?,?,?,?)",
-                          [(a["height"], a["chain"], a["tx"], a["state_root"], a["anchored_by"], a["memo"], a["anchored_at"], S.of_anchor(a)) for a in rows])
+                          [tuple(a[k] for k in cols) + (S.of_anchor(a),) for a in rows])
             c.execute("DROP TABLE anchors"); c.execute("ALTER TABLE anchors_new RENAME TO anchors"); c.commit()
         except Exception:
             c.rollback(); raise
-    if not c.execute("SELECT 1 FROM blobs WHERE kind='epochs:s1'").fetchone():
-        r = c.execute("SELECT ts, json FROM blobs WHERE kind='epochs'").fetchone()
-        if r:
-            ep = json.loads(r[1]) or []
-            old = [e for e in ep if isinstance(e, dict) and S.of_record(e) != S.CURRENT]
-            new = [e for e in ep if isinstance(e, dict) and S.of_record(e) == S.CURRENT]
-            if old:
-                c.execute("BEGIN IMMEDIATE")
-                c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs:s1', ?, ?)", (r[0], json.dumps(old)))
-                c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs', ?, ?)", (int(time.time()), json.dumps(new)))
-                c.commit()
+    elif r:
+        move = [(S.of_anchor(dict(zip(cols, x[1:]))), x[0]) for x in c.execute("SELECT rowid, " + ", ".join(cols) + ", segment FROM anchors").fetchall()
+                if S.of_anchor(dict(zip(cols, x[1:8]))) != x[8]]
+        if move:
+            c.execute("BEGIN IMMEDIATE"); c.executemany("UPDATE OR REPLACE anchors SET segment=? WHERE rowid=?", move); c.commit()
+    _regroup_closes(c, S)
     c.commit()
+
+def _regroup_closes(c, S):
+    kinds = {k: (ts, json.loads(j) or []) for k, ts, j in c.execute("SELECT kind, ts, json FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()}
+    if not kinds: return
+    by, seen = {}, set()
+    for k in sorted(kinds, key=lambda k: (k != "epochs", k)):   # a record present in two blobs is kept once
+        for e in kinds[k][1]:
+            if not isinstance(e, dict): continue
+            key = (e.get("epoch"), e.get("ts"))
+            if key in seen: continue
+            seen.add(key); by.setdefault(S.of_record(e), []).append(e)
+    want = {S.blob_kind(n): sorted(rows, key=lambda e: int(e.get("epoch", 0))) for n, rows in by.items()}
+    sig = lambda rows: sorted((e.get("epoch"), e.get("ts")) for e in rows)
+    now = int(time.time()); ops = []
+    for k, rows in want.items():
+        if k not in kinds or sig(kinds[k][1]) != sig(rows):
+            ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?, ?, ?)", (k, kinds.get(k, (now,))[0] if k != "epochs" else now, json.dumps(rows))))
+    for k in kinds:
+        if k not in want and kinds[k][1]:
+            ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?, ?, ?)", (k, now, "[]")))   # its records now live in another segment's blob
+    if "epochs" not in want and "epochs" not in kinds:
+        ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs', ?, '[]')", (now,)))
+    if ops:
+        c.execute("BEGIN IMMEDIATE")
+        for q, a in ops: c.execute(q, a)
+        c.commit()
 
 def _clean(a):
     """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""

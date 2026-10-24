@@ -7,7 +7,7 @@ Per-day tx and snapshot figures live in a small rollup table (network_daily, one
 incrementally: only days touched by tx or snapshot rows added since the last refresh are recomputed, found by rowid
 watermarks. Everything else is read with range-bounded SQL. Responses are cached per (from, to) for CACHE_TTL seconds."""
 import bisect, collections, datetime as dt, json, statistics, threading, time
-from . import db, analytics as A, swapclient as SC
+from . import db, analytics as A, swapclient as SC, segments as _SG
 
 CACHE_TTL = 180
 CACHE_MAX = 8
@@ -53,7 +53,8 @@ METRICS = {
     "mining.attesters": "distinct attesters that day",
     "mining.height": "ledger height in POAScan's last /api/networks read of the day",
     "mining.checkpoint_height": "finalized checkpoint height in the last /api/status snapshot of the day",
-    "mining.checkpoint_advance": "checkpoint_height change from the day before (null when either day has no snapshot)",
+    "mining.checkpoint_advance": "checkpoint_height change from the day before (null when either day has no snapshot or the days are in different segments)",
+    "mining.checkpoint_segment": "the segment checkpoint_height belongs to (heights restart per segment)",
     "swaps.created": "swap offers whose swap-offer tx timestamp falls on that day",
     "swaps.filled": "offers filled that day (swap-fill tx timestamp)",
     "swaps.cancelled": "offers cancelled that day (swap-cancel tx timestamp)",
@@ -109,6 +110,12 @@ def _last_snap(kind, lo, hi, first=False):
 def _num(x, f=int):
     try: return f(x) if x is not None and x != "" else None
     except Exception: return None
+
+def _cp_now(st):
+    """The current checkpoint: /api/networks for the current segment's chain (the same read as meta.checkpoint), else /api/status."""
+    nw = db.get_blob("networks")[0] or {}
+    n = next((_num(c.get("checkpoint_height")) for c in nw.get("chains") or [] if c.get("chain_id") == _SG.BY_N[_SG.CURRENT].get("chain_id")), None)
+    return n if n is not None else _num(st.get("checkpoint_height"))
 
 def _snap_day(d):
     lo, hi = d * 86400, (d + 1) * 86400
@@ -278,6 +285,7 @@ def _compute(frm, to):
         ae, pe = sn.get("agents_end"), prev.get("agents_end")
         new = (ae - pe) if ae is not None and pe is not None else (ae - sn["agents_start"]) if ae is not None and sn.get("agents_start") is not None else None
         ck, pk = sn.get("checkpoint"), prev.get("checkpoint")
+        sg, psg = _SG.of_ts(min((d + 1) * 86400 - 1, time.time())), _SG.of_ts(d * 86400 - 1)   # heights restart per segment: no advance across a boundary
         days.append(dict(
             day=_day(d).isoformat(),
             agents=dict(new=new, total=ae, first_seen=first.get(d, 0), join_txs=g("join"), active=tx.get("active", 0),
@@ -288,7 +296,7 @@ def _compute(frm, to):
             epochs=ep.get(d, dict(zero_ep, numbers=[])),
             mining=dict(submissions=g("challenge"), submitters=g("challenge", "agents"), grade_seals=g("grade-sealed"), graders=g("grade-sealed", "agents"),
                         attest_batches=g("attest-batch"), attesters=g("attest-batch", "agents"), height=sn.get("height"), checkpoint_height=ck,
-                        checkpoint_advance=(ck - pk) if ck is not None and pk is not None else None),
+                        checkpoint_advance=(ck - pk) if ck is not None and pk is not None and sg == psg else None, checkpoint_segment=sg),
             swaps=sw.get(d, dict(zero_sw, by_asset={})),
             wallets=dict(solana_new=lday[d].get("solana", 0), ethereum_new=lday[d].get("ethereum", 0), solana_total=cum(d, "solana"),
                          ethereum_total=cum(d, "ethereum"), any_total=bisect.bisect_right(afirst, d)),
@@ -298,7 +306,7 @@ def _compute(frm, to):
     snap = dict(history_from=_day(hist).isoformat() if hist is not None else None,
                 upstream_from=_day(up_first // 86400).isoformat() if up_first else None,
                 agents_total=_num(st.get("agents_joined")), holders_reported=_num(st.get("holders")), supply=_r(_num(st.get("supply"), float)),
-                epochs_closed=_num(st.get("epochs_closed")), checkpoint_height=_num(st.get("checkpoint_height")), open_swap_offers=o,
+                epochs_closed=_num(st.get("epochs_closed")), checkpoint_height=_cp_now(st), segment=_SG.CURRENT, open_swap_offers=o,
                 holders=_holders(), wallets=dict(current_only=True, verified=wcur["verified"], dated=wcur["dated"]),
                 skipped=SKIPPED)
     return dict(**{"from": frm, "to": to}, as_of=_iso(time.time()), metrics=METRICS, days=days, snapshot=snap)

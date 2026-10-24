@@ -2,7 +2,7 @@
 /v1 prefix (the host maps /api/v1/... onto /api/...). The explorer side reads swaps only through these same routes
 (poascan/swapclient.py): /api/v1/price, /api/v1/swaps, /api/v1/swaps/status, /api/v1/swaps/price-history, /api/v1/swaps/<offer_id>."""
 import hashlib, json, os, re, mimetypes, threading, time
-from . import config as C, market as M, store as S, pages as P, host as H
+from . import config as C, market as M, store as S, pages as P, host as H, state as ST
 
 OFFER = re.compile(r"^/api/swaps/([A-Za-z0-9_-]{1,128})$")   # after /status and /price-history
 
@@ -25,9 +25,12 @@ def enrich(rows):
     if not rows: return rows
     ch = S.chains(); ev = S.events_all(); marks = H.tx_marks([r.get("fill_txid") for r in rows]); rs = S.receipt_signed(); fs = S.fill_submitted()
     ep = getattr(H, "epoch_of_ts", None)   # optional host hook: network epoch of a ledger timestamp
+    ST.correct(rows)
     for r in rows:
         tl = [dict(event=EVENT.get(e["kind"], e["kind"]), ts=e["ts"], txid=e["txid"]) for e in ev.get(r["offer_id"], [])]
         if r.get("status") == "expired" and r.get("expires_ts"): tl.append(dict(event="expired", ts=r["expires_ts"]))
+        if r.get("fill_basis") == "balances" and not any(x["txid"] == r["fill_txid"] for x in tl): tl.append(dict(event=EVENT.get("swap-fill", "filled"), ts=r["fill_ts"], txid=r["fill_txid"]))
+        if r.get("status") == "refunded" and r.get("refund_basis"): tl.append(dict(event="refunded", ts=r["refund_basis"]["ts"], txid=r["refund_basis"].get("notice_txid")))
         if tl: r["timeline"] = tl
         m = _verified(ch, r.get("maker"))
         if m: r["maker_chains"] = m
@@ -50,7 +53,7 @@ def settle(r, signed, submitted=False):
     """Settlement fields from the archived public txs only (no extra reads). taker_credit: on a filled offer (its
     swap-fill is final), poa minus fee_poa, at the fill tx time. refund_txid: on a cancelled offer, the final swap-cancel
     that returned the escrow. An expired offer keeps refund_txid null until the maker cancels; null is not proof the
-    escrow stayed locked. receipt_state: 'signed' once a finalized swap-fill tx carries the seller's receipt signature;
+    escrow stayed locked. A refunded offer (open at a segment boundary) has refund_at, refund_basis, money_moved false. receipt_state: 'signed' once a finalized swap-fill tx carries the seller's receipt signature;
     receipts before a fill are not public, so null is not proof none exists. money_moved: true on a filled offer (final
     swap-fill); null (unknown) when a swap-fill tx was submitted (not dropped) but the offer is not filled by it, since
     POAScan can't see external-chain payments; false only when no swap-fill tx exists."""
@@ -62,6 +65,8 @@ def settle(r, signed, submitted=False):
     out["money_moved"] = True if r.get("status") == "filled" and r.get("fill_txid") else (None if submitted else False)
     if r.get("status") == "cancelled" and r.get("cancel_txid"):
         out["refund_txid"] = r["cancel_txid"]; out["refund_at"] = _iso(r.get("cancel_ts"))
+    if r.get("status") == "refunded" and r.get("refund_basis"):
+        out["refund_at"] = r["refund_basis"]["at"]; out["money_moved"] = False   # refund_txid stays null: no per-offer refund tx is public
     return out
 
 def offer_json(oid):

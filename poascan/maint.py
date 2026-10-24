@@ -409,6 +409,47 @@ def _last_status(field, window=86400):
 
 STATUS_FRESH_S = 600   # /api/status as_of within this many seconds reads as fresh (A.LAG_NODE_S: minepoa's own stale flag counts only past this age)
 
+from decimal import Decimal
+
+def _close_rows(c, key):
+    """(minted total, labels) of the closes listed under cut[key], from the stored close records; None when one is missing."""
+    from . import segments as S
+    tot = 0.0; got = []
+    for x in c.get(key) or []:
+        with S.use(int(x["segment"])): r = next((r for r in A.epoch_rows() if r["epoch"] == int(x["epoch"])), None)
+        if r is None: return None, f"S{x['segment']} E{x['epoch']}"
+        tot += float(r["minted"] or 0); got.append(f"S{x['segment']} E{x['epoch']}")
+    return tot, got
+
+def cut_baseline():
+    """Supply carried over the newest segment boundary (segments config), from POAScan's own /api/status snapshots and
+    stored close records. Primary basis: the last supply read of the earlier segment, less the rewards of the closes the
+    config lists under cut.excluded_closes. Cross check: the first read once the earlier segment's checkpoint reached its
+    final height (cut_height), plus the rewards of cut.carried_closes. Both are compared with the first read in the new
+    segment. None when there is no boundary."""
+    from . import segments as S
+    c = S.cut()
+    if not c: return None
+    prev = S.BY_N.get(c["from_segment"]) or {}; h = prev.get("cut_height")
+    ex = "json_extract(json, '$.checkpoint_height')"; sp = "json_extract(json, '$.supply')"
+    last = db.q1(f"SELECT ts, {sp} AS s FROM snaps WHERE kind='status' AND ts < ? AND {sp} IS NOT NULL ORDER BY ts DESC LIMIT 1", (c["ts"],))
+    atcp = db.q1(f"SELECT ts, {sp} AS s FROM snaps WHERE kind='status' AND ts < ? AND {ex} = ? ORDER BY ts LIMIT 1", (c["ts"], h)) if h is not None else None
+    a = db.q1(f"SELECT ts, {sp} AS s FROM snaps WHERE kind='status' AND ts >= ? AND {sp} IS NOT NULL ORDER BY ts LIMIT 1", (c["ts"],))
+    sa = _num(a["s"]) if a else None
+    lab = prev.get("label", "")
+    exc, eg = _close_rows(c, "excluded_closes"); car, cg = _close_rows(c, "carried_closes")
+    def side(b, add, sign, names, txt):
+        if b is None or add is None: return None
+        v = _num(b["s"]) + sign * Decimal(f"{add:.6f}")
+        return dict(value=f"{v:.6f}", basis=txt + ((" less " if sign < 0 else " plus ") + ", ".join(names) + " rewards" if names else ""), ts=b["ts"],
+                    intact=(abs(sa - v) < Decimal("0.00001")) if sa is not None else None)
+    p1 = side(last, exc, -1, eg, f"last {lab} supply") if c.get("excluded_closes") is not None else None
+    p2 = side(atcp, car, 1, cg, f"{lab} supply at checkpoint h{h}") if h is not None else None
+    pr = p1 or p2
+    return dict(before=pr["value"] if pr else None, after=f"{sa:.6f}" if sa is not None else None, basis=pr["basis"] if pr else None,
+                before_ts=pr["ts"] if pr else None, after_ts=a["ts"] if a else None, intact=pr["intact"] if pr else None,
+                cross_check=p2 if p1 and p2 else None, segment=c["segment"])
+
 def recovery():
     """Public recovery facts from our own mirror: checkpoint moved, new state root, supply carried over, status freshness, counters."""
     st = dict(A.status()); sup = _num(st.get("supply")); pre = _num(PRE_SUPPLY)
@@ -418,9 +459,14 @@ def recovery():
     if cp is None: cp = A.networks().get("checkpoint_height")
     t = A._ts(st.get("as_of")); age = int(time.time() - t) if t else None
     from . import segments as S   # a genesis cut restarts heights: a new segment's low checkpoint is not a parked one
-    return dict(moved=cp is not None and (int(cp) > PARKED or S.has_cut()), checkpoint=int(cp) if cp is not None else None, previous_checkpoint=PARKED,
-                state_root=st.get("state_root"), supply=str(st.get("supply")) if st.get("supply") is not None else None, supply_before=PRE_SUPPLY,
-                supply_intact=sup is not None and sup == pre, status_as_of=st.get("as_of"), status_age_s=age,
+    cb = cut_baseline() if S.has_cut() else None
+    prev_cp = S.BY_N[S.cut()["from_segment"]].get("cut_height") if cb else PARKED
+    if cb: pre_s, intact = cb["before"], cb["intact"]
+    else: pre_s, intact = PRE_SUPPLY, sup is not None and sup == pre
+    return dict(moved=cp is not None and (int(cp) > PARKED or S.has_cut()), checkpoint=int(cp) if cp is not None else None, previous_checkpoint=prev_cp,
+                state_root=st.get("state_root"), supply=str(st.get("supply")) if st.get("supply") is not None else None, supply_before=pre_s,
+                supply_intact=intact, supply_before_basis=cb["basis"] if cb else f"supply at parked checkpoint {PARKED}",
+                supply_after_cut=cb["after"] if cb else None, supply_cross_check=cb["cross_check"] if cb else None, previous_segment=S.cut()["from_segment"] if cb else None, status_as_of=st.get("as_of"), status_age_s=age,
                 status_fresh=age is not None and age <= STATUS_FRESH_S, status_stale_flag=bool(st.get("stale")),   # same rule as the pill: a stale flag on a read under 10 minutes old is not lag
                 txs=st.get("txs"), final=st.get("final"), epochs_closed=st.get("epochs_closed"), open_ballots=open_ballots())
 
@@ -478,6 +524,8 @@ def state():
     head, short = (" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x), " ".join(x for x in (hm[0] + ".", hm[1]) if x))
     gs = grading_state()
     if c: head, short = DONE_LINE[gs["state"]]
+    sn = segment_notice()
+    if sn and sn["active"]: head, short = f'{sn["label"]}: {sn["note"]} {head}', f'{sn["label"]}. {short}'   # the active boundary notice first, tersely
     return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
@@ -489,7 +537,21 @@ def state():
                 updated_at=iso(c["at"] if c else stamp_ts()),
                 hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(),
                 official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
-                notice=notice(), recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), **_hs())
+                notice=notice(), segment_notice=sn, recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), **_hs())
+
+def segment_notice():
+    """The newest segment boundary's notice (segments config) with its state in our /api/notices mirror: active is true
+    while the mirror lists it unexpired, false once gone or expired, null when the mirror has never held it."""
+    from . import segments as S
+    c = S.cut()
+    if not c or not c.get("notice_id"): return None
+    d = db.get_blob("notices")[0]; now = time.time()
+    x = next((x for x in ((d or {}).get("active") or []) if isinstance(x, dict) and x.get("id") == c["notice_id"]), None) if isinstance(d, dict) else None
+    act = None if x is None and not isinstance(d, dict) else bool(x and not (isinstance(x.get("expires_ts"), (int, float)) and x["expires_ts"] < now))
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if isinstance(t, (int, float)) else None
+    return dict(id=c["notice_id"], label=c["label"], note=c["note"], active=act, issued_at=iso((x or {}).get("issued_ts")) or iso(c["ts"]),
+                expires_at=iso((x or {}).get("expires_ts")), severity=(x or {}).get("severity"), txid=(x or {}).get("txid") or c.get("txid"),
+                segment=c["segment"], from_segment=c["from_segment"], from_height=c["from_height"], url="https://poascan.io/about#segments")
 
 DONE_HEAD = "Upgrade complete. Mining, grading and joining are open."
 DONE_LINE = {"open": (DONE_HEAD, "Upgrade complete."),

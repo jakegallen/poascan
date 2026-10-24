@@ -6,7 +6,7 @@ Usage: python3 tools/recovery_test.py"""
 import json, os, re as _re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 tmp = tempfile.mkdtemp(); DBP = os.path.join(tmp, "rec.db")
-os.environ.update(POASCAN_DB=DBP, POASCAN_MAINTENANCE="1", POA_BASE="http://127.0.0.1:9"); os.environ.pop("POASCAN_JOIN_OPEN", None)
+os.environ.update(POASCAN_DB=DBP, POASCAN_MAINTENANCE="1", POASCAN_SEGMENTS="1", POA_BASE="http://127.0.0.1:9"); os.environ.pop("POASCAN_JOIN_OPEN", None)
 sys.path.insert(0, ROOT)
 from poascan import db, hosted as R, maint as M
 fails = []

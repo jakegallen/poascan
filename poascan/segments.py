@@ -6,31 +6,88 @@ Epoch numbers, checkpoint heights and nonces repeat across segments, so every pl
 keys on the segment. Txs, answers and anchors carry a segment column (existing rows are segment 1; db.init migrates).
 Close records live in one blob per segment: "epochs" holds the current segment, "epochs:s<n>" an archived one.
 
+Segment boundaries, labels, heights and per segment flags are config (segments.json), so adding a segment or moving a
+boundary is one config edit: db.init reassigns stored rows and regroups close records to match on the next boot.
+
 The segment a request reads is per thread: server.py sets it from ?segment=<n>, MCP tools from their segment argument,
 and everything else reads the current segment. analytics.cached keys every cached value on it."""
-import contextlib, datetime as _dt, os, threading
+import contextlib, datetime as _dt, json, os, threading
 
-CUT_TS = 1792875660   # 2026-10-24T21:01:00Z: issued_ts of notice 2026-10-24-genesis-cut (/api/notices), the boundary POAScan uses
-CUT_NOTICE = "2026-10-24-genesis-cut"
-CUT_TX = "e1c4ea26349b41a6781bcb76f98e3da4118398d6a212122c099ab75561b38373"
-ARCHIVE_URL = "https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1-segment1"
+# 1.26.92: segments come from config (segments.json, or the file named by POASCAN_SEGMENTS_FILE), never from code.
+# A boundary is the next entry's start_ts; end_ts, the archived flags and the cut fields are derived from the list.
+CONFIG_PATH = os.environ.get("POASCAN_SEGMENTS_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "segments.json")
 
-# n, label, chain id on /api/networks, start and end (UTC seconds; end None while live), the height the next segment
-# continued from, closes in the segment (archived only) and the segment's final anchor state root (archived only).
-SEGMENTS = (
-    dict(n=1, label="Segment 1", chain_id="poa-mainnet-1-segment1", start_ts=None, end_ts=CUT_TS, cut_height=44003, closes=15,
-         final_state_root="b45a8a5c6965cd4053f74e403f2817154f589fa5a3bc5d055ed016968fdd12a7", archive_url=ARCHIVE_URL),
-    dict(n=2, label="Segment 2", chain_id="poa-mainnet-1", start_ts=CUT_TS, end_ts=None, from_height=44003, from_segment=1),
-)
+def _load(path=None):
+    with open(path or CONFIG_PATH, encoding="utf-8") as f: cfg = json.load(f)
+    segs = [dict(x) for x in cfg.get("segments") or []]
+    if not segs: raise ValueError("segments config: no segments")
+    segs.sort(key=lambda x: int(x["n"]))
+    for i, x in enumerate(segs):
+        x["n"] = int(x["n"]); x.setdefault("label", f"Segment {x['n']}"); x.setdefault("start_ts", None)
+        nxt = segs[i + 1] if i + 1 < len(segs) else None
+        x["end_ts"] = int(nxt["start_ts"]) if nxt and nxt.get("start_ts") is not None else None
+        if i and x.get("start_ts") is None: raise ValueError(f"segments config: segment {x['n']} needs start_ts")
+    return segs, dict(cfg.get("sources") or {})
+
+SEGMENTS, SOURCES = _load()
 # POASCAN_SEGMENTS=1: one live segment and no cut (a fork on another network, or a test whose synthetic history spans the
-# real cut time). Everything then reads as before 1.26.91.
+# configured boundary). Everything then reads as before 1.26.91.
 if os.environ.get("POASCAN_SEGMENTS") == "1":
-    SEGMENTS = (dict(n=1, label="Segment 1", chain_id="poa-mainnet-1", start_ts=None, end_ts=None),)
+    SEGMENTS, SOURCES = [dict(n=1, label="Segment 1", chain_id=SEGMENTS[-1].get("chain_id"), start_ts=None, end_ts=None)], {}
 BY_N = {s["n"]: s for s in SEGMENTS}
-CURRENT = SEGMENTS[-1]["n"]
 NUMBERS = tuple(BY_N)
-CUT_NOTE = "Segment 2 began at h44003 of segment 1. Earlier history archived."
-CUT_LABEL = "Genesis cut"
+
+def live_chain(networks):
+    """The chain /api/networks marks live and default (else live, else default), or None."""
+    ch = [c for c in (networks or {}).get("chains") or [] if isinstance(c, dict)]
+    pick = ([c for c in ch if c.get("status") == "live" and c.get("default")] or [c for c in ch if c.get("status") == "live"]
+            or [c for c in ch if c.get("default")])
+    return (pick[0].get("chain_id") if pick else None) or (networks or {}).get("default_chain")
+
+def current_of(networks, segs=None, now=None):
+    """The current segment: the latest configured segment that has started and whose chain_id is the live chain in
+    /api/networks; with no networks data (or no configured match), the latest started segment."""
+    import time as _t
+    segs = segs or SEGMENTS; now = now or _t.time()
+    started = [x for x in segs if x.get("start_ts") is None or int(x["start_ts"]) <= now] or segs[:1]
+    lc = live_chain(networks)
+    m = [x for x in started if lc and x.get("chain_id") == lc]
+    return (m or started)[-1]["n"]
+
+def _networks_blob():
+    """The stored /api/networks read (the db module imports this one, so read the file directly)."""
+    import sqlite3
+    p = os.environ.get("POASCAN_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "poascan.db"))
+    if not os.path.exists(p): return None
+    try:
+        c = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=5)
+        try: r = c.execute("SELECT json FROM blobs WHERE kind='networks'").fetchone()
+        finally: c.close()
+        return json.loads(r[0]) if r else None
+    except (sqlite3.Error, ValueError): return None
+
+CURRENT = SEGMENTS[-1]["n"] if len(SEGMENTS) == 1 else current_of(_networks_blob())
+
+def _cut_of(x):
+    """The cut that opened segment x (its start), or None for the first segment."""
+    prev = BY_N.get(x.get("from_segment")) or next((y for y in SEGMENTS if y.get("end_ts") == x.get("start_ts") and y is not x), None)
+    if x.get("start_ts") is None or prev is None: return None
+    c = dict(x.get("cut") or {}); h = x.get("from_height", prev.get("cut_height"))
+    lab = c.get("label") or "Segment boundary"
+    note = f"{x['label']} began at h{h} of {prev['label'][0].lower() + prev['label'][1:]}. Earlier history archived." if h is not None else f"{x['label']} began. Earlier history archived."
+    return dict(label=lab, ts=int(x["start_ts"]), notice_id=c.get("notice_id"), txid=c.get("txid"), from_segment=prev["n"], from_height=h,
+                segment=x["n"], archive_url=prev.get("archive_url"), note=note, carried_closes=list(c.get("carried_closes") or []),
+                excluded_closes=list(c["excluded_closes"]) if c.get("excluded_closes") is not None else None)
+
+CUTS = [c for c in (_cut_of(x) for x in SEGMENTS) if c]
+_LAST = next((c for c in CUTS if c["segment"] == CURRENT), None) or (CUTS[-1] if CUTS else {})   # the cut that opened the current segment
+# Names kept from 1.26.91: the newest cut (the current segment's start), derived from config.
+CUT_TS = _LAST.get("ts") or 0
+CUT_NOTICE = _LAST.get("notice_id")
+CUT_TX = _LAST.get("txid")
+ARCHIVE_URL = _LAST.get("archive_url")
+CUT_NOTE = _LAST.get("note") or ""
+CUT_LABEL = _LAST.get("label") or ""
 
 _ctx = threading.local()
 
@@ -93,9 +150,19 @@ def of_record(e):
     if isinstance(t, (int, float)) and t > 1e11: t = t / 1000
     return of_ts(t)
 
+def closes_of(m):
+    """Closes in segment m: the config count for an archived segment, else its stored close records (None for the current one)."""
+    if m == CURRENT: return None
+    c = BY_N[m].get("closes")
+    if c is not None: return int(c)
+    try:
+        from . import db
+        return len(db.get_blob(blob_kind(m))[0] or [])
+    except Exception: return 0
+
 def offset(n=None):
     """Closes in every earlier segment: segment n's epoch k is lifetime close number offset(n) + k (vesting, lifetime rewards)."""
-    n = n or selected(); return sum(int(BY_N[m].get("closes") or 0) for m in NUMBERS if m < n)
+    n = n or selected(); return sum(int(closes_of(m) or 0) for m in NUMBERS if m < n)
 
 def gkey(epoch, n=None): return offset(n) + int(epoch)
 
@@ -103,7 +170,7 @@ def split_gkey(g):
     """(segment, epoch) for a lifetime close number."""
     g = int(g)
     for n in NUMBERS:
-        c = BY_N[n].get("closes")
+        c = closes_of(n)
         if n == CURRENT or c is None or g < offset(n) + int(c): return n, g - offset(n)
     return CURRENT, g - offset(CURRENT)
 
@@ -124,13 +191,47 @@ def info(n=None):
 
 def all_info(): return [info(n) for n in NUMBERS]
 
+def _unconfirmed_set():
+    """(segment, epoch) of every close whose rewards are not confirmed in later balances: config unconfirmed_closes,
+    plus each boundary's excluded_closes (closes left out of the carried supply)."""
+    out = {(n, int(k)) for n in NUMBERS for k in BY_N[n].get("unconfirmed_closes") or []}
+    for x in SEGMENTS:
+        for e in (x.get("cut") or {}).get("excluded_closes") or []:
+            if int(e["segment"]) in BY_N: out.add((int(e["segment"]), int(e["epoch"])))
+    return out
+
+def unconfirmed(epoch, n=None):
+    """True when this close's rewards are not confirmed in later balances (see _unconfirmed_set)."""
+    n = n or selected(); return (n, int(epoch)) in _unconfirmed_set()
+
+def unconfirmed_g(g):
+    n, k = split_gkey(g); return unconfirmed(k, n)
+
+def unconfirmed_list():
+    """[{segment, epoch}] for every close whose rewards are not confirmed in later balances."""
+    return [dict(segment=n, epoch=k) for n, k in sorted(_unconfirmed_set())]
+
+def source_segment(name):
+    """The segment an upstream source serves (config sources, e.g. explorer), or the current segment."""
+    v = SOURCES.get(name)
+    return int(v) if v in BY_N else CURRENT
+
+def checkpoint_of(n, networks=None):
+    """Segment n's checkpoint height: /api/networks for its chain_id (data) when listed, else its config cut_height."""
+    s = BY_N.get(n) or {}
+    for c in (networks or {}).get("chains") or []:
+        if c.get("chain_id") == s.get("chain_id") and c.get("checkpoint_height") is not None:
+            try: return int(c["checkpoint_height"])
+            except (TypeError, ValueError): pass
+    return s.get("cut_height")
+
 def has_cut(): return len(SEGMENTS) > 1
 
 def cut():
-    """The genesis cut, for API responses and pages (None in a single segment world)."""
-    if not has_cut(): return None
-    return dict(label=CUT_LABEL, ts=CUT_TS, notice_id=CUT_NOTICE, txid=CUT_TX, from_segment=1, from_height=44003, segment=CURRENT,
-                archive_url=ARCHIVE_URL, note=CUT_NOTE)
+    """The newest cut (the current segment's start), for API responses and pages (None in a single segment world)."""
+    return dict(_LAST) if _LAST else None
+
+def cuts(): return [dict(c) for c in CUTS]
 
 def ep_label(g):
     """A lifetime close number as a label: E3 in the current segment, S1 E3 in an archived one."""

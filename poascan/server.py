@@ -160,7 +160,8 @@ def api(path, qs):
         if not r:
             n = int(m.group(1)); last = max((x["epoch"] for x in A.epoch_rows()), default=-1)
             raise NotFound(("unknown epoch" if SG.archived() else "epoch not closed yet") if n > last else "unknown epoch", epoch=n, last_closed=last if last >= 0 else None, segment=SG.selected(),
-                           **({"segment_1": f"{AG.BASE}{AG.API_PREFIX}/epoch/{n}?segment=1"} if SG.has_cut() and not SG.archived() and n < int(SG.BY_N[1].get("closes") or 0) else {}))
+                           **({f"segment_{m}": f"{AG.BASE}{AG.API_PREFIX}/epoch/{n}?segment={m}" for m in SG.NUMBERS
+                              if SG.has_cut() and not SG.archived() and m != SG.CURRENT and n < int(SG.closes_of(m) or 0)}))
         return dict(r[0], rewards=A.epoch_detail(int(m.group(1))).get("rewards")), False
     if path == "/api/richlist": return [{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in A.holders()["rows"]], True
     if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4], segment=SG.of_ts(p[0])) for p in A.accounts_series()], True

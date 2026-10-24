@@ -138,14 +138,15 @@ def stats_html():
 
 def history_html():
     nm = H.names(); ev = []
-    for r in S.swaps_all():
+    for r in ST.correct([dict(x) for x in S.swaps_all()]):
         pm, usd = M.per_1m(r); pair = net_logo(r["chain"]) + f'POA→{E(r["asset"] or "?")}'
         if r["created_ts"]: ev.append((r["created_ts"], "offer", r, pm, usd, pair))
         if r["fill_ts"]: ev.append((r["fill_ts"], "fill", r, pm, usd, pair))
         if r["cancel_ts"]: ev.append((r["cancel_ts"], "cancel", r, pm, usd, pair))
+        if r["status"] == "refunded": ev.append((r["refund_basis"]["ts"], "refunded", r, pm, usd, pair))
         if r["status"] in ("expired", "delisted") and r["expires_ts"]: ev.append((r["expires_ts"] if r["status"] == "expired" else r["updated"], r["status"], r, pm, usd, pair))
     ev.sort(key=lambda x: -x[0])
-    cls = {"offer": "b-send", "fill": "b-grade", "cancel": "b-sys", "expired": "b-sys", "delisted": "b-sys"}
+    cls = {"offer": "b-send", "fill": "b-grade", "cancel": "b-sys", "expired": "b-sys", "delisted": "b-sys", "refunded": "b-sys"}
     rows = [[utc(ts, "%m-%d %H:%M"), f'<span class="badge {cls[k]}">{k.upper()}</span>', pair, poa(r["poa"]), _pfmt(pm, usd, r["asset"]),
              addr_link(r["maker"], nm), addr_link(r["taker"], nm) if r["taker"] else '<span class="na">···</span>',
              _ext(r["chain"], r["ext_ref"], tx=True) if k == "fill" and r["ext_ref"] else (tx_link(r["fill_txid"] if k == "fill" else r["cancel_txid"] if k == "cancel" else r["offer_id"], (6, 4)) if (r["fill_txid"] if k == "fill" else r["cancel_txid"] if k == "cancel" else r["offer_id"]) and k in ("offer", "fill", "cancel") else '<span class="na">···</span>')]

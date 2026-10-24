@@ -9,6 +9,7 @@
 Test tokens are generated at runtime. Usage: python3 tools/network_test.py"""
 import json, os, re, secrets, socket, subprocess, sys, tempfile, threading, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+os.environ["POASCAN_SEGMENTS"] = "1"   # one segment: the fixture days are relative to today
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
 fails = []

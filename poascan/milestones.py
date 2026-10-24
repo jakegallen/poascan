@@ -36,14 +36,17 @@ SEED = [
     # Hardening pause over, resume normal cadence." One notice, so both markers carry its issued_ts.
     ("grading_reopened", 1792774656, "Grading reopened", _tx(DONE_TX), "notice 2026-10-23-grading-resumed issued_ts (/api/notices, on-ledger tx a241efae)"),
     ("ended", 1792774656, "Upgrade complete", _tx(DONE_TX), "notice 2026-10-23-grading-resumed: hardening pause over (/api/notices, on-ledger tx a241efae)"),
-    # Verified 2026-10-24 against /api/notices, go.md, /api/networks (poa-mainnet-1-segment1 halted at checkpoint 44003) and the
-    # GitHub archive branch poa-mainnet-1-segment1: the chain continued from h44003 as segment 2 (segments.py).
-    ("genesis_cut", 1792875660, "Genesis cut", _tx("e1c4ea26349b41a6781bcb76f98e3da4118398d6a212122c099ab75561b38373"),
-     "notice 2026-10-24-genesis-cut issued_ts (/api/notices, on-ledger tx e1c4ea26): chain continued from checkpoint h44003"),
 ]
 SEEDED = {k for k, *_ in SEED}
 # Keys that always get their own marker (never folded into a nearby group), so both real events stay labelled.
-SOLO = {"grading_reopened", "ended", "genesis_cut"}
+# Segment boundaries (segments.json): one milestone per cut, linked to its notice tx when the config names one.
+from . import segments as _SG
+for _c in _SG.cuts():
+    _k = "genesis_cut" if _c["segment"] == 2 else f"genesis_cut_s{_c['segment']}"
+    SEED.append((_k, _c["ts"], _c["label"], _tx(_c["txid"]) if _c.get("txid") else None,
+                 f"segments.json: {_c['label']} at the start of segment {_c['segment']}" + (f" (notice {_c['notice_id']})" if _c.get("notice_id") else "")))
+SEEDED = {k for k, *_ in SEED}
+SOLO = {"grading_reopened", "ended", "genesis_cut"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
 
 # Routes the route check covers: (route id, label). A route seen open gets "<label> responding" at its first open read.
 ROUTE_LABEL = {"mining": "Mining", "grading": "Grading", "send": "Send", "swap_offer": "Swap offers", "vote": "Voting", "export": "Export"}
