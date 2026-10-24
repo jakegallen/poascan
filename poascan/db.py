@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS blobs(kind TEXT PRIMARY KEY, ts INTEGER, json TEXT);
 CREATE TABLE IF NOT EXISTS accounts(addr TEXT PRIMARY KEY, invited_by TEXT, balance REAL, balance_s TEXT,
   api_ts INTEGER, api_joined_epoch INTEGER, first_seen INTEGER, last_seen INTEGER);
 CREATE TABLE IF NOT EXISTS anchors(height INTEGER, chain TEXT, tx TEXT, state_root TEXT, anchored_by TEXT,
-  memo TEXT, anchored_at TEXT, PRIMARY KEY(height, chain));
+  memo TEXT, anchored_at TEXT, segment INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(segment, height, chain));
 CREATE TABLE IF NOT EXISTS forum_posts(id INTEGER PRIMARY KEY, community TEXT, title TEXT, author TEXT,
   author_public_id TEXT, created_at TEXT, score INTEGER, comment_count INTEGER, deleted INTEGER, pinned INTEGER, fetched INTEGER, body TEXT);
 CREATE TABLE IF NOT EXISTS forum_comments(id INTEGER PRIMARY KEY, post_id INTEGER, parent_id INTEGER, author TEXT,
@@ -93,6 +93,7 @@ def init():
         from .swap import store as _swap_store   # the swap module owns and migrates its own tables
         _swap_store.init(conn())
         _visit_counts_pjoin()
+        _segments()
         for t in ("forum_posts", "forum_comments"):   # LabLeak author edits set edited_at (shown publicly as an edit)
             if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
@@ -108,6 +109,59 @@ def _visit_counts_pjoin():
     c.commit()
     c.executescript("BEGIN IMMEDIATE; DROP TABLE IF EXISTS visit_counts_new; " + new + "; INSERT INTO visit_counts_new(day,metric,key,n) SELECT day,metric,key,n FROM visit_counts;"
                     " DROP TABLE visit_counts; ALTER TABLE visit_counts_new RENAME TO visit_counts; COMMIT;")
+
+SEGMENT_INDEXES = ("CREATE INDEX IF NOT EXISTS txs_seg_type ON txs(segment, type, ts DESC)",
+                   "CREATE INDEX IF NOT EXISTS txs_seg_from ON txs(segment, from_addr, ts DESC)")
+
+def seg_case(col):
+    """SQL CASE giving the segment of a UTC time column (segments.of_ts in SQL)."""
+    from . import segments as S
+    parts = []
+    for x in S.SEGMENTS[:-1]:
+        parts.append(f"WHEN COALESCE({col}, 0) != 0 AND {col} < {int(x['end_ts'])} THEN {int(x['n'])}")
+    return "CASE " + " ".join(parts) + f" ELSE {int(S.CURRENT)} END" if parts else str(int(S.CURRENT))
+
+def _segments():
+    """1.26.91 genesis cut (poascan/segments.py). Idempotent, in one transaction per table, every row kept:
+    * txs and answers get a segment column set from ts (before the cut: 1); an insert trigger fills it for writers that omit it.
+    * anchors is rebuilt with segment in its key, PRIMARY KEY(segment, height, chain): a new segment's height 2 must not
+      be ignored as a duplicate of segment 1's height 2.
+    * the close records blob: records from before the cut move to "epochs:s1" (written once), later ones stay in "epochs"."""
+    from . import segments as S
+    c = conn(); c.commit()
+    for t in ("txs", "answers"):
+        if "segment" not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
+            c.executescript(f"BEGIN IMMEDIATE; ALTER TABLE {t} ADD COLUMN segment INTEGER; UPDATE {t} SET segment = CASE WHEN COALESCE(ts, 0) >= {int(S.CUT_TS)} AND {int(S.has_cut())} THEN {int(S.CURRENT)} ELSE 1 END; COMMIT;")
+        # an insert that names no segment (every writer but the indexer, tests, seeds) gets it from its ts, rebuilt each boot
+        c.executescript(f"DROP TRIGGER IF EXISTS {t}_segment; CREATE TRIGGER {t}_segment AFTER INSERT ON {t} WHEN NEW.segment IS NULL "
+                        f"BEGIN UPDATE {t} SET segment = {seg_case('NEW.ts')} WHERE rowid = NEW.rowid; END;")
+    for x in SEGMENT_INDEXES: c.execute(x)
+    r = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='anchors'").fetchone()
+    if r and "segment" not in r[0]:
+        rows = [dict(zip(("height", "chain", "tx", "state_root", "anchored_by", "memo", "anchored_at"), x)) for x in
+                c.execute("SELECT height, chain, tx, state_root, anchored_by, memo, anchored_at FROM anchors").fetchall()]
+        c.execute("BEGIN IMMEDIATE")
+        try:
+            c.execute("DROP TABLE IF EXISTS anchors_new")
+            c.execute("CREATE TABLE anchors_new(height INTEGER, chain TEXT, tx TEXT, state_root TEXT, anchored_by TEXT, memo TEXT, anchored_at TEXT, "
+                      "segment INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(segment, height, chain))")
+            c.executemany("INSERT OR IGNORE INTO anchors_new(height, chain, tx, state_root, anchored_by, memo, anchored_at, segment) VALUES(?,?,?,?,?,?,?,?)",
+                          [(a["height"], a["chain"], a["tx"], a["state_root"], a["anchored_by"], a["memo"], a["anchored_at"], S.of_anchor(a)) for a in rows])
+            c.execute("DROP TABLE anchors"); c.execute("ALTER TABLE anchors_new RENAME TO anchors"); c.commit()
+        except Exception:
+            c.rollback(); raise
+    if not c.execute("SELECT 1 FROM blobs WHERE kind='epochs:s1'").fetchone():
+        r = c.execute("SELECT ts, json FROM blobs WHERE kind='epochs'").fetchone()
+        if r:
+            ep = json.loads(r[1]) or []
+            old = [e for e in ep if isinstance(e, dict) and S.of_record(e) != S.CURRENT]
+            new = [e for e in ep if isinstance(e, dict) and S.of_record(e) == S.CURRENT]
+            if old:
+                c.execute("BEGIN IMMEDIATE")
+                c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs:s1', ?, ?)", (r[0], json.dumps(old)))
+                c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs', ?, ?)", (int(time.time()), json.dumps(new)))
+                c.commit()
+    c.commit()
 
 def _clean(a):
     """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""

@@ -1,6 +1,7 @@
 """'The Agents' analytics. Model/harness = self-reported; operator families = estimated. Nothing is imputed."""
 import re, json, math, time, statistics, collections, csv, os, datetime as dt
 from . import db, analytics as A
+from . import segments as _SG
 from .census_rules import M as CENSUS_M, LABEL as CENSUS_LABEL, KNOWN_ADDR
 
 cached = A.cached
@@ -29,7 +30,8 @@ def answerers():
     for e in A.epochs_raw():
         out[int(e["epoch"])] |= set(e.get("challenges", {}).keys())
     src = collections.defaultdict(set)
-    for r in db.q("SELECT from_addr, ts, epoch FROM txs WHERE type='challenge'"):
+    w, wa = _SG.sql()   # epoch numbers restart at a genesis cut: only the selected segment's answers
+    for r in db.q("SELECT from_addr, ts, epoch FROM txs WHERE type='challenge'" + w, wa):
         k = r["epoch"] if r["epoch"] is not None else epoch_of_ts(r["ts"])
         src[int(k)].add(r["from_addr"])
     for k, s in src.items(): out[k] |= s
@@ -206,7 +208,7 @@ def streaks():
     return out
 
 def time_to_answer():
-    rows = db.q("SELECT ts, epoch FROM txs WHERE type='challenge'")
+    w, wa = _SG.sql(); rows = db.q("SELECT ts, epoch FROM txs WHERE type='challenge'" + w, wa)
     by = collections.defaultdict(list)
     for r in rows:
         k = r["epoch"] if r["epoch"] is not None else epoch_of_ts(r["ts"])
@@ -247,7 +249,7 @@ def grams(t, vocab, n=5):
 
 @cached("originality", 600)
 def originality():
-    rows = db.q("SELECT id, from_addr, epoch, ts, text, slot_template, prompt_echo, len, lang FROM answers WHERE text IS NOT NULL")
+    w, wa = _SG.sql(); rows = db.q("SELECT id, from_addr, epoch, ts, text, slot_template, prompt_echo, len, lang FROM answers WHERE text IS NOT NULL" + w, wa)
     vocab = seed_vocab([r["text"] for r in rows])
     by = collections.defaultdict(list)
     for r in rows:

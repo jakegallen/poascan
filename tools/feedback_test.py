@@ -2,6 +2,7 @@
 basis_state, established history. Temp database, no network: the node is http://127.0.0.1:9 (refused), so every
 on-demand read fails the way a busy node does. Usage: python3 tools/feedback_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
 tmp = tempfile.mkdtemp(); DB = os.path.join(tmp, "f.db")
@@ -37,7 +38,7 @@ db.put_blob("params", {"estab_ttl": 6, "auto_epoch_seconds": P, "grade_quorum": 
 db.put_blob("status", {"epochs_closed": 10, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))})
 def tx(i, typ, frm, ep, ts): db.write("INSERT INTO txs(id, type, from_addr, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?)", (i, typ, frm, ep, ts, 5, 5, 1))
 tx(OLD, "challenge", X, 6, t0 + 6 * P + 100)
-db.write("INSERT INTO answers VALUES(?,?,?,?,?,?,?,?,?,?,?)", (OLD, X, 6, t0 + 6 * P + 100, 22, 0, 0, "An a", now, "An archived E6 answer.", "en"))
+db.write("INSERT INTO answers VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL)", (OLD, X, 6, t0 + 6 * P + 100, 22, 0, 0, "An a", now, "An archived E6 answer.", "en"))
 tx(NONANS, "attest-batch", Y, 9, now - 3000)
 tx(SET, "challenge", X, 7, t0 + 7 * P + 50); tx(PEND, "challenge", X, 9, t0 + 9 * P + 50)
 tx(VAN, "challenge", X, 8, t0 + 8 * P + 50); tx(GONE, "challenge", X, 5, t0 + 5 * P + 50)

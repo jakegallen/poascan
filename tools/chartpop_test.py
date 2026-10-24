@@ -105,7 +105,7 @@ ge = MS.group(MS.events(), MS.events()[0]["ts"], MS.events()[-1]["ts"] + 3600, w
 labs = {e["label"] for e in MS.events()}
 check(f"milestone labels read the event name only, no +N suffix ({[x[1] for x in ge]})", ge and all(x[1] in labs and not re.search(r"\+\d", x[1]) for x in ge) and any("; " in x[3] for x in ge)
       and all(not re.search(r"\+\d", m[1]) for k in ("joins", "agents", "supply") for r_ in ("24h", "7d", "30d", "all") for m in CP.payload(k, r_, 400).get("marks", [])))
-check("Answers per epoch: bars with Answered and Paid", pa["kind"] == "bars" and pa["legend"] == ["Answered", "Paid"] and all(re.fullmatch(r"E\d+", b[0]) for b in pa["bars"]))
+check("Answers per epoch: bars with Answered and Paid", pa["kind"] == "bars" and pa["legend"] == ["Answered", "Paid"] and all(re.fullmatch(r"(S\d+ )?E\d+", b[0]) for b in pa["bars"]))
 check("Circulating Epoch view: one bar per closed epoch", pe["kind"] == "bars" and len(pe["bars"]) == len(A.epoch_rows()))
 check("Agents / hr and Txs / hour are lines", pj["kind"] == "line" and pt["kind"] == "line" and pt["title"] == "Txs / hour")
 check("every key builds", all(CP.payload(k, "", 800)["c"] == k for k in CP.CHARTS))

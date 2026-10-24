@@ -7,6 +7,7 @@
 * The node's txs and final counters restarting at a checkpoint read explained, with the time, when they match the archive.
 * The guard treats 30% steal as throttled."""
 import json, os, sys, tempfile, threading, time
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
 tmp = tempfile.mkdtemp(); os.environ.update(POASCAN_DB=os.path.join(tmp, "a.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9")

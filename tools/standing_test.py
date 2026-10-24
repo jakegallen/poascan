@@ -6,6 +6,7 @@ Grading seats don't refresh it. Checks the address page Established card, /api/v
 Usage: python3 tools/standing_test.py            (temp database, no network)
        python3 tools/standing_test.py --check FILE  (also checks every established_removed entry at E8+ in a saved /api/epochs dump)"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 TMP = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(TMP, "t.db")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, ROOT)

@@ -46,7 +46,12 @@ def _growth():
     return V3.growth_data()
 
 def _epoch_closes():
-    return [(r["epoch"], r["close_ts"]) for r in A.epoch_rows()]
+    """(lifetime close number, close_ts) over every segment, oldest first: epoch numbers restart at a genesis cut (segments.py)."""
+    from . import segments as SG
+    out = []
+    for n in SG.NUMBERS:
+        with SG.use(n): out += [(SG.gkey(r["epoch"], n), r["close_ts"]) for r in A.epoch_rows()]
+    return out
 
 def _hourly(pts):
     """Agents / hr from the Agents series: joins in each whole hour that has a reading in the hour before it."""
@@ -117,7 +122,8 @@ def payload(key, rng, w):
     if key == "answers" or r == "epoch":
         rows = series(key, "epoch")
         if SPAN.get(r): rows = window(rows, now - SPAN[r], lambda x: x[1])
-        out.update(kind="bars", bars=[[f"E{e}", int(t), [round(v, 6) for v in vals]] for e, t, vals in rows])
+        from . import segments as SG
+        out.update(kind="bars", bars=[[SG.ep_label(e), int(t), [round(v, 6) for v in vals]] for e, t, vals in rows])
         if key == "answers": out.update(legend=["Answered", "Paid"], colors=["#E3A33A", "#3DDC97"])
         else: out.update(legend=[], colors=[cfg["color"]])
         return out

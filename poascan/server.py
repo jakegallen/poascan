@@ -14,6 +14,7 @@ from . import chartpop as CP
 from . import standing as SD
 from . import offer as OF
 from . import kin as KN
+from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -133,8 +134,8 @@ def api(path, qs):
     if path == "/api/epochs": return A.epoch_rows(), True
     if path == "/api/notices/verified":   # signed.feed: G0 signature results from POAScan's own store; no upstream read here
         if qs: raise BadRequest("no parameters")
-        from . import signed as SG
-        return dict(SG.feed(), upstream_notice=notices_notice()), False
+        from . import signed as _SIG
+        return dict(_SIG.feed(), upstream_notice=notices_notice()), False
     if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
@@ -151,21 +152,23 @@ def api(path, qs):
         if t not in V4.COLS: return {"error": "unknown tab", "tabs": list(V4.COLS)}, False
         return V4.rows(t), True
     if path == "/api/status":
-        d = V2.status_data(); return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"], **V.joins_fields()), False
+        d = V2.status_data(); return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"],
+                                          segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), **V.joins_fields()), False
     m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]
         if not r:
             n = int(m.group(1)); last = max((x["epoch"] for x in A.epoch_rows()), default=-1)
-            raise NotFound("epoch not closed yet" if n > last else "unknown epoch", epoch=n, last_closed=last)
+            raise NotFound(("unknown epoch" if SG.archived() else "epoch not closed yet") if n > last else "unknown epoch", epoch=n, last_closed=last if last >= 0 else None, segment=SG.selected(),
+                           **({"segment_1": f"{AG.BASE}{AG.API_PREFIX}/epoch/{n}?segment=1"} if SG.has_cut() and not SG.archived() and n < int(SG.BY_N[1].get("closes") or 0) else {}))
         return dict(r[0], rewards=A.epoch_detail(int(m.group(1))).get("rewards")), False
     if path == "/api/richlist": return [{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in A.holders()["rows"]], True
-    if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4]) for p in A.accounts_series()], True
+    if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4], segment=SG.of_ts(p[0])) for p in A.accounts_series()], True
     if path == "/api/forum":
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/pending-by-epoch": return A.pending_by_epoch(), False
     if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "dropped", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
-    if path == "/api/anchors": return A.anchors_latest(500), True
+    if path == "/api/anchors": return A.anchors_latest(500, SG.selected() if SG.archived() else None), True   # current segment first; ?segment=1 keeps segment 1
     if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False
     if path == "/api/chains":   # address map; upstream_notice is added only while minepoa has /api/chains paused (keys stay addresses otherwise)
         d = dict(db.get_blob("chains")[0] or {}); n = chains_notice()
@@ -194,6 +197,11 @@ def api(path, qs):
     if path == "/api/agents/builders":
         b = dict(G.builders()); return b, False
     raise KeyError(path)
+
+_EP_HREF = re.compile(r'href="/epoch/(\d+)"')
+def seg_links(html):
+    """On a page that reads an archived segment, epoch links stay in that segment."""
+    return _EP_HREF.sub(lambda m: f'href="/epoch/{m.group(1)}{SG.qs()}"', html)
 
 PREFIX_HEX = re.compile(r"^[0-9a-fA-F]{6,63}$")
 PREFIX_ADDR = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{2,59}$")
@@ -460,9 +468,12 @@ class H(BaseHTTPRequestHandler):
             n = int(mm.group(1)); r = RR.record(n)
             if not r: return nf(f"no close record for epoch {n}", last_close=last)
             b, h = r
-            return self.cond(b, h, RR.IMMUTABLE, dict(mh, **{"X-Record-SHA256": h, "X-Record-Bytes": str(len(b)), "X-Canonical": RR.CANON}))
+            # immutable only under an explicit ?segment=: a bare /epoch/<n>/record names the current segment's close n, which
+            # a genesis cut gives to a different record (segments.py)
+            cc = RR.IMMUTABLE if self._seg_explicit() or not SG.has_cut() else "public, max-age=300"
+            return self.cond(b, h, cc, dict(mh, **{"X-Record-SHA256": h, "X-Record-Bytes": str(len(b)), "X-Canonical": RR.CANON}))
         fr = qs.get("from", [None])[0]
-        rows = [dict(r, url=f"{AG.BASE}{AG.API_PREFIX}/epoch/{r['epoch']}/record") for r in ix]
+        rows = [dict(r, url=f"{AG.BASE}{AG.API_PREFIX}/epoch/{r['epoch']}/record{SG.qs()}") for r in ix]
         if fr is None:
             if fmt == "csv": return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": 'attachment; filename="api_epoch_records.csv"', "Access-Control-Allow-Origin": "*"}))
             b = RR.canonical(rows); return self.cond(b, RR.sha256(b), "max-age=60", mh)
@@ -472,6 +483,8 @@ class H(BaseHTTPRequestHandler):
         if len(fr) > 9: return self.send(404, json.dumps({"error": f"no close record for epoch {fr}", "last_close": last}), "application/json", mh)
         b, nxt = RR.page(int(fr), lim)
         return self.cond(b, RR.sha256(b), "max-age=60", dict(mh, **({"X-Next-From": str(nxt)} if nxt is not None else {})))
+    def _seg_explicit(self):
+        return "segment" in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
     def client_ip(self):
         return (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or self.client_address[0])
     def ops_event(self):
@@ -636,6 +649,9 @@ class H(BaseHTTPRequestHandler):
                   {"Retry-After": str(wait), "Cache-Control": "no-store"})
         return True
     def do_GET(self):
+        try: return self._get()
+        finally: SG.reset()   # the segment a request reads (?segment=) never leaks into the next one on this thread
+    def _get(self):
         I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)
         if self.key_guard(): return
         if self.www(): return
@@ -645,6 +661,13 @@ class H(BaseHTTPRequestHandler):
         if off: return self.send(301, "", TXT, {"Location": off, "Cache-Control": "public, max-age=3600"})
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
+        # 1.26.91: ?segment=<n> reads an archived chain segment (segments.py); dropped from qs so routes that take no
+        # parameters still answer. Cache keys use the raw query, so each segment is cached apart.
+        if "segment" in qs:
+            try: SG.set_selected(SG.parse((qs.pop("segment") or [""])[0]))
+            except ValueError as e:
+                if path.startswith("/api/") or path == "/api": return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
+                SG.reset()
         V.REQ.path, V.REQ.qs = path, qs
         if PAGE_LIMITED.match(path) and self.page_limited(): return
         if path == "/ops/visits": return self.ops_visits(path, qs)
@@ -825,6 +848,8 @@ class H(BaseHTTPRequestHandler):
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
             html = page(path, qs)
+            if isinstance(html, str) and SG.archived(): html = seg_links(html)
+            elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))
             if isinstance(html, tuple): return self.send(*html)   # (status, html): a known route with an unknown subject
             return self.send(200, html)

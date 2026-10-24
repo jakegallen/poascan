@@ -1,6 +1,7 @@
 """Every main route renders (HTTP 200) with maintenance on, joining paused (derived) and swap rows present (open and filled,
 with events, attestations and verified chain links). Usage: python3 tools/routes_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ROUTES = ["/", "/start", "/upgrade", "/epochs", "/txs", "/agents", "/token", "/network", "/about", "/privacy", "/status",

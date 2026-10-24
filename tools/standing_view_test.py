@@ -9,6 +9,7 @@ and the join prompt unchanged. Then, from tools/standing_view_fixture.json (the 
 removal at E8+ sits at last challenge_eligible + 7 and every E11 mark count equals that address's losing-side jury votes.
 Usage: python3 tools/standing_view_test.py   (temp database, no network)"""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error, collections
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 TMP = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(TMP, "t.db")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, ROOT)

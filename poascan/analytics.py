@@ -1,6 +1,6 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
 import json, time, threading, statistics, collections, csv, os, re, datetime as dt
-from . import db
+from . import db, segments as S
 
 _cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
 _inflight = {}                        # key -> Event while one thread recomputes it
@@ -14,7 +14,7 @@ def cached(key, ttl=30):
     value (or wait for the first compute). Concurrent requests never run the same heavy function at once."""
     def deco(fn):
         def wrap(*a):
-            k = (key,) + a; own = True
+            k = (key, S.selected()) + a; own = True   # every cached value is per segment (segments.py)
             while True:
                 with _lock:
                     hit = _cache.get(k)
@@ -62,16 +62,41 @@ def networks():
         if c.get("chain_id") == "poa-mainnet-1": return c
     return {}
 
-_epochs = {"ts": None, "v": []}
+_epochs = {}   # segment -> {"ts", "v"}
 @cached("epochs_raw", 15)
 def epochs_raw():
-    """The epochs blob is ~11 MB of JSON (~40 MB parsed). Parse it only when the indexer stores a new copy."""
-    r = db.q1("SELECT ts FROM blobs WHERE kind='epochs'")
+    """The selected segment's close records (segments.py: one blob per segment; segment 1's is ~21 MB of JSON).
+    Each is parsed only when the indexer stores a new copy."""
+    kind = S.blob_kind(); c = _epochs.setdefault(kind, {"ts": None, "v": []})
+    r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
     ts = r["ts"] if r else None
-    if ts != _epochs["ts"]:
-        _epochs["v"] = []; _epochs["ts"] = None          # drop the old copy before parsing the new one
-        _epochs["v"] = db.get_blob("epochs")[0] or []; _epochs["ts"] = ts
-    return _epochs["v"]
+    if ts != c["ts"]:
+        c["v"] = []; c["ts"] = None          # drop the old copy before parsing the new one
+        c["v"] = db.get_blob(kind)[0] or []; c["ts"] = ts
+    return c["v"]
+
+def epochs_ts():
+    """When the selected segment's close records were stored (blobs.ts), or None."""
+    try: r = db.q1("SELECT ts FROM blobs WHERE kind=?", (S.blob_kind(),))
+    except Exception: return None   # a database not yet initialised (tools that read before db.init)
+    return r["ts"] if r else None
+
+def segment_closes(n):
+    """Close records of segment n, whatever segment this thread reads."""
+    with S.use(n): return epochs_raw()
+
+@cached("segment_minted", 300)
+def segment_minted():
+    """Sum of every reward in the selected segment's close records."""
+    return sum(float(v) for e in epochs_raw() for v in (e.get("rewards") or {}).values())
+
+def minted_before():
+    """Rewards minted in every segment before the selected one (cum_supply starts there; balances carried over)."""
+    out = 0.0
+    for n in S.NUMBERS:
+        if n >= S.selected(): break
+        with S.use(n): out += segment_minted()
+    return out
 
 # 1.26.89: from the E14 close minepoa's pending rows carry no "since" (origin epoch); before, every row had it. Reading a
 # missing since as 0 put E14's 1,252 new answers under E0 (stale, expiring at close 16). since_of() fills it from POAScan's
@@ -79,8 +104,8 @@ def epochs_raw():
 _sf = {"ts": None, "v": {}}
 def since_fill():
     """{answer id: origin epoch} for pending rows without since, rebuilt only when a new epochs blob lands."""
-    r = db.q1("SELECT ts FROM blobs WHERE kind='epochs'"); ts = r["ts"] if r else None
-    if ts is not None and ts == _sf["ts"]: return _sf["v"]
+    ts = (S.selected(), epochs_ts())
+    if ts[1] is not None and ts == _sf["ts"]: return _sf["v"]
     first = {}
     for e in epochs_raw():
         n = int(e.get("epoch", 0))
@@ -120,7 +145,8 @@ def grade_counts(e, prev_ts=None):
 
 @cached("epoch_rows", 60)
 def epoch_rows():
-    out = []; prev = None; cum = 0.0; pprev = None
+    """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
+    out = []; prev = None; cum = minted_before(); pprev = None; seg = S.selected()
     for e in epochs_raw():
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         pool = float(e.get("pool") or 0); m = sum(r); cum += m; t = int(e["ts"])
@@ -152,7 +178,7 @@ def epoch_rows():
             audit_sampled=(b.get("audit") or {}).get("sampled"), audit_slashed=len((b.get("audit") or {}).get("slashed", [])),
             ceiling_capped=len((b.get("final_payout") or {}).get("capped", {})),
             paid_at_max=sum(1 for v in r if rs and round(v, 6) == round(rs[0], 6)) if r else 0,   # from the rewards row, not final_payout (E12: 152 at the top tier, 210 capped)
-            referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {}))))
+            referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {})), segment=seg))
         prev = t
     return out
 
@@ -167,12 +193,17 @@ def open_epoch():
     """The open epoch. Answers are tagged with the epoch they land in, so when the newest answers already carry the next
     number (a close our /api/status or /api/epochs read hasn't caught up with yet), that number is the open epoch.
     Its start is the previous close when we have that record, else the first answer tagged with it (start_estimated)."""
+    with S.use(S.CURRENT): return _open_epoch()
+
+def _open_epoch():
     rows = epoch_rows(); p = params(); st = status()
     closed = max(int(st.get("epochs_closed") or 0), (rows[-1]["epoch"] + 1) if rows else 0)
     period = int(p.get("auto_epoch_seconds") or 21600)
     nxt = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE type='challenge' AND epoch=? AND ts > ?", (closed + 1, int(time.time()) - period))
     ep = closed + 1 if nxt and nxt["n"] >= AHEAD_MIN else closed
     last_close, est = (rows[-1]["close_ts"] if rows else None), False
+    seg0 = S.BY_N[S.CURRENT].get("start_ts")
+    if not rows and seg0 and S.has_cut(): last_close, est = seg0, True   # a new segment's first epoch opens at the cut
     if rows and rows[-1]["epoch"] != ep - 1:
         t0 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='challenge' AND epoch=? AND ts > ?", (ep, int(time.time()) - 2 * period))["t"]
         if t0: last_close, est = t0, True
@@ -197,7 +228,7 @@ def open_epoch():
                 graders_epoch=graders_epoch, graders_reopened_at=reopened,
                 graders_served_last=rows[-1].get("graders") if rows else None, graders_served_last_official=rows[-1].get("graders_official") if rows else None, graders_served_last_epoch=rows[-1]["epoch"] if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
                 grading_state=gs["state"], grading_basis=gs["basis"], last_seal_at=gs.get("last_seal_at"),
-                start_estimated=est)
+                start_estimated=est, segment=S.CURRENT)
 
 HALT_ID_RX = re.compile(r"grading[-_ ]halt", re.I)
 HALT_MSG_RX = re.compile(r"\bgrading\b[^.]{0,40}?\bhalted\b", re.I)
@@ -221,10 +252,33 @@ def grading_halt(now=None):
 
 @cached("rewards_by_addr", 60)
 def rewards_by_addr():
+    """addr -> {lifetime close number: reward} over every segment (segments.gkey: segment 1's E0 to E14 are 0 to 14,
+    segment 2's E0 is 15). Lifetime totals, vesting and streaks span the cut; segments.split_gkey gives (segment, epoch)."""
     out = collections.defaultdict(dict)
-    for e in epochs_raw():
-        for a, v in e.get("rewards", {}).items(): out[a][int(e["epoch"])] = float(v)
+    for n in S.NUMBERS:
+        for e in segment_closes(n):
+            for a, v in e.get("rewards", {}).items(): out[a][S.gkey(e["epoch"], n)] = float(v)
     return out
+
+def rewards_in_segment(rb, n=None):
+    """{epoch: reward} of one segment from a rewards_by_addr() entry."""
+    n = n or S.selected(); out = {}
+    for g, v in rb.items():
+        sg, k = S.split_gkey(g)
+        if sg == n: out[k] = v
+    return out
+
+def open_gkey():
+    """The open epoch as a lifetime close number (vesting counts closes across segments)."""
+    with S.use(S.CURRENT): k = status().get("epochs_closed") or len(epoch_rows())
+    return S.gkey(int(k), S.CURRENT)
+
+def last_close_gkey():
+    """The newest close in any segment as a lifetime close number (None with no close at all)."""
+    for n in reversed(S.NUMBERS):
+        ep = segment_closes(n)
+        if ep: return S.gkey(max(int(e.get("epoch", 0)) for e in ep), n)
+    return None
 
 def vesting_split(rewards, open_ep, vest=100):
     """Each epoch k's reward unlocks 1/vest per epoch starting the next epoch (verified against /api/hosted/me)."""
@@ -233,7 +287,7 @@ def vesting_split(rewards, open_ep, vest=100):
 
 @cached("supply", 60)
 def supply_split():
-    vest = int(params().get("vesting_epochs") or 100); n = status().get("epochs_closed") or len(epoch_rows())
+    vest = int(params().get("vesting_epochs") or 100); n = open_gkey()
     sp = lk = 0.0
     for a, r in rewards_by_addr().items():
         s, l = vesting_split(r, n, vest); sp += s; lk += l
@@ -271,12 +325,14 @@ def established_set():
     over every close and add identities that held a grading seat (graders_served or a settled
     jury) after their last removal and within estab_ttl closes, plus trusted/system graders.
     Seats go only to established identities (go.md), so a seat is evidence of standing."""
-    ep = epochs_raw()
+    seg = S.selected(); ep = [(m, e) for m in S.NUMBERS if m <= seg for e in sorted(segment_closes(m), key=lambda r: int(r.get("epoch", 0)))]
     if not ep: return set()
-    pp = params(); ttl = int(pp.get("estab_ttl") or 6); last = int(ep[-1].get("epoch", len(ep) - 1))
+    # 1.26.91: folded over every segment up to the selected one, by lifetime close number: standing is ledger state, carried
+    # over at the genesis cut with balances, so a new segment starts from segment 1's last close, not from nobody.
+    pp = params(); ttl = int(pp.get("estab_ttl") or 6); last = S.gkey(ep[-1][1].get("epoch", 0), ep[-1][0])
     est, seat, removed = set(), {}, {}
-    for e in sorted(ep, key=lambda r: int(r.get("epoch", 0))):
-        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
+    for m, e in ep:
+        n = S.gkey(e.get("epoch", 0), m); b = e.get("basis", {}) or {}
         seated = set(b.get("graders_served", {}) or {})
         seated |= {j.get("grader") for s in (b.get("settled") or []) for j in (s.get("jury") or []) if j.get("grader")}
         for a in seated: seat[a] = n
@@ -458,13 +514,18 @@ def freshness():
                 href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
                 fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up)
 
-def anchors_latest(n=20):
-    return db.q("SELECT * FROM anchors ORDER BY height DESC, chain LIMIT ?", (n,))
+def anchors_latest(n=20, segment=None):
+    """Newest anchors first, current segment first (heights restart at a genesis cut); segment= keeps one segment."""
+    if segment: return db.q("SELECT * FROM anchors WHERE segment=? ORDER BY height DESC, chain LIMIT ?", (segment, n))
+    return db.q("SELECT * FROM anchors ORDER BY segment DESC, height DESC, chain LIMIT ?", (n,))
 
 def anchor_summary():
-    r = db.q1("SELECT COUNT(DISTINCT height) AS heights, COUNT(*) AS n, MAX(height) AS top, MAX(anchored_at) AS last, MIN(anchored_at) AS first FROM anchors")
-    r["signers"] = db.q("SELECT DISTINCT chain, anchored_by FROM anchors")
-    r["sigs"] = db.q("SELECT substr(memo, instr(memo,':sigs')+1) AS s, COUNT(*) AS n FROM anchors GROUP BY s")
+    """The selected segment's anchors (a new segment's top height is its own, not segment 1's h44003)."""
+    sg = S.selected()
+    r = db.q1("SELECT COUNT(DISTINCT height) AS heights, COUNT(*) AS n, MAX(height) AS top, MAX(anchored_at) AS last, MIN(anchored_at) AS first FROM anchors WHERE segment=?", (sg,))
+    r["signers"] = db.q("SELECT DISTINCT chain, anchored_by FROM anchors WHERE segment=?", (sg,))
+    r["sigs"] = db.q("SELECT substr(memo, instr(memo,':sigs')+1) AS s, COUNT(*) AS n FROM anchors WHERE segment=? GROUP BY s", (sg,))
+    r["segment"] = sg
     return r
 
 MIN_ACTIVITY_EPOCHS = 1  # an Agent paid in at most this many epochs counts as min-activity

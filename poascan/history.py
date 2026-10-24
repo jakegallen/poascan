@@ -1,6 +1,7 @@
 """Full address history from the archive (keyset paging) and grading assignments per grader from the close records."""
 import base64, collections, json, threading, time
 from . import db, analytics as A
+from . import segments as S
 
 LIMIT_MAX = 200
 
@@ -36,13 +37,25 @@ def coverage(a):
     g = db.q1("SELECT MIN(ts) AS t FROM txs") or {}
     s = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS lo, MAX(ts) AS hi FROM txs WHERE from_addr = ?", (a,)) or {}
     t = db.q1("SELECT COUNT(*) AS n FROM txs WHERE to_addr = ? AND (from_addr IS NULL OR from_addr != ?)", (a, a)) or {}
-    nz = db.q1("SELECT MAX(CAST(json_extract(d.json, '$.body.nonce') AS INTEGER)) AS m FROM txs t JOIN tx_detail d ON d.id = t.id WHERE t.from_addr = ?", (a,)) or {}
-    m = nz.get("m"); sent = s.get("n") or 0
+    sent = s.get("n") or 0
+    # 1.26.91: nonces restart at a genesis cut, so the nonce and its gap are per segment (never segment 1's 395 against
+    # every tx sent in both). The top level keeps its fields for the current segment; by_segment has each one.
+    by = {r["segment"]: r for r in db.q("SELECT segment, COUNT(*) AS n, MIN(ts) AS lo, MAX(ts) AS hi FROM txs WHERE from_addr = ? GROUP BY segment", (a,))}
+    nz = {r["segment"]: r["m"] for r in db.q("SELECT t.segment AS segment, MAX(CAST(json_extract(d.json, '$.body.nonce') AS INTEGER)) AS m FROM txs t "
+                                             "JOIN tx_detail d ON d.id = t.id WHERE t.from_addr = ? GROUP BY t.segment", (a,))}
+    def one(n):
+        r = by.get(n) or {}; k = r.get("n") or 0; m = nz.get(n)
+        return dict(segment=n, label=S.label(n), archived=n != S.CURRENT, indexed_sent=k, first_ts=r.get("lo"), last_ts=r.get("hi"), highest_nonce=m,
+                    nonce_gap=(m - k) if m is not None and m > k else 0 if m is not None else None, complete=False if m is not None and m > k else None)
+    segs = [one(n) for n in reversed(S.NUMBERS) if n == S.CURRENT or n in by]
+    cur = segs[0]
     return dict(archive_start_ts=g.get("t"), indexed=sent + (t.get("n") or 0), indexed_sent=sent, first_ts=s.get("lo"), last_ts=s.get("hi"),
-                highest_nonce=m, nonce_gap=(m - sent) if m is not None and m > sent else 0 if m is not None else None,
-                complete=False if m is not None and m > sent else None,    # never true: the newest bodies may not be archived, so the nonce is a lower bound
+                segment=S.CURRENT, highest_nonce=cur["highest_nonce"], nonce_gap=cur["nonce_gap"],
+                complete=cur["complete"],    # never true: the newest bodies may not be archived, so the nonce is a lower bound
+                by_segment=segs,
                 note="Archive of the network's tx feed (newest 200, read every minute), its tx window and address reads; the network lists only an address's newest 100. "
-                     "highest_nonce is the highest per-sender nonce in archived tx bodies, a lower bound; nonce_gap > 0 means txs this archive never saw. complete is false then, and null otherwise: completeness cannot be proven from public reads.")
+                     "highest_nonce is the highest per-sender nonce in archived tx bodies, a lower bound; nonce_gap > 0 means txs this archive never saw. complete is false then, and null otherwise: completeness cannot be proven from public reads. "
+                     "Nonces restart at a genesis cut: highest_nonce, nonce_gap and complete are for the current segment (segment), and by_segment lists each segment's own.")
 
 # ---------------- grading assignments ----------------
 _lock = threading.Lock(); _gx = {"key": None, "v": None}
@@ -53,7 +66,7 @@ def grading_index():
     raw = A.epochs_raw()
     # keyed on the parsed blob's identity and its stored ts; compared with == (an `is` on two int ids is never true,
     # which made every address page rebuild this index from the whole epochs blob)
-    key = (id(raw), A._epochs.get("ts"))
+    key = (S.selected(), id(raw), A.epochs_ts())
     with _lock:
         if _gx["key"] == key and _gx["v"]: return _gx["v"]
     rec, by = {}, {}

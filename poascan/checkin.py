@@ -142,7 +142,8 @@ def _rates(r):
 def _closes():
     """epoch -> close time, and addr -> {epoch: reward}, from the archive's epoch records (no upstream call)."""
     from . import analytics as A
-    return {int(e["epoch"]): int(e.get("ts") or 0) for e in A.epochs_raw()}, A.rewards_by_addr()
+    from . import segments as S   # rewards are keyed by lifetime close number across segments
+    return {S.gkey(e["epoch"], m): int(e.get("ts") or 0) for m in S.NUMBERS for e in A.segment_closes(m)}, A.rewards_by_addr()
 
 def match(addr, ts):
     """('joined', join ts) when the address's first archived join tx is at most WINDOW_S before the check-in (SKEW_S after it

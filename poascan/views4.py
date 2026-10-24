@@ -16,8 +16,8 @@ def _nm(): return A.forum_names()
 
 @A.cached("lb_base", 60)
 def _base():
-    rb = A.rewards_by_addr(); acc = G.accounts_all(); ep = A.epoch_rows()
-    last = ep[-1]["epoch"] if ep else None
+    rb = A.rewards_by_addr(); acc = G.accounts_all()
+    last = A.last_close_gkey()   # rewards are keyed by lifetime close number (segments.gkey)
     kids = collections.defaultdict(list)
     for a, r in acc.items():
         if r["invited_by"]: kids[r["invited_by"]].append(a)

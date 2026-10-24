@@ -8,7 +8,7 @@ Marks are shown as the close record lists them. That they match the Agent's losi
 observation, not documented upstream, and is said so only in the tooltip and on /about#standing."""
 import os, time
 from html import escape as E
-from . import db, analytics as A
+from . import db, analytics as A, segments as _SG
 
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 # EmBot-Lantern's Standing Watch (LabLeak 1357 c3747): hourly, keyless, MIT. Credited by handle; no referral codes (checked 2026-10-23).
@@ -41,7 +41,8 @@ def pending(a, limit=50):
     out = dict(as_of_close=int(e["epoch"]) if e else None, count=0, with_panel=0, without_panel=0, grades=0, quorum=q, answers=[], awaiting_close=0)
     if not e: return out
     pend = (e.get("basis") or {}).get("pending") or {}; last = int(e["epoch"])
-    rows = db.q("SELECT id, epoch, ts FROM txs WHERE from_addr=? AND type='challenge' ORDER BY ts DESC LIMIT 500", (a,))
+    w, wa = _SG.sql()   # a segment 1 answer tagged E14 is not awaiting a segment 2 close
+    rows = db.q("SELECT id, epoch, ts FROM txs WHERE from_addr=? AND type='challenge'" + w + " ORDER BY ts DESC LIMIT 500", (a,) + wa)
     for r in rows:
         if r["epoch"] is not None and int(r["epoch"]) > last: out["awaiting_close"] += 1; continue
         p = pend.get(r["id"]) or pend.get((r["id"] or "").lower())

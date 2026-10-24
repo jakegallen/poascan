@@ -417,7 +417,8 @@ def recovery():
     cp = st.get("checkpoint_height")
     if cp is None: cp = A.networks().get("checkpoint_height")
     t = A._ts(st.get("as_of")); age = int(time.time() - t) if t else None
-    return dict(moved=cp is not None and int(cp) > PARKED, checkpoint=int(cp) if cp is not None else None, previous_checkpoint=PARKED,
+    from . import segments as S   # a genesis cut restarts heights: a new segment's low checkpoint is not a parked one
+    return dict(moved=cp is not None and (int(cp) > PARKED or S.has_cut()), checkpoint=int(cp) if cp is not None else None, previous_checkpoint=PARKED,
                 state_root=st.get("state_root"), supply=str(st.get("supply")) if st.get("supply") is not None else None, supply_before=PRE_SUPPLY,
                 supply_intact=sup is not None and sup == pre, status_as_of=st.get("as_of"), status_age_s=age,
                 status_fresh=age is not None and age <= STATUS_FRESH_S, status_stale_flag=bool(st.get("stale")),   # same rule as the pill: a stale flag on a read under 10 minutes old is not lag

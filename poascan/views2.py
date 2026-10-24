@@ -97,7 +97,9 @@ def status_data():
             start = t; last_cp_change = t; prev = cp
     if start and hs and hs[-1][0] - start >= STALL: inc.append((start, None, "no checkpoint > 3h", None))
     inc.sort(key=lambda x: -x[0])
-    anc = db.q("SELECT chain, MAX(anchored_at) AS t, MAX(height) AS h FROM anchors GROUP BY chain")
+    from . import segments as _SG
+    anc = db.q("SELECT chain, MAX(anchored_at) AS t, MAX(height) AS h FROM anchors WHERE segment=? GROUP BY chain", (_SG.CURRENT,))   # heights restart at a cut
+    if not anc: anc = db.q("SELECT chain, MAX(anchored_at) AS t, MAX(height) AS h FROM anchors GROUP BY chain")
     return dict(eps=eps, inc=inc, lag=lag, last_cp_change=last_cp_change, anchors=anc,
                 lat=[(h, statistics.median(v)) for h, v in sorted(hrs.items())])
 

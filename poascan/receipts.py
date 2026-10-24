@@ -2,7 +2,7 @@
 the tx itself, close records (basis.pending / basis.settled / rewards) and cached grade-sealed details.
 Fields that the public records cannot show are None (unknown), never a guess."""
 import json, time
-from . import db, analytics as A, indexer as I
+from . import db, analytics as A, indexer as I, segments as S
 
 QUORUM_DEFAULT = 4
 
@@ -44,9 +44,17 @@ def _detail(tid, fetch):
 
 def receipt(tid, fetch=False, row=None):
     """Receipt for one answer tx, or None when tid is not a known answer. fetch=True may read the tx once from
-    minepoa.com (same as viewing /tx); it is cached for good once final."""
+    minepoa.com (same as viewing /tx); it is cached for good once final. Read against the close records of the tx's own
+    segment (segments.py): a segment 1 answer is never matched to a segment 2 close with the same number."""
     tid = tid.lower()
-    row = row or db.q1("SELECT id, type, from_addr, epoch, ts, final FROM txs WHERE id=?", (tid,))
+    row = row or db.q1("SELECT id, type, from_addr, epoch, ts, final, segment FROM txs WHERE id=?", (tid,))
+    seg = (row or {}).get("segment") or S.of_ts((row or {}).get("ts"))
+    with S.use(seg):
+        r = _receipt(tid, fetch, row)
+    if r and r.get("accepted"): r["segment"] = seg
+    return r
+
+def _receipt(tid, fetch, row):
     d = _detail(tid, fetch) if (fetch or not row) else (I.get_tx_detail(tid, allow_fetch=False) or {})
     d = d or {}
     typ = (row or {}).get("type") or d.get("type")
@@ -94,7 +102,7 @@ def receipt(tid, fetch=False, row=None):
                 paid_via_challenge_eligible=(bs == "absent" and bool(ce) and (_num(ca) or 0) > 0) if have and bs else None)
 
 def for_address(a, limit=50):
-    rows = db.q("SELECT id, type, from_addr, epoch, ts, final FROM txs WHERE from_addr=? AND type='challenge' ORDER BY ts DESC LIMIT ?", (a, limit))
+    rows = db.q("SELECT id, type, from_addr, epoch, ts, final, segment FROM txs WHERE from_addr=? AND type='challenge' ORDER BY ts DESC LIMIT ?", (a, limit))
     return [x for x in (receipt(r["id"], row=r) for r in rows) if x]
 
 # ---------------------------------------------------------------- HTML
@@ -106,9 +114,14 @@ TAG = {"passed": "ok", "failed": "bad", "vanished": "warn", "refused": "bad"}
 LABEL = {"passed": "Passed", "failed": "Failed", "pending": "Pending", "awaiting_close": "Awaiting close",
          "vanished": "Dropped at close", "unrecorded": "No record", "refused": "Refused"}
 
+def _e(r, n):
+    """E5, or S1 E5 for an answer from an archived segment."""
+    sg = r.get("segment") or S.CURRENT
+    return f"E{n}" if sg == S.CURRENT else f"S{sg} E{n}"
+
 def status_tag(r):
     s = r["status"]; c = r.get("settled_close") if s in ("passed", "failed") else r.get("last_pending_close") if s == "vanished" else None
-    at = f' · E{c}' if c is not None else ""
+    at = f' · {_e(r, c)}' if c is not None else ""
     return f'<span class="tag {TAG.get(s, "")}">{LABEL[s]}{at}</span>'   # pending and awaiting close stay neutral
 
 def seals_txt(r):
@@ -117,9 +130,9 @@ def seals_txt(r):
     return f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span> <span class="dim">/ {q}</span>'
 
 def paid_txt(r):
-    if r.get("paid_via_challenge_eligible"): return f'E{r["epoch"]} <span class="dim">· challenge-eligible, not in basis</span>'
-    if r["address_credited"] is True: return f'E{r["paid_close"]}'
-    if r["passed"] is True: return f'No credit at E{r["settled_close"]}'
+    if r.get("paid_via_challenge_eligible"): return f'{_e(r, r["epoch"])} <span class="dim">· challenge-eligible, not in basis</span>'
+    if r["address_credited"] is True: return _e(r, r["paid_close"])
+    if r["passed"] is True: return f'No credit at {_e(r, r["settled_close"])}'
     if r["passed"] is False: return "No"
     return '<span class="dim">Not settled</span>'
 
@@ -142,5 +155,5 @@ def list_html(rs):
     def sl(r): return UNK if r["seals"] is None else f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span>'
     def pd(r): return paid_txt(r) if r["passed"] is not None or r.get("paid_via_challenge_eligible") else '<span class="dim">·</span>'
     return table(["Answer", "Status", f"Seals / {q}" if q else "Seals", "Paid"],
-                 [[f'<span class="ep dim">E{r["epoch"]}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 4, 4))}</a>',
+                 [[f'<span class="ep dim">{_e(r, r["epoch"])}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 4, 4))}</a>',
                    status_tag(r), sl(r), pd(r)] for r in rs], cls="rcpt")

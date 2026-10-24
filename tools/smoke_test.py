@@ -1,6 +1,7 @@
 """CI smoke test: start POAScan on an empty database with the indexer off (no upstream calls), then check
 key pages, the API, openapi.json, llms.txt and the MCP server. Usage: python3 tools/smoke_test.py"""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 
 def _og_ok():
     from poascan import og

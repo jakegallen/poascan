@@ -1,6 +1,7 @@
 """Server-rendered pages."""
 import json, time, math, collections, threading, datetime as dt, re
 from . import db, analytics as A, agents as G, indexer as I
+from . import segments as SG
 from .ui import *
 from . import prompts as PR
 from . import ui as _ui
@@ -298,8 +299,8 @@ def live_rows(kind):
 
 def _sig_badge(d):
     """G0 notice, release and declaration txs: the Signed / Unverified / Invalid badge (signed.py)."""
-    from . import signed as SG
-    return SG.badge(SG.for_detail(d))
+    from . import signed as _SIG
+    return _SIG.badge(_SIG.for_detail(d))
 
 def tx_unavailable(tid, paused):
     """No archived copy and no node read: a clean state with the txid and a retry link, never an error page."""
@@ -460,9 +461,9 @@ def address(a):
     d, err, at = address_read(a); nm = names(); p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None
-    n = A.status().get("epochs_closed") or 0
+    n = A.open_gkey()   # rewards are keyed by lifetime close number (segments.gkey): vesting runs across the genesis cut
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
-    rsum = sum(rb.values()); est = a in A.established_set()
+    rsum = sum(rb.values()); est = a in A.established_set(); cvn = HI.coverage(a)
     vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test agent)."
     if bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
     cen = p["census"]; fam = p["family"]
@@ -474,14 +475,15 @@ def address(a):
           ("Custody", E((p["label"] or {}).get("custody") or "···")), ("External wallet", "linked" if a in chains_linked() else "···"),
           ("Model / Harness", (f'{E(cen["eco"])}{" · "+E(cen["detail"]) if cen.get("detail") else ""} / {E(", ".join(cen["harness"]))}' if cen else "···")),
           ("Kin", kin_row(a, KN.kin(a), nm)),
+          ("Nonce", nonce_txt(cvn).split(" ", 1)[1] if cvn.get("indexed_sent") else "···"),
           ("Family size", str(fam[1]) if fam else "···"), ("Family root", addr_link(fam[0], nm) if fam and fam[1] > 1 else "···"),
           ("Longest run", f'{p["streak"][0]} epochs' if p["streak"][0] else "···"), ("Epochs answered", ", ".join("E"+str(k) for k in p["answered"]) or "···"),
           ("Answers passed / settled", f'{sum(1 for x in p["settled"] if x[2])} / {len(p["settled"])}'), ("Jury aligned / seats", f'{sum(1 for x in p["jury"] if x[1])} / {len(p["jury"])}'),
           ("Grades served", f'{p["served"]:,}'), ("Bug + proposal posts", str(len(p["builder_posts"])) if p["builder_posts"] else "···"), ("G0 mentions", str(p["credit"]) if p["credit"] else "···")]
     kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v))
     eps = sorted(rb.items())
-    rew = bars([(f"E{k}", [v]) for k, v in eps], colors=("#E3A33A",)) if eps else '<p class="na">No rewards yet.</p>'
-    rew += table(["Epoch", "Reward"], [[f'<a href="/epoch/{k}">E{k}</a>', poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
+    rew = bars([(SG.ep_label(k), [v]) for k, v in eps], colors=("#E3A33A",)) if eps else '<p class="na">No rewards yet.</p>'
+    rew += table(["Epoch", "Reward"], [[f'<a href="{SG.ep_href(k)}">{SG.ep_label(k)}</a>', poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
     qs = getattr(REQ, "qs", {}) or {}
     typ = qs.get("type", [""])[0] or ""
     tab = qs.get("tab", [""])[0] or ("txs" if typ else "overview")
@@ -665,12 +667,20 @@ def history_card(a, typ=""):
              + "".join(f'<a href="/address/{E(a)}?tab=txs&amp;type={E(t)}" class="chip {"on" if t == typ else ""}">{E(type_name(t))} <small>{n:,}</small></a>' for t, n in tc.items())) if len(tc) > 1 else ""
     q = f"&type={E(typ)}" if typ else ""
     more = more_btn(f"/fragment/addr?a={a}&k=txs{q}&cursor={nxt}" if nxt else None)
-    st = (f'Archive from {_pt_day(cv["archive_start_ts"])} · {cv["indexed_sent"]:,} sent · nonce ' + (f'{cv["highest_nonce"]:,}' if cv["highest_nonce"] is not None else RC.UNK)
+    st = (f'Archive from {_pt_day(cv["archive_start_ts"])} · {cv["indexed_sent"]:,} sent · ' + nonce_txt(cv)
           + f' · <a href="/about#history">coverage</a>') if total else ""
     tb = (f'<div class="tw"><table class="hist"><thead><tr><th>Tx</th><th>Type</th><th class="r">Epoch</th><th class="r">Age</th></tr></thead>'
           f'<tbody>{hist_rows(rows) or f"<tr><td colspan=4 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
     return card("History", (f'<div class="chips">{chips}</div>' if chips else "") + tb + more + (f'<p class="cov dim small">{st}</p>' if st else ""),
                 f'<a class="more" href="/api/v1/address/{E(a)}/txs{"?type=" + E(typ) if typ else ""}">API →</a>', cls="histc", id="txs")
+
+def nonce_txt(cv):
+    """Nonce per segment (nonces restart at a genesis cut): "Nonce S2 3 · S1 395", or "nonce 395" with one segment."""
+    segs = cv.get("by_segment") or []
+    f = lambda m: f'{m:,}' if m is not None else RC.UNK
+    if len(segs) <= 1 or not SG.has_cut():
+        return "nonce " + f(cv.get("highest_nonce"))
+    return "Nonce " + " · ".join(f'<span class="nseg" title="{E(x["label"])}">S{x["segment"]} {f(x["highest_nonce"])}</span>' for x in segs)
 
 def _pt_day(ts):
     t = _pt(ts); return t.strftime("%b %-d") if t else "···"
@@ -772,8 +782,26 @@ def live_hero():
             f'<div>{graders_tile(o)}</div>'
             f'<div><span class="lbl">Pool</span><b>{poa(o["pool"], dec=2)}</b></div></div></section>')
 
+def cut_note(link_seg1=True):
+    """The genesis cut in one line (segments.py), or "" with no cut."""
+    c = SG.cut()
+    if not c: return ""
+    seg1 = ' <a href="/epochs?segment=1">Segment 1</a>' if link_seg1 else ""
+    return (f'<p class="cutnote"><span class="tag warn">{E(c["label"])}</span> <span>{E(c["note"])}</span>{seg1}'
+            f' <a href="{E(c["archive_url"])}" rel="noopener noreferrer">Archive ↗</a></p>')
+
+def seg_tabs(base="/epochs"):
+    """Current segment and archived segment chips (a toggle), or "" with no cut."""
+    if not SG.has_cut(): return ""
+    cur = SG.selected()
+    return ('<nav class="chips segs" aria-label="Segment">' + "".join(
+        f'<a href="{base}{"" if n == SG.CURRENT else "?segment=" + str(n)}" class="chip {"on" if n == cur else ""}"{" aria-current=\"page\"" if n == cur else ""}>{E(SG.label(n))}</a>'
+        for n in reversed(SG.NUMBERS)) + '</nav>')
+
 def epochs_page(qs=None):
-    """Open epoch hero, then Closed (history, cohorts, cadence), Pending (the queue, was /live) and Grading (was /grading) tabs."""
+    """Open epoch hero, then Closed (history, cohorts, cadence), Pending (the queue, was /live) and Grading (was /grading) tabs.
+    ?segment=1 shows an archived segment's closes only (no open epoch, queue or grading: those belong to the live segment)."""
+    if SG.archived(): return epochs_archived()
     qs = qs or {}; tab = (qs.get("tab") or [""])[0]; tab = tab if tab in dict(EP_TABS) else ("closed" if not qs.get("state") else "closed")
     ep = A.epoch_rows(); pend = A.pending_by_epoch()
     cnt = {"closed": len(ep), "pending": pend.get("total")}
@@ -785,18 +813,39 @@ def epochs_page(qs=None):
         inner = grading()
     else:
         cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
-        inner = (card("History", f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{epochs_table(ep)}</div>', X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
+        hist = epochs_table(ep) if ep or not SG.has_cut() else na(f"No closes in {SG.label(SG.CURRENT)} yet.")
+        inner = (card("History", f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>', X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
                  + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", cad + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
-    body = f'<div class="sechead"><h1>Epochs</h1></div>{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
+    body = f'<div class="sechead"><h1>Epochs</h1>{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
+def epochs_archived():
+    """An archived segment's closes: History and Cadence from its own close records, labelled, read only."""
+    ep = A.epoch_rows(); sg = SG.selected(); info = SG.info(sg)
+    cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
+    s = "".join([stat("Closes", intc(len(ep))), stat("Last close", rel(ep[-1]["close_ts"]) if ep else "···"),
+                 stat("Final checkpoint", intc(info.get("cut_height"))), stat("Minted", poa(sum(r["minted"] for r in ep), mined=True))])
+    arch = f'<a class="more" href="{E(info["archive_url"])}" rel="noopener noreferrer">Archive ↗</a>' if info.get("archive_url") else ""
+    body = (f'<div class="sechead"><h1>Epochs</h1>{seg_tabs()}</div>'
+            f'<div class="stats four">{s}</div>'
+            + card("History", epochs_table(ep) if ep else na("No close records stored for this segment."), X.usd_toggle() + f'<a class="more" href="/api/epochs.csv{SG.qs()}">CSV →</a>' + arch)
+            + card("Cadence", cad))
+    return page(f"Epochs · {SG.label(sg)}", body, "/epochs")
+
 def epoch(n):
-    rows = {r["epoch"]: r for r in A.epoch_rows()}; o = A.open_epoch()
+    rows = {r["epoch"]: r for r in A.epoch_rows()}; arch = SG.archived()
+    o = A.open_epoch() if not arch else {"epoch": None}
     if n == o["epoch"]:
-        body = card(f"Epoch {n} · open", tracker_html())
+        body = cut_note() + card(f"Epoch {n} · open", tracker_html()) if n == 0 and SG.has_cut() else card(f"Epoch {n} · open", tracker_html())
         return page(f"Epoch {n}", body, "/epochs")
     r = rows.get(n)
-    if not r: return 404, page("Epoch not found", card("Epoch", na(f"Epoch {n} has not closed (latest closed is {max(rows) if rows else '···'}).")), "/epochs")
+    if not r and arch: return 404, page("Epoch not found", card("Epoch", na(f"{SG.label()} has no epoch {n} (E0 to E{max(rows) if rows else '···'}).")), "/epochs")
+    if not r:
+        # an old link to a segment 1 close (epoch numbers restarted at the genesis cut) gets a pointer to it
+        old = [m for m in SG.NUMBERS if m != SG.CURRENT and n < int(SG.BY_N[m].get("closes") or 0)]
+        hint = "".join(f' <a href="/epoch/{n}?segment={m}">{E(SG.label(m))} E{n} →</a>' for m in old)
+        return 404, page("Epoch not found", card("Epoch", na(f"Epoch {n} has not closed in {SG.label()} (latest closed is {max(rows) if rows else '···'}).{hint}" if SG.has_cut()
+                                                          else f"Epoch {n} has not closed (latest closed is {max(rows) if rows else '···'}).")), "/epochs")
     e = A.epoch_detail(n); nm = names()
     rw = sorted(((a, float(v)) for a, v in e.get("rewards", {}).items()), key=lambda x: -x[1])
     unp = r["slashed"] - len((A.params().get("slash_pardons") or {}).get(str(n), []))   # red only when some slash was not pardoned
@@ -823,11 +872,12 @@ def epoch(n):
     nav = (f'<a class="more epn" href="/epoch/{n-1}" aria-label="Epoch {n-1}" title="Epoch {n-1}">‹</a>'
            f'<a class="more epn" href="/epoch/{n+1}" aria-label="Epoch {n+1}" title="Epoch {n+1}">›</a>')
     t = _pt(r["close_ts"])
-    line = (f'<h1 class="ephd">Epoch {n} · <span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
+    sgt = (f'<a class="tag{" warn" if arch else ""} segt" href="/epochs{SG.qs()}">{E(SG.label())}</a> ') if SG.has_cut() else ""
+    line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
             f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
     body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", rt, X.usd_toggle())}</div>')
-    return page(f"Epoch {n}", body, "/epochs")
+    return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
 # ---------------- The Agents ----------------
 SUB = [("/agents", "Overview"), ("/agents/top", "Rankings"), ("/agents/graders", "Graders"), ("/agents/at-risk", "At risk"), ("/agents/operators", "Operators"),
@@ -1118,7 +1168,7 @@ def network(tab="", rng="", title=None):
     chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS)
     head = f'<div class="sechead"><h1>Network</h1></div><nav class="chips atabs scroll" aria-label="Network">{chips}</nav>'
     if tab == "health":
-        body = V2.status_body()
+        body = cut_note() + V2.status_body()
         return page(title or "Network health", head + body, "/network")
     if tab == "charts":
         body = V3.charts_body(rng).replace('<div class="cx">', '<div class="cx">' + PR.ask([PR.GROWTH]), 1)
@@ -1141,12 +1191,12 @@ def network_overview(head):
         ("Trusted graders", len(p.get("trusted_graders", []))), ("System graders", len(p.get("system_grader_accounts", []))),
         ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
         ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"]) or "···")])
-    from . import signed as SG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
+    from . import signed as _SIG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
     vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
     rtx = lambda x: (f' <a class="mono dim small reltx" href="/tx/{E(x["txid"])}" title="One of {vn[x.get("version")]} signed release txs named {E(x.get("version") or "")}">{E(x["txid"][:8])}</a>'
                      if vn[x.get("version")] > 1 and x.get("txid") else "")
-    rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{SG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
-    al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
+    rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{_SIG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
+    al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
     cap = sy["last_epoch_capped"]
     syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [
         ("Slot templates", pct(sy["slot"]/sy["sampled"]) if sy["sampled"] else "···"), ("Instruction echo", pct(sy["echo"]/sy["sampled"]) if sy["sampled"] else "···"),
@@ -1222,6 +1272,7 @@ def about():
 <li><b>New Agents</b> (/agents): change in <code>agents_joined</code> between the last /api/status snapshot of each UTC day. The first day POAScan saw is partial.</li>
 <li><b>Uptime</b> (Network → Health): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
+<h3 id="segments">Segments</h3><p>On 2026-10-24 Proof of Agent made a genesis cut: the chain continued from checkpoint h44003 as a new segment (chain <code>poa-mainnet-1</code>), and the earlier history was archived as <code>poa-mainnet-1-segment1</code> (<a href="https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1-segment1" rel="noopener noreferrer">GitHub ↗</a>). Balances carried over; open offers were refunded. POAScan keeps both segments. Epoch numbers, heights and nonces restart in each segment, so every epoch, checkpoint and nonce is read together with its segment: Segment 1 E3 and Segment 2 E3 are different closes. A transaction belongs to the segment whose time span holds it (the cut is the notice time, 21:01 UTC); an anchor belongs to Segment 1 if it is the final anchored root or was anchored before the cut. The epoch list, epoch pages, open epoch, pending queue, standing expiry and reconcile counters follow the current segment; add <code>?segment=1</code> to a page or API call (or <code>segment: 1</code> to an MCP tool) to read Segment 1. Lifetime figures (rewards, vesting, established standing) span both segments in close order. Address pages and <code>/api/address/&lt;addr&gt;/coverage</code> show the nonce per segment, so a nonce that restarts at the cut is not a gap. In the API, <code>rewards_by_epoch</code> keeps its lifetime keys and <code>rewards_by_segment</code> gives the same rewards keyed by segment and epoch.</p>
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.

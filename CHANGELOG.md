@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.91] - 2026-10-24
+
+### Added (genesis cut, segments)
+- minepoa.com cut the chain on 2026-10-24 (notice 2026-10-24-genesis-cut, on-ledger tx e1c4ea26): it continued from checkpoint h44003 as a new segment and archived the history as poa-mainnet-1-segment1 (GitHub branch EmblemCompany/ProofOfAgent poa-mainnet-1-segment1; /api/networks lists it halted at checkpoint 44003 with 15 closes). POAScan keeps both: Segment 1 (archived) stays readable and Segment 2 is current.
+- Storage: txs, answers and anchors carry a segment column (db.init migrates once; existing rows are segment 1, rows from the cut time on are segment 2; an insert trigger fills it for writers that omit it). anchors is keyed (segment, height, chain), so segment 2's low heights are not dropped as duplicates; segment 1's final root stays in segment 1. Close records live per segment: blob epochs is the current segment, epochs:s1 the archive, which only grows.
+- ?segment=1 on pages and the API, segment on MCP get_epoch and get_epoch_record; responses for epochs, closes, close records, anchors, coverage and status carry segment. /api/v1/status and MCP get_network_summary add segment, segments and genesis_cut; meta and X-Segment name the segment read. Bad values are a 400.
+- Epochs: Segment 2 / Segment 1 (archived) toggle, one line note "Segment 2 began at h44003 of segment 1. Earlier history archived." with the archive link; archived epoch pages are labelled and their links stay in segment 1. An old /epoch/<n> link that is not closed in segment 2 points to Segment 1 E<n>; the API 404 adds segment_1.
+- Network health and the epoch list show the Genesis cut label. Charts: Genesis cut milestone on Supply, Agents and Holders (plain label), close marks and Answers / epoch run across both segments with S1 E<n> labels.
+- Address pages: nonce per segment (Profile row and history card, "S2 3 · S1 395"); coverage adds by_segment, and the top level highest_nonce, nonce_gap and complete are the current segment's, so a nonce that restarts at the cut is not a gap.
+- API: rewards_by_epoch keeps lifetime close numbers (segment 1 E0 to E14 are 0 to 14; segment 2 E0 is 15); rewards_by_segment adds segment and epoch. /about#segments has the method.
+
+### Changed
+- Open epoch, pending queue, standing expiry estimate, reconcile (Closes, Txs, Final, Checkpoint) and recovery read the current segment; vesting, lifetime rewards and established standing span both (standing carried over with balances). A new segment's low checkpoint is not read as parked.
+- /api/v1/epoch/<n>/record is cached immutable only with ?segment= (a bare n names a different close after a cut); 300 s otherwise.
+
 ## [1.26.89] - 2026-10-24
 
 ### Fixed (paused minepoa lookups)

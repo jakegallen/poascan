@@ -4,7 +4,7 @@ Canonical form is RFC 8785 (JCS): object keys sorted by UTF-16 code units, no wh
 JSON.stringify does (non-ASCII left as UTF-8), numbers in ECMAScript shortest form, UTF-8 bytes. For these records it equals
 json.dumps(r, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() in Python. sha256 is over those bytes."""
 import collections, decimal, gzip, hashlib, json, threading
-from . import db, analytics as A
+from . import db, analytics as A, segments as S
 
 def _num(f):
     if f != f or f in (float("inf"), float("-inf")): raise ValueError("non-finite number")
@@ -44,37 +44,41 @@ def canonical(x):
 
 def sha256(b): return hashlib.sha256(b).hexdigest()
 
-_lock = threading.Lock(); _ix = {"ts": None, "rows": []}; _lru = collections.OrderedDict(); LRU_MAX = 3
+# Per segment (segments.py): epoch numbers restart at a genesis cut, so the index and the LRU key on the segment too.
+_lock = threading.Lock(); _ixs = {}; _lru = collections.OrderedDict(); LRU_MAX = 3
 
-def _blob_ts():
-    r = db.q1("SELECT ts FROM blobs WHERE kind='epochs'"); return r["ts"] if r else None
+def _blob_ts(): return A.epochs_ts()
 
 def _raw():
     return {int(e.get("epoch", 0)): e for e in A.epochs_raw()}
 
 def index():
     """[{epoch, close_ts, sha256, bytes}] for every published close, recomputed only when the ingested blob changes."""
-    ts = _blob_ts()
+    ts = _blob_ts(); sg = S.selected()
     with _lock:
-        if _ix["ts"] == ts and _ix["rows"]: return _ix["rows"]
+        ix = _ixs.get(sg)
+        if ix and ix["ts"] == ts and ix["rows"]: return ix["rows"]
     rows = []
     for n, e in sorted(_raw().items()):
-        b = canonical(e); rows.append(dict(epoch=n, close_ts=e.get("ts"), sha256=sha256(b), bytes=len(b)))
-    with _lock: _ix.update(ts=ts, rows=rows); _lru.clear()
+        b = canonical(e); rows.append(dict(epoch=n, close_ts=e.get("ts"), sha256=sha256(b), bytes=len(b), segment=sg))
+    with _lock:
+        _ixs[sg] = dict(ts=ts, rows=rows)
+        for k in [k for k in _lru if k[0] == sg]: _lru.pop(k, None)
     return rows
 
 def record(n):
     """(canonical bytes, sha256) of close n, or None when epoch n has no published close record."""
     row = next((r for r in index() if r["epoch"] == n), None)
     if not row: return None
+    k = (S.selected(), n)
     with _lock:
-        hit = _lru.get(n)
-        if hit and hit[1] == row["sha256"]: _lru.move_to_end(n); return hit
+        hit = _lru.get(k)
+        if hit and hit[1] == row["sha256"]: _lru.move_to_end(k); return hit
     e = _raw().get(n)
     if e is None: return None
     b = canonical(e); h = sha256(b)
     with _lock:
-        _lru[n] = (b, h)
+        _lru[k] = (b, h)
         while len(_lru) > LRU_MAX: _lru.popitem(last=False)
     return b, h
 

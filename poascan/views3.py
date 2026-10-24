@@ -2,6 +2,7 @@
 import time, json, collections, datetime as dt
 from . import market as _X
 from html import escape as E
+from . import segments as _SG
 from . import db, analytics as A, agents as G
 from .ui import *
 from . import prompts as PR
@@ -32,16 +33,21 @@ def _close_ts(j):
 
 @A.cached("unlocks", 60)
 def unlock_data():
+    # R is keyed by lifetime close number (segments.gkey): vesting counts closes across the genesis cut. fut keeps the
+    # current segment's own epoch number for labels.
     vest = _vest(); R = _minted_by_epoch(); o = A.open_epoch(); n = o["epoch"]; tot = sum(R.values())
-    def circ(j):  # circulating right after epoch j closes (open epoch = j+1)
+    off = _SG.offset(_SG.CURRENT); ng = off + n
+    def circ(j):  # circulating right after lifetime close j (open = j+1)
         return sum(v * min(1.0, max(0, j + 1 - k) / vest) for k, v in R.items())
-    past = [(r["close_ts"], circ(r["epoch"])) for r in A.epoch_rows()]
-    last_k = max(R) if R else n
+    past = []
+    for m in _SG.NUMBERS:
+        with _SG.use(m): past += [(r["close_ts"], circ(_SG.gkey(r["epoch"], m))) for r in A.epoch_rows()]
+    last_k = max(R) if R else ng
     fut = []
-    for j in range(n, last_k + vest):
-        t = _close_ts(j)
-        if t: fut.append((j, t, circ(j), circ(j) - circ(j - 1)))
-    now_c = circ(n - 1)
+    for jg in range(ng, last_k + vest):
+        t = _close_ts(jg - off)
+        if t: fut.append((jg - off, t, circ(jg), circ(jg) - circ(jg - 1)))
+    now_c = circ(ng - 1)
     hit = {}
     for p in (.25, .5, 1.0):
         hit[p] = next(((j, t) for j, t, c, _ in fut if c >= p * tot - 1e-6), None) if now_c < p * tot - 1e-6 else ("done", None)
@@ -90,15 +96,17 @@ def unlocks_api():
 
 # ---------------- address reward tracker ----------------
 def reward_tracker(a, p):
-    vest = _vest(); o = A.open_epoch(); n = o["epoch"]; rb = p["rewards"]
+    # one key space: lifetime close numbers (segments.gkey), so segment 1 rewards keep vesting across the genesis cut
+    vest = _vest(); o = A.open_epoch(); off = _SG.offset(_SG.CURRENT); n = off + o["epoch"]; rb = p["rewards"]
     sett = collections.defaultdict(lambda: [0, 0])
     for e, _, ok in p["settled"]:
-        sett[e][1] += 1; sett[e][0] += 1 if ok else 0
-    eps = sorted(set(p["answered"]) | set(rb) | set(sett))
+        sett[off + e][1] += 1; sett[off + e][0] += 1 if ok else 0
+    answered = {off + k for k in p["answered"]}
+    eps = sorted(answered | set(rb) | set(sett))
     if not eps: return '<p class="na">No answers yet.</p>', ""
     rows = []
     for k in reversed(eps):
-        sub = k in p["answered"]
+        sub = k in answered
         if k >= n: gr, gs = ("open", "cur")
         elif sett.get(k): gr, gs = (f'{sett[k][0]}/{sett[k][1]} pass', "ok" if sett[k][0] else "bad")
         elif sub: gr, gs = ("unsettled", "dimx")
@@ -108,18 +116,18 @@ def reward_tracker(a, p):
         elif r: pd, ps = (poa(r, dec=2), "ok")
         else: pd, ps = ("0", "off" if not sub else "bad")
         if r:
-            f = min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1)
+            f = min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1 - off)
             vs = (f'<span class="vbar"><i style="width:{f*100:.1f}%"></i></span><span class="num">{f*100:.0f}%</span>'
                   + (f' <span class="dim small">full {utc(done_t, "%m-%d")}</span>' if f < 1 else ""))
             vss = "ok" if f >= 1 else "cur"
         else: vs, vss = ("···", "off")
         step = lambda st, lab, val: f'<div class="rs {st}"><i></i><b>{lab}</b><span>{val}</span></div>'
-        rows.append(f'<div class="rtr"><a class="rte" href="/epoch/{k}">E{k}</a><div class="rsteps">'
+        rows.append(f'<div class="rtr"><a class="rte" href="{_SG.ep_href(k)}">{_SG.ep_label(k)}</a><div class="rsteps">'
                     + step("ok" if sub else ("off" if k < n else "cur"), "Submitted", "yes" if sub else (("grader only" if r else "···") if k < n else "…"))
                     + step(gs, "Graded", gr) + step(ps, "Paid", pd) + step(vss, "Vesting", vs) + '</div></div>')
     # schedule
     nxt = sum(v / vest for k, v in rb.items() if k <= n - 1 and n + 1 - k <= vest)
-    full_t = _close_ts(max(rb) + vest - 1) if rb else None
+    full_t = _close_ts(max(rb) + vest - 1 - off) if rb else None
     tot = sum(rb.values()); unl = sum(v * min(1.0, max(0, n - k) / vest) for k, v in rb.items())
     t_next = o["est_close"]
     sched = "".join([stat("Unlocked", pct(unl / tot) if tot else "···"), stat("Next unlock", poa(nxt) if rb else "···"),
@@ -146,6 +154,9 @@ def invite_tree(a, depth=2, cap=40):
     return upline + (f'<ul class="itree">{node(a, 0)}</ul>' if n_inv else '<p class="na">No invites yet.</p>'), n_inv
 
 # ---------------- growth ----------------
+def _ep_rows(n):
+    with _SG.use(n): return A.epoch_rows()
+
 @A.cached("growth", 120)
 def growth_data():
     s = A.accounts_series()
@@ -154,14 +165,21 @@ def growth_data():
     supply = [(t, sup) for t, a, h, sup, tx in s if sup]
     day = db.q("SELECT (ts/86400)*86400 AS d, COUNT(*) AS n FROM txs WHERE ts IS NOT NULL GROUP BY d ORDER BY d")
     hour = db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM txs WHERE ts IS NOT NULL GROUP BY h ORDER BY h")
-    ans = G.answerers(); rows = A.epoch_rows()
-    paid = {r["epoch"]: r["paid"] for r in rows}
-    per_ep = [(k, len(ans.get(k, ())), paid.get(k, 0)) for k in sorted(set(ans) | set(paid))]
+    # 1.26.91: closes from every segment, keyed by lifetime close number (epoch numbers restart at a genesis cut), so the
+    # charts run on across the cut; labels read E3 in the current segment and S1 E3 in an archived one (segments.py)
+    per_ep, rows = [], []
+    for n in _SG.NUMBERS:
+        with _SG.use(n):
+            ans = G.answerers(); rs = A.epoch_rows(); paid = {r["epoch"]: r["paid"] for r in rs}
+            per_ep += [(_SG.gkey(k, n), len(ans.get(k, ())), paid.get(k, 0)) for k in sorted(set(ans) | set(paid))]
+            rows += [dict(r, g=_SG.gkey(r["epoch"], n)) for r in rs]
     ms = []
     for th in (500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000):
         hit = next((t for t, a in agents if a >= th), None)
         if hit and agents[0][1] < th: ms.append((hit, f"{th//1000}k" if th % 1000 == 0 else f"{th/1000:g}k", "agents"))
-    for r in rows: ms.append((r["close_ts"], f"E{r['epoch']}", "close"))
+    for r in rows: ms.append((r["close_ts"], _SG.ep_label(r["g"]), "close"))
+    c = _SG.cut()
+    if c: ms.append((c["ts"], c["label"], "cut"))   # also a milestone on the Supply chart (milestones.py); here it marks Agents and Holders
     t1 = _X.first_offer_ts()   # from /api/v1/swaps
     if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
@@ -174,12 +192,12 @@ def charts_body(rng=""):
     span = dict((k, v) for k, _, v in RANGES)[rng]; now = time.time(); t0 = now - span if span else 0
     g = growth_data(); cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
-    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap") and t >= t0]
-    em = [(t, l) for t, l, k in g["ms"] if k == "close" and t >= t0]
+    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap", "cut") and t >= t0]
+    em = [(t, l) for t, l, k in g["ms"] if k in ("close", "cut") and t >= t0]
     la = g["agents"][-1][1] if g["agents"] else None
     a24 = next((a for t, a in g["agents"] if t >= now - DAY), None)
     tday = g["day"][-1]["n"] if g["day"] else None
-    pe = g["per_ep"]; closes = {r["epoch"]: r["close_ts"] for r in A.epoch_rows()}
+    pe = g["per_ep"]; closes = {_SG.gkey(r["epoch"], n): r["close_ts"] for n in _SG.NUMBERS for r in _ep_rows(n)}
     pe_r = [x for x in pe if (closes.get(x[0]) or now) >= t0]
     st = "".join([stat("New · 24h", f'<span class="num">+{la - a24:,}</span>' if la and a24 else "···", tip="Agents joined in the last 24 hours"),
                   stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
@@ -193,12 +211,12 @@ def charts_body(rng=""):
     sc = line(sp, height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0, marks=um)
     if um: sc = sc.replace('<div class="chartbox">', '<div class="chartbox end">', 1)   # 390px: open at the newest end, where the markers are
     th = None if rng == "all" else line([(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0], height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
-    ec = bars([(f"E{k}", [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
+    ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
     tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])
-    rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0] + [(e["ts"], 1, lk(e)) for e in up]
+    rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0 and k != "cut"] + [(e["ts"], 1, lk(e)) for e in up]
     ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
     chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
     pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out

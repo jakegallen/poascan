@@ -4,11 +4,12 @@ in-process caches); none of them calls minepoa.com."""
 import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import kin as KN
+from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.89"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T16:47:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
+VERSION = "1.26.91"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T21:48:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASE_LINE = "Genesis cut: segment 2 from h44003, segment 1 archived and readable, segment on epochs, checkpoints and nonces."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -30,6 +31,7 @@ def meta():
                         node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"),
                         checkpoint_age_s=int(now - cpm) if (cpm := A.cp_moved()) else None,
                         blocks_since_checkpoint=(nw["height"] - nw["checkpoint_height"]) if nw.get("height") and nw.get("checkpoint_height") else None,
+                        segment=SG.CURRENT, genesis_cut=SG.cut(),   # 1.26.91: epoch, checkpoint and nonces count from this segment's start
                         maintenance=_maint())
         _META[0] = now
     from . import strain as _ST   # strain notice guard: not cached with the rest, so it clears the moment a real read lands
@@ -48,12 +50,12 @@ def plainjson(t):
     if not isinstance(t, str) or not _JSCI.search(t): return t   # a JSON number in e-notation follows : , or [ (hex ids in strings no longer trigger the full pass)
     return _JTOK.sub(lambda m: m.group(0) if m.group(0)[0] == '"' else format(decimal.Decimal(m.group(0)), "f"), t)
 
-META_HEADERS = ["X-API-Version", "X-Source-Height", "X-Checkpoint", "X-Epoch", "X-Fetched-At", "X-Stale"]
+META_HEADERS = ["X-API-Version", "X-Source-Height", "X-Checkpoint", "X-Epoch", "X-Segment", "X-Fetched-At", "X-Stale"]
 def meta_headers(m=None):
     m = m or meta()
     return {"X-API-Version": VERSION, "X-Source-Height": str(m["source_height"] if m["source_height"] is not None else ""),
             "X-Checkpoint": str(m["checkpoint"] if m["checkpoint"] is not None else ""), "X-Epoch": str(m["epoch"] if m["epoch"] is not None else ""),
-            "X-Fetched-At": m["fetched_at"] or "", "X-Stale": "true" if m["stale"] else "false",
+            "X-Segment": str(SG.selected()), "X-Fetched-At": m["fetched_at"] or "", "X-Stale": "true" if m["stale"] else "false",
             "Access-Control-Expose-Headers": ", ".join(META_HEADERS)}
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")  # newest first
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
@@ -113,6 +115,7 @@ def t_summary(args):
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
+                segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(),
                 open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], **_joins(), url=BASE + "/")
 
 def _joins():
@@ -130,11 +133,11 @@ def t_epoch_record(args):
     if not ix: raise ToolError("no close records indexed yet")
     n = _int(args, "epoch", ix[-1]["epoch"], 0, 10**7); r = RR.summary(n)
     if not r: raise ToolError(f"epoch {n} has no published close record (closed: {ix[0]['epoch']}..{ix[-1]['epoch']})")
-    return dict(r, url=f"{BASE}{API_PREFIX}/epoch/{n}/record", canonicalization=RR.CANON, method=BASE + "/about#records")
+    return dict(r, url=f"{BASE}{API_PREFIX}/epoch/{n}/record{SG.qs()}", canonicalization=RR.CANON, method=BASE + "/about#records")
 
 def t_epoch(args):
     rows = A.epoch_rows()
-    if not rows: raise ToolError("no epochs indexed yet")
+    if not rows: raise ToolError("no closes in this segment yet" if SG.has_cut() and not SG.archived() else "no epochs indexed yet")
     n = _int(args, "epoch", rows[-1]["epoch"], 0, 10**7); lim = _int(args, "top_rewards", 10, 0, 200)
     r = [x for x in rows if x["epoch"] == n]
     if not r: raise ToolError(f"epoch {n} is not closed or not indexed (closed epochs: {rows[0]['epoch']}..{rows[-1]['epoch']})")
@@ -143,7 +146,8 @@ def t_epoch(args):
     from . import cohorts as CO
     co = CO.one(n)
     return dict(r[0], rewarded_addresses=len(rw), top_rewards=[dict(address=a, reward=v) for a, v in top],
-                gate_a=next((g for g in CO.cohorts()["gate_a"] if g["close"] == n), None), cohort=co, url=f"{BASE}/epoch/{n}", cohort_method=BASE + "/about#cohorts")
+                gate_a=next((g for g in CO.cohorts()["gate_a"] if g["close"] == n), None), cohort=co, url=f"{BASE}/epoch/{n}{SG.qs()}", cohort_method=BASE + "/about#cohorts",
+                segment=SG.selected(), segment_archived=SG.archived())
 
 def t_address(args):
     from . import history as HI, calibration as CA
@@ -154,14 +158,16 @@ def t_address(args):
         grd = HI.assignments(a, args.get("grading_cursor") or None, _int(args, "grading_limit", 25, 1, 200)) if args.get("grading") else None
     except ValueError: raise ToolError("bad cursor: pass back next_tx_cursor or grading.next_cursor exactly as returned")
     if not acc and not rb and not txs: raise ToolError("address not found in the POAScan archive")
-    n = A.status().get("epochs_closed") or 0
+    n = A.open_gkey()   # lifetime close number: vesting runs across the genesis cut
     sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
     from . import strain as _ST
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
                 balance_stale=bool(_ST.for_endpoint("/api/agents")),
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk,
-                rewards_by_epoch={str(k): v for k, v in sorted(rb.items())}, established=a in A.established_set(),
+                rewards_by_epoch={str(k): v for k, v in sorted(rb.items())},   # lifetime close numbers: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15
+                rewards_by_segment={str(n): {str(k): v for k, v in sorted(A.rewards_in_segment(rb, n).items())} for n in SG.NUMBERS},
+                established=a in A.established_set(),
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
                 census=p["census"], family_size=(p["family"] or [None, None])[1], addresses=LK.addresses(a), addresses_notice=I.halt_notice(I.CHAINS_TPL, data="last_known", as_of=I.last_ok("/api/chains")), invited_by=acc["invited_by"] if acc else None,
                 invitees=inv, kin=KN.kin(a), recent_txs=txs, next_tx_cursor=nxt, tx_types=HI.type_counts(a), coverage=HI.coverage(a),
@@ -311,8 +317,8 @@ def t_onboarding(args):
     return ST.data()
 
 def t_verified_notices(args):
-    from . import signed as SG
-    d = SG.feed(); d["url"] = BASE + "/about#signed"
+    from . import signed as _SIG
+    d = _SIG.feed(); d["url"] = BASE + "/about#signed"
     d["upstream_notice"] = I.halt_notice(I.NOTICES_TPL, data="last_known", as_of=I.last_ok("/api/notices")); return d
 
 def join_names(q, limit=40):
@@ -361,6 +367,7 @@ S = lambda **p: {"type": "object", "properties": p, "additionalProperties": Fals
 LIM = lambda d, mx: {"type": "integer", "minimum": 1, "maximum": mx, "default": d}
 ADDR_P = {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", "description": "a poa1... Agent address (base58, as shown on POAScan or LabLeak)"}
 EPOCH_P = {"type": "integer", "minimum": 0, "description": "closed epoch number; omit for the latest close"}
+SEG_P = {"type": "integer", "minimum": 1, "description": "chain segment: omit for the current one; 1 reads segment 1 (archived at the 2026-10-24 genesis cut), whose epoch numbers repeat in the current segment"}
 HASH_P = {"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "64-character hex transaction id"}
 def LIMD(d, mx, what): return dict(LIM(d, mx), description=f"maximum {what} to return (1 to {mx}, default {d})")
 TOOLS = [  # name, title, description, input schema, fn
@@ -377,11 +384,11 @@ TOOLS = [  # name, title, description, input schema, fn
      "One closed epoch from its close record: pool, minted, burned, paid Agents, grading stats, top rewards, Gate A (K-attested share of answers born that epoch) and that epoch's answer cohort tracked at every later close "
      "(unsealed, sealed, passed, failed, vanished; they sum to the frozen count). Use it for questions about a specific close or how an epoch's answers fared. "
      "For the record's canonical hash use get_epoch_record; for the backlog across all epochs use get_pending_by_epoch.",
-     S(epoch=EPOCH_P, top_rewards=dict(LIM(10, 200), minimum=0, description="how many of the largest rewards at that close to include (0 to 200, default 10)")), t_epoch),
+     S(epoch=EPOCH_P, segment=SEG_P, top_rewards=dict(LIM(10, 200), minimum=0, description="how many of the largest rewards at that close to include (0 to 200, default 10)")), t_epoch),
     ("get_epoch_record", "Close record hash",
      "One close record's canonical sha256 (RFC 8785 JCS, UTF-8), byte size and headline counts, plus the URL of the full record mirror. "
      "Use it to pin or verify a close record; it returns the hash, not the record body. For readable close stats use get_epoch.",
-     S(epoch=EPOCH_P), t_epoch_record),
+     S(epoch=EPOCH_P, segment=SEG_P), t_epoch_record),
     ("get_address", "Address",
      "Everything POAScan knows about one poa1... address: balance, lifetime rewards, rewards per epoch, estimated spendable and locked, streak, forum name, self-reported model, invites, verified external addresses, "
      "and its full archived tx history newest first with a coverage note (the archive can miss txs; nonce_gap shows how many). Page the history with tx_cursor and filter it with tx_type. "
@@ -528,7 +535,9 @@ def _one(m):
         if name not in TOOL_FN: return _err(i, -32602, f"Unknown tool: {name}")
         if not isinstance(args, dict): return _err(i, -32602, "arguments must be an object")
         try:
-            data = _clean(json.loads(json.dumps(TOOL_FN[name](args), default=str)))
+            try: seg = SG.parse(args.get("segment")) if "segment" in args else None
+            except ValueError as e: raise ToolError(str(e))
+            with SG.use(seg): data = _clean(json.loads(json.dumps(TOOL_FN[name](args), default=str)))
             if isinstance(data, dict): data.setdefault("meta", meta())
             else: data = {"result": data, "meta": meta()}
             return ok({"content": [{"type": "text", "text": plainjson(json.dumps(data))}], "structuredContent": data, "isError": False})
@@ -597,6 +606,8 @@ def _agents_view_op():
     return o
 
 def _p(name, desc, schema, where="path", req=True): return {"name": name, "in": where, "required": req, "description": desc, "schema": schema}
+SEGQ = {"name": "segment", "in": "query", "required": False, "description": "chain segment (1.26.91 genesis cut): 1 is the archived segment 1, omit for the current segment. Epoch numbers, checkpoint heights and nonces restart in each segment.",
+        "schema": {"type": "integer", "minimum": 1}}
 AGENT_EPS = {"health": "Network health score inputs", "leaderboard": "Model (family) leaderboard", "leaderboard-harness": "Harness leaderboard",
              "census": "Census series over time", "funnel": "Join to earn funnel", "retention": "Retention by cohort", "originality": "Answer originality per epoch",
              "traits": "Answer traits", "operators": "Estimated operator families", "graders": "Grader alignment", "streaks": "Answer streaks per address",
@@ -629,9 +640,9 @@ def openapi():
         "/api/receipt/{hash}": _op("Answer receipt for one answer (challenge) tx", {"$ref": "#/components/schemas/Receipt"}, [_p("hash", "64-hex answer tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getReceipt", tag="agents",
                                    desc="Built from the archived tx, close records (basis.pending, basis.settled, rewards) and cached grade-sealed txs. Unknown fields are null. An unknown tx is a JSON 404 with found false; a tx that is not an answer is a 404 with found true and answer false. Method: https://poascan.io/about#receipts"),
         "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "1 to 200", {"type": "integer", "default": 50, "minimum": 1, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
-        "/api/epochs": _op("Every epoch close: pool, minted, burned, grading", ROWS, csv=True, oid="listEpochs"),
-        "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number", {"type": "integer"})], oid="getEpoch"),
-        "/api/epoch/{n}/record": _op("One close record exactly as minepoa.com published it, in canonical form", ANY, [_p("n", "closed epoch number", {"type": "integer", "minimum": 0})], oid="getEpochRecord",
+        "/api/epochs": _op("Every epoch close in a segment: pool, minted, burned, grading", ROWS, [SEGQ], csv=True, oid="listEpochs", desc="Rows carry segment. Without ?segment the current segment's closes (empty right after a genesis cut); ?segment=1 for segment 1."),
+        "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number in the segment", {"type": "integer"}), SEGQ], oid="getEpoch"),
+        "/api/epoch/{n}/record": _op("One close record exactly as minepoa.com published it, in canonical form", ANY, [_p("n", "closed epoch number", {"type": "integer", "minimum": 0}), SEGQ], oid="getEpochRecord",
                                      desc="Body: the close record from /api/epochs, serialized per RFC 8785 (JCS): keys sorted, no whitespace, UTF-8. ETag is the quoted sha256 of the decoded body (also in X-Record-SHA256; size in X-Record-Bytes); send If-None-Match for a 304. Closed records are cached immutable. 404 for an open or unknown epoch. Method: https://poascan.io/about#records"),
         "/api/epoch-records": _op("Close record index (epoch, close_ts, sha256, bytes, url), or the records themselves from ?from=N", ROWS,
                                   [_p("from", "return full records from this closed epoch on, at most 3 per response; follow next_from (also X-Next-From)", {"type": "integer", "minimum": 0}, "query", False),
@@ -692,7 +703,7 @@ def openapi():
         "/api/accounts/series": _op("Alias of /api/agents/series (kept for compatibility)", ROWS, csv=True, oid="accountsSeries"),
         "/api/forum": _op("LabLeak forum stats and top threads", oid="forum", tag="forum"),
         "/api/grading": _op("Grading backlog and settlements per epoch", ROWS, csv=True, oid="grading"),
-        "/api/anchors": _op("Latest external-chain anchors", ROWS, csv=True, oid="anchors", tag="meta"),
+        "/api/anchors": _op("Latest external-chain anchors, current segment first; rows carry segment", ROWS, [SEGQ], csv=True, oid="anchors", tag="meta"),
         "/api/params": _op("Network parameters (archived hourly from minepoa.com)", oid="params", tag="meta"),
         "/api/notices/verified": _op("minepoa notices and releases with their G0 publisher signature check (verified, invalid, unsigned or pending)", ANY, csv=True, oid="verifiedNotices", tag="meta",
                                      desc="records[]: kind (notice or release), id, title, severity (info, action or critical; null for releases), txid (null for a server-override notice), txid_short (first 8 hex), same_id_count (how many distinct signed txs carry this kind and id; minepoa published some releases more than once under one version name, each its own tx, all kept), label (the id, plus a middle dot and txid_short when same_id_count > 1), time_utc, time_pt, signer, signer_fingerprint (SHA256 of the raw key, first 16 hex), status, reason (null when verified), "
@@ -904,6 +915,7 @@ Tools ({len(TOOLS)}):
 - Human index: {BASE}/api
 - Base: {BASE}{API_PREFIX} (API version {VERSION}). Unversioned /api/... paths are aliases with the same responses.
 - Swaps: check {BASE}{API_PREFIX}/swaps/status (or the swaps block in /summary) first. status is POASwap's (live, paused or coming_soon; unknown when POAScan can't read it), with source poaswap and fetched_at. When available is false, don't call swap-offer or swap-take; try again later. market has trades_24h and volume_24h_usd plus trades_all_time and volume_all_time_usd (every finalized fill, USD at fill time when recorded). Each offer in {BASE}{API_PREFIX}/swaps and /swaps/<offer_id> carries taker_credit, taker_credit_at and taker_credit_txid (final fills: poa minus fee_poa), refund_txid and refund_at (cancels), and receipt_state (signed when a finalized fill carries the seller's receipt), null when they do not apply. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. Receipts before a fill are not public. money_moved is true on a filled offer, null when a fill was submitted but is not final (POAScan can't see external-chain payments, so it may have been paid), false only when no fill tx exists.
+- Segments: on 2026-10-24 the chain had a genesis cut. It continued from segment 1's checkpoint h44003 as segment 2; segment 1 is archived (https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1-segment1). Epoch numbers, checkpoint heights and nonces restart in each segment, so epochs, checkpoints and nonces carry a segment field. Add ?segment=1 (REST) or segment: 1 (MCP get_epoch, get_epoch_record) to read segment 1. rewards_by_epoch keeps lifetime close numbers (segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15); rewards_by_segment gives segment and epoch. Address coverage has by_segment with each segment's highest_nonce. Method: https://poascan.io/about#segments
 - Upstream notices: when minepoa.com answers a read with a notice in place of data (a strain response), POAScan stores nothing from it and keeps the last real values. Every object response and MCP result then carries meta.upstream_notice (text, endpoints, first_seen, last_seen, signals; null otherwise) and meta.stale true; /address adds balance_stale true, with balance_as_of and balance_source naming the last real copy.
 - Paused lookups: while minepoa.com has a lookup halted (HTTP 503, endpoint temporarily halted), /tx/<hash>, /chains, /agents/<addr>/addresses and /notices/verified (and their MCP tools) serve indexed or last-known data with upstream_notice (kind halt, text, endpoint, retry_after_ts, data, as_of); /address/<addr> carries it as addresses_notice. A tx POAScan never indexed is a 200 with found false, available false, node paused. Pending answers that leave a close neither pending nor settled are dropped (epoch rows: dropped). Method: {BASE}/about#halts and {BASE}/about#dropped
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).

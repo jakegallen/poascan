@@ -2,6 +2,7 @@
 import time, json, collections
 from decimal import Decimal as D
 from . import db, analytics as A
+from . import segments as S
 from .analytics import cached
 
 EPS = D("0.000001")
@@ -52,11 +53,15 @@ def _held_why(gap, esc, unl, n):
 @cached("reconcile", 60)
 def reconcile():
     st, st_t = db.get_blob("status"); st = st or {}; nw = A.networks(); _, nw_t = db.get_blob("networks")
-    E = A.epochs_raw(); ep_t = (db.q1("SELECT ts FROM blobs WHERE kind='epochs'") or {"ts": None})["ts"]; node_at = _iso_ts(st.get("as_of")) or st_t
+    # 1.26.91 genesis cut: the node's epochs_closed, txs, final, invalid and checkpoint restarted with segment 2, so those rows
+    # compare the current segment only. Supply carried over, so Mined, Burned and Held sum the close records of every segment.
+    with S.use(S.CURRENT): E = A.epochs_raw(); ep_t = A.epochs_ts()
+    EA = [e for n in S.NUMBERS for e in A.segment_closes(n)]
+    node_at = _iso_ts(st.get("as_of")) or st_t; seg0 = S.BY_N[S.CURRENT].get("start_ts") or 0
     acc_t = (db.q1("SELECT MAX(last_seen) AS t FROM accounts") or {}).get("t")
     tx_t = (db.q1("SELECT MAX(last_seen) AS t FROM txs") or {}).get("t")
-    mint = sum((_d(v) or D(0)) for e in E for v in (e.get("rewards") or {}).values())
-    pool = sum((_d(e.get("pool")) or D(0)) for e in E)
+    mint = sum((_d(v) or D(0)) for e in EA for v in (e.get("rewards") or {}).values())
+    pool = sum((_d(e.get("pool")) or D(0)) for e in EA)
     sup = _d(st.get("supply"))
     lagging = (st.get("epochs_closed") or 0) > len(E); behind = bool(E and node_at and node_at < int(E[-1]["ts"]))
     why_mint = ("the node has closed an epoch whose record POAScan has not read yet" if lagging else
@@ -65,24 +70,24 @@ def reconcile():
     esc = sum((_d(v) or D(0)) for v in __import__("poascan.market", fromlist=["x"]).open_escrow())   # open offers, via /api/v1/swaps
     listed = {r["addr"] for r in db.q("SELECT addr FROM accounts")}
     unl = collections.defaultdict(D)
-    for e in E:
+    for e in EA:
         for a, v in (e.get("rewards") or {}).items():
             if a not in listed: unl[a] += _d(v) or D(0)
     unl_sum = sum(unl.values(), D(0))
     hold = len(A.holders()["rows"])
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")
-    tx = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs") or {}
-    inv = (db.q1("SELECT COUNT(*) AS n FROM invalid_txs") or {}).get("n")
+    tx = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs WHERE segment = ?", (S.CURRENT,)) or {}
+    inv = (db.q1("SELECT COUNT(*) AS n FROM invalid_txs WHERE COALESCE(first_seen, 0) >= ?", (seg0,)) or {}).get("n")
     # The node's txs and final counters restarted at a recovery checkpoint (observed: its txs equal the archive's txs since
     # NODE_RESET_TS to 0.1% on Oct 23 and 24, 2026; its final stays at the checkpoint). Both rows read explained, with the
     # time, while the archive since then matches the node's txs within 2% and its final within 10%.
     nt, nf, reset = st.get("txs"), st.get("final"), None
     if nt and NODE_RESET_TS and (tx.get("n") or 0) > nt:
-        r = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs WHERE ts >= ?", (NODE_RESET_TS,)) or {}
+        r = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs WHERE ts >= ? AND segment = ?", (NODE_RESET_TS, S.CURRENT)) or {}
         if abs((r.get("n") or 0) - nt) <= max(10, nt * 0.02) and (not nf or abs((r.get("f") or 0) - nf) <= max(10, nf * 0.1)): reset = NODE_RESET_TS
     rs_txt = (f"the node's counters restart at a recovery checkpoint: it counts the archive's txs since "
               f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(reset))}, and its final count stays at the checkpoint") if reset else None
-    anc = db.q1("SELECT MAX(height) AS h FROM anchors") or {}
+    anc = db.q1("SELECT MAX(height) AS h FROM anchors WHERE segment = ?", (S.CURRENT,)) or {}
     pend_rec = len(((E[-1].get("basis") or {}).get("pending") or {})) if E else None
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None
     rows = [

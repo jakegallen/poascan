@@ -27,7 +27,7 @@ def fixture(db):
             tx(5, "grade-sealed", A3, D[1] + 10), tx(6, "grade-sealed", A3, D[1] + 20), tx(7, "transfer", A1, D[1] + 30, A2, "12.5"),
             tx(8, "transfer", A2, D[1] + 40, A1, "0.5"), tx(9, "attest-batch", A4, D[2] + 50), tx(10, "chains-update", A1, D[1] + 60),
             tx(11, "challenge", A1, 0)]                    # ts 0 stays out of every series
-    db.write("INSERT INTO txs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows, many=True)
+    db.write("INSERT INTO txs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)", rows, many=True)
     db.write("INSERT INTO tx_detail VALUES(?,?,?,?)", (f"{10:064x}", json.dumps({"id": f"{10:064x}", "final": 1, "body": {"chains": {"solana": SOL1, "ethereum": ETH1}}}), D[1], 1))
     db.put_blob("chains", {A1: {"solana": {"addr": SOL1, "verified": True}, "ethereum": {"addr": ETH1.upper().replace("0X", "0x"), "verified": True}},
                            A2: {"solana": {"addr": "So2" + "b" * 40, "verified": True}}, A3: {"ethereum": {"addr": "0x" + "cd" * 20, "verified": False}}})
@@ -97,7 +97,7 @@ def unit():
     check("aggregate only: no address in the response", "poa1" not in raw and SOL1 not in raw and ETH1 not in raw)
     check("no em dash in the response or the module", chr(0x2014) not in raw and chr(0x2014) not in open(os.path.join(ROOT, "poascan", "network.py")).read())
     # incremental rollup: a late tx on day 1 and a new snapshot today are picked up on the next refresh
-    db.write("INSERT INTO txs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (f"{99:064x}", "transfer", A4, A1, "7", None, None, None, D[0] + 900, 1, 5, 1, 0, 0, "test"))
+    db.write("INSERT INTO txs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)", (f"{99:064x}", "transfer", A4, A1, "7", None, None, None, D[0] + 900, 1, 5, 1, 0, 0, "test"))
     db.add_snap("status", {"agents_joined": 25, "holders": 4, "supply": "1001", "checkpoint_height": 160}, D[3] + 10)
     NW._cache.clear(); NW._last_refresh[0] = 0
     out2 = json.loads(NW.report(iso(D[0]), iso(D[3]))); d2 = {d["day"]: d for d in out2["days"]}

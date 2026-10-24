@@ -1,6 +1,6 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
 import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
-from . import db, strain as _ST
+from . import db, strain as _ST, segments as _SG
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
 UA = "POAScan-indexer/1.0 (+https://poascan.io; read-only)"
@@ -346,10 +346,12 @@ def upsert_txs(rows, source):
         to = t.get("to_addr", t.get("to")) or None
         amt = t.get("amount") or None
         fin = t.get("final"); fin = 1 if fin in (1, True, "1") else 0
+        ts = int(t.get("ts") or 0)
         out.append((tid, t.get("type"), fr, to, amt, t.get("memo") or None, t.get("invited_by"), t.get("epoch"),
-                    int(t.get("ts") or 0), int(t.get("atts") or 0), t.get("K"), fin, now, now, source))
-    db.write("""INSERT INTO txs(id,type,from_addr,to_addr,amount,memo,invited_by,epoch,ts,atts,k,final,first_seen,last_seen,source)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ts, int(t.get("atts") or 0), t.get("K"), fin, now, now, source, _SG.of_ts(ts)))
+    # segment is set once, from the tx time (segments.py); a later copy of the same id never moves it
+    db.write("""INSERT INTO txs(id,type,from_addr,to_addr,amount,memo,invited_by,epoch,ts,atts,k,final,first_seen,last_seen,source,segment)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET atts=MAX(txs.atts, excluded.atts), final=MAX(txs.final, excluded.final),
         last_seen=excluded.last_seen, memo=COALESCE(txs.memo, excluded.memo), invited_by=COALESCE(txs.invited_by, excluded.invited_by),
         epoch=COALESCE(txs.epoch, excluded.epoch), k=COALESCE(txs.k, excluded.k)""", out, many=True)
@@ -408,13 +410,16 @@ def job_live():
             if d is not NOT_MODIFIED: fn(d)
         except Busy as e: log.warning("%s: %s", path, e)
 
-def _live_status(st): db.add_snap("status", st); db.put_blob("status", st)
+def _live_status(st):
+    # snapshots carry the segment they were read in: counters that restart at a cut (txs, final, epochs_closed,
+    # checkpoint_height) are never compared across it (segments.py)
+    db.add_snap("status", dict(st, segment=_SG.CURRENT)); db.put_blob("status", st)
 
 def _live_networks(nw):
     db.put_blob("networks", nw)
     for c in nw.get("chains", []):
         if c.get("chain_id") == "poa-mainnet-1":
-            db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height")})
+            db.add_snap("height", {"height": c.get("height"), "checkpoint_height": c.get("checkpoint_height"), "segment": _SG.CURRENT})
 
 def job_window():
     d = fetch("/api/txs", timeout=90, cond=True)
@@ -432,12 +437,16 @@ def job_meta():
             if d is NOT_MODIFIED: continue
             db.put_blob(kind, d)
             if kind == "anchors":
-                db.write("INSERT OR IGNORE INTO anchors VALUES(?,?,?,?,?,?,?)",
-                         [(a["height"], a["chain"], a.get("tx_hash") or a.get("tx_signature"), a.get("state_root"),
-                           a.get("anchored_by"), a.get("memo"), a.get("anchored_at")) for a in d], many=True)
+                store_anchors(d)
         except Busy as e:
             log.warning("%s: %s", path, e)
         time.sleep(1)
+
+def store_anchors(d):
+    """Anchor rows keyed by (segment, height, chain): heights restart at a genesis cut (segments.of_anchor)."""
+    db.write("INSERT OR IGNORE INTO anchors(height,chain,tx,state_root,anchored_by,memo,anchored_at,segment) VALUES(?,?,?,?,?,?,?,?)",
+             [(a["height"], a["chain"], a.get("tx_hash") or a.get("tx_signature") or a.get("tx"), a.get("state_root"),
+               a.get("anchored_by"), a.get("memo"), a.get("anchored_at"), _SG.of_anchor(a)) for a in d if isinstance(a, dict) and "height" in a], many=True)
 
 def job_hourly_meta():
     for kind, path in (("params", "/api/params"), ("release", "/api/release"), ("chains", "/api/chains")):
@@ -449,14 +458,33 @@ def job_hourly_meta():
         time.sleep(1)
 
 def job_epochs(force=False):
-    from . import analytics as A   # shared parsed copy; re-parsing the ~11 MB blob here every 5 min cost ~50 MB each run
-    st, _ = db.get_blob("status"); have = A.epochs_count(); ep = have
-    need = (st or {}).get("epochs_closed", 0)
-    if not force and ep and have >= need: return False
+    """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
+    cut), so a new segment with no close yet reads nothing; the ~21 MB list is fetched only when a close is missing."""
+    from . import analytics as A   # shared parsed copy; re-parsing the blob here every 5 min cost ~50 MB each run
+    st, _ = db.get_blob("status")
+    with _SG.use(_SG.CURRENT): have = A.epochs_count()
+    need = (st or {}).get("epochs_closed", 0) or 0
+    seeded = bool(have) or bool(db.q1("SELECT 1 AS x FROM blobs WHERE kind LIKE 'epochs:s%'"))
+    if not force and seeded and have >= need: return False
     d = fetch("/api/epochs", timeout=180, cond=True)
-    if isinstance(d, list) and d:
-        db.put_blob("epochs", d); return True
+    if isinstance(d, list) and d: return store_epochs(d)
     return False
+
+def store_epochs(d):
+    """Split /api/epochs by segment (close time, segments.of_record) and store each segment's records in its own blob.
+    An archived segment's blob is written only when it gains records, never shrunk or replaced by another segment's."""
+    by = {}
+    for e in d:
+        if isinstance(e, dict): by.setdefault(_SG.of_record(e), []).append(e)
+    wrote = False
+    for n, rows in by.items():
+        kind = _SG.blob_kind(n)
+        if n != _SG.CURRENT:
+            old = db.get_blob(kind)[0] or []
+            if len(rows) <= len(old): continue
+        db.put_blob(kind, rows); wrote = True
+    if _SG.CURRENT not in by and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
+    return wrote
 
 def job_agents():
     d = fetch("/api/agents", timeout=120)
@@ -689,9 +717,9 @@ def job_sample(n=20):
         except Busy: break
         body = (d or {}).get("body") or {}
         c = classify(body.get("answer", ""))
-        db.write("INSERT OR REPLACE INTO answers VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        db.write("INSERT OR REPLACE INTO answers(id,from_addr,epoch,ts,len,slot_template,prompt_echo,prefix4,sampled_at,text,lang,segment) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                  (r["id"], r["from_addr"], body.get("epoch", r["epoch"]), r["ts"], c["len"], c["slot_template"], c["prompt_echo"], c["prefix4"],
-                  int(time.time()), body.get("answer", ""), c["lang"]))
+                  int(time.time()), body.get("answer", ""), c["lang"], _SG.of_ts(r["ts"])))
 
 def job_links(n=10):
     """Each chains-update tx's body (the linked chain addresses), read once through the same rate-limited tx read the
@@ -715,15 +743,14 @@ def seed(seed_dir):
         except Exception: return None
     raw = os.path.join(seed_dir, "dashboard", "raw")
     e = J(os.path.join(raw, "epochs.json"))
-    if isinstance(e, list) and e: db.put_blob("epochs", e)
+    if isinstance(e, list) and e: store_epochs(e)
     for kind in ("params", "release", "notices", "ballots", "chains", "networks"):
         d = J(os.path.join(raw, kind + ".json"))
         if d is not None: db.put_blob(kind, d)
     a = J(os.path.join(raw, "anchors.json"))
     if a:
         db.put_blob("anchors", a)
-        db.write("INSERT OR IGNORE INTO anchors VALUES(?,?,?,?,?,?,?)",
-                 [(x["height"], x["chain"], x.get("tx_hash") or x.get("tx_signature"), x.get("state_root"), x.get("anchored_by"), x.get("memo"), x.get("anchored_at")) for x in a], many=True)
+        store_anchors(a)
     # status history points (mainnet only; all captured from unprefixed /api/status after launch)
     for p in ["st.json", "status_m2.json", "status_now.json", "dashboard/raw/status.json", "dashboard/raw/status_1141.json"]:
         d = J(os.path.join(seed_dir, p))
@@ -753,9 +780,9 @@ def seed(seed_dir):
         if "body" in d:
             db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
             c = classify(d["body"].get("answer", ""))
-            db.write("INSERT OR REPLACE INTO answers VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            db.write("INSERT OR REPLACE INTO answers(id,from_addr,epoch,ts,len,slot_template,prompt_echo,prefix4,sampled_at,text,lang,segment) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                      (tid, d.get("from_addr"), d["body"].get("epoch"), d.get("ts"), c["len"], c["slot_template"], c["prompt_echo"], c["prefix4"],
-                      int(time.time()), d["body"].get("answer", ""), c["lang"]))
+                      int(time.time()), d["body"].get("answer", ""), c["lang"], _SG.of_ts(d.get("ts"))))
     import csv
     cp = os.path.join(os.path.dirname(__file__), "..", "data", "census.csv")
     if os.path.exists(cp):
