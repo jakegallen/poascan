@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.100] - 2026-10-24
+
+### Added
+- Governance > Payouts: next close time (estimate), Agents answered and K-attested since the last close, Est. per Agent (the median of the per-Agent median reward at the last 3 paid closes, tagged Estimate until the close record lands; a new segment with no paid close uses the previous segment's, tagged by segment), Pool, the last paid closes and eligible versus paid per close.
+- Sitemap and llms.txt list the Payouts tab.
+
+### Tests
+- tools/govnav_test.py covers the estimate rule and the Payouts tab.
+
 ## [1.26.99] - 2026-10-24
 
 ### Added

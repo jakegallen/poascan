@@ -39,6 +39,17 @@ def fresh():
     finally:
         A.segment_closes, A.params, SD._trusted = sv
 
+def payout_unit():
+    """Est. per Agent: median of the last 3 paid closes' per-Agent median (one segment here)."""
+    from poascan import governance as GV, analytics as A
+    rows = [dict(epoch=i, paid=3, median=m, max=m, pool=1e9, burn_pct=99.0) for i, m in enumerate((785568.0, 900000.0, 709920.0, 612877.0))]
+    sv = A.epoch_rows
+    try:
+        A.epoch_rows = lambda: rows; pe = GV.payout_estimate()
+        check(f"payout estimate: median of the last 3 paid closes ({pe['estimate']})", pe["estimate"] == 709920.0 and [b["epoch"] for b in pe["basis"]] == [1, 2, 3])
+    finally:
+        A.epoch_rows = sv
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
@@ -87,13 +98,13 @@ def live():
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
         tabs = {}
-        for t in ("", "at-risk", "graders", "directory", "charts", "rules"):
+        for t in ("", "at-risk", "payouts", "graders", "directory", "charts", "rules"):
             u = "/governance" + (f"?tab={t}" if t else ""); c, b, _ = get(u); tabs[t] = b
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
         check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Graders", "Directory", "Charts", "Rules")))
+              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Charts", "Rules")))
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
@@ -105,6 +116,9 @@ def live():
         d2 = get("/governance?tab=directory&sort=atts&filter=graders")[1]
         check("Directory: sort and filter keep each other", 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Graders' in d2
               and 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Attestations' in d2)
+        pa = tabs["payouts"]
+        check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
+              and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox"' in pa)
         cs = tabs["charts"]
         check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
@@ -115,11 +129,11 @@ def live():
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
         check("sitemap: /chain, /chain/txs, /network?tab=token, /governance; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
-        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=token)" in ll
+        check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)
     finally:
         p.terminate()
 
 if __name__ == "__main__":
-    unit(); fresh(); live()
+    unit(); fresh(); payout_unit(); live()
     print(f"{len(FAILS)} failed" if FAILS else "all passed"); sys.exit(1 if FAILS else 0)

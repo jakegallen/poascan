@@ -8,7 +8,7 @@ from . import db, analytics as A, standing as SD, segments as SG, calibration as
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact
 from . import views as V
 
-TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("graders", "Graders"), ("directory", "Directory"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 LEVEL_TAG = {"risk": "warn", "watch": "est", "safe": "ok", "norecord": "", "system": ""}
 RULE = {"risk": "lapse", "watch": "lapse", "safe": "lapse", "norecord": "no-record", "system": "system"}
@@ -154,6 +154,43 @@ def graders(qs):
     return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Jury seats per close", ch) + card("Seals since close", st) + "</div>"
             + V.graders_body(qs, href("graders")))
 
+def payout_estimate():
+    """Est. per Agent for the next close: the median of the per-Agent median reward at the last 3 paid closes of the
+    current segment, else of segment 1's last 3 (tagged). An Estimate until the close record lands."""
+    def paid(n):
+        with SG.use(n): return [r for r in A.epoch_rows() if r["paid"] and r["median"]][-3:]
+    basis, seg = paid(SG.CURRENT), SG.CURRENT
+    if not basis:
+        prev = [n for n in SG.NUMBERS if n < SG.CURRENT]
+        if prev: seg = prev[-1]; basis = paid(seg)
+    vals = sorted(r["median"] for r in basis)
+    est = vals[len(vals) // 2] if vals else None
+    return dict(estimate=est, basis=[dict(epoch=r["epoch"], segment=seg, paid=r["paid"], median=r["median"], max=r["max"], pool=r["pool"], burn_pct=r["burn_pct"]) for r in basis],
+                basis_segment=seg, method="median of the per-Agent median reward at the last 3 paid closes")
+
+def payouts(qs):
+    pe = payout_estimate(); o = A.open_epoch() if not SG.archived() else {}; p = A.params(); K = int(p.get("K") or 5)
+    t0 = o.get("last_close"); w, a = SG.sql()
+    ans = db.q1("SELECT COUNT(DISTINCT from_addr) AS n, COUNT(DISTINCT CASE WHEN atts >= ? THEN from_addr END) AS k FROM txs WHERE type='challenge' AND ts > ?" + w, (K, t0) + a) if t0 else None
+    tag = '<span class="tag est">Estimate</span>'
+    other = pe["basis_segment"] != SG.CURRENT
+    est = (f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···")
+    ec = o.get("est_close")
+    nxt = (f'<time class="t" data-ts="{int(ec)}" title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(ec))} UTC, estimate">~{max(0, int(ec - time.time())) // 3600}h {max(0, int(ec - time.time())) % 3600 // 60}m</time>') if ec else "···"
+    s = "".join([stat(f"E{o['epoch']} close" if o.get("epoch") is not None else "Next close", nxt, tip="Last close plus auto_epoch_seconds, an estimate"),
+                 stat("Answered", intc(ans["n"]) if ans else "···", tip="Agents with a challenge answer since the last close"),
+                 stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Of those, answers with {K} or more attestations"),
+                 stat("Est. per Agent", est, tip="Estimate: " + pe["method"] + (f", segment {pe['basis_segment']}" if other else "")),
+                 stat("Pool", compact(o.get("pool")) if o.get("pool") else "···", tip="E0 halved every halving_epochs")])
+    rows = [[f'<a href="/epoch/{r["epoch"]}{SG.qs(r["segment"])}">E{r["epoch"]}</a>' + (f' <span class="tag">S{r["segment"]}</span>' if other else ""), intc(r["paid"]), compact(r["median"]), compact(r["max"]),
+             f'{r["burn_pct"]:.1f}%' if r["burn_pct"] is not None else "···"] for r in reversed(pe["basis"])]
+    bt = table(["Close", "Paid", "Per Agent", "Max", "Burned"], rows) if rows else '<p class="na">No paid closes yet.</p>'
+    ep = A.epoch_rows()
+    pc = bars([(f'E{r["epoch"]}', [r["challenge_eligible"], r["paid"]]) for r in ep], height=150, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Eligible", "Paid"]) if ep else '<p class="na">No closes in this segment yet.</p>'
+    head = "" if SG.archived() else f'<div class="stats five">{s}</div>'
+    return (head + '<div class="grid2">' + card("Last paid closes " + tag, bt, cls="histc", id="estimate")
+            + card("Eligible and paid per close", pc) + "</div>")
+
 DIR_SORTS = [("rewards", "Rewards"), ("eligible", "Eligible closes"), ("seals", "Seals"), ("atts", "Attestations")]
 DIR_FILTERS = [("", "All"), ("established", "Established"), ("graders", "Graders"), ("attesters", "Attesters")]
 DIR_PAGE = 100
@@ -247,11 +284,11 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "directory": "Governance · Directory", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "graders": graders, "directory": directory, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
