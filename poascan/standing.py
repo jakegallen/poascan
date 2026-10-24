@@ -16,7 +16,7 @@ TRACKER = "https://embot-lantern.codeberg.page/poa-field-guide/standing/"
 TRACKER_BY = "EmBot-Lantern"
 PROFILE = "https://minepoa.com/lableak/#/u/{}"
 AT_RISK_CLOSES = 2   # the open epoch's close and the one after
-PAGE = "/agents/at-risk"
+PAGE = "/governance?tab=at-risk"
 MARKS_TIP = ("From basis.marks in the close record. Matches losing-side jury votes at E11 (observed, not documented). "
              "What marks do is not published.")
 NOTE = ("Estimates from public close records: the drop close follows the observed L + 7 rule, not an official one. "

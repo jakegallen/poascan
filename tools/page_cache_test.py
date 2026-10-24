@@ -41,7 +41,7 @@ try:
     for _ in range(150):
         try: get(base, "/healthz"); break
         except Exception: time.sleep(0.2)
-    for p in ("/", "/start", "/about", "/epochs", "/agents", "/token", "/unlocks"):
+    for p in ("/", "/start", "/about", "/chain", "/agents", "/network?tab=token", "/unlocks"):
         c, h, body = get(base, p, {"Accept-Encoding": "gzip"}); et = h.get("etag", "")
         c2, h2, b2 = get(base, p); c3, h3, _ = get(base, p, {"If-None-Match": et}); c4, _, _ = get(base, p, {"If-None-Match": et.removeprefix("W/")})
         c5, _, _ = get(base, p, {"If-None-Match": 'W/"0000000000000000"'})

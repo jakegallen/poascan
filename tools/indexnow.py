@@ -9,7 +9,7 @@ ROOT = __file__.rsplit("/tools/", 1)[0] if "/tools/" in __file__ else "."
 INDEXNOW_KEY = re.search(r'INDEXNOW_KEY = "([0-9a-f]+)"', open(ROOT + "/poascan/agentapi.py").read()).group(1)
 
 BASE = "https://poascan.io"
-MAIN = ["/", "/epochs", "/txs", "/token", "/unlocks", "/agents/top", "/agents/census", "/about", "/api", "/find", "/llms.txt"]
+MAIN = ["/", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents/top", "/agents/census", "/about", "/api", "/find", "/llms.txt"]
 
 def sitemap():
     with urllib.request.urlopen(BASE + "/sitemap.xml", timeout=30) as r:

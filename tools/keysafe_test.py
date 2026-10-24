@@ -41,7 +41,7 @@ def main():
             except Exception: time.sleep(0.2)
         k = FAKE.encode()
         probes = ["/search?q=" + FAKE, "/search?q=" + quote(quote(FAKE)), "/address/" + FAKE, "/api/v1/address/" + FAKE, "/fragment/suggest?q=" + FAKE,
-                  "/start?name=" + FAKE, "/api/v1/search?q=" + FAKE, "/?key=" + FAKE, "/txs?api_key=abc", "/?token=abc", "/tx/" + FAKE]
+                  "/start?name=" + FAKE, "/api/v1/search?q=" + FAKE, "/?key=" + FAKE, "/chain/txs?api_key=abc", "/?token=abc", "/tx/" + FAKE]
         for path in probes:
             c, h, b = req(base, path)
             check(f"refused, no echo: {path.replace(FAKE, '<fake key>')} ({c})", c == 400 and k not in b and FAKE not in json.dumps(h) and "Location" not in h

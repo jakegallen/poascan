@@ -100,7 +100,7 @@ try:
     ad = json.loads(get("/api/v1/agents/poa1" + "K" * 40 + "/addresses")[1])
     check("/api/v1/agents/<a>/addresses: upstream_notice", (ad.get("upstream_notice") or {}).get("endpoint") == "/api/chains")
     check("meta.upstream_notice stays null and no site strip for a halt", a1["meta"]["upstream_notice"] is None and 'id="ntbar"' not in h1)
-    codes = [get(u)[0] for u in ("/", "/txs", "/epochs", "/epoch/1", "/network?tab=health", "/about", "/api/v1/summary", "/llms.txt")]
+    codes = [get(u)[0] for u in ("/", "/chain/txs", "/chain", "/epoch/1", "/network?tab=health", "/about", "/api/v1/summary", "/llms.txt")]
     check(f"no 5xx anywhere {codes}", all(c < 500 for c in codes))
     db.write("UPDATE fetch_log SET next_at = 0"); ST._halts.clear()
     # the server keeps its own memory; its halt records lapse only with their until. A real read clears them; here the fake keeps halting,

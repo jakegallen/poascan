@@ -27,7 +27,7 @@ try:
         try: urllib.request.urlopen(base + "/healthz", timeout=2); break
         except Exception: time.sleep(0.2)
     get = lambda p: urllib.request.urlopen(base + p, timeout=30).read().decode()
-    for p in ("/", "/start", "/address/poa1" + "A" * 40, "/epochs", "/about", "/upgrade"):
+    for p in ("/", "/start", "/address/poa1" + "A" * 40, "/chain", "/about", "/upgrade"):
         h = get(p); body = h[h.index("<body"):]; body = body[body.index(">") + 1:]
         m = re.match(r'\s*<div class="devbar" id="devbar" role="note">(.*?)</div></div>', body, re.S)
         inner = m.group(1) if m else ""

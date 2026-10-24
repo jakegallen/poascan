@@ -12,6 +12,7 @@ from . import checkin as CK
 from . import opsdash as OD
 from . import chartpop as CP
 from . import standing as SD
+from . import governance as GV
 from . import offer as OF
 from . import kin as KN
 from . import segments as SG
@@ -218,7 +219,7 @@ def prefix_hits(q, n=20):
 
 def page(path, qs):
     if path in ("/", "/index.html"): return V.home()
-    if path == "/txs": return V.txs(qs)
+    if path == "/chain/txs": return V.txs(qs)
     m = re.match(r"^/tx/([0-9a-fA-F]{64})$", path)
     if m: return V.tx(m.group(1).lower())
     m = re.match(r"^/address/(poa1\w+)$", path)
@@ -228,15 +229,13 @@ def page(path, qs):
         r = OF.page_body(m.group(1))
         if r is None: return (404, V.page("Swap offer not found", V.card("Swap offer", V.na(f"POAScan holds no swap offer <code>{V.E(m.group(1))}</code>. Offers appear here once the network lists them.")), "/txs"))
         return V.page(r[0], r[1], "/txs")
-    if path == "/token": return V.token()
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
-    if path == "/agents/graders": return V.graders_page(qs)
-    if path == "/agents/at-risk": return V.at_risk_page(qs)
+    if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/upgrade": return V2.status_page("Network upgrade")
-    if path in ("/epochs", "/blocks"): return V.epochs_page(qs)
+    if path == "/chain": return V.epochs_page(qs)
     m = re.match(r"^/epoch/(\d+)$", path)
     if m: return V.epoch(int(m.group(1)))
     tab = (qs.get("tab") or [""])[0]
@@ -271,23 +270,35 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/txs", "/epochs", "/token", "/unlocks", "/agents", "/agents/top", "/agents/census",
-                 "/agents/operators", "/agents/graders", "/agents/at-risk", "/agents/community", "/network", "/about", "/privacy", "/api"]
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
+                 "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=graders",
+                 "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
-MOVED = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
+MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
          "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
          "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
-         "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", "/at-risk": "/agents/at-risk",
+         "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", "/at-risk": "/governance?tab=at-risk",
          **FQ.REDIRECTS}
 # The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
+# 1.26.96 header merge (Chain, Agents, Network, Governance): list and tab URLs 301 to their new home and keep every query
+# parameter (?segment=, ?tab=, ?state=, ?type=, ?page=, ?sort=); a tab the target names wins over the incoming one.
+MOVED_Q = {"/epochs": "/chain", "/blocks": "/chain", "/txs": "/chain/txs", "/transactions": "/chain/txs", "/token": "/network?tab=token",
+           "/agents/at-risk": "/governance?tab=at-risk", "/agents/graders": "/governance?tab=graders"}
+def keep_query(target, qs):
+    """target plus the request's query: target's own parameters first and winning, then the rest in request order."""
+    base, _, tq = target.partition("?"); own = urllib.parse.parse_qs(tq, keep_blank_values=True)
+    rest = [(k, v) for k, vs in (qs or {}).items() if k not in own for v in vs]
+    q = urllib.parse.urlencode([(k, v) for k, vs in own.items() for v in vs] + rest)
+    return base + ("?" + q if q else "")
 def moved(path, qs):
     if path == "/find":
         q = (qs.get("q", [""])[0] or "").strip()
         return "/search?" + urllib.parse.urlencode({"q": q}) if q else "/#find"
+    if path in MOVED_Q: return keep_query(MOVED_Q[path], qs)
     return MOVED.get(path)
 V.ROUTES = STATIC_ROUTES
 _SITEMAP = [0, ""]
@@ -730,7 +741,8 @@ class H(BaseHTTPRequestHandler):
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
             if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/network?tab=health"})
-            loc = moved(path, qs)
+            # the raw query: ?segment= was taken out of qs above, and a moved list URL keeps it
+            loc = moved(path, urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True) if path in MOVED_Q else qs)
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":
                 q = (qs.get("q", [""])[0] or "").strip()

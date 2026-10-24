@@ -270,7 +270,7 @@ try:
     check(f"SC-002 limit=-1 is clamped to 1, not the whole archive ({len(rows)})", c == 200 and len(rows) <= 1)
     c, _, b = get("/api/v1/txs?limit=100000"); check("SC-002 limit is capped at 1000", c == 200 and len(json.loads(b)) <= 1000)
     c, _, b = get("/api/v1/txs?offset=-5"); check("SC-002 negative offset reads from 0", c == 200 and len(json.loads(b)) >= 1)
-    PATHS = ["/api/v1/epoch/", "/api/v1/epoch/%s/record", "/epoch/", "/txs?page=", "/fragment/lb?tab=richlist&offset=", "/epochs?tab=", "/agents/top?tab=",
+    PATHS = ["/api/v1/epoch/", "/api/v1/epoch/%s/record", "/epoch/", "/chain/txs?page=", "/fragment/lb?tab=richlist&offset=", "/chain?tab=", "/agents/top?tab=",
              "/api/v1/epoch-records?from=", "/fragment/addr?a=" + A1 + "&cursor=", "/api/v1/leaderboard/richlist?limit=", "/network?range="]
     bad = []
     for path in PATHS:
@@ -333,11 +333,11 @@ try:
     try: o.open(urllib.request.Request(base + "/x?y=1", headers={"Host": "www.evil.example"}), timeout=10); loc = None
     except urllib.error.HTTPError as e: loc = e.headers.get("Location")
     check(f"SC-017 www redirect is never built from Host ({loc})", loc == "https://poascan.io/x?y=1")
-    c, h, b = get("/txs"); html = b.decode()
+    c, h, b = get("/chain/txs"); html = b.decode()
     check("SC-017 COOP header", h.get("Cross-Origin-Opener-Policy") == "same-origin")
     check("SC-027 /txs has an h1", "<h1" in html and ">Transactions</h1>" in html)
     check("SC-027 active nav item has aria-current", 'aria-current="page"' in html)
-    c, h, b = get("/txs?page=abc"); check(f"SC-002 /txs?page=abc renders page 1 ({c})", c == 200)
+    c, h, b = get("/chain/txs?page=abc"); check(f"SC-002 /txs?page=abc renders page 1 ({c})", c == 200)
     # SC-007 privacy and SC-019 about
     c, _, b = get("/privacy"); pv = b.decode()
     check("SC-007 /privacy: CC BY 4.0, Fly-Client-IP, retention, client and app_version, logs without IP", c == 200 and "CC BY 4.0" in pv and "creativecommons.org/licenses/by/4.0/" in pv

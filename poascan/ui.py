@@ -176,7 +176,9 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/epochs", "Epochs"), ("/txs", "Transactions"), ("/agents", "Agents"), ("/token", "Token"), ("/network", "Network"), ("/about", "About")]   # Home is the logo; Source is in the footer; swaps live on POASwap (header button)
+NAV = [("/chain", "Chain"), ("/agents", "Agents"), ("/network", "Network"), ("/governance", "Governance")]   # Home is the logo; About and Source are in the footer; swaps live on POASwap (header button)
+# Pages that live under a header tab: the tab that shows as active for them (1.26.96 header merge)
+NAV_OF = {"/epochs": "/chain", "/txs": "/chain", "/token": "/network", "/unlocks": "/network"}
 
 SITE_URL = "https://poascan.io/"
 SITE_TITLE = "POAScan · Proof of Agent Explorer"
@@ -187,11 +189,14 @@ OG_IMAGE = SITE_URL + "static/og-card.png?v=1"
 OG_HOOK = None   # server sets og.url_for: path -> per-page preview image, or None for the generic card
 
 REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canonical URLs and per-page meta
-CANON = {"/index.html": "/", "/blocks": "/epochs", "/community": "/forum", "/join": "/start", "/onboarding": "/start"}
+CANON = {"/index.html": "/", "/blocks": "/chain", "/epochs": "/chain", "/txs": "/chain/txs", "/community": "/forum", "/join": "/start", "/onboarding": "/start"}
 DESCS = {
     "/": SITE_DESC,
     "/live": "The current Proof of Agent epoch in real time: countdown, answers, graders, pool and the live activity feed.",
     "/start": "Start mining Proof of Agent: one copy-ready prompt for your AI agent, plus the steps from the official minepoa.com guide.",
+    "/chain/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
+    "/chain": "Proof of Agent epochs: the open epoch live, every close (pool, minted, burned, cohorts), the pending queue and grading, with CSV.",
+    "/governance": "Proof of Agent governance: established Agents, standing at risk, graders, payouts per close and how established works.",
     "/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
     "/epochs": "Proof of Agent epochs: the open epoch live, every close (pool, minted, burned, cohorts), the pending queue and grading, with CSV.",
     "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
@@ -226,7 +231,7 @@ def req_path():
 def canonical():
     p = req_path(); p = CANON.get(p, p); qs = getattr(REQ, "qs", None) or {}
     tab = (qs.get("tab") or [""])[0]   # tabbed pages: each tab is its own canonical URL; the default tab is the bare path
-    dflt = {"/agents/top": "holders", "/epochs": "closed", "/network": "overview", "/agents/census": "models", "/agents/community": "forum"}
+    dflt = {"/agents/top": "holders", "/chain": "closed", "/network": "overview", "/governance": "overview", "/agents/census": "models", "/agents/community": "forum"}
     if p in dflt and tab not in ("", dflt[p]) and re.match(r"^[a-z]+$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
     return SITE_URL.rstrip("/") + p
 
@@ -251,7 +256,7 @@ def _dataset(name, desc, page, csv, js):
             "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": b + csv},
                              {"@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": b + js}]}
 
-EPOCHS_DS = ("Proof of Agent epoch closes", "Pool, minted, burned and grading per epoch on poa-mainnet-1.", "/epochs", "/api/v1/epochs.csv", "/api/v1/epochs")
+EPOCHS_DS = ("Proof of Agent epoch closes", "Pool, minted, burned and grading per epoch on poa-mainnet-1.", "/chain", "/api/v1/epochs.csv", "/api/v1/epochs")
 
 SAME_AS = ["https://github.com/jakegallen/poascan", "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.jakegallen%2Fpoascan/versions/latest",
            "https://www.moltbook.com/u/poascan", "https://thecolony.cc/u/poascan", "https://clawk.ai/@poascan"]
@@ -273,13 +278,13 @@ def jsonld():
              _dataset(*EPOCHS_DS)]
     elif p.startswith(("/epoch/", "/address/", "/tx/")):
         kind, ident = p.split("/")[1], p.split("/", 2)[2]
-        parent = {"epoch": ("Epochs", "epochs"), "address": ("Agents", "agents/top"), "tx": ("Transactions", "txs")}[kind]
+        parent = {"epoch": ("Epochs", "chain"), "address": ("Agents", "agents/top"), "tx": ("Transactions", "chain/txs")}[kind]
         leaf = f"Epoch {ident}" if kind == "epoch" else (ident[:10] + "..." + ident[-6:] if len(ident) > 20 else ident)
         g = [{"@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "POAScan", "item": SITE_URL},
             {"@type": "ListItem", "position": 2, "name": parent[0], "item": SITE_URL + parent[1]},
             {"@type": "ListItem", "position": 3, "name": leaf, "item": canonical()}]}]
-    elif p == "/epochs":
+    elif p == "/chain":
         g = [pub, _dataset(*EPOCHS_DS)]
     elif p == "/start":
         from . import start as _st
@@ -321,7 +326,7 @@ def head_meta(full_title, title=""):
 
 from . import join as _join
 
-FOOT = [("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
+FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
         ("/privacy", "Privacy"), ("/api/health", "API")]
 def _footer():
@@ -369,6 +374,7 @@ def _strain_bar():
     except Exception: return ""
 
 def layout(title, body, active="/", live=None, head=""):
+    active = NAV_OF.get(active, active)
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="on" aria-current="page">{n}</a>' if h == active else f'<a href="{h}" class="">{n}</a>' for h, n in NAV)
     if not isinstance(live, dict):
@@ -380,7 +386,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=110">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=111">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>

@@ -134,8 +134,8 @@ try:
     check("/api/epoch/9 is not closed in segment 2 (404 with segment)", c == 404 and json.loads(b).get("segment") == 2)
     c, b, h = get("/api/epoch/0?segment=7"); check("bad segment is a 400", c == 400)
     c, b, h = get("/api/epochs?segment=1"); check("/api/epochs?segment=1 lists 15", c == 200 and len(json.loads(b)) == 15)
-    c, b, h = get("/epochs"); check("epoch list has the segment toggle and cut note", c == 200 and "Segment 1 (archived)" in b and "Segment 2 began at h44003 of segment 1. Earlier history archived." in b)
-    c, b, h = get("/epochs?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
+    c, b, h = get("/chain"); check("epoch list has the segment toggle and cut note", c == 200 and "Segment 1 (archived)" in b and "Segment 2 began at h44003 of segment 1. Earlier history archived." in b)
+    c, b, h = get("/chain?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
     c, b, h = get("/epoch/14?segment=1"); check("archived epoch page", c == 200 and "Segment 1 (archived)" in b)
     c, b, h = get("/network?tab=health"); check("health shows Genesis cut", c == 200 and "Genesis cut" in b)
     c, b, h = get(f"/address/{X}"); check("address page shows per-segment nonce", c == 200 and ">S2 3</span>" in b and ">S1 395</span>" in b)
@@ -158,7 +158,7 @@ try:
     check("records: segment 1 E0 immutable, bare E0 not, different bodies", c == 200 and c2 == 200 and "immutable" in (h.get("Cache-Control") or "")
           and "immutable" not in (h2.get("Cache-Control") or "") and b != b2)
     c, b, h = get("/about"); check("/about has the Segments method", c == 200 and 'id="segments"' in b)
-    for path in ("/epochs", "/epochs?segment=1", "/epoch/0", "/about", "/network?tab=health"):
+    for path in ("/chain", "/chain?segment=1", "/epoch/0", "/about", "/network?tab=health"):
         c, b, h = get(path); check(f"no en or em dash on {path}", "\u2013" not in b and "\u2014" not in b)
 finally:
     p.terminate(); p.wait(10)

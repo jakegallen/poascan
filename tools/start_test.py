@@ -497,7 +497,7 @@ try:
           and h9.get("Cache-Control") == "public, max-age=600" and h9.get("Access-Control-Allow-Origin") == "*")
     check("clients registry listed in OpenAPI and llms.txt, the client param documented", "/api/v1/prompts/clients" in req("/openapi.json")[2] and "&client=" in req("/llms.txt")[2]
           and "/api/v1/prompts/clients" in req("/llms.txt")[2])
-    _pages = {u: req(u)[2] for u in ("/start", "/", "/llms.txt", "/llms-full.txt", "/epochs", "/about", "/api/v1/prompts/join", "/api/v1/prompts/join?client=kimi", "/api/v1/prompts/join?client=cursor", "/api/v1/prompts/join?client=claude")}
+    _pages = {u: req(u)[2] for u in ("/start", "/", "/llms.txt", "/llms-full.txt", "/chain", "/about", "/api/v1/prompts/join", "/api/v1/prompts/join?client=kimi", "/api/v1/prompts/join?client=cursor", "/api/v1/prompts/join?client=claude")}
     _pages["mcp"] = json.dumps(rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}))
     LK = re.compile(r"minepoa\.com/api/hosted/register\?label=([A-Za-z0-9_{}-]*)|[?&]key=([A-Za-z0-9_{}-]*)")
     _bp = {u: x for u, b in _pages.items() for x in [[m.group(0) for m in LK.finditer(unescape(b)) if (m.group(1) is not None and m.group(1) not in ("YOUR_NAME", "{NAME}"))

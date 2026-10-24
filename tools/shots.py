@@ -3,7 +3,7 @@ import sys, os, json
 from playwright.sync_api import sync_playwright
 base, out, addr, tx = sys.argv[1:5]
 os.makedirs(out, exist_ok=True)
-pages = {"home": "/", "token": "/token", "agents": "/agents", "address": f"/address/{addr}", "tx": f"/tx/{tx}", "growth": "/growth", "unlocks": "/unlocks"}
+pages = {"home": "/", "token": "/network?tab=token", "agents": "/agents", "address": f"/address/{addr}", "tx": f"/tx/{tx}", "growth": "/growth", "unlocks": "/unlocks"}
 report = {}
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])

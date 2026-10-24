@@ -36,7 +36,7 @@ try:
     for _ in range(100):
         try: get(base + "/healthz"); break
         except Exception: time.sleep(0.2)
-    pages = {r: get(base + r) for r in ("/", "/address/poa1" + "A" * 40, "/about", "/start", "/epochs")}
+    pages = {r: get(base + r) for r in ("/", "/address/poa1" + "A" * 40, "/about", "/start", "/chain")}
     for r, (c, h, t) in pages.items():
         check(f"{r} ({c}): no Join dialog or trigger, app.js v86, Ask dialog still inline", c in (200, 404) and "joinmodal" not in t and "data-join" not in t
               and 'id="jm-prompt"' not in t and 'data-rname="jclient"' not in t and "/static/app.js?v=87" in t and 'id="askmodal"' in t and 'id="toast"' in t

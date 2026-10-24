@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.96] - 2026-10-24
+
+### Changed
+- Header: Home (the logo), then four tabs: Chain, Agents, Network, Governance. About moves to the footer. Start, POASwap, search and the status pill stay.
+- Chain: Epochs (/chain, with Closed, Pending and Grading) and Transactions (/chain/txs) sub-tabs. Network gains a Token tab (/network?tab=token). /unlocks and epoch and tx detail pages highlight their tab.
+- Old list URLs answer 301 and keep every query parameter, ?segment= included: /epochs and /blocks to /chain, /txs and /transactions to /chain/txs, /token to /network?tab=token, /agents/at-risk to /governance?tab=at-risk, /agents/graders to /governance?tab=graders. /live, /grading and /at-risk go there in one hop. Detail pages are unchanged.
+- Sitemap, llms.txt, the API `url` fields and the Agents sub-tabs follow the new routes.
+
+### Added
+- Governance (/governance): Overview (Established, At risk, Watch, Safe, Graders, Agreement; At risk and Watch list; latest closes), At risk (the two-close list, then every established Agent with Level, Closes left, Missed, Last cleared, Drops at and a rule link, filterable by level), Graders (calibration), Charts (Established, Paid per close, Grading queue, Panel coverage; 24h, 7d, 30d, All) and Rules (docs and observed behavior side by side). Segment chips where a segment 1 archive exists.
+
+### Tests
+- tools/govnav_test.py covers the header, sub-tabs, the 301s with query strings, sitemap, llms.txt and every Governance tab. Existing tests use the new routes.
+
 ## [1.26.95] - 2026-10-24
 
 ### Changed

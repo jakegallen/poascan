@@ -2,7 +2,7 @@
 import sys, os, json
 from playwright.sync_api import sync_playwright
 base, out = sys.argv[1], sys.argv[2]; os.makedirs(out, exist_ok=True)
-PAGE2 = sys.argv[3] if len(sys.argv) > 3 else "/epochs"
+PAGE2 = sys.argv[3] if len(sys.argv) > 3 else "/chain"
 W = [360, 390, 430, 600, 768, 900, 1024, 1100, 1101, 1200, 1300, 1440]
 CHECK = """() => {
  const r = e => e ? e.getBoundingClientRect() : null, q = s => document.querySelector(s);
@@ -51,7 +51,7 @@ with sync_playwright() as p:
             pg.click(".burger"); pg.wait_for_timeout(250); pg.mouse.click(w // 2, 30); pg.wait_for_timeout(250)
             r["afterOutside"] = pg.evaluate("document.body.classList.contains('navopen')")
             pg.click(".burger"); pg.wait_for_timeout(250)
-            pg.click("#nav a[href='/token']"); pg.wait_for_load_state("networkidle"); r["afterLink"] = pg.url
+            pg.click("#nav a[href='/network']"); pg.wait_for_load_state("networkidle"); r["afterLink"] = pg.url
         r["errors"] = errs; res[w] = r; ctx.close()
     b.close()
 print(json.dumps(res, indent=0))

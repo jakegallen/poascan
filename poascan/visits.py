@@ -28,8 +28,8 @@ SEG = {"epochs": "epochs", "epoch": "epochs", "blocks": "epochs", "txs": "txs", 
        "agents": "agents", "find": "find", "token": "token", "unlocks": "unlocks", "swaps": "swaps", "network": "network",
        "forum": "forum", "community": "forum", "grading": "grading", "live": "grading", "status": "status", "upgrade": "upgrade",
        "start": "start", "join": "start", "onboarding": "start", "about": "about", "privacy": "privacy", "search": "search",
-       "growth": "network", "mining": "agents"}
-GROUPS = ("home", "epochs", "txs", "address", "agents", "find", "token", "unlocks", "swaps", "network", "forum", "grading",
+       "growth": "network", "mining": "agents", "chain": "epochs", "governance": "governance"}
+GROUPS = ("home", "epochs", "txs", "governance", "address", "agents", "find", "token", "unlocks", "swaps", "network", "forum", "grading",
           "status", "upgrade", "start", "about", "privacy", "apidocs", "search", "api", "mcp", "agentdocs", "other")
 
 # ---- daily event counts (1.23.0). metric -> what the key is. Keys outside each allowlist are counted as 'other'.
@@ -135,6 +135,7 @@ def group(p):
     if p == "/mcp": return "mcp"
     if (p.startswith("/llms") and p.endswith(".txt")) or (p.startswith("/openapi") and p.endswith(".json")) or p.startswith("/.well-known/") or p.startswith("/mcp/"):
         return "agentdocs"
+    if p == "/chain/txs" or p.startswith("/chain/txs/"): return "txs"
     return SEG.get(p.split("/")[1], "other")
 
 def kind(p, ua):

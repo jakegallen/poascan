@@ -49,7 +49,7 @@ def main():
         for _ in range(50):
             try: req(base + "/api/health"); break
             except Exception: time.sleep(0.2)
-        for path in ["/", "/about", "/api", "/token", "/epochs", "/agents", "/agents/top", "/status"]:
+        for path in ["/", "/about", "/api", "/network?tab=token", "/chain", "/agents", "/agents/top", "/status"]:
             c, _ = req(base + path); check(f"GET {path} -> {c}", c == 200)
         c, b = req(base + "/healthz"); check(f"GET /healthz -> {c}", c == 200)
         c, b = req(base + "/api/health"); h = json.loads(b) if c in (200, 503) else {}
@@ -114,7 +114,7 @@ def main():
         c, b = rpc("nope/nope"); check("mcp unknown method -> -32601", json.loads(b).get("error", {}).get("code") == -32601)
         c, b = req(base + "/robots.txt"); check("robots.txt allows AI bots + sitemap", c == 200 and b"GPTBot" in b and b"Sitemap: https://poascan.io/sitemap.xml" in b)
         c, b = req(base + "/sitemap.xml"); check("sitemap.xml", c == 200 and b"<urlset" in b and b"https://poascan.io/about" in b)
-        c, b = req(base + "/blocks"); check("canonical /blocks -> /epochs", b'rel="canonical" href="https://poascan.io/epochs"' in b and b'og:url" content="https://poascan.io/epochs"' in b)
+        c, b = req(base + "/chain"); check("canonical /chain (/blocks and /epochs 301 here)", req0(base + "/blocks")[0] == 301 and b'rel="canonical" href="https://poascan.io/chain"' in b and b'og:url" content="https://poascan.io/chain"' in b)
         c, b = req(base + "/"); check("home JSON-LD + h1", b"application/ld+json" in b and b'<h1 class="sr-only">Proof of Agent explorer</h1>' in b and b'class="hsearch"' in b and b"Find my agent" in b and b'<body class="home">' in b and b"homehead" not in b)
         c, b = req(base + "/llms.txt"); check("llms.txt Join section", b"## Join PoA" in b and b"https://minepoa.com/mcp" in b and b"invite or referral" in b)
         c, b = req(base + "/llms-full.txt"); check(f"llms-full.txt -> {c}", c == 200 and b"## MCP tools" in b and b"## Endpoints" in b)
@@ -147,11 +147,11 @@ def main():
         except urllib.error.HTTPError as e: _c = e.code
         check(f"agents/view ETag -> 304 ({_c})", bool(_et) and _c == 304)
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
-        c, b = req(base + "/epochs"); check(f"/epochs: open epoch hero on top, then Closed | Pending | Grading tabs -> {c}", c == 200 and b'data-live="answers"' in b and b'livehero' in b
-              and b.index(b"livehero") < b.index(b'class="chips atabs scroll"') and b'href="/epochs?tab=pending"' in b and b'href="/epochs?tab=grading"' in b)
-        check("/epochs in sitemap + llms, home links the hero", b"/epochs</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
-              and b"/epochs the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive" href="/epochs"' in req(base + "/")[1])
-        check("/token concentration card", b"Min-activity Agents" in req(base + "/token")[1])
+        c, b = req(base + "/chain"); check(f"/epochs: open epoch hero on top, then Closed | Pending | Grading tabs -> {c}", c == 200 and b'data-live="answers"' in b and b'livehero' in b
+              and b.index(b"livehero") < b.index(b'class="chips atabs scroll"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
+        check("/epochs in sitemap + llms, home links the hero", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
+              and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive" href="/chain"' in req(base + "/")[1])
+        check("/token concentration card", b"Min-activity Agents" in req(base + "/network?tab=token")[1])
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
         from poascan import agentapi as _AG, indexer as _IX
@@ -188,7 +188,7 @@ def main():
         _sb = b'<a class="swaplink" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"'
         _mk = req(base + "/static/poaswap-mark.svg?v=1")
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
-              for u in ("/", "/epochs", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
+              for u in ("/", "/chain", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
         _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
         _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
         check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
@@ -197,8 +197,8 @@ def main():
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
               and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
         check("status dot: never on home; on other pages present but hidden unless Upgrading", b'id="updot"' not in _hm[1]
-              and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/epochs", "/about", "/privacy")))
-        check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/epochs")[1])
+              and all(b'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading" hidden>' in req(base + u)[1] for u in ("/chain", "/about", "/privacy")))
+        check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/chain")[1])
         _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: one More toggle, closed; extra connector deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 1 and '>More<' in _m and '>Other clients<' not in _m
               and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
@@ -235,7 +235,7 @@ def main():
             c, loc = req0(base + u)
             check(f"FAQ {u} -> 301 /about#{u[1:]}, section keeps its title", c == 301 and loc == "/about#" + u[1:] and f'id="{u[1:]}"'.encode() in ab and b'"FAQPage"' in ab
                   and f"https://poascan.io{u}<".encode() not in req(base + "/sitemap.xml")[1] and f"#{u[1:]}".encode() in req(base + "/llms.txt")[1])
-        moved = {"/live": "/epochs?tab=pending", "/grading": "/epochs?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health", "/find": "/#find",
+        moved = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health", "/find": "/#find",
                  "/find?q=Jade": "/search?q=Jade", "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
                  "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers", "/agents/leaderboard": "/agents/top?tab=ai",
                  "/agents/journey": "/agents/census?tab=journey"}
@@ -249,9 +249,9 @@ def main():
         check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
-        lv = req(base + "/epochs?tab=pending")[1]; check("Pending tab: the queue", b"Queue</h2>" in lv and b"\xe2\x80\x94" not in lv and b'class="chip on">Pending' in lv)
+        lv = req(base + "/chain?tab=pending")[1]; check("Pending tab: the queue", b"Queue</h2>" in lv and b"\xe2\x80\x94" not in lv and b'class="chip on">Pending' in lv)
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
-        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/epochs", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
+        txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/chain", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
     finally:
         p.terminate(); p.wait(10)
@@ -267,9 +267,9 @@ def headers(base, check):
     """Caching, HSTS and the www redirect."""
     c, h, _ = raw(base, "/static/style.css?v=1"); check("versioned asset is immutable", c == 200 and h.get("cache-control") == "public, max-age=31536000, immutable")
     c, h, _ = raw(base, "/static/style.css"); check("unversioned asset keeps a short cache", "immutable" not in h.get("cache-control", ""))
-    c, h, _ = raw(base, "/token"); et = h.get("etag")
+    c, h, _ = raw(base, "/network?tab=token"); et = h.get("etag")
     check("HTML has HSTS with includeSubDomains (no preload) and an ETag", h.get("strict-transport-security") == "max-age=31536000; includeSubDomains" and et and h.get("cache-control") == "public, max-age=15, s-maxage=30, stale-while-revalidate=15")
-    c2, _, b2 = raw(base, "/token", {"If-None-Match": et}); check(f"HTML ETag revalidates -> {c2}", c2 == 304 and not b2)
+    c2, _, b2 = raw(base, "/network?tab=token", {"If-None-Match": et}); check(f"HTML ETag revalidates -> {c2}", c2 == 304 and not b2)
     c, h, _ = raw(base, "/live?a=1&b=2", {"Host": "www.poascan.io"}); check("www redirects to the apex with path and query", c == 301 and h.get("location") == "https://poascan.io/live?a=1&b=2")
     c, _, b = raw(base, "/healthz", {"Host": "172.19.0.2:8080"}); check("health check unaffected", c == 200 and b == b"ok\n")
     c, h, b = raw(base, "/.well-known/security.txt"); t = b.decode()
@@ -408,7 +408,7 @@ def history(base, check):
           and 'id="grading"' in gd and "Unlisted" in gd and ">No seal<" in gd
           and fr["html"].count("<tr>") == 25 and fr["next"] and not any("\u2014" in x for x in (ov, ad, gd)))
     rw = req(base + "/fragment/rows?t=txs"); rc = req(base + "/fragment/rows?t=closes"); lb = json.loads(req(base + "/fragment/lb?tab=holders&offset=0")[1])
-    tx1 = req(base + "/txs")[1].decode(); ab = req(base + "/about")[1].decode(); hm = req(base + "/")[1].decode(); ep1 = req(base + "/epochs")[1].decode()
+    tx1 = req(base + "/chain/txs")[1].decode(); ab = req(base + "/about")[1].decode(); hm = req(base + "/")[1].decode(); ep1 = req(base + "/chain")[1].decode()
     check("batch 4: live rows fragments, Rankings Load more, lazy /about, live tables marked, chart skeletons sized",
           rw[0] == 200 and rw[1].count(b"<tr>") >= 1 and b"<table" not in rw[1] and rc[0] == 200 and req0(base + "/fragment/rows?t=nope")[0] == 404
           and req0(base + "/fragment/lb?tab=nope")[0] == 400 and "html" in lb and 'data-liverows="txs"' in tx1 and 'data-liverows="closes-home"' in hm
@@ -438,7 +438,7 @@ def calibration(base, check):
           and [r["grader"] for r in d["rows"]] == sorted(by) and d["method"].endswith("/about#calibration"))
     n = json.loads(req(base + "/api/v1/agents/calibration?sort=n")[1]); c, h, b = reqh(base + "/api/v1/agents/calibration.csv")
     check("calibration: sort=n, CSV rows, 400 on a bad sort", n["rows"][0]["grader"] == A3 and c == 200 and b.decode().count("\n") == 6 and req(base + "/api/v1/agents/calibration?sort=best")[0] == 400)
-    pg = req(base + "/agents/graders")[1].decode(); p2 = req(base + "/agents/graders?sort=n")[1].decode()
+    pg = req(base + "/governance?tab=graders")[1].decode(); p2 = req(base + "/governance?tab=graders&sort=n")[1].decode()
     card = pg[pg.index('id="calibration"'):]; card = card[:card.index("</section>")]
     check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks",
           "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'class="chip on">n<' in p2
@@ -464,7 +464,7 @@ def cohorts(base, check):
     check("Gate A: challenge_eligible over answers born at that close", g[7]["eligible"] == 2 and g[7]["answers"] == 9 and g[7]["rate"] == round(2 / 9, 4) and c7["gate_a"]["eligible"] == 2 and d["k"] == 5)
     c, h, b = reqh(base + "/api/v1/cohorts.csv")
     check("cohorts CSV: one row per cohort and close", c == 200 and b.decode().count("\n") == 1 + sum(len(x["closes"]) for x in cs))
-    pg = req(base + "/epochs")[1].decode(); p2 = req(base + "/epochs?state=passed")[1].decode(); p3 = req(base + "/epochs?state=nope")
+    pg = req(base + "/chain")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
     card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
     check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
           ">Challenge share<" in card and "Gate A" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200
@@ -657,7 +657,7 @@ def fixture_pages(check):
         site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
         paths = sorted(set(nav + site))
         bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
-        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 6 and len(paths) > 30 and not bad)
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 4 and len(paths) > 30 and not bad)
         g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
         op = req(base + "/agents/operators")[1]
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))
@@ -695,27 +695,27 @@ def fixture_pages(check):
               '<h1 class="ephd">Epoch 7 · ' in ep7 and " PT</span>" in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
               and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided / passed<" in ep7
               and '<th class="pc">Reward</th>' in ep7 and 'title="&lt;' not in ep7)
-        tx_ = req(base + "/txs")[1].decode()
+        tx_ = req(base + "/chain/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)
-        gr = req(base + "/epochs?tab=grading")[1].decode()
+        gr = req(base + "/chain?tab=grading")[1].decode()
         check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Per close</h2>" in gr)
         hm2 = req(base + "/")[1].decode()
         check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
               not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
               and ">Finalized height<" in req(base + "/network")[1].decode() and ">Checkpoint<" not in hm2)
-        hm = req(base + "/")[1].decode(); tk = req(base + "/token")[1].decode()
+        hm = req(base + "/")[1].decode(); tk = req(base + "/network?tab=token")[1].decode()
         check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
         check("token: no Transfers card", ">Transfers<" not in tk)
         c, nf = req(base + "/epoch"); nf = nf.decode()
-        check("404: says what is missing and suggests the closest page, no stock label", c == 404 and "No page at this link." in nf and 'href="/epochs"' in nf and "Not measurable" not in nf)
+        check("404: says what is missing and suggests the closest page, no stock label", c == 404 and "No page at this link." in nf and 'href="/chain"' in nf and "Not measurable" not in nf)
         c, sr = req(base + "/search?q=zzzzqq"); sr = sr.decode()
         check("search: no match lists what search takes", c == 404 and "No match for" in sr and "Not measurable" not in sr)
         tid = db_first_tx(env["POASCAN_DB"])
         if tid:
             c2, b2 = req(base + "/search?q=" + tid[:10])
             check(f"search: a partial tx hash opens the transaction ({c2})", c2 == 200 and tid in b2.decode() and "No match for" not in b2.decode())
-        _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/epochs", "/txs", "/api", "/network", "/growth")}
+        _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/chain", "/chain/txs", "/api", "/network", "/growth")}
         check(f"one Ask agent button per page {_asks}", set(_asks.values()) == {1})
         from poascan import prompts as _PR
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))

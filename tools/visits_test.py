@@ -70,7 +70,7 @@ def unit():
         hit("/static/app.css", UA_H, ip); hit("/healthz", UA_H, ip); hit("/ops/visits", UA_H, ip)
         hit("/", UA_H, ip, m="HEAD"); hit("/nope", UA_H, ip, code=404); hit("/search", UA_H, ip, code=302)
     hit("/mcp", "python-httpx/0.27", "198.51.100.7", m="POST")
-    hit("/epochs", UA_H, "198.51.100.8", code=304)
+    hit("/chain", UA_H, "198.51.100.8", code=304)
     check("flush ok", c.flush())
     day = VS.today(clock[0]); r = VS.report(day, day)["days"][0]; v = r["views"]
     n = len(IPS)

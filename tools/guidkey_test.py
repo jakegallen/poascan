@@ -23,7 +23,7 @@ plain = [f'"appId": "{g}"', f"<podcast:guid>{g}</podcast:guid>", f"monkey={g}", 
 check("ordinary GUIDs are left alone (app id, podcast guid, prose, other params, WebSocket GUID)", not any(K.has_key(t) for t in plain) and all(K.redact(t) == t for t in plain))
 check("pk_ keys still redacted", K.redact("pk_" + "a1" * 12) == K.REDACTED)
 check("has_guid_value: bare GUID as a path segment or query value", K.has_guid_value(f"/search?q={g}") and K.has_guid_value(f"/address/{G}") and K.has_guid_value(f"/x?a=1&q={g}#t")
-      and K.has_guid_value(f"/search?q=%20{g}".replace("%20", "")) and not K.has_guid_value("/swap/" + "ab" * 32) and not K.has_guid_value("/epochs?tab=pending"))
+      and K.has_guid_value(f"/search?q=%20{g}".replace("%20", "")) and not K.has_guid_value("/swap/" + "ab" * 32) and not K.has_guid_value("/chain?tab=pending"))
 
 # keyscan
 def sc(l): return S.scan_text("f", [(1, l)])

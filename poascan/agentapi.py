@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.95"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T22:53:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.96"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T23:07:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -239,7 +239,7 @@ def t_leaderboard(args):
 def t_richlist(args):
     h = A.holders(); lim = _int(args, "limit", 25, 1, 500)
     return dict(holders=h["count"], total_balance=h["total"], top10_share=h["top10_share"], gini=h["gini"], concentration=A.concentration(),
-                rows=[{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in h["rows"][:lim]], url=BASE + "/token")
+                rows=[{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in h["rows"][:lim]], url=BASE + "/network?tab=token")
 
 def t_unlocks(args):
     rows = V3.unlocks_api(); lim = _int(args, "limit", 20, 1, 500); sp = A.supply_split()
@@ -295,7 +295,7 @@ def t_swap_status(args):
     return d
 
 def t_pending(args):
-    d = dict(A.pending_by_epoch()); d.update(url=BASE + "/epochs?tab=pending", method=BASE + "/about#pending"); return d
+    d = dict(A.pending_by_epoch()); d.update(url=BASE + "/chain?tab=pending", method=BASE + "/about#pending"); return d
 
 def t_clusters(args):
     cs = dict(G.cluster_signals()); sg = str(args.get("signal") or ""); lim = _int(args, "limit", 25, 1, 200)
@@ -932,7 +932,7 @@ Tools ({len(TOOLS)}):
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; basis_state is pending, settled or absent; method at {BASE}/about#receipts). An unknown tx is a JSON 404 with found false.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
-- Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/agents/at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
+- Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/governance?tab=at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
@@ -946,11 +946,12 @@ Tools ({len(TOOLS)}):
 ## Pages
 - {BASE}/ live epoch, stats, feed
 - {BASE}/start one prompt to start mining PoA
-- {BASE}/epochs the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading)
+- {BASE}/chain the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading); {BASE}/chain/txs transactions
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
-- {BASE}/token, {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census, {BASE}/agents/at-risk (standing drops in the next 2 closes)
+- {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
+- {BASE}/governance where established Agents stand: at risk (?tab=at-risk, drops in the next 2 closes), graders (?tab=graders), charts (?tab=charts) and rules (?tab=rules)
 - Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
-- {BASE}/network chain health (?tab=health) and charts (?tab=charts)
+- {BASE}/network chain health (?tab=health), charts (?tab=charts) and the POA token (?tab=token)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 
 ## Safety

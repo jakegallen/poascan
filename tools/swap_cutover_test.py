@@ -34,7 +34,7 @@ try:
            or not (hd.get("content-type", "").startswith("application/json") or (u.endswith("csv") and "csv" in hd.get("content-type", "")))]
     check(f"swap data routes stay 200 here, never redirect {bad}", not bad)
     check("swap JSON parses", all(json.loads(res[u][2]) is not None for u in data if not u.endswith("csv")))
-    pages = {u: raw("GET", u)[2].decode() for u in ("/", "/start", "/token", "/about", "/privacy", "/agents", "/api", "/llms.txt", "/llms-full.txt", "/sitemap.xml", "/upgrade")}
+    pages = {u: raw("GET", u)[2].decode() for u in ("/", "/start", "/network?tab=token", "/about", "/privacy", "/agents", "/api", "/llms.txt", "/llms-full.txt", "/sitemap.xml", "/upgrade")}
     left = {u: re.findall(r'(?:href="|https://poascan\.io)/swaps(?:#xemb)?\b[^"\s]*', h) for u, h in pages.items()}
     left = {u: v for u, v in left.items() if v}
     check(f"no internal /swaps or /swaps#xemb link in pages, llms or sitemap {left}", not left)
