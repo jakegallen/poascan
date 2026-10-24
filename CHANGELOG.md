@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.83] - 2026-10-23
+
+### Health reconcile and epoch 404
+- Network > Health: the node's txs and final rows read explained again. They are now anchored to the node's counter restart (2026-10-24 01:07:59 UTC) and checked against the archive since then, because the node's final count stays at the recovery checkpoint.
+- /api/v1/epoch/<n> for an epoch that has not closed now returns 404 epoch not closed yet, with epoch and last_closed, instead of unknown endpoint.
+
 ## [1.26.82] - 2026-10-23
 
 ### Fixed (accuracy, restarts and feeds)

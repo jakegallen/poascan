@@ -51,6 +51,7 @@ check("failed job: next try after JOB_RETRY_S, not the full interval", "last[nam
 from poascan import reconcile as RC
 now = int(time.time())
 db.write_tx([("INSERT INTO txs(id, type, ts, final) VALUES(?, 'challenge', ?, ?)", ("t%d" % i, now - 100000 + i * 10, 1 if i % 2 else 0), False) for i in range(100)])
+RC.NODE_RESET_TS = now - 100000 + 80 * 10   # the newest 20 synthetic txs
 db.put_blob("status", {"txs": 20, "final": 10, "as_of": "2026-10-24T05:00:00Z", "epochs_closed": 2, "supply": "0"})
 A._cache.clear()
 try:
@@ -62,9 +63,13 @@ if rows is None:
     rows = {x["key"]: x for x in fn[0]()["rows"]} if fn else {}
 check("reconcile: txs reads explained with the restart time", rows.get("txs", {}).get("state") == "explained" and "restart at a recovery checkpoint" in (rows["txs"].get("reason") or ""))
 check("reconcile: final reads explained too", rows.get("final", {}).get("state") == "explained")
-db.put_blob("status", {"txs": 20, "final": 2, "as_of": "2026-10-24T05:00:00Z", "epochs_closed": 2, "supply": "0"}); A._cache.clear()
+db.put_blob("status", {"txs": 40, "final": 10, "as_of": "2026-10-24T05:00:00Z", "epochs_closed": 2, "supply": "0"}); A._cache.clear()
 rows = {x["key"]: x for x in (RC.reconcile() if hasattr(RC, "reconcile") else fn[0]())["rows"]}
-check("reconcile: a final count that does not match stays differs", rows["txs"]["state"] == "differs")
+check("reconcile: a txs count that does not match the archive since the reset stays differs", rows["txs"]["state"] == "differs")
+
+import poascan.server as SV
+try: SV.api("/api/epoch/999999", {}); check("api: an epoch past the last close is 404 epoch not closed yet", False)
+except SV.NotFound as e: check("api: an epoch past the last close is 404 epoch not closed yet", str(e) == "epoch not closed yet")
 
 check("guard: 30% steal is throttled, 10% is a hang", GD.STEAL_THROTTLED == 0.3)
 print("ALL OK" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

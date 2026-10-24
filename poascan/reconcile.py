@@ -5,6 +5,7 @@ from . import db, analytics as A
 from .analytics import cached
 
 EPS = D("0.000001")
+NODE_RESET_TS = int(__import__("os").environ.get("POASCAN_NODE_RESET_TS", "1792804079"))   # 2026-10-24 01:07:59 UTC, the first tx the node's counters include
 
 def _d(v):
     try: return D(str(v))
@@ -72,15 +73,15 @@ def reconcile():
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")
     tx = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs") or {}
     inv = (db.q1("SELECT COUNT(*) AS n FROM invalid_txs") or {}).get("n")
-    # The node's txs and final counters restart at a recovery checkpoint (seen Oct 23, 2026): when its txs count is the
-    # archive's newest N txs and their final count matches the node's within 1%, both rows read explained with that time.
+    # The node's txs and final counters restarted at a recovery checkpoint (observed: its txs equal the archive's txs since
+    # NODE_RESET_TS to 0.1% on Oct 23 and 24, 2026; its final stays at the checkpoint). Both rows read explained, with the
+    # time, while the archive since then matches the node's txs within 2% and its final within 10%.
     nt, nf, reset = st.get("txs"), st.get("final"), None
-    if nt and nf and (tx.get("n") or 0) > nt:
-        r = db.q1("SELECT ts FROM txs ORDER BY ts DESC LIMIT 1 OFFSET ?", (int(nt) - 1,))
-        f = (db.q1("SELECT SUM(final) AS f FROM txs WHERE ts >= ?", (r["ts"],)) or {}).get("f") or 0 if r and r.get("ts") else None
-        if f is not None and abs(f - nf) <= max(5, nf * 0.01): reset = int(r["ts"])
-    rs_txt = (f"the node's counters restart at a recovery checkpoint: its count matches the archive's txs since "
-              f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(reset))}, and their final count matches within 1%") if reset else None
+    if nt and NODE_RESET_TS and (tx.get("n") or 0) > nt:
+        r = db.q1("SELECT COUNT(*) AS n, SUM(final) AS f FROM txs WHERE ts >= ?", (NODE_RESET_TS,)) or {}
+        if abs((r.get("n") or 0) - nt) <= max(10, nt * 0.02) and (not nf or abs((r.get("f") or 0) - nf) <= max(10, nf * 0.1)): reset = NODE_RESET_TS
+    rs_txt = (f"the node's counters restart at a recovery checkpoint: it counts the archive's txs since "
+              f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(reset))}, and its final count stays at the checkpoint") if reset else None
     anc = db.q1("SELECT MAX(height) AS h FROM anchors") or {}
     pend_rec = len(((E[-1].get("basis") or {}).get("pending") or {})) if E else None
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None

@@ -6,8 +6,8 @@ from html import escape as E
 from . import kin as KN
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.82"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-24T05:37:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.83"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-24T05:46:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Standing view on the address page (at risk, pending answers, marks), an At risk list under Agents, and links to POASwap swap status."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"

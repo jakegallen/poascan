@@ -155,7 +155,9 @@ def api(path, qs):
     m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]
-        if not r: raise KeyError
+        if not r:
+            n = int(m.group(1)); last = max((x["epoch"] for x in A.epoch_rows()), default=-1)
+            raise NotFound("epoch not closed yet" if n > last else "unknown epoch", epoch=n, last_closed=last)
         return dict(r[0], rewards=A.epoch_detail(int(m.group(1))).get("rewards")), False
     if path == "/api/richlist": return [{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in A.holders()["rows"]], True
     if path in ("/api/agents/series", "/api/accounts/series"): return [dict(ts=p[0], accounts=p[1], holders=p[2], supply=p[3], window_txs=p[4]) for p in A.accounts_series()], True
