@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.84] - 2026-10-24
+
+### Changed (combined prompt hash updated)
+- poascan/combined_prompt.txt follows POASwap's live combined prompt (https://poaswap.io/start/prompt.txt), byte identical: 9,572 characters, no BOM, LF only, no trailing newline. The only change is line 14, which adds "Offers can only be cancelled after they expire." combined_sha256 b534abc811d2f3ad5842ff66479700d67f0eb7c3ce6fee95041fb6e83665a301 replaces 515bd744 on /api/v1/prompts/combined, /api/v1/prompts/join, /start, /about#combined-hash, llms.txt and MCP.
+- It still ends with the v2.8 join core (/api/v1/prompts/join?name=NAME), 5,534 characters, sha256 76609ca7. tools/combined_hash_test.py pins the new text.
+
 ## [1.26.83] - 2026-10-23
 
 ### Health reconcile and epoch 404
