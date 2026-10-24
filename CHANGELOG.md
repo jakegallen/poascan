@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.78] - 2026-10-23
+
+### Fixed (join name repair)
+- At start, the indexer refills join names and custody that a memo-less join copy blanked before 1.26.77, from the archived join tx memo. Idempotent, local data only, no upstream read; rows with a name are untouched.
+- /api/v1/agents/name-available and the address page custody read the repaired rows, so those names read taken and hosted.
+- tools/addr_cache_search_test.py covers the repair.
+
 ## [1.26.77] - 2026-10-23
 
 ### Fixed (hosted join name search)
