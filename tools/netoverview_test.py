@@ -148,4 +148,39 @@ A._cache.clear() if hasattr(A, "_cache") else None
 st = {x["label"]: x["state"] for x in A.feeds()["feeds"]}
 check(f"Epochs Degraded while a needed read fails ({st.get('Epochs')})", st.get("Epochs") == "Degraded")
 
+# ---------------- 1.26.100: /api/txs load ----------------
+SENT = []
+class _R:
+    def __init__(s, body, h): s.b, s.headers = body, h
+    def read(s): return s.b
+    def __enter__(s): return s
+    def __exit__(s, *a): return False
+import urllib.request as _U, urllib.error as _UE, importlib
+I2 = importlib.reload(I)   # undo the fakes above
+BODY = [json.dumps({"valid": [{"id": "1" * 64, "type": "challenge", "ts": now}], "invalid": []}).encode()]
+def _open(req, timeout=None):
+    SENT.append(dict(req.header_items()))
+    if req.get_header("If-none-match") == '"e1"' and BODY[0] is None: raise _UE.HTTPError(req.full_url, 304, "nm", {}, None)
+    return _R(BODY[0], {"ETag": '"e1"', "Last-Modified": "Sat, 24 Oct 2026 23:00:00 GMT"})
+_U.urlopen = _open
+db.write("DELETE FROM fetch_log"); I2._etags.clear(); I2._lastmod.clear()
+used = I2.live_list()
+check(f"first /api/txs read: new rows keep the 2 min cadence ({used}, {I2._txlist_every[0]})", used == "/api/txs" and I2._txlist_every[0] == I2.TXLIST_S == 120)
+BODY[0] = None; db.write("UPDATE fetch_log SET last_ok=last_ok-200 WHERE endpoint='/api/txs'")
+I2.live_list()
+check("conditional headers sent: If-None-Match and If-Modified-Since", SENT[-1].get("If-none-match") == '"e1"' and SENT[-1].get("If-modified-since") == "Sat, 24 Oct 2026 23:00:00 GMT")
+check(f"a 304 moves to the 5 min cadence ({I2._txlist_every[0]})", I2._txlist_every[0] == I2.TXLIST_IDLE_S == 300)
+n = len(SENT); db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/txs'", (int(time.time()) - 200,)); I2.live_list()
+check("inside the 5 min cadence no read is sent", len(SENT) == n)
+BODY[0] = json.dumps({"valid": [{"id": "1" * 64, "type": "challenge", "ts": now}], "invalid": []}).encode()
+db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/txs'", (int(time.time()) - 310,)); I2._etags.clear(); I2.live_list()
+check(f"a 200 with no new rows stays at 5 min ({I2._txlist_every[0]})", I2._txlist_every[0] == 300)
+BODY[0] = json.dumps({"valid": [{"id": "2" * 64, "type": "challenge", "ts": now}], "invalid": []}).encode()
+db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/txs'", (int(time.time()) - 310,)); I2._etags.clear(); I2.live_list()
+check(f"new rows bring back the 2 min cadence ({I2._txlist_every[0]})", I2._txlist_every[0] == 120)
+b = I2.bytes_1h().get("/api/txs", 0)
+check(f"wire bytes counted per endpoint for the last hour ({b})", b > 0)
+I2.flush_counts(force=True)
+check("bytes flushed to upstream_bytes and still reported", I2.bytes_1h().get("/api/txs", 0) == b)
+
 print(f"\n{len(fails)} failed" if fails else "\nall ok"); sys.exit(1 if fails else 0)

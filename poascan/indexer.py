@@ -24,6 +24,7 @@ STATUS_S = _ei("POASCAN_STATUS_S", 60, 60)                     # /api/status, on
 STATUS_DEGRADED_S = _ei("POASCAN_STATUS_DEGRADED_S", 120, 60)
 NETWORKS_S = _ei("POASCAN_NETWORKS_S", 120, 60)                # /api/networks (height, checkpoint)
 TXLIST_S = _ei("POASCAN_TXLIST_S", 120, 60)                  # /api/txs, the keyless tx list (1.26.98); /api/explorer/txs is its fallback
+TXLIST_IDLE_S = _ei("POASCAN_TXLIST_IDLE_S", 300, 120)        # /api/txs while a read brought no new rows (304 or same ids); back to TXLIST_S on new rows
 SWAPS_S = _ei("POASCAN_SWAPS_S", 60, 30, 120)                  # /api/swaps (swap mirrors read our cached copy, never minepoa.com)
 FORUM_S = _ei("POASCAN_FORUM_S", 3600, 900)                    # communities plus one posts list per community
 META_S = _ei("POASCAN_META_S", 300, 120)                       # anchors, notices, ballots
@@ -52,6 +53,7 @@ NOTICE_RETRY_S = _ei("POASCAN_NOTICE_RETRY_S", 300, 60)   # back-off floor after
 NOT_MODIFIED = object()            # fetch(..., cond=True) result when the node answered 304 to our If-None-Match
 MAX_BODY = 96 * 1024 * 1024        # decoded size cap (the epochs list is about 11 MB)
 _etags = {}                        # path -> ETag of the last 200, in memory only (a restart sends one plain GET)
+_lastmod = {}                      # path -> Last-Modified of the last 200 (sent as If-Modified-Since), in memory only
 
 def _decode(raw, enc):
     """gzip bodies are inflated with a size cap; anything other than gzip or identity is refused."""
@@ -83,11 +85,13 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     if hold > 0: deny(ep, "pause_429"); raise Limited("minepoa.com asked us to wait (429)", int(hold) + 1)
     hd = {"User-Agent": UA, "Accept": "application/json", "Accept-Encoding": "gzip"}
     if cond and _etags.get(path): hd["If-None-Match"] = _etags[path]
+    if cond and _lastmod.get(path): hd["If-Modified-Since"] = _lastmod[path]
     req = urllib.request.Request(BASE + path, headers=hd)
     now = int(time.time()); t0 = time.time()
     try:
         with (_NOREDIR.open(req, timeout=timeout) if soft else urllib.request.urlopen(req, timeout=timeout)) as r:
-            wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag")
+            wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag"); lm = r.headers.get("Last-Modified")
+        count_bytes(ep, len(wire))
         if raw[:1] not in (b"{", b"["):
             _probe(ep, True, t0, "200"); count(ep, 200)
             raise Busy("non-JSON response (load page?)")
@@ -100,6 +104,8 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         if cond:
             if et: _etags[path] = et
             else: _etags.pop(path, None)
+            if lm: _lastmod[path] = lm
+            else: _lastmod.pop(path, None)
         db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes,err) VALUES(?,?,0,0,?,NULL) "
                  "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, bytes=excluded.bytes",
                  (ep, now, len(raw)))
@@ -236,15 +242,37 @@ def count(ep, code, now=None):
     with _ctr_lock: _ctr[(m, ep, _code_class(code))] += 1
 def _ensure_counts():
     db.write("CREATE TABLE IF NOT EXISTS upstream_counts(minute INTEGER, endpoint TEXT, code TEXT, n INTEGER, PRIMARY KEY(minute, endpoint, code))")
+    db.write("CREATE TABLE IF NOT EXISTS upstream_bytes(minute INTEGER, endpoint TEXT, bytes INTEGER, PRIMARY KEY(minute, endpoint))")
+# Response bytes on the wire (compressed, body only) per minute and endpoint key (1.26.100), flushed with the request
+# counter to upstream_bytes; /api/health reports the last hour (load_1h).
+_bytes = collections.Counter()
+def count_bytes(ep, n, now=None):
+    m = int((now or time.time()) // 60) * 60
+    with _ctr_lock: _bytes[(m, ep)] += n
+def bytes_1h(now=None):
+    """{endpoint key: wire bytes} for the last 60 minutes, flushed rows plus what is still in memory."""
+    now = now or time.time(); t = int(now) - 3600; out = collections.Counter()
+    try:
+        for r in db.q("SELECT endpoint, SUM(bytes) AS b FROM upstream_bytes WHERE minute >= ? GROUP BY endpoint", (t,)): out[r["endpoint"]] += r["b"] or 0
+    except Exception: pass
+    with _ctr_lock:
+        for (m, ep), n in _bytes.items():
+            if m >= t: out[ep] += n
+    return dict(out)
+
 def flush_counts(force=False):
     if not force and time.time() - _ctr_flushed[0] < 60: return
     _ctr_flushed[0] = time.time()
-    with _ctr_lock: items = list(_ctr.items()); _ctr.clear()
+    with _ctr_lock: items = list(_ctr.items()); _ctr.clear(); bitems = list(_bytes.items()); _bytes.clear()
     _ensure_counts()
     if items:
         db.write("INSERT INTO upstream_counts VALUES(?,?,?,?) ON CONFLICT(minute, endpoint, code) DO UPDATE SET n = n + excluded.n",
                  [(m, ep, c, n) for (m, ep, c), n in items], many=True)
+    if bitems:
+        db.write("INSERT INTO upstream_bytes VALUES(?,?,?) ON CONFLICT(minute, endpoint) DO UPDATE SET bytes = bytes + excluded.bytes",
+                 [(m, ep, n) for (m, ep), n in bitems], many=True)
     db.write("DELETE FROM upstream_counts WHERE minute < ?", (int(time.time()) - UPSTREAM_KEEP_DAYS * 86400,))
+    db.write("DELETE FROM upstream_bytes WHERE minute < ?", (int(time.time()) - UPSTREAM_KEEP_DAYS * 86400,))
     try: flush_denials()
     except Exception as e: log.warning("upstream denials flush: %s", type(e).__name__)
 def template(ep): return ep.split(" (")[0]
@@ -408,15 +436,21 @@ def _ok_within(ep, s):
     r = db.q1("SELECT last_ok, fails FROM fetch_log WHERE endpoint=?", (ep,))
     return bool(r and r["last_ok"] and not r["fails"] and time.time() - r["last_ok"] < s)
 
+_txlist_every = [TXLIST_S]   # current /api/txs cadence: TXLIST_S after new rows, TXLIST_IDLE_S after a 304 or no new rows
+
 def live_list():
     """The tx list (1.26.98): minepoa's keyless /api/txs first, read once per TXLIST_S with If-None-Match; when it fails,
     the older /api/explorer/txs feed (with its gap fill) takes over until /api/txs answers again. Returns the path used."""
     now = time.time()
     if can_fetch("/api/txs"):
-        if now - _last_try("/api/txs") < TXLIST_S - 5 and _ok_within("/api/txs", 3 * TXLIST_S): return "/api/txs"
+        if now - _last_try("/api/txs") < _txlist_every[0] - 5 and _ok_within("/api/txs", 3 * TXLIST_IDLE_S): return "/api/txs"
         try:
             d = fetch("/api/txs", timeout=60, cond=True)
-            if d is not NOT_MODIFIED: _store_window(d)
+            new = 0
+            if d is not NOT_MODIFIED:
+                ids = [t["id"] for t in d.get("valid", []) if isinstance(t, dict) and t.get("id")]
+                new = len(ids) - sum(len(_known(ids[i:i + 500])) for i in range(0, len(ids), 500)); _store_window(d)
+            _txlist_every[0] = TXLIST_S if new else TXLIST_IDLE_S   # 1.26.100: 304 or no new rows -> every 5 min
             return "/api/txs"
         except Busy as e: log.warning("/api/txs: %s", e)
     else: skip_backoff("/api/txs")

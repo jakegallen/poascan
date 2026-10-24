@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.101] - 2026-10-24
+
+### Changed
+- Tx list load: `/api/txs` reads send If-None-Match (and If-Modified-Since when the node sends Last-Modified); a 304 is no change. After a 304 or a read with no new rows the next read waits 5 minutes (`POASCAN_TXLIST_IDLE_S`, floor 2 min); new rows bring back the 2 minute cadence.
+
+### Added
+- Upstream response bytes (compressed) per minute and endpoint key, kept like the request counter. `/api/health` adds `load_1h` (total and per endpoint bytes for the last hour, and the current `/api/txs` cadence).
+
+### Tests
+- tools/netoverview_test.py: conditional headers, 304 and no-new-rows backoff, return to 2 minutes, byte counter.
+
 ## [1.26.100] - 2026-10-24
 
 ### Added
