@@ -41,12 +41,69 @@ def _mark(k, ts, atts, final, b):
         h = 6 + 30 * min(1.0, math.log(atts + 1) / math.log(51)); return f'<line class="mt" x1="{x}" x2="{x}" y1="{26 - h / 2:.1f}" y2="{26 + h / 2:.1f}"/>'
     return f'<line class="ms" x1="{x}" x2="{x}" y1="23" y2="29"/>'
 
+# Seals arrive in bursts (dozens in one second), so the Seals lane draws clusters, not one stroke each: neighbours closer than their
+# own widths plus GAP merge into one capsule at their weighted center with a count, and the newest is held inside the now line. The
+# spacing is in screen pixels: app.js reruns seal_clusters at the lane's real width; the server render assumes the narrowest lane
+# (NOMINAL_PX, a 390 px phone), so without JS marks are further apart than needed but never touch.
+GAP, NOMINAL_PX = 4, 260
+def seal_w(n):
+    """A mark's width in px: a 6 px pill for one seal, a capsule that fits its count (10 px mono digits) for more."""
+    return 6 if n == 1 else 12 + 6 * len(str(n))
+
+def seal_clusters(ts, pxs, right=None):
+    """[[center ts, n, first ts, last ts], ...] oldest first, for seal times `ts` at `pxs` px per second. Adjacent clusters merge
+    until every pair of centers is at least (w1 + w2) / 2 + GAP px apart; `right` (a ts, the now line) pulls the newest ones back
+    inside it, keeping that spacing. app.js sealCluster is the same algorithm."""
+    st = []
+    for t in sorted(ts):
+        st.append([float(t), 1, t, t])
+        while len(st) > 1 and (st[-1][0] - st[-2][0]) * pxs < (seal_w(st[-1][1]) + seal_w(st[-2][1])) / 2 + GAP:
+            b, a = st.pop(), st[-1]; n = a[1] + b[1]
+            st[-1] = [(a[0] * a[1] + b[0] * b[1]) / n, n, min(a[2], b[2]), max(a[3], b[3])]
+    if right is not None and st:
+        lim = right - (seal_w(st[-1][1]) / 2 + 1) / pxs
+        for i in range(len(st) - 1, -1, -1):
+            if st[i][0] <= lim: break
+            st[i][0] = lim
+            if i: lim -= ((seal_w(st[i][1]) + seal_w(st[i - 1][1])) / 2 + GAP) / pxs
+    return st
+
+def _hms(t):
+    return time.strftime("%H:%M:%S", time.gmtime(t))
+
+def seal_tip(c):
+    """Hover text for a cluster, UTC (the no-JS fallback; app.js writes the visitor's time)."""
+    n, t0, t1 = c[1], c[2], c[3]
+    if n == 1: return f"Seal · {_hms(t0)} UTC"
+    return f"{n} Seals · {_hms(t0)} UTC" if t0 == t1 else f"{n} Seals · {_hms(t0)} to {_hms(t1)} UTC"
+
+def seal_layer(ts, b, lo, now):
+    """The Seals lane's marks as HTML over the lane's SVG (round capsules and counts cannot sit in a stretched viewBox). data-s
+    carries every seal as seconds after b (repeats as x*n) so app.js can recluster at the real width and keep the count."""
+    pxs = NOMINAL_PX / WIN; out = []
+    for c in seal_clusters(ts, pxs, right=now):
+        if (c[0] - lo) * pxs < seal_w(c[1]) / 2: continue   # would be cut at the window's start: a mark leaves whole
+        left = 100 * (c[0] - b) / WIN
+        out.append(f'<i class="sm" style="left:{left:.2f}%" title="{seal_tip(c)}">{c[1] if c[1] > 1 else ""}</i>' if c[1] > 1
+                   else f'<i class="sm s1" style="left:{left:.2f}%" title="{seal_tip(c)}"></i>')
+    rel, runs = [t - b for t in sorted(ts)], []
+    for x in rel:
+        if runs and runs[-1][0] == x: runs[-1][1] += 1
+        else: runs.append([x, 1])
+    ds = " ".join(f"{x}*{n}" if n > 1 else str(x) for x, n in runs)
+    return f'<div class="sk" data-b="{b}" data-s="{ds}" style="transform:translateX({100 * (b - lo) / WIN:.2f}%)" aria-hidden="true">{"".join(out)}</div>'
+
 def score_html(now=None):
     now = time.time() if now is None else now
     b = base(now); rows = score_rows(now); lo = now - WIN; out = []
     grid = "".join(f'<line class="gl" x1="{WIN * g // 4}" x2="{WIN * g // 4}" y1="0" y2="52"/>' for g in (1, 2, 3))
     for t, label, k in LANES:
         mine = [r for r in rows if r[0] == k]; n = sum(1 for r in mine if r[1] >= lo)
+        if k == "s":   # clusters, never overlapping (seal_layer)
+            out.append(f'<div class="lane" data-k="{k}"><span class="lbl">{label}</span><div class="plot"><svg viewBox="0 0 {WIN} 52" preserveAspectRatio="none" aria-hidden="true">'
+                       f'{grid}<line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>{seal_layer([r[1] for r in mine], b, lo, now)}</div>'
+                       f'<b class="c num">{n}</b></div>')
+            continue
         marks = "".join(_mark(*r, b) for r in mine)
         out.append(f'<div class="lane" data-k="{k}"><span class="lbl">{label}</span><svg viewBox="0 0 {WIN} 52" preserveAspectRatio="none" aria-hidden="true">'
                    f'{grid}<g class="mk" data-b="{b}" transform="translate({b - lo:.0f} 0)">{marks}</g><line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>'

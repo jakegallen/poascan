@@ -159,6 +159,8 @@ jobs:
         run: python tools/phase2_test.py
       - name: Phase 3 signature moments (maker's marks, hallmarks, the Pour)
         run: python tools/phase3_test.py
+      - name: Activity map in the visitor's zone, Seals that never overlap (1.26.135)
+        run: python tools/localmap_seals_test.py
       - name: Supply basis at the genesis cut (cum_supply, circulating plus locked, holders total and unlocks equal the supply; reconcile Mined explained)
         run: python tools/supply_test.py
       - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)

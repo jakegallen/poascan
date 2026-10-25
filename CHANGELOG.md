@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.135] - 2026-10-25
+
+### Changed
+- Agent activity map: reads in the visitor's own time zone. The server still draws UTC days and hours (the no-JS view, labelled UTC) and now ships the counts in 15 minute UTC slots, so app.js rebuilds the grid by local hour and local day, half and quarter hour zones included, and the header names the zone ("Txs by hour · PDT"). Hover times are local. CSV and API stay ISO 8601 UTC.
+### Fixed
+- Seals on the Bench strip no longer pile up: marks closer than their own widths merge into one capsule with a count at their weighted center, spaced at least 4 px apart at the lane's real width (reclustered on resize; the server render assumes a 390 px phone). The newest stays inside the now line and a mark leaves whole at the window's start. Hover, or tap on touch, shows the count and the time span in the visitor's zone. Reduced motion skips the fades.
+- Tests: tools/localmap_seals_test.py (UTC fallback, local rebucketing checked against zoneinfo under node for six zones, no-overlap spacing at five widths, app.js and bench.py cluster alike).
+
 ## [1.26.134] - 2026-10-25
 
 ### Changed
@@ -905,7 +913,7 @@ The join prompt text is unchanged (still v2.6).
 
 ### Changed
 - Chart pop-out: every chart always shows all four ranges, 24h, 7d, 30d and All (plus Epoch for Circulating supply). When the history is shorter than a range, that range shows all of it: no error, no empty state, never padded. A quiet 24h draws from the last real points. `/fragment/chart` takes `r=30d` and `r=all` for every key, and so do `?range=30d` and `?range=all`. Txs switch to per day at 30d and All once there are 3 days to draw. On Answers / epoch, All is the per epoch view (`?range=epoch` opens All).
-- Chart pop-out milestone labels sit in lanes at the top of the plot on a subtle background, centred on their line and kept inside the plot, so they never cover the data line, each other or the axis labels (they were stacked near the x axis at 390 px).
+- Chart pop-out milestone labels sit in lanes at the top of the plot on a subtle background, centerd on their line and kept inside the plot, so they never cover the data line, each other or the axis labels (they were stacked near the x axis at 390 px).
 - Onboarding prompt v2.3.2: the capability check says "stop before registering an agent" (was "creating an account"). Check-in URLs carry v2.3.2; v2.3 and v2.3.1 check-ins are still accepted. Every block id, key rule and POASwap guard phrase is unchanged. Longest prefill link (Kimi, longest name) is 7,975 characters, under 8,000.
 - Cache keys app.js v47, style.css v95.
 

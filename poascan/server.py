@@ -403,7 +403,9 @@ MPID = re.compile(rb'"mp\d+"')
 PAGE_VOLATILE = [(MPID, b""), (re.compile(rb'(data-close="[\d.]+">)[^<]*'), rb"\1"), (re.compile(rb'( pathLength="100" stroke-dasharray=")[\d.]+'), rb"\1"),
                  (re.compile(rb'(<i class="molten" style="width:)[\d.]+'), rb"\1"), (re.compile(rb'(<span class="vp num">)\d+'), rb"\1"),
                  (re.compile(rb'(<time class="t rel" data-ts="\d+">)[^<]*'), rb"\1"),
-                 (re.compile(rb'(<g class="mk" data-b="\d+" transform="translate\()[-\d.]+'), rb"\1")]   # the Bench strip slide (bench.py)
+                 (re.compile(rb'(<g class="mk" data-b="\d+" transform="translate\()[-\d.]+'), rb"\1"),
+                 (re.compile(rb'(<div class="sk" data-b="\d+" data-s="[^"]*" style="transform:translateX\()[-\d.]+'), rb"\1"),
+                 (re.compile(rb'(<i class="sm(?: s1)?" style="left:)[\d.]+'), rb"\1")]   # the Bench strip slide and the Seals clusters held inside the now line (bench.py)
 PAGE_CACHE = "public, max-age=15, s-maxage=30, stale-while-revalidate=15"
 def page_etag(b):
     for r, k in PAGE_VOLATILE: b = r.sub(k, b)

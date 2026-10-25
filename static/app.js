@@ -24,11 +24,28 @@ function ltf(ts,f,full){var d=new Date(ts*1000),o={};if(f!=="t"){o.month="short"
  try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return utc(ts)}}
 function tzn(){if(TZN!==null)return TZN;TZN="";try{var p=new Intl.DateTimeFormat(undefined,{timeZoneName:"short"}).formatToParts(new Date());for(var i=0;i<p.length;i++)if(p[i].type==="timeZoneName")TZN=p[i].value}catch(e){}return TZN}
 function ltt(s){return s.replace(/\{t:(\d+)(?::(\w+))?\}/g,function(_,ts,f){return ltf(+ts,f||"dt")}).replace(/ \(UTC\)$/,"")}
-function lt(root){$$("time.lt",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts||t.dataset.lz==ts)return;t.textContent=ltf(ts,t.dataset.f||"dt");t.dataset.lz=ts});
+function lt(root){pheat(root);$$("time.lt",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts||t.dataset.lz==ts)return;t.textContent=ltf(ts,t.dataset.f||"dt");t.dataset.lz=ts});
  var z=tzn();if(z)$$(".tzn",root).forEach(function(s){s.textContent=z});
  $$("[data-ltt]",root).forEach(function(e){e.title=ltt(e.dataset.ltt);e.removeAttribute("data-ltt")});
  $$("[data-lts]",root).forEach(function(e){e.textContent=ltf(+e.dataset.lts,e.dataset.f||"dt");e.removeAttribute("data-lts")});
  $$("[title*=' UTC']",root).forEach(function(e){e.title=ltx(e.title)})}
+/* the Agent activity map (profile.py activity): the server draws UTC days and hours and ships the counts in 15 minute UTC slots
+   (data-q "slot:n"). Here they are rebucketed by the visitor's own hours and days, so half and quarter hour zones land right, and
+   the header and label name the zone. Same five steps of gold as the server. */
+function pstep(n,mx){return !n?0:mx>1?1+Math.min(3,Math.floor(4*(n-1)/mx)):4}
+function pbucket(q0,days,dq,t){var st=[],g={},mx=0,i;
+  for(i=0;i<=days;i++)st.push(new Date(t.getFullYear(),t.getMonth(),t.getDate()-(days-1)+i).getTime()/1000);
+  dq.split(" ").forEach(function(p){var k=p.split(":"),ts=q0+(+k[0])*900,n=+k[1];if(!n||ts<st[0]||ts>=st[days])return;
+   for(var d=0;d<days&&ts>=st[d+1];d++);var key=d*24+new Date(ts*1000).getHours();g[key]=(g[key]||0)+n;if(g[key]>mx)mx=g[key]});
+  return {st:st,g:g,mx:mx}}
+function pheat(root){$$(".pheat[data-q]",root).forEach(function(el){if(el.dataset.lz)return;el.dataset.lz="1";
+  var days=+el.dataset.days||7,B=pbucket(+el.dataset.q0,days,el.dataset.q,new Date()),st=B.st,g=B.g,mx=B.mx,i,h;
+  var o="";for(i=0;i<days;i++){var ds=new Date(st[i]*1000),day=ltf(st[i],"d");o+='<div class="phr"><span>'+day+'</span>';
+   for(h=0;h<24;h++){var n=g[i*24+h]||0,cs=new Date(ds.getFullYear(),ds.getMonth(),ds.getDate(),h).getTime()/1000;
+    o+='<i class="l'+pstep(n,mx)+'" title="'+ltf(cs,"dt")+": "+n+" tx"+(n===1?"":"s")+'"></i>'}o+="</div>"}
+  var ax=$(".phax",el);$$(".phr",el).forEach(function(r){r.remove()});el.insertAdjacentHTML("afterbegin",o);if(ax)el.appendChild(ax);
+  var z=tzn()||"local";el.setAttribute("aria-label","Txs by hour, last "+days+" days, "+z);
+  var c=el.closest(".card"),lb=c&&$(".phz",c);if(lb)lb.textContent=z})}
 /* a dated UTC time inside hover text ("Oct 25, 15:48 UTC", ui.utc_text) reads local too; a bare "15:48 UTC" has no date and stays */
 var LTMON="JanFebMarAprMayJunJulAugSepOctNovDec";
 function ltx(s){return s.replace(/\b([A-Z][a-z]{2}) (\d{1,2})(?:, (\d{4}))?, (\d{2}):(\d{2})(?::(\d{2}))? UTC\b/g,function(m,mo,d,y,h,mi,se){var k=LTMON.indexOf(mo);if(k<0||k%3)return m;
@@ -117,14 +134,44 @@ function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.datas
 /* the Bench strip (bench.py): marks sit at x = ts - b in a 1440 s wide viewBox. Every 5 s the group slides left with time; a new tx in
    the snapshot refetches the window (/fragment/score, cached 10 s), at most once per 20 s. Marks newer than what we had fade in. */
 var SC={top:null,t:0,busy:0,max:0,tm:0};
-function scoreSlide(){var now=Date.now()/1000;$$("#score .lane").forEach(function(l){var g=$(".mk",l);if(!g)return;var tx=+g.dataset.b-(now-1440),n=0;
+function scoreSlide(){var now=Date.now()/1000;$$("#score .lane").forEach(function(l){var sk=$(".sk",l);if(sk){sealSlide(l,sk,now);return}var g=$(".mk",l);if(!g)return;var tx=+g.dataset.b-(now-1440),n=0;
   g.setAttribute("transform","translate("+tx.toFixed(1)+" 0)");$$("line",g).forEach(function(m){var x=+m.getAttribute("x1")+tx;if(x<-60)m.remove();else if(x>=0)n++});
   var c=$(".c",l);if(c&&c.textContent!==String(n))c.textContent=n})}
+/* the Seals lane (bench.py seal_clusters, the same algorithm): seals come in bursts, so neighbours closer than their widths plus 4 px
+   merge into one capsule with a count at their weighted centre, reclustered at the lane's real width (and on resize). The newest is
+   held inside the now line. Hover, or tap on touch, shows the count and the times in the visitor's zone. */
+function sealW(n){return n===1?6:12+6*String(n).length}
+function sealCluster(ts,pxs,right){var st=[],i,a,b,n;ts=ts.slice().sort(function(x,y){return x-y});
+  for(i=0;i<ts.length;i++){st.push([ts[i],1,ts[i],ts[i]]);
+   while(st.length>1){b=st[st.length-1];a=st[st.length-2];if((b[0]-a[0])*pxs>=(sealW(b[1])+sealW(a[1]))/2+4)break;st.pop();n=a[1]+b[1];st[st.length-1]=[(a[0]*a[1]+b[0]*b[1])/n,n,Math.min(a[2],b[2]),Math.max(a[3],b[3])]}}
+  if(right!=null&&st.length){var lim=right-(sealW(st[st.length-1][1])/2+1)/pxs;for(i=st.length-1;i>=0;i--){if(st[i][0]<=lim)break;st[i][0]=lim;if(i)lim-=((sealW(st[i][1])+sealW(st[i-1][1]))/2+4)/pxs}}
+  return st}
+function sealTs(sk){if(!sk._s){var b=+sk.dataset.b,o=[];(sk.dataset.s||"").split(" ").forEach(function(p){if(!p)return;var q=p.split("*"),k=q[1]?+q[1]:1;for(var j=0;j<k;j++)o.push(b+(+q[0]))});sk._s=o}return sk._s}
+function sealDraw(sk,old){var w=sk.parentNode.clientWidth;if(!w)return;sk._w=w;var b=+sk.dataset.b,h="";
+  var now=Date.now()/1000;sealCluster(sealTs(sk),w/1440,now).forEach(function(c){var nw=(old&&c[3]>old&&!RM?" nw":"")+((c[0]-(now-1440))*w/1440<sealW(c[1])/2?" out":"");
+   h+='<i class="sm'+(c[1]===1?" s1":"")+nw+'" style="left:'+(100*(c[0]-b)/1440).toFixed(2)+'%" data-x="'+c[0].toFixed(1)+'" data-n="'+c[1]+'" data-t0="'+c[2]+'" data-t1="'+c[3]+'">'+(c[1]>1?c[1]:"")+'</i>'});
+  sk.innerHTML=h;sealSlide(sk.closest(".lane"),sk,now)}
+function sealSlide(l,sk,now){if(!sk._w)sealDraw(sk);sk.style.transform="translateX("+(100*(+sk.dataset.b-(now-1440))/1440).toFixed(3)+"%)";
+  var w=sk._w||0;$$(".sm",sk).forEach(function(m){var o=(+m.dataset.x-(now-1440))*w/1440<sealW(+m.dataset.n)/2;if(m.classList.contains("out")!==o){m.classList.toggle("out",o);if(o&&STIP&&STIP._m===m)sealUntip()}});   /* a mark leaves whole at the window's start */
+  var n=0;sealTs(sk).forEach(function(t){if(t>=now-1440)n++});var c=$(".c",l);if(c&&c.textContent!==String(n))c.textContent=n}
+function sealHms(ts){try{return new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",second:"2-digit"}).format(new Date(ts*1000))}catch(e){return utc(ts)}}
+var STIP=null;
+function sealTip(m,pin){var sc=$("#score");if(!sc)return;if(!STIP){STIP=D.createElement("div");STIP.className="stip";STIP.setAttribute("aria-hidden","true");sc.appendChild(STIP)}
+  var n=+m.dataset.n,t0=+m.dataset.t0,t1=+m.dataset.t1;STIP.textContent=(n===1?"Seal":n+" Seals")+" · "+sealHms(t0)+(t1>t0?" to "+sealHms(t1):"");
+  var r=sc.getBoundingClientRect(),q=m.getBoundingClientRect(),tw=STIP.offsetWidth,th=STIP.offsetHeight;
+  STIP.style.left=Math.max(0,Math.min(r.width-tw,q.left+q.width/2-r.left-tw/2)).toFixed(0)+"px";STIP.style.top=(q.top-r.top-th-8).toFixed(0)+"px";
+  if(STIP._m&&STIP._m!==m)STIP._m.classList.remove("on");STIP._m=m;STIP._pin=!!pin;m.classList.add("on");STIP.classList.add("on")}
+function sealUntip(){if(!STIP)return;STIP.classList.remove("on");if(STIP._m)STIP._m.classList.remove("on");STIP._m=null;STIP._pin=false}
+D.addEventListener("pointerover",function(e){var m=e.target.closest&&e.target.closest("#score .sm");if(m&&e.pointerType==="mouse")sealTip(m)});
+D.addEventListener("pointerout",function(e){var m=e.target.closest&&e.target.closest("#score .sm");if(m&&STIP&&!STIP._pin&&!(e.relatedTarget&&m.contains(e.relatedTarget)))sealUntip()});
+D.addEventListener("click",function(e){var m=e.target.closest&&e.target.closest("#score .sm");if(m){if(STIP&&STIP._pin&&STIP._m===m)sealUntip();else sealTip(m,1);return}if(STIP&&STIP._m)sealUntip()});
+var sealRT=0;W.addEventListener("resize",function(){clearTimeout(sealRT);sealRT=setTimeout(function(){sealUntip();$$("#score .sk").forEach(function(sk){if(sk.parentNode.clientWidth!==sk._w)sealDraw(sk)})},150)});
 function scoreMark(r,b,nw){var x=r[1]-b,k=r[0],c=nw?" nw":"";if(k==="a")return '<line class="ma'+(r[3]?" f":"")+c+'" x1="'+x+'" x2="'+x+'" y1="12" y2="40"/>';
   if(k==="t"){var h=6+30*Math.min(1,Math.log(r[2]+1)/Math.log(51));return '<line class="mt'+c+'" x1="'+x+'" x2="'+x+'" y1="'+(26-h/2).toFixed(1)+'" y2="'+(26+h/2).toFixed(1)+'"/>'}
   return '<line class="ms'+c+'" x1="'+x+'" x2="'+x+'" y1="23" y2="29"/>'}
 function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){SC.busy=0;
-  var old=SC.max;$$("#score .lane").forEach(function(l){var k=l.dataset.k,g=$(".mk",l);if(!g)return;var h="";
+  var old=SC.max;$$("#score .lane").forEach(function(l){var k=l.dataset.k,sk=$(".sk",l);if(sk){sk._s=d.rows.filter(function(r){return r[0]===k}).map(function(r){return r[1]});sk.dataset.b=d.b;sealUntip();sealDraw(sk,old);return}
+   var g=$(".mk",l);if(!g)return;var h="";
    d.rows.forEach(function(r){if(r[0]===k)h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});g.dataset.b=d.b;g.innerHTML=h});
   d.rows.forEach(function(r){if(r[1]>SC.max)SC.max=r[1]});scoreSlide()}).catch(function(){SC.busy=0})}
 /* the Pour: when a snapshot shows a new close, the card fetches its body, the pool bar starts whole and splits into minted gold and
@@ -135,7 +182,8 @@ function pourLive(s){var p=$("#pour");if(!p||!s.last||s.last.epoch==null||String
    var hd=n.closest(".card")&&$(".cx .lbl",n.closest(".card"));if(hd&&s.last.epoch!=null){hd.textContent="Epoch "+s.last.epoch;hd.setAttribute("href","/epoch/"+s.last.epoch)}
    if(m&&!RM)requestAnimationFrame(function(){requestAnimationFrame(function(){m.style.width=w})})}).catch(function(){p._busy=0})}
 function scoreLive(s){if(!$("#score")||!s.feed)return;var top=(s.feed.match(/data-id="([^"]+)"/)||[])[1];if(!top||top===SC.top)return;SC.top=top;
-  if(!SC.max)$$("#score line.ma,#score line.mt,#score line.ms").forEach(function(m){var g=m.parentNode,t=+m.getAttribute("x1")+(+g.dataset.b);if(t>SC.max)SC.max=t});
+  if(!SC.max){$$("#score line.ma,#score line.mt").forEach(function(m){var g=m.parentNode,t=+m.getAttribute("x1")+(+g.dataset.b);if(t>SC.max)SC.max=t});
+   $$("#score .sk").forEach(function(sk){sealTs(sk).forEach(function(t){if(t>SC.max)SC.max=t})})}
   var w=20000-(Date.now()-SC.t);if(SC.busy)return;if(w>0){clearTimeout(SC.tm);SC.tm=setTimeout(scoreFetch,w);return}scoreFetch()}
 
 /* apply a snapshot (from WS or polling) */

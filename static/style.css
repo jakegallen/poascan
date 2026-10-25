@@ -1077,6 +1077,20 @@ td a.mono{display:inline-block;min-width:24px}
 .lane .mt{stroke:var(--steel);stroke-width:1.5;stroke-opacity:.85}
 .lane .ms{stroke:var(--verd);stroke-width:6;stroke-linecap:round;stroke-opacity:.9}
 .lane .nw{animation:mkin 600ms var(--ease) both}
+/* the Seals lane: clusters as HTML over the lane's SVG (bench.py seal_layer), so pills stay round and counts stay crisp */
+.score{position:relative}
+.lane .plot{position:relative;height:52px;min-width:0;overflow:hidden}
+.sk{position:absolute;inset:0;pointer-events:none}
+.sm{position:absolute;top:50%;box-sizing:border-box;height:16px;padding:0 6px;transform:translate(-50%,-50%);border-radius:var(--r-pill);background:var(--verd);
+ color:var(--ink-0);font:500 10px/16px var(--mono);font-style:normal;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap;
+ box-shadow:0 0 0 2px var(--ink-2);pointer-events:auto;cursor:default;transition:background-color var(--fast) var(--ease),opacity var(--state) var(--ease)}
+.sm.s1{width:6px;height:12px;padding:0;opacity:.9;box-shadow:none}
+.sm::after{content:"";position:absolute;inset:-16px -2px}
+.sm:hover,.sm.on{background:var(--verd-hi);opacity:1}
+.sm.out{opacity:0;pointer-events:none;transition:opacity var(--state) var(--ease)}
+.stip{position:absolute;left:0;top:0;z-index:3;pointer-events:none;padding:6px 8px;border-radius:var(--r-sm);background:var(--ink-3);border:1px solid var(--rule-2);
+ color:var(--bone);font:400 var(--t12)/1.2 var(--mono);white-space:nowrap;opacity:0;transition:opacity var(--fast) var(--ease)}
+.stip.on{opacity:1}
 @keyframes mkin{from{opacity:0}to{opacity:1}}
 .sax{display:grid;grid-template-columns:72px minmax(0,1fr) 44px;margin-top:8px}
 .sax div{display:flex;justify-content:space-between;font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
@@ -1097,6 +1111,7 @@ td a.mono{display:inline-block;min-width:24px}
  .bench .bn{font-size:84px}.bcd .cd{font-size:var(--t28)}.trio b{font-size:var(--t20)}.bnum{gap:20px}
  .lane,.sax{grid-template-columns:70px minmax(0,1fr) 36px}.lane .lbl{font-size:10px}.bench .legend{display:none}.bezel{margin-top:20px}}
 @media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}
+@media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}
 
 
 /* Phase 2: Home grid: the Assay line beside Closes, Graders and the Pour */
