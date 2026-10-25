@@ -31,7 +31,7 @@ def uptime_chart_html():
     if not rows: return skel()
     days = collections.OrderedDict()
     for r in rows: d = days.setdefault(r["day"], [0, 0]); d[0] += r["checks"]; d[1] += r["ok"]
-    return bars([(k[5:], [v[1] / v[0] * 100 if v[0] else 0]) for k, v in days.items()], height=150, colors=("#3DDC97",), fmt=lambda v: f"{v:.0f}%", ymax=100)
+    return bars([(k[5:], [v[1] / v[0] * 100 if v[0] else 0]) for k, v in days.items()], height=150, colors=("gold",), fmt=lambda v: f"{v:.0f}%", ymax=100)
 
 def uptime_table_html():
     rows = [r for r in uptime_rows() if r["kind"] == "probe"]
@@ -358,8 +358,8 @@ def status_body():
     it = table(["Start (UTC)", "End", "Duration", "What", "Fails"],
                [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else utc(b, "%m-%d %H:%M")), dur(((b or now) - a)),
                  E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
-    lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", y0=0)
-    latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}ms")
+    lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="gold", fmt=lambda v: f"{v:,.0f}", y0=0)
+    latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
     body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''

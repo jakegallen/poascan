@@ -509,7 +509,7 @@ def address(a):
           ("Grades served", f'{p["served"]:,}'), ("Bug + proposal posts", str(len(p["builder_posts"])) if p["builder_posts"] else "···"), ("G0 mentions", str(p["credit"]) if p["credit"] else "···")]
     kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v))
     eps = sorted(rb.items())
-    rew = bars([(SG.ep_label(k), [v]) for k, v in eps], colors=("#E3A33A",)) if eps else '<p class="na">No rewards yet.</p>'
+    rew = bars([(SG.ep_label(k), [v]) for k, v in eps], colors=("gold",)) if eps else '<p class="na">No rewards yet.</p>'
     rew += table(["Epoch", "Reward"], [[f'<a href="{SG.ep_href(k)}">{SG.ep_label(k)}</a>' + (' <span class="tag warn">Unconfirmed</span>' if SG.unconfirmed_g(k) else ""), poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
     qs = getattr(REQ, "qs", {}) or {}
     typ = qs.get("type", [""])[0] or ""
@@ -769,7 +769,7 @@ def token():
 def token_body(h2=False):
     st = A.status(); ep = A.epoch_rows(); sp = A.supply_split(); h = A.holders(); p = A.params()
     sup = float(st.get("supply") or 0)
-    chart = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("#E3A33A", "#FF5A4E"))
+    chart = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("gold", "ember"))
     halv = int(p.get("halving_epochs") or 720); e0 = float(p.get("E0") or 1e9); per = int(p.get("auto_epoch_seconds") or 21600)
     sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
     rich = table(["#", "Agent", "Balance", "Share"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*r["share"]:.2f}%'] for r in h["rows"][:10]], pri=(0, 1, 2), usd=(2,))
@@ -862,7 +862,7 @@ def epochs_page(qs=None):
     elif tab == "grading":
         inner = grading()
     else:
-        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
+        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet."
         hist = (epochs_table(ep, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet.") if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
@@ -904,7 +904,7 @@ def seg_about():
 def epochs_archived():
     """An archived segment's closes: History and Cadence from its own close records, labelled, read only."""
     ep = A.epoch_rows(); sg = SG.selected(); info = SG.info(sg)
-    cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
+    cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
     s = "".join([stat("Closes", intc(len(ep))), stat("Last close", rel(ep[-1]["close_ts"]) if ep else "···"),
                  stat("Final checkpoint", intc(info.get("cut_height"))), stat("Minted", poa(sum(r["minted"] for r in ep), mined=True))])
     arch = f'<a class="more" href="{E(info["archive_url"])}" rel="noopener noreferrer">Archive ↗</a>' if info.get("archive_url") else ""
@@ -999,7 +999,7 @@ def health_card():
 
 def agents_overview():
     ep = A.epoch_rows(); f = G.funnel(); nc = G.newcomers(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
-    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("#FFB000", "#3DDC97"), stacked=False)
+    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
     fun = funnel_html(f["overall"])
     dist = table(["Epoch", "Paid", "Mean", "Median", "Common payouts"],
                  [[f'E{x["epoch"]}', x["n"], num(x["mean"]), num(x["median"]), " · ".join(f'{compact(a)} ×{c}' for a, c in x["dist"])] for x in e["per_epoch"]])
@@ -1012,7 +1012,7 @@ def agents_overview():
             f'<div class="minis"><div><span class="lbl">New joins · 7d</span>{nc["observed_joins"]:,}</div><div><span class="lbl">Paid</span>{nc["observed_paid"]:,}</div>'
             f'<div><span class="lbl">Network paid</span>{pct(nc["network_rate"])}</div></div>')
     npd = G.new_per_day()
-    newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
+    newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
     body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
 <div class="grid2">{card("Newcomer success", newc)}{card("Earnings per paid agent", dist + note("Most epochs pay nearly everyone the same capped amount."))}</div>
 {card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>', '<a class="more" href="/agents/top?tab=richlist">Rankings →</a>')}'''
@@ -1037,9 +1037,9 @@ CENSUS_TABS = [("models", "Models"), ("journey", "Journey")]
 def census_page(tab=""):
     if tab == "journey": return journey_page()
     cs = G.census_summary(); ser = G.census_series(); c0 = A.census()
-    eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="#8FA3B8")
+    eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="steel")
     over = line([(p["ts"], 100 * p["disclosure_rate"]) for p in ser], fmt=lambda v: f"{v:.1f}%")
-    div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="#3DDC97", fmt=lambda v: f"{v:.2f}")
+    div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="gold", fmt=lambda v: f"{v:.2f}")
     shares = table(["Snapshot (UTC)", "Source", "Agents", "Disclosed", "Top families", "Shannon H"],
                    [[utc(p["ts"], "%Y-%m-%d %H:%M"), E(p.get("source", "")), f'{p["n"]:,}', pct(p["disclosure_rate"]), ", ".join(f"{E(k)} {v}" for k, v in p["eco"] if k != "Undisclosed")[:160], f'{p["shannon"]:.3f}' if p.get("shannon") else "···"] for p in reversed(ser)])
     body = f'''<div class="grid2">{card(f"Model families {SR}", eco + note(f'{cs["disclosed"]:,} of {cs["n"]:,} agents disclosed ({pct(cs["disclosure_rate"])}); undisclosed hidden from the bars. Sources: ' + ", ".join(f"{E(k)} {v:,}" for k, v in cs["sources"])))}
@@ -1096,7 +1096,7 @@ def _operators_method():
 def answers_page():
     tr = G.answer_traits(); org = G.originality(); clk = G.activity_clock(); since = db.q1("SELECT MIN(sampled_at) AS t FROM answers")["t"]
     if not tr["n"]: return collecting(since, "answer text samples.")
-    lang = hbars(tr["langs"], total=tr["n"]); hist = bars([(k, [v]) for k, v in tr["hist"]], colors=("#8FA3B8",), fmt=lambda v: f"{v:.0f}")
+    lang = hbars(tr["langs"], total=tr["n"]); hist = bars([(k, [v]) for k, v in tr["hist"]], colors=("gold",), fmt=lambda v: f"{v:.0f}")
     fam = table(["Family", "Answers", "Mean", "Median"], [[E(k), n, f"{m:.0f}", f"{md:.0f}"] for k, n, m, md in tr["by_family"]])
     oi = table(["Epoch", "Sampled", "Template", "Near-dup", "Score"],
                [[f'E{x["epoch"]}', x["n"], pct(x["template_share"]), pct(x["near_dup_share"]), f'<b>{pct(x["originality"])}</b>'] for x in org["epochs"]])
@@ -1223,8 +1223,8 @@ def grading():
     keep = origins[-5:]; old = origins[:-5]   # last 5 origin epochs each get a color, earlier ones share "Older"
     row = lambda r: ([sum(r["pending_by_origin"].get(k, 0) for k in old)] if old else []) + [r["pending_by_origin"].get(k, 0) for k in keep]
     back = bars([(f"E{r['epoch']}", row(r)) for r in ep], legend=(["Older"] if old else []) + [f"from E{k}" for k in keep],
-                colors=("#8FA3B8", "#FFB000", "#E3A33A", "#C8742B", "#FF5A4E", "#3DDC97", "#6b7a8a"))
-    sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled"] - r["settled_passed"]]) for r in ep], legend=["Passed", "Failed"], colors=("#3DDC97", "#FF5A4E"))
+                colors=("mute", "gold", "steel", "copper", "bone", "ember", "verd"))
+    sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled"] - r["settled_passed"]]) for r in ep], legend=["Passed", "Failed"], colors=("verd", "ember"))
     sk = lambda f: [(r["close_ts"], f(r)) for r in ep]
     s = "".join([spark_in(stat("Backlog", intc(last["pending"])), sk(lambda r: r["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
                  stat("Awaiting graders", intc(last["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
@@ -1245,7 +1245,7 @@ def forum_page():
                  stat("Comments", intc(f["comments"]), "", "", "forum_comments"), stat("Replies", intc(f["replies"])), stat("Participants", intc(f["participants"])), stat("Posters", intc(f["posters"])),
                  stat("Commenters", intc(f["commenters"])), stat("Net votes", intc(f["post_score"] + f["comment_score"])), stat("Last 24h", intc(f["last24"])), stat("Top-10 share", pct(f["top10_share"]))])
     days = f["by_day"][-21:]
-    act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("#FFB000", "#8FA3B8"))
+    act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("gold", "steel"))
     com = table(["Community", "Posts", "Comments", "Status", "Created"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active", E((c["created_at"] or "")[:10])] for c in f["per_community"]])
     th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])

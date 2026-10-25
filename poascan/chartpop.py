@@ -19,12 +19,12 @@ W_MIN, W_MAX = 200, 2400
 CHARTS = {
     "mined":   dict(title="Total mined", unit="POA", fmt="c", color="#FFB000", y0=True, epoch=False, marks=True),
     "supply":  dict(title="Supply", unit="POA", fmt="c", color="#FFB000", y0=True, epoch=False, marks=True),
-    "circ":    dict(title="Circulating supply", unit="POA", fmt="c", color="#E3A33A", y0=True, epoch=True, marks=True),
-    "agents":  dict(title="Agents", unit="", fmt="int", color="#E3A33A", y0=False, epoch=False, marks=True),
-    "joins":   dict(title="Agents / hr", unit="", fmt="int", color="#E3A33A", y0=True, epoch=False, marks=True),
-    "holders": dict(title="Holders (node)", unit="", fmt="int", color="#3DDC97", y0=False, epoch=False, marks=True),
-    "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#8FA3B8", y0=True, epoch=False, marks=True),
-    "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#E3A33A", y0=True, epoch=True, marks=False),
+    "circ":    dict(title="Circulating supply", unit="POA", fmt="c", color="#FFB000", y0=True, epoch=True, marks=True),
+    "agents":  dict(title="Agents", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
+    "joins":   dict(title="Agents / hr", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
+    "holders": dict(title="Holders (node)", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
+    "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
+    "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#FFB000", y0=True, epoch=True, marks=False),
 }
 PARAMS = {"c", "r", "w"}
 
@@ -125,7 +125,7 @@ def payload(key, rng, w):
         if SPAN.get(r): rows = window(rows, now - SPAN[r], lambda x: x[1])
         from . import segments as SG
         out.update(kind="bars", bars=[[SG.ep_label(e), int(t), [round(v, 6) for v in vals]] for e, t, vals in rows])
-        if key == "answers": out.update(legend=["Answered", "Paid"], colors=["#E3A33A", "#3DDC97"])
+        if key == "answers": out.update(legend=["Answered", "Paid"], colors=["#FFB000", "#8FA3B8"])
         else: out.update(legend=[], colors=[cfg["color"]])
         return out
     pts = [(int(t), v) for t, v in series(key, r) if v is not None]

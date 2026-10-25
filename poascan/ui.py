@@ -393,7 +393,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=118">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=119">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -406,7 +406,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=90" defer></script></body></html>'''
+<script src="/static/app.js?v=119" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -510,87 +510,126 @@ def upnote(text):
     paused the lookup it would have made (strain.HALT_NOTE). Method on /about#halts."""
     return f'<p class="ntin" role="status">{E(text)}</p>'
 
-# ---------- SVG charts ----------
-def bars(series, height=180, colors=("#FFB000", "#FF5A4E"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):
-    """series: list of (xlabel, [v1, v2, ...]). Stacked bar chart."""
+# ---------- Charts: one spec (1.26.119) ----------
+# Geometry lives in an SVG stretched to the plot box (preserveAspectRatio none, non-scaling strokes); every label is HTML in
+# 12px mono, so text stays the same size at any width. One series palette by class (s-gold, s-steel, s-ember, s-verd, s-bone):
+# a single series is always gold; green and red only for pass and burn. No per-point dots: hover shows one, plus the last point.
+SERIES = {"gold": "s-gold", "steel": "s-steel", "ember": "s-ember", "verd": "s-verd", "bone": "s-bone", "copper": "s-copper", "mute": "s-mute"}
+_LEGACY_HEX = {"#FFB000": "gold", "#E3A33A": "gold", "#FFD36B": "gold", "#3DDC97": "verd", "#FF5A4E": "ember", "#8FA3B8": "steel",
+               "#C8742B": "copper", "#6B7A8A": "mute"}
+def series_cls(c):
+    """'gold' / 'steel' / ... (or a legacy hex) -> its series class."""
+    c = str(c or "gold"); return SERIES.get(_LEGACY_HEX.get(c.upper(), c), "s-gold")
+
+VW, VH = 1000, 1000   # plot box in viewBox units; the SVG stretches to the CSS plot height (style.css .cp)
+
+def _f(v): return f"{v:.1f}".rstrip("0").rstrip(".")
+
+def _plot(svg_inner, overlay, height, top=0, tail="", yg=56):
+    st = f' style="--ch:{int(height)}px;--yg:{int(yg)}px' + (f';--mt:{top}px' if top else "") + '"'
+    return (f'<div class="chartbox"><div class="cvg{" tl" if top else ""}"{st}><div class="cvp">'
+            f'<svg class="chart" viewBox="0 0 {VW} {VH}" preserveAspectRatio="none" role="img" aria-hidden="true">{svg_inner}</svg>'
+            f'{overlay}</div></div>{tail}</div>')
+
+def _grid(ymin, ymax, fmt, n=4):
+    """Hairline gridlines and their y labels; also the gutter width (px) the longest label needs at 12px mono."""
+    g, lab, wl = [], [], 1
+    for i in range(n + 1):
+        y = VH * i / n; v = ymax - (ymax - ymin) * i / n
+        g.append(f'<line x1="0" x2="{VW}" y1="{_f(y)}" y2="{_f(y)}" class="grid"/>')
+        t = fmt(v); wl = max(wl, len(t))
+        lab.append(f'<span class="yl{" o" if i % 2 else ""}" style="top:{100 * i / n:.2f}%">{E(t)}</span>')
+    return "".join(g), "".join(lab), 7.3 * wl + 14
+
+def _marks(marks, X, x0, x1):
+    """Milestones: a dashed hairline in the plot, a chip above it (the label when it is short, else its number) and, for
+    numbered ones, a line in the legend under the chart that carries the link. Chips go in two rows so they never overlap
+    (sized for a 300px plot, the narrowest at 390px); one that fits neither row keeps its line and its legend entry."""
+    ms = [(i, m) for i, m in enumerate(marks or []) if x0 <= m[0] <= x1]
+    if not ms: return "", "", "", 0
+    svg, chips, leg, rows, n = [], [], [], [[], []], 0
+    for i, m in sorted(ms, key=lambda im: im[1][0]):
+        x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
+        px = X(x) / VW; short = len(l) <= 4 and not url
+        if not short: n += 1
+        txt = l if short else str(n)
+        w = (7.2 * len(txt) + 12) / 300; a, b = px - w / 2, px + w / 2
+        row = next((r for r in (0, 1) if all(b + .01 < s or a - .01 > e for s, e in rows[r])), None)
+        svg.append(f'<g class="mk">{"<title>" + E(tip or l) + "</title>"}<line x1="{_f(X(x))}" x2="{_f(X(x))}" y1="0" y2="{VH}"/></g>')
+        if row is not None:
+            rows[row].append((a, b)); edge = " r" if px > .94 else " l" if px < .06 else ""
+            chips.append(f'<span class="mkc{edge}{" q2" if row else ""}" style="left:{100 * px:.2f}%" title="{E(tip or l)}">{E(txt)}</span>')
+        if not short:
+            ext = url and url.startswith("http")
+            lab = (f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}{(" title=\"" + E(tip) + "\"") if tip else ""}>{E(l)}</a>'
+                   if url else (f'<span title="{E(tip)}">{E(l)}</span>' if tip else E(l)))
+            leg.append(f'<li><b>{n}</b>{lab}</li>')
+    top = 22 if not rows[1] else 42
+    return "".join(svg), "".join(chips), (f'<ol class="mkleg">{"".join(leg)}</ol>' if leg else ""), top
+
+def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):
+    """series: list of (xlabel, [v1, v2, ...]). Stacked (or grouped) bars that fit the card at any width."""
     if not series: return chart_skel(640, height)
-    W = max(640, 18 * len(series)); H = height; pad_l, pad_b, pad_t = 56, 26, 10
-    mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
-    bw = (W - pad_l) / len(series) * 0.62; step = (W - pad_l) / len(series)
-    out = [f'<svg class="chart" viewBox="0 0 {W} {H}" role="img"' + (f' style="min-width:{int(W*0.75)}px"' if W > 640 else "") + '>']
-    for i in range(5):
-        y = pad_t + (H - pad_t - pad_b) * i / 4; v = mx * (1 - i / 4)
-        out.append(f'<line x1="{pad_l}" x2="{W}" y1="{y:.1f}" y2="{y:.1f}" class="grid"/><text x="{pad_l-6}" y="{y+4:.1f}" class="ax" text-anchor="end">{fmt(v)}</text>')
-    every = max(1, math.ceil(len(series) / 16))
+    n = len(series); mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
+    cls = [series_cls(c) for c in colors] if len(series[0][1]) > 1 or legend else ["s-gold"]
+    step = VW / n; bw = step * (0.62 if n < 40 else 0.8)
+    g, ylab, yg = _grid(0, mx, fmt)
+    out = [g]
+    lw = 7.3 * max(len(str(lab)) for lab, _ in series) + 12   # x labels: as many as fit a 280px plot, the narrowest at 390px
+    every = max(1, math.ceil(n / max(2, int(280 / lw)))); xl = []
     for i, (lab, vals) in enumerate(series):
-        x = pad_l + step * i + (step - bw) / 2; base = H - pad_b
+        x = step * i + (step - bw) / 2; base = VH
         tip = E(str(lab)) + " · " + " · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))
-        out.append(f'<g class="col" data-tip="{tip}" data-cx="{x+bw/2:.1f}">')
+        top = VH - VH * ((sum(vals) if stacked else max(vals)) / mx)
+        out.append(f'<g class="col" data-tip="{tip}" data-cx="{_f(x + bw / 2)}" data-cy="{_f(top)}">')
         if stacked:
             for j, v in enumerate(vals):
-                h = (H - pad_t - pad_b) * (v / mx); base -= h
-                out.append(f'<rect x="{x:.1f}" y="{base:.1f}" width="{bw:.1f}" height="{max(h,0):.1f}" fill="{colors[j % len(colors)]}"/>')
+                h = VH * (v / mx); base -= h
+                out.append(f'<rect x="{_f(x)}" y="{_f(base)}" width="{_f(bw)}" height="{_f(max(h, 0))}" class="{cls[j % len(cls)]}"/>')
         else:
             w2 = bw / len(vals)
             for j, v in enumerate(vals):
-                h = (H - pad_t - pad_b) * (v / mx)
-                out.append(f'<rect x="{x + j*w2:.1f}" y="{base-h:.1f}" width="{w2:.1f}" height="{max(h,0):.1f}" fill="{colors[j % len(colors)]}"/>')
+                h = VH * (v / mx)
+                out.append(f'<rect x="{_f(x + j * w2)}" y="{_f(base - h)}" width="{_f(w2)}" height="{_f(max(h, 0))}" class="{cls[j % len(cls)]}"/>')
         out.append("</g>")
-        if i % every == 0: out.append(f'<text x="{x+bw/2:.1f}" y="{H-8}" class="ax" text-anchor="middle">{E(str(lab))}</text>')
-    out.append("</svg>")
+        if i % every == 0:
+            p = 100 * (x + bw / 2) / VW
+            xl.append(f'<span class="xl c" style="left:{p:.2f}%">{E(str(lab))}</span>' if 6 < p < 94 else
+                      f'<span class="xl" style="{"left:0" if p <= 6 else "right:0"}">{E(str(lab))}</span>')
     lg = ""
-    if legend: lg = '<div class="legend">' + "".join(f'<span><i style="background:{colors[j % len(colors)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
-    return '<div class="chartbox">' + "".join(out) + "</div>" + lg
+    if legend: lg = '<div class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
+    return _plot("".join(out), ylab + "".join(xl), height, yg=yg) + lg
 
-def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None):
-    """marks: [(x, label)] or [(x, label, url, title)] dashed markers. proj_from: x after which the line is drawn dashed (projection).
-    breaks: x values the line is not drawn across (a counter that restarted at a genesis cut)."""
+def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None):
+    """marks: [(x, label)] or [(x, label, url, title)] milestone markers. proj_from: x after which the line is drawn dashed (projection).
+    breaks: x values the line is not drawn across (a counter that restarted at a genesis cut). One series, always gold."""
     pts = [(x, y) for x, y in points if y is not None]
     if len(pts) < 2: return chart_skel(640, height)
-    W, H, pl, pb, pt = 640, height, 56, 24, 14
     x0, x1 = pts[0][0], pts[-1][0]; ymin = min(y for _, y in pts) if y0 is None else y0; y1 = max(y for _, y in pts)
     if y1 == ymin: y1 = ymin + 1
-    X = lambda x: pl + (W - pl - 8) * (x - x0) / ((x1 - x0) or 1); Y = lambda y: pt + (H - pt - pb) * (1 - (y - ymin) / (y1 - ymin))
+    X = lambda x: VW * (x - x0) / ((x1 - x0) or 1); Y = lambda y: VH * (1 - (y - ymin) / (y1 - ymin))
     if proj_from is not None:
         a = [p for p in pts if p[0] <= proj_from]; b = [p for p in pts if p[0] >= proj_from]
         if a and b and a[-1] != b[0]: b = [a[-1]] + b
     else: a, b = pts, []
     bk = sorted(breaks or [])
     gap = lambda a, b: any(a < k <= b for k in bk)
-    path = lambda ps: " ".join(f"{'M' if i == 0 or gap(ps[i - 1][0], x) else 'L'}{X(x):.1f},{Y(y):.1f}" for i, (x, y) in enumerate(ps))
-    g = "".join(f'<line x1="{pl}" x2="{W}" y1="{Y(ymin+(y1-ymin)*i/4):.1f}" y2="{Y(ymin+(y1-ymin)*i/4):.1f}" class="grid"/><text x="{pl-6}" y="{Y(ymin+(y1-ymin)*i/4)+4:.1f}" class="ax" text-anchor="end">{fmt(ymin+(y1-ymin)*i/4)}</text>' for i in range(5))
+    path = lambda ps: " ".join(f"{'M' if i == 0 or gap(ps[i - 1][0], x) else 'L'}{_f(X(x))},{_f(Y(y))}" for i, (x, y) in enumerate(ps))
+    g, ylab, yg = _grid(ymin, y1, fmt)
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
-    xs = f'<text x="{pl}" y="{H-6}" class="ax">{xl(x0)}</text><text x="{W-4}" y="{H-6}" class="ax" text-anchor="end">{xl(x1)} UTC</text>'
-    # Bottom labels (marks with a url or title) go in lanes, so two labels never overlap: each takes the lowest lane whose last
-    # label ends before it starts (12px mono is about 7.2 units a character). One that fits no lane keeps its line and its title.
-    lanes, ends, CW, NL = {}, [], 7.2, 4
-    for i, m in sorted(enumerate(marks or []), key=lambda im: im[1][0]):
-        if not (x0 <= m[0] <= x1) or not (len(m) > 2 and (m[2] or (len(m) > 3 and m[3]))): continue
-        w = CW * len(m[1]) + 2; mx = X(m[0]); lx = mx - 3 - w if mx + 3 + w > W - 2 else mx + 3
-        ln = next((q for q in range(NL) if q >= len(ends) or ends[q] + 6 <= lx), None)
-        if ln is not None:
-            if ln >= len(ends): ends.append(0)
-            ends[ln] = lx + w
-        lanes[i] = ln
-    def _mk(i, m):   # (x, label) or (x, label, url, title): a url makes the marker a link, a title its hover tip; these label along the bottom
-        x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
-        low = i in lanes; ln = lanes.get(i)
-        end = X(x) + 3 + CW * len(l) + 2 > W - 2 if low else X(x) > W - 60
-        txt = "" if low and ln is None else (f'<text x="{(X(x)-3 if end else X(x)+3):.1f}" y="{(H-pb-6 - ln * 13) if low else (pt+8 + (i % 2) * 11)}" '
-                                             f'class="ax mkl"{" text-anchor=\"end\"" if end else ""}>{E(l)}</text>')
-        if low and ln is not None:   # a backing plate so a bottom label stays readable where the line runs low (Txs, Agents / hr)
-            lw = CW * len(l) + 4; txt = f'<rect class="mkb" x="{(X(x)-3-lw+2 if end else X(x)+1):.1f}" y="{H-pb-6 - ln * 13 - 10:.1f}" width="{lw:.1f}" height="13" rx="2"/>' + txt
-        g_ = (f'<g class="mk">{"<title>" + E(tip) + "</title>" if tip else ""}<line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/>{txt}</g>')
-        ext = url and url.startswith("http")
-        return f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}>{g_}</a>' if url else g_
-    mk = "".join(_mk(i, m) for i, m in enumerate(marks or []) if x0 <= m[0] <= x1)
-    step = max(1, len(pts) // 60)
-    circ = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="2.6" fill="{color}" data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-cx="{X(x):.1f}"/>' for x, y in pts[::step])
-    pb_ = f'<path d="{path(b)}" fill="none" stroke="{color}" stroke-width="2" stroke-dasharray="5 4" opacity=".7"/>' if len(b) > 1 else ""
-    tl = any(x0 <= m[0] <= x1 and i not in lanes for i, m in enumerate(marks or []))   # labels along the top: the hover tip sits below them
-    return f'<div class="chartbox{" tl" if tl else ""}"><svg class="chart" viewBox="0 0 {W} {H}">{g}<path d="{path(a)}" fill="none" stroke="{color}" stroke-width="2"/>{pb_}{circ}{mk}{xs}</svg></div>'
+    xs = f'<span class="xl l">{E(xl(x0))}</span><span class="xl r">{E(xl(x1))} UTC</span>'
+    msvg, chips, leg, top = _marks(marks, X, x0, x1)
+    step = max(1, len(pts) // 160)
+    hit = "".join(f'<g data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-cx="{_f(X(x))}" data-cy="{_f(Y(y))}"></g>' for x, y in pts[::step])
+    if (len(pts) - 1) % step: hit += f'<g data-tip="{E(xl(pts[-1][0]))} UTC · {E(fmt(pts[-1][1]))}" data-cx="{_f(X(pts[-1][0]))}" data-cy="{_f(Y(pts[-1][1]))}"></g>'
+    lp = a[-1] if a else pts[-1]
+    pb_ = f'<path d="{path(b)}" class="ln pj s-gold"/>' if len(b) > 1 else ""
+    dot = f'<i class="ld s-gold" style="left:{100 * X(lp[0]) / VW:.2f}%;top:{100 * Y(lp[1]) / VH:.2f}%"></i>'
+    svg = f'{g}{msvg}<path d="{path(a)}" class="ln s-gold"/>{pb_}{hit}'
+    return _plot(svg, ylab + xs + chips + dot, height, top=top, tail=leg, yg=yg)
 
-def hbars(items, total=None, color="#FFB000", maxn=12):
+def hbars(items, total=None, color="gold", maxn=12):
     items = items[:maxn]; mx = max((v for _, v in items), default=1) or 1; tot = total or sum(v for _, v in items) or 1
-    rows = "".join(f'<div class="hb"><span class="hl" title="{E(str(k))}">{E(str(k))}</span><span class="hbar"><i style="width:{100*v/mx:.1f}%;background:{color}"></i></span><span class="hv num">{v:,} <small>({100*v/tot:.1f}%)</small></span></div>' for k, v in items)
+    sc = series_cls(color)
+    rows = "".join(f'<div class="hb"><span class="hl" title="{E(str(k))}">{E(str(k))}</span><span class="hbar"><i class="{sc}" style="width:{100*v/mx:.1f}%"></i></span><span class="hv num">{v:,} <small>({100*v/tot:.1f}%)</small></span></div>' for k, v in items)
     return f'<div class="hbars">{rows}</div>'

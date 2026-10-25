@@ -137,11 +137,13 @@ function charts(){if(RM||!("IntersectionObserver" in W))return chartTips();
  chartTips()}
 function chartTips(){
  $$(".chartbox").forEach(function(b){var svg=$("svg",b);if(!svg)return;var items=$$("[data-tip]",svg);if(!items.length)return;
-  var xh=D.createElement("i"),xt=D.createElement("div");xh.className="xh";xt.className="xt";b.appendChild(xh);b.appendChild(xt);var on=null;
-  function move(e){var r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,x=(e.clientX-r.left)/sx,best=null,bd=1e9;
+  var xh=D.createElement("i"),xt=D.createElement("div"),xd=D.createElement("i");xh.className="xh";xt.className="xt";xd.className="xd";b.appendChild(xh);b.appendChild(xt);b.appendChild(xd);var on=null;
+  /* one chart spec (1.26.119): the SVG is stretched to its plot box, so x and y scale separately; a dot marks the hovered point */
+  function move(e){var r=svg.getBoundingClientRect(),br=b.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,sy=r.height/vb.height,x=(e.clientX-r.left)/sx,best=null,bd=1e9;
    items.forEach(function(it){var d=Math.abs(+it.dataset.cx-x);if(d<bd){bd=d;best=it}});if(!best)return;
    if(on!==best){if(on)on.classList.remove("on");best.classList.add("on");on=best;xt.textContent=best.dataset.tip}
-   var px=+best.dataset.cx*sx+(r.left-b.getBoundingClientRect().left)+b.scrollLeft;xh.style.left=px+"px";
+   var px=+best.dataset.cx*sx+(r.left-br.left)+b.scrollLeft,top=r.top-br.top;xh.style.left=px+"px";xh.style.top=top+"px";xh.style.height=r.height+"px";xt.style.top=(top+4)+"px";
+   if(best.dataset.cy!=null&&!best.classList.contains("col")){xd.style.display="";xd.style.left=px+"px";xd.style.top=(top+(+best.dataset.cy)*sy)+"px"}else xd.style.display="none";
    var w=xt.offsetWidth/2,bw=b.clientWidth+b.scrollLeft;xt.style.left=Math.max(w+b.scrollLeft,Math.min(bw-w,px))+"px";b.classList.add("hov")}
   b.addEventListener("pointermove",move);b.addEventListener("pointerdown",move);
   b.addEventListener("pointerleave",function(){b.classList.remove("hov");if(on)on.classList.remove("on");on=null})})}

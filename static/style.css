@@ -245,10 +245,31 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
 
 /* charts */
 .chartbox{position:relative;width:100%;overflow-x:auto}
-.chart{width:100%;height:auto;display:block;overflow:visible}
-.chart .grid{stroke:var(--rule);stroke-width:1}.chart .ax{fill:var(--bone-3);font:400 var(--t12) var(--mono)}
-.chart .col rect,.chart circle{transition:opacity var(--fast)}
+/* one chart spec (1.26.119): the SVG holds geometry only, stretched to the plot box; labels are HTML at a constant 12px */
+.cvg{position:relative;padding:var(--mt,8px) var(--yg,56px) 24px 0}
+.cvp{position:relative;height:var(--ch,170px)}
+.cvp>.chart{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+.chart line,.chart path,.chart rect{vector-effect:non-scaling-stroke}
+.chart .grid{stroke:var(--rule);stroke-width:1}
+.chart .ln{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.chart .ln.pj{stroke-dasharray:5 4;opacity:.7}
+.chart rect{fill:var(--c)}
+.s-gold{--c:var(--gold)}.s-steel{--c:var(--steel)}.s-ember{--c:var(--ember)}.s-verd{--c:var(--verd)}.s-bone{--c:var(--bone-2)}.s-copper{--c:var(--copper)}.s-mute{--c:var(--steel-lo)}
+.legend i[class^="s-"],.hbar i[class^="s-"]{background:var(--c)}
+.yl,.xl,.mkc{position:absolute;font:400 var(--t12)/1 var(--mono);color:var(--bone-3);white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
+.yl{left:100%;margin-left:8px;transform:translateY(-50%)}
+.xl{top:100%;margin-top:8px}.xl.l{left:0}.xl.r{right:0}.xl.c{transform:translateX(-50%)}
+.ld{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--ink-2);pointer-events:none}
+.chart .mk line{stroke:var(--gold-edge);stroke-width:1;stroke-dasharray:3 3}
+.mkc{bottom:100%;margin-bottom:6px;transform:translateX(-50%);min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border:1px solid var(--gold-edge);border-radius:var(--r-pill);background:var(--ink-1);color:var(--gold);pointer-events:auto;cursor:default}
+.mkc.q2{margin-bottom:26px}.mkc.l{transform:none}.mkc.r{transform:translateX(-100%);margin-left:9px}
+.mkleg{list-style:none;display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 0;padding:0;font:400 var(--t12)/1.4 var(--ui);color:var(--lbl)}
+.mkleg b{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-right:6px;border:1px solid var(--gold-edge);border-radius:var(--r-pill);font:400 var(--t12)/1 var(--mono);color:var(--gold)}
+.mkleg a{color:var(--bone-1)}.mkleg a:hover{color:var(--gold)}
+.chart .col rect{transition:opacity var(--fast)}
 .chartbox.hov .col:not(.on) rect{opacity:.45}
+.xd{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px var(--ink-2);pointer-events:none;opacity:0;transition:opacity var(--fast);z-index:2}
+.chartbox.hov .xd{opacity:1}
+@media (max-width:640px){.yl.o{display:none}}
 /* charts draw in once, left to right; visible by default (no script needed). Below the fold app.js holds them (.pre) until seen */
 .js .chart{animation:draw .6s cubic-bezier(.3,.7,.2,1) both}
 .js .chart.pre{animation:none;clip-path:inset(0 100% 0 0)}
@@ -258,8 +279,8 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
 .cskel i{position:absolute;inset:0;height:auto;border-radius:var(--r-md);opacity:.6}
 .cskel span{position:relative;color:var(--mute);font:500 var(--t13) var(--ui)}
 .lzs>*{content-visibility:auto;contain-intrinsic-size:auto 640px}
-.xh{position:absolute;top:0;bottom:18px;width:1px;background:color-mix(in srgb,var(--gold) 55%,transparent);pointer-events:none;opacity:0;transition:opacity var(--fast)}
-.xt{position:absolute;top:4px;pointer-events:none;opacity:0;transform:translateX(-50%);background:var(--ink-1);border:1px solid var(--gold-edge);border-radius:var(--r-md);padding:4px 8px;font:500 var(--t12) var(--mono);color:var(--hi);white-space:nowrap;transition:opacity var(--fast);z-index:2}
+.xh{position:absolute;top:0;height:0;width:1px;background:color-mix(in srgb,var(--gold) 55%,transparent);pointer-events:none;opacity:0;transition:opacity var(--fast)}
+.xt{position:absolute;top:0;pointer-events:none;opacity:0;transform:translateX(-50%);background:var(--ink-1);border:1px solid var(--gold-edge);border-radius:var(--r-md);padding:4px 8px;font:500 var(--t12) var(--mono);color:var(--hi);white-space:nowrap;transition:opacity var(--fast);z-index:2}
 .chartbox.hov .xh,.chartbox.hov .xt{opacity:1}
 .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:var(--t12);color:var(--lbl);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:var(--r-sm);margin-right:6px;vertical-align:-1px}
 .hbars .hb{display:grid;grid-template-columns:220px minmax(0,1fr) 120px;gap:10px;align-items:center;padding:4px 0;font-size:var(--t12)}
@@ -301,7 +322,6 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
  .hbars .hb{grid-template-columns:96px minmax(0,1fr) 84px}.funnel .fs{grid-template-columns:96px minmax(0,1fr) 110px}
  .sy{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .minis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
- .chart{min-width:520px}
  .tw td:first-child,.tw th:first-child{position:sticky;left:0;z-index:1;background:var(--card);box-shadow:1px 0 0 var(--line)}
  td,th{padding:12px 10px}
  .chip{min-height:44px;padding:0 14px}.pager a{min-height:44px;padding:0 14px}.more{min-height:44px}
@@ -381,7 +401,6 @@ a.pill:hover{text-decoration:none;filter:brightness(1.15)}
 .pair{font:500 var(--t14) var(--mono);color:var(--hi)}.pair .dim{margin:0 3px}
 .xcd{color:var(--amber)}
 .sechead .tag{margin-left:10px;vertical-align:middle}
-.mk line{stroke:var(--gold-edge);stroke-dasharray:3 3}.mk .mkl{fill:var(--amber);font-size:var(--t12)}.chart .mk .mkb{fill:var(--ink-1);opacity:.88}.chartbox.tl .xt{top:34px}
 .safety{display:grid;gap:14px}.lks{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .lk{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--line2);border-radius:var(--r-pill);background:var(--card2);color:var(--txt);font:600 var(--t14) var(--ui)}
 .lk:hover{text-decoration:none;border-color:var(--gold-edge);color:var(--amber)}

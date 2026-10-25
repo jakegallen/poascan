@@ -77,7 +77,7 @@ def unlock_chart():
     pts = u["past"] + [(t, c) for _, t, c, _ in u["fut"]]
     if pts and pts[0][1] > 0: pts = [(pts[0][0] - u["period"], 0.0)] + pts
     marks = [(h[1], f"{int(p*100)}%") for p, h in u["hit"].items() if h and h[0] != "done" and h[1]]
-    return line(pts, height=200, color="#E3A33A", fmt=compact, xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"),
+    return line(pts, height=200, color="gold", fmt=compact, xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"),
                 marks=marks, proj_from=now, y0=0)
 
 def unlock_calendar(nrows=12):
@@ -205,17 +205,17 @@ def charts_body(rng=""):
                   stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
                   stat("Answerers", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None)), tip="Agents who answered in the last closed epoch")])
     H = 140
-    ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, breaks=brk)
-    hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, breaks=brk)
+    ac = line(cut(g["agents"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, breaks=brk)
+    hc = line(cut(g["holders"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, breaks=brk)
     up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])   # up: every event, for the Milestones table
     um = mk("supply", sp)
-    sc = line(sp, height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0, marks=um)
+    sc = line(sp, height=H, color="gold", fmt=compact, xfmt=xf, y0=0, marks=um)
     end = lambda h, m: h.replace('<div class="chartbox', '<div class="chartbox end', 1) if m else h   # 390px: a marked chart opens at its newest end
     ac, hc, sc = end(ac, any(len(x) > 2 for x in am)), end(hc, em), end(sc, um)
     tp = [(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0]
-    tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)
-    ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
-    tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
+    tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)
+    ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
+    tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("gold",), fmt=lambda v: f"{v:,.0f}")
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])

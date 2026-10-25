@@ -196,7 +196,7 @@ def graders(qs):
     cov = (1 - last["empty"] / last["queue"]) if last and last["queue"] else None
     s = "".join([stat("Graders now", intc(len(rows)), tip="Agents with a grade-sealed tx since the last close"), stat("Seals now", intc(sum(r["seals"] for r in rows)), tip="grade-sealed txs since the last close"),
                  stat("Queue", intc(last["queue"]) if last else "···", tip="Pending answers at the last close"), stat("Coverage", pct(cov) if cov is not None else "···", tip="Pending answers with a panel at the last close")])
-    ch = bars([(f'E{x["epoch"]}', [x["aligned"], x["other"]]) for x in js], height=150, colors=("#3DDC97", "#FF5A4E"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else '<p class="na">No settled jury seats in this segment yet.</p>'
+    ch = bars([(f'E{x["epoch"]}', [x["aligned"], x["other"]]) for x in js], height=150, colors=("verd", "ember"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else '<p class="na">No settled jury seats in this segment yet.</p>'
     def ag(g):
         a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
         return (name_link(nm[g], g) + f"<small>{a}</small>") if nm.get(g) else a
@@ -250,7 +250,7 @@ def payouts(qs):
              f'{r["burn_pct"]:.1f}%' if r["burn_pct"] is not None else "···"] for r in basis]
     bt = table([], rows, sort=(pcols, pby, pd_, plink)) if rows else '<p class="na">No paid closes yet.</p>'
     ep = A.epoch_rows()
-    pc = bars([(f'E{r["epoch"]}', [r["challenge_eligible"], r["paid"]]) for r in ep], height=150, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Eligible", "Paid"]) if ep else '<p class="na">No closes in this segment yet.</p>'
+    pc = bars([(f'E{r["epoch"]}', [r["challenge_eligible"], r["paid"]]) for r in ep], height=150, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Eligible", "Paid"]) if ep else '<p class="na">No closes in this segment yet.</p>'
     head = "" if SG.archived() else f'<div class="stats five">{s}</div>'
     return (head + '<div class="grid2">' + card("Last paid closes " + tag, bt, cls="histc", id="estimate")
             + card("Eligible and paid per close", pc) + "</div>")
@@ -420,10 +420,10 @@ def charts(qs):
     for r in ep: run += (r["established"] or 0) - (r["established_removed"] or 0); est.append((r["close_ts"], run))
     cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
-    series = [("Established", "gov-est", est, "#3DDC97"),
-              ("Paid per close", "gov-paid", [(r["close_ts"], r["paid"]) for r in ep], "#FFB000"),
-              ("Grading queue", "gov-queue", [(r["close_ts"], r["pending"]) for r in ep], "#E3A33A"),
-              ("Panel coverage", "gov-cover", [(r["close_ts"], 100 * (1 - r["pending_empty_panel"] / r["pending"])) for r in ep if r["pending"]], "#8FA3B8")]
+    series = [("Established", "gov-est", est, "gold"),
+              ("Paid per close", "gov-paid", [(r["close_ts"], r["paid"]) for r in ep], "gold"),
+              ("Grading queue", "gov-queue", [(r["close_ts"], r["pending"]) for r in ep], "gold"),
+              ("Panel coverage", "gov-cover", [(r["close_ts"], 100 * (1 - r["pending_empty_panel"] / r["pending"])) for r in ep if r["pending"]], "gold")]
     def chart(title, key, pts, color):
         p = cut(pts)
         if len(p) < 2: body = f'<p class="na">Needs 2 closes in {dict((k, t) for k, t, _ in RANGES)[rng]}.</p>'
@@ -513,7 +513,7 @@ def forum(qs):
                  stat("Reply rate", pct(f["reply_rate"]) if f["reply_rate"] is not None else "···", tip="Posts with a comment by another author"),
                  stat("First reply", _dur(f["median_wait"]), tip="Median time to the first comment by another author"),
                  stat("Operator replies", intc(f["operator_replied"]), tip="Posts with a comment by an official network account (G0)")])
-    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"), [n]) for t, n in f["per_day"]], height=140, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
+    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"), [n]) for t, n in f["per_day"]], height=140, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
     ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
     def who(r):
         pid = r["pid"]; nm = r["name"] or short(pid, 6, 4)

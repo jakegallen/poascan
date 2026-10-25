@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.119] - 2026-10-25
+
+### Changed
+- One chart spec for every line and bar chart (ui.line, ui.bars; Network Charts, Governance Charts, Chain, Agents, Health, Token and the agent pages). The SVG holds geometry only and stretches to the card; strokes stay 1 or 2 px; every label is HTML in 12px mono, so text is the same size at any width. Bars fit the card at 390px instead of scrolling.
+- One series palette: a single series is always gold; second series steel; green and red only for pass and burn (Passed and Failed, Aligned, Minted and Burned). Answered and Paid, Eligible and Paid, Paid miners and Newly established read gold and steel. The pop-out uses the same colors.
+- No beaded dots: the line carries one dot on its last point and one on the hovered point. Hairline gridlines, y labels in a right gutter sized to the longest label, x labels thinned to what fits.
+- Milestones: a dashed hairline plus a chip above the plot (the label when short, else its number) in up to two rows so chips never overlap; numbered milestones are listed under the chart with their links. The hover tip sits inside the plot, below the chips.
+- Watermark, ranges and the pop-out are unchanged.
+
 ## [1.26.118] - 2026-10-25
 
 ### Changed
