@@ -16,7 +16,7 @@ def _env_num(name, default, lo=None, hi=None, cast=float):
 _ei = lambda n, d, lo=None, hi=None: _env_num(n, d, lo, hi, int)
 
 # ---- polling cadence (env-tunable; floors keep a bad value from hammering minepoa.com) ----
-# Healthy cadence, and the slower one used while upstream is degraded: any 429, 5xx or timeout on the shared feed
+# Healthy cadence, and the slower one used while upstream is degraded: any 429, 5xx or timeout (or 3 401s in a row on one) on the shared feed
 # endpoints in the last DEGRADED_FOR_S seconds. Back to healthy once that window passes clean.
 LIVE_S = _ei("POASCAN_LIVE_S", 60, 30)                         # /api/explorer/txs, healthy
 LIVE_DEGRADED_S = _ei("POASCAN_LIVE_DEGRADED_S", 120, 30)      # /api/explorer/txs, degraded (never faster than 30 s)
@@ -108,7 +108,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
             if lm: _lastmod[path] = lm
             else: _lastmod.pop(path, None)
         db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes,err) VALUES(?,?,0,0,?,NULL) "
-                 "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, bytes=excluded.bytes",
+                 "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, bytes=excluded.bytes, run401=0",
                  (ep, now, len(raw)))
         return data
     except urllib.error.HTTPError as e:
@@ -116,7 +116,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         if e.code == 304 and cond:
             _probe(ep, True, t0, "304")
             db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,err) VALUES(?,?,0,0,NULL) "
-                     "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0", (ep, now))
+                     "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, run401=0", (ep, now))
             return NOT_MODIFIED
         retry = retry_after(e.headers.get("Retry-After"))
         body = None
@@ -203,21 +203,32 @@ def backoff_s(fails, retry=None, rnd=random.random):
         r = min(RETRY_AFTER_MAX_S, float(retry)); d = max(d, r + rnd() * r * 0.1)
     return d
 
+RUN401 = 3   # 1.26.147: this many 401s in a row on one endpoint before they count toward degraded()
+
 def _fail(ep, err, retry):
-    row = db.q1("SELECT fails FROM fetch_log WHERE endpoint=?", (ep,))
+    """Record a failed read: the endpoint's own backoff (every failure), and hard_err, the time degraded() reads. A 401 alone
+    (minepoa answers a few with it under load) sets hard_err only from the RUN401th in a row on that endpoint; a 429, 5xx,
+    timeout or notice sets it at once, as before. run401 counts the 401 streak; any other failure or a good read ends it."""
+    row = db.q1("SELECT fails, run401, hard_err FROM fetch_log WHERE endpoint=?", (ep,))
     fails = (row["fails"] if row else 0) + 1
+    is401 = str(err).startswith("HTTP 401")
+    run = ((row["run401"] or 0) if row else 0) + 1 if is401 else 0
     now = int(time.time())
-    db.write("INSERT INTO fetch_log(endpoint,last_err,err,fails,next_at) VALUES(?,?,?,?,?) "
-             "ON CONFLICT(endpoint) DO UPDATE SET last_err=excluded.last_err, err=excluded.err, fails=excluded.fails, next_at=excluded.next_at",
-             (ep, now, err, fails, now + int(backoff_s(fails, retry))))
+    hard = now if (not is401 or run >= RUN401) else ((row["hard_err"] if row else None))
+    db.write("INSERT INTO fetch_log(endpoint,last_err,err,fails,next_at,run401,hard_err) VALUES(?,?,?,?,?,?,?) "
+             "ON CONFLICT(endpoint) DO UPDATE SET last_err=excluded.last_err, err=excluded.err, fails=excluded.fails, next_at=excluded.next_at, "
+             "run401=excluded.run401, hard_err=excluded.hard_err",
+             (ep, now, err, fails, now + int(backoff_s(fails, retry)), run, hard))
 
 def degraded(now=None):
-    """Upstream is degraded: a failed read (429, 5xx, timeout) on a shared feed endpoint in the last DEGRADED_FOR_S,
-    or POASCAN_UPSTREAM_DEGRADED=1. Feed polls slow down to their *_DEGRADED_S cadence while this holds."""
+    """Upstream is degraded: a failed read (429, 5xx, timeout, notice, or RUN401 401s in a row) on a shared feed endpoint in the
+    last DEGRADED_FOR_S, or POASCAN_UPSTREAM_DEGRADED=1. Feed polls slow down to their *_DEGRADED_S cadence while this holds."""
     if os.environ.get("POASCAN_UPSTREAM_DEGRADED") == "1": return True
     now = now or time.time()
     if _hold[0] > now: return True
-    r = db.q1(f"SELECT MAX(last_err) AS t FROM fetch_log WHERE endpoint IN ({','.join('?' * len(FEED_EPS))})", FEED_EPS)
+    # hard_err from _fail; a row written another way (older builds, tests) counts its last_err unless that was a 401
+    r = db.q1("SELECT MAX(CASE WHEN hard_err IS NOT NULL THEN hard_err WHEN COALESCE(err, '') NOT LIKE 'HTTP 401%' THEN last_err END) AS t "
+              f"FROM fetch_log WHERE endpoint IN ({','.join('?' * len(FEED_EPS))})", FEED_EPS)
     return bool(r and r["t"] and now - r["t"] < DEGRADED_FOR_S)
 
 def live_every(): return LIVE_DEGRADED_S if degraded() else LIVE_S

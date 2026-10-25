@@ -1,4 +1,4 @@
-"""Bench motion (1.26.145): the ticker under the strip, the bezel head, the dev only demo gate, and the client rules (no new
+"""Bench motion (1.26.145, ticker lead 1.26.147): the ticker under the strip, the bezel head, the dev only demo gate, and the client rules (no new
 requests, reduced motion, paused while hidden, no layout shift hooks). No network. Usage: python3 tools/bench_motion_test.py"""
 import os, re, subprocess, sys, tempfile, time
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -50,6 +50,44 @@ check("bench motion: one rAF loop, stopped while hidden or under reduced motion"
 check("bench motion: reduced motion sets values in place", blk.count("if(RM||D.hidden)") >= 3)
 check("demo hook only with data-demo, and no socket in the demo", 'BM.demo)D.addEventListener("poa:demo"' in js and "if(BM.demo)wantLive=false;" in js)
 check("the clock ticks on the second", "1000-Date.now()%1000" in js)
+# 1.26.147 ticker: the newest tx leads the moment it arrives; older ones rotate only while nothing new comes in
+def fn(name):
+    i = js.index("function " + name + "("); d = 0; j = js.index("{", i)
+    while True:
+        d += {"{": 1, "}": -1}.get(js[j], 0); j += 1
+        if not d: return js[i:j]
+check("ticker: no oldest first queue any more", "BM.q" not in js and "fresh.slice(-6)" not in js)
+import shutil, json as _json
+if shutil.which("node"):
+    sim = """var T=100000,Date={now:function(){return T}},RM=%s,D={hidden:false},shown=[],BM={live:1,items:[],seen:{},cur:-1,next:0,hold:0,lead:0,lk:null,sts:null};
+function $(){return 1}function tkHtml(it){return it.key}function tkShow(h,c,ts){BM.sts=ts||0;shown.push(h)}
+%s
+function it(k,ts){return {key:k,ts:ts}}
+var out={};
+tkIngest([it("a",10),it("b",20),it("c",30)]);out.first=shown.slice();
+T+=1000;tkIngest([it("d",40),it("e",50)]);out.arrive=shown.slice(-1)[0];
+T+=3000;tkStep();out.held=shown.length;
+T+=3500;tkStep();out.rot1=shown.slice(-1)[0];T+=3300;tkStep();out.rot2=shown.slice(-1)[0];
+T+=100;tkIngest([it("f",60)]);out.arrive2=shown.slice(-1)[0];
+T+=100;tkIngest([it("old",5)]);out.backfill=shown.slice(-1)[0];out.n=shown.length;
+BM.hold=T+7000;tkShow("summary","tks");T+=100;tkIngest([it("g",70)]);out.during=shown.slice(-1)[0];
+T+=7000;tkStep();out.after=shown.slice(-1)[0];
+console.log(JSON.stringify(out));"""
+    body = "\n".join(fn(n) for n in ("tkIngest", "tkLead", "tkStep"))
+    def run(rm):
+        r = subprocess.run(["node", "-e", sim % ("true" if rm else "false", body)], capture_output=True, text=True, timeout=30)
+        return _json.loads(r.stdout or "{}") if r.returncode == 0 else {"err": r.stderr[-300:]}
+    o = run(False)
+    check(f"ticker sim: the newest leads on arrival ({o})", o.get("first") == ["c"] and o.get("arrive") == "e")
+    check("ticker sim: the newest holds the line before any rotation", o.get("held") == 2)
+    check("ticker sim: older ones rotate only once nothing new has come in", o.get("rot1") == "d" and o.get("rot2") == "c")
+    check("ticker sim: a new tx mid rotation takes the line at once", o.get("arrive2") == "f")
+    check("ticker sim: an older backfilled tx does not take the line", o.get("backfill") == "f" and o.get("n") == 5)
+    check("ticker sim: the close summary keeps the line, then the newest leads", o.get("during") == "summary" and o.get("after") == "g")
+    o = run(True)
+    check(f"ticker sim, reduced motion: newest in place, no rotation ({o})", o.get("arrive") == "e" and o.get("rot1") == "e" and o.get("rot2") == "e" and o.get("arrive2") == "f" and o.get("after") == "g")
+else:
+    print("skip ticker sim: node not found")
 css = open(os.path.join(ROOT, "static/style.css")).read()
 c0 = css.index("1.26.145 Bench motion"); c = css[c0:css.index(".bench.final .cd,.bench.closing .cd{animation:none}}", c0)]
 check("motion css: reduced motion block", "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw,.sm.nw,.lspk,.bump,.od>span,.flp>span" in c)

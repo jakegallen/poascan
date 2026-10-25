@@ -195,7 +195,7 @@ function scoreLive(s){if(!$("#score")||!s.feed||BM.demo)return;var top=(s.feed.m
    latest txs from the snapshot feed. Every number comes from the snapshot and /fragment/score the page already polls, so this
    adds no requests. Transforms and opacity only; one requestAnimationFrame loop that stops while the tab is hidden. Reduced
    motion keeps the static Bench: values change in place, nothing slides, pulses or cycles. */
-var BM={on:!!$(".bench #score"),demo:D.documentElement.dataset.demo==="motion",raf:0,live:0,items:[],seen:{},q:[],cur:-1,next:0,hold:0,pend:null};
+var BM={on:!!$(".bench #score"),demo:D.documentElement.dataset.demo==="motion",raf:0,live:0,items:[],seen:{},cur:-1,next:0,hold:0,pend:null,lead:0,lk:null};
 function escH(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":"&quot;"})}
 /* odometer: each changed digit rolls, the old one up and out, the new one up and in, rightmost first */
 function odo(n,t){var o=n.textContent;if(o===t)return;if(RM||D.hidden){n.textContent=t;return}
@@ -245,19 +245,19 @@ function tkShow(html,cls,ts){var box=$("#btk");if(!box)return;BM.sts=ts||0;var o
  old.forEach(function(o){o.classList.remove("on");o.classList.add("out");setTimeout(function(){o.remove()},520)})}
 function tkTimes(){$$("#btk time.tkt").forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;var x=tkAgo(ts);if(t.textContent!==x)t.textContent=x;if(!t.title)t.title=ltf(ts,"dts",1)})}
 function tkIngest(list){var fresh=[];list.forEach(function(it){if(BM.seen[it.key])return;BM.seen[it.key]=1;fresh.push(it)});if(!fresh.length)return;
- fresh.sort(function(a,b){return a.ts-b.ts});BM.items=fresh.slice().reverse().concat(BM.items).sort(function(a,b){return b.ts-a.ts}).slice(0,8);
- var top=BM.items[0],t=Date.now();if(t<BM.hold)return;
- if(BM.sts!=null&&top.ts-BM.sts>60){BM.cur=0;BM.q=[];BM.next=t+3200;tkShow(tkHtml(top),"",top.ts);return}   /* a stale line (a cached page) gives way at once */
- if(BM.live&&!RM)fresh.slice(-6).forEach(function(it){BM.q.push(it)});else if(BM.live){BM.cur=0;tkShow(tkHtml(top),"",top.ts)}}
-function tkStep(){if(!$("#btk")||D.hidden)return;var t=Date.now();if(RM){if(BM.hold&&t>=BM.hold&&BM.items[0]){BM.hold=0;tkShow(tkHtml(BM.items[0]),"",BM.items[0].ts)}return}
- if(t<BM.hold||t<BM.next)return;var it;
- if(BM.q.length){it=BM.q.shift();BM.cur=Math.max(0,BM.items.indexOf(it));BM.next=t+(BM.q.length?1400:3200)}
- else{var n=Math.min(5,BM.items.length);if(n<2){BM.next=t+3200;return}BM.cur=(BM.cur+1)%n;it=BM.items[BM.cur];BM.next=t+3200}
+ BM.items=fresh.concat(BM.items).sort(function(a,b){return b.ts-a.ts}).slice(0,8);
+ var top=BM.items[0],t=Date.now();if(t<BM.hold){BM.lead=1;return}   /* the close summary keeps the line; the newest leads once it ends */
+ if(BM.live||(BM.sts!=null&&top.ts-BM.sts>60))tkLead(t)}   /* a new tx leads at once; a stale line (a cached page) gives way too */
+/* the newest tx takes the line and holds it 6 s; older ones rotate only while nothing new comes in */
+function tkLead(t){var top=BM.items[0];BM.lead=0;if(top&&BM.lk!==top.key){BM.cur=0;BM.next=t+6000;BM.lk=top.key;tkShow(tkHtml(top),"",top.ts)}}
+function tkStep(){if(!$("#btk")||D.hidden)return;var t=Date.now();if(RM){if(BM.hold&&t>=BM.hold&&BM.items[0]){BM.hold=0;BM.lead=0;BM.lk=BM.items[0].key;tkShow(tkHtml(BM.items[0]),"",BM.items[0].ts)}return}
+ if(t<BM.hold||t<BM.next)return;if(BM.lead)return tkLead(t);
+ var n=Math.min(5,BM.items.length);if(n<2){BM.next=t+3200;return}BM.cur=(BM.cur+1)%n;var it=BM.items[BM.cur];BM.next=t+3200;BM.lk=it.key;
  tkShow(tkHtml(it),"",it.ts)}
 /* a close: the summary takes the ticker for 7 s, then the line returns to live txs */
 function benchClose(oe,ne,ans,last){var st=last&&last.epoch===oe&&last.settled!=null?last.settled:null,
   txt='<i class="sw a"></i><a class="tkn" href="/epoch/'+escH(oe)+'">Epoch '+escH(oe)+" closed</a>, "+(st!=null?Math.round(st).toLocaleString("en-US")+" answers settled":ans!=null?Math.round(ans).toLocaleString("en-US")+" answers in":"settling now");
- tkShow(txt,"tks");BM.hold=Date.now()+7000;BM.next=BM.hold;BM.q=[]}
+ tkShow(txt,"tks");BM.hold=Date.now()+7000;BM.next=BM.hold;BM.lk=null;BM.lead=1}
 function benchTick(now){var c=$(".bench .cd[data-close]");if(!c)return;var b=c.closest(".bench"),e=+c.dataset.close,left=e-now,fin=e&&left>0&&left<=60;
  b.classList.toggle("final",!!fin);b.classList.toggle("closing",!!(e&&left<=0&&left>-1800));if(e&&left<=0&&left>-1800)c.textContent="Closing";
  if(fin&&!RM){var a=c.classList.contains("ta");c.classList.toggle("ta",!a);c.classList.toggle("tb",a)}else c.classList.remove("ta","tb");
@@ -265,7 +265,7 @@ function benchTick(now){var c=$(".bench .cd[data-close]");if(!c)return;var b=c.c
 function benchInit(){if(!BM.on)return;benchSize();
  $$("#btk .tki").forEach(function(s,i){var a=$("a.tkn",s),h=a?a.getAttribute("href")||"":"",ad=decodeURIComponent(h.split("/u/")[1]||""),tm=$("time",s),k=($(".sw",s)||{className:""}).className.split(" ")[1]||"a",v=[];
   for(var x in TKV)if(TKV[x][1]===k)v=TKV[x];if(!tm)return;var it={key:k+":"+ad+":"+tm.dataset.ts,k:k,v:v[0],a:ad,n:a?a.textContent:"",ts:+tm.dataset.ts};BM.seen[it.key]=1;BM.items.push(it);if(i)s.remove()});
- BM.cur=0;BM.next=Date.now()+3200;BM.sts=BM.items.length?BM.items[0].ts:null;tkTimes();
+ BM.cur=0;BM.next=Date.now()+3200;BM.sts=BM.items.length?BM.items[0].ts:null;BM.lk=BM.items.length?BM.items[0].key:null;tkTimes();
  var rt=0;W.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(benchSize,150)});
  D.addEventListener("visibilitychange",function(){if(!D.hidden){benchSize();scoreSlide();tick();benchGo()}});
  setTimeout(function(){BM.live=1},1500);benchGo()}

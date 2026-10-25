@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.147] - 2026-10-25
+
+### Fixed
+- Live freshness: a 401 from minepoa.com no longer puts the shared feed endpoints on the degraded 120 s cadence by itself. Only 3 in a row from the same endpoint count; a good read ends the streak. A 429, a 5xx, a timeout or a notice still slows the feed at once, as before. The tx feed is back to its 60 s reads while upstream answers the odd 401. fetch_log gains hard_err (the last failure that slows the feed) and run401 (the 401 streak), added in place on boot.
+- Home, Latest ticker: the newest tx takes the line the moment it arrives and holds it for 6 s; older ones rotate only while nothing new has come in (no oldest first queue). After a close summary the newest leads. Reduced motion still sets the newest in place with no rotation.
+
+### Tests
+- tools/backoff_401_test.py: a single 401 (no slowdown), 3 in a row (slowdown), a good read or other endpoints break the streak, 429, 503, 500 and a timeout (slowdown), a 503 not masked by a later 401, older rows.
+- tools/bench_motion_test.py: a ticker simulation (newest leads, rotation only while idle, backfill and close summary, reduced motion). Both run in CI.
+
 ## [1.26.146] - 2026-10-25
 
 ### Added

@@ -73,6 +73,10 @@ jobs:
         run: python tools/recovery_test.py
       - name: Polite polling (backoff with jitter and Retry-After, incremental feed, cadence, on-demand caps, upstream counter)
         run: python tools/polite_test.py
+      - name: 401 backoff (a lone 401 keeps the 60 s feed; 3 in a row, 429, 5xx or a timeout slow it)
+        run: python tools/backoff_401_test.py
+      - name: Bench motion and ticker lead (newest tx first, rotation only while idle, reduced motion in place)
+        run: python tools/bench_motion_test.py
       - name: Network upgrade milestones (verified times, live first-seen events kept across restarts, grouping, no upstream call)
         run: python tools/milestones_test.py
       - name: Wallet safety (pinned emblemai via npx, backup first, file names only, always --profile, no global install, POASwap wording)

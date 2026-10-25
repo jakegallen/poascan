@@ -94,6 +94,9 @@ def init():
         _swap_store.init(conn())
         _visit_counts_pjoin()
         _segments()
+        fl = {r[1] for r in conn().execute("PRAGMA table_info(fetch_log)")}   # 1.26.147: hard_err (the last failure that slows the feed), run401
+        for col in ("hard_err", "run401"):
+            if col not in fl: conn().execute(f"ALTER TABLE fetch_log ADD COLUMN {col} INTEGER")
         for t in ("forum_posts", "forum_comments"):   # LabLeak author edits set edited_at (shown publicly as an edit)
             if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
