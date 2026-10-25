@@ -168,6 +168,7 @@ def joins_fields():
     if not r: return dict(agent_joins_per_hour=None, agent_joins_per_hour_window=None)
     return dict(agent_joins_per_hour=r["agent_joins_per_hour"],
                 agent_joins_per_hour_window=dict(kind=r["window"], hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
+                                                 joining_from_ts=r.get("joining_from"), source=r.get("source"),
                                                  paused_until_ts=r["paused_until"], trailing_per_hour=r["trailing"]))
 
 
@@ -197,7 +198,8 @@ def home_epochs(ep):
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
-    joins = [p for p in A.hourly_joins(g["agents"], A.cut_list()) if p[0] >= time.time() - 49 * 3600]   # same series as the pop-out
+    from . import chartpop as CP
+    joins = [p for p in CP._hourly(g["agents"]) if p[0] >= time.time() - 49 * 3600]   # same series as the pop-out
     return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], joins_hr=joins)
 
 # ---------------- pages ----------------
@@ -1363,7 +1365,7 @@ def about():
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
 <li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
-<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. Within a day of a genesis cut the window starts at the first read of the new segment (the count restarted there with the carried Agents), and the chart has no point or line across the cut. The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
+<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. Within a day of a genesis cut it counts the new segment's join txs (real join times) from its first join, when joining reopened, to now (at least 1 h); the count restarted at the cut with the carried Agents, so nothing is measured across it, and the chart has no point or line across the cut (hours of the new segment count its join txs). The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>

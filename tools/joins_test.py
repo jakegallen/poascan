@@ -63,6 +63,22 @@ check("hourly: real 40/h before the halt, 0 while halted, 3/h after the cut", hj
 hj2 = A.hourly_joins(pts, [C], now=end)
 check("hourly: the hour still filling is left out", max(t for t, _ in hj2) < (end // H) * H)
 check("hourly without cuts keeps the old behaviour (the cross-cut hour clamps to 0)", any(t == (C // H) * H and v == 0 for t, v in A.hourly_joins(pts, [], now=end + H)))
+jt = [C + 2 * H + i * 1200 for i in range(6)]   # joining reopened 2 h after the cut: 6 joins, one every 20 min
+s2b = [(C + 600 + i * 900, 1000 + max(0, (C + 600 + i * 900 - jt[0]) // 1200 + 1) if C + 600 + i * 900 >= jt[0] else 1000) for i in range(4 * 4)]
+now2 = C + 4 * H
+r = A.joins_rate_calc(s1 + s2b, now=now2, floor=C, join_ts=jt)
+check(f"since the cut from join txs: 6 joins over the 2 h since the first join -> 3, joining_from set {r and (r['agent_joins_per_hour'], r['window_hours'], r['source'])}",
+      r and r["agent_joins_per_hour"] == 3 and r["joins"] == 6 and abs(r["window_hours"] - 2) < .01 and r["joining_from"] == jt[0] and r["source"] == "join_txs" and r["window"] == "since_cut")
+r0 = A.joins_rate_calc(s1 + [(C + 600, 1000), (C + 2 * H, 1000)], now=C + 2 * H, floor=C, join_ts=[])
+check("since the cut, none joined yet in a segment over 1 h old: 0 (real), not None and not a pre-cut figure", r0 and r0["agent_joins_per_hour"] == 0 and r0["joining_from"] is None)
+rg = A.joins_rate_calc(s1 + s2b, now=now2, floor=C, join_ts=jt[:2])
+check("fewer join txs than agents_joined rose (feed gap): status reads instead", rg and rg["source"] == "status")
+js = A.joins_series(s1 + s2b, now=now2 + 1, floor=C, join_ts=jt)
+check(f"chart since the cut: join txs per whole hour of the segment {[(t - C) // H for t, _ in js if t >= C - H]}",
+      [(t, v) for t, v in js if t >= C - H] == [(C - H, 0), (C, 0), (C + H, 0), (C + 2 * H, 3), (C + 3 * H, 3)])
+js = A.joins_series(s1 + s2b, now=now2 + 1, floor=C + 600, join_ts=jt)
+check("a cut inside an hour: that hour has no point (the line breaks there), the next whole hour starts the segment",
+      not any(t == C for t, _ in js) and min(t for t, _ in js if t > C) == C + H and max(t for t, _ in js if t < C) == C - H)
 from poascan import ui as U
 sv = U.spark([(t, v) for t, v in hj], breaks=[C])
 check("sparkline breaks at the cut: two polylines", sv.count("<polyline") == 2 and U.spark([(t, v) for t, v in hj]).count("<polyline") == 1)

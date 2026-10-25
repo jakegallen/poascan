@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.111] - 2026-10-24
+
+### Fixed
+- Agents / hr since the genesis cut counts the segment's join txs (real join times) from its first join, when joining reopened (3:59 PM PT Oct 24), not from the cut: joining stayed closed for about 2 h after the cut, which read as 2 /hr (7 joins over 3.4 h); now 4 /hr (7 over 1.7 h). Falls back to agents_joined reads if the tx list holds fewer joins than the count rose.
+- Agents / hr chart hours in the new segment count join txs per hour (3 PM: 3, 4 PM: 2), not status read deltas, which moved joins at 3:59 PM into the next hour.
+
+### Added
+- `agent_joins_per_hour_window.joining_from_ts` and `source` (`join_txs` or `status`), additive.
+
 ## [1.26.110] - 2026-10-24
 
 ### Fixed

@@ -738,6 +738,25 @@ def hourly_joins(pts, cuts=(), now=None):
     return [(k * 3600, max(0, hr[k][1] - hr[j][1])) for j, k in zip(ks, ks[1:])
             if k - j == 1 and seg_idx(hr[j][0], cuts) == seg_idx(hr[k][0], cuts)]
 
+def seg_join_times():
+    """UTC times of the current segment's join txs (real join times), oldest first. One indexed read (txs_seg_type)."""
+    return [r["ts"] for r in db.q("SELECT ts FROM txs WHERE segment = ? AND type = 'join' AND ts IS NOT NULL ORDER BY ts", (S.CURRENT,))]
+
+def joins_series(pts, now=None, floor=None, join_ts=None):
+    """Pure: the Agents / hr chart [(hour start, joins)]. Before the current segment: hourly_joins over the status reads.
+    From the first whole hour of the current segment (floor, its start): join txs counted per hour (real join times), unless
+    the tx list holds fewer joins than agents_joined rose (a gap in the feed), then the status reads there too. The hour
+    holding the cut has no point, so the line breaks at the cut."""
+    now = int(now if now is not None else time.time()); cuts = sorted({c for c in cut_list()} | ({floor} if floor else set()))
+    snap = hourly_joins(pts, cuts, now)
+    if not floor or join_ts is None: return snap
+    seg = [p for p in pts if p[0] >= floor]
+    rise = seg[-1][1] - seg[0][1] if len(seg) > 1 else 0
+    if len([t for t in join_ts if t >= floor]) < rise: return snap
+    first, cur = -(-int(floor) // 3600) * 3600, now // 3600 * 3600
+    n = collections.Counter(int(t) // 3600 * 3600 for t in join_ts if t >= floor)
+    return [p for p in snap if p[0] + 3600 <= floor] + [(h, n.get(h, 0)) for h in range(first, cur, 3600)]
+
 def joins_between(lo, hi):
     """Agents joined in (lo, hi] from POAScan's own status snapshots, summed within each segment (never across a cut).
     Base: the last read at or before lo. Two indexed reads, no upstream call."""
@@ -759,14 +778,25 @@ def _rate_since(pts, t0):
     h = (end[0] - base[0]) / 3600
     return dict(joins=max(0, end[1] - base[1]), hours=round(h, 2), per_hour=round(max(0, end[1] - base[1]) / h, 1) if h > 0 else None)
 
-def joins_rate_calc(pts, now=None, floor=None):
+def joins_rate_calc(pts, now=None, floor=None, join_ts=None):
     """Pure: the homepage Agents / hr from (ts, agents_joined) reads, oldest first.
     Default: joins over the trailing 24 h divided by its hours. If agents_joined stood still for JOIN_PAUSE_S or more inside
     that window (joining paused, e.g. a network upgrade), the window starts where the latest pause ended, so a pause does not
     drag the rate toward zero; it stays at least JOIN_MIN_S long.
     floor: the current segment's start (a genesis cut) when it is inside the 24 h. The window then starts at the first read of the
     segment (kind since_cut); with less than JOIN_MIN_S of the segment read it is None, and a trailing rate longer than the
-    segment is None, never a figure over a shorter span."""
+    segment is None, never a figure over a shorter span.
+    join_ts: the current segment's join tx times. Since a cut they are the source (real join times): joins from the segment's
+    first join (joining reopened; joining_from) to now, over at least JOIN_MIN_S; 0 while none has joined in a segment over
+    an hour old. If the tx list holds fewer joins than agents_joined rose, the status reads are used instead."""
+    if join_ts is not None and floor is not None and now is not None and floor > now - JOIN_RATE_WINDOW_S and now - floor >= JOIN_MIN_S:
+        seg = [p for p in pts if p[0] >= floor]; jt = sorted(t for t in join_ts if floor <= t <= now)
+        rise = seg[-1][1] - seg[0][1] if len(seg) > 1 else 0
+        if len(jt) >= rise:
+            start = jt[0] if jt else floor; h = max(JOIN_MIN_S, now - start) / 3600
+            tr = {k: (round(sum(1 for t in jt if t > now - s) / (s / 3600), 1) if now - s >= floor else None) for k, s in (("1h", 3600), ("6h", 6 * 3600), ("24h", 86400))}
+            return dict(agent_joins_per_hour=int(round(len(jt) / h)), joins=len(jt), window_hours=round(h, 2), window="since_cut", window_end=now,
+                        paused_until=None, joining_from=jt[0] if jt else None, source="join_txs", trailing=tr)
     if len(pts) < 2: return None
     end = pts[-1][0]; t0 = end - JOIN_RATE_WINDOW_S
     since_cut = floor is not None and floor > t0
@@ -788,10 +818,10 @@ def joins_rate_calc(pts, now=None, floor=None):
     trailing = {k: (_rate_since(pts, end - s) if not since_cut or end - s >= t0 else None) for k, s in (("1h", 3600), ("6h", 6 * 3600), ("24h", 86400))}
     return dict(agent_joins_per_hour=int(round(r["per_hour"])), joins=r["joins"], window_hours=r["hours"],
                 window="since_pause" if paused_until is not None else "since_cut" if since_cut else "24h", window_end=end, paused_until=paused_until,
-                trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
+                joining_from=None, source="status", trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
 
 @cached("joins_rate", 120)
 def joins_rate():
     """Cached 2 min: one indexed range read of about a day of status snapshots."""
     now = int(time.time()); fl = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
-    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl)
+    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl, join_ts=seg_join_times() if fl else None)

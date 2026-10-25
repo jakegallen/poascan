@@ -55,8 +55,9 @@ def _epoch_closes():
 
 def _hourly(pts):
     """Agents / hr from the Agents series: joins in each whole hour with a reading in the hour before it, in the same segment
-    (analytics.hourly_joins: no bucket across a genesis cut, the filling hour left out)."""
-    return A.hourly_joins(pts, A.cut_list())
+    (analytics.joins_series: no bucket across a genesis cut, join tx times in the current segment, the filling hour left out)."""
+    now = int(time.time()); fl = A.S.CUT_TS if A.S.has_cut() and now >= A.S.CUT_TS else None
+    return A.joins_series(pts, now, fl, A.seg_join_times() if fl else None)
 
 def _daily(g, rng):
     """Txs per day for 30d and All once there are at least 3 days to draw; per hour before that."""
