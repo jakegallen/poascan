@@ -25,13 +25,16 @@ def main():
     try: GS.load_cfg(p); check("weights that do not sum to 1 are refused", False)
     except AssertionError: check("weights that do not sum to 1 are refused", True)
     cf, last, n = GS.close_facts(CLOSES, frozenset({T}), ttl=6)
-    check(f"fold: closes held (A added E1, removed E3, back E4; C held by seats and jury seats; T trusted once seen) {cf[A]['closes_established']} {cf[C]['closes_established']} {cf[T]['closes_established']}",
-          cf[A]["closes_established"] == 3 and cf[C]["closes_established"] == 5 and cf[T]["closes_established"] == 3)
+    check(f"fold (engine, 1.26.140): A added E1, removed E3, back E4; seats and trusted hold nothing {cf[A]['closes_established']} {cf[C]['closes_established']} {cf[T]['closes_established']}",
+          cf[A]["closes_established"] == 3 and cf[C]["closes_established"] == 0 and cf[T]["closes_established"] == 0)
+    cs, _, _ = GS.close_facts(CLOSES, frozenset({T}), ttl=6, seeds={None: {C}})
+    check("fold: a genesis import seed is held from the first close", cs[C]["closes_established"] == 5)
     check("facts: removals, slashes, marks, jury, settled, paid", cf[A]["removed"] == 1 and cf[B]["slashed"] == 1 and cf[C]["marks"] == 1 and (cf[C]["jury_seats"], cf[C]["jury_aligned"]) == (2, 1)
           and (cf[A]["settled"], cf[A]["passed"], cf[B]["passed"]) == (1, 1, 0) and cf[A]["paid_closes"] == 1 and cf[A]["rewards"] == 10)
     check("a removal alone is not activity", 3 not in cf[A]["active_closes"] and cf[A]["active_closes"] == [0, 1, 2, 4])
-    cr, _, _ = GS.close_facts(CLOSES[:3] + [dict(CLOSES[3], epoch=3)] + [dict(CLOSES[4])], resets=frozenset({4}))
-    check("reset: standing starts fresh at a segment's first close", cr[C]["closes_established"] == 4)
+    cr, _, _ = GS.close_facts(CLOSES, resets=frozenset({4}), seeds={None: {C}, 4: {T}})
+    check(f"reset: standing starts fresh at a segment's first close, from that segment's seed {cr[C]['closes_established']} {cr[T]['closes_established']}",
+          cr[C]["closes_established"] == 4 and cr[T]["closes_established"] == 1 and cr[A]["closes_established"] == 3)
     def full(a, **o):
         f = dict(GS._blank()); f.update(cf.get(a) or {}); f.update(GS.EMPTY_TX); f.update(GS.EMPTY_FORUM); f.update(o); return f
     s1 = GS.score(full(A), "safe", last, n); s2 = GS.score(full(A), "safe", last, n)

@@ -504,8 +504,12 @@ def established_history(addr):
     trusted = addr in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
     seat_eps = sorted(seated)
     est = addr in A.established_set()
-    basis = ("trusted" if trusted else "readmitted" if listed and listed.get("readmitted") else "listed" if listed and listed["change"] == "added" else
-             "seat" if est and seat_eps else "removed" if listed else "none")
+    # 1.26.140, minepoa's engine (estfold.py): standing comes from the genesis import or established_after only; seats and
+    # trusted graders no longer count, so "seat" and "trusted" are not emitted any more
+    from . import estfold as EF
+    imp = addr in EF.imported(__import__("poascan.segments", fromlist=["x"]).selected())
+    basis = ("readmitted" if listed and listed.get("readmitted") else "listed" if listed and listed["change"] == "added" else
+             "removed" if listed else "import" if est and imp else "none")
     answered = sorted(k for k, s in ans.items() if addr in s)
     n_ans = db.q1("SELECT COUNT(*) AS n FROM txs WHERE from_addr=? AND type='challenge'", (addr,))["n"]
     f = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=? OR to_addr=?", (addr, addr))["t"]

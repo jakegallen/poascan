@@ -28,16 +28,20 @@ def fresh():
     from poascan import governance as GV, analytics as A, standing as SD
     recs = [{"epoch": 0, "basis": {"established_after": [], "challenge_eligible": ["poa1X"]}},
             {"epoch": 1, "basis": {"established_after": ["poa1X"], "established_removed": [], "challenge_eligible": ["poa1X", "poa1Y"], "graders_served": {"poa1S": 2}}}]
-    sv = (A.segment_closes, A.params, SD._trusted)
+    from poascan import estfold as EF
+    sv = (A.segment_closes, A.params, SD._trusted, EF.CFG.get("imports"))
     try:
         A.segment_closes = lambda n: recs; A.params = lambda: {"estab_ttl": 6}; SD._trusted = lambda: {"poa1S", "poa1T"}
+        EF.CFG["imports"] = {}; A._cache.clear()
         est, le = GV.segment_standing()
-        check(f"segment standing: adds and seats from this segment only, seen system graders, last eligible per close {sorted(est)} {le}",
-              est == {"poa1X", "poa1S"} and le == {"poa1X": 1, "poa1Y": 1})
-        A.segment_closes = lambda n: [{"epoch": 0, "basis": {}}]
-        check("segment standing: a new segment with no entries starts empty", GV.segment_standing()[0] == set())
+        check(f"segment standing (engine, 1.26.140): adds from this segment only, no seats or system graders, last eligible per close {sorted(est)} {le}",
+              est == {"poa1X"} and le == {"poa1X": 1, "poa1Y": 1})
+        A.segment_closes = lambda n: [{"epoch": 0, "basis": {}}]; A._cache.clear()
+        check("segment standing: a new segment with no import and no entries starts empty", GV.segment_standing()[0] == set())
+        EF.CFG["imports"] = {str(n): {"established": ["poa1G"], "established_count": 1} for n in (1, 2, 3)}; A._cache.clear()
+        check("segment standing: a segment starts from its genesis import", GV.segment_standing()[0] == {"poa1G"})
     finally:
-        A.segment_closes, A.params, SD._trusted = sv
+        A.segment_closes, A.params, SD._trusted, EF.CFG["imports"] = sv; A._cache.clear()
 
 def payout_unit():
     """Est. per Agent: median of the last 3 paid closes' per-Agent median (one segment here)."""

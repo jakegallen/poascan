@@ -4,7 +4,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, estfold as EF
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
@@ -29,26 +29,11 @@ def href(tab, **kw):
     return "/governance" + ("?" + "&amp;".join(f"{k}={E(v)}" for k, v in q) if q else "")
 
 def segment_standing():
-    """(established set, last challenge_eligible close per address) from the selected segment's own close records only.
-    Governance shows standing fresh at a genesis cut (segment 1 standing stays under Segment 1). Same fold as
-    analytics.established_set: established_after adds, established_removed drops, a grading seat within estab_ttl
-    closes after the last removal counts, plus trusted and system graders."""
-    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
-    pp = A.params(); ttl = int(pp.get("estab_ttl") or 6); tr = SD._trusted()
-    est, seat, removed, le = set(), {}, {}, {}
-    for e in eps:
-        n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
-        seated = set(b.get("graders_served", {}) or {}) | {j.get("grader") for x in (b.get("settled") or []) for j in (x.get("jury") or []) if j.get("grader")}
-        for a in seated: seat[a] = n
-        gone = set(b.get("established_removed", []) or [])
-        for a in gone: removed[a] = n
-        est = (est - gone) | set(b.get("established_after", []) or [])
-        for a in b.get("challenge_eligible", []) or []: le[a] = n
-    if eps:
-        last = int(eps[-1].get("epoch", 0))
-        est |= {a for a, n in seat.items() if n > removed.get(a, -1) and n > last - ttl}
-        est |= tr & (set(seat) | est)
-    return est, le
+    """(established set, last challenge_eligible close per address) for the selected segment, per minepoa's engine
+    (estfold.py, 1.26.140): genesis import flags plus established_after minus established_removed. No trusted or
+    system graders, no seats."""
+    est, le, _ = A.established_fold()
+    return set(est), le
 
 def level_of(left):
     return "risk" if left <= SD.AT_RISK_CLOSES else "watch" if left == SD.AT_RISK_CLOSES + 1 else "safe"
@@ -59,15 +44,16 @@ def standing_rows():
     ep = A.epoch_rows(); ttl = int(A.params().get("estab_ttl") or 6)
     if SG.archived(): cur = (ep[-1]["epoch"] + 1) if ep else None
     else: cur = A.open_epoch().get("epoch")
-    est, le = segment_standing(); tr = SD._trusted(); nm = A.forum_names(); last = ep[-1]["epoch"] if ep else None
+    est, le = segment_standing(); nm = A.forum_names(); last = ep[-1]["epoch"] if ep else None
+    _, _, why = A.established_fold()
     rows = []
     for a in est:
-        L = le.get(a)
-        if a in tr: lv, drop, left = "system", None, None
-        elif L is None or cur is None: lv, drop, left = "norecord", None, None
-        else: drop = L + ttl + 1; left = max(0, drop - cur + 1); lv = level_of(left)
-        rows.append(dict(address=a, name=nm.get(a), last=L, drop=drop, left=left, level=lv,
-                         missed=(last - L) if (L is not None and last is not None) else None))
+        L = le.get(a); Lr = -1 if L is None else L   # engine: no challenge_eligible close in this segment reads as -1
+        if cur is None: lv, drop, left = "norecord", None, None
+        else: drop = Lr + ttl + 1; left = max(0, drop - cur + 1); lv = level_of(left)
+        h, hn = why.get(a, (None, None))
+        rows.append(dict(address=a, name=nm.get(a), last=L, drop=drop, left=left, level=lv, basis=h, basis_close=hn,
+                         missed=(last - Lr) if last is not None else None))
     order = {k: i for i, (k, _) in enumerate(LEVELS)}
     rows.sort(key=lambda r: (order[r["level"]], r["drop"] if r["drop"] is not None else 1 << 30, (r["name"] or "~").lower(), r["address"]))
     return dict(rows=rows, open_epoch=cur, ttl=ttl, last_close=last,
@@ -374,18 +360,19 @@ def scores(scope="segment"):
     tr = frozenset(SD._trusted()); ops = frozenset(operator_ids()); ttl = int(A.params().get("estab_ttl") or 6)
     if scope == "all":
         with SG.use(SG.CURRENT): lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
-        closes, resets = [], set()
+        closes, resets, seeds = [], set(), {}
         for n in SG.NUMBERS:
             cs = sorted(A.segment_closes(n), key=lambda e: int(e.get("epoch", 0)))
-            if cs: resets.add(SG.gkey(int(cs[0].get("epoch", 0)), n))
+            if cs:
+                k = SG.gkey(int(cs[0].get("epoch", 0)), n); resets.add(k); seeds[k] = EF.imported(n)
             closes += [dict(e, epoch=SG.gkey(int(e.get("epoch", 0)), n)) for e in cs]
-        out, last, nc = GS.build(closes, "", (), None, None, lv, ballot_posts(), ops, tr, frozenset(resets), ttl, listed=GR.seal_facts(), unconfirmed=_unconf(lv))
+        out, last, nc = GS.build(closes, "", (), None, None, lv, ballot_posts(), ops, tr, frozenset(resets), ttl, listed=GR.seal_facts(), unconfirmed=_unconf(lv), seeds=seeds)
     else:
         n = SG.selected(); seg = SG.BY_N[n]; w, a = SG.sql()
         lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
         cur = not SG.archived()
         out, last, nc = GS.build(A.segment_closes(n), w, a, seg.get("start_ts"), seg.get("end_ts"), lv, ballot_posts(), ops, tr, ttl=ttl,
-                                 listed=GR.seal_facts(seg.get("start_ts"), seg.get("end_ts")) if cur else {}, unconfirmed=_unconf(lv) if cur else frozenset())
+                                 listed=GR.seal_facts(seg.get("start_ts"), seg.get("end_ts")) if cur else {}, unconfirmed=_unconf(lv) if cur else frozenset(), seeds={None: EF.imported(n)})
     return dict(rows=out, last_close=last, closes=nc)
 
 def _score_cell(v): return f'<span class="tag score">{v}</span>' if v is not None else '<span class="dim">···</span>'
@@ -609,19 +596,19 @@ def rules():
     b = _side("earn", "Earn", f"<p>Earned by answering challenges that pass grading ({GO}, Continuous mining).</p>",
               "<p>130 of 131 Agents added to established_after in segment 1 were in challenge_eligible at the same close.</p>")
     b += _side("lapse", "Lapse window", f"<p>Kept while there is a passing answer within the last 6 epochs, about 36 hours ({GO}, Continuous mining; {SK}). estab_ttl is 6 in /api/params.</p>",
-               f"<p>Drop at close L + 7, where L is the last close that listed the Agent in challenge_eligible. 117 of 125 segment 1 removals with an L on record match.</p>"
+               f"<p>The engine removes an Agent at close L + estab_ttl + 1 (L + 7), where L is the last close in this segment that listed it in challenge_eligible, -1 when none. Only challenge_eligible keeps standing.</p>"
                f"<p>Closes left = drop close minus the open epoch, plus 1. At risk: {SD.AT_RISK_CLOSES} or fewer. Watch: {SD.AT_RISK_CLOSES + 1}. Safe: {SD.AT_RISK_CLOSES + 2} or more.</p>")
     b += _side("removal", "Removal at close", f"<p>Removal is not described beyond the lapse window ({GO}).</p>",
                "<p>The other 8 segment 1 removals are in the same close as a slash. 61 removals have no L on record.</p>")
-    b += _side("no-record", "No record", "<p>Not described.</p>",
-               "<p>Established, but no close in this segment lists the Agent in challenge_eligible, so no drop close is estimated.</p>")
+    b += _side("no-record", "No challenge_eligible yet", "<p>Not described.</p>",
+               "<p>The engine reads L as -1, so an established Agent with no challenge_eligible close in this segment drops at the E6 close (estab_ttl 6).</p>")
     b += _side("system", "System graders", "<p>trusted_graders and system_grader_accounts in /api/params.</p>",
-               "<p>Listed as System. The lapse estimate is not applied.</p>")
+               "<p>Not added to the established set. The engine\'s set is the genesis import plus established_after, minus established_removed.</p>")
     b += _side("seats", "Grading seats", f"<p>Grade every seat each epoch: it pays from the grading pool and keeps you established ({GO}, GRADE).</p>",
-               "<p>45 of the 117 segment 1 removals at L + 7 held a grading seat after L.</p>")
+               "<p>The engine does not count seats or jury seats toward standing. 45 of the 117 segment 1 removals at L + 7 held a grading seat after L.</p>")
     b += _side("votes", "Votes", f"<p>Only established identities count ({GO}; {SK}).</p>", '<p>Ballots: /api/ballots.</p>')
     b += _side("carryover", "Genesis cut", "<p>Balances, ep13 rewards and escrow refunds carried (notice 2026-10-24-genesis-cut). Established standing is not mentioned.</p>",
-               "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
+               f"<p>The genesis import (/api/genesis-import, checkpoint 44003) flags {len(EF.imported(2))} Agents established; segment 2 starts from them. They carry no segment 2 challenge_eligible until they earn one, so L is -1. Segment 1 standing stays under Segment 1.</p>")
     return b
 
 TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
@@ -645,10 +632,15 @@ def _url(tab, **kw):
 
 def _seg(): return dict(segment=SG.selected(), archived=SG.archived())
 
+ESTABLISHED_RULE = ("minepoa's engine: the segment's genesis import flags, plus established_after, minus established_removed; no trusted or system "
+                    "graders, seats don't count. Removal at close L + estab_ttl + 1, L the last challenge_eligible close in this segment (-1 when none). "
+                    "established_basis: import or added. Method: " + "https://poascan.io/about#established")
+
 def _std(r):
     src, mest, _d = GR.established_check(r["address"])
     return dict(address=r["address"], name=r["name"], profile=PROFILE.format(r["address"]) if r["name"] else None, level=LEVEL_KEYS[r["level"]],
                 closes_left=r["left"], missed=r["missed"], last_challenge_eligible_epoch=r["last"], drop_close=r["drop"],
+                established_basis=r.get("basis"), established_basis_close=r.get("basis_close"),
                 established_source=src, minepoa_established=mest)
 
 def established_cross():
@@ -713,7 +705,8 @@ def api_established(sort="score", filt="", limit=1000, offset=0, d="desc"):
     rs, rows, data = established_select(sort, EST_FILTER_IN.get(filt, "") if filt else "", d)
     out = [dict(_std(r), **_sflat(r), added_epoch=r["since"], closes_held=r["held"], eligible_closes=r["eligible"], seals=r["seals"],
                 grading_seat_closes=r["seats"]) for r in rs[offset:offset + limit]]
-    return dict(_seg(), established=len(rows), established_check=established_cross(), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"],
+    return dict(_seg(), established=len(rows), established_check=established_cross(), rule=ESTABLISHED_RULE, estab_ttl=data["ttl"],
+                genesis_import=EF.import_info(SG.selected()), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"],
                 score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD, rows=out,
                 url=_url("established", sort=sort if sort != "score" else "", dir="asc" if d == "asc" else "", filter=EST_FILTER_IN.get(filt, "") if filt else ""))
 

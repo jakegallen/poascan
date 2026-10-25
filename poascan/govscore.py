@@ -39,28 +39,29 @@ def _clamp(x, lo=0.0, hi=1.0): return max(lo, min(hi, x))
 def _logpart(n, target): return _clamp(math.log1p(max(0, n)) / math.log1p(target)) if target else 0.0
 def _shrunk(k, n, prior, m): return (k + prior * m) / (n + m) if (n + m) else prior
 
-def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6):
+def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6, seeds=None):
     """Per address: facts from close records (any order in, folded in epoch order). Pure: no db reads.
     resets: epochs where standing starts fresh (the first close of each segment when closes span segments).
-    Closes established uses the same fold as governance.segment_standing at every close: established_after adds,
-    established_removed drops, a grading seat within ttl closes after the last removal counts, plus trusted graders seen."""
+    seeds: {epoch or None: set} the genesis import's established Agents, at the start (None) or at a reset close.
+    1.26.140: closes established uses minepoa's engine fold (estfold.py): the seed, plus established_after, minus
+    established_removed. Seats and trusted graders no longer count (trusted and ttl are kept for callers)."""
+    seeds = seeds or {}
     eps = sorted(closes, key=lambda e: int(e.get("epoch", 0)))
     F = collections.defaultdict(lambda: dict(closes_established=0, added=0, removed=0, eligible=0, seat_closes=0, grades_served=0, jury_seats=0, jury_aligned=0,
                                              settled=0, passed=0, marks=0, slashed=0, rewards=0.0, paid_closes=0, attestations_received=0,
                                              first_close=None, last_close=None, active_closes=[], added_epochs=[], removed_epochs=[]))
-    est, seat, rem = set(), {}, {}
+    est = set(seeds.get(None) or ())
     for e in eps:
         n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}
         touched = set()
-        if n in resets: est, seat, rem = set(), {}, {}
+        if n in resets: est = set(seeds.get(n) or ())
         add = set(b.get("established_after") or []); gone = set(b.get("established_removed") or [])
         for a in add: F[a]["added"] += 1; F[a]["added_epochs"].append(n); touched.add(a)
         for a in gone: F[a]["removed"] += 1; F[a]["removed_epochs"].append(n)   # a removal is not activity
-        est = (est - gone) | add
-        for a in gone: rem[a] = n
+        est = (est | add) - gone
         for a in b.get("challenge_eligible") or []: F[a]["eligible"] += 1; touched.add(a)
         for a, v in (b.get("graders_served") or {}).items():
-            F[a]["seat_closes"] += 1; touched.add(a); seat[a] = n
+            F[a]["seat_closes"] += 1; touched.add(a)
             try: F[a]["grades_served"] += int(v)
             except (TypeError, ValueError): pass
         for x in b.get("settled") or []:
@@ -68,7 +69,7 @@ def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6):
             if fr: F[fr]["settled"] += 1; F[fr]["passed"] += 1 if x.get("passed") else 0; touched.add(fr)
             for j in x.get("jury") or []:
                 g = j.get("grader")
-                if g: F[g]["jury_seats"] += 1; F[g]["jury_aligned"] += 1 if j.get("aligned") else 0; touched.add(g); seat[g] = n
+                if g: F[g]["jury_seats"] += 1; F[g]["jury_aligned"] += 1 if j.get("aligned") else 0; touched.add(g)
         for a, v in (b.get("marks") or {}).items():
             try: F[a]["marks"] += int(v)
             except (TypeError, ValueError): pass
@@ -81,9 +82,7 @@ def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6):
         for a, v in (b.get("attestations") or {}).items():
             try: F[a]["attestations_received"] += int(v)
             except (TypeError, ValueError): pass
-        held = est | {a for a, k in seat.items() if k > rem.get(a, -1) and k > n - ttl}
-        held |= trusted & (set(seat) | held)
-        for a in held: F[a]["closes_established"] += 1
+        for a in est: F[a]["closes_established"] += 1
         for a in touched:
             f = F[a]; f["active_closes"].append(n)
             if f["first_close"] is None: f["first_close"] = n
@@ -166,11 +165,11 @@ def grading_inputs(f, listed):
     f["seals_source"] = "minepoa_grading" if n else "archived_txs"
     return f
 
-def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted, resets=frozenset(), ttl=6, listed=None, unconfirmed=frozenset()):
+def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted, resets=frozenset(), ttl=6, listed=None, unconfirmed=frozenset(), seeds=None):
     """{address: facts + level + score parts} for a set of closes, a tx filter and a forum window. listed: {address: (seals,
     qualifying)} from the grading list store; unconfirmed: established Agents minepoa's list does not confirm."""
     listed = listed or {}
-    cf, last, n = close_facts(closes, trusted, resets, ttl)
+    cf, last, n = close_facts(closes, trusted, resets, ttl, seeds)
     tf = tx_facts(where, args); ff = forum_facts(t0, t1, ballot_posts, operators)
     out = {}
     for a in set(cf) | set(tf) | set(ff):

@@ -378,35 +378,22 @@ def holders():
 
 @cached("established_set", 60)
 def established_set():
-    """Best public estimate of who is ESTABLISHED now (what hosted /me reports as established).
+    """Who is ESTABLISHED now, per minepoa's engine (estfold.py, 1.26.140): the selected segment's genesis import flags,
+    plus established_after, minus established_removed, over that segment's closes. No trusted or system graders, no
+    seats. Hosted /me is the authority."""
+    from . import estfold as F
+    return established_fold()[0]
 
-    Close records only publish changes: basis.established_after lists identities that became
-    established at that close and basis.established_removed those that lost it. Standing carried
-    in from testnet, and standing restored off-record, is never listed. So we fold the changes
-    over every close and add identities that held a grading seat (graders_served or a settled
-    jury) after their last removal and within estab_ttl closes, plus trusted/system graders.
-    Seats go only to established identities (go.md), so a seat is evidence of standing."""
-    seg = S.selected(); ep = [(m, e) for m in S.NUMBERS if m <= seg for e in sorted(segment_closes(m), key=lambda r: int(r.get("epoch", 0)))]
-    if not ep: return set()
-    # 1.26.91: folded over every segment up to the selected one, by lifetime close number: standing is ledger state, carried
-    # over at the genesis cut with balances, so a new segment starts from segment 1's last close, not from nobody.
-    pp = params(); ttl = int(pp.get("estab_ttl") or 6); last = S.gkey(ep[-1][1].get("epoch", 0), ep[-1][0])
-    est, seat, removed = set(), {}, {}
-    for m, e in ep:
-        n = S.gkey(e.get("epoch", 0), m); b = e.get("basis", {}) or {}
-        seated = set(b.get("graders_served", {}) or {})
-        seated |= {j.get("grader") for s in (b.get("settled") or []) for j in (s.get("jury") or []) if j.get("grader")}
-        for a in seated: seat[a] = n
-        gone = set(b.get("established_removed", []) or [])
-        for a in gone: removed[a] = n
-        est = (est - gone) | set(b.get("established_after", []) or [])
-    est |= {a for a, n in seat.items() if n > removed.get(a, -1) and n > last - ttl}
-    est |= set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or [])
-    return est
+@cached("established_fold", 60)
+def established_fold():
+    """(set, {address: last challenge_eligible close}, {address: (how, close)}) for the selected segment (estfold.fold)."""
+    from . import estfold as F
+    seg = S.selected()
+    return F.fold(segment_closes(seg), F.imported(seg), params().get("slash_pardons"))
 
-STANDING_NOTE = ("Estimate from observed behavior, not an official rule: established standing has dropped at close L + estab_ttl + 1 "
-                 "(L + 7 with estab_ttl 6), where L is the Agent's last challenge_eligible epoch. It fits all 76 removals at the E8 to E11 closes. "
-                 "Grading seats don't refresh standing. Hosted /me is the authority.")
+STANDING_NOTE = ("minepoa's engine removes an established Agent at close L + estab_ttl + 1 (L + 7 with estab_ttl 6), where L is its last "
+                 "challenge_eligible close in this segment, -1 when none (genesis import Agents start at -1). Grading seats and jury seats don't "
+                 "keep standing. A slash or ejection can remove it sooner. Hosted /me is the authority.")
 
 @cached("last_eligible", 300)
 def last_eligible():
@@ -419,22 +406,22 @@ def last_eligible():
     return out
 
 def established_expiry_est(a):
-    """When an established Agent's standing is expected to drop, under the observed rule in STANDING_NOTE (an estimate).
-    established_expires_epoch_est is the close (epoch number) and established_expires_basis says how; both are None when
-    unknown: not established, a trusted or system grader, no challenge_eligible epoch on record (standing from a seat,
-    testnet or off record), or the estimated close already passed while the Agent still reads established.
+    """When an established Agent is removed under minepoa's engine (estfold.py): close L + estab_ttl + 1, where L is its last
+    challenge_eligible close in this segment (-1 when none). established_expires_basis says how. All None when not
+    established or when that close already passed while the Agent still reads established.
     established_expires_closes_left counts closes from now (the open epoch's own close is 1); established_expires_ts_est is the
     open epoch's estimated close plus auto_epoch_seconds per later close (None without a close time on record)."""
-    L = last_eligible().get(a)
+    from . import estfold as F
+    est, le, _ = established_fold(); L = le.get(a)
     out = dict(established_expires_epoch_est=None, established_expires_basis=None, last_challenge_eligible_epoch=L,
                established_expires_closes_left=None, established_expires_ts_est=None)
-    pp = params()
-    if L is None or a not in established_set() or a in set(pp.get("trusted_graders") or []) | set(pp.get("system_grader_accounts") or []): return out
-    ttl = int(pp.get("estab_ttl") or 6); n = L + ttl + 1; o = open_epoch(); cur = o.get("epoch")
+    if a not in est: return out
+    pp = params(); ttl = F.ttl_of(pp); Lr = -1 if L is None else L; n = F.drop_close(Lr, ttl); o = open_epoch(); cur = o.get("epoch")
     if cur is None or n < cur: return out
     out.update(established_expires_epoch_est=n, established_expires_closes_left=n - cur + 1,
                established_expires_ts_est=int(o["est_close"] + (n - cur) * (o.get("period") or 21600)) if o.get("est_close") else None,
-               established_expires_basis=f"observed estimate, not an official rule: last challenge_eligible epoch {L} + estab_ttl {ttl} + 1")
+               established_expires_basis=(f"minepoa's engine rule, time an estimate: last challenge_eligible close {L} + estab_ttl {ttl} + 1" if L is not None else
+                                          f"minepoa's engine rule, time an estimate: no challenge_eligible close in this segment (L = -1) + estab_ttl {ttl} + 1"))
     return out
 
 def established_expiry_counts():

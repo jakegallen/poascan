@@ -85,7 +85,13 @@ check("lifetime rewards span both segments (S1 E14, S2 E0)", float(rb[X][14]) ==
 check("lifetime close labels", SG.ep_label(14) == "S1 E14" and SG.ep_label(15) == "E0" and SG.ep_href(3) == "/epoch/3?segment=1")
 check("records index per segment", [x["epoch"] for x in RR.index()] == [0, 1] if hasattr(RR, "index") else True)
 
-check("established standing carried over the cut", Y in A.established_set())
+# 1.26.140: standing carries over the cut through the segment's genesis import (estfold.py), not segment 1's fold
+from poascan import estfold as EF
+_imp = EF.CFG.get("imports"); EF.CFG["imports"] = {}; A._cache.clear()
+check("without an import, segment 1's fold does not carry over the cut", Y not in A.established_set())
+EF.CFG["imports"] = {"2": {"established": [Y], "established_count": 1}}; A._cache.clear()
+check("established standing carried over the cut by the genesis import", Y in A.established_set())
+EF.CFG["imports"] = _imp; A._cache.clear()
 check("standing expiry not estimated from the other segment's closes (unknown, never past)", A.established_expiry_est(Y)["established_expires_epoch_est"] is None)
 
 # ---- 3. nonce reset is not a gap ----

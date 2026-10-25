@@ -58,25 +58,25 @@ def main():
     f = A.established_expiry_est(FRESH)
     check("last challenge_eligible epoch is the latest one (9), not the first", f["last_challenge_eligible_epoch"] == 9)
     check("estimate is close L + estab_ttl + 1 (16)", f["established_expires_epoch_est"] == 16)
-    check("basis says observed estimate, not official, with L and estab_ttl", "estimate" in f["established_expires_basis"] and "not an official rule" in f["established_expires_basis"]
-          and "epoch 9" in f["established_expires_basis"] and "estab_ttl 6" in f["established_expires_basis"])
+    check("basis names minepoa's engine rule with L and estab_ttl (1.26.140)", "engine rule" in f["established_expires_basis"] and "estimate" in f["established_expires_basis"]
+          and "close 9" in f["established_expires_basis"] and "estab_ttl 6" in f["established_expires_basis"])
     check("closes left counts the open epoch's close as 1 (6)", f["established_expires_closes_left"] == 6)
     o = A.open_epoch()
     check("estimated time is the open close plus a period per later close", o.get("est_close") and f["established_expires_ts_est"] == int(o["est_close"] + 5 * 21600))
     check("closes left and time are null when unknown", A.established_expiry_est(NEVER)["established_expires_closes_left"] is None and A.established_expiry_est(NEVER)["established_expires_ts_est"] is None)
     check("the rule matches the fixture removals", all(A.last_eligible()[a] + 6 + 1 == n for n in (8, 10) for a in E[n]["basis"]["established_removed"]))
     for a, why in ((OLD, "removed (not established)"), (SEATED, "removed after a seat (seats don't refresh)"), (NEVER, "never eligible"),
-                   (TRUST, "trusted grader"), (SEATONLY, "established from a seat, no eligible epoch on record")):
+                   (TRUST, "trusted grader, never added (not established)"), (SEATONLY, "a seat alone is not standing (not established)")):
         x = A.established_expiry_est(a)
         check(f"null when unknown: {why}", x["established_expires_epoch_est"] is None and x["established_expires_basis"] is None)
-    check("SEATONLY reads established (so the null is the unknown case, not the not-established one)", SEATONLY in A.established_set())
+    check("engine rule: seats and trusted graders are not established (1.26.140)", SEATONLY not in A.established_set() and TRUST not in A.established_set())
     db.put_blob("status", {"epochs_closed": 17}); A._cache.clear()
     check("null once the estimated close has passed while still established", A.established_expiry_est(FRESH)["established_expires_epoch_est"] is None)
     db.put_blob("status", {"epochs_closed": 11}); A._cache.clear()
     c = A.established_expiry_counts()
     check(f"counts: one Agent with an estimate, soonest close 16 ({c})", c == dict(with_estimate=1, soonest=16))
-    check("note: an estimate from observed behavior, not official, seats don't refresh, no dashes",
-          "Estimate from observed behavior, not an official rule" in A.STANDING_NOTE and "Grading seats don't refresh" in A.STANDING_NOTE
+    check("note: minepoa's engine rule, L -1 when none, seats don't keep standing, no dashes",
+          "minepoa's engine removes" in A.STANDING_NOTE and "-1 when none" in A.STANDING_NOTE and "don't keep standing" in A.STANDING_NOTE
           and not re.search("[\u2013\u2014]", A.STANDING_NOTE))
     from poascan import start as S
     check("join prompt template_sha256 unchanged (6762aa1c, v2.8)", S.template_sha256() == "6762aa1cb3bf173a20f6d25af3045b10ef4463a962754e8f1f58dc28878b5cdd")
@@ -112,7 +112,7 @@ def main():
         c, h = get(f"/address/{FRESH}")
         row = re.search(r'<div class="kv"><span>Est\. expires</span><div>(.*?)</div></div>', h, re.S)
         check(f"address page ({c}): Est. expires row reads E16 close, labelled estimate, tooltip says not official",
-              c == 200 and row is not None and "E16 close" in row.group(1) and "estimate" in row.group(1) and "not an official rule" in row.group(1))
+              c == 200 and row is not None and "E16 close" in row.group(1) and "estimate" in row.group(1) and "engine removes" in row.group(1))
         check("address page: Est. expires gives closes left and an estimated time (tooltip from data-ts)", row is not None and "in 6 closes, " in row.group(1)
               and re.search(r'<time class="t" data-ts="\d+">~(3[0-9]|2[0-9])h</time>', row.group(1)) is not None)
         check("no em or en dashes on the Est. expires row", row is not None and not re.search("[\u2013\u2014]", row.group(1)))
@@ -136,8 +136,8 @@ def main():
         check(f"address page ({c}): no Est. expires row when unknown", c == 200 and "Est. expires" not in h)
         c, h = get("/about")
         m = re.search(r'<p id="established-expiry">(.*?)</p>', h, re.S)
-        check("/about#established-expiry: the methodology line, estimate, not official, L + 7, seats don't refresh", c == 200 and m is not None
-              and "not an official rule" in m.group(1) and "L + 7" in m.group(1) and "Grading seats don't refresh standing" in m.group(1) and 'id="established"' in h)
+        check("/about#established-expiry: the engine decay rule, L + 7, -1 drops at E6, seats don't keep standing", c == 200 and m is not None
+              and "decay rule" in m.group(1) and "L + 7" in m.group(1) and "seats don\'t" in m.group(1) and "E6 close" in m.group(1) and 'id="established"' in h)
         check("no em or en dashes on the new surfaces", not re.search("[\u2013\u2014]", (m.group(1) if m else "") + (row.group(1) if row else "")))
     finally:
         srv.terminate()

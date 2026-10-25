@@ -108,17 +108,15 @@ def at_risk():
     The same rule and inputs as analytics.established_expiry_est, computed once for the whole set."""
     o = A.open_epoch(); cur = o.get("epoch"); pp = A.params(); ttl = int(pp.get("estab_ttl") or 6)
     out = dict(open_epoch=cur, window_closes=AT_RISK_CLOSES, closes=[], count=0, by_close={}, rows=[], estab_ttl=ttl,
-               rule=f"drop close = last challenge_eligible epoch + estab_ttl {ttl} + 1 (observed, not official)",
+               rule=f"drop close = last challenge_eligible close in this segment (-1 when none) + estab_ttl {ttl} + 1 (minepoa's engine)",
                tracker=TRACKER, tracker_by=TRACKER_BY, note=NOTE, method=BASE + "/about#standing", url=BASE + PAGE)
     if cur is None: return out
     closes = list(range(cur, cur + AT_RISK_CLOSES)); out["closes"] = closes
-    le = A.last_eligible(); tr = _trusted(); nm = A.forum_names(); mk = marks_index(); last = (_latest() or {}).get("epoch")
+    _est, le, _ = A.established_fold(); nm = A.forum_names(); mk = marks_index(); last = (_latest() or {}).get("epoch")
     period = o.get("period") or 21600; est_close = o.get("est_close")
     rows = []
-    for a in A.established_set():
-        L = le.get(a)
-        if L is None or a in tr: continue
-        n = L + ttl + 1
+    for a in _est:
+        L = le.get(a); n = (-1 if L is None else L) + ttl + 1   # engine rule (estfold.py): L is -1 with no challenge_eligible close
         if n not in closes: continue
         name = nm.get(a)
         rows.append(dict(address=a, name=name, profile=PROFILE.format(a) if name else None, last_challenge_eligible_epoch=L,

@@ -34,7 +34,7 @@ def seed():
     db.put_blob("params", {"estab_ttl": 6, "K": 5, "grade_quorum": 4, "auto_epoch_seconds": 21600, "trusted_graders": [TRUST]})
     db.put_blob("status", {"epochs_closed": 12})
     E = [close(n, last_ts - (11 - n) * 21600) for n in range(12)]
-    E[5]["basis"].update(challenge_eligible=[NEXT, NAMED, TRUST], established_after=[NEXT, NAMED, TRUST])   # L=5: drops at E12 (open close)
+    E[5]["basis"].update(challenge_eligible=[NEXT, NAMED, TRUST], established_after=[NEXT, NAMED])   # L=5: drops at E12 (open close); TRUST eligible but never added
     E[6]["basis"].update(challenge_eligible=[AFTER], established_after=[AFTER])                            # L=6: drops at E13
     E[7]["basis"].update(challenge_eligible=[LATER], established_after=[LATER])                            # L=7: drops at E14, not at risk
     E[4]["basis"].update(challenge_eligible=[GONE], established_after=[GONE])
@@ -77,8 +77,8 @@ def main():
           and s["established_expires_closes_left"] == 1 and s["at_risk"] is True)
     check("AFTER: drop E13 (2 closes) is at risk", SD.standing(AFTER)["at_risk"] is True and SD.standing(AFTER)["established_expires_closes_left"] == 2)
     check("LATER: drop E14 (3 closes) is not at risk", SD.standing(LATER)["at_risk"] is False)
-    check("at_risk null when established but unknown (seat only), false when not established (removed)", SD.standing(SEATONLY)["at_risk"] is None and SD.standing(GONE)["at_risk"] is False)
-    check("trusted grader never at risk", SD.standing(TRUST)["at_risk"] is None or SD.standing(TRUST)["at_risk"] is False)
+    check("engine rule (1.26.140): a seat alone is not standing, removed is not established; neither at risk", SD.standing(SEATONLY)["at_risk"] is False and SD.standing(SEATONLY)["established"] is False and SD.standing(GONE)["at_risk"] is False)
+    check("trusted grader not in established_after is not established, never at risk", SD.standing(TRUST)["established"] is False and SD.standing(TRUST)["at_risk"] is False)
     p = s["pending"]
     check("pending: two of its answers in the E11 record, matched by its answer txs (not someone else's)", p["count"] == 2 and {x["tx"] for x in p["answers"]} == {tx("a"), tx("b")} and p["as_of_close"] == 11)
     b = [x for x in p["answers"] if x["tx"] == tx("b")][0]; a0 = [x for x in p["answers"] if x["tx"] == tx("a")][0]

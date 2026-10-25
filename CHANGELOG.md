@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.140] - 2026-10-25
+
+### Changed
+- Established now follows minepoa's engine rule (poa.mjs establishedAt and the close decay): the Agents flagged established in the segment's genesis import (segment 2: 81 of 4,941 in /api/genesis-import, pinned by sha256 in `poascan/established.json`), plus established_after, minus established_removed (slash_pardons voids a slash removal, as in the engine). Trusted and system graders are no longer added, and grading or jury seats neither grant nor keep standing. Segment 2 reads 90 established (was 34): the 56 genesis import Agents POAScan missed join; nobody leaves.
+- Drop close: L + estab_ttl + 1 (estab_ttl from /api/params), L the last challenge_eligible close in this segment, -1 when none. Genesis import Agents with no segment 2 challenge_eligible drop at the E6 close record, so No record and System no longer appear; every established Agent has a drop close, a level and closes left, and the At risk list follows.
+- Score: closes established uses the same fold (seeded by the genesis import at each segment's first close).
+- API and CSV: `/api/v1/governance/established` adds rule, estab_ttl, genesis_import and per row established_basis (import or added) and established_basis_close; `/api/v1/address/<a>/established` basis adds import and no longer emits seat or trusted; expiry basis names the engine rule. Copy on /about#established, #established-expiry, #standing and Governance Rules.
+
 ## [1.26.139] - 2026-10-25
 
 ### Fixed
