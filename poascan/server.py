@@ -11,6 +11,7 @@ from . import opsinternal as OI
 from . import checkin as CK
 from . import opsdash as OD
 from . import chartpop as CP
+from . import protocol as PT
 from . import standing as SD
 from . import governance as GV, gradingview as GVW
 from . import offer as OF
@@ -109,6 +110,12 @@ def api(path, qs):
         return SD.at_risk(), False
     if path.startswith("/api/governance"):
         return governance_api(path, qs), False
+    if path == "/api/protocol":   # 1.26.141: signed releases and client file hashes (protocol.py); stored copy only, no upstream read
+        bad = set(qs) - {"kind", "limit", "format"}
+        if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))
+        k = (qs.get("kind") or [""])[0] or None
+        if k is not None and k not in PT.KINDS: raise BadRequest("kind must be one of " + ", ".join(PT.KINDS))
+        return PT.api(k, qint(qs, "limit", 500, 1, 5000)), False
     m = re.match(r"^/api/address/(poa1\w+)/(txs|assignments)$", path)
     if m:
         a, k = m.groups(); c = qs.get("cursor", [""])[0] or None
@@ -933,7 +940,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue", "/api/protocol") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})

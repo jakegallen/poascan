@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.141] - 2026-10-25
+
+### Added
+- Protocol poller: both public client files (`/client/poa.mjs` and `/poa-web.mjs`) are hashed once an hour inside the hourly meta job. A conditional GET with the stored ETag or Last-Modified; without a validator, a HEAD each hour and a full GET at most every 6 hours. Bytes are hashed, never run or kept.
+- `protocol_events`: signed releases from `/api/release`, the first hash per file (baseline), source changes matched to the signed release whose `client_sha256` or `web_client_sha256` equals the new hash (else unreleased). Seeded with release v1.1.2-carveout2 and the hashes taken at 19:45 UTC.
+- `/api/v1/protocol` (JSON and CSV; kind, limit): checked_at, last_ok_ts, stale (no good check for 3 hours), check_errors, files, current (state, badge, release hashes, live hashes, in_sync) and the events.
+- Network Health lists both files.
+
 ## [1.26.140] - 2026-10-25
 
 ### Changed

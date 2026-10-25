@@ -560,6 +560,8 @@ def job_hourly_meta():
             if d is not NOT_MODIFIED: db.put_blob(kind, d)
         except Busy as e: log.warning("%s: %s", path, e)
         time.sleep(1)
+    try: __import__("poascan.protocol", fromlist=["x"]).check()   # 1.26.141: hash both client files (conditional GET), log protocol events
+    except Exception as e: log.warning("protocol check: %s", type(e).__name__)
 
 def job_epochs(force=False):
     """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
@@ -926,7 +928,7 @@ def seed(seed_dir):
 EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S,
-         "/api/explorer/grading": 900}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
+         "/api/explorer/grading": 900, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
