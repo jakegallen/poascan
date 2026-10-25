@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.118] - 2026-10-25
+
+### Changed
+- Design tokens: one :root token block in static/style.css holds every color, surface, border, radius, spacing step and shadow. Every hard-coded hex and rgba outside it is replaced by a token (alpha tints via color-mix). The old variable names stay as aliases. Dark and amber identity unchanged.
+- Radii come from four tokens (4, 8, 12 and 999 px) instead of thirteen values. Tags and badges share one shape and one tint (40% border, 7% fill); badges use the tag type.
+- Type: Instrument Sans for the interface, Newsreader for stat figures and page titles, IBM Plex Mono for data. Self-hosted latin and latin-ext, only the weights in use (sans 400 to 600, serif 400, mono 400 and 500), font-display swap, the three latin files preloaded. No synthetic bold (font-synthesis none); 700 and 800 weights become 600.
+- One type scale (12, 13, 14, 16, 20, 28, 40, 64 px; 10, 11, 15, 18, 22, 36 and 44 px snapped to it) and one stat figure scale: 40 hero, 28 card, 20 compact, stepping down one size at 640 px. Tabular lining figures. The undefined --t18 and --text are gone.
+- One label color for stat labels, table headers and legends (warm grey); steel stays a data color.
+- Flat gold buttons: Start, the /start Copy button and gold tags lose their gradients and glows; the Start glow still plays once on load. The dot grid behind pages is retired.
+- Lint: tools/design_tokens_test.py fails on a hex, rgb or px radius outside the token block, a non token hex in the Python views or app.js, a missing font file, an undefined var() or an em or en dash in any tracked file. Runs in CI.
+
 ## [1.26.117] - 2026-10-25
 
 ### Changed

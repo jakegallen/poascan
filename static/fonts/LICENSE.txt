@@ -1,2 +1,3 @@
-Space Grotesk (Florian Karsten) and JetBrains Mono (JetBrains), latin and latin-ext subsets, self-hosted so pages load no third-party resources.
-Both are licensed under the SIL Open Font License 1.1: https://openfontlicense.org
+Instrument Sans (Instrument), Newsreader (Production Type) and IBM Plex Mono (IBM), latin and latin-ext subsets, self-hosted so pages load no third-party resources.
+Space Grotesk (Florian Karsten) and JetBrains Mono (JetBrains) files are kept for one release so cached pages still render.
+All are licensed under the SIL Open Font License 1.1: https://openfontlicense.org

@@ -12,9 +12,10 @@ ui = open(os.path.join(ROOT, "poascan", "ui.py"), encoding="utf-8").read()
 dev = " ".join(re.findall(r"(?:^|\})\.devbar[^{]*\{([^}]*)\}", css))
 check("banner CSS present", ".devbar{" in css and ".devbar p{" in css and ".devbar a{" in css)
 check("banner is in normal flow (no fixed, sticky or absolute)", not re.search(r"position\s*:", dev))
-check("banner uses the POASwap amber tint", "rgba(227,163,58,.20)" in css and "#FFC861" in css)
+dv = re.search(r"\.devbar\{([^}]*)\}", css).group(1)   # 1.26.118: token form of the same tint (gold-mid 20%, gold-hi text)
+check("banner uses the POASwap amber tint", "var(--gold-mid) 20%" in dv and "--gold-hi:" in css and "color:var(--gold-hi)" in css)
 up = re.search(r"\.upstrip\{([^}]*)\}", css).group(1)
-check("Upgrading strip stays steel, not a second amber bar", "143,163,184" in up and "227,163,58" not in up and "255,176,0" not in up)
+check("Upgrading strip stays steel, not a second amber bar", "var(--steel)" in up and "--gold" not in up and "--amber" not in up)
 check("cache key moved (style.css v104+)", int(re.search(r"style\.css\?v=(\d+)", ui).group(1)) >= 104)
 
 TEXT = "System development in progress. Follow @Jakegallen for updates."

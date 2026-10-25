@@ -65,7 +65,7 @@ def main():
         check("headers: nosniff, no-referrer, frame deny", hl.get("x-content-type-options") == "nosniff" and hl.get("referrer-policy") == "no-referrer" and hl.get("x-frame-options") == "DENY")
         check("pages load no third-party resources", b"fonts.googleapis" not in b and b"gstatic" not in b and b'name="referrer" content="no-referrer"' in b)
         check("external links carry noreferrer", b'rel="noopener"' not in req(base, "/start")[2] and b'rel="noopener"' not in b)
-        c, h, _ = req(base, "/static/fonts/spacegrotesk-latin-4ecc7e.woff2")
+        c, h, _ = req(base, "/static/fonts/instrumentsans-latin-a64857.woff2")
         check(f"self-hosted font serves ({c})", c == 200 and h.get("Content-Type") == "font/woff2")
     finally:
         p.terminate(); p.wait(timeout=10); lf.close()
