@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.126] - 2026-10-25
+
+### Fixed
+- Phones: a stat label with a state tag wraps, so the tag sits below the label instead of running past the card or over the pop-out icon (Home Circulating supply, Token tab Circulating and Locked).
+
 ## [1.26.125] - 2026-10-25
 
 ### Fixed

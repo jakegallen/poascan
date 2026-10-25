@@ -1209,3 +1209,5 @@ th.hs .qtip{margin-left:2px}
 .qtip.sflag>summary.est{color:var(--steel);border-color:var(--steel-edge)}
 .qtip.sflag[open]>summary{color:var(--hi)}
 @media (max-width:640px){.qtip.sflag>summary{width:auto;height:auto}}
+/* 1.26.126 phones: a stat label with a state tag wraps, so the tag drops below the label instead of running past the card or over the pop-out icon */
+@media (max-width:640px){.sl:has(.sflag){flex-wrap:wrap;row-gap:4px}.sl:has(.sflag) .sflag{max-width:100%}}
