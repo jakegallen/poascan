@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.122"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-25T17:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.123"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-25T17:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -112,6 +112,7 @@ def t_summary(args):
     return dict(network=nw.get("chain_id") or "poa-mainnet-1", as_of=st.get("as_of"), stale=bool(st.get("stale")),
                 indexer_live=bool(h["live_last_ok"] and time.time() - h["live_last_ok"] < 300),
                 supply=float(st.get("supply") or 0), circulating=sp.get("spendable"), locked=sp.get("locked"),
+                circulating_basis=sp.get("circulating_basis"), locked_confirmed=sp.get("locked_confirmed"), carried_supply=sp.get("carried_supply"), excluded_rewards=sp.get("excluded_rewards"),
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
                 open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
@@ -165,7 +166,7 @@ def t_address(args):
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
                 balance_stale=bool(_ST.for_endpoint("/api/agents")) or bool(acc and (acc["last_seen"] or 0) < (SG.BY_N[SG.CURRENT].get("start_ts") or 0)),
                 balance_as_of_checkpoint=None, balance_segment=SG.of_ts(acc["last_seen"]) if acc and acc["last_seen"] else None,
-                lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk,
+                lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk, spendable_basis=SG.carry_basis(),
                 rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(rb) if SG.unconfirmed_g(k)],
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())},   # lifetime close numbers: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15
                 rewards_by_segment={str(n): {str(k): v for k, v in sorted(A.rewards_in_segment(rb, n).items())} for n in SG.NUMBERS},
@@ -292,7 +293,7 @@ def t_richlist(args):
 def t_unlocks(args):
     rows = V3.unlocks_api(); lim = _int(args, "limit", 20, 1, 500); sp = A.supply_split()
     return dict(circulating=sp.get("spendable"), locked=sp.get("locked"), vesting_epochs=sp.get("vesting_epochs"),
-                schedule=rows[:lim], total_rows=len(rows), url=BASE + "/unlocks")
+                circulating_basis=sp.get("circulating_basis"), locked_confirmed=sp.get("locked_confirmed"), schedule=rows[:lim], total_rows=len(rows), url=BASE + "/unlocks")
 
 def t_swaps(args):
     stt = str(args.get("status") or "open"); lim = _int(args, "limit", 20, 1, 200)
@@ -976,7 +977,7 @@ def openapi():
                                                                      "properties": {"last_fill_usd_per_poa": {"type": ["number", "null"]}, "last_fill_ts": {"type": ["integer", "null"]},
                                                                                     "market_cap_usd": {"type": ["number", "null"], "description": "last fill price x circulating (unlocked) supply"},
                                                                                     "fdv_usd": {"type": ["number", "null"], "description": "last fill price x total supply mined to date, including locked and vesting"},
-                                                                                    "circulating_supply": {"type": ["number", "null"]}, "mined_supply": {"type": ["number", "null"]},
+                                                                                    "circulating_supply": {"type": ["number", "null"]}, "circulating_basis": {"type": ["string", "null"], "description": "carry_unlocked, vesting_continues or unconfirmed (circulating then a lower bound)"}, "mined_supply": {"type": ["number", "null"]},
                                                                                     "trades_24h": {"type": "integer"}, "volume_24h_usd": {"type": ["number", "null"]},
                                                                                     "trades_all_time": {"type": "integer", "description": "every finalized swap-fill"},
                                                                                     "volume_all_time_usd": {"type": ["number", "null"], "description": "sum of fills in USD at fill time when recorded, else at the current reference"},

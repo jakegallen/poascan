@@ -37,8 +37,9 @@ def unlock_data():
     # current segment's own epoch number for labels.
     vest = _vest(); R = _minted_by_epoch(); o = A.open_epoch(); n = o["epoch"]; tot = sum(R.values())
     off = _SG.offset(_SG.CURRENT); ng = off + n
+    full = _SG.carry_unlocked() is True   # 1.26.123: carried rewards spendable since the cut (segments config)
     def circ(j):  # circulating right after lifetime close j (open = j+1)
-        return sum(v * min(1.0, max(0, j + 1 - k) / vest) for k, v in R.items())
+        return sum(v * (1.0 if full and k < off else min(1.0, max(0, j + 1 - k) / vest)) for k, v in R.items())
     past = []
     for m in _SG.NUMBERS:
         with _SG.use(m): past += [(r["close_ts"], circ(_SG.gkey(r["epoch"], m))) for r in A.epoch_rows()]
@@ -65,8 +66,8 @@ def unlock_stats():
         h = u["hit"][p]
         return '<span class="tag ok">REACHED</span>' if h and h[0] == "done" else (_days(h[1]) if h else '<span class="na">···</span>')
     return "".join([
-        stat("Circulating", poa(u["now"]) + _X.usd_of(u["now"]), "", ICON_LOCK, "vest"),
-        stat("Circulating %", pct(u["now"] / u["total"]) if u["total"] else "···"),
+        stat("Circulating", poa(u["now"]) + _X.usd_of(u["now"]), "", ICON_LOCK, "vest", flag_html=A.carry_flag("circ")),
+        stat("Circulating %", pct(u["now"] / u["total"]) if u["total"] else "···", flag_html=A.carry_flag("circ")),
         stat("Next unlock", (poa(nx[3]) + f' <span class="dim small">· E{nx[0]} close</span>') if nx else "···"),
         stat("Next unlock in", f'<span class="xcd num" data-close="{int(nx[1])}"></span>' if nx else "···"),
         stat("To 25%", th(.25)), stat("To 50%", th(.5)), stat("To 100%", th(1.0)),
@@ -92,7 +93,8 @@ def unlock_section():
 
 def unlocks_api():
     u = unlock_data()
-    return [dict(epoch_close=j, ts=int(t), unlocks=round(d, 6), circulating=round(c, 6), pct=round(c / u["total"], 6) if u["total"] else None) for j, t, c, d in u["fut"]]
+    b = _SG.carry_basis()
+    return [dict(epoch_close=j, ts=int(t), unlocks=round(d, 6), circulating=round(c, 6), pct=round(c / u["total"], 6) if u["total"] else None, basis=b) for j, t, c, d in u["fut"]]
 
 # ---------------- address reward tracker ----------------
 def reward_tracker(a, p):
@@ -116,7 +118,7 @@ def reward_tracker(a, p):
         elif r: pd, ps = (poa(r, dec=2), "ok")
         else: pd, ps = ("0", "off" if not sub else "bad")
         if r:
-            f = min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1 - off)
+            f = 1.0 if (_SG.carry_unlocked() is True and k < off) else min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1 - off)
             vs = (f'<span class="vbar"><i style="width:{f*100:.1f}%"></i></span><span class="num">{f*100:.0f}%</span>'
                   + (f' <span class="dim small">full {utc(done_t, "%m-%d")}</span>' if f < 1 else ""))
             vss = "ok" if f >= 1 else "cur"

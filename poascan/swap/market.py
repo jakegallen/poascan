@@ -124,7 +124,7 @@ def swap_market():
     ba = dict(per_1m_poa=r8(st["best"][1]), asset=st["best"][2]["asset"]) if st["best"] else None
     return dict(last_fill_usd_per_poa=float(f"{px:.6g}") if px else px, last_fill_ts=int(last["fill_ts"]) if last else None,
                 market_cap_usd=round(gp * circ, 2) if gp and circ else None, fdv_usd=round(gp * mined, 2) if gp and mined else None,
-                circulating_supply=circ, mined_supply=mined, trades_24h=len(day),
+                circulating_supply=circ, circulating_basis=getattr(H, "circulating_basis", lambda: None)(), mined_supply=mined, trades_24h=len(day),
                 volume_24h_usd=round(sum(vol), 2) if vol else (None if day else 0.0),
                 trades_all_time=len(done), volume_all_time_usd=round(sum(vall), 2) if vall else (None if done else 0.0),
                 usd_ref=f.get("src") or "CoinGecko", price=pr,

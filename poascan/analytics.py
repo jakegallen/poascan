@@ -300,9 +300,15 @@ def confirmed(rb):
     return {k: v for k, v in rb.items() if not S.unconfirmed_g(k)}
 
 def vest_split(rb, n=None, vest=None):
-    """(spendable, locked) of one address's rewards_by_addr() entry: the vesting basis is its confirmed rewards (1.26.122)."""
+    """(spendable, locked) of one address's rewards_by_addr() entry: the vesting basis is its confirmed rewards (1.26.122).
+    With segments cut.carry_unlocked true (1.26.123), rewards from earlier segments are fully spendable since the cut."""
     vest = vest or int(params().get("vesting_epochs") or 100); n = open_gkey() if n is None else n
-    return vesting_split(confirmed(rb), n, vest)
+    c = confirmed(rb)
+    if S.carry_unlocked() is True:
+        off = S.offset(S.CURRENT); early = sum(v for k, v in c.items() if k < off)
+        sp, lk = vesting_split({k: v for k, v in c.items() if k >= off}, n, vest)
+        return early + sp, lk
+    return vesting_split(c, n, vest)
 
 @cached("supply", 60)
 def supply_split():
@@ -311,7 +317,25 @@ def supply_split():
     sp = lk = 0.0
     for a, r in rewards_by_addr().items():
         s, l = vest_split(r, n, vest); sp += s; lk += l
-    return dict(spendable=sp, locked=lk, vesting_epochs=vest, open_epoch=n)
+    with S.use(S.CURRENT): carried = minted_before()
+    return dict(spendable=sp, locked=lk, vesting_epochs=vest, open_epoch=n, circulating_basis=S.carry_basis(),
+                locked_confirmed=S.carry_unlocked() is not None or not S.has_cut(), carried_supply=carried if S.has_cut() else None,
+                excluded_rewards=excluded_rewards())
+
+def excluded_rewards():
+    """Rewards of closes later balances do not carry (segments config), summed over every segment."""
+    out = 0.0
+    for n in S.NUMBERS:
+        for e in segment_closes(n):
+            if S.unconfirmed(int(e.get("epoch", 0)), n): out += sum(float(v) for v in (e.get("rewards") or {}).values())
+    return out
+
+def carry_flag(kind):
+    """Interim tag (ui.flag) on Circulating and Locked while segments cut.carry_unlocked is unset; "" otherwise."""
+    if not S.has_cut() or S.carry_unlocked() is not None: return ""
+    from .ui import flag
+    return flag("Lower bound" if kind == "circ" else "Upper bound",
+                "Carried balances may have unlocked at the genesis cut. Not yet confirmed network-wide, so this counts them as still vesting.", tone="est")
 
 @cached("holders", 60)
 def holders():

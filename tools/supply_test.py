@@ -63,4 +63,24 @@ check("reconcile Mined reads explained by the excluded closes", by["mined"]["sta
 check("reconcile Burned reads explained", by["burned"]["state"] == "explained")
 check("reconcile Held: carried rewards against current /api/agents, explained by the unlisted address", by["held"]["state"] in ("match", "explained"))
 
+# ---- 1.26.123: segments cut.carry_unlocked (unset: bounds; true: carried rewards spendable since the cut) ----
+from poascan import agentapi as AG, views as V
+check("carry_unlocked ships unset", SG.carry_unlocked() is None and sp["circulating_basis"] == "unconfirmed" and sp["locked_confirmed"] is False)
+check("carried_supply and excluded_rewards are additive numbers", abs(sp["carried_supply"] - carried) < 1e-6 and abs(sp["excluded_rewards"] - 65) < 1e-6)
+sm = AG.t_summary({})
+check("v1 summary keeps circulating and locked as numbers, adds the basis", isinstance(sm["circulating"], float) and isinstance(sm["locked"], float) and sm["circulating_basis"] == "unconfirmed")
+check("unlock rows carry the basis", all(r["basis"] == "unconfirmed" for r in u))
+tb = V.token_body()
+check("Token tab: Lower bound on Circulating, Upper bound on Locked, as tags (no sub-line)", "Lower bound</summary>" in tb and "Upper bound</summary>" in tb and 'class="asof"' not in tb)
+check("Home headline: Lower bound tag on Circulating supply", "Lower bound</summary>" in V.headline()["circ"])
+cut = SG.BY_N[SG.CURRENT]["cut"]; cut["carry_unlocked"] = True; A._cache.clear()
+sp2 = A.supply_split(); u2 = V3.unlocks_api()
+off = SG.offset(SG.CURRENT); vest_now = 10 * min(1.0, (A.open_gkey() - (off + 1)) / 100)
+check("carry true: carried rewards spendable, new rewards vest", abs(sp2["spendable"] - (carried + vest_now)) < 1e-6 and abs(sp2["spendable"] + sp2["locked"] - supply) < 1e-6)
+check("carry true: calendar unlocks only new rewards", bool(u2) and abs(u2[0]["unlocks"] - 0.1) < 1e-6 and abs(u2[0]["circulating"] - u2[0]["unlocks"] - sp2["spendable"]) < 1e-5)
+check("carry true: no bound tags", "Lower bound" not in V.token_body() and sp2["circulating_basis"] == "carry_unlocked" and sp2["locked_confirmed"] is True)
+cut["carry_unlocked"] = False; A._cache.clear()
+check("carry false: same figures as unset, confirmed, no tags", abs(A.supply_split()["spendable"] - sp["spendable"]) < 1e-6 and A.supply_split()["circulating_basis"] == "vesting_continues" and "Lower bound" not in V.token_body())
+cut["carry_unlocked"] = None; A._cache.clear()
+
 print(f"\n{len(fails)} failed" if fails else "\nall ok"); sys.exit(1 if fails else 0)

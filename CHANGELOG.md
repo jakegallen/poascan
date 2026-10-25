@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.123] - 2026-10-25
+
+### Added
+- segments.json cut.carry_unlocked (null, true or false): whether rewards carried into the current segment are spendable since the cut. Ships null (not confirmed network-wide). true: carried rewards count as spendable and only new rewards vest (circulating, locked, unlock calendar, address Spendable and Locked, reward tracker). false or null: they keep vesting on lifetime closes.
+- While null: Circulating carries a Lower bound tag and Locked an Upper bound tag (Home, Token tab, Unlocks, address pages with carried rewards); hover or tap for the detail.
+- Additive fields: circulating_basis (carry_unlocked, vesting_continues or unconfirmed), locked_confirmed, carried_supply and excluded_rewards on the MCP get_network_summary and get_unlock_schedule results; basis on /api/v1/unlocks rows; spendable_basis on get_address; circulating_basis in swaps market.
+
 ## [1.26.122] - 2026-10-25
 
 ### Fixed

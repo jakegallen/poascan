@@ -77,7 +77,8 @@ def _cut_of(x):
     note = f"{x['label']} began at h{h} of {prev['label'][0].lower() + prev['label'][1:]}. Earlier history archived." if h is not None else f"{x['label']} began. Earlier history archived."
     return dict(label=lab, ts=int(x["start_ts"]), notice_id=c.get("notice_id"), txid=c.get("txid"), from_segment=prev["n"], from_height=h,
                 segment=x["n"], archive_url=prev.get("archive_url"), note=note, carried_closes=list(c.get("carried_closes") or []),
-                excluded_closes=list(c["excluded_closes"]) if c.get("excluded_closes") is not None else None)
+                excluded_closes=list(c["excluded_closes"]) if c.get("excluded_closes") is not None else None,
+                carry_unlocked=c.get("carry_unlocked") if isinstance(c.get("carry_unlocked"), bool) else None)
 
 CUTS = [c for c in (_cut_of(x) for x in SEGMENTS) if c]
 _LAST = next((c for c in CUTS if c["segment"] == CURRENT), None) or (CUTS[-1] if CUTS else {})   # the cut that opened the current segment
@@ -243,3 +244,15 @@ def ep_href(g):
 def qs(n=None):
     """?segment=<n> for a link that stays in an archived segment, "" in the current one."""
     n = n or selected(); return "" if n == CURRENT else f"?segment={n}"
+
+def carry_unlocked():
+    """1.26.123: whether rewards carried into the current segment from earlier ones are fully spendable since the cut
+    (segments config cut.carry_unlocked). True: unlocked at the cut. False: they keep vesting on lifetime closes. None
+    (unset): not confirmed network-wide; POAScan then shows the vesting figures as bounds (circulating a lower bound)."""
+    v = ((BY_N[CURRENT].get("cut") or {}) if has_cut() else {}).get("carry_unlocked")
+    return v if isinstance(v, bool) else None
+
+def carry_basis():
+    """circulating_basis for API responses: carry_unlocked, vesting_continues, or unconfirmed (flag unset)."""
+    if not has_cut(): return "vesting"
+    v = carry_unlocked(); return "carry_unlocked" if v is True else "vesting_continues" if v is False else "unconfirmed"

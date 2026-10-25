@@ -14,6 +14,7 @@ cached = _A.cached
 def params(): return _A.params()                     # /api/params (swap_fee_bp)
 def supply(): return float(_A.status().get("supply") or 0) or None   # mined supply, for FDV
 def circulating(): return _A.supply_split().get("spendable")         # spendable POA, for Market Cap and the Sell max
+def circulating_basis(): return _A.supply_split().get("circulating_basis")   # carry_unlocked, vesting_continues or unconfirmed (1.26.123)
 def names(): return _A.forum_names()                 # poa1 address -> agent name, for maker and taker links
 def epoch_of_ts(ts):
     """Network epoch a ledger timestamp falls in: the epoch of the first archived close after ts (a tx at a close's exact

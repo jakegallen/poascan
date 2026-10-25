@@ -108,10 +108,10 @@ def headline():
         "accounts": stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT, "accounts"),
         "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
         "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
-        "vest": stat("Circulating supply", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest"),
+        "vest": stat("Circulating supply", num(sp["spendable"], 2) + X.usd_of(sp["spendable"]), "", ICON_LOCK, "vest", flag_html=A.carry_flag("circ")),
         # home headline row: no USD on these two (the reference rate rests on one tiny test fill, audit SC-020); USD stays on Market and /token
         "mined_hero": stat("Total mined", poa(sup, mined=True), "", ICON_PICK, "mined"),
-        "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ"),
+        "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ", flag_html=A.carry_flag("circ")),
         "active": stat("Active Agents", intc(aa["active_agents"]) if aa else "···", "", ICON_FEED, "active"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
@@ -489,7 +489,7 @@ def address(a):
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None
     n = A.open_gkey()   # rewards are keyed by lifetime close number (segments.gkey): vesting runs across the genesis cut
-    sp, lk = A.vest_split(rb, n)
+    sp, lk = A.vest_split(rb, n); early = any(k < SG.offset(SG.CURRENT) for k in A.confirmed(rb))   # carried rewards: bounds while unconfirmed
     rsum = sum(rb.values()); est = a in A.established_set(); cvn = HI.coverage(a)
     vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test agent)."
     if bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
@@ -521,7 +521,7 @@ def address(a):
     head = (f'<div class="addrhead">{idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
             f'{addr_meta(a, bal, p)}'
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
-            f'{stat("Spendable", poa(sp) + X.usd_of(sp))}{stat("Locked", poa(lk) + X.usd_of(lk))}</div>')
+            f'{stat("Spendable", poa(sp) + X.usd_of(sp), flag_html=A.carry_flag("circ") if early else "")}{stat("Locked", poa(lk) + X.usd_of(lk), flag_html=A.carry_flag("locked") if early else "")}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
     tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng), ("governance", "Governance", None)]
     nav = '<nav class="chips atabs scroll" aria-label="Address sections">' + "".join(
@@ -777,7 +777,7 @@ def token_body(h2=False):
     cum = {r["close_ts"]: r["cum_supply_confirmed"] for r in ep}   # 1.26.122: carried supply, so Locked continues across the cut
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
     stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders (node)", intc(st.get("holders"))), g["holders"]), "holders"),
-                     pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),
+                     pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"]), flag_html=A.carry_flag("circ")), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"]), flag_html=A.carry_flag("locked")), locked),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
     c = A.concentration(); ma = c["min_activity"]
     gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"

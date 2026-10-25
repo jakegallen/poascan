@@ -28,6 +28,7 @@
     "label": "Genesis cut",
     "notice_id": "2026-10-24-genesis-cut",
     "txid": "e1c4ea26349b41a6781bcb76f98e3da4118398d6a212122c099ab75561b38373",
+    "carry_unlocked": null,
     "carried_closes": [
      {
       "segment": 1,
