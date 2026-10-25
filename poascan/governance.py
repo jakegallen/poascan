@@ -4,11 +4,11 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, estfold as EF
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
-TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 AGENT_COL = SS.Col("name", "Agent", "text")   # header sorting (1.26.117): Agent sorts by name A to Z, unnamed Agents last
 LEVEL_ORDER = {k: i for i, (k, _) in enumerate(LEVELS)}
@@ -611,13 +611,13 @@ def rules():
                f"<p>The genesis import (/api/genesis-import, checkpoint 44003) flags {len(EF.imported(2))} Agents established; segment 2 starts from them. They carry no segment 2 challenge_eligible until they earn one, so L is -1. Segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
-    head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
+    head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------

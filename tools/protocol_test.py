@@ -126,8 +126,50 @@ def main():
     blob = json.dumps(PT.meta()) + json.dumps(PT.events())
     check("no file bytes stored", "a new client build" not in blob)
     check("no em or en dash in module and API", all(c not in src + json.dumps(d) for c in ("\u2014", "\u2013")))
+    ui_checks()
     print(f"\n{len(fails)} failed" if fails else "\nall passed")
     sys.exit(1 if fails else 0)
+
+def ui_checks():
+    """Governance, Protocol and the Network badge."""
+    import re
+    from poascan import governance as GV, views as V, protocolview as PV
+    txt = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h))
+    h = GV.page({"tab": ["protocol"]}); t = txt(h)
+    check("tab: Protocol chip and title", 'tab=protocol' in h and "Governance · Protocol" in h)
+    check("tab: timeline card with CSV and API links", "Protocol timeline" in t and "/api/v1/protocol.csv" in h and "/api/v1/protocol" in h)
+    check("tab: header sorting (aria-sort, phone menu)", "aria-sort" in h and 'class="sortsel"' in h)
+    check("tab: visitor-local times", '<time class="t lt' in h)
+    check("tab: kind chips", "Releases" in t and "Source" in t)
+    check("tab: four stats, no sub-lines", h.count('<div class="stat">') >= 4 and 'class="ss"' not in h)
+    h2 = GV.page({"tab": ["protocol"], "sort": ["kind"], "dir": ["asc"]})
+    check("tab: sort by event works", "aria-sort=\"" in h2)
+    h3 = GV.page({"tab": ["protocol"], "kind": ["release"]}); rows = re.findall(r"<tr><td>", h3)
+    body = h3.split('<tbody>')[1].split('</tbody>')[0]; evs = re.findall(r"<tr><td>.*?</td><td>([^<]*)</td>", body)
+    check("tab: kind filter keeps releases only", evs and set(evs) == {"Release"})
+    # badge states
+    st = PT.state()
+    b = PV.badge()
+    check("badge links to the tab", 'href="/governance?tab=protocol"' in b and "pbadge" in b)
+    check("badge text follows the state", (("Client matches release" in b) if st["state"] in ("match", "older_release") else ("Unreleased client change" in b)))
+    m = PT.meta(); db.put_blob(PT.META, dict(m, last_ok=int(time.time()) - PT.STALE_S - 60))
+    check("stale: ui.flag Stale tag on the badge and stats", "Stale" in PV.badge() and 'class="tag warn"' in PV.badge() and "Stale" in GV.page({"tab": ["protocol"]}))
+    db.put_blob(PT.META, dict(m, last_ok=int(time.time())))
+    check("fresh: no Stale tag", "Stale" not in PV.badge())
+    n = V.network("")
+    check("Network overview carries the badge", "pbadge" in n and "/governance?tab=protocol" in n)
+    files = {"client": dict(m["files"]["client"], sha="00" * 32), "web_client": m["files"]["web_client"]}
+    db.put_blob(PT.META, dict(m, files=files, last_ok=int(time.time())))
+    check("unreleased hash: amber badge 'Unreleased client change'", "Unreleased client change" in PV.badge() and "pbadge warn" in PV.badge())
+    db.put_blob(PT.META, m)
+    ab = V.about() if hasattr(V, "about") else ""
+    check("/about#protocol explains the method", 'id="protocol"' in open(V.__file__).read())
+    for name, x in (("protocol tab", h), ("network", n), ("badge", b)): check(name + ": no em or en dash", "\u2014" not in x and "\u2013" not in x)
+    css = open(os.path.join(HERE, "..", "static", "style.css")).read()
+    check("badge styles use tokens", ".pbadge{" in css and ".pbadge.warn" in css)
+    base = re.sub(r"@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", css)   # rules outside any media query
+    check("stat state tags wrap at every width (no clipped Unconfirmed at 1280)", ".sl:has(.sflag){flex-wrap:wrap" in base and "white-space:nowrap;overflow:visible" in base)
+    check("copy: Agents, never Accounts", "Accounts" not in txt(h) and "Accounts" not in txt(n))
 
 if __name__ == "__main__":
     main()

@@ -1379,3 +1379,12 @@ ul.jury .num{display:inline-block;min-width:14px;color:var(--amber)}
 h3.sub{font:600 var(--t12)/1.4 var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin:4px 0 8px}
 table.why tr.whym{display:none}
 @media (max-width:640px){.qp i{width:9px;height:7px}.qp{gap:2px;margin-right:4px}table.why tr.whym{display:table-row}table.why tr.whym td{border-top:0;padding-top:0;min-width:0}table.why tr:has(+tr.whym) td{border-bottom:0}}
+/* Protocol badge (1.26.142): client file hash against the signed release */
+.pbadge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:var(--r-pill);padding:2px 10px;font-family:var(--ui);font-size:var(--t12);font-weight:600;color:var(--steel);white-space:nowrap;text-decoration:none;line-height:1.5}
+.pbadge i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.pbadge.ok{color:var(--green);border-color:color-mix(in srgb,var(--verd) 40%,transparent);background:color-mix(in srgb,var(--verd) 7%,transparent)}
+.pbadge.warn{color:var(--amber);border-color:color-mix(in srgb,var(--gold) 40%,transparent);background:color-mix(in srgb,var(--gold) 7%,transparent)}
+a.pbadge:hover{border-color:currentColor}
+@media (max-width:640px){.pbadge{white-space:normal}}
+/* 1.26.142 every width: a stat label with a state tag wraps, so a long tag (Unconfirmed) drops below the label whole instead of clipping */
+.sl:has(.sflag){flex-wrap:wrap;row-gap:4px}.sl:has(.sflag) .sflag{max-width:100%}.qtip.sflag>summary{white-space:nowrap;overflow:visible;text-overflow:clip;max-width:none}

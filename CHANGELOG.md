@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.142] - 2026-10-25
+
+### Added
+- Governance, Protocol: the protocol timeline (signed releases, baseline hashes, source changes and, later, params changes) with header sorting, kind chips, visitor-local times, CSV and API links, and four stats: Release, poa.mjs, poa-web.mjs and Last check (Stale tag after 3 hours without a good check).
+- Network, Overview: a badge on Recent, "Client matches release vX" or "Unreleased client change", linking to the timeline.
+- /about#protocol: how the files are checked and what a match does and does not prove.
+
+### Fixed
+- Stat cards: a state tag (Unconfirmed, Stale, Queued) wraps below the label at every width instead of clipping at 1280.
+
 ## [1.26.141] - 2026-10-25
 
 ### Added
