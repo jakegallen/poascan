@@ -85,7 +85,7 @@ def pour_html(last):
     if not last: return '<p class="empty">No closes yet</p>'
     pool = float(last.get("pool") or 0); m = float(last.get("minted") or 0); b = float(last.get("burned") or 0)
     mp = 100 * m / pool if pool else 0; bp = last.get("burn_pct") if last.get("burn_pct") is not None else (100 - mp)
-    return (f'<div class="pour" id="pour"><div class="prow"><span class="lbl">Pool</span><b class="fig" title="{pool:,.2f} POA">{compact(pool)}</b></div>'
+    return (f'<div class="pour" id="pour" data-ep="{last.get("epoch")}"><div class="prow"><span class="lbl">Pool</span><b class="fig" title="{pool:,.2f} POA">{compact(pool)}</b></div>'
             f'<div class="pourbar" role="img" aria-label="Minted {mp:.1f}%, burned {bp:.1f}%"><i class="pm" style="width:{mp:.2f}%"></i><i class="pb"></i></div>'
             f'<div class="pleg"><span><i class="sw m"></i>Minted <b class="num">{compact(m)}</b></span><span><i class="sw b"></i>Burned <b class="num">{compact(b)}</b></span>'
             f'<span class="pp"><b class="num">{bp:.1f}%</b> burned</span></div></div>')

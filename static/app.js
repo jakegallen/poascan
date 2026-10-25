@@ -127,6 +127,13 @@ function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"
   var old=SC.max;$$("#score .lane").forEach(function(l){var k=l.dataset.k,g=$(".mk",l);if(!g)return;var h="";
    d.rows.forEach(function(r){if(r[0]===k)h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});g.dataset.b=d.b;g.innerHTML=h});
   d.rows.forEach(function(r){if(r[1]>SC.max)SC.max=r[1]});scoreSlide()}).catch(function(){SC.busy=0})}
+/* the Pour: when a snapshot shows a new close, the card fetches its body, the pool bar starts whole and splits into minted gold and
+   burned slag (600 ms), and the new close's hallmark draws in as its row lands in Closes (CSS, 1.2 s in all). */
+function pourLive(s){var p=$("#pour");if(!p||!s.last||s.last.epoch==null||String(s.last.epoch)===p.dataset.ep||p._busy)return;p._busy=1;
+  fetch("/fragment/pour",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(h){var t=D.createElement("div");t.innerHTML=h;var n=t.firstElementChild;if(!n)throw 0;
+   var m=$(".pm",n),w=m?m.style.width:"";if(m&&!RM){m.style.width="100%"}p.replaceWith(n);
+   var hd=n.closest(".card")&&$(".cx .lbl",n.closest(".card"));if(hd&&s.last.epoch!=null){hd.textContent="Epoch "+s.last.epoch;hd.setAttribute("href","/epoch/"+s.last.epoch)}
+   if(m&&!RM)requestAnimationFrame(function(){requestAnimationFrame(function(){m.style.width=w})})}).catch(function(){p._busy=0})}
 function scoreLive(s){if(!$("#score")||!s.feed)return;var top=(s.feed.match(/data-id="([^"]+)"/)||[])[1];if(!top||top===SC.top)return;SC.top=top;
   if(!SC.max)$$("#score line.ma,#score line.mt,#score line.ms").forEach(function(m){var g=m.parentNode,t=+m.getAttribute("x1")+(+g.dataset.b);if(t>SC.max)SC.max=t});
   var w=20000-(Date.now()-SC.t);if(SC.busy)return;if(w>0){clearTimeout(SC.tm);SC.tm=setTimeout(scoreFetch,w);return}scoreFetch()}
@@ -146,7 +153,7 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
   var be=$('[data-live="bm_ep"]');if(be&&s.epoch.n!=null)be.textContent=s.epoch.n}
  if(s.frags)Object.keys(s.frags).forEach(function(id){var el=D.getElementById(id);if(el&&el.dataset.h!==String(s.frags[id].length+":"+s.frags[id].slice(-40))){el.innerHTML=s.frags[id];el.dataset.h=s.frags[id].length+":"+s.frags[id].slice(-40);paintIds(el);times(el);tick()}});
  var bq=$(".bench");if(bq)bq.classList.toggle("quiet",s.live===false);
- mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s)}
+ mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s);pourLive(s)}
 
 /* transport: WebSocket with backoff, polling fallback */
 var ws=null,fails=0,pollT=null,wantLive=!!($("#feed")||$("#tracker")||$("#ticker")||$("[data-live]"));

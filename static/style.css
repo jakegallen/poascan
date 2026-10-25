@@ -1132,6 +1132,16 @@ tbody tr.in>td:first-child{box-shadow:none}
 .js .chart.in{animation:draw var(--draw) var(--ease) both}
 .naBox{border:0;border-radius:0;padding:var(--s5) var(--s4);text-align:center;color:var(--bone-3);font-size:var(--t13)}
 
+/* Phase 3: maker's marks and hallmarks (marks.py): engraved rosettes from an address or a close's record, served as cached SVG */
+.hallk,table td a.hallk{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.hmark,.mmark{display:block;flex:none;border-radius:var(--r-pill)}
+.hmark.big{width:56px;height:56px;margin-right:4px}
+.addrhead .mmark{width:56px;height:56px}
+@media (max-width:640px){.hmark.big,.addrhead .mmark{width:44px;height:44px}}
+tr.in .hmark{animation:hallin 1.2s var(--ease) both}
+@keyframes hallin{0%{clip-path:circle(0% at 50% 50%);transform:rotate(-40deg);opacity:.4}50%{opacity:1}100%{clip-path:circle(71% at 50% 50%);transform:none}}
+@media (prefers-reduced-motion:reduce){tr.in .hmark{animation:none}}
+
 /* chart pop-out (app.js, chartpop.py). No entrance fade or transform anywhere in it: the dialog and the chart are visible from the
    first frame (the 1.26.28 iOS rule). Full screen on phones, touch scrubs the chart (touch-action none on the plot only). */
 .cpt{cursor:pointer}

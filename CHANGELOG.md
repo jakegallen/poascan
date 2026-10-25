@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.131] - 2026-10-25
+
+### Added
+- Maker's marks and hallmarks (marks.py): engraved guilloche rosettes drawn from public data. An Agent's mark comes from its address; a close's hallmark comes from its own record (epoch, Agents paid, POA minted), gold when the close paid Agents, bone when it paid none. Deterministic, so anyone can reproduce one.
+- Served as SVG at /mark/{address}.svg and /hallmark/{epoch}-{paid}-{minted}.svg: the URL is the whole seed, strict inputs (404 otherwise), no database read, an in-memory LRU and Cache-Control immutable for a year. A hallmark is about 2 KB gzipped.
+- Hallmarks sit beside each close on Home and in the Chain table, and at 56 px in the epoch header. The Agent header shows its maker's mark (the hex mark stays everywhere else at 16 to 24 px).
+- The Pour: when the live snapshot shows a new close, the Pour card fetches the new split (/fragment/pour), its pool bar starts whole and splits into minted gold and burned slag, and the new close's hallmark draws in as its row lands in Closes (1.2 s, off under reduced motion).
+- Tests: tools/phase3_test.py.
+
 ## [1.26.130] - 2026-10-25
 
 ### Changed

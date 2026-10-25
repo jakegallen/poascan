@@ -769,6 +769,12 @@ class H(BaseHTTPRequestHandler):
             if path in ROOT_FILES:
                 fn, ct = ROOT_FILES[path]
                 return self.send(200, open(os.path.join(STATIC, fn), "rb").read(), ct, {"Cache-Control": "public, max-age=86400"})
+            if path.startswith("/mark/") or path.startswith("/hallmark/"):   # maker's marks and hallmarks (marks.py): pure functions of the URL
+                from . import marks as MK
+                k = path.split("/", 2)[2]
+                svg = (MK.agent_svg if path.startswith("/mark/") else MK.hall_svg)(k[:-4]) if k.endswith(".svg") else None
+                if not svg: return self.send(404, "not found", TXT)
+                return self.send(200, svg, "image/svg+xml", {"Cache-Control": MK.CACHE})
             if path.startswith("/og/"):
                 r = OG.render(path) if OG.available() else None
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
@@ -849,6 +855,10 @@ class H(BaseHTTPRequestHandler):
             if path == "/fragment/upgrade":   # the live /upgrade view, refetched by app.js when the snapshot's upsig changes
                 if not MT.state()["active"]: return self.send(404, "", "text/plain")
                 return self.send(200, f'<div data-upview data-sig="{V2.upgrade_sig()}">{V2.upgrade_view()}</div>', extra={"Cache-Control": "no-store"})
+            if path == "/fragment/pour":   # the Pour card body after a close (bench.py), local archive only
+                from . import bench as BN, analytics as _A
+                ep = _A.epoch_rows()
+                return self.send(200, BN.pour_html(ep[-1] if ep else None), extra={"Cache-Control": "no-store"})
             if path == "/fragment/score":   # the Bench activity strip (bench.py): last 24 min of txs from the archive, cached 10 s
                 from . import bench as BN
                 return self.send(200, json.dumps(BN.score_json(), separators=(",", ":")), "application/json", {"Cache-Control": "public, max-age=10"})

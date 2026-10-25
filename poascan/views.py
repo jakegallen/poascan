@@ -10,6 +10,7 @@ from . import market as X   # swap data via the swap module's API: ≈$, market 
 from . import swap as SW   # only for the swap page's live fragment in the snapshot
 from . import views3 as V3
 from . import bench as BN
+from . import marks as MK
 from . import receipts as RC
 from . import history as HI
 from . import kin as KN
@@ -186,7 +187,7 @@ def epochs_table(rows, link=True, qs=None, base=None):
     by = SS.q(qs, "sort", "epoch"); by = by if by in EPOCH_SORTS else "epoch"; d = SS.page_dir(qs)
     rs = SS.sort_rows(list(rows), lambda r: r.get(by), "num", d, tie=lambda r: -r["epoch"])
     lk = SS.link_fn(base, "epoch", "#history", **({"segment": str(SG.selected())} if SG.archived() else {})) if base else None
-    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
+    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk">{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
                    num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
 
@@ -207,7 +208,7 @@ def home_epochs(ep):
         t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
         return f'<span class="mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
     return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burned", "Pour"],
-               [[f'<span class="okdot" title="Finalized"></span><a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
+               [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
                  f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>',
                  f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"], 1)}</span>', pour(r)] for r in rows], cls="closes", pri=(0, 2, 3, 5))
 
@@ -535,7 +536,7 @@ def address(a):
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
     nmx = nm.get(a) or p["forum_name"]
     title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
-    head = (f'<div class="addrhead">{idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
+    head = (f'<div class="addrhead">{MK.mark_img(a, 56) or idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
             f'{addr_meta(a, bal, p)}'
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp), flag_html=A.carry_flag("circ") if early else "")}{stat("Locked", poa(lk) + X.usd_of(lk), flag_html=A.carry_flag("locked") if early else "")}</div>')
@@ -975,7 +976,7 @@ def epoch(n):
     sgt += '<span class="tag warn" title="Rewards not confirmed in later balances">Unconfirmed</span> ' if unc else ""
     line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span>closed {lt(r["close_ts"])}</span>'
             f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
-    body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
+    body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", (note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt, X.usd_toggle())}</div>')
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
