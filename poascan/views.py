@@ -1099,8 +1099,13 @@ def _cal_cell(v, sub, low):
 
 def graders_body(qs=None, base="/governance?tab=graders"):
     """Calibration table (Governance > Graders; was /agents/graders)."""
-    by = ((qs or {}).get("sort") or ["name"])[0]; by = by if by in ("name", "n") else "name"
-    c, rows = CA.sorted_rows(by); m = CA.MIN_N
+    from . import governance as GV, scoresort as SS
+    sorts = [("name", "Name"), ("n", "n")] + SS.PARTS
+    by = SS.page_sort(qs, dict(sorts), "name"); d = SS.page_dir(qs)
+    c, rows = CA.sorted_rows(by if by in ("name", "n") else "name"); m = CA.MIN_N; scs = GV.scores()["rows"]
+    rows = [dict(r, **GV.parts_of(r["grader"], scs)) for r in rows]
+    if by in SS.KEYS: rows = SS.order(rows, lambda r: r[by], d, tie=lambda r: ((r["name"] or "~").lower(), r["grader"]))
+    elif d == "asc": rows = list(reversed(rows))
     def ag(r):
         g = r["grader"]; a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
         sy = '<span class="tag">system</span>' if r["trusted"] else ""
@@ -1111,15 +1116,18 @@ def graders_body(qs=None, base="/governance?tab=graders"):
     def cond(r, k):
         n, a = r[f"seats_{k}"], r[f"aligned_{k}"]; return _cal_cell(pct(a / n) if n else RC.UNK, f"of {n:,}", n < m)
     trs = "".join(f'<tr class="{"low" if r["low_n"] else ""}"><td>{ag(r)}</td><td class="r">{al(r)}</td><td class="r dk">{cond(r, "passed")}</td><td class="r dk">{cond(r, "failed")}</td>'
-                  f'<td class="r">{sc(r)}</td><td class="r">{pc(r)}</td></tr>' for r in rows)
-    tb = (f'<div class="tw"><table class="hist cal"><thead><tr><th>Agent</th><th class="r">Aligned</th><th class="r dk">If passed</th><th class="r dk">If failed</th><th class="r">Score</th><th class="r">Seals per close</th></tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=6 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
-    chips = "".join(f'<a href="{base}{("&amp;" if "?" in base else "?") + "sort=n" if k == "n" else ""}" class="chip {"on" if k == by else ""}">{t}</a>' for k, t in (("name", "Name"), ("n", "n")))
+                  f'<td class="r dk">{sc(r)}</td><td class="r">{pc(r)}</td>{GV.score_cells(r)}</tr>' for r in rows)
+    tb = (f'<div class="tw"><table class="hist cal"><thead><tr><th>Agent</th><th class="r">Aligned</th><th class="r dk">If passed</th><th class="r dk">If failed</th><th class="r dk">Grade</th><th class="r">Seals per close</th>{GV.score_heads(by)}</tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=11 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
+    def link(k, dd):
+        qq = [x for x in ((f"sort={k}" if k != "name" else ""), ("dir=asc" if dd == "asc" else "")) if x]
+        return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "") + "#calibration"
+    chips = SS.controls(link, sorts, by, d)
     f2 = lambda v: f"{v:.2f}" if v is not None else RC.UNK
     s = "".join([stat("Jury seats", intc(c["seats"])), stat("Agreement", pct(c["aligned_rate"])), stat("Mean grade", f2(c["score_mean"])),
                  stat("Grade spread", f2(c["score_sd"]))])
     foot = f'<p class="cov dim small">As of E{c["as_of_close"]} · grey under n {m} · <a href="/about#calibration">method</a></p>' if c["as_of_close"] is not None else ""
-    body = f'<div class="stats eight">{s}</div>' + card(f"Calibration · {c['graders_count']}", f'<div class="chips">{chips}<span class="sp"></span><span class="tag warn" title="Agreement with the panel, not accuracy">Advisory</span></div>' + tb + foot,
+    body = f'<div class="stats eight">{s}</div>' + card(f"Calibration · {c['graders_count']}", f'<div class="chips"><span class="tag warn" title="Agreement with the panel, not accuracy">Advisory</span></div>' + chips + tb + foot,
                                                       PR.ask([PR.CALIB]) + '<a class="more" href="/api/v1/agents/calibration">API →</a>', cls="histc", id="calibration")
     return body
 
@@ -1340,7 +1348,7 @@ def score_method():
     c = GS.CFG; w = c["weights"]; s, g, f = c["standing"], c["grading"], c["forum"]; pc = lambda v: f"{round(v * 100)}%"
     return (f'<h3 id="score">Score</h3><p>POAScan\'s own score, 0 to 100, 100 best. Built by POAScan from public network data. Not an official ranking and not a minepoa grade. '
             f'Meant to help explain how Agents become established ({V_GO}: established is earned by passing answers and kept by a passing answer within estab_ttl closes; grading seats count). '
-            f'Per segment: only that segment\'s close records, txs and forum posts; All on the address page uses every segment, with standing fresh at each cut. Deterministic; weights live in <code>poascan/govscore.json</code>.</p><ul>'
+            f'Per segment: only that segment\'s close records, txs and forum posts; All on the address page uses every segment, with standing fresh at each cut. Governance lists use the selected segment; Rankings and Forum Most active use All. Every Agent list sorts by Score or a part, Top first or Bottom first (<code>?sort=score&amp;dir=asc</code>, also in the API and CSV). Deterministic; weights live in <code>poascan/govscore.json</code>.</p><ul>'
             f'<li><b>Standing</b> ({pc(w["standing"])}): closes established over closes since first active ({pc(s["held"])}), current level ({pc(s["level"])}: Safe and System 1, Watch 0.7, At risk 0.4, No record 0.5, not established 0), '
             f'passed over settled answers, pulled toward {s["prior_pass"]} with {s["prior_n"]} virtual answers ({pc(s["passed"])}); minus {s["removal_penalty"]} per removal and {s["slash_penalty"]} per slash, at most {s["penalty_cap"]}.</li>'
             f'<li><b>Grading</b> ({pc(w["grading"])}): closes with a grading seat, up to {g["seat_closes_target"]} ({pc(g["seats"])}), grade-sealed txs on a log scale up to {g["seals_target"]} ({pc(g["seals"])}), '

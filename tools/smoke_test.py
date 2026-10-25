@@ -441,8 +441,8 @@ def calibration(base, check):
     pg = req(base + "/governance?tab=graders")[1].decode(); p2 = req(base + "/governance?tab=graders&sort=n")[1].decode()
     card = pg[pg.index('id="calibration"'):]; card = card[:card.index("</section>")]
     check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks",
-          "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'class="chip on">n<' in p2
-          and "Read my calibration" in card and not any(w in card.lower() for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
+          "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'class="chip on" aria-current="true">n<' in p2
+          and "Read my calibration" in card and not any(w in card.lower().replace("top first", "").replace("not an official ranking", "") for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": A3, "tx_limit": 1, "grading": True}}}).encode(),
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])

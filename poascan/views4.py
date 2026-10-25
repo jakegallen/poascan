@@ -23,7 +23,34 @@ def _base():
         if r["invited_by"]: kids[r["invited_by"]].append(a)
     return rb, acc, last, kids
 
-def rows(tab):
+RANK = ("", "Rank")
+def sorts(tab):
+    """Server-side sort keys for a Rankings tab: "" (the tab's own ranking) plus Score and its parts for Agent tabs."""
+    tab = ALIAS.get(tab, tab); return ["", "rank"] + ([] if tab == "models" else [k for k, _ in _SS().PARTS])
+
+def _SS():
+    from . import scoresort as SS
+    return SS
+
+def _scores():
+    """Score and parts across all segments (Rankings are lifetime lists)."""
+    from . import governance as GV
+    return GV.scores("all")["rows"]
+
+def rows(tab, sort="", d="desc"):
+    """Ranked rows; sort="" keeps the tab's own ranking, sort="score" or a part re-ranks by POAScan's Score; d="asc" is Bottom first."""
+    out = _rows(tab)
+    if tab == "models" or ALIAS.get(tab, tab) == "models": return out
+    SS = _SS(); sc = _scores()
+    for x in out:
+        f = sc.get(x.get("addr")) or {}
+        for k in SS.KEYS: x[k] = f.get(k, 0)
+    if sort in SS.KEYS: out = SS.order(out, lambda x: x[sort], d, tie=lambda x: x["rank"])
+    elif d == "asc": out = list(reversed(out))
+    for i, x in enumerate(out, 1): x["rank"] = i
+    return out
+
+def _rows(tab):
     tab = ALIAS.get(tab, tab)
     rb, acc, last, kids = _base(); nm = _nm(); out = []
     tot = lambda a: sum(rb.get(a, {}).values())
@@ -117,18 +144,30 @@ def _cell(kind, v):
 
 PAGE = 50   # rows per page; Load more appends the next 50 (/fragment/lb)
 
-def _rows_html(tab, rs, nm):
+def _score_tds(x, sort):
+    SS = _SS(); p = "p" if sort in SS.KEYS else ""
+    return (f'<td data-v="{x.get("score", 0)}" class="{p}"><span class="tag score">{x.get("score", 0)}</span></td>'
+            + "".join(f'<td data-v="{x.get(k, 0)}">{x.get(k, 0)}</td>' for k in SS.SUBS))
+
+def _score_ths(sort):
+    from . import governance as GV
+    SS = _SS(); p = ' class="p"' if sort in SS.KEYS else ""
+    return f'<th data-sort="num"{p}>Score{GV.score_tip()}</th>' + "".join(f'<th data-sort="num">{t}</th>' for k, t in SS.PARTS[1:])
+
+def _rows_html(tab, rs, nm, sort=""):
     cols = COLS[tab]; body = []
     cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)
     for x in rs:
         who = (f'<td data-v="{E(x["name"])}" class="p">{E(x["name"])}</td>' if tab == "models"
                else f'<td data-v="{E(x.get("name") or x["addr"])}" class="p">{addr_link(x["addr"], nm)}</td>')
         tr = f'<td data-v="{x["rank"]}" class="rk p">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)).replace("<td ", f'<td class="{cl(i, k)}" ', 1) for i, (c, _, k) in enumerate(cols))
+        if tab != "models": tr += _score_tds(x, sort)
         if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>' if ADDR_RX.match(x["addr"] or "") else '<td></td>'
         body.append(f"<tr>{tr}</tr>")
     return "".join(body)
 
-def _next(tab, off, n): return f"/fragment/lb?tab={tab}&offset={off}" if off < n else None
+def _next(tab, off, n, sort="", d="desc"):
+    return (f"/fragment/lb?tab={tab}&offset={off}" + (f"&sort={sort}" if sort else "") + ("&dir=asc" if d == "asc" else "")) if off < n else None
 
 def fragment(qs):
     """Load more for Rankings: the next PAGE rows as JSON {html, next}. Raises ValueError on a bad tab or offset."""
@@ -136,27 +175,40 @@ def fragment(qs):
     if tab not in COLS: raise ValueError("tab")
     off = int(qs.get("offset", ["0"])[0] or 0)
     if off < 0: raise ValueError("offset")
-    rs = rows(tab)
-    return dict(html=_rows_html(tab, rs[off:off + PAGE], _nm()), next=_next(tab, off + PAGE, len(rs)))
+    so = qs.get("sort", [""])[0]; d = qs.get("dir", ["desc"])[0]
+    if so not in sorts(tab) or d not in ("desc", "asc"): raise ValueError("sort")
+    rs = rows(tab, so, d)
+    return dict(html=_rows_html(tab, rs[off:off + PAGE], _nm(), so), next=_next(tab, off + PAGE, len(rs), so, d))
 
-def table_html(tab, limit=PAGE):
-    rs = rows(tab); nm = _nm(); cols = COLS[tab]
+def table_html(tab, limit=PAGE, sort="", d="desc"):
+    rs = rows(tab, sort, d); nm = _nm(); cols = COLS[tab]
     first = "Model / harness" if tab == "models" else "Agent"
     cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)   # first metric stays visible at 390px; POA columns convert to USD
     th = f'<th data-sort="num" class="p">#</th><th data-sort="text" class="p">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}" class="{cl(i, k)}">{h}</th>' for i, (_, h, k) in enumerate(cols))
+    if tab != "models": th += _score_ths(sort)
     if tab == "referrals": th += "<th>Tree</th>"
-    nx = _next(tab, limit, len(rs))
+    nx = _next(tab, limit, len(rs), sort, d)
     more = f'<button type="button" class="btn ghost more-btn" data-more="{E(nx)}">Load more</button>' if nx else ""
-    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm) or "<tr><td colspan=9 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
+    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm, sort) or "<tr><td colspan=14 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
 
-def leaderboard_page(tab, apage):
+def leaderboard_page(tab, apage, qs=None):
     tab = ALIAS.get(tab, tab); tab = PAGE_ALIAS.get(tab, tab); tab = tab if tab in dict(TABS) else "holders"
+    SS = _SS(); key0 = "models" if tab == "ai" else tab
+    so = SS.q(qs, "sort"); so = so if so in sorts(key0) and so != "rank" else ""; d = SS.page_dir(qs)
     chips = "".join(f'<a href="/agents/top{"" if k == "holders" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{n}</a>' for k, n in TABS)
     key = "models" if tab == "ai" else tab
-    tb, n = table_html(key)
+    tb, n = table_html(key, PAGE, so, d)
+    if key != "models":
+        base = "/agents/top" + ("" if tab == "holders" else f"?tab={tab}")
+        def link(k, dd):
+            qq = [x for x in ((f"sort={k}" if k else ""), ("dir=asc" if dd == "asc" else "")) if x]
+            return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "")
+        tb = SS.controls(link, [RANK] + SS.PARTS, so, d) + tb
+    cq = "&".join(x for x in ((f"sort={so}" if so else ""), ("dir=asc" if d == "asc" else "")) if x)
     title = dict(TABS)[tab]
     body = (f'<nav class="chips lbtabs scroll" aria-label="Rankings">{chips}</nav>'
-            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{key}.csv">CSV →</a>'))
+            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{key}.csv{"?" + cq.replace("&", "&amp;") if cq else ""}" download>CSV →</a>'
+                + f'<a class="more" href="/api/v1/leaderboard/{key}{"?" + cq.replace("&", "&amp;") if cq else ""}">API →</a>'))
     if tab == "ai":
         from . import views as V
         body += V.ai_cards()

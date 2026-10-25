@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.112] - 2026-10-24
+
+### Added
+- Score sorting on every Agent list: Governance Established, Directory, At risk, Graders (seals since close and calibration) and Forum Most active, and every Agent tab of Rankings. Sort by Score, Standing, Grading, Forum or Consistency, Top first or Bottom first. Sort and direction live in the URL (`?sort=score&dir=asc`) and carry into CSV, API and Load more links. Chip row at 1280, a compact Sort menu at 390.
+- Score and the four parts as columns where space allows (parts at 1280 only), each Score header with its tooltip.
+- API: `sort` takes score, standing, grading, forum or consistency and `dir` takes desc or asc on `/governance/established`, `/directory`, `/at-risk`, `/graders`, `/forum` and `/leaderboard/<tab>`; bad values are a 400. Rows carry score and score_standing, score_grading, score_forum, score_consistency. MCP `list_established`, `list_governance_directory`, `list_governance_standing`, `get_governance_graders`, `get_forum_activity` and `get_leaderboard` take the same sort and dir.
+
+### Changed
+- Graders calibration: the mean grade column is now labelled Grade (Score is POAScan's Score).
+
 ## [1.26.111] - 2026-10-24
 
 ### Fixed

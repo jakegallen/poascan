@@ -1251,3 +1251,9 @@ code.brk{overflow-wrap:anywhere}
 .qtip .qbox a{color:var(--amber);margin-left:2px}
 @media (max-width:640px){.qtip>summary{width:24px;height:24px;font-size:12px}}
 .tag.score{color:var(--hi);border-color:var(--line2);min-width:34px;text-align:center}
+/* 1.26.112 score sorting: chip row on wide screens, a compact menu at 390 */
+.sortsep{width:1px;align-self:stretch;background:var(--line2);margin:0 4px}.chip.dir{font-weight:600}
+.sortmenu{display:none;margin:0 0 10px}.sortmenu>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;font-size:var(--t12);font-weight:600;color:#CFC6B3}
+.sortmenu>summary::-webkit-details-marker{display:none}.sortmenu>summary::after{content:"▾";color:var(--steel)}.sortmenu[open]>summary{color:var(--amber);border-color:#6B5420}
+.sortmenu>summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}.sortmenu .chips{margin-top:8px}
+@media (max-width:640px){.sortchips{display:none}.sortmenu{display:block}}

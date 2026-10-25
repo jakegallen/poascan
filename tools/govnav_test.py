@@ -136,14 +136,14 @@ def live():
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
-        gr = tabs["graders"]; check("Graders: the calibration table, sort keeps the tab", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;sort=n"' in gr)
+        gr = tabs["graders"]; check("Graders: the calibration table, sort keeps the tab", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;sort=n#calibration"' in gr)
         check("Graders: live seals, jury seats per close and coverage stats", all(x in gr for x in ("Seals since close", "Jury seats per close", ">Coverage<", ">Queue<")) and 'class="chartbox"' in gr)
         dr = tabs["directory"]; A1 = "poa1" + "A" * 40
         check("Directory: every Agent with rewards, eligible, seals and attestations; sort and filter chips", 'id="directory"' in dr and f'href="/address/{A1}#standing"' in dr
               and all(f'>{x}</a>' in dr for x in ("Rewards", "Eligible closes", "Seals", "Attestations", "Established", "Graders", "Attesters")))
         d2 = get("/governance?tab=directory&sort=atts&filter=graders")[1]
         check("Directory: sort and filter keep each other", 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Graders' in d2
-              and 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Attestations' in d2)
+              and 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders#directory" class="chip on" aria-current="true">Attestations' in d2)
         pa = tabs["payouts"]
         check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
               and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox"' in pa)
@@ -171,7 +171,7 @@ def live():
         check("Established: sort and filter keep each other", get("/governance?tab=established&sort=name&filter=graders")[0] == 200
               and 'sort=name&amp;filter=graders#established" class="chip on"' in get("/governance?tab=established&sort=name&filter=graders")[1])
         check("Directory: Score column and sort chip", ">Score<" in dr or 'Score<details class="qtip"' in dr)
-        check("Directory: sort=score", 'class="chip on">Score</a>' in get("/governance?tab=directory&sort=score")[1])
+        check("Directory: sort=score", 'class="chip on" aria-current="true">Score</a>' in get("/governance?tab=directory&sort=score")[1])
         c, _, h = get("/established?segment=1"); check(f"/established 301 keeps the query ({h.get('Location')})", c == 301 and h.get("Location") == "/governance?tab=established&segment=1")
         ab = get("/about")[1]; check("/about#score: method and weights", 'id="score"' in ab and "govscore.json" in ab and "Not an official ranking" in ab)
         c, b, _ = get("/api/v1/governance/established?sort=score&limit=5")
@@ -181,6 +181,43 @@ def live():
         c, b, h = get("/api/v1/governance/established.csv?filter=safe"); check("API established CSV", c == 200 and h.get("Content-Type", "").startswith("text/csv") and "score_standing" in b.splitlines()[0])
         check("API established bad filter 400", get("/api/v1/governance/established?filter=x")[0] == 400)
         dj = J.loads(get("/api/v1/governance/directory?sort=score&limit=3")[1]); check("API directory: score and sort=score", all("score" in r for r in dj["rows"]) and dj["sort"] == "score")
+        # 1.26.112 Score sorting everywhere: Score and the four parts, Top first / Bottom first, in the URL, CSV and API links
+        def sc_order(html):
+            return [int(x) for x in re.findall(r'<span class="tag score">(\d+)</span>', html)]
+        for u, anchor in (("/governance?tab=established", "established"), ("/governance?tab=directory", "directory"), ("/governance?tab=at-risk", "standing"),
+                          ("/governance?tab=graders", "calibration"), ("/governance?tab=forum&range=all", "active"), ("/agents/top?tab=richlist", None)):
+            j = "&" if "?" in u else "?"
+            hi = get(u + j + "sort=score")[1]; lo = get(u + j + "sort=score&dir=asc")[1]; gr_ = get(u + j + "sort=grading&dir=asc")[1]
+            ho, lw = sc_order(hi), sc_order(lo)
+            check(f"{u}: sort=score Top first and Bottom first ({ho[:4]} / {lw[:4]})", ho == sorted(ho, reverse=True) and lw == sorted(lw) and (not ho or sorted(ho) == sorted(lw)))
+            if "forum" in u and "No authors" in hi: hi = hi.replace("No authors", '<details class="qtip">')
+            check(f"{u}: Score tooltip, 4 part sorts, Top first / Bottom first, compact menu for 390", '<details class="qtip">' in hi and all(f'>{t}</a>' in hi for t in ("Standing", "Grading", "Forum", "Consistency"))
+                  and '>Top first</a>' in hi and '>Bottom first</a>' in hi and '<details class="sortmenu"><summary>Sort: Score · Top first</summary>' in hi
+                  and '<summary>Sort: Grading · Bottom first</summary>' in gr_ and "\u2014" not in hi and "\u2013" not in hi)
+            check(f"{u}: Bottom first link keeps the sort", "sort=score&amp;dir=asc" in hi or ("dir=asc" in hi and "sort=score" not in hi.split("sortchips", 1)[1].split("Bottom first")[0][-200:]))
+        lo = get("/governance?tab=established&sort=forum&dir=asc&filter=safe")[1]
+        check("Established: CSV and API links carry sort, dir and filter", "/api/v1/governance/established.csv?sort=forum&amp;dir=asc&amp;filter=safe" in lo and "/api/v1/governance/established?sort=forum&amp;dir=asc&amp;filter=safe" in lo)
+        dl = get("/governance?tab=directory&sort=consistency&dir=asc")[1]
+        check("Directory: CSV link carries sort and dir; part columns", "/api/v1/governance/directory.csv?sort=consistency&amp;dir=asc" in dl and ">Consistency</th>" in dl and ">Standing</th>" in dl)
+        rk = get("/agents/top?tab=graders&sort=standing&dir=asc")[1]
+        check("Rankings: CSV and API links carry sort and dir; Score and parts columns", "/api/leaderboard/graders.csv?sort=standing&amp;dir=asc" in rk and "/api/v1/leaderboard/graders?sort=standing&amp;dir=asc" in rk and ">Standing</th>" in rk)
+        apis2 = {}
+        for u in ("/api/v1/governance/established?sort=standing&dir=asc", "/api/v1/governance/directory?sort=grading&dir=desc", "/api/v1/governance/at-risk?sort=score&dir=asc",
+                  "/api/v1/governance/graders?sort=forum", "/api/v1/governance/forum?range=all&sort=consistency&dir=asc", "/api/v1/leaderboard/richlist?sort=score&dir=asc"):
+            c, b, _ = get(u); apis2[u] = (c, J.loads(b) if c == 200 else None)
+        def rows_of(d): return d if isinstance(d, list) else d.get("rows") or d.get("seals_since_close") or d.get("most_active") or []
+        def key_of(u): return re.search(r"sort=(\w+)", u).group(1)
+        for u, (c, d) in apis2.items():
+            k = key_of(u); k = k if k == "score" else ("score_" + k)
+            rs = rows_of(d) if d is not None else []
+            vals = [r.get(k) if k in r else r.get(k.replace("score_", "")) for r in rs]
+            want = sorted(vals) if "dir=asc" in u else sorted(vals, reverse=True)
+            check(f"API {u}: 200 and ordered by {k}", c == 200 and vals == want and all(x is not None for x in vals))
+        bad2 = [get(u)[0] for u in ("/api/v1/governance/established?sort=x", "/api/v1/governance/established?dir=up", "/api/v1/governance/directory?dir=x", "/api/v1/governance/at-risk?sort=rewards",
+                                     "/api/v1/governance/graders?sort=name", "/api/v1/governance/forum?dir=1", "/api/v1/leaderboard/richlist?sort=x", "/api/v1/leaderboard/richlist?dir=x", "/api/v1/leaderboard/models?sort=score")]
+        check(f"API bad sort or dir 400 {bad2}", all(c == 400 for c in bad2))
+        fr2 = J.loads(get("/fragment/lb?tab=richlist&offset=0&sort=score&dir=asc")[1]); check("Rankings Load more keeps sort and dir", sc_order(fr2["html"]) == sorted(sc_order(fr2["html"])))
+        check("Rankings Load more: bad sort 400", get("/fragment/lb?tab=richlist&offset=0&sort=x")[0] == 400)
         # 1.26.109 per-Agent governance: address page tab, API, MCP
         c, ag, _ = get(f"/address/{A1}?tab=governance")
         check("Agent page: Governance tab with Score, four parts, tooltip, Standing, Grading and Forum", c == 200 and f'href="/address/{A1}?tab=governance" class="chip on"' in ag
@@ -227,6 +264,11 @@ def live():
         check(f"MCP tools/call each governance tool {[t for t, r in res.items() if 'result' not in r or r['result'].get('isError')]}", all("result" in r and not r["result"].get("isError") for r in res.values()))
         ga = rpc("tools/call", {"name": "get_agent_governance", "arguments": {"address": A1, "scope": "all"}})
         check("MCP get_agent_governance", "result" in ga and not ga["result"].get("isError") and ga["result"]["structuredContent"]["scope"] == "all")
+        for t, a_ in (("list_established", {"sort": "grading", "dir": "asc"}), ("list_governance_directory", {"sort": "score", "dir": "asc"}), ("list_governance_standing", {"sort": "score"}),
+                      ("get_governance_graders", {"sort": "standing"}), ("get_forum_activity", {"range": "all", "sort": "forum", "dir": "asc"}), ("get_leaderboard", {"tab": "richlist", "sort": "score", "dir": "asc"})):
+            r_ = rpc("tools/call", {"name": t, "arguments": a_}); ok_ = "result" in r_ and not r_["result"].get("isError")
+            b_ = rpc("tools/call", {"name": t, "arguments": dict(a_, dir="sideways")})
+            check(f"MCP {t} sort and dir; bad dir is an error", ok_ and (("result" in b_ and b_["result"].get("isError")) or "error" in b_))
         e = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "x"}})
         check("MCP bad sort is an error", ("result" in e and e["result"].get("isError")) or "error" in e)
         dd = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "seals", "limit": 2}})["result"]["structuredContent"]

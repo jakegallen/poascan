@@ -166,7 +166,10 @@ def api(path, qs):
     if path.startswith("/api/leaderboard/"):
         t = path.rsplit("/", 1)[1]; t = V4.ALIAS.get(t, t)
         if t not in V4.COLS: return {"error": "unknown tab", "tabs": list(V4.COLS)}, False
-        return V4.rows(t), True
+        so = (qs.get("sort") or [""])[0]; d = (qs.get("dir") or ["desc"])[0]
+        if so and so not in V4.sorts(t): raise BadRequest("sort must be one of " + ", ".join(V4.sorts(t)))
+        if d not in ("desc", "asc"): raise BadRequest("dir must be desc or asc")
+        return V4.rows(t, so, d), True
     if path == "/api/status":
         d = V2.status_data(); return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"],
                                           segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), **V.joins_fields()), False
@@ -246,7 +249,7 @@ def page(path, qs):
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
     if path == "/governance": return GV.page(qs)
-    if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage)
+    if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage, qs)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/upgrade": return V2.status_page("Network upgrade")
     if path == "/chain": return V.epochs_page(qs)
@@ -298,9 +301,9 @@ MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/grow
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
-GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit"}, "/api/governance/payouts": set(),
-           "/api/governance/graders": {"limit"}, "/api/governance/directory": {"sort", "filter", "limit", "offset"},
-           "/api/governance/forum": {"range"}, "/api/governance/proposals": {"limit"}}
+GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "sort", "dir"}, "/api/governance/payouts": set(),
+           "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
+           "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}}
 def governance_api(path, qs):
     """Governance tabs as JSON (?segment= is read before routing). Unknown parameters and values are a 400."""
     if path not in GOV_API: raise KeyError(path)
@@ -317,18 +320,27 @@ def governance_api(path, qs):
         v = one(k, d)
         if v not in allowed: raise BadRequest(f"{k} must be one of " + ", ".join(x for x in allowed if x))
         return v
+    def sd(sorts, default):
+        return pick("sort", [k for k, _ in sorts], default), pick("dir", ["desc", "asc"], "desc")
     if path == "/api/governance": return GV.api_overview()
     if path == "/api/governance/at-risk":
         lv = one("level")
         if lv is not None and lv not in GV.LEVEL_IN: raise BadRequest("level must be one of " + ", ".join(GV.LEVEL_IN))
-        return GV.api_at_risk(lv, num("limit", 1000, 1, 5000))
+        so, d = sd(GV.RISK_SORTS, "level")
+        return GV.api_at_risk(lv, num("limit", 1000, 1, 5000), so, d)
     if path == "/api/governance/established":
-        return GV.api_established(pick("sort", [k for k, _ in GV.EST_SORTS], "score"), pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
+        so, d = sd(GV.EST_SORTS, "score")
+        return GV.api_established(so, pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6), d)
     if path == "/api/governance/payouts": return GV.api_payouts()
-    if path == "/api/governance/graders": return GV.api_graders(num("limit", 100, 1, 1000))
+    if path == "/api/governance/graders":
+        so, d = sd(GV.GRADER_SORTS, "seals")
+        return GV.api_graders(num("limit", 100, 1, 1000), so, d)
     if path == "/api/governance/directory":
-        return GV.api_directory(pick("sort", [k for k, _ in GV.DIR_SORTS], "rewards"), pick("filter", [k for k, _ in GV.DIR_FILTERS], ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
-    if path == "/api/governance/forum": return GV.api_forum(pick("range", [k for k, _, _ in GV.RANGES], "7d"))
+        so, d = sd(GV.DIR_SORTS, "rewards")
+        return GV.api_directory(so, pick("filter", [k for k, _ in GV.DIR_FILTERS], ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6), d)
+    if path == "/api/governance/forum":
+        so, d = sd(GV.FORUM_SORTS, "items")
+        return GV.api_forum(pick("range", [k for k, _, _ in GV.RANGES], "7d"), so, d)
     return GV.api_proposals(num("limit", 100, 1, 1000))
 
 # 1.26.96 header merge (Chain, Agents, Network, Governance): list and tab URLs 301 to their new home and keep every query

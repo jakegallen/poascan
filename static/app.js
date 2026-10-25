@@ -485,4 +485,5 @@ if(wantLive)connect();
 /* 1.26.108 qtip: close an open tooltip on Escape (focus back on its ? button) or a tap outside it */
 (function(){var D=document;function shut(k){[].slice.call(D.querySelectorAll("details.qtip[open]")).forEach(function(d){if(d!==k)d.removeAttribute("open")})}
 D.addEventListener("click",function(e){shut(e.target.closest?e.target.closest("details.qtip"):null)});
+[].slice.call(D.querySelectorAll("details.qtip")).forEach(function(q){q.addEventListener("click",function(e){e.stopPropagation();shut(q)})});   /* a ? inside a sortable header never sorts the table (1.26.112) */
 D.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=D.querySelector("details.qtip[open]");if(o){o.removeAttribute("open");var s=o.querySelector("summary");if(s)s.focus()}})})();
