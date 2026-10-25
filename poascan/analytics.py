@@ -714,6 +714,39 @@ JOIN_RATE_WINDOW_S = 86400     # default window: trailing 24 h
 JOIN_PAUSE_S = 2 * 3600        # agents_joined flat this long reads as joining paused, not a slow spell
 JOIN_MIN_S = 3600              # never report over less than an hour
 
+def cut_list():
+    """Segment boundaries (UTC ts, oldest first) from segments.json: agents_joined restarts at each, so no join delta crosses one."""
+    return sorted(c["ts"] for c in S.cuts())
+
+def seg_idx(t, cuts):
+    """Which segment run a read at t falls in: the number of cuts at or before it (pure)."""
+    return sum(1 for c in cuts if c <= t)
+
+def join_steps(pts, cuts=()):
+    """Pure: (ts, joins) between consecutive (ts, agents_joined) reads in the same segment, oldest first.
+    A pair that straddles a cut is skipped: the count restarted there (carried Agents), so its difference is not joins."""
+    return [(b[0], b[1] - a[1]) for a, b in zip(pts, pts[1:]) if seg_idx(a[0], cuts) == seg_idx(b[0], cuts)]
+
+def hourly_joins(pts, cuts=(), now=None):
+    """Pure: Agents / hr points [(hour start, joins)] from (ts, agents_joined) reads. Joins in hour k are the last read of hour k
+    minus the last read of hour k-1, only when both exist and are in the same segment (no bucket across a cut: no fake zero or
+    spike). The current hour is still filling and is left out."""
+    hr = {}
+    for t, a in pts: hr[int(t) // 3600] = (int(t), a)
+    cur = int(now if now is not None else time.time()) // 3600
+    ks = sorted(k for k in hr if k < cur)
+    return [(k * 3600, max(0, hr[k][1] - hr[j][1])) for j, k in zip(ks, ks[1:])
+            if k - j == 1 and seg_idx(hr[j][0], cuts) == seg_idx(hr[k][0], cuts)]
+
+def joins_between(lo, hi):
+    """Agents joined in (lo, hi] from POAScan's own status snapshots, summed within each segment (never across a cut).
+    Base: the last read at or before lo. Two indexed reads, no upstream call."""
+    b = db.q1("SELECT ts, json_extract(json, '$.agents_joined') AS a FROM snaps WHERE kind='status' AND ts <= ? AND json_extract(json, '$.agents_joined') IS NOT NULL ORDER BY ts DESC LIMIT 1", (lo,))
+    rows = db.q("SELECT ts, json_extract(json, '$.agents_joined') AS a FROM snaps WHERE kind='status' AND ts > ? AND ts <= ? ORDER BY ts", (lo, hi))
+    pts = ([(b["ts"], int(b["a"]))] if b and b["a"] else []) + [(r["ts"], int(r["a"])) for r in rows if r["a"]]
+    if len(pts) < 2: return None
+    return sum(max(0, d) for _, d in join_steps(pts, cut_list()))
+
 def _join_points(since):
     if S.has_cut() and time.time() >= S.CUT_TS: since = max(since, S.CUT_TS)   # agents_joined restarted at the genesis cut: never a delta across it
     return [(r["ts"], int(r["a"])) for r in db.q(
@@ -726,13 +759,21 @@ def _rate_since(pts, t0):
     h = (end[0] - base[0]) / 3600
     return dict(joins=max(0, end[1] - base[1]), hours=round(h, 2), per_hour=round(max(0, end[1] - base[1]) / h, 1) if h > 0 else None)
 
-def joins_rate_calc(pts, now=None):
+def joins_rate_calc(pts, now=None, floor=None):
     """Pure: the homepage Agents / hr from (ts, agents_joined) reads, oldest first.
     Default: joins over the trailing 24 h divided by its hours. If agents_joined stood still for JOIN_PAUSE_S or more inside
     that window (joining paused, e.g. a network upgrade), the window starts where the latest pause ended, so a pause does not
-    drag the rate toward zero; it stays at least JOIN_MIN_S long."""
+    drag the rate toward zero; it stays at least JOIN_MIN_S long.
+    floor: the current segment's start (a genesis cut) when it is inside the 24 h. The window then starts at the first read of the
+    segment (kind since_cut); with less than JOIN_MIN_S of the segment read it is None, and a trailing rate longer than the
+    segment is None, never a figure over a shorter span."""
     if len(pts) < 2: return None
     end = pts[-1][0]; t0 = end - JOIN_RATE_WINDOW_S
+    since_cut = floor is not None and floor > t0
+    if since_cut:
+        pts = [p for p in pts if p[0] >= floor]
+        if len(pts) < 2 or end - pts[0][0] < JOIN_MIN_S: return None
+        t0 = pts[0][0]
     win = [p for p in pts if p[0] >= t0]
     start = t0; paused_until = None
     i = 0
@@ -741,16 +782,16 @@ def joins_rate_calc(pts, now=None):
         while j + 1 < len(win) and win[j + 1][1] == win[i][1]: j += 1
         if j + 1 < len(win) and win[j][0] - win[i][0] >= JOIN_PAUSE_S: paused_until = win[j][0]   # an ended pause (an ongoing one keeps 24 h)
         i = j + 1
-    if paused_until is not None: start = min(paused_until, end - JOIN_MIN_S)
+    if paused_until is not None: start = max(t0, min(paused_until, end - JOIN_MIN_S))
     r = _rate_since(pts, start)
     if not r or r["per_hour"] is None: return None
-    trailing = {k: _rate_since(pts, end - s) for k, s in (("1h", 3600), ("6h", 6 * 3600), ("24h", 86400))}
+    trailing = {k: (_rate_since(pts, end - s) if not since_cut or end - s >= t0 else None) for k, s in (("1h", 3600), ("6h", 6 * 3600), ("24h", 86400))}
     return dict(agent_joins_per_hour=int(round(r["per_hour"])), joins=r["joins"], window_hours=r["hours"],
-                window="since_pause" if paused_until is not None else "24h", window_end=end, paused_until=paused_until,
+                window="since_pause" if paused_until is not None else "since_cut" if since_cut else "24h", window_end=end, paused_until=paused_until,
                 trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
 
 @cached("joins_rate", 120)
 def joins_rate():
     """Cached 2 min: one indexed range read of about a day of status snapshots."""
-    now = int(time.time())
-    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now)
+    now = int(time.time()); fl = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
+    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl)

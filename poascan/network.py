@@ -18,7 +18,7 @@ BUCKETS = (("0", None), ("lt1", 1), ("lt10", 10), ("lt100", 100), ("lt1k", 1000)
 
 
 METRICS = {
-    "agents.new": "new Agents that day: change in minepoa's agents_joined between the last /api/status snapshot of the day and of the day before (first day: within the day)",
+    "agents.new": "new Agents that day: change in minepoa's agents_joined between the last /api/status snapshot of the day and of the day before (first day: within the day); on a genesis cut day, joins summed on each side of the cut",
     "agents.total": "agents_joined in the last /api/status snapshot of the day (cumulative Agents)",
     "agents.first_seen": "Agents whose first archived tx (any type) falls on that day",
     "agents.join_txs": "archived join txs (registrations) that day",
@@ -284,6 +284,8 @@ def _compute(frm, to):
         by = tx.get("by_type") or {}; g = lambda t, k="n": (by.get(t) or {}).get(k, 0)
         ae, pe = sn.get("agents_end"), prev.get("agents_end")
         new = (ae - pe) if ae is not None and pe is not None else (ae - sn["agents_start"]) if ae is not None and sn.get("agents_start") is not None else None
+        if new is not None and any(d * 86400 <= c < (d + 1) * 86400 for c in A.cut_list()):
+            new = A.joins_between(d * 86400, (d + 1) * 86400)   # agents_joined restarted at a cut that day: joins on each side, not the difference
         ck, pk = sn.get("checkpoint"), prev.get("checkpoint")
         sg, psg = _SG.of_ts(min((d + 1) * 86400 - 1, time.time())), _SG.of_ts(d * 86400 - 1)   # heights restart per segment: no advance across a boundary
         days.append(dict(

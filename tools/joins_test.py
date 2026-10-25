@@ -43,6 +43,30 @@ check("ongoing pause keeps the 24 h window", r["window"] == "24h" and r["paused_
 check("slow but moving (a join every 90 min) is not a pause", A.joins_rate_calc([(T + i * 900, 100 + i // 6) for i in range(100)])["window"] == "24h")
 check("no data: None", A.joins_rate_calc([]) is None and A.joins_rate_calc([(T, 5)]) is None)
 
+# ---------------- genesis cut (1.26.x agentsph): agents_joined restarted lower with the carried Agents ----------------
+C = T + 20 * H   # the cut: 20 h at 40/h in segment 1 (to 1800), 6 h flat (halted), then 1000 carried, +3/h in segment 2
+s1 = [(T + i * 900, 1000 + i * 10) for i in range(4 * 14 + 1)]
+s1 += [(s1[-1][0] + i * 900, s1[-1][1]) for i in range(1, 4 * 6)]
+s2 = [(C + 600 + i * 900, 1000 + (i * 3) // 4) for i in range(4 * 3 + 1)]
+pts = s1 + s2; end = pts[-1][0]
+r = A.joins_rate_calc(pts, floor=C)
+check(f"since the cut: 3/h over the segment, kind since_cut {r and (r['agent_joins_per_hour'], r['window'], r['window_hours'], r['joins'])}",
+      r and r["agent_joins_per_hour"] == 3 and r["window"] == "since_cut" and r["joins"] == 9 and abs(r["window_hours"] - 3) < .01)
+check("since the cut: 6h and 24h trailing are None (longer than the segment), 1h is real", r["trailing"]["6h"] is None and r["trailing"]["24h"] is None and r["trailing"]["1h"] == 3.0)
+check("since the cut: under 1 h of the segment read is None, not a figure over minutes", A.joins_rate_calc(s1 + s2[:3], floor=C) is None)
+check("a cut more than 24 h back: the normal 24 h window", A.joins_rate_calc(steady, floor=T - 10)["window"] == "24h")
+st = A.join_steps(pts, [C])
+check("join_steps: no step across the cut (no -800, no fake zero pair)", all(d >= 0 for _, d in st) and len(st) == len(pts) - 2 and sum(d for _, d in st) == 560 + 9)
+hj = A.hourly_joins(pts, [C], now=end + H)
+check("hourly: no bucket for the hour that straddles the cut", not any(t == (C // H) * H for t, _ in hj) and all(v >= 0 for _, v in hj))
+check("hourly: real 40/h before the halt, 0 while halted, 3/h after the cut", hj[0][1] == 40 and any(v == 0 and t < C for t, v in hj) and [v for t, v in hj if t > C][:2] == [3, 3])
+hj2 = A.hourly_joins(pts, [C], now=end)
+check("hourly: the hour still filling is left out", max(t for t, _ in hj2) < (end // H) * H)
+check("hourly without cuts keeps the old behaviour (the cross-cut hour clamps to 0)", any(t == (C // H) * H and v == 0 for t, v in A.hourly_joins(pts, [], now=end + H)))
+from poascan import ui as U
+sv = U.spark([(t, v) for t, v in hj], breaks=[C])
+check("sparkline breaks at the cut: two polylines", sv.count("<polyline") == 2 and U.spark([(t, v) for t, v in hj]).count("<polyline") == 1)
+
 # ---------------- DB read ----------------
 now = int(time.time())
 db.write("DELETE FROM snaps WHERE kind='status'")

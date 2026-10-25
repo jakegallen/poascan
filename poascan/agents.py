@@ -521,16 +521,16 @@ def established_history(addr):
 
 
 def new_per_day():
-    """New Agents per UTC day from POAScan's /api/status snapshots (agents_joined). The first day is partial."""
-    last = {}
-    for t, a, h, sup, tx in A.accounts_series():
-        if a: d = t // 86400 * 86400; last.setdefault(d, [a, a]); last[d][1] = a
-    out, prev = [], None
-    for d in sorted(last):
-        first, end = last[d]
-        out.append(dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, new_agents=end - (prev if prev is not None else first), total=end, partial=prev is None))
-        prev = end
-    return out
+    """New Agents per UTC day from POAScan's /api/status snapshots (agents_joined). The first day is partial.
+    Joins are summed between consecutive reads in the same segment (analytics.join_steps): agents_joined restarted at the
+    genesis cut, so the cut day counts the joins on each side and never the drop or rise across it."""
+    pts = [(t, a) for t, a, h, sup, tx in A.accounts_series() if a]
+    new, last = {}, {}
+    for t, a in pts: last[t // 86400 * 86400] = a
+    for t, n in A.join_steps(pts, A.cut_list()):
+        d = t // 86400 * 86400; new[d] = new.get(d, 0) + n
+    first = pts[0][0] // 86400 * 86400 if pts else None
+    return [dict(day=time.strftime("%Y-%m-%d", time.gmtime(d)), ts=d, new_agents=new.get(d, 0), total=last[d], partial=d == first) for d in sorted(last)]
 
 # ---------------- cluster signals (neutral: signals, not findings) ----------------
 SYNC_WINDOW_S = 5     # first challenges inside the same 5-second window

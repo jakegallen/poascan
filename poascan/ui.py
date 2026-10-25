@@ -439,19 +439,24 @@ def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text
         return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
 
-def spark(points, n=40):
-    """Tiny trend line (no axes): the last n points, scaled to their own range."""
+def spark(points, n=40, breaks=None):
+    """Tiny trend line (no axes): the last n points, scaled to their own range. breaks: x values the line is not drawn across
+    (a counter that restarted at a genesis cut), as line() and the pop-out."""
     pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
     if len(pts) < 2: return ""
     if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
     t0, t1 = pts[0][0], pts[-1][0]; lo = min(v for _, v in pts); hi = max(v for _, v in pts)
     xs = lambda t: 100 * (t - t0) / ((t1 - t0) or 1); ys = lambda v: 22 - 20 * (v - lo) / ((hi - lo) or 1)
-    d = " ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in pts)
-    return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="{d}" vector-effect="non-scaling-stroke"/></svg>'
+    bk = sorted(breaks or []); runs = [[]]
+    for i, (t, v) in enumerate(pts):
+        if i and any(pts[i - 1][0] < k <= t for k in bk): runs.append([])
+        runs[-1].append((t, v))
+    pl = "".join(f'<polyline points="{" ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in r)}" vector-effect="non-scaling-stroke"/>' for r in runs if r)
+    return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}</svg>'
 
-def spark_in(stat_html, points):
+def spark_in(stat_html, points, breaks=None):
     """Put a sparkline under a stat card's value."""
-    sv = spark(points)
+    sv = spark(points, breaks=breaks)
     return stat_html[:-len("</div>")] + sv + "</div>" if sv and stat_html.endswith("</div>") else stat_html
 
 ICON_EXPAND = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'

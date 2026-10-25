@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.110] - 2026-10-24
+
+### Fixed
+- Agents / hr across the genesis cut. agents_joined restarted at the cut with the carried Agents (5,361 to 4,941), and the rate read it as a 24 h window over 3 h: the headline now says `since_cut` (window kind) until the segment is a day old, 6 h and 24 h trailing rates are null while the segment is shorter, and under 1 h of the segment it is null.
+- Agents / hr chart (home sparkline and pop-out, all ranges): no hourly bucket across the cut (it read as a fake 0), the line breaks at the cut like Agents and Holders, and the hour still filling is left out.
+- New Agents daily (/agents, `/api/v1/agents/new-per-day`), Network daily `agents.new` and Network > Charts New · 24h sum joins on each side of the cut instead of the difference across it (Oct 24 UTC: 496, was 76; New · 24h: real joins in both segments, was segment 2 only).
+
 ## [1.26.109] - 2026-10-24
 
 ### Added

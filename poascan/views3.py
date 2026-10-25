@@ -194,13 +194,12 @@ def charts_body(rng=""):
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
     am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap", "cut") and t >= t0]
     em = [(t, l) for t, l, k in g["ms"] if k in ("close", "cut") and t >= t0]
-    la = g["agents"][-1][1] if g["agents"] else None
     c = _SG.cut(); brk = [c["ts"]] if c else []   # agents_joined and holders restarted at the genesis cut: no line or delta across it
-    a24 = next((a for t, a in g["agents"] if t >= max([now - DAY] + brk)), None)
+    n24 = A.joins_between(now - DAY, now)   # joins summed within each segment: the cut is neither a drop nor a rise
     tday = g["day"][-1]["n"] if g["day"] else None
     pe = g["per_ep"]; closes = {_SG.gkey(r["epoch"], n): r["close_ts"] for n in _SG.NUMBERS for r in _ep_rows(n)}
     pe_r = [x for x in pe if (closes.get(x[0]) or now) >= t0]
-    st = "".join([stat("New · 24h", f'<span class="num">+{la - a24:,}</span>' if la and a24 else "···", tip="Agents joined in the last 24 hours"),
+    st = "".join([stat("New · 24h", f'<span class="num">+{n24:,}</span>' if n24 is not None else "···", tip="Agents joined in the last 24 hours"),
                   stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
                   stat("Answerers", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None)), tip="Agents who answered in the last closed epoch")])
     H = 140

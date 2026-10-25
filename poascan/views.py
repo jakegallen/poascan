@@ -197,10 +197,7 @@ def home_epochs(ep):
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
-    hr = {}
-    for t, a in g["agents"]: hr[t // 3600] = a
-    ks = sorted(hr)[-49:]
-    joins = [(k * 3600, max(0, hr[k] - hr[j])) for j, k in zip(ks, ks[1:]) if k - j == 1]
+    joins = [p for p in A.hourly_joins(g["agents"], A.cut_list()) if p[0] >= time.time() - 49 * 3600]   # same series as the pop-out
     return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], joins_hr=joins)
 
 # ---------------- pages ----------------
@@ -208,8 +205,9 @@ def home():
     """Search, then the headline row (Total mined, Circulating supply, Agents, Agents / hr; method on /about#home), the open epoch,
     Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
-    kpis = "".join(pop(spark_in(h[k], sp.get(sk)), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("joins_hr", "joins_hr", "joins")))
-    more = pop(spark_in(h["holders"], sp.get("holders")), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
+    bk = A.cut_list()   # Agents, Agents / hr and Holders restart at a genesis cut: their sparklines break there, as the charts do
+    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk in ("accounts", "joins_hr") else None), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("joins_hr", "joins_hr", "joins")))
+    more = pop(spark_in(h["holders"], sp.get("holders"), bk), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
@@ -1365,7 +1363,7 @@ def about():
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
 <li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
-<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
+<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. Within a day of a genesis cut the window starts at the first read of the new segment (the count restarted there with the carried Agents), and the chart has no point or line across the cut. The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
