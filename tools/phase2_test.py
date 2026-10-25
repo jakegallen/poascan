@@ -53,5 +53,11 @@ check("app.js: slide every 5 s, refetch on a new tx at most every 20 s, fade new
       "setInterval(scoreSlide,5000)" in js and "20000-(Date.now()-SC.t)" in js and "/fragment/score" in js and "!RM)" in js)
 css = open(os.path.join(ROOT, "static/style.css")).read()
 check("style.css: reduced motion stops the live dot and mark fades", "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}" in css)
+check("motion: one easing, 240 ms row slide of 8 px, 600 ms chart draw, no feed glow, still skeletons, 2.4 s live dots",
+      "--state:240ms;--draw:600ms;--ease:cubic-bezier(.2,.7,.2,1)" in css and "@keyframes rowslide{from{opacity:0;transform:translateY(-8px)}" in css
+      and ".js .chart.in{animation:draw var(--draw) var(--ease) both}" in css and ".skel i{animation:none" in css and ".pill.live i{animation:ldot 2.4s" in css)
+check("relative ages step every 10 s under a minute (server and app.js agree)", '"just now":s<60?Math.floor(s/10)*10+"s ago"' in js
+      and re.search(r">(just now|\d0s ago|\d+m ago)</time>", __import__("poascan.ui", fromlist=["x"]).rel(time.time() - 25)) and ">20s ago<" in __import__("poascan.ui", fromlist=["x"]).rel(time.time() - 25))
+check("one empty state: naBox reads as the centered line", ".naBox{border:0;border-radius:0;padding:var(--s5) var(--s4);text-align:center" in css)
 if fails: print(f"FAIL: {len(fails)}: {fails}"); sys.exit(1)
 print("all passed")

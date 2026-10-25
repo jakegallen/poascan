@@ -22,7 +22,7 @@
 --ui:"Instrument Sans","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;--fig:"Newsreader",Georgia,"Times New Roman",serif;
 --t12:12px;--t13:13px;--t14:14px;--t16:16px;--t20:20px;--t28:28px;--t40:40px;--t64:64px;
 --fig-xl:40px;--fig-l:28px;--fig-m:20px;
---lh-tight:1.15;--lh:1.5;--track-label:.08em;--fast:160ms;--ease:cubic-bezier(.2,.7,.2,1);
+--lh-tight:1.15;--lh:1.5;--track-label:.08em;--fast:160ms;--state:240ms;--draw:600ms;--ease:cubic-bezier(.2,.7,.2,1);
 /* legacy names, kept as aliases so existing rules keep working */
 --bg:var(--ink-0);--card:var(--ink-2);--card2:var(--ink-3);--inset:var(--ink-1);--line:var(--rule);--line2:var(--rule-2);--row:var(--rule);
 --amber:var(--gold);--amber-d:var(--copper);--green:var(--verd);--red:var(--ember);
@@ -1120,6 +1120,17 @@ td a.mono{display:inline-block;min-width:24px}
  .fhd,.assay .feed .frow{grid-template-columns:76px minmax(0,1fr) 52px}
  .fhd span:nth-child(3),.assay .feed .fa{display:none}
  .closes .mpour{width:56px}.rate{width:32px;margin-right:6px}}
+
+/* Phase 2: motion. One easing (--ease): 160 ms hovers, 240 ms state changes, 600 ms one time chart draw in. New rows slide 8 px and
+   fade in, numbers roll only when they change (app.js). The only loops are the live dots (2.4 s); skeletons hold still.
+   Everything stops under prefers-reduced-motion (the global rule). Empty states: one centered line in the card body. */
+.feed .frow.in,tbody tr.in>td{animation:rowslide var(--state) var(--ease) both}
+tbody tr.in>td:first-child{box-shadow:none}
+@keyframes rowslide{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.pill.live i{animation:ldot 2.4s ease-in-out infinite}
+.skel i{animation:none;background:var(--ink-3)}
+.js .chart.in{animation:draw var(--draw) var(--ease) both}
+.naBox{border:0;border-radius:0;padding:var(--s5) var(--s4);text-align:center;color:var(--bone-3);font-size:var(--t13)}
 
 /* chart pop-out (app.js, chartpop.py). No entrance fade or transform anywhere in it: the dialog and the chart are visible from the
    first frame (the 1.26.28 iOS rule). Full screen on phones, touch scrubs the chart (touch-action none on the plot only). */

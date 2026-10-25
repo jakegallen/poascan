@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.130] - 2026-10-25
+
+### Changed
+- Motion, one set of rules: one easing, 160 ms hovers, 240 ms state changes, a 600 ms one time chart draw in (new tokens --state and --draw). New feed and table rows slide 8 px and fade in, with no gold flash. Numbers roll only when they change.
+- Calm: relative ages under a minute step every 10 s ("just now", "20s ago") instead of ticking every second, on the server and in app.js. The only loops are the live dots (2.4 s, opacity only, no glow). Loading skeletons hold still.
+- One empty state: no data reads as one centered line in the card body (naBox and the new empty line share it).
+- Everything stops under prefers-reduced-motion.
+
 ## [1.26.129] - 2026-10-25
 
 ### Changed
