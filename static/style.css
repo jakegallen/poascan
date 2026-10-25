@@ -1257,3 +1257,17 @@ code.brk{overflow-wrap:anywhere}
 .sortmenu>summary::-webkit-details-marker{display:none}.sortmenu>summary::after{content:"▾";color:var(--steel)}.sortmenu[open]>summary{color:var(--amber);border-color:#6B5420}
 .sortmenu>summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}.sortmenu .chips{margin-top:8px}
 @media (max-width:640px){.sortchips{display:none}.sortmenu{display:block}}
+/* Sortable column headers (1.26.117, scoresort.heads): the whole label is the button; the active column shows its direction */
+th.hs{padding-top:0;padding-bottom:0}
+th.hs .hsb{display:inline-flex;align-items:center;gap:5px;min-height:40px;color:inherit;text-decoration:none;cursor:pointer;border-radius:6px;-webkit-tap-highlight-color:transparent}
+th.hs .hsb:hover{color:#CFC6B3}
+th.hs .hsb:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+th.hs .ha{display:inline-block;width:10px;font-style:normal;font-size:11px;line-height:1;opacity:0;transition:opacity .15s}
+th.hs .hsb:hover .ha,th.hs .hsb:focus-visible .ha{opacity:.45}
+th.hs.on,th.hs.on .hsb{color:var(--amber)}
+th.hs.on .ha{opacity:1}
+th.hs .qtip{margin-left:2px}
+.sortsel{display:none;align-items:center;gap:8px;margin:0 0 10px;font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--steel)}
+.sortsel select{flex:1;min-width:0;max-width:280px;min-height:44px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:var(--card);color:#CFC6B3;font:inherit;font-size:var(--t12);text-transform:none;letter-spacing:0}
+.sortsel select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (max-width:640px){.sortsel{display:flex}th.hs .hsb{min-height:44px}.cal th.hs,table th.hs{white-space:nowrap;vertical-align:bottom}th.hs .ha{width:auto}}

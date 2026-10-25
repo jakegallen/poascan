@@ -167,7 +167,7 @@ def api(path, qs):
         t = path.rsplit("/", 1)[1]; t = V4.ALIAS.get(t, t)
         if t not in V4.COLS: return {"error": "unknown tab", "tabs": list(V4.COLS)}, False
         so = (qs.get("sort") or [""])[0]; d = (qs.get("dir") or ["desc"])[0]
-        if so and so not in V4.sorts(t): raise BadRequest("sort must be one of " + ", ".join(V4.sorts(t)))
+        if so and so not in V4.sorts(t): raise BadRequest("sort must be one of " + ", ".join(x for x in V4.sorts(t) if x))
         if d not in ("desc", "asc"): raise BadRequest("dir must be desc or asc")
         return V4.rows(t, so, d), True
     if path == "/api/status":

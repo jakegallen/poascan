@@ -136,14 +136,14 @@ def live():
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
-        gr = tabs["graders"]; check("Graders: the calibration table, sort keeps the tab", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;sort=n#calibration"' in gr)
+        gr = tabs["graders"]; check("Graders: the calibration table, header sort keeps the tab (csort, its own key)", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;csort=aligned#calibration"' in gr)
         check("Graders: live seals, jury seats per close and coverage stats", all(x in gr for x in ("Seals since close", "Jury seats per close", ">Coverage<", ">Queue<")) and 'class="chartbox"' in gr)
         dr = tabs["directory"]; A1 = "poa1" + "A" * 40
         check("Directory: every Agent with rewards, eligible, seals and attestations; sort and filter chips", 'id="directory"' in dr and f'href="/address/{A1}#standing"' in dr
-              and all(f'>{x}</a>' in dr for x in ("Rewards", "Eligible closes", "Seals", "Attestations", "Established", "Graders", "Attesters")))
+              and all(f'>{x}<i class="ha"' in dr for x in ("Rewards", "Eligible", "Seals", "Attestations", "Last paid", "Agent")) and all(f'>{x}</a>' in dr for x in ("Established", "Graders", "Attesters")))
         d2 = get("/governance?tab=directory&sort=atts&filter=graders")[1]
         check("Directory: sort and filter keep each other", 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Graders' in d2
-              and 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders#directory" class="chip on" aria-current="true">Attestations' in d2)
+              and '<th class="r dk hs on" aria-sort="descending"><a class="hsb" href="/governance?tab=directory&amp;sort=atts&amp;dir=asc&amp;filter=graders#directory"' in d2)
         pa = tabs["payouts"]
         check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
               and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox"' in pa)
@@ -166,12 +166,12 @@ def live():
         c, es, _ = get("/governance?tab=established")
         check("Established tab: count in the header, Score column with a tap and keyboard tooltip, sort and filter chips", c == 200 and re.search(r"Established · \d+", es) is not None
               and '<details class="qtip"><summary aria-label="About Score"' in es and "Not an official ranking." in es and 'href="/about#score">Method</a>' in es
-              and all(f'>{x}</a>' in es for x in ("Score", "Closes held", "Name")) and 'class="tag score"' in es and "\u2014" not in es)
+              and all(f'>{x}<i class="ha"' in es for x in ("Score", "Held", "Agent", "Level", "Added", "Eligible", "Seals", "Left")) and 'class="tag score"' in es and "\u2014" not in es)
         check("Established: names link to LabLeak, addresses to the Agent page", ('aname" href="https://minepoa.com/lableak/' in es or "fname" not in es) and 'href="/address/' in es)
         check("Established: sort and filter keep each other", get("/governance?tab=established&sort=name&filter=graders")[0] == 200
               and 'sort=name&amp;filter=graders#established" class="chip on"' in get("/governance?tab=established&sort=name&filter=graders")[1])
         check("Directory: Score column and sort chip", ">Score<" in dr or 'Score<details class="qtip"' in dr)
-        check("Directory: sort=score", 'class="chip on" aria-current="true">Score</a>' in get("/governance?tab=directory&sort=score")[1])
+        check("Directory: sort=score", '<th class="r hs on" aria-sort="descending"><a class="hsb" href="/governance?tab=directory&amp;sort=score&amp;dir=asc#directory"' in get("/governance?tab=directory&sort=score")[1])
         c, _, h = get("/established?segment=1"); check(f"/established 301 keeps the query ({h.get('Location')})", c == 301 and h.get("Location") == "/governance?tab=established&segment=1")
         ab = get("/about")[1]; check("/about#score: method and weights", 'id="score"' in ab and "govscore.json" in ab and "Not an official ranking" in ab)
         c, b, _ = get("/api/v1/governance/established?sort=score&limit=5")
@@ -187,20 +187,27 @@ def live():
         for u, anchor in (("/governance?tab=established", "established"), ("/governance?tab=directory", "directory"), ("/governance?tab=at-risk", "standing"),
                           ("/governance?tab=graders", "calibration"), ("/governance?tab=forum&range=all", "active"), ("/agents/top?tab=richlist", None)):
             j = "&" if "?" in u else "?"
-            hi = get(u + j + "sort=score")[1]; lo = get(u + j + "sort=score&dir=asc")[1]; gr_ = get(u + j + "sort=grading&dir=asc")[1]
+            sk, dk = ("csort", "cdir") if anchor == "calibration" else ("sort", "dir")   # the calibration table has its own keys (the seals table shares the page)
+            hi = get(u + j + f"{sk}=score")[1]; lo = get(u + j + f"{sk}=score&{dk}=asc")[1]; gr_ = get(u + j + f"{sk}=grading&{dk}=asc")[1]
             ho, lw = sc_order(hi), sc_order(lo)
+            if anchor == "calibration":   # only the calibration table's Score column
+                cut = lambda h: h[h.index('id="calibration"'):] if 'id="calibration"' in h else ""
+                ho, lw = sc_order(cut(hi)), sc_order(cut(lo))
             check(f"{u}: sort=score Top first and Bottom first ({ho[:4]} / {lw[:4]})", ho == sorted(ho, reverse=True) and lw == sorted(lw) and (not ho or sorted(ho) == sorted(lw)))
-            if "forum" in u and "No authors" in hi: hi = hi.replace("No authors", '<details class="qtip">')
-            check(f"{u}: Score tooltip, 4 part sorts, Top first / Bottom first, compact menu for 390", '<details class="qtip">' in hi and all(f'>{t}</a>' in hi for t in ("Standing", "Grading", "Forum", "Consistency"))
-                  and '>Top first</a>' in hi and '>Bottom first</a>' in hi and '<details class="sortmenu"><summary>Sort: Score · Top first</summary>' in hi
-                  and '<summary>Sort: Grading · Bottom first</summary>' in gr_ and "\u2014" not in hi and "\u2013" not in hi)
-            check(f"{u}: Bottom first link keeps the sort", "sort=score&amp;dir=asc" in hi or ("dir=asc" in hi and "sort=score" not in hi.split("sortchips", 1)[1].split("Bottom first")[0][-200:]))
+            if "forum" in u and "No authors" in hi: continue
+            th = lambda h, lab: re.search(r'<th[^>]*aria-sort="(\w+)"><a class="hsb" href="([^"]+)"[^>]*>' + lab + r'<i class="ha"', h)
+            s1, g1 = th(hi, "Score"), th(gr_, "Grading")
+            check(f"{u}: header sort: Score descending, click flips to ascending; Grading ascending; Score ? outside the link; phone sort menu; no chip rows",
+                  s1 is not None and s1.group(1) == "descending" and f"{dk}=asc" in s1.group(2) and g1 is not None and g1.group(1) == "ascending" and f"{dk}=asc" not in g1.group(2)
+                  and re.search(r'Score<i class="ha" aria-hidden="true">↓</i></a><details class="qtip">', hi) is not None and '<label class="sortsel">' in hi
+                  and all(f'>{t}<i class="ha"' in hi for t in ("Standing", "Grading", "Forum", "Consistency"))
+                  and "Top first</a>" not in hi and "Bottom first</a>" not in hi and 'class="chips sortchips"' not in hi and "\u2014" not in hi and "\u2013" not in hi)
         lo = get("/governance?tab=established&sort=forum&dir=asc&filter=safe")[1]
         check("Established: CSV and API links carry sort, dir and filter", "/api/v1/governance/established.csv?sort=forum&amp;dir=asc&amp;filter=safe" in lo and "/api/v1/governance/established?sort=forum&amp;dir=asc&amp;filter=safe" in lo)
         dl = get("/governance?tab=directory&sort=consistency&dir=asc")[1]
-        check("Directory: CSV link carries sort and dir; part columns", "/api/v1/governance/directory.csv?sort=consistency&amp;dir=asc" in dl and ">Consistency</th>" in dl and ">Standing</th>" in dl)
+        check("Directory: CSV link carries sort and dir; part columns", "/api/v1/governance/directory.csv?sort=consistency&amp;dir=asc" in dl and '>Consistency<i class="ha"' in dl and '>Standing<i class="ha"' in dl)
         rk = get("/agents/top?tab=graders&sort=standing&dir=asc")[1]
-        check("Rankings: CSV and API links carry sort and dir; Score and parts columns", "/api/leaderboard/graders.csv?sort=standing&amp;dir=asc" in rk and "/api/v1/leaderboard/graders?sort=standing&amp;dir=asc" in rk and ">Standing</th>" in rk)
+        check("Rankings: CSV and API links carry sort and dir; Score and parts columns", "/api/leaderboard/graders.csv?sort=standing&amp;dir=asc" in rk and "/api/v1/leaderboard/graders?sort=standing&amp;dir=asc" in rk and '>Standing<i class="ha"' in rk)
         apis2 = {}
         for u in ("/api/v1/governance/established?sort=standing&dir=asc", "/api/v1/governance/directory?sort=grading&dir=desc", "/api/v1/governance/at-risk?sort=score&dir=asc",
                   "/api/v1/governance/graders?sort=forum", "/api/v1/governance/forum?range=all&sort=consistency&dir=asc", "/api/v1/leaderboard/richlist?sort=score&dir=asc"):
@@ -214,7 +221,7 @@ def live():
             want = sorted(vals) if "dir=asc" in u else sorted(vals, reverse=True)
             check(f"API {u}: 200 and ordered by {k}", c == 200 and vals == want and all(x is not None for x in vals))
         bad2 = [get(u)[0] for u in ("/api/v1/governance/established?sort=x", "/api/v1/governance/established?dir=up", "/api/v1/governance/directory?dir=x", "/api/v1/governance/at-risk?sort=rewards",
-                                     "/api/v1/governance/graders?sort=name", "/api/v1/governance/forum?dir=1", "/api/v1/leaderboard/richlist?sort=x", "/api/v1/leaderboard/richlist?dir=x", "/api/v1/leaderboard/models?sort=score")]
+                                     "/api/v1/governance/graders?sort=rewards", "/api/v1/governance/forum?dir=1", "/api/v1/leaderboard/richlist?sort=x", "/api/v1/leaderboard/richlist?dir=x", "/api/v1/leaderboard/models?sort=score")]
         check(f"API bad sort or dir 400 {bad2}", all(c == 400 for c in bad2))
         fr2 = J.loads(get("/fragment/lb?tab=richlist&offset=0&sort=score&dir=asc")[1]); check("Rankings Load more keeps sort and dir", sc_order(fr2["html"]) == sorted(sc_order(fr2["html"])))
         check("Rankings Load more: bad sort 400", get("/fragment/lb?tab=richlist&offset=0&sort=x")[0] == 400)

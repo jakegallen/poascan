@@ -316,15 +316,10 @@ if(am){var amP=$("#am-p",am),amT=$("#am-t",am),amC=$(".am-c",am),cur=[];
    var mu=cur.length>1;amC.hidden=!mu;am.classList.toggle("multi",mu);amT.classList.toggle("sr-only",mu);amSet(0);ev(cur[0]&&cur[0][2]&&cur[0][2]+".open");if(am.showModal)am.showModal();else am.setAttribute("open","");D.documentElement.classList.add("jmlock");return}
   if(am.open&&(t===am||t.closest("[data-amclose]"))){if(am.close)am.close();else am.removeAttribute("open")}});
  am.addEventListener("close",function(){D.documentElement.classList.remove("jmlock")})}
-/* sortable tables */
-function sortables(){$$("table.sortable").forEach(function(tb){$$("th[data-sort]",tb).forEach(function(th,ci){th.tabIndex=0;th.setAttribute("role","button");
- function go(){var asc=th.dataset.dir!=="asc"&&th.dataset.dir!==undefined?true:th.dataset.dir==="desc";if(th.dataset.dir===undefined)asc=th.dataset.sort==="text";
-  $$("th",tb).forEach(function(o){delete o.dataset.dir});th.dataset.dir=asc?"asc":"desc";
-  var bd=tb.tBodies[0];$$(".xrow",bd).forEach(function(x){x.remove()});$$("tr.open",bd).forEach(function(r){r.classList.remove("open")});var rs=Array.prototype.slice.call(bd.rows),num=th.dataset.sort==="num";
-  rs.sort(function(a,b){var x=a.cells[ci]&&a.cells[ci].dataset.v,y=b.cells[ci]&&b.cells[ci].dataset.v;if(num){x=parseFloat(x);y=parseFloat(y);x=isNaN(x)?-1e18:x;y=isNaN(y)?-1e18:y;return asc?x-y:y-x}
-   x=(x||"").toLowerCase();y=(y||"").toLowerCase();return asc?(x<y?-1:x>y?1:0):(x<y?1:x>y?-1:0)});
-  rs.forEach(function(r){bd.appendChild(r)})}
- th.addEventListener("click",go);th.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}})})})}
+/* sortable column headers (1.26.117): each header is a link the server sorts by (?sort=&dir=); Space activates it like a
+   button, and the phone sort menu follows the option picked */
+function sortables(){$$("th.hs .hsb").forEach(function(a){if(a.dataset.hk)return;a.dataset.hk=1;a.addEventListener("keydown",function(e){if(e.key===" "){e.preventDefault();a.click()}})});
+ $$("select[data-nav]").forEach(function(s){if(s.dataset.hk)return;s.dataset.hk=1;s.addEventListener("change",function(){var v=s.value;if(v&&v.charAt(0)==="/")location.href=v})})}
 /* priority columns at 390px: hidden cells open in a row below on tap or Enter */
 function pris(root){$$("table.pri",root).forEach(function(tb){var hs=tb.tHead?Array.prototype.slice.call(tb.tHead.rows[0].cells):[];
  $$("tbody tr:not(.xrow)",tb).forEach(function(tr){if(tr.dataset.pl)return;tr.dataset.pl=1;var ps=$$("td.p",tr);if(ps.length&&ps.length<tr.cells.length){ps[ps.length-1].classList.add("pl");ps[ps.length-1].insertAdjacentHTML("beforeend",'<span class="xi" aria-hidden="true">+</span>')}});

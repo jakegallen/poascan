@@ -175,11 +175,21 @@ def joins_fields():
                                                  paused_until_ts=r["paused_until"], trailing_per_hour=r["trailing"]))
 
 
-def epochs_table(rows, link=True):
-    return table(["#", "Status", "Closed (UTC)", "Agents paid", "Minted", "Burned", "Burn %", "Median reward"],
-                 [[f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
-                   poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>',
-                   num(r["median"])] for r in reversed(rows)], pri=(0, 4, 6), usd=(4, 5, 7))
+def epoch_cols():
+    from . import scoresort as SS
+    return [SS.Col("epoch", "#"), SS.Col(None, "Status"), SS.Col("close_ts", "Closed (UTC)"), SS.Col("paid", "Agents paid"), SS.Col("minted", "Minted"),
+            SS.Col("burned", "Burned"), SS.Col("burn_pct", "Burn %"), SS.Col("median", "Median reward")]
+EPOCH_SORTS = ("epoch", "close_ts", "paid", "minted", "burned", "burn_pct", "median")
+
+def epochs_table(rows, link=True, qs=None, base=None):
+    """Closes, newest first. qs and base: every header sorts the list (?sort=&dir=, server side; blanks last)."""
+    from . import scoresort as SS
+    by = SS.q(qs, "sort", "epoch"); by = by if by in EPOCH_SORTS else "epoch"; d = SS.page_dir(qs)
+    rs = SS.sort_rows(list(rows), lambda r: r.get(by), "num", d, tie=lambda r: -r["epoch"])
+    lk = SS.link_fn(base, "epoch", "#history", **({"segment": str(SG.selected())} if SG.archived() else {})) if base else None
+    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>', utc(r["close_ts"]), intc(r["paid"]),
+                   poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
+                   num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
 
 def raw_fields(extra):
     """Short scalar fields inline; long blobs collapsed behind a 'show raw' toggle."""
@@ -855,9 +865,11 @@ def epochs_page(qs=None):
         cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("#8FA3B8",), fmt=lambda v: f"{v:.2f}h")
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet."
-        hist = (epochs_table(ep) + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet.") if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
+        hist = (epochs_table(ep, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet.") if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
             unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")
-        inner = (card("History", f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>', X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>')
+        live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
+        hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
+        inner = (card("History", hist, X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>', id="history")
                  + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
     body = f'<div class="sechead"><h1 class="sr-only">Epochs</h1>{chain_tabs("/chain")}{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
@@ -1102,12 +1114,20 @@ def _cal_cell(v, sub, low):
 def graders_body(qs=None, base="/governance?tab=graders"):
     """Calibration table (Governance > Graders; was /agents/graders)."""
     from . import governance as GV, scoresort as SS
-    sorts = [("name", "Name"), ("n", "n")] + SS.PARTS
-    by = SS.page_sort(qs, dict(sorts), "name"); d = SS.page_dir(qs)
-    c, rows = CA.sorted_rows(by if by in ("name", "n") else "name"); m = CA.MIN_N; scs = GV.scores()["rows"]
+    cols = ([GV.AGENT_COL, SS.Col("aligned", "Aligned", "num", "r"), SS.Col("passed", "If passed", "num", "r dk"), SS.Col("failed", "If failed", "num", "r dk"),
+             SS.Col("grade", "Grade", "num", "r dk"), SS.Col("per_close", "Seals per close", "num", "r")] + GV.score_cols())
+    sorts = SS.keys(cols) + [("n", "n")]
+    # own query keys (csort, cdir): the Seals since close table on the same page sorts by sort and dir
+    by = SS.q(qs, "csort", "name"); by = by if by in dict(sorts) else "name"; d = SS.q(qs, "cdir", "desc"); d = d if d in ("desc", "asc") else "desc"
+    c, rows = CA.sorted_rows("n" if by == "n" else "name"); m = CA.MIN_N; scs = GV.scores()["rows"]
     rows = [dict(r, **GV.parts_of(r["grader"], scs)) for r in rows]
-    if by in SS.KEYS: rows = SS.order(rows, lambda r: r[by], d, tie=lambda r: ((r["name"] or "~").lower(), r["grader"]))
-    elif d == "asc": rows = list(reversed(rows))
+    rate = lambda n, a: (a / n) if n else None
+    val = {"name": lambda r: SS.text_key(r["name"]), "aligned": lambda r: r["aligned_rate"] if r["seats"] else None,
+           "passed": lambda r: rate(r["seats_passed"], r["aligned_passed"]), "failed": lambda r: rate(r["seats_failed"], r["aligned_failed"]),
+           "grade": lambda r: r["score_mean"] if r["scored"] else None, "per_close": lambda r: r["seals_per_close"]}
+    tie = lambda r: ((r["name"] or "~").lower(), r["grader"])
+    if by == "n": rows = list(reversed(rows)) if d == "asc" else rows
+    else: rows = SS.sort_rows(rows, val.get(by, lambda r: r[by]), SS.kind_of(cols, by), d, tie=tie)
     def ag(r):
         g = r["grader"]; a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
         sy = '<span class="tag">system</span>' if r["trusted"] else ""
@@ -1119,12 +1139,12 @@ def graders_body(qs=None, base="/governance?tab=graders"):
         n, a = r[f"seats_{k}"], r[f"aligned_{k}"]; return _cal_cell(pct(a / n) if n else RC.UNK, f"of {n:,}", n < m)
     trs = "".join(f'<tr class="{"low" if r["low_n"] else ""}"><td>{ag(r)}</td><td class="r">{al(r)}</td><td class="r dk">{cond(r, "passed")}</td><td class="r dk">{cond(r, "failed")}</td>'
                   f'<td class="r dk">{sc(r)}</td><td class="r">{pc(r)}</td>{GV.score_cells(r)}</tr>' for r in rows)
-    tb = (f'<div class="tw"><table class="hist cal"><thead><tr><th>Agent</th><th class="r">Aligned</th><th class="r dk">If passed</th><th class="r dk">If failed</th><th class="r dk">Grade</th><th class="r">Seals per close</th>{GV.score_heads(by)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=11 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
     def link(k, dd):
-        qq = [x for x in ((f"sort={k}" if k != "name" else ""), ("dir=asc" if dd == "asc" else "")) if x]
+        qq = [x for x in ((f"csort={k}" if k != "name" else ""), ("cdir=asc" if dd == "asc" else "")) if x]
         return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "") + "#calibration"
-    chips = SS.controls(link, sorts, by, d)
+    tb = (SS.select(cols, by, d, link) + f'<div class="tw"><table class="hist cal"><thead><tr>{SS.heads(cols, by, d, link)}</tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=11 class=na>No rows yet.</td></tr>"}</tbody></table></div>')
+    chips = ""
     f2 = lambda v: f"{v:.2f}" if v is not None else RC.UNK
     s = "".join([stat("Jury seats", intc(c["seats"])), stat("Agreement", pct(c["aligned_rate"])), stat("Mean grade", f2(c["score_mean"])),
                  stat("Grade spread", f2(c["score_sd"]))])

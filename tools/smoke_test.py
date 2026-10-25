@@ -438,10 +438,10 @@ def calibration(base, check):
           and [r["grader"] for r in d["rows"]] == sorted(by) and d["method"].endswith("/about#calibration"))
     n = json.loads(req(base + "/api/v1/agents/calibration?sort=n")[1]); c, h, b = reqh(base + "/api/v1/agents/calibration.csv")
     check("calibration: sort=n, CSV rows, 400 on a bad sort", n["rows"][0]["grader"] == A3 and c == 200 and b.decode().count("\n") == 6 and req(base + "/api/v1/agents/calibration?sort=best")[0] == 400)
-    pg = req(base + "/governance?tab=graders")[1].decode(); p2 = req(base + "/governance?tab=graders&sort=n")[1].decode()
+    pg = req(base + "/governance?tab=graders")[1].decode(); p2 = req(base + "/governance?tab=graders&csort=n")[1].decode()
     card = pg[pg.index('id="calibration"'):]; card = card[:card.index("</section>")]
     check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks",
-          "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'class="chip on" aria-current="true">n<' in p2
+          "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'id="calibration"' in p2 and 'csort=aligned#calibration' in card and '<label class="sortsel">' in card
           and "Read my calibration" in card and not any(w in card.lower().replace("top first", "").replace("not an official ranking", "") for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": A3, "tx_limit": 1, "grading": True}}}).encode(),

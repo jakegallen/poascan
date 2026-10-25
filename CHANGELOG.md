@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.117] - 2026-10-25
+
+### Changed
+- Sortable column headers on every list table, from one shared component (scoresort.heads): Governance Established (every column: Agent, Score and its parts, Level, Added, Held, Eligible, Seals, Left), At risk, Graders (Seals since close and Calibration), Directory, Forum Most active and Payouts; Agents Rankings (every tab and column); Chain Epochs history. Click a header to sort by it, again to flip; the active header shows an arrow (up ascending, down descending) and aria-sort, the others a faint arrow on hover. Numbers sort highest first on the first click, text A to Z, Level in its own order (At risk, Watch, Safe, No record, System); blanks last either way, with a stable name and address tiebreak.
+- Sorting stays server side with ?sort=&dir= in the URL, so CSV and API links, pagination and Load more keep it. New sort keys: Established level and added; At risk name, left, missed, last and drop; Graders name; Directory name and last_paid; Forum name, posts, comments and received; Rankings name and every column. dir keeps its 1.26.112 meaning (desc is the natural order); bad values are still 400.
+- The 1.26.112 sort chip rows and Top first / Bottom first chips are gone; filter chips stay. At 640px and below one compact sort menu lists every column both ways. The Score ? stays outside the sort link. The Calibration table sorts with its own csort and cdir, so it no longer follows the Seals since close table on the same page.
+- Tests: tools/headersort_test.py (new), tools/govnav_test.py and tools/smoke_test.py.
+
 ## [1.26.116] - 2026-10-24
 
 ### Changed

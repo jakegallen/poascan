@@ -479,16 +479,26 @@ def _fit(value):
     fx = fxn + (len(txt("unit")) * 7.4 + 6 if 'class="unit"' in value else 0)
     return f' style="--nc:{nc};--fx:{fx:.0f}px;--fxn:{fxn:.0f}px"'
 
-def table(headers, rows, cls="", pri=None, usd=None):
-    """pri: column indexes that stay visible at 390px (the rest open on tap). usd: POA amount columns the POA | USD toggle converts."""
+def table(headers, rows, cls="", pri=None, usd=None, sort=None):
+    """pri: column indexes that stay visible at 390px (the rest open on tap). usd: POA amount columns the POA | USD toggle converts.
+    sort: (cols, key, dir, link) makes the headers sort links (scoresort.heads; one scoresort.Col per column) with the
+    phone sort menu above the table; headers is then ignored."""
     pri, usd = set(pri or ()), set(usd or ())
     def c(i, base=""):
         k = " ".join(x for x in (base, "p" if i in pri else "", "pc" if i in usd else "") if x)
         return f' class="{k}"' if k else ""
-    th = "".join(f"<th{c(i)}>{h}</th>" for i, h in enumerate(headers))
+    pre = ""
+    if sort:
+        from . import scoresort as SS
+        cols, cur, d, link = sort
+        cols = [x._replace(cls=" ".join(y for y in (x.cls, "p" if i in pri else "", "pc" if i in usd else "") if y)) for i, x in enumerate(cols)]
+        th = SS.heads(cols, cur, d, link); pre = SS.select(cols, cur, d, link) if link else ""
+        headers = cols
+    else:
+        th = "".join(f"<th{c(i)}>{h}</th>" for i, h in enumerate(headers))
     tr = "".join("<tr>" + "".join(f"<td{c(i)}>{x}</td>" for i, x in enumerate(r)) + "</tr>" for r in rows) or f'<tr><td colspan="{len(headers)}" class="na p">No rows yet.</td></tr>'
     cl = " ".join(x for x in (cls, "pri" if pri else "") if x)
-    return f'<div class="tw"><table class="{cl}"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table></div>'
+    return pre + f'<div class="tw"><table class="{cl}"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table></div>'
 
 def note(t): return ""  # caveat notes removed site-wide; methodology lives on /about
 

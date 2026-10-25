@@ -23,10 +23,24 @@ def _base():
         if r["invited_by"]: kids[r["invited_by"]].append(a)
     return rb, acc, last, kids
 
-RANK = ("", "Rank")
+
 def sorts(tab):
-    """Server-side sort keys for a Rankings tab: "" (the tab's own ranking) plus Score and its parts for Agent tabs."""
-    tab = ALIAS.get(tab, tab); return ["", "rank"] + ([] if tab == "models" else [k for k, _ in _SS().PARTS])
+    """Server-side sort keys for a Rankings tab: "" or rank (the tab's own ranking), name (A to Z), every column, plus
+    Score and its parts for Agent tabs (1.26.117: every column header sorts)."""
+    tab = ALIAS.get(tab, tab)
+    return ["", "rank", "name"] + [c for c, _, _ in COLS.get(tab, [])] + ([] if tab == "models" else [k for k, _ in _SS().PARTS])
+
+def cols(tab):
+    """Header columns (scoresort.Col) for a Rankings tab: #, Agent (or Model / harness), the tab's columns, Score and parts."""
+    SS = _SS(); tab = ALIAS.get(tab, tab)
+    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)
+    out = [SS.Col("rank", "#", "rank", "p"), SS.Col("name", "Model / harness" if tab == "models" else "Agent", "text", "p")]
+    out += [SS.Col(c, h, "text" if k == "text" else "num", cl(i, k)) for i, (c, h, k) in enumerate(COLS[tab])]
+    if tab != "models":
+        from . import governance as GV
+        out += [SS.Col("score", "Score", "num", "", GV.score_tip())] + [SS.Col(k, t, "num") for k, t in SS.PARTS[1:]]
+    if tab == "referrals": out.append(SS.Col(None, "Tree"))
+    return out
 
 def _SS():
     from . import scoresort as SS
@@ -38,15 +52,21 @@ def _scores():
     return GV.scores("all")["rows"]
 
 def rows(tab, sort="", d="desc"):
-    """Ranked rows; sort="" keeps the tab's own ranking, sort="score" or a part re-ranks by POAScan's Score; d="asc" is Bottom first."""
-    out = _rows(tab)
-    if tab == "models" or ALIAS.get(tab, tab) == "models": return out
-    SS = _SS(); sc = _scores()
-    for x in out:
-        f = sc.get(x.get("addr")) or {}
-        for k in SS.KEYS: x[k] = f.get(k, 0)
-    if sort in SS.KEYS: out = SS.order(out, lambda x: x[sort], d, tie=lambda x: x["rank"])
-    elif d == "asc": out = list(reversed(out))
+    """Ranked rows; sort="" or rank keeps the tab's own ranking (d="asc" reverses it); name sorts A to Z; a column or Score
+    or a part re-ranks by it (desc highest first). Blanks last either way, ties keep the tab's own order; # is renumbered."""
+    out = _rows(tab); SS = _SS(); models = tab == "models" or ALIAS.get(tab, tab) == "models"
+    if not models:
+        sc = _scores()
+        for x in out:
+            f = sc.get(x.get("addr")) or {}
+            for k in SS.KEYS: x[k] = f.get(k, 0)
+    if sort in ("", "rank"):
+        if d == "asc": out = list(reversed(out))
+    elif sort == "name":
+        out = SS.sort_rows(out, lambda x: SS.text_key(x.get("name") or ("" if models else None)), "text", d, tie=lambda x: x["rank"])
+    else:
+        out = SS.sort_rows(out, (lambda x: SS.text_key(x.get(sort))) if SS.kind_of(cols(tab), sort) == "text" else (lambda x: x.get(sort)),
+                           SS.kind_of(cols(tab), sort), d, tie=lambda x: x["rank"])
     for i, x in enumerate(out, 1): x["rank"] = i
     return out
 
@@ -149,11 +169,6 @@ def _score_tds(x, sort):
     return (f'<td data-v="{x.get("score", 0)}" class="{p}"><span class="tag score">{x.get("score", 0)}</span></td>'
             + "".join(f'<td data-v="{x.get(k, 0)}">{x.get(k, 0)}</td>' for k in SS.SUBS))
 
-def _score_ths(sort):
-    from . import governance as GV
-    SS = _SS(); p = ' class="p"' if sort in SS.KEYS else ""
-    return f'<th data-sort="num"{p}>Score{GV.score_tip()}</th>' + "".join(f'<th data-sort="num">{t}</th>' for k, t in SS.PARTS[1:])
-
 def _rows_html(tab, rs, nm, sort=""):
     cols = COLS[tab]; body = []
     cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)
@@ -180,30 +195,27 @@ def fragment(qs):
     rs = rows(tab, so, d)
     return dict(html=_rows_html(tab, rs[off:off + PAGE], _nm(), so), next=_next(tab, off + PAGE, len(rs), so, d))
 
-def table_html(tab, limit=PAGE, sort="", d="desc"):
-    rs = rows(tab, sort, d); nm = _nm(); cols = COLS[tab]
-    first = "Model / harness" if tab == "models" else "Agent"
-    cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)   # first metric stays visible at 390px; POA columns convert to USD
-    th = f'<th data-sort="num" class="p">#</th><th data-sort="text" class="p">{first}</th>' + "".join(f'<th data-sort="{"text" if k == "text" else "num"}" class="{cl(i, k)}">{h}</th>' for i, (_, h, k) in enumerate(cols))
-    if tab != "models": th += _score_ths(sort)
-    if tab == "referrals": th += "<th>Tree</th>"
+def table_html(tab, limit=PAGE, sort="", d="desc", link=None):
+    """The Rankings table: header links (link(key, dir)) sort server-side, so Load more continues the same order."""
+    rs = rows(tab, sort, d); nm = _nm()
+    SS = _SS(); hc = cols(tab)
+    if sort in SS.KEYS: hc = [c._replace(cls=(c.cls + " p").strip()) if c.key == "score" else c for c in hc]   # Score stays visible at 390 when it is the sort
+    th = SS.heads(hc, sort or "rank", d, link)
     nx = _next(tab, limit, len(rs), sort, d)
     more = f'<button type="button" class="btn ghost more-btn" data-more="{E(nx)}">Load more</button>' if nx else ""
-    return (f'<div class="tw"><table class="sortable lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm, sort) or "<tr><td colspan=14 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
+    return ((SS.select(hc, sort or "rank", d, link) if link else "") + f'<div class="tw"><table class="lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm, sort) or "<tr><td colspan=14 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
 
 def leaderboard_page(tab, apage, qs=None):
     tab = ALIAS.get(tab, tab); tab = PAGE_ALIAS.get(tab, tab); tab = tab if tab in dict(TABS) else "holders"
     SS = _SS(); key0 = "models" if tab == "ai" else tab
     so = SS.q(qs, "sort"); so = so if so in sorts(key0) and so != "rank" else ""; d = SS.page_dir(qs)
+    base = "/agents/top" + ("" if tab == "holders" else f"?tab={tab}")
+    def link(k, dd):
+        qq = [x for x in ((f"sort={k}" if k not in ("", "rank") else ""), ("dir=asc" if dd == "asc" else "")) if x]
+        return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "")
     chips = "".join(f'<a href="/agents/top{"" if k == "holders" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{n}</a>' for k, n in TABS)
     key = "models" if tab == "ai" else tab
-    tb, n = table_html(key, PAGE, so, d)
-    if key != "models":
-        base = "/agents/top" + ("" if tab == "holders" else f"?tab={tab}")
-        def link(k, dd):
-            qq = [x for x in ((f"sort={k}" if k else ""), ("dir=asc" if dd == "asc" else "")) if x]
-            return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "")
-        tb = SS.controls(link, [RANK] + SS.PARTS, so, d) + tb
+    tb, n = table_html(key, PAGE, so, d, link)
     cq = "&".join(x for x in ((f"sort={so}" if so else ""), ("dir=asc" if d == "asc" else "")) if x)
     title = dict(TABS)[tab]
     body = (f'<nav class="chips lbtabs scroll" aria-label="Rankings">{chips}</nav>'
