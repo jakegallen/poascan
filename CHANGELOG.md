@@ -11,11 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.114] - 2026-10-24
+
+### Changed
+- Segment 2 Mining reopened now sits at the first segment 2 answer tx, Oct 24 2:11 PM PT (21:11:34 UTC, tx 190951ee), from chain data, linked to that tx. Milestone sources are operator notices, operator posts and chain data only; a test checks it.
+
 ## [1.26.113] - 2026-10-24
 
 ### Changed
 - Chart milestones by relevance. Every event lives in `poascan/milestones.json` with its plain label, verified source and the charts it affects (`charts`: chart ids or groups chain, mining, grading, joining; [] lists it in the Milestones table only). Pop-out, Network > Charts and Governance > Charts draw only the milestones that affect that chart, on 24h, 7d, 30d and All.
-- Upgrade begins (Oct 21 12:00 PM PT): mining, grading and joining charts. Mining reopened (Oct 22 4:16 PM PT, post 1357 comment 3121): mining charts, and Joining reopened on Agents and Agents / hr. Upgrade complete (Oct 23 9:57 AM PT): Total mined, Supply, Circulating, Txs. Grading reopened (same notice): Governance charts. Genesis cut (Oct 24 2:01 PM PT): every chart. Segment 2 Mining reopened (Oct 24 3:13 PM PT, post 1451 comment 4291): mining charts. First join of segment 2 (Oct 24 3:59 PM PT, join tx d2c977ff): Agents and Agents / hr.
+- Upgrade begins (Oct 21 12:00 PM PT): mining, grading and joining charts. Mining reopened (Oct 22 4:16 PM PT, post 1357 comment 3121): mining charts, and Joining reopened on Agents and Agents / hr. Upgrade complete (Oct 23 9:57 AM PT): Total mined, Supply, Circulating, Txs. Grading reopened (same notice): Governance charts. Genesis cut (Oct 24 2:01 PM PT): every chart. Segment 2 Mining reopened: mining charts. First join of segment 2 (Oct 24 3:59 PM PT, join tx d2c977ff): Agents and Agents / hr.
 - Route reads, the checkpoint, the hardening notice, Grading still halted and the back signal stay in the Milestones table, off the charts. Holders no longer carries epoch close labels; Agents no longer carries the first swap.
 - Plainer labels: Mining paused (was Mining, grading paused), Mining reopened (was All-clear), Mining back seen (was Mining reopened, POAScan's own signal time).
 - Bottom marker labels sit on a backing plate over the line; the inline hover tip sits below top labels; the pop-out has 4 label lanes; marked charts open at their newest end at 390px. CSS v114, app.js v90.

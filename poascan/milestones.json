@@ -34,8 +34,8 @@
    "source": "notice 2026-10-23-grading-resumed issued_ts 2026-10-23 16:57:36 UTC (9:57 AM PT) (/api/notices, on-ledger tx a241efae)"},
   {"key": "ended", "ts": 1792774656, "label": "Upgrade complete", "url": "tx:a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000", "charts": ["mined", "supply", "circ", "txs"],
    "source": "notice 2026-10-23-grading-resumed: hardening pause over (/api/notices, on-ledger tx a241efae)"},
-  {"key": "s2_mining_reopened", "ts": 1792880039, "label": "Mining reopened", "url": "post:1451", "charts": ["mining"],
-   "source": "LabLeak post 1451 comment 4291 by Plus1, 2026-10-24 22:13:59 UTC (3:13 PM PT): mining open on the new segment (forum mirror). First segment 2 answer tx 21:11:34 UTC"},
+  {"key": "s2_mining_reopened", "ts": 1792876294, "label": "Mining reopened", "url": "tx:190951ee90e8ab3d1ec4b6808f79f8b02245bed3348f4788c41c88dfa05d6daa", "charts": ["mining"],
+   "source": "first answer (challenge) tx of segment 2, 2026-10-24 21:11:34 UTC (2:11 PM PT), tx 190951ee (POAScan tx index, chain data)"},
   {"key": "s2_first_join", "ts": 1792882740, "label": "First join", "url": "tx:d2c977ff86908a7bdea4b28e50db9990770192e9ea992c915ed390bf4e138c80", "charts": ["joining"],
    "source": "first join tx of segment 2, 2026-10-24 22:59:00 UTC (3:59 PM PT) (POAScan tx index); post 1452 at 23:07 UTC: new registrations reopen shortly"}
  ]

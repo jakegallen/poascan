@@ -25,7 +25,7 @@ want = {"begins": ("2026-10-21T19:00:51Z", "Upgrade begins"), "paused": ("2026-1
         "route:export": ("2026-10-22T23:16:36Z", "Export responding"), "allclear": ("2026-10-22T23:16:55Z", "Mining reopened"),
         "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining back seen"),
         "grading_reopened": ("2026-10-23T16:57:36Z", "Grading reopened"), "ended": ("2026-10-23T16:57:36Z", "Upgrade complete"),
-        "s2_mining_reopened": ("2026-10-24T22:13:59Z", "Mining reopened"), "s2_first_join": ("2026-10-24T22:59:00Z", "First join"),
+        "s2_mining_reopened": ("2026-10-24T21:11:34Z", "Mining reopened"), "s2_first_join": ("2026-10-24T22:59:00Z", "First join"),
         "genesis_cut": ("2026-10-24T21:01:00Z", "Genesis cut")}
 for k, (t, lab) in want.items():
     check(f"{lab} at {t}", k in ev and iso(ev[k]["ts"]) == t and ev[k]["label"] == lab)
@@ -103,15 +103,20 @@ check("route reads, checkpoint, notices and the back signal are table only", not
 check("labels are plain: no +N, no em or en dash, at most 24 characters, per chart too",
       all(len(e["label"]) <= 24 and not re.search(r"\+\d|[\u2013\u2014]", e["label"]) for k in MS.CHART_IDS for e in MS.events(k)))
 check("no em or en dash anywhere in the config", not re.search(r"[\u2013\u2014]", open(os.path.join(ROOT, "poascan", "milestones.json"), encoding="utf-8").read()))
+check("no milestone cites or links Plus1 content (operator notices and chain data only)",
+      "plus1" not in open(os.path.join(ROOT, "poascan", "milestones.json"), encoding="utf-8").read().lower()
+      and all(e["url"] is None or e["url"] == MS.POST or e["url"].startswith("/tx/") for e in MS.events())   # operator post 1357 or chain txs only
+      and all("plus1" not in (e["source"] or "").lower() for e in MS.events()))
+check("segment 2 Mining reopened is the first segment 2 answer tx (chain data)", {e["key"]: e for e in MS.events()}["s2_mining_reopened"]["url"] == "/tx/190951ee90e8ab3d1ec4b6808f79f8b02245bed3348f4788c41c88dfa05d6daa")
 check("a live event of an unknown kind is table only", MS.charts_of("route:grading") == () and MS.charts_of("something_new") == ())
 
 # ---------------- grouping ----------------
 e7 = [e for e in MS.events("mined") if e["ts"] < 1792774656]
 t1 = 1792712749 + 3600; g = MS.group(e7, t1 - 7 * 86400, t1)
 check(f"7 days, Total mined, before completion: two markers ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
-g2 = MS.group(MS.events("mined"), 1792880039 + 3600 - 7 * 86400, 1792880039 + 3600)
+g2 = MS.group(MS.events("mined"), 1792876294 + 3600 - 7 * 86400, 1792876294 + 3600)
 check(f"7 days, Total mined, with segment 2: every event labelled ({[x[1] for x in g2]})", [x[1] for x in g2] == ["Upgrade begins", "Mining reopened", "Upgrade complete", "Genesis cut", "Mining reopened"])
-g3 = MS.group(MS.events("gov-queue"), 1792880039 + 3600 - 7 * 86400, 1792880039 + 3600)
+g3 = MS.group(MS.events("gov-queue"), 1792876294 + 3600 - 7 * 86400, 1792876294 + 3600)
 check(f"7 days, Grading queue ({[x[1] for x in g3]})", [x[1] for x in g3] == ["Upgrade begins", "Grading reopened", "Genesis cut"])
 check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for gg in (g, g2, g3) for x in gg))
 gz = MS.group([e for e in MS.events() if e["key"] in want and e["ts"] < 1792774656], 1792609251 - 3600, 1792712749 + 3600)
@@ -119,7 +124,7 @@ check("a group's tip lists every member, in UTC", all(x[3].endswith("(UTC)") for
 check("a group links its lead event's source", g[1][2] == MS.POST)
 check("events outside the range are left out", MS.group(e7, 0, 1000) == [])
 for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 60 * 86400)):
-    x1 = 1792880039 + 7200; gg = MS.group(MS.events("joins"), x1 - sp_, x1, width=326)
+    x1 = 1792876294 + 7200; gg = MS.group(MS.events("joins"), x1 - sp_, x1, width=326)
     check(f"{r_} at 390px (Agents / hr): markers present, plain labels {[x[1] for x in gg]}", gg and all(not re.search(r"\+\d", x[1]) for x in gg) and "Genesis cut" in [x[1] for x in gg])
 
 # ---------------- Supply chart and Milestones table ----------------
