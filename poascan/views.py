@@ -9,6 +9,7 @@ from . import views2 as V2
 from . import market as X   # swap data via the swap module's API: ≈$, market tile, price stats, tx swap rows
 from . import swap as SW   # only for the swap page's live fragment in the snapshot
 from . import views3 as V3
+from . import bench as BN
 from . import receipts as RC
 from . import history as HI
 from . import kin as KN
@@ -69,15 +70,12 @@ def graders_tile(o):
     return (f'<span class="lbl" title="{E(graders_tip(o))}">Graders{tag}</span>'
             f'<b class="num" data-live="graders" title="{E(graders_tip(o))}">{intc(o.get("graders"))}</b>')
 
-def tracker_html():
-    o = A.open_epoch(); now = time.time()
-    left = (o["est_close"] - now) if o["est_close"] else None
-    cd = f'<b class="cd num" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
-    return (f'<div class="tracker">{ring(o)}<div class="tk"><span class="lbl">Epoch</span><b class="num ep" data-live="epoch">{o["epoch"]}</b></div>'
-            f'<div class="tk"><span class="lbl">Closes in</span>{cd}</div><span class="sp"></span>'
-            f'<div class="tk"><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
-            f'<div class="tk">{graders_tile(o)}</div>'
-            f'{PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE])}<a class="more tklive" href="/chain">More →</a></div>')
+def tracker_html(score=True):
+    """Home's hero, the Bench (bench.py): epoch numeral, countdown, bezel, Answers, Graders and Pool, and the last 24 minutes of
+    answers, attests and seals. score=False leaves the strip out (the /api/summary field stays small)."""
+    o = A.open_epoch()
+    h = BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]))
+    return h if score else re.sub(r'<div class="score".*?</div></div></div></div>$', "</div></div>", h, flags=re.S)
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
@@ -141,7 +139,7 @@ def live_snapshot():
             "last": [last.get("minted"), "c2"], "burn": [last.get("burn_pct"), "p1"], "height": [nw.get("height"), "int"],
             "checkpoint": [nw.get("checkpoint_height"), "int"], "answers": [o.get("answers"), "int"], "graders": [o.get("graders"), "int"],
             "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"],
-            "active": [(A.active_agents() or {}).get("active_agents"), "int"]}
+            "active": [(A.active_agents() or {}).get("active_agents"), "int"], "pool": [o.get("pool"), "c2"]}
     nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
@@ -159,7 +157,7 @@ def _swap_cards():
 
 def summary_json():
     h = headline(); o = A.open_epoch(); st = A.status()
-    return dict(live=is_live(), pill=pill(), as_of=st.get("as_of"), stale=st.get("stale"), tracker=tracker_html(), feed=feed_rows(), cards=h,
+    return dict(live=is_live(), pill=pill(), as_of=st.get("as_of"), stale=st.get("stale"), tracker=tracker_html(score=False), feed=feed_rows(), cards=h,
                 open_epoch=o, supply=st.get("supply"), holders=st.get("holders"), accounts=st.get("agents_joined"), **joins_fields())
 
 def joins_fields():
@@ -224,9 +222,9 @@ def home():
     more = pop(spark_in(h["holders"], sp.get("holders"), bk), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
+<section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
 <section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
-<div class="hero"><div id="tracker" class="card trk">{tracker_html()}</div>
-<div class="herogrid"><div class="stats three kstats kmore">{more}</div>{card(ICON_FLAME + "Burn meter", burnmeter_html(), PR.ask([PR.BURN]), cls="bmcard")}</div></div>
+<div class="herogrid"><div class="stats three kstats kmore">{more}</div>{card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}</div>
 <div class="grid2">
 {card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/chain" class="more">Full list →</a>')}
 {card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/chain/txs" class="more">All txs →</a>')}

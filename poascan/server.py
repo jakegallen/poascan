@@ -402,7 +402,8 @@ MPID = re.compile(rb'"mp\d+"')
 # cache plus 15 s stale-while-revalidate: at most 45 s, inside the 60 s live feed cadence. /ops never gets it (no-store).
 PAGE_VOLATILE = [(MPID, b""), (re.compile(rb'(data-close="[\d.]+">)[^<]*'), rb"\1"), (re.compile(rb'( pathLength="100" stroke-dasharray=")[\d.]+'), rb"\1"),
                  (re.compile(rb'(<i class="molten" style="width:)[\d.]+'), rb"\1"), (re.compile(rb'(<span class="vp num">)\d+'), rb"\1"),
-                 (re.compile(rb'(<time class="t rel" data-ts="\d+">)[^<]*'), rb"\1")]
+                 (re.compile(rb'(<time class="t rel" data-ts="\d+">)[^<]*'), rb"\1"),
+                 (re.compile(rb'(<g class="mk" data-b="\d+" transform="translate\()[-\d.]+'), rb"\1")]   # the Bench strip slide (bench.py)
 PAGE_CACHE = "public, max-age=15, s-maxage=30, stale-while-revalidate=15"
 def page_etag(b):
     for r, k in PAGE_VOLATILE: b = r.sub(k, b)
@@ -848,6 +849,9 @@ class H(BaseHTTPRequestHandler):
             if path == "/fragment/upgrade":   # the live /upgrade view, refetched by app.js when the snapshot's upsig changes
                 if not MT.state()["active"]: return self.send(404, "", "text/plain")
                 return self.send(200, f'<div data-upview data-sig="{V2.upgrade_sig()}">{V2.upgrade_view()}</div>', extra={"Cache-Control": "no-store"})
+            if path == "/fragment/score":   # the Bench activity strip (bench.py): last 24 min of txs from the archive, cached 10 s
+                from . import bench as BN
+                return self.send(200, json.dumps(BN.score_json(), separators=(",", ":")), "application/json", {"Cache-Control": "public, max-age=10"})
             if path.startswith("/fragment/feed"): return self.send(200, V.feed_rows(), extra={"Cache-Control": "no-store"})
             if path.startswith("/api/"):
                 fmt = "csv" if path.endswith(".csv") else qs.get("format", ["json"])[0]

@@ -1043,6 +1043,62 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:1240px){.herogrid>*,.herogrid>.stats.three{margin-bottom:0}}
 @media (max-width:1100px){.grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}}
 @media (max-width:640px){.grid2,.grid3,.herogrid{gap:12px}.herogrid,.card.trk,.grid2>.card:last-child,.grid3>.card:last-child,.mtile{margin-bottom:12px}.shero{margin:0 0 12px}}
+/* ---------- Phase 2: the Bench (Home hero, bench.py) and the Pour ---------- */
+.benchc{padding:0;margin-bottom:16px;overflow:hidden}
+.bench{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr)}
+.bench>div{padding:var(--s5);min-width:0}
+.bench .bl{border-right:1px solid var(--rule);display:flex;flex-direction:column}
+.bh{display:flex;align-items:center;gap:10px;min-height:28px}.bh .lbl{display:inline}.bh .lbl.on{color:var(--bone)}.bl .bh .askb{margin-left:auto}
+.bnum{display:flex;align-items:flex-end;gap:28px;margin-top:10px}
+.bench .bn{font:400 112px/.8 var(--fig);color:var(--bone-hi);letter-spacing:-.03em;font-variant-numeric:lining-nums}
+.bcd .lbl{margin-bottom:10px}.bcd .cd{font:400 var(--t40)/1 var(--fig);color:var(--gold);font-variant-numeric:tabular-nums lining-nums;white-space:nowrap}
+.bezel{margin-top:28px}.bezel svg{display:block;width:100%;height:22px}
+.bezel line{stroke:var(--rule-2);stroke-width:1;vector-effect:non-scaling-stroke;transition:stroke 240ms var(--ease)}.bezel line.big{stroke-width:1.5}
+.bezel line.on{stroke:var(--gold);stroke-opacity:.75}.bezel line.on.big{stroke-opacity:1}
+.bez-ax{display:flex;justify-content:space-between;margin-top:8px;font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:auto;padding-top:18px;border-top:1px solid var(--rule)}
+.bl .bezel+.trio{margin-top:24px}
+.trio .lbl{margin-bottom:10px}.trio b{font:400 var(--t28)/1 var(--fig);color:var(--bone);font-variant-numeric:tabular-nums lining-nums}
+.trio .num{font-family:var(--fig)}
+.trio small{font:500 var(--t12)/1 var(--ui);color:var(--bone-3);margin-left:4px;letter-spacing:.04em}
+.ldot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--gold);flex:none;animation:ldot 2.4s ease-in-out infinite}
+@keyframes ldot{0%,100%{opacity:1}50%{opacity:.35}}
+.bench.quiet .ldot{animation:none;background:var(--bone-4)}
+.bench .legend{margin:0 0 0 auto;gap:14px}.bench .legend i{margin-right:6px}
+.sw.a{background:var(--gold)}.sw.t{background:var(--steel)}.sw.s{background:var(--verd)}
+.score{margin-top:16px}
+.lane{display:grid;grid-template-columns:72px minmax(0,1fr) 44px;align-items:center;height:52px;border-top:1px solid var(--rule)}
+.lane:last-of-type{border-bottom:1px solid var(--rule)}
+.lane .lbl{font-size:11px}.lane .c{text-align:right;font:500 var(--t13)/1 var(--mono);color:var(--bone)}
+.lane svg{display:block;width:100%;height:52px;overflow:hidden}
+.lane line{vector-effect:non-scaling-stroke}
+.lane .gl{stroke:var(--rule)}.lane .now{stroke:var(--gold);stroke-opacity:.6}
+.lane .ma{stroke:var(--gold);stroke-width:1.5;stroke-opacity:.4}.lane .ma.f{stroke-opacity:.95}
+.lane .mt{stroke:var(--steel);stroke-width:1.5;stroke-opacity:.85}
+.lane .ms{stroke:var(--verd);stroke-width:6;stroke-linecap:round;stroke-opacity:.9}
+.lane .nw{animation:mkin 600ms var(--ease) both}
+@keyframes mkin{from{opacity:0}to{opacity:1}}
+.sax{display:grid;grid-template-columns:72px minmax(0,1fr) 44px;margin-top:8px}
+.sax div{display:flex;justify-content:space-between;font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
+.pour{padding:4px 0}
+.prow{display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 12px}
+.prow .fig{font:400 var(--t28)/1 var(--fig);color:var(--bone-hi);font-variant-numeric:lining-nums}
+.pourbar{height:14px;border-radius:var(--r-sm);background:var(--ink-1);border:1px solid var(--rule);overflow:hidden;display:flex}
+.pourbar .pm{background:var(--gold);transition:width 600ms var(--ease)}.pourbar .pb{flex:1;background:var(--slag)}
+.pleg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:var(--t12);line-height:1.4;color:var(--bone-3)}
+.pleg>span{display:inline-flex;align-items:center;gap:6px}.pleg b{color:var(--bone);font-weight:400}
+.pleg .pp{margin-left:auto}.pleg .pp b{color:var(--ember)}
+.pleg .sw{width:8px;height:8px}.pleg .sw.b{background:var(--slag);box-shadow:0 0 0 1px var(--ember-deep)}
+.pourc .cx{display:flex;align-items:center;gap:10px}.pourc .cx .lbl{display:inline}
+.empty{margin:0;padding:var(--s5) var(--s4);text-align:center;color:var(--bone-3);font-size:var(--t13)}
+@media (max-width:640px){
+ .bench{grid-template-columns:minmax(0,1fr)}.bench>div{padding:var(--s4)}
+ .bench .bl{border-right:0;border-bottom:1px solid var(--rule)}
+ .bench .bn{font-size:84px}.bcd .cd{font-size:var(--t28)}.trio b{font-size:var(--t20)}.bnum{gap:20px}
+ .lane,.sax{grid-template-columns:70px minmax(0,1fr) 36px}.lane .lbl{font-size:10px}.bench .legend{display:none}.bezel{margin-top:20px}}
+@media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}
+
+
 /* chart pop-out (app.js, chartpop.py). No entrance fade or transform anywhere in it: the dialog and the chart are visible from the
    first frame (the 1.26.28 iOS rule). Full screen on phones, touch scrubs the chart (touch-action none on the plot only). */
 .cpt{cursor:pointer}

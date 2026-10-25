@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.128] - 2026-10-25
+
+### Changed
+- Home: the Bench replaces the epoch tracker. The epoch numeral, the countdown and a 72 tick bezel that fills as the epoch runs (start and close in the visitor's time), then Answers, Graders and Pool. Beside it, the chain in three voices over the last 24 minutes: Answers (gold, dim until final), Attests (steel, sized by attestations) and Seals (verdigris), with a now line and counts.
+- The strip comes from POAScan's own txs table (bench.py, one indexed range read cached 10 s). app.js slides it with time (one transform every 5 s) and refetches /fragment/score only when the live snapshot shows a new tx, at most once per 20 s. New marks fade in; reduced motion turns that off. No new upstream reads.
+- The Pour replaces the Burn meter: the latest close's pool split into minted gold and burned slag, with the burn share. The open pool now lives in the Bench, so each fact shows once. The watermark stays.
+- Snapshot nums carry the open pool, so it rolls only when it changes. The page ETag ignores the strip slide.
+- Tests: tools/phase2_test.py.
+
 ## [1.26.127] - 2026-10-25
 
 ### Added
