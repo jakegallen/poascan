@@ -502,7 +502,7 @@ def address(a):
     qs = getattr(REQ, "qs", {}) or {}
     typ = qs.get("type", [""])[0] or ""
     tab = qs.get("tab", [""])[0] or ("txs" if typ else "overview")
-    tab = tab if tab in ("overview", "rewards", "txs", "grading") else "overview"
+    tab = tab if tab in ("overview", "rewards", "txs", "grading", "governance") else "overview"
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
     nmx = nm.get(a) or p["forum_name"]
     title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
@@ -511,7 +511,7 @@ def address(a):
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), asof_text="Includes Unconfirmed" if any(SG.unconfirmed_g(k) for k in rb) else None)}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp))}{stat("Locked", poa(lk) + X.usd_of(lk))}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
-    tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng)]
+    tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng), ("governance", "Governance", None)]
     nav = '<nav class="chips atabs scroll" aria-label="Address sections">' + "".join(
         f'<a href="/address/{E(a)}{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}"{" aria-current=\"page\"" if k == tab else ""}>{n}{f" <small>{c:,}</small>" if c else ""}</a>'
         for k, n, c in tabs) + '</nav>'
@@ -520,6 +520,9 @@ def address(a):
         main = card(ICON_CUBE + "Tracker", trk_sched + trk) + card("Per epoch", rew, X.usd_toggle(), id="rewards")
     elif tab == "txs": main = history_card(a, typ)
     elif tab == "grading": main = grading_card(a) or card("Assignments", na("No grading assignments for this Agent yet."), id="grading")
+    elif tab == "governance":
+        from . import governance as GV
+        main = GV.agent_tab(a, qs)
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""

@@ -181,6 +181,17 @@ def live():
         c, b, h = get("/api/v1/governance/established.csv?filter=safe"); check("API established CSV", c == 200 and h.get("Content-Type", "").startswith("text/csv") and "score_standing" in b.splitlines()[0])
         check("API established bad filter 400", get("/api/v1/governance/established?filter=x")[0] == 400)
         dj = J.loads(get("/api/v1/governance/directory?sort=score&limit=3")[1]); check("API directory: score and sort=score", all("score" in r for r in dj["rows"]) and dj["sort"] == "score")
+        # 1.26.109 per-Agent governance: address page tab, API, MCP
+        c, ag, _ = get(f"/address/{A1}?tab=governance")
+        check("Agent page: Governance tab with Score, four parts, tooltip, Standing, Grading and Forum", c == 200 and f'href="/address/{A1}?tab=governance" class="chip on"' in ag
+              and all(f">{x}<" in ag for x in ("Score", "Standing", "Grading", "Forum", "Consistency", "Closes held", "Seals", "Jury aligned", "Posts", "Ballot comments", "Votes"))
+              and '<details class="qtip"><summary aria-label="About Score"' in ag and "\u2014" not in ag and "\u2013" not in ag)
+        check("Agent page: Governance tab sits in the address tabs", f'href="/address/{A1}?tab=governance"' in get(f"/address/{A1}")[1])
+        c, b, _ = get(f"/api/v1/address/{A1}/governance"); aj = J.loads(b) if c == 200 else {}
+        check(f"API agent governance: score, parts, facts {aj.get('score')} {aj.get('score_parts')}", c == 200 and 0 <= aj.get("score", -1) <= 100 and set(aj.get("score_parts", {})) == {"standing", "grading", "forum", "consistency"}
+              and "seals" in aj.get("facts", {}) and aj.get("votes") == "not public per Agent")
+        c2, b2, _ = get(f"/api/v1/address/{A1}/governance?scope=all"); check("API agent governance scope=all", c2 == 200 and J.loads(b2)["scope"] == "all")
+        check("API agent governance: bad scope 400, bad address 400", get(f"/api/v1/address/{A1}/governance?scope=x")[0] == 400 and get("/api/v1/address/poa1x/governance")[0] in (400, 404))
         # Governance API: JSON per endpoint, ?segment=, CSV, 400s
         import json as J
         apis = {}
@@ -214,6 +225,8 @@ def live():
         check("MCP: 8 governance tools, each takes segment", all(t in tl and "segment" in tl[t]["inputSchema"]["properties"] for t in GT))
         res = {t: rpc("tools/call", {"name": t, "arguments": {"segment": 1}}) for t in GT}
         check(f"MCP tools/call each governance tool {[t for t, r in res.items() if 'result' not in r or r['result'].get('isError')]}", all("result" in r and not r["result"].get("isError") for r in res.values()))
+        ga = rpc("tools/call", {"name": "get_agent_governance", "arguments": {"address": A1, "scope": "all"}})
+        check("MCP get_agent_governance", "result" in ga and not ga["result"].get("isError") and ga["result"]["structuredContent"]["scope"] == "all")
         e = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "x"}})
         check("MCP bad sort is an error", ("result" in e and e["result"].get("isError")) or "error" in e)
         dd = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "seals", "limit": 2}})["result"]["structuredContent"]

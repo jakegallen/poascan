@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.108"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-25T00:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.109"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-25T00:22:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -220,6 +220,11 @@ def t_gov_established(args):
     GV = _gov()
     return GV.api_established(_pick(args, "sort", [k for k, _ in GV.EST_SORTS], "score"), _pick(args, "filter", [""] + list(GV.EST_FILTER_IN), ""),
                               _int(args, "limit", 200, 1, 5000), _int(args, "offset", 0, 0, 10 ** 6))
+
+def t_agent_governance(args):
+    a = _addr(args); sc = args.get("scope", "segment")
+    if sc not in ("segment", "all"): raise ToolError("scope must be segment or all")
+    return _gov().api_agent(a, sc)
 
 def t_gov_payouts(args): return _gov().api_payouts()
 
@@ -547,6 +552,12 @@ TOOLS += [
      S(sort={"type": "string", "enum": ["score", "held", "eligible", "seals", "left", "name"], "default": "score", "description": "score (default), held, eligible, seals, left (fewest closes left first) or name"},
        filter={"type": "string", "enum": ["", "at_risk", "watch", "safe", "no_record", "system", "graders"], "default": "", "description": "a level, graders, or empty for all"},
        limit=LIMD(200, 5000, "Agents"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_gov_established),
+    ("get_agent_governance", "Agent governance",
+     "Everything one Agent did in governance and the forum, per segment or across all (scope=all): POAScan's Score (0 to 100, 100 best; POAScan's own, not an official minepoa grade) "
+     "with parts standing, grading, forum and consistency; established, level, closes added, removed and held, eligible closes, answers passed of settled, slashes; "
+     "grading seat closes, grades served, seals, jury aligned of seats, marks, attest txs; LabLeak posts, comments, proposals, ballot thread comments, replies received and operator replies. "
+     "Votes are not public per Agent. Use it to explain one Agent's governance record; method at /about#score.",
+     dict(S(address=ADDR_P, scope={"type": "string", "enum": ["segment", "all"], "default": "segment", "description": "segment (the selected one) or all segments"}, segment=SEG_P), required=["address"]), t_agent_governance),
     ("get_payout_outlook", "Payout outlook",
      "The next close: Est. per Agent (estimate=true until the close record lands; median of the per-Agent median reward at the last 3 paid closes, from the previous segment when this one has none), "
      "the basis closes, next close epoch and estimated time, pool, Agents answered and K-attested since the last close, and eligible versus paid per close. Use it before the next close to see what an Agent may earn.",
@@ -723,6 +734,11 @@ def openapi():
                                   [_p("from", "return full records from this closed epoch on, at most 3 per response; follow next_from (also X-Next-From)", {"type": "integer", "minimum": 0}, "query", False),
                                    _p("limit", "records per response with from (1 to 3)", {"type": "integer", "minimum": 1, "maximum": 3}, "query", False)], csv=True, oid="listEpochRecords",
                                   desc="Without from: the index as a list (CSV too). With from: {from, next_from, records: [{bytes, epoch, record, sha256}]}, itself canonical. ETag is the sha256 of the body; If-None-Match gives a 304."),
+        "/api/address/{address}/governance": _op("One Agent's governance and forum record with POAScan's Score, per segment or all", ANY,
+                                                 [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}),
+                                                  _p("scope", "segment (default, the selected one) or all", {"type": "string", "enum": ["segment", "all"], "default": "segment"}, "query", False), SEGQ],
+                                                 oid="getAgentGovernance", tag="governance",
+                                                 desc="score and score_parts (standing, grading, forum, consistency; POAScan's own, 0 to 100, not an official minepoa grade; method /about#score), established, level, closes_left, added_closes, removed_closes, rewards and facts: closes_established, eligible, challenges, settled, passed, paid_closes, slashed, seat_closes, grades_served, seals, jury_seats, jury_aligned, marks, attest_txs, attestations_received, posts, comments, proposals, ballot_comments, replies_received, posts_replied, posts_operator_replied. Votes are not public per Agent."),
         "/api/address/{address}/standing": _op("Standing of an address: the drop-close estimate, the at-risk flag, pending answers and marks", ANY, [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getStanding", tag="agents",
                                                desc="From archived close records only. established (our estimate), last_challenge_eligible_epoch, established_expires_epoch_est (last challenge_eligible epoch + estab_ttl + 1: an estimate from observed behavior, not an official rule), established_expires_closes_left (the open close is 1), established_expires_ts_est, established_expires_basis (null when unknown); at_risk is true when the drop is within at_risk_window_closes (2) closes, false when later or not established, null when established but unknown. pending: the address's answers in the latest close's basis.pending (tx, since, kind, panel, has_panel, grades = distinct graders, scores) with count, with_panel, without_panel, grades, quorum and awaiting_close (answers in the open epoch). marks: basis.marks per close (latest_close, at_latest_close, total, by_close); what marks mean is not published. links.tracker is EmBot-Lantern's independent Standing Watch. Hosted /me is the authority. Method: https://poascan.io/about#standing"),
         "/api/governance": _op("Governance overview: established, levels, graders, Est. per Agent (estimate), latest closes", ANY, [SEGQ], oid="governanceOverview", tag="governance",
@@ -1033,6 +1049,7 @@ Tools ({len(TOOLS)}):
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; basis_state is pending, settled or absent; method at {BASE}/about#receipts). An unknown tx is a JSON 404 with found false.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
+- Agent governance: {BASE}{API_PREFIX}/address/<poa1...>/governance?scope=segment|all (Score and parts, standing, grading, forum, ballots for one Agent; page {BASE}/address/<poa1...>?tab=governance). MCP get_agent_governance.
 - Governance: {BASE}{API_PREFIX}/governance (overview), /governance/established?sort=&filter= (every established Agent with Score; CSV), /governance/at-risk?level=, /governance/payouts (Est. per Agent, an estimate), /governance/graders, /governance/directory?sort=&filter=&limit=&offset= (CSV: /governance/directory.csv), /governance/forum?range=24h|7d|30d|all and /governance/proposals; every one takes ?segment= (standing starts fresh in each segment; forum and proposals are not split by segment). Score: POAScan's own 0 to 100 (100 best) from standing, grading, forum and consistency; not an official minepoa grade; method {BASE}/about#score. MCP: get_governance_overview, list_established, list_governance_standing, get_payout_outlook, get_governance_graders, list_governance_directory, get_forum_activity, list_proposals.
 - Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/governance?tab=at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).

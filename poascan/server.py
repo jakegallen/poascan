@@ -77,6 +77,15 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return dict(address=a, **G.established_history(a), method=AG.BASE + "/about#established"), False
+    m = re.match(r"^/api/address/(poa1\w+)/governance$", path)
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        bad = set(qs) - {"scope", "format"}
+        if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))
+        sc = (qs.get("scope") or ["segment"])[0]
+        if sc not in ("segment", "all"): raise BadRequest("scope must be segment or all")
+        return GV.api_agent(a, sc), False
     m = re.match(r"^/api/address/(poa1\w+)/standing$", path)
     if m:
         a = m.group(1)

@@ -593,3 +593,66 @@ def api_proposals(limit=100):
                 ballots=[dict(id=b["id"], name=b["name"], ends=b["ends"], topics=[dict(post=t, topic=k, url=POST.format(t)) for t, k in b["topics"]],
                               tally=b["tally"], tally_public=b["tally"] is not None, source_posts=[b["opened_post"], b["voting_post"]], source=POST.format(b["voting_post"])) for b in BALLOTS],
                 open_ballots=live, source="a/proposals in POAScan's LabLeak mirror; not split by segment", url=_url("proposals"))
+
+
+# ---------------- Per-Agent governance (1.26.109): the address page Governance tab, API and MCP ----------------
+def agent_data(a, scope="segment"):
+    """Everything an Agent did in governance and the forum, from scores(scope): standing, grading, forum, ballots, Score."""
+    sc = scores(scope); f = sc["rows"].get(a)
+    if scope == "all":
+        lbl = lambda g: SG.ep_label(g)
+        with SG.use(SG.CURRENT): lv = {r["address"]: r for r in standing_rows()["rows"]}.get(a)
+    else:
+        lbl = lambda e: f"E{e}"; lv = {r["address"]: r for r in standing_rows()["rows"]}.get(a)
+    f = dict(f) if f else dict(GS._blank(), **GS.EMPTY_TX, **GS.EMPTY_FORUM, level="none", score=0, standing=0, grading=0, forum=0, consistency=0)
+    return dict(address=a, scope=scope, f=f, std=lv, lbl=lbl, last_close=sc["last_close"], closes=sc["closes"])
+
+def _yn(v): return '<span class="tag ok">Yes</span>' if v else '<span class="tag">No</span>'
+
+def agent_tab(a, qs):
+    """Address page Governance tab: segment chips plus All, Score with its four parts, then Standing, Grading, Forum."""
+    scope = "all" if _q(qs, "scope") == "all" else "segment"
+    d = agent_data(a, scope); f = d["f"]; L = d["lbl"]; st = d["std"]
+    base = f"/address/{E(a)}?tab=governance"
+    chips = ""
+    if SG.has_cut():
+        cs = [(f"{base}{'' if n == SG.CURRENT else '&amp;segment=' + str(n)}", SG.label(n), scope == "segment" and n == SG.selected()) for n in reversed(SG.NUMBERS)]
+        cs.append((f"{base}&amp;scope=all", "All", scope == "all"))
+        chips = '<nav class="chips segs" aria-label="Segment">' + "".join(f'<a href="{h}" class="chip {"on" if on else ""}"{" aria-current=\"page\"" if on else ""}>{E(t)}</a>' for h, t, on in cs) + "</nav>"
+    tip = score_tip()
+    s = "".join([stat("Score", f'<span class="num">{f["score"]}</span>'), stat("Standing", intc(f["standing"])), stat("Grading", intc(f["grading"])),
+                 stat("Forum", intc(f["forum"])), stat("Consistency", intc(f["consistency"]))])
+    eps = lambda xs: ", ".join(L(x) for x in xs[-6:]) + (f" (+{len(xs) - 6})" if len(xs) > 6 else "") if xs else "···"
+    level = (_lvl(st["level"]) + (f' <span class="dim">· {st["left"]} left</span>' if st.get("left") is not None else "")) if st else '<span class="tag">No</span>'
+    kv = lambda rows: "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
+    span = (d["last_close"] - f["first_close"] + 1) if f.get("first_close") is not None and d["last_close"] is not None else 0
+    std_rows = [("Established", level), ("Added", eps(f["added_epochs"])), ("Removed", eps(f["removed_epochs"])),
+                ("Closes held", f'{f["closes_established"]:,} of {span:,}' if span else "···"), ("Eligible closes", intc(f["eligible"])),
+                ("Answers", intc(f["challenges"])), ("Passed", f'{f["passed"]:,} of {f["settled"]:,}' if f["settled"] else "···"),
+                ("Paid closes", intc(f["paid_closes"])), ("Rewards", compact(f["rewards"]) if f["rewards"] else "0"), ("Slashes", intc(f["slashed"]))]
+    gr_rows = [("Seat closes", intc(f["seat_closes"])), ("Grades served", intc(f["grades_served"])), ("Seals", intc(f["seals"])),
+               ("Jury aligned", f'{f["jury_aligned"]:,} of {f["jury_seats"]:,}' if f["jury_seats"] else "···"), ("Marks", intc(f["marks"])),
+               ("Attest txs", intc(f["attest_txs"])), ("Attestations", intc(f["attestations_received"]))]
+    fo_rows = [("Posts", intc(f["posts"])), ("Comments", intc(f["comments"])), ("Proposals", intc(f["proposals"])),
+               ("Ballot comments", intc(f["ballot_comments"])), ("Votes", '<span class="dim">Not public</span>'),
+               ("Replies received", intc(f["replies_received"])), ("Posts replied", intc(f["posts_replied"])), ("Operator replies", intc(f["posts_operator_replied"]))]
+    q = f"?scope=all" if scope == "all" else (f"?segment={SG.selected()}" if SG.archived() else "")
+    api = f'<a class="more" href="/api/v1/address/{E(a)}/governance{q}">API →</a>'
+    head = card("Score" + tip, f'<div class="stats five">{s}</div>', f'<a class="more" href="{href("established")}">Established →</a>', id="score")
+    return (chips + head + '<div class="grid2">' + card("Standing", kv(std_rows), api, id="gov-standing") + card("Grading", kv(gr_rows))
+            + "</div>" + card("Forum", kv(fo_rows), f'<a class="more" href="{href("forum")}">Forum →</a>', id="gov-forum"))
+
+def api_agent(a, scope="segment"):
+    d = agent_data(a, scope); f = d["f"]; st = d["std"]
+    keep = ("closes_established", "added", "removed", "eligible", "challenges", "settled", "passed", "paid_closes", "slashed", "seat_closes", "grades_served", "seals",
+            "jury_seats", "jury_aligned", "marks", "attest_txs", "attestations_received", "posts", "comments", "proposals", "ballot_comments", "replies_received",
+            "posts_replied", "posts_operator_replied", "first_close", "last_close")
+    out = {k: f.get(k) for k in keep}
+    lab = (lambda xs: [SG.ep_label(x) for x in xs]) if scope == "all" else (lambda xs: list(xs))
+    return dict(address=a, name=A.forum_names().get(a), scope=scope, **({} if scope == "all" else _seg()),
+                score=f["score"], score_parts={k: f[k] for k, _ in GS.PARTS},
+                score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD,
+                established=bool(st), level=LEVEL_KEYS[st["level"]] if st else None, closes_left=st["left"] if st else None,
+                added_closes=lab(f["added_epochs"]), removed_closes=lab(f["removed_epochs"]), rewards=round(f["rewards"], 6), facts=out, votes="not public per Agent",
+                closes_in_scope=d["closes"], sources="close records, archived txs and POAScan's LabLeak mirror; forum and txs limited to the segment's time window unless scope is all",
+                url=f"{BASE}/address/{a}?tab=governance" + ("&scope=all" if scope == "all" else (f"&segment={SG.selected()}" if SG.archived() else "")))

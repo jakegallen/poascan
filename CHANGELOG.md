@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.109] - 2026-10-24
+
+### Added
+- Agent page Governance tab: Score with Standing, Grading, Forum and Consistency, then Standing (established, level, closes added, removed and held, eligible closes, answers, passed, paid closes, rewards, slashes), Grading (seat closes, grades served, seals, jury aligned, marks, attest txs, attestations) and Forum (posts, comments, proposals, ballot comments, replies received, operator replies). Per segment with All.
+- API `/api/v1/address/<poa1...>/governance?scope=segment|all` and MCP `get_agent_governance` (34 tools).
+
 ## [1.26.108] - 2026-10-24
 
 ### Added
