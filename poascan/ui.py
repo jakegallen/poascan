@@ -174,10 +174,10 @@ def seal(final):
 
 SEAL_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1l1.8 1.3 2.2-.1.7 2.1 1.8 1.3-.7 2.1.7 2.1-1.8 1.3-.7 2.1-2.2-.1L8 15l-1.8-1.3-2.2.1-.7-2.1L1.5 10.4l.7-2.1-.7-2.1 1.8-1.3.7-2.1 2.2.1z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'
 
-LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gck" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD36B"/><stop offset="1" stop-color="#C8742B"/></linearGradient>
-<linearGradient id="gsw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#FFF4D6" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gck" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--mark-hi)"/><stop offset="1" style="stop-color:var(--copper)"/></linearGradient>
+<linearGradient id="gsw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--white)" stop-opacity="0"/><stop offset=".5" style="stop-color:var(--mark-glint)" stop-opacity=".85"/><stop offset="1" style="stop-color:var(--white)" stop-opacity="0"/></linearGradient>
 <clipPath id="hexclip"><path d="M32 3 57 17.5v29L32 61 7 46.5v-29z"/></clipPath></defs>
-<g fill="none" stroke="#FFB000" stroke-width="2.2" stroke-linejoin="round"><path d="M32 3 57 17.5v29L32 61 7 46.5v-29z"/>
+<g fill="none" style="stroke:var(--gold)" stroke-width="2.2" stroke-linejoin="round"><path d="M32 3 57 17.5v29L32 61 7 46.5v-29z"/>
 <path d="M24 7.5 40 9.5 50 26 44 50 30 57 15 45 13 24z"/><path d="M24 7.5 26 22 13 24M26 22 40 9.5M26 22 45 27 50 26M45 27 44 50M26 22 24 44 30 57M24 44 15 45M24 44 44 50"/></g>
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
@@ -328,7 +328,7 @@ def head_meta(full_title, title=""):
             f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{img}">\n'
             '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">\n'
             '<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">\n'
-            f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0E0D0B">{_verify_meta()}{jsonld()}')
+            f'<link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#0B0A08">{_verify_meta()}{jsonld()}')
 
 from . import join as _join
 
@@ -359,7 +359,7 @@ def search_form(cls, sid):
             f'<div class="sugg" id="{sid}-s" role="listbox"><p class="shint">Find my agent: paste its poa1 address or type its name</p><div class="sopts"></div></div></form>')
 
 POASWAP_URL = "https://poaswap.io"
-# Sister site button, the mirror of POASwap's own POAScan pill: its mark (vendored, static/poaswap-mark.svg) and teal (#35C9D0, #8EEAEA).
+# Sister site button, the mirror of POASwap's own POAScan pill: its mark (vendored, static/poaswap-mark.svg) and teal (style.css --swap, --swap-hi).
 SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noopener noreferrer" title="POASwap, agent to agent swaps" aria-label="POASwap, agent to agent swaps">'
             '<img class="swmark" src="/static/poaswap-mark.svg?v=1" width="18" height="18" alt="" aria-hidden="true"><span>POASwap</span></a>')
 
@@ -393,7 +393,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=119">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=120">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -406,7 +406,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=119" defer></script></body></html>'''
+<script src="/static/app.js?v=120" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -515,11 +515,9 @@ def upnote(text):
 # 12px mono, so text stays the same size at any width. One series palette by class (s-gold, s-steel, s-ember, s-verd, s-bone):
 # a single series is always gold; green and red only for pass and burn. No per-point dots: hover shows one, plus the last point.
 SERIES = {"gold": "s-gold", "steel": "s-steel", "ember": "s-ember", "verd": "s-verd", "bone": "s-bone", "copper": "s-copper", "mute": "s-mute"}
-_LEGACY_HEX = {"#FFB000": "gold", "#E3A33A": "gold", "#FFD36B": "gold", "#3DDC97": "verd", "#FF5A4E": "ember", "#8FA3B8": "steel",
-               "#C8742B": "copper", "#6B7A8A": "mute"}
 def series_cls(c):
-    """'gold' / 'steel' / ... (or a legacy hex) -> its series class."""
-    c = str(c or "gold"); return SERIES.get(_LEGACY_HEX.get(c.upper(), c), "s-gold")
+    """'gold' / 'steel' / ... -> its series class (anything else reads gold)."""
+    return SERIES.get(str(c or "gold"), "s-gold")
 
 VW, VH = 1000, 1000   # plot box in viewBox units; the SVG stretches to the CSS plot height (style.css .cp)
 

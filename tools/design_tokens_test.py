@@ -36,7 +36,7 @@ check(f"every var() used in style.css is defined {undef[:6]}", not undef)
 check("no faked weights: font-synthesis none, nothing above 600",
       "font-synthesis:none" in rest and not re.search(r"font-weight:\s*(?:700|800|900|bold)|font:\s*(?:700|800|900)\s", rest))
 # Python views and app.js: hex only from the token palette (og.py draws images with its own fonts; swap/ has its own sheet)
-LEGACY = {"#E3A33A", "#3DDC97", "#FF5A4E", "#0E0D0B", "#FFF", "#FFF4D6", "#F3EDE0", "#2B261C"}
+LEGACY = set()   # emptied in 1.26.120
 srcs = subprocess.run(["git", "ls-files", "poascan/*.py", "static/app.js"], cwd=ROOT, capture_output=True, text=True).stdout.split()
 bad = {}
 for p in srcs:

@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.120] - 2026-10-25
+
+### Changed
+- Cleanup after the token and chart releases: the header mark and Token page mark read their colors from tokens; identicons use the token palette; theme-color and the web manifest match the new page background; chart series take names only (gold, steel, verd, ember, bone, copper, mute), no hex.
+- tools/design_tokens_test.py: the legacy hex allowance is empty, so the Python views and app.js may use token values only.
+- The Space Grotesk and JetBrains Mono web fonts are removed (no page uses them since 1.26.118). OG images keep their own fonts.
+
 ## [1.26.119] - 2026-10-25
 
 ### Changed

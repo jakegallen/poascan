@@ -19,13 +19,13 @@ function times(root){upts(root);$$("time.t",root).forEach(function(t){var ts=+t.
 
 /* hex identicons: deterministic from the address */
 function h32(s,seed){var h=seed>>>0;for(var i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),16777619)>>>0}return h}
-var PAL=["#FFB000","#E3A33A","#C8742B","#FFD36B","#8FA3B8","#3DDC97","#6B5420","#2B261C","#F3EDE0"];
+var PAL=["#FFB000","#E3A33A","#C8742B","#FFD36B","#8FA3B8","#4FC59A","#6B5420","#272219","#F6F0E2"];   /* style.css tokens */
 function identicon(a){var h1=h32(a,2166136261),h2=h32(a,374761393),c=[];for(var i=0;i<6;i++){var k=((i<3?h1>>>(i*5):h2>>>((i-3)*5))&31)%PAL.length;c.push(PAL[k])}
  var P=[[12,1.5],[21.1,6.75],[21.1,17.25],[12,22.5],[2.9,17.25],[2.9,6.75]],cx=12,cy=12,o="";
  var inner=(h2>>>20)%3;
  for(i=0;i<6;i++){var p=P[i],q=P[(i+1)%6];o+='<path d="M'+cx+' '+cy+'L'+p[0]+' '+p[1]+'L'+q[0]+' '+q[1]+'Z" fill="'+c[i]+'" fill-opacity="'+(0.55+((h1>>>i)&1)*0.45)+'"/>'}
- o+='<path d="M12 1.5 21.1 6.75v10.5L12 22.5 2.9 17.25V6.75z" fill="none" stroke="#0E0D0B" stroke-width="1.2"/>';
- if(inner)o+='<path d="M12 7.5 15.9 9.75v4.5L12 16.5 8.1 14.25v-4.5z" fill="#0E0D0B" fill-opacity="'+(inner==1?.85:.4)+'"/>';
+ o+='<path d="M12 1.5 21.1 6.75v10.5L12 22.5 2.9 17.25V6.75z" fill="none" stroke="#100E0A" stroke-width="1.2"/>';
+ if(inner)o+='<path d="M12 7.5 15.9 9.75v4.5L12 16.5 8.1 14.25v-4.5z" fill="#100E0A" fill-opacity="'+(inner==1?.85:.4)+'"/>';
  return '<svg viewBox="0 0 24 24">'+o+'</svg>'}
 function paintIds(root){$$(".idn:not(.on)",root).forEach(function(e){var a=e.dataset.a;if(a){e.innerHTML=identicon(a);e.classList.add("on")}})}
 
