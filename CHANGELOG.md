@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.121] - 2026-10-25
+
+### Changed
+- No sub-lines under stats: stale or partial values carry a small tag beside the label instead (ui.flag). Hover shows the detail, a tap or click opens it, aria-label names it. Balance from an earlier segment: Stale (As of checkpoint N). Total rewards with Unconfirmed closes: Unconfirmed. Network K and Version: Stale only when the hourly read is over 3 h old, else the read age is on the label hover. Finality lag Behind, Finality moved Stalled and Parked use the same tag.
+- Network Charts: a 30d range, so every chart page has 24h, 7d, 30d and All. Computed from POAScan's own database (no new minepoa.com reads).
+- Tests: tools/followups_test.py (new); tools/smoke_test.py requires the tags instead of the old sub-lines.
+
 ## [1.26.120] - 2026-10-25
 
 ### Changed

@@ -393,7 +393,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=120">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=121">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -426,14 +426,29 @@ def _sig3(value):
     else: return value
     return value[:m.start(3)] + new + value[m.end(3):]
 
-def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text=None):
-    """Terse stat card: label + value (3 significant figures). `sub` is accepted for compatibility and ignored. `asof`: when a slow source was last read.
-    `tip`: the definition, shown on hover (methodology stays on /about)."""
+STALE_S = 3 * 3600   # hourly sources (params, release) read longer ago than this are flagged Stale
+
+def _ago(s):
+    s = max(0, int(s)); return f"{s // 60}m" if s < 3600 else f"{s // 3600}h {s % 3600 // 60}m" if s < 86400 else f"{s // 86400}d"
+
+def flag(word, detail, tone="warn"):
+    """1.26.121: a small state tag beside a stat label (Stale, Unconfirmed, Behind, Stalled, Parked) instead of a sub-line under
+    the value. Hover shows the detail (title); tap, click or keyboard opens it (details/summary, the qtip note, closed by app.js)."""
+    return (f'<details class="qtip sflag"><summary class="tag {tone}" aria-label="{E(word)}: {E(detail)}" title="{E(detail)}">{E(word)}</summary>'
+            f'<span class="qbox" role="note">{E(detail)}</span></details>')
+
+def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text=None, flag_html=""):
+    """Terse stat card: label + value (3 significant figures), no sub-line. `sub` is accepted for compatibility and ignored.
+    `asof`: when a slow hourly source was last read; flagged Stale past STALE_S, else the read age is on the label hover.
+    `asof_text`: a fixed point the value stands at (e.g. "As of checkpoint 44003"), flagged Stale with that detail.
+    `flag_html`: any other flag() tag. `tip`: the definition, shown on hover (methodology stays on /about)."""
     value = _sig3(value)
+    if asof and time.time() - int(asof) > STALE_S: flag_html = flag("Stale", f"Last read {_ago(time.time() - int(asof))} ago") + flag_html
+    elif asof: tip = ((tip + ". ") if tip else "") + f"Read {_ago(time.time() - int(asof))} ago"
+    if asof_text: flag_html = flag("Stale", asof_text) + flag_html
     if tip: label = f'<span title="{E(tip)}">{label}</span>'
     k = f' data-live="{key}"' if key else ""
-    a = f'<div class="asof">as of {rel(asof)}</div>' if asof else ""
-    if asof_text: a = f'<div class="asof">{E(asof_text)}</div>'   # a fixed point, e.g. "As of checkpoint 44003"
+    label += flag_html; a = ""
     if 'class="usd"' in value:   # number, unit and ≈$ share one line; the number shrinks to fit (style.css .sv.fit)
         k += _fit(value)
         ku = " ku" if 'class="unit"' in value and not re.search(r'<span class="unit">POA</span>', value) else ""   # keep SOL/ETH units

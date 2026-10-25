@@ -184,7 +184,7 @@ def growth_data():
     if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
 
-RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("all", "All", None)]
+RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("30d", "30d", 30 * DAY), ("all", "All", None)]   # 1.26.121: 30d, from our own DB
 
 def charts_body(rng=""):
     """Network → Charts (was /growth): small multiples over one shared range. Home shows the same series as sparklines."""

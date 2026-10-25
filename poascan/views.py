@@ -520,7 +520,7 @@ def address(a):
     title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
     head = (f'<div class="addrhead">{idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
             f'{addr_meta(a, bal, p)}'
-            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), asof_text="Includes Unconfirmed" if any(SG.unconfirmed_g(k) for k in rb) else None)}'
+            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp))}{stat("Locked", poa(lk) + X.usd_of(lk))}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
     tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng), ("governance", "Governance", None)]
@@ -1295,10 +1295,10 @@ def network_overview(head):
     cur = rel_.get("current") or {}
     ver = (f'<span class="mono ver" title="{E(cur["version"])}">{E(cur["version"])}</span>' if cur.get("version")
            else f'<span class="na" title="{E(rel_.get("note") or "No release manifest on the ledger yet")}">None yet</span>')
-    lag_flag = '<div class="asof amber">Behind</div>' if lag >= A.LAG_BLOCKS else ""
-    lag_card = stat("Finality lag", intc(lag), tip=f"Blocks between the chain height and the finalized height. Flagged at {A.LAG_BLOCKS:,}")
+    lag_flag = flag("Behind", f"Finality lag at or above {A.LAG_BLOCKS:,} blocks") if lag >= A.LAG_BLOCKS else ""
+    lag_card = stat("Finality lag", intc(lag), tip=f"Blocks between the chain height and the finalized height. Flagged at {A.LAG_BLOCKS:,}", flag_html=lag_flag)
     s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"),
-                 lag_card[:-len("</div>")] + lag_flag + "</div>",
+                 lag_card,
                  stat("Epoch cadence", cad, tip="Mean time between closes in this segment"), stat("Closes", intc(closes), tip="Epoch closes in this segment"),
                  stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
                  stat("Signers", signers), stat("K", intc(p.get("K")), asof=p_t),

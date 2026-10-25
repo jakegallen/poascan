@@ -125,8 +125,9 @@ def cp_stat():
     """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
     f = A.freshness()
     from . import maint as M
-    flag = ('<div class="asof steel">Parked</div>' if f["maintenance"] and not M.recovery()["moved"] else f'<div class="asof amber">Stalled</div>' if f["checkpoint_stalled"] else "")
-    return f'<div class="stat"><div class="sl"><span title="When the finalized height (checkpoint) last moved">Finality moved</span></div><div class="sv">{rel(f["checkpoint_moved"])}</div>{flag}</div>'
+    fl = (flag("Parked", "Finality is parked for maintenance", "est") if f["maintenance"] and not M.recovery()["moved"]
+          else flag("Stalled", f"Finalized height unchanged for {A.LAG_CP_S // 3600}h or more") if f["checkpoint_stalled"] else "")
+    return f'<div class="stat"><div class="sl"><span title="When the finalized height (checkpoint) last moved">Finality moved</span>{fl}</div><div class="sv">{rel(f["checkpoint_moved"])}</div></div>'
 
 RECON_TAG = {"match": ("ok", "Match"), "explained": ("", "Explained"), "differs": ("bad", "Differs"), "node_only": ("", "Node only"), "poascan_only": ("", "Ours only")}
 

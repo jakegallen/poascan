@@ -153,6 +153,8 @@ jobs:
         run: python tools/halt_test.py
       - name: Design tokens lint (no hex, rgb or px radius outside the style.css token block; views and app.js use token colors; three self-hosted faces; no em or en dashes)
         run: python tools/design_tokens_test.py
+      - name: Phase 1 follow-ups (stat state tags instead of sub-lines, Network Charts 30d, visitor-local times)
+        run: python tools/followups_test.py
 
   deploy:
     needs: test

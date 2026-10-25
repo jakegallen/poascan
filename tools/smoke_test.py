@@ -590,7 +590,7 @@ def maintenance(base, root, env, check):
     n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
     check("maintenance: header pill hides (the home strip carries Upgrading), still one live indicator for app.js, checkpoint Parked not Stalled",
           'class="pill up" id="livepill" href="/upgrade"' in n and n[n.index('id="livepill"'):].split(">", 1)[0].endswith(" hidden") and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
-          and 'asof steel">Parked<' in n and ">Stalled<" not in n)
+          and 'aria-label="Parked: ' in n and ">Parked</summary>" in n and ">Stalled<" not in n)
     u = req(base + "/upgrade")[1].decode(); um = u[u.index("<main"):u.index("</main>")]
     check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
           s.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in s and 'id="upgrade"' not in s and 'class="uph"' not in s and 'class="grp' not in s
@@ -722,7 +722,9 @@ def fixture_pages(check):
         _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
               'class="pill lag" id="livepill"' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
-        check("/network: as-of on Version and K, checkpoint flagged", _n.count('<div class="asof">as of') == 2 and 'asof amber">Stalled<' in _n)
+        check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
+              re.search(r'title="Read \d+m ago">K<', _n) is not None and re.search(r'title="Read \d+m ago">Version<', _n) is not None
+              and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)
         _snap = json.loads(req(base + "/api/v1/summary")[1]); check("summary carries the pill state", _snap.get("pill", {}).get("state") == "lag")

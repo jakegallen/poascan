@@ -1202,3 +1202,10 @@ th.hs .qtip{margin-left:2px}
 .sortsel select{flex:1;min-width:0;max-width:280px;min-height:44px;padding:0 12px;border:1px solid var(--line2);border-radius:var(--r-pill);background:var(--card);color:var(--bone-1);font:inherit;font-size:var(--t12);text-transform:none;letter-spacing:0}
 .sortsel select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 @media (max-width:640px){.sortsel{display:flex}th.hs .hsb{min-height:44px}.cal th.hs,table th.hs{white-space:nowrap;vertical-align:bottom}th.hs .ha{width:auto}}
+/* 1.26.121 stat state tags (ui.flag): Stale, Unconfirmed, Behind, Stalled, Parked beside the label; hover title, tap opens the note */
+.sl .sflag{margin-left:0;flex:none}
+.qtip.sflag>summary{width:auto;height:auto;padding:0 6px;border-radius:var(--r-sm);font:600 var(--t12)/18px var(--ui);letter-spacing:.06em;text-transform:uppercase}
+.qtip.sflag>summary.warn{color:var(--amber);border-color:color-mix(in srgb,var(--gold) 40%,transparent)}
+.qtip.sflag>summary.est{color:var(--steel);border-color:var(--steel-edge)}
+.qtip.sflag[open]>summary{color:var(--hi)}
+@media (max-width:640px){.qtip.sflag>summary{width:auto;height:auto}}
