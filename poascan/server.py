@@ -277,7 +277,7 @@ AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public ver
 
 STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
-                 "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
+                 "/governance?tab=established", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
 MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
@@ -289,7 +289,7 @@ MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/grow
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
-GOV_API = {"/api/governance": set(), "/api/governance/at-risk": {"level", "limit"}, "/api/governance/payouts": set(),
+GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit"}, "/api/governance/directory": {"sort", "filter", "limit", "offset"},
            "/api/governance/forum": {"range"}, "/api/governance/proposals": {"limit"}}
 def governance_api(path, qs):
@@ -313,6 +313,8 @@ def governance_api(path, qs):
         lv = one("level")
         if lv is not None and lv not in GV.LEVEL_IN: raise BadRequest("level must be one of " + ", ".join(GV.LEVEL_IN))
         return GV.api_at_risk(lv, num("limit", 1000, 1, 5000))
+    if path == "/api/governance/established":
+        return GV.api_established(pick("sort", [k for k, _ in GV.EST_SORTS], "score"), pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
     if path == "/api/governance/payouts": return GV.api_payouts()
     if path == "/api/governance/graders": return GV.api_graders(num("limit", 100, 1, 1000))
     if path == "/api/governance/directory":
@@ -323,7 +325,8 @@ def governance_api(path, qs):
 # 1.26.96 header merge (Chain, Agents, Network, Governance): list and tab URLs 301 to their new home and keep every query
 # parameter (?segment=, ?tab=, ?state=, ?type=, ?page=, ?sort=); a tab the target names wins over the incoming one.
 MOVED_Q = {"/epochs": "/chain", "/blocks": "/chain", "/txs": "/chain/txs", "/transactions": "/chain/txs", "/token": "/network?tab=token",
-           "/agents/at-risk": "/governance?tab=at-risk", "/agents/graders": "/governance?tab=graders"}
+           "/agents/at-risk": "/governance?tab=at-risk", "/agents/graders": "/governance?tab=graders",
+           "/established": "/governance?tab=established", "/agents/established": "/governance?tab=established"}
 def keep_query(target, qs):
     """target plus the request's query: target's own parameters first and winning, then the rest in request order."""
     base, _, tq = target.partition("?"); own = urllib.parse.parse_qs(tq, keep_blank_values=True)
@@ -890,7 +893,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})

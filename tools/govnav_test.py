@@ -126,13 +126,13 @@ def live():
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
         tabs = {}
-        for t in ("", "at-risk", "payouts", "graders", "directory", "forum", "proposals", "charts", "rules"):
+        for t in ("", "established", "at-risk", "payouts", "graders", "directory", "forum", "proposals", "charts", "rules"):
             u = "/governance" + (f"?tab={t}" if t else ""); c, b, _ = get(u); tabs[t] = b
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
         check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "At risk", "Payouts", "Graders", "Directory", "Forum", "Proposals", "Charts", "Rules")))
+              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Graders", "Directory", "Forum", "Proposals", "Charts", "Rules")))
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
@@ -161,6 +161,26 @@ def live():
         check("Overview: Est. per Agent card labelled Estimate, links to Payouts", 'id="est-payout"' in g and '<span class="tag est">Estimate</span>' in g and ">Est. per Agent<" in g
               and 'href="/governance?tab=payouts' in g)
         check("Directory: CSV and API links keep sort, filter and segment", re.search(r'href="/api/v1/governance/directory\.csv\?sort=atts&amp;filter=graders[^"]*" download', d2) is not None)
+        # 1.26.108 Established tab and Score
+        import json as J
+        c, es, _ = get("/governance?tab=established")
+        check("Established tab: count in the header, Score column with a tap and keyboard tooltip, sort and filter chips", c == 200 and re.search(r"Established · \d+", es) is not None
+              and '<details class="qtip"><summary aria-label="About Score"' in es and "Not an official ranking." in es and 'href="/about#score">Method</a>' in es
+              and all(f'>{x}</a>' in es for x in ("Score", "Closes held", "Name")) and 'class="tag score"' in es and "\u2014" not in es)
+        check("Established: names link to LabLeak, addresses to the Agent page", ('aname" href="https://minepoa.com/lableak/' in es or "fname" not in es) and 'href="/address/' in es)
+        check("Established: sort and filter keep each other", get("/governance?tab=established&sort=name&filter=graders")[0] == 200
+              and 'sort=name&amp;filter=graders#established" class="chip on"' in get("/governance?tab=established&sort=name&filter=graders")[1])
+        check("Directory: Score column and sort chip", ">Score<" in dr or 'Score<details class="qtip"' in dr)
+        check("Directory: sort=score", 'class="chip on">Score</a>' in get("/governance?tab=directory&sort=score")[1])
+        c, _, h = get("/established?segment=1"); check(f"/established 301 keeps the query ({h.get('Location')})", c == 301 and h.get("Location") == "/governance?tab=established&segment=1")
+        ab = get("/about")[1]; check("/about#score: method and weights", 'id="score"' in ab and "govscore.json" in ab and "Not an official ranking" in ab)
+        c, b, _ = get("/api/v1/governance/established?sort=score&limit=5")
+        ej = J.loads(b) if c == 200 else {}
+        check(f"API established: rows with score and parts, sorted by score", c == 200 and ej.get("rows") and all(0 <= r["score"] <= 100 and "score_standing" in r for r in ej["rows"])
+              and [r["score"] for r in ej["rows"]] == sorted((r["score"] for r in ej["rows"]), reverse=True) and "not an official" in ej.get("score_note", ""))
+        c, b, h = get("/api/v1/governance/established.csv?filter=safe"); check("API established CSV", c == 200 and h.get("Content-Type", "").startswith("text/csv") and "score_standing" in b.splitlines()[0])
+        check("API established bad filter 400", get("/api/v1/governance/established?filter=x")[0] == 400)
+        dj = J.loads(get("/api/v1/governance/directory?sort=score&limit=3")[1]); check("API directory: score and sort=score", all("score" in r for r in dj["rows"]) and dj["sort"] == "score")
         # Governance API: JSON per endpoint, ?segment=, CSV, 400s
         import json as J
         apis = {}
@@ -189,9 +209,9 @@ def live():
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
             c.request("POST", "/mcp", J.dumps({"jsonrpc": "2.0", "id": 1, "method": m, "params": prm}), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
             r = c.getresponse(); b = r.read(); c.close(); return J.loads(b)
-        GT = ("get_governance_overview", "list_governance_standing", "get_payout_outlook", "get_governance_graders", "list_governance_directory", "get_forum_activity", "list_proposals")
+        GT = ("get_governance_overview", "list_established", "list_governance_standing", "get_payout_outlook", "get_governance_graders", "list_governance_directory", "get_forum_activity", "list_proposals")
         tl = {t["name"]: t for t in rpc("tools/list", {})["result"]["tools"]}
-        check("MCP: 7 governance tools, each takes segment", all(t in tl and "segment" in tl[t]["inputSchema"]["properties"] for t in GT))
+        check("MCP: 8 governance tools, each takes segment", all(t in tl and "segment" in tl[t]["inputSchema"]["properties"] for t in GT))
         res = {t: rpc("tools/call", {"name": t, "arguments": {"segment": 1}}) for t in GT}
         check(f"MCP tools/call each governance tool {[t for t, r in res.items() if 'result' not in r or r['result'].get('isError')]}", all("result" in r and not r["result"].get("isError") for r in res.values()))
         e = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "x"}})
@@ -201,11 +221,11 @@ def live():
         # sitemap and llms.txt
         sm = get("/sitemap.xml")[1]; ll = get("/llms.txt")[1]
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
-        check("sitemap: /chain, /chain/txs, /network?tab=token, /governance; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance"))
+        check("sitemap: /chain, /chain/txs, /network?tab=token, /governance, Established; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=established"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
         check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=proposals)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)
-        check("llms.txt: governance API and MCP tools", "/governance/directory.csv" in ll and "list_governance_standing" in ll and "?segment=" in ll)
+        check("llms.txt: governance API and MCP tools", "/governance/directory.csv" in ll and "/governance/established" in ll and "/about#score" in ll and "(?tab=established)" in ll and "list_governance_standing" in ll and "?segment=" in ll)
     finally:
         p.terminate()
 

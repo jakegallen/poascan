@@ -88,6 +88,12 @@ def short(h, a=6, b=4):
 
 PROFILE_URL = "https://minepoa.com/lableak/#/u/{}"  # LabLeak profile; public_id == poa1 address for key-login agents
 
+def qtip(text, method_href, label):
+    """A tap, click and keyboard tooltip (details/summary, no hover only): a ? button that opens a short note with a Method link.
+    The note is fixed to the viewport so table scroll boxes never clip it; app.js closes it on Escape or an outside tap."""
+    return (f'<details class="qtip"><summary aria-label="{E(label)}" title="{E(label)}">?</summary>'
+            f'<span class="qbox" role="note">{E(text)} <a href="{E(method_href)}">Method</a></span></details>')
+
 def name_link(name, pid=None, cls="fname"):
     """Agent display name -> LabLeak profile (new tab). Plain text when there is no LabLeak public id."""
     if not name: return ""
@@ -386,7 +392,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=111">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=112">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -399,7 +405,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=87" defer></script></body></html>'''
+<script src="/static/app.js?v=88" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

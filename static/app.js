@@ -482,3 +482,7 @@ if(wantLive)connect();
 (function(){var b=[].slice.call(document.querySelectorAll(".askb"));b.slice(1).forEach(function(x){x.classList.add("ico")})})();
 /* charts marked .end (the upgrade milestones on Supply) open scrolled to the newest end where 390px makes them scroll */
 (function(){[].slice.call(document.querySelectorAll(".chartbox.end")).forEach(function(b){b.scrollLeft=b.scrollWidth})})();
+/* 1.26.108 qtip: close an open tooltip on Escape (focus back on its ? button) or a tap outside it */
+(function(){var D=document;function shut(k){[].slice.call(D.querySelectorAll("details.qtip[open]")).forEach(function(d){if(d!==k)d.removeAttribute("open")})}
+D.addEventListener("click",function(e){shut(e.target.closest?e.target.closest("details.qtip"):null)});
+D.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=D.querySelector("details.qtip[open]");if(o){o.removeAttribute("open");var s=o.querySelector("summary");if(s)s.focus()}})})();

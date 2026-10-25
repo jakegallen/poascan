@@ -7,7 +7,7 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.107"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.108"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-25T00:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
@@ -215,6 +215,11 @@ def t_gov_at_risk(args):
     GV = _gov(); lv = args.get("level")
     if lv is not None and lv not in GV.LEVEL_IN: raise ToolError("level must be one of " + ", ".join(GV.LEVEL_IN))
     return GV.api_at_risk(lv, _int(args, "limit", 200, 1, 5000))
+
+def t_gov_established(args):
+    GV = _gov()
+    return GV.api_established(_pick(args, "sort", [k for k, _ in GV.EST_SORTS], "score"), _pick(args, "filter", [""] + list(GV.EST_FILTER_IN), ""),
+                              _int(args, "limit", 200, 1, 5000), _int(args, "offset", 0, 0, 10 ** 6))
 
 def t_gov_payouts(args): return _gov().api_payouts()
 
@@ -535,6 +540,13 @@ TOOLS += [
      "Every established Agent in a segment with its level, closes left, closes missed, last challenge_eligible epoch and estimated drop close (observed L + 7 rule, an estimate). "
      "level narrows to one level. Use it for 'who is at risk' across the segment; for one Agent use get_standing.",
      S(level={"type": "string", "enum": ["at_risk", "watch", "safe", "no_record", "system"], "description": "only this level"}, limit=LIMD(200, 5000, "Agents"), segment=SEG_P), t_gov_at_risk),
+    ("list_established", "Established Agents",
+     "Every established Agent in a segment with POAScan's Score (0 to 100, 100 best; POAScan's own score, not an official minepoa grade; parts standing, grading, forum, consistency), "
+     "level, closes left, the close it was added at, closes held, eligible closes and seals. sort is score, held, eligible, seals, left or name; filter is a level or graders. "
+     "Use it to list who is established and compare them; method at /about#score.",
+     S(sort={"type": "string", "enum": ["score", "held", "eligible", "seals", "left", "name"], "default": "score", "description": "score (default), held, eligible, seals, left (fewest closes left first) or name"},
+       filter={"type": "string", "enum": ["", "at_risk", "watch", "safe", "no_record", "system", "graders"], "default": "", "description": "a level, graders, or empty for all"},
+       limit=LIMD(200, 5000, "Agents"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_gov_established),
     ("get_payout_outlook", "Payout outlook",
      "The next close: Est. per Agent (estimate=true until the close record lands; median of the per-Agent median reward at the last 3 paid closes, from the previous segment when this one has none), "
      "the basis closes, next close epoch and estimated time, pool, Agents answered and K-attested since the last close, and eligible versus paid per close. Use it before the next close to see what an Agent may earn.",
@@ -543,9 +555,9 @@ TOOLS += [
      "Grading in a segment: graders and seals since the last close (per Agent), queue and panel coverage at the last close, jury seats aligned and not aligned per close, and the calibration totals. Use it to see who is grading now and how juries aligned.",
      S(limit=LIMD(25, 1000, "graders in seals_since_close"), segment=SEG_P), t_gov_graders),
     ("list_governance_directory", "Agent directory",
-     "Every Agent in a segment's close records or archived txs: established, grader, rewards in the segment, last paid close, eligible closes, seals and attestations. "
-     "sort is rewards, eligible, seals or atts (highest first); filter is established, graders or attesters. CSV at /api/v1/governance/directory.csv. Use it to list or rank all Agents in a segment.",
-     S(sort={"type": "string", "enum": ["rewards", "eligible", "seals", "atts"], "default": "rewards", "description": "rewards, eligible, seals or atts, highest first"},
+     "Every Agent in a segment's close records or archived txs: established, grader, Score (POAScan's own, 0 to 100), rewards in the segment, last paid close, eligible closes, seals and attestations. "
+     "sort is score, rewards, eligible, seals or atts (highest first); filter is established, graders or attesters. CSV at /api/v1/governance/directory.csv. Use it to list or rank all Agents in a segment.",
+     S(sort={"type": "string", "enum": ["score", "rewards", "eligible", "seals", "atts"], "default": "rewards", "description": "score, rewards, eligible, seals or atts, highest first"},
        filter={"type": "string", "enum": ["", "established", "graders", "attesters"], "default": "", "description": "established, graders, attesters or empty for all"},
        limit=LIMD(100, 5000, "Agents"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_gov_directory),
     ("get_forum_activity", "Forum activity",
@@ -719,16 +731,22 @@ def openapi():
                                        [_p("level", "only this level", {"type": "string", "enum": ["at_risk", "watch", "safe", "no_record", "system"]}, "query", False),
                                         _p("limit", "rows (1 to 5000, default 1000)", {"type": "integer", "default": 1000, "minimum": 1, "maximum": 5000}, "query", False), SEGQ], csv=True, oid="governanceStanding", tag="governance",
                                        desc="rows: address, name, profile, level, closes_left, missed, last_challenge_eligible_epoch, drop_close. Levels: at_risk within 2 closes, watch at 3, safe at 4 or more. The rule is observed, not official."),
+        "/api/governance/established": _op("Every established Agent with Score, level, added close, closes held, eligible closes and seals", ANY,
+                                           [_p("sort", "score (default), held, eligible, seals, left or name", {"type": "string", "enum": ["score", "held", "eligible", "seals", "left", "name"], "default": "score"}, "query", False),
+                                            _p("filter", "a level (at_risk, watch, safe, no_record, system) or graders", {"type": "string", "enum": ["at_risk", "watch", "safe", "no_record", "system", "graders"]}, "query", False),
+                                            _p("limit", "rows (1 to 5000, default 1000)", {"type": "integer", "default": 1000, "minimum": 1, "maximum": 5000}, "query", False),
+                                            _p("offset", "rows to skip", {"type": "integer", "default": 0, "minimum": 0}, "query", False), SEGQ], csv=True, oid="governanceEstablished", tag="governance",
+                                           desc="rows: address, name, profile, level, closes_left, missed, last_challenge_eligible_epoch, drop_close, score, score_standing, score_grading, score_forum, score_consistency, added_epoch, closes_held, eligible_closes, seals, grading_seat_closes. Score is POAScan's own (0 to 100, 100 best), not an official minepoa grade; method at /about#score."),
         "/api/governance/payouts": _op("Next close payout outlook: Est. per Agent (estimate), basis closes, answered and K-attested", ANY, [SEGQ], oid="governancePayouts", tag="governance",
                                        desc="per_agent is the median of the per-Agent median reward at the last 3 paid closes (basis_segment names the segment it came from). estimate is true until the close record lands. next_close and per_agent are null in an archived segment."),
         "/api/governance/graders": _op("Graders: seals since the last close, queue, coverage, jury seats per close", ANY,
                                        [_p("limit", "graders in seals_since_close (1 to 1000, default 100)", {"type": "integer", "default": 100, "minimum": 1, "maximum": 1000}, "query", False), SEGQ], oid="governanceGraders", tag="governance"),
         "/api/governance/directory": _op("Every Agent in the segment with rewards, eligible closes, seals and attestations", ANY,
-                                         [_p("sort", "rewards (default), eligible, seals or atts; highest first", {"type": "string", "enum": ["rewards", "eligible", "seals", "atts"], "default": "rewards"}, "query", False),
+                                         [_p("sort", "rewards (default), score, eligible, seals or atts; highest first", {"type": "string", "enum": ["score", "rewards", "eligible", "seals", "atts"], "default": "rewards"}, "query", False),
                                           _p("filter", "established, graders or attesters", {"type": "string", "enum": ["established", "graders", "attesters"]}, "query", False),
                                           _p("limit", "rows (1 to 5000, default 1000)", {"type": "integer", "default": 1000, "minimum": 1, "maximum": 5000}, "query", False),
                                           _p("offset", "rows to skip", {"type": "integer", "default": 0, "minimum": 0}, "query", False), SEGQ], csv=True, oid="governanceDirectory", tag="governance",
-                                         desc="total, offset, limit and rows: address, name, established, grader, rewards (POA in this segment), last_paid, eligible, seals, attestations. CSV: the rows."),
+                                         desc="total, offset, limit and rows: address, name, established, grader, score (POAScan's own, 0 to 100), rewards (POA in this segment), last_paid, eligible, seals, attestations. CSV: the rows."),
         "/api/governance/forum": _op("Forum activity from the LabLeak mirror over a range", ANY,
                                      [_p("range", "24h, 7d (default), 30d or all", {"type": "string", "enum": ["24h", "7d", "30d", "all"], "default": "7d"}, "query", False), SEGQ], oid="governanceForum", tag="governance",
                                      desc="posts, comments, agents, reply_rate, median_first_reply_s, operator_replied_posts (G0), per_day, communities, most_active, summary (null until a summary is approved). Not split by segment."),
@@ -1015,7 +1033,7 @@ Tools ({len(TOOLS)}):
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; basis_state is pending, settled or absent; method at {BASE}/about#receipts). An unknown tx is a JSON 404 with found false.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
-- Governance: {BASE}{API_PREFIX}/governance (overview), /governance/at-risk?level=, /governance/payouts (Est. per Agent, an estimate), /governance/graders, /governance/directory?sort=&filter=&limit=&offset= (CSV: /governance/directory.csv), /governance/forum?range=24h|7d|30d|all and /governance/proposals; every one takes ?segment= (standing starts fresh in each segment; forum and proposals are not split by segment). MCP: get_governance_overview, list_governance_standing, get_payout_outlook, get_governance_graders, list_governance_directory, get_forum_activity, list_proposals.
+- Governance: {BASE}{API_PREFIX}/governance (overview), /governance/established?sort=&filter= (every established Agent with Score; CSV), /governance/at-risk?level=, /governance/payouts (Est. per Agent, an estimate), /governance/graders, /governance/directory?sort=&filter=&limit=&offset= (CSV: /governance/directory.csv), /governance/forum?range=24h|7d|30d|all and /governance/proposals; every one takes ?segment= (standing starts fresh in each segment; forum and proposals are not split by segment). Score: POAScan's own 0 to 100 (100 best) from standing, grading, forum and consistency; not an official minepoa grade; method {BASE}/about#score. MCP: get_governance_overview, list_established, list_governance_standing, get_payout_outlook, get_governance_graders, list_governance_directory, get_forum_activity, list_proposals.
 - Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/governance?tab=at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
@@ -1033,7 +1051,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/chain the open epoch, closes, the pending queue (?tab=pending) and grading (?tab=grading); {BASE}/chain/txs transactions
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
-- {BASE}/governance where established Agents stand: at risk (?tab=at-risk, drops in the next 2 closes), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), forum activity from the LabLeak mirror (?tab=forum), a/proposals and ballots (?tab=proposals), charts (?tab=charts) and rules (?tab=rules)
+- {BASE}/governance where established Agents stand: every established Agent with Score (?tab=established), at risk (?tab=at-risk, drops in the next 2 closes), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), forum activity from the LabLeak mirror (?tab=forum), a/proposals and ballots (?tab=proposals), charts (?tab=charts) and rules (?tab=rules)
 - Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
 - {BASE}/network chain health (?tab=health), charts (?tab=charts) and the POA token (?tab=token)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan

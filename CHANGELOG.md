@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.108] - 2026-10-24
+
+### Added
+- Governance Established tab: every established Agent in the segment with Score, level, the close it was added at, closes held, eligible closes, seals and closes left. Sort and filter chips, count in the header, CSV and API links. `/established` redirects there.
+- Score: POAScan's own 0 to 100 score per Agent (100 best) from Standing, Grading, Forum and Consistency. Not an official ranking. Weights in `poascan/govscore.json`; method at /about#score. Score column and sort on Established and Directory, with a tap and keyboard tooltip.
+- API `/api/v1/governance/established` (CSV too) and MCP `list_established` (33 tools). Directory rows carry `score` and accept `sort=score`.
+
 ## [1.26.107] - 2026-10-24
 
 ### Changed

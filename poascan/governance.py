@@ -4,11 +4,11 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, analytics as A, standing as SD, segments as SG, calibration as CA
-from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS
+from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip
 from . import views as V
 
-TABS = [("overview", "Overview"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 LEVEL_TAG = {"risk": "warn", "watch": "est", "safe": "ok", "norecord": "", "system": ""}
 RULE = {"risk": "lapse", "watch": "lapse", "safe": "lapse", "norecord": "no-record", "system": "system"}
@@ -210,7 +210,7 @@ def payouts(qs):
     return (head + '<div class="grid2">' + card("Last paid closes " + tag, bt, cls="histc", id="estimate")
             + card("Eligible and paid per close", pc) + "</div>")
 
-DIR_SORTS = [("rewards", "Rewards"), ("eligible", "Eligible closes"), ("seals", "Seals"), ("atts", "Attestations")]
+DIR_SORTS = [("score", "Score"), ("rewards", "Rewards"), ("eligible", "Eligible closes"), ("seals", "Seals"), ("atts", "Attestations")]
 DIR_FILTERS = [("", "All"), ("established", "Established"), ("graders", "Graders"), ("attesters", "Attesters")]
 DIR_PAGE = 100
 
@@ -234,8 +234,9 @@ def directory_rows():
     w, args = SG.sql()
     seals = {r["g"]: r["n"] for r in db.q("SELECT from_addr AS g, COUNT(*) AS n FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL" + w + " GROUP BY from_addr", args)}
     addrs = set(rw) | set(el) | set(at) | set(seat) | set(seals) | est
+    sc = scores()["rows"]
     return [dict(address=a, name=nm.get(a), established=a in est, rewards=rw.get(a, 0.0), last_paid=lp.get(a), eligible=el.get(a, 0),
-                 seals=seals.get(a, 0), atts=at.get(a, 0), seats=seat.get(a, 0)) for a in addrs if a and a.startswith("poa1")]
+                 seals=seals.get(a, 0), atts=at.get(a, 0), seats=seat.get(a, 0), score=(sc.get(a) or {}).get("score", 0)) for a in addrs if a and a.startswith("poa1")]
 
 def directory_select(by="rewards", f=""):
     """Directory rows for one sort (rewards, eligible, seals, atts; highest first) and filter ("", established, graders, attesters)."""
@@ -253,10 +254,10 @@ def directory(qs):
     sc = "".join(f'<a href="{href("directory", **kw(sort=k if k != "rewards" else ""))}" class="chip {"on" if k == by else ""}">{t}</a>' for k, t in DIR_SORTS)
     fc = "".join(f'<a href="{href("directory", **kw(filter=k))}" class="chip {"on" if k == f else ""}">{t}</a>' for k, t in DIR_FILTERS)
     tags = lambda r: (' <span class="tag ok">Established</span>' if r["established"] else "") + (' <span class="tag">Grader</span>' if r["seats"] or r["seals"] else "")
-    trs = "".join(f'<tr><td>{_agent(r)}{tags(r)}</td><td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>0</span>"}</td><td class="r dk">{_ep(r["last_paid"])}</td>'
+    trs = "".join(f'<tr><td>{_agent(r)}{tags(r)}</td><td class="r">{_score_cell(r["score"])}</td><td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>0</span>"}</td><td class="r dk">{_ep(r["last_paid"])}</td>'
                   f'<td class="r">{r["eligible"]:,}</td><td class="r">{r["seals"]:,}</td><td class="r dk">{r["atts"]:,}</td></tr>' for r in cur)
-    tb = (f'<div class="tw"><table class="hist cal gov"><thead><tr><th>Agent</th><th class="r">Rewards</th><th class="r dk">Last paid</th><th class="r">Eligible</th><th class="r">Seals</th><th class="r dk">Attestations</th></tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=6 class=na>No Agents in this segment yet.</td></tr>"}</tbody></table></div>')
+    tb = (f'<div class="tw"><table class="hist cal gov"><thead><tr><th>Agent</th><th class="r">Score{score_tip()}</th><th class="r">Rewards</th><th class="r dk">Last paid</th><th class="r">Eligible</th><th class="r">Seals</th><th class="r dk">Attestations</th></tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=7 class=na>No Agents in this segment yet.</td></tr>"}</tbody></table></div>')
     nav = ""
     if pages > 1:
         nav = ('<div class="chips">' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg - 1) if pg > 2 else ""))}">Newer</a>' if pg > 1 else "")
@@ -267,6 +268,77 @@ def directory(qs):
     links = (f'<a class="more" href="/api/v1/governance/directory.csv{"?" + cq if cq else ""}" download>CSV →</a>'
              f'<a class="more" href="/api/v1/governance/directory{"?" + cq if cq else ""}">API →</a>')
     return f'<div class="stats four">{s}</div>' + card(f"Directory · {len(rs):,}", f'<div class="chips">{fc}</div><div class="chips">{sc}</div>' + tb + nav, links, cls="histc", id="directory")
+
+SCORE_METHOD = "/about#score"
+def score_tip(): return qtip(GS.TIP, SCORE_METHOD, "About Score")
+
+def ballot_posts(): return frozenset({t for b in BALLOTS for t, _ in b["topics"]} | {b[k] for b in BALLOTS for k in ("opened_post", "voting_post")})
+
+@A.cached("gov_scores", 300)
+def scores(scope="segment"):
+    """{address: governance facts plus Score parts} for the selected segment, or every segment (scope "all": closes on the
+    lifetime close number, standing fresh at each segment's first close, all txs and the whole forum mirror).
+    Levels are the selected segment's (the current segment's for all)."""
+    tr = frozenset(SD._trusted()); ops = frozenset(operator_ids()); ttl = int(A.params().get("estab_ttl") or 6)
+    if scope == "all":
+        with SG.use(SG.CURRENT): lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
+        closes, resets = [], set()
+        for n in SG.NUMBERS:
+            cs = sorted(A.segment_closes(n), key=lambda e: int(e.get("epoch", 0)))
+            if cs: resets.add(SG.gkey(int(cs[0].get("epoch", 0)), n))
+            closes += [dict(e, epoch=SG.gkey(int(e.get("epoch", 0)), n)) for e in cs]
+        out, last, nc = GS.build(closes, "", (), None, None, lv, ballot_posts(), ops, tr, frozenset(resets), ttl)
+    else:
+        n = SG.selected(); seg = SG.BY_N[n]; w, a = SG.sql()
+        lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
+        out, last, nc = GS.build(A.segment_closes(n), w, a, seg.get("start_ts"), seg.get("end_ts"), lv, ballot_posts(), ops, tr, ttl=ttl)
+    return dict(rows=out, last_close=last, closes=nc)
+
+def _score_cell(v): return f'<span class="tag score">{v}</span>' if v is not None else '<span class="dim">···</span>'
+
+EST_SORTS = [("score", "Score"), ("held", "Closes held"), ("eligible", "Eligible"), ("seals", "Seals"), ("left", "Closes left"), ("name", "Name")]
+EST_FILTERS = [("", "All")] + [(k, t) for k, t in LEVELS] + [("graders", "Graders")]
+
+def established_rows():
+    """Every established Agent in the selected segment: standing (level, closes left), when it was added, closes held,
+    eligible closes, seals and Score."""
+    d = standing_rows(); sc = scores()["rows"]; out = []
+    for r in d["rows"]:
+        f = sc.get(r["address"]) or {}
+        out.append(dict(r, since=(f.get("added_epochs") or [None])[-1], held=f.get("closes_established", 0), eligible=f.get("eligible", 0),
+                        seals=f.get("seals", 0), seats=f.get("seat_closes", 0), score=f.get("score"), parts={k: f.get(k) for k, _ in GS.PARTS}))
+    return out, d
+
+def established_select(by="score", f=""):
+    rows, d = established_rows()
+    keep = (lambda r: True) if not f else (lambda r: r["seats"] or r["seals"]) if f == "graders" else (lambda r: r["level"] == f)
+    rs = [r for r in rows if keep(r)]
+    if by == "name": key = lambda r: ((r["name"] or "~").lower(), r["address"])
+    elif by == "left": key = lambda r: (r["left"] if r["left"] is not None else 1 << 30, (r["name"] or "~").lower(), r["address"])
+    else: key = lambda r: (-(r[by] or 0), (r["name"] or "~").lower(), r["address"])
+    return sorted(rs, key=key), rows, d
+
+def established(qs):
+    by = _q(qs, "sort", "score"); by = by if by in dict(EST_SORTS) else "score"
+    f = _q(qs, "filter"); f = f if f in dict(EST_FILTERS) else ""
+    rs, rows, d = established_select(by, f)
+    kw = lambda **o: dict(dict(sort=by if by != "score" else "", filter=f), **o)
+    cnt = collections.Counter(r["level"] for r in rows); ng = sum(1 for r in rows if r["seats"] or r["seals"])
+    fc = "".join(f'<a href="{href("established", **kw(filter=k))}#established" class="chip {"on" if k == f else ""}">{t}'
+                 + (f' <small>{(ng if k == "graders" else cnt.get(k, 0)) if k else len(rows):,}</small>' if True else "") + '</a>'
+                 for k, t in EST_FILTERS if not k or k == f or (ng if k == "graders" else cnt.get(k)))
+    sc = "".join(f'<a href="{href("established", **kw(sort=k if k != "score" else ""))}#established" class="chip {"on" if k == by else ""}">{t}</a>' for k, t in EST_SORTS)
+    trs = "".join(f'<tr><td>{_agent(r)}</td><td class="r">{_score_cell(r["score"])}</td><td class="r">{_lvl(r["level"])}</td><td class="r dk">{_ep(r["since"])}</td>'
+                  f'<td class="r">{r["held"]:,}</td><td class="r dk">{r["eligible"]:,}</td><td class="r dk">{r["seals"]:,}</td>'
+                  f'<td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td></tr>' for r in rs)
+    tb = (f'<div class="tw"><table class="hist cal gov est"><thead><tr><th>Agent</th><th class="r">Score{score_tip()}</th><th class="r">Level</th><th class="r dk">Added</th>'
+          f'<th class="r">Held</th><th class="r dk">Eligible</th><th class="r dk">Seals</th><th class="r">Left</th></tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=8 class=na>No established Agents in this segment yet.</td></tr>"}</tbody></table></div>')
+    cq = "&amp;".join(f"{k}={E(v)}" for k, v in (("sort", by if by != "score" else ""), ("filter", LEVEL_KEYS.get(f, f)), ("segment", str(SG.selected()) if SG.archived() else "")) if v)
+    links = (f'<a class="more" href="/api/v1/governance/established.csv{"?" + cq if cq else ""}" download>CSV →</a>'
+             f'<a class="more" href="/api/v1/governance/established{"?" + cq if cq else ""}">API →</a>')
+    foot = f'<p class="cov dim small">Reference E{d["open_epoch"]} · <a href="{href("rules")}#earn">Rules</a></p>' if d["open_epoch"] is not None else ""
+    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div><div class="chips">{sc}</div>' + tb + foot, links, cls="histc", id="established")
 
 def charts(qs):
     rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
@@ -414,13 +486,13 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
@@ -473,11 +545,23 @@ def api_graders(limit=100):
                 calibration=dict(graders=cal.get("graders_count"), seats=cal.get("seats"), agreement=cal.get("aligned_rate"), url=BASE + "/api/v1/agents/calibration"),
                 url=_url("graders"))
 
-DIR_FIELDS = ("address", "name", "established", "grader", "rewards", "last_paid", "eligible", "seals", "attestations")
+EST_FILTER_IN = dict({v: k for k, v in LEVEL_KEYS.items()}, graders="graders")
+
+def _parts(r): return {k: r.get(k) for k, _ in GS.PARTS}
+
+def api_established(sort="score", filt="", limit=1000, offset=0):
+    rs, rows, d = established_select(sort, EST_FILTER_IN.get(filt, "") if filt else "")
+    out = [dict(_std(r), score=r["score"], **{"score_" + k: v for k, v in r["parts"].items()}, added_epoch=r["since"], closes_held=r["held"], eligible_closes=r["eligible"], seals=r["seals"],
+                grading_seat_closes=r["seats"]) for r in rs[offset:offset + limit]]
+    return dict(_seg(), established=len(rows), sort=sort, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=d["open_epoch"],
+                score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD, rows=out,
+                url=_url("established", sort=sort if sort != "score" else "", filter=EST_FILTER_IN.get(filt, "") if filt else ""))
+
+DIR_FIELDS = ("address", "name", "established", "grader", "score", "rewards", "last_paid", "eligible", "seals", "attestations")
 
 def api_directory(sort="rewards", filt="", limit=1000, offset=0):
     rs = directory_select(sort, filt)
-    rows = [dict(address=r["address"], name=r["name"], established=r["established"], grader=bool(r["seats"] or r["seals"]), rewards=round(r["rewards"], 6),
+    rows = [dict(address=r["address"], name=r["name"], established=r["established"], grader=bool(r["seats"] or r["seals"]), score=r["score"], rewards=round(r["rewards"], 6),
                  last_paid=r["last_paid"], eligible=r["eligible"], seals=r["seals"], attestations=r["atts"]) for r in rs[offset:offset + limit]]
     return dict(_seg(), sort=sort, filter=filt or None, total=len(rs), offset=offset, limit=limit, rows=rows, url=_url("directory", sort=sort if sort != "rewards" else "", filter=filt))
 

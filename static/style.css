@@ -1241,3 +1241,13 @@ code.brk{overflow-wrap:anywhere}
 .feeds li{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(64px,auto);align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);min-width:0}
 .feeds b{font-weight:500;color:var(--hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .feeds .fdt{font:400 var(--t12)/1 var(--mono);color:var(--dim);text-align:right;white-space:nowrap}
+
+/* 1.26.108 qtip: tap, click and keyboard tooltip (details/summary); the note is fixed to the viewport so scroll boxes never clip it */
+.qtip{display:inline-block;vertical-align:middle;margin-left:4px;position:static}
+.qtip>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid var(--line2);border-radius:50%;font-size:11px;font-weight:700;color:var(--steel);text-transform:none;letter-spacing:0;line-height:1}
+.qtip>summary::-webkit-details-marker{display:none}.qtip>summary::marker{content:""}
+.qtip>summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}.qtip[open]>summary{color:var(--amber);border-color:#6B5420}
+.qtip .qbox{position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);width:min(300px,86vw);background:var(--card2);border:1px solid var(--line2);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.45;font-weight:400;letter-spacing:0;text-transform:none;color:var(--txt);white-space:normal;text-align:left;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.qtip .qbox a{color:var(--amber);margin-left:2px}
+@media (max-width:640px){.qtip>summary{width:24px;height:24px;font-size:12px}}
+.tag.score{color:var(--hi);border-color:var(--line2);min-width:34px;text-align:center}
