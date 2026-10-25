@@ -4,7 +4,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
@@ -73,9 +73,20 @@ def standing_rows():
     return dict(rows=rows, open_epoch=cur, ttl=ttl, last_close=last,
                 counts={k: sum(1 for r in rows if r["level"] == k) for k, _ in LEVELS})
 
-def _agent(r):
+def _agent(r, est=False):
+    """Agent cell: name (LabLeak) with the short address under it. est: an established row, tagged Unconfirmed when
+    minepoa's grading list does not have it (grading.established_check)."""
     a = r["address"]; al = f'<a class="mono" href="/address/{E(a)}#standing" title="{E(a)}">{E(short(a, 6, 4))}</a>'
-    return (name_link(r["name"], a) + f"<small>{al}</small>") if r["name"] else al
+    tg = GR.tag_html(GR.established_check(a)[2]) if est else ""
+    return ((name_link(r["name"], a) + tg + f"<small>{al}</small>") if r["name"] else al + tg)
+
+def unconfirmed_flag(addrs):
+    """The Unconfirmed tag for an Established count when minepoa's grading list leaves out some of these Agents."""
+    c = GR.conflict_summary(addrs)
+    if not c or not c["conflict"]: return ""
+    q = sum(1 for a in addrs if a not in GR.index()["established"] and (GR.index()["by_g"].get(a) or {}).get("qual"))
+    lead = "minepoa's grading list shows none" if c["list_empty"] else f"{c['conflict']:,} not on minepoa's grading list"
+    return GR.tag_html(lead + (f"; seals from {q:,} of these Agents still count toward quorum." if q else "; hosted /me is the authority."))
 
 def _ep(n): return f'<a href="/epoch/{n}{SG.qs()}">E{n}</a>' if n is not None else '<span class="dim">···</span>'
 
@@ -89,7 +100,7 @@ def risk_cols(): return [c for x in RISK_COLS for c in ([x] if x else score_cols
 def standing_table(rows, limit=None, sort=None, d="desc", link=None):
     """Standing rows with Score and parts (scores of the selected segment). link(key, dir): sortable headers; None: plain."""
     rs = rows[:limit] if limit else rows; sc = scores()["rows"]
-    trs = "".join(f'<tr><td>{_agent(r)}</td>{score_cells(parts_of(r["address"], sc))}<td class="r">{_lvl(r["level"])}</td><td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td>'
+    trs = "".join(f'<tr><td>{_agent(r, True)}</td>{score_cells(parts_of(r["address"], sc))}<td class="r">{_lvl(r["level"])}</td><td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td>'
                   f'<td class="r dk">{r["missed"] if r["missed"] is not None else "<span class=dim>···</span>"}</td><td class="r dk">{_ep(r["last"])}</td><td class="r">{_ep(r["drop"])}</td>'
                   f'<td class="r dk"><a href="{href("rules")}#{RULE[r["level"]]}">Rule</a></td></tr>' for r in rs)
     return ((SS.select(risk_cols(), sort, d, link) if link else "") + f'<div class="tw"><table class="hist cal risk gov"><thead><tr>{SS.heads(risk_cols(), sort, d, link)}</tr></thead>'
@@ -107,7 +118,7 @@ def seg_chips(tab):
 def overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
     f2 = lambda v: pct(v) if v is not None else "···"
-    s = "".join([stat("Established", intc(len(d["rows"]))), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
+    s = "".join([stat("Established", intc(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
                  stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"), stat("Safe", intc(c["safe"])),
                  stat("Graders", intc(cal.get("graders_count"))), stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats aligned with the panel, advisory")])
     risky = [r for r in d["rows"] if r["level"] in ("risk", "watch")]
@@ -304,7 +315,7 @@ def directory(qs):
     kw = lambda **o: dict(dict(sort=by if by != "rewards" else "", dir="asc" if d == "asc" else "", filter=f), **o)
     link = lambda k, dd: href("directory", **kw(sort=k if k != "rewards" else "", dir="asc" if dd == "asc" else "", page="")) + "#directory"
     fc = "".join(f'<a href="{href("directory", **kw(filter=k))}" class="chip {"on" if k == f else ""}">{t}</a>' for k, t in DIR_FILTERS)
-    tags = lambda r: (' <span class="tag ok">Established</span>' if r["established"] else "") + (' <span class="tag">Grader</span>' if r["seats"] or r["seals"] else "")
+    tags = lambda r: (' <span class="tag ok">Established</span>' + GR.tag_html(GR.established_check(r["address"])[2]) if r["established"] else "") + (' <span class="tag">Grader</span>' if r["seats"] or r["seals"] else "")
     trs = "".join(f'<tr><td>{_agent(r)}{tags(r)}</td>{score_cells(r)}<td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>0</span>"}</td><td class="r dk">{_ep(r["last_paid"])}</td>'
                   f'<td class="r">{r["eligible"]:,}</td><td class="r">{r["seals"]:,}</td><td class="r dk">{r["atts"]:,}</td></tr>' for r in cur)
     tb = (SS.select(dir_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(dir_cols(), by, d, link)}</tr></thead>'
@@ -402,7 +413,7 @@ def established(qs):
                  + f' <small>{(ng if k == "graders" else cnt.get(k, 0)) if k else len(rows):,}</small></a>'
                  for k, t in EST_FILTERS if not k or k == f or (ng if k == "graders" else cnt.get(k)))
     link = lambda k, dd: href("established", **kw(sort=k if k != "score" else "", dir="asc" if dd == "asc" else "")) + "#established"
-    trs = "".join(f'<tr><td>{_agent(r)}</td>{score_cells(r)}<td class="r">{_lvl(r["level"])}</td><td class="r dk">{_ep(r["since"])}</td>'
+    trs = "".join(f'<tr><td>{_agent(r, True)}</td>{score_cells(r)}<td class="r">{_lvl(r["level"])}</td><td class="r dk">{_ep(r["since"])}</td>'
                   f'<td class="r">{r["held"]:,}</td><td class="r dk">{r["eligible"]:,}</td><td class="r dk">{r["seals"]:,}</td>'
                   f'<td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td></tr>' for r in rs)
     tb = (SS.select(est_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov est"><thead><tr>{SS.heads(est_cols(), by, d, link)}</tr></thead>'
@@ -603,13 +614,24 @@ def _url(tab, **kw):
 def _seg(): return dict(segment=SG.selected(), archived=SG.archived())
 
 def _std(r):
+    src, mest, _d = GR.established_check(r["address"])
     return dict(address=r["address"], name=r["name"], profile=PROFILE.format(r["address"]) if r["name"] else None, level=LEVEL_KEYS[r["level"]],
-                closes_left=r["left"], missed=r["missed"], last_challenge_eligible_epoch=r["last"], drop_close=r["drop"])
+                closes_left=r["left"], missed=r["missed"], last_challenge_eligible_epoch=r["last"], drop_close=r["drop"],
+                established_source=src, minepoa_established=mest)
+
+def established_cross():
+    """API: how POAScan's established set compares with minepoa's grading list (None fields without a current copy)."""
+    rows = standing_rows()["rows"]; c = GR.conflict_summary([r["address"] for r in rows]) if rows or GR.usable() else None
+    return dict(source="conflict" if c and c["conflict"] else "minepoa_grading" if c else "close_records",
+                minepoa_established_count=c["minepoa_count"] if c else None, confirmed=c["confirmed"] if c else None,
+                unconfirmed=c["conflict"] if c else None, grading_upstream_as_of=GR.upstream_as_of() if c else None,
+                grading_fetched_at=GR.fetched_at() if c else None,
+                note="established_source per row: close_records (POAScan's fold, no current grading list), minepoa_grading (on minepoa's list too) or conflict (POAScan counts it, minepoa's list does not; shown as Unconfirmed). Hosted /me is the authority.")
 
 def api_overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
     pe = payout_estimate() if not SG.archived() else None
-    return dict(_seg(), established=len(d["rows"]), counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+    return dict(_seg(), established=len(d["rows"]), established_check=established_cross(), counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
                 graders=cal.get("graders_count"), agreement=cal.get("aligned_rate"),
                 est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
@@ -651,7 +673,7 @@ def api_established(sort="score", filt="", limit=1000, offset=0, d="desc"):
     rs, rows, data = established_select(sort, EST_FILTER_IN.get(filt, "") if filt else "", d)
     out = [dict(_std(r), **_sflat(r), added_epoch=r["since"], closes_held=r["held"], eligible_closes=r["eligible"], seals=r["seals"],
                 grading_seat_closes=r["seats"]) for r in rs[offset:offset + limit]]
-    return dict(_seg(), established=len(rows), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"],
+    return dict(_seg(), established=len(rows), established_check=established_cross(), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"],
                 score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD, rows=out,
                 url=_url("established", sort=sort if sort != "score" else "", dir="asc" if d == "asc" else "", filter=EST_FILTER_IN.get(filt, "") if filt else ""))
 
@@ -659,7 +681,7 @@ DIR_FIELDS = ("address", "name", "established", "grader", "score", "score_standi
 
 def api_directory(sort="rewards", filt="", limit=1000, offset=0, d="desc"):
     rs = directory_select(sort, filt, d)
-    rows = [dict(address=r["address"], name=r["name"], established=r["established"], grader=bool(r["seats"] or r["seals"]), **_sflat(r), rewards=round(r["rewards"], 6),
+    rows = [dict(address=r["address"], name=r["name"], established=r["established"], minepoa_established=GR.minepoa_established(r["address"]), grader=bool(r["seats"] or r["seals"]), **_sflat(r), rewards=round(r["rewards"], 6),
                  last_paid=r["last_paid"], eligible=r["eligible"], seals=r["seals"], attestations=r["atts"]) for r in rs[offset:offset + limit]]
     return dict(_seg(), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, rows=rows,
                 url=_url("directory", sort=sort if sort != "rewards" else "", dir="asc" if d == "asc" else "", filter=filt))
@@ -723,7 +745,7 @@ def agent_tab(a, qs):
     s = "".join([stat("Score", f'<span class="num">{f["score"]}</span>'), stat("Standing", intc(f["standing"])), stat("Grading", intc(f["grading"])),
                  stat("Forum", intc(f["forum"])), stat("Consistency", intc(f["consistency"]))])
     eps = lambda xs: ", ".join(L(x) for x in xs[-6:]) + (f" (+{len(xs) - 6})" if len(xs) > 6 else "") if xs else "···"
-    level = (_lvl(st["level"]) + (f' <span class="dim">· {st["left"]} left</span>' if st.get("left") is not None else "")) if st else '<span class="tag">No</span>'
+    level = (_lvl(st["level"]) + GR.tag_html(GR.established_check(a)[2]) + (f' <span class="dim">· {st["left"]} left</span>' if st.get("left") is not None else "")) if st else '<span class="tag">No</span>'
     kv = lambda rows: "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
     span = (d["last_close"] - f["first_close"] + 1) if f.get("first_close") is not None and d["last_close"] is not None else 0
     std_rows = [("Established", level), ("Added", eps(f["added_epochs"])), ("Removed", eps(f["removed_epochs"])),
@@ -752,7 +774,8 @@ def api_agent(a, scope="segment"):
     return dict(address=a, name=A.forum_names().get(a), scope=scope, **({} if scope == "all" else _seg()),
                 score=f["score"], score_parts={k: f[k] for k, _ in GS.PARTS},
                 score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD,
-                established=bool(st), level=LEVEL_KEYS[st["level"]] if st else None, closes_left=st["left"] if st else None,
+                established=bool(st), established_source=GR.established_check(a)[0] if st else "close_records", minepoa_established=GR.minepoa_established(a),
+                level=LEVEL_KEYS[st["level"]] if st else None, closes_left=st["left"] if st else None,
                 added_closes=lab(f["added_epochs"]), removed_closes=lab(f["removed_epochs"]), rewards=round(f["rewards"], 6), facts=out, votes="not public per Agent",
                 closes_in_scope=d["closes"], sources="close records, archived txs and POAScan's LabLeak mirror; forum and txs limited to the segment's time window unless scope is all",
                 url=f"{BASE}/address/{a}?tab=governance" + ("&scope=all" if scope == "all" else (f"&segment={SG.selected()}" if SG.archived() else "")))

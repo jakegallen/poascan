@@ -37,7 +37,7 @@ BACKOFF_MAX_S = _ei("POASCAN_BACKOFF_MAX_S", 900, 60)
 RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After beyond this is treated as this
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
-ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
+ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
                      r"epochs|agents|anchors|params|release|notices|ballots|chains|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
@@ -925,7 +925,8 @@ def seed(seed_dir):
 # How often each upstream source is read when healthy (for the /status freshness table).
 EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
-         "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S}
+         "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S,
+         "/api/explorer/grading": 900}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
@@ -947,6 +948,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
     ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),
     ("swap_writes", lambda: __import__("poascan.hosted", fromlist=["x"]).write_job(), 60, None),   # 1.26.127: one keyless swap-offer GET about every 10 min (30 min when unchanged); the stored next_at decides
+    ("grading", lambda: __import__("poascan.grading", fromlist=["x"]).job(), 60, None),   # 1.26.134: /api/explorer/grading every 10 min (5 near a close), backoff to 30 min; the stored next_at decides
     ("milestones", lambda: __import__("poascan.milestones", fromlist=["x"]).job(), 300, None),   # upgrade milestones from live state; no upstream call   # one keyless GET per hosted route, only while maintenance is on
 ]
 

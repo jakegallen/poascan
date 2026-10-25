@@ -52,6 +52,7 @@ REQUIRED = {
     "/api/release": ("dict", ("current",)),
     "/api/chains": ("addrmap", ()),
     "/api/swaps": ("list", ("offer_id",)),
+    "/api/explorer/grading": ("dict", ("rows", "stats", "epoch")),
     "/lableak/api/communities": ("list", ("slug",)),
     "/lableak/api/posts": ("list", ("id",)),
     "/lableak/api/posts/:id": ("dict", ("id",)),

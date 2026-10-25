@@ -14,7 +14,7 @@ def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
 # sha256 of poascan/indexer.py ALLOWED.pattern (1.26.98: adds the keyless /chain/<id>/api/tx/<txid> and /api/tx/<txid> reads on minepoa.com); review any change
-ALLOWED_SHA = "9edb8121c43922c7c4ec4f795179e5ac3d4465d3d00a5711ea5cfe644876b54a"
+ALLOWED_SHA = "98805ecec48a166b3143179202509d21d71b0e2927faf7470c32c39b98696c86"   # 1.26.136: + explorer/grading (keyless, read-only)
 
 def js_code(n=2000):
     """Run the app.js generator logic (same alphabet and mapping) with Python's CSPRNG standing in for getRandomValues."""

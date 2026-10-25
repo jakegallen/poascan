@@ -590,7 +590,7 @@ FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Tx li
          ("Close records", ()), ("Tx lookup", ("/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id")), ("Address lookup", ("/api/explorer/address/:addr",)),
          ("Swaps", ("/api/swaps", "/api/explorer/tx/:id (swaps)")), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
          ("Notices", ("/api/notices",)), ("Ballots", ("/api/ballots",)), ("Release", ("/api/release",)), ("Params", ("/api/params",)),
-         ("Forum", ("/lableak/api/communities", "/lableak/api/posts"))]
+         ("Forum", ("/lableak/api/communities", "/lableak/api/posts")), ("Grading list", ("/api/explorer/grading",))]
 FEED_ON_NEED = ("/api/epochs",)   # read only when a close record is missing: judged by its failures, like an on-view read
 FEED_IDLE_S = 3600                # an on-view read not tried for this long is idle: old failures no longer count
 FEED_RANK = {"OK": 0, "Degraded": 1, "Down": 2}

@@ -83,7 +83,9 @@ def standing(a):
     est = a in A.established_set()
     from . import agents as G
     h = G.established_history(a)
-    return dict(address=a, established=est, trusted=a in _trusted(),
+    from . import grading as GR
+    src, mest, _d = GR.established_check(a) if est else ("close_records", GR.minepoa_established(a), None)
+    return dict(address=a, established=est, trusted=a in _trusted(), established_source=src, minepoa_established=mest,
                 state="readmitted" if est and h.get("readmitted") else "established" if est else "not_established",
                 readmitted_epoch=h.get("readmitted_epoch"),
                 last_challenge_eligible_epoch=x["last_challenge_eligible_epoch"],

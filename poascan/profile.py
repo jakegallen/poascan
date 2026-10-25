@@ -8,8 +8,11 @@ from .ui import E, card, copy, name_link, intc, short, bars
 
 LEVEL = {"safe": ("Safe", "ok"), "watch": ("Watch", "warn"), "atrisk": ("At risk", "bad"), "system": ("System", ""), "norecord": None}
 
-def tags(est, level, cen):
+def tags(est, level, cen, a=None):
     t = ['<span class="tag ok">Established</span>' if est else ""]
+    if est and a:   # 1.26.134: POAScan counts it, minepoa's grading list does not: Unconfirmed with the detail on hover or tap
+        from . import grading as GR
+        t.append(GR.tag_html(GR.established_check(a)[2]))
     lv = LEVEL.get(level or "norecord")
     if lv: t.append(f'<span class="tag {lv[1]}">{lv[0]}</span>')
     if cen:

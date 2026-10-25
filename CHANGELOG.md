@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.136] - 2026-10-25
+
+### Added
+- minepoa's grading list (/api/explorer/grading, public and keyless) is read on the server every 10 minutes, every 5 within 30 minutes of a close, with If-None-Match. A failed read waits 10, then 20, then 30 minutes; a Retry-After is a floor. The schedule is kept in the database, so restarts and deploys add no read, and no page view ever calls minepoa.com.
+- Stored: a compact current copy (no answer snippets), seal changes (each seal with when POAScan first saw it, when it left the list and when its quorum flag changed) and full gzipped copies only for the read just before a close and the first read after one.
+- Network, Health: a Grading list feed row.
+- Established Agents that minepoa's grading list does not list carry an Unconfirmed tag (Governance Overview, Established, At risk, Directory, the Agent header, Established history, the Agent's Governance tab). Hover or tap: "minepoa's grading list shows none; this Agent's seals still count toward quorum."
+- API: established_source (close_records, minepoa_grading or conflict) and minepoa_established on established and at-risk rows, /address/{address}/standing and /address/{address}/governance; established_check on /governance and /governance/established; minepoa_established on directory rows. Additive.
+- /about#grading-list: pending seals carry no verdict, q is not documented and its meaning is inferred, avg is the mean jury score.
+- Tests: tools/grading_test.py.
+
 ## [1.26.135] - 2026-10-25
 
 ### Changed
