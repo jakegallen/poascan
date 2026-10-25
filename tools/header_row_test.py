@@ -1,7 +1,7 @@
 """Header on one row (1.26.150): at 360 and 390 px (and 430, 1280) the logo, the status pill, POASwap, Start and the menu stay on
 one row with every pill state, including the longest label. Up to 430 px the pill is a compact status line under the wordmark:
 dot and word in the state color, still the Status link, never hidden or clipped. Renders the fixture site in Chromium with
-Playwright; in CI (CI set) a missing Playwright is a failure, locally it is skipped. Usage: python3 tools/header_row_test.py"""
+Playwright. The compact pill has the same clear background and no border in every state (1.26.151). In CI (CI set) a missing Playwright is a failure, locally it is skipped. Usage: python3 tools/header_row_test.py"""
 import os, re, socket, subprocess, sys, tempfile, time, urllib.request
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 fails = []
@@ -28,7 +28,7 @@ PROBE = """([cls,lab])=>{const p=document.getElementById('livepill');p.hidden=fa
  const hit=others.filter(e=>{const r=R(e);return !(r.right<=pr.left||r.left>=pr.right||r.bottom<=pr.top||r.top>=pr.bottom)}).map(e=>String(e.getAttribute("class")||e.tagName));
  const top=Math.min(...row.map(e=>R(e).top)),bot=Math.max(...row.map(e=>R(e).bottom));
  return {n:row.length,spread:Math.round(Math.max(...cy)-Math.min(...cy)),pin:pr.top>=top-1&&pr.bottom<=bot+1&&pr.left>=0&&pr.right<=innerWidth,
-   text:p.innerText.trim(),textw:Math.round(sp.width),hit,ox:document.documentElement.scrollWidth-innerWidth,vis:getComputedStyle(p).visibility,href:p.getAttribute('href')}}"""
+   text:p.innerText.trim(),textw:Math.round(sp.width),hit,ox:document.documentElement.scrollWidth-innerWidth,vis:getComputedStyle(p).visibility,bg:(c=>[c.backgroundColor,c.backgroundImage,c.borderTopWidth].join(' '))(getComputedStyle(p)),href:p.getAttribute('href')}}"""
 if sync_playwright:
     def free_port():
         s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
@@ -57,6 +57,10 @@ if sync_playwright:
                         check(f"{tag}: the pill sits inside that row and the viewport, over nothing else {r['hit']}", r["pin"] and not r["hit"])
                         check(f"{tag}: the state word shows in full ({r['text']!r}, {r['textw']} px)", r["text"].lower() == SHOWN[k].lower() and r["textw"] >= 18 and r["vis"] == "visible")
                         check(f"{tag}: still the Status link, no horizontal overflow", bool(r["href"]) and r["ox"] <= 0)
+                    if mob:
+                        bgs = {k: r["bg"] for k, r in res.items()}
+                        check(f"{w} {path}: the compact pill has the same background in every state, no box ({sorted(set(bgs.values()))})",
+                              len(set(bgs.values())) == 1 and next(iter(bgs.values())) == "rgba(0, 0, 0, 0) none 0px")
                     pg.close()
                 ctx.close()
             b.close()

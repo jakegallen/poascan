@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.151] - 2026-10-25
+
+### Fixed
+- Header on phones: the compact PARTIAL status line no longer sits on a faint gold box. The `.pill.partial` background rule came later in style.css and won over the compact style; the compact rule now targets `#livepill`, so every state shows the same clear background and no border.
+
+### Tests
+- tools/header_row_test.py: at 360, 390 and 430 px the compact pill has the same background in every state (clear, no image, no border).
+
 ## [1.26.150] - 2026-10-25
 
 ### Fixed

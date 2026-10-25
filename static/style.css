@@ -374,9 +374,9 @@ html.jmlock,html.jmlock body{overflow:hidden}
 @media (max-width:640px){.joinbtn{height:44px;padding:0 16px;font-size:var(--t14)}}
 /* phones up to 430 px: the status pill becomes a compact status line under the wordmark (dot and word, in its state color, still
    the Status link), so logo, POASwap, Start and the menu keep one row with any pill state. The wordmark moves up only while a
-   pill shows. */
+   pill shows. #livepill (1.26.151) so no state rule (.pill.partial sits later) brings back its tinted box. */
 @media (max-width:430px){.hdr{position:relative;column-gap:8px}.hdr .joinbtn{padding:0 12px}
- .hdr .pill{position:absolute;left:56px;top:35px;margin:0;padding:0;border:0;background:none;gap:5px;font-size:10px;line-height:12px;letter-spacing:.06em}
+ .hdr #livepill{position:absolute;left:56px;top:35px;margin:0;padding:0;border:0;background:none;gap:5px;font-size:10px;line-height:12px;letter-spacing:.06em}
  .hdr .pill i{width:6px;height:6px}.hdr .pill::after{content:"";position:absolute;inset:-8px -8px -6px}
  .hdr .pill~.swaplink{margin-left:auto}
  .hdr:has(.pill:not([hidden])) .wm b{transform:translateY(-7px)}}
