@@ -1388,3 +1388,7 @@ a.pbadge:hover{border-color:currentColor}
 @media (max-width:640px){.pbadge{white-space:normal}}
 /* 1.26.142 every width: a stat label with a state tag wraps, so a long tag (Unconfirmed) drops below the label whole instead of clipping */
 .sl:has(.sflag){flex-wrap:wrap;row-gap:4px}.sl:has(.sflag) .sflag{max-width:100%}.qtip.sflag>summary{white-space:nowrap;overflow:visible;text-overflow:clip;max-width:none}
+/* 1.26.144 protocol: version names fit their stat card and timeline cell (wrap at any character, smaller in a stat) */
+.sv .ver{display:block;font-size:.68em;line-height:1.25;overflow-wrap:anywhere}
+.proto td .mono{overflow-wrap:anywhere}
+@media (max-width:640px){.proto td{white-space:normal}.proto td .mono{word-break:break-all}}

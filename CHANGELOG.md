@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.144] - 2026-10-25
+
+### Fixed
+- Governance, Protocol: the Release stat shows the version name at stat size without breaking mid-name at 1280; timeline release names wrap inside their cell at 390.
+
 ## [1.26.143] - 2026-10-25
 
 ### Added

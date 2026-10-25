@@ -189,6 +189,7 @@ def ui_checks():
     check("/about#protocol explains the method", 'id="protocol"' in open(V.__file__).read())
     for name, x in (("protocol tab", h), ("network", n), ("badge", b)): check(name + ": no em or en dash", "\u2014" not in x and "\u2013" not in x)
     css = open(os.path.join(HERE, "..", "static", "style.css")).read()
+    check("version names wrap in stat cards and timeline cells", ".sv .ver{" in css and ".proto td .mono{overflow-wrap:anywhere}" in css)
     check("badge styles use tokens", ".pbadge{" in css and ".pbadge.warn" in css)
     base = re.sub(r"@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", css)   # rules outside any media query
     check("stat state tags wrap at every width (no clipped Unconfirmed at 1280)", ".sl:has(.sflag){flex-wrap:wrap" in base and "white-space:nowrap;overflow:visible" in base)
