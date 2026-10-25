@@ -35,6 +35,15 @@ hm = V.home()
 check("home: the Bench, the Pour (watermark kept: bmcard), stats and live tables", 'id="tracker" class="card benchc"' in hm and "pourc" in hm and "bmcard" in hm
       and 'data-liverows="closes-home"' in hm and 'id="feed"' in hm and "Active Agents" in hm)
 check("home: no Burn meter (the Pour replaces it), no em or en dashes", "Burn meter" not in hm and "\u2014" not in hm and "\u2013" not in hm)
+check("home grid: the Assay line (Type, Agent, Seals, Age) beside Closes, Graders and the Pour", hm.index("Assay line") < hm.index('class="side"') < hm.index("Closes</h2>") < hm.index("Graders</h2>") < hm.index("pourc")
+      and '<span>Type</span><span>Agent</span><span>Seals</span><span>Age</span>' in hm)
+fr = V.feed_rows(3)
+check("assay rows: type first, agent, seal pips, age linking the tx; rows keep data-id for the live merge", fr.startswith('<div class="frow" data-id="') and '<span class="badge' in fr
+      and 'class="dots"' in fr and '<a class="ft" href="/tx/' in fr and fr.index("badge") < fr.index('class="fw"') < fr.index('class="dots"') < fr.index('class="ft"'))
+ce = V.home_epochs(__import__("poascan.analytics", fromlist=["x"]).epoch_rows())
+check("closes: minted, burned and a pour bar per close; phones keep #, Paid, Minted and Pour", "<th" in ce and ">Burned<" in ce and ">Pour<" in ce and 'class="mpour"' in ce
+      and 'aria-label="Minted 17.0%, burned 83.0%"' in ce and V.live_rows("closes-home").count("<tr") >= 1)
+check("graders card: jurors with 10 or more settled seats, aligned bar and share", "Settled" in V.home_graders() or V.home_graders() == '<p class="empty">No settled grades yet</p>')
 snap = V.live_snapshot()
 check("snapshot carries the open pool as a live number", snap["nums"]["pool"][0] == snap["epoch"]["pool"])
 a = hm.encode(); b = re.sub(rb'(class="mk" data-b="\d+" transform="translate\()[-\d.]+', rb"\g<1>-99", a)

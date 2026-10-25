@@ -120,14 +120,15 @@ def _reltxt(ts):
     r = rel(ts); return r[r.index(">") + 1:-len("</time>")]
 
 def feed_rows(n=12, stable=False):
+    """The Assay line (Home): Type, Agent, seal progress and age; the age links the tx. app.js merges new rows in (slide and fade)."""
     rows = db.q("SELECT * FROM txs ORDER BY ts DESC LIMIT ?", (n,)); nm = names()
     out = []
     for t in rows:
-        who = addr_link(t["from_addr"], nm, (7, 4))
-        amt = f'<span class="num">{t["amount"]}</span>' if t["amount"] else '<span class="na">no transfer</span>'
-        out.append(f'<div class="frow" data-id="{E(t["id"])}"><span class="fh">{tx_link(t["id"], (6,4))}</span>{badge(t["type"])}<span class="fw">{who}</span>'
-                   f'<span class="fa">{dots(t["atts"], t["k"] or 5)}{seal(t["final"])}</span><span class="ft"><time class="t rel" data-ts="{int(t["ts"] or 0)}">{"" if stable else _reltxt(t["ts"])}</time></span></div>')
-    return "".join(out) or skel(5)
+        who = addr_link(t["from_addr"], nm, (6, 4))
+        out.append(f'<div class="frow" data-id="{E(t["id"])}">{badge(t["type"])}<span class="fw">{who}</span>'
+                   f'<span class="fa">{dots(t["atts"], t["k"] or 5)}{seal(t["final"])}</span><a class="ft" href="/tx/{E(t["id"])}" title="Transaction {E(short(t["id"], 6, 4))}">'
+                   f'<time class="t rel" data-ts="{int(t["ts"] or 0)}">{"" if stable else _reltxt(t["ts"])}</time></a></div>')
+    return "".join(out) or '<p class="empty">No transactions yet</p>'
 
 def live_snapshot():
     """Payload for /ws broadcasts and the /api/summary polling fallback. Built from the local archive only."""
@@ -199,12 +200,25 @@ def raw_fields(extra):
             f'<pre class="wrappre">{E(raw[:20000])}</pre></details>')
 
 def home_epochs(ep):
-    """Compact closes table for the home panel. The pool split lives in the Burn meter only."""
-    rows = list(reversed(ep[-8:]))
-    return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burn %", "Median"],
+    """Closes on Home: when, Agents paid, minted, burned and the pour (the pool split, minted gold against burned slag)."""
+    rows = list(reversed(ep[-6:]))
+    def pour(r):
+        pool = float(r.get("pool") or 0); m = 100 * float(r.get("minted") or 0) / pool if pool else 0
+        t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
+        return f'<span class="mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
+    return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burned", "Pour"],
                [[f'<span class="okdot" title="Finalized"></span><a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
-                 f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>', f'<span class="red">{r["burn_pct"]:.1f}%</span>',
-                 num(r["median"], 1)] for r in rows], cls="eph")
+                 f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>',
+                 f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"], 1)}</span>', pour(r)] for r in rows], cls="closes", pri=(0, 2, 3, 5))
+
+def home_graders(n=5):
+    """Graders on Home: the most aligned jurors with at least 10 settled seats (agents.graders, cached 300 s)."""
+    g = [x for x in G.graders()["graders"] if x[1] >= 10]; nm = names()
+    g = sorted(g, key=lambda x: (-x[3], -x[1]))[:n]
+    if not g: return '<p class="empty">No settled grades yet</p>'
+    return table(["Agent", "Settled", "Aligned"],
+                 [[addr_link(a, nm, (6, 4)), intc(k), f'<span class="rate" aria-hidden="true"><i style="width:{r * 100:.0f}%"></i></span><span class="num">{r * 100:.1f}%</span>']
+                  for a, k, al, r, *_ in g], cls="grs")
 
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
@@ -213,8 +227,9 @@ def home_sparks():
 
 # ---------------- pages ----------------
 def home():
-    """Search, then the headline row (Total mined, Circulating supply, Agents, Active Agents; method on /about#home), the open epoch,
-    Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
+    """Search, the Bench (open epoch and the last 24 min, bench.py), the headline row (Total mined, Circulating supply, Agents, Active
+    Agents; method on /about#home), Holders and heights, then the Assay line beside Closes, Graders and the Pour, and a compact
+    market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
     bk = A.cut_list()   # Agents and Holders restart at a genesis cut: their sparklines break there, as the charts do
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk == "accounts" else None), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents")))
@@ -224,10 +239,14 @@ def home():
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
 <section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
-<div class="herogrid"><div class="stats three kstats kmore">{more}</div>{card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}</div>
-<div class="grid2">
-{card(ICON_CUBE + "Closed", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep)}</div>', '<a href="/chain" class="more">Full list →</a>')}
-{card(ICON_FEED + 'Mining feed', f'<div id="feed" class="feed">{feed_rows()}</div>', '<a href="/chain/txs" class="more">All txs →</a>')}
+<section class="stats three kstats kmore krow" aria-label="Holders and heights">{more}</section>
+<div class="grid2 hgrid">
+{card(ICON_FEED + 'Assay line', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed">{feed_rows(16)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
+<div class="side">
+{card(ICON_CUBE + "Closes", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', '<a href="/chain" class="more">Full list →</a>')}
+{card(ICON_SEAL + "Graders", home_graders(), '<a href="/governance?tab=graders" class="more">All graders →</a>', cls="hgr")}
+{card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}
+</div>
 </div>
 {card(V2.ICON_SWAP + "Market", f'<div class="stats four">{X.market_mini()}{X.price_stats_html()}</div>', X.usd_src() + f'<a class="more mswap" href="{E((X.SC.status() or {}).get("url") or "https://poaswap.io/start")}" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">POASwap →</a>', cls="mtile")}'''
     return page("Proof of Agent explorer", body, "/")

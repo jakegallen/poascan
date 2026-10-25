@@ -1099,6 +1099,28 @@ td a.mono{display:inline-block;min-width:24px}
 @media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}
 
 
+/* Phase 2: Home grid: the Assay line beside Closes, Graders and the Pour */
+.krow{margin-bottom:16px}
+.hgrid{align-items:start}.hgrid>.card,.side>.card{margin:0}
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.fhd,.assay .feed .frow{display:grid;grid-template-columns:88px minmax(0,1fr) 112px 64px;gap:10px;align-items:center}
+.fhd{padding:0 6px 8px;border-bottom:1px solid var(--rule);font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl)}
+.fhd span:nth-child(3){text-align:left}.fhd span:last-child{text-align:right}
+.assay .feed .frow{grid-template-areas:none;padding:9px 6px}
+.assay .feed .frow>*{grid-area:auto}
+.assay .ft{text-align:right;color:var(--lbl);font-size:var(--t12)}.assay .ft:hover{color:var(--amber);text-decoration:none}
+.closes td,.closes th{padding-left:8px;padding-right:8px}
+.closes .mpour{display:inline-block;width:96px;max-width:100%;height:6px;border-radius:var(--r-sm);background:var(--slag);overflow:hidden;vertical-align:middle}
+.closes .mpour i{display:block;height:100%;background:var(--gold)}
+.grs td:first-child{max-width:0;width:55%}.grs .al{max-width:100%}
+.rate{display:inline-block;width:56px;height:4px;border-radius:var(--r-sm);background:var(--rule);margin-right:10px;vertical-align:middle;overflow:hidden}
+.rate i{display:block;height:100%;background:var(--verd)}
+@media (max-width:640px){
+ .stats.krow{grid-template-columns:minmax(0,1fr);gap:8px}
+ .fhd,.assay .feed .frow{grid-template-columns:76px minmax(0,1fr) 52px}
+ .fhd span:nth-child(3),.assay .feed .fa{display:none}
+ .closes .mpour{width:56px}.rate{width:32px;margin-right:6px}}
+
 /* chart pop-out (app.js, chartpop.py). No entrance fade or transform anywhere in it: the dialog and the chart are visible from the
    first frame (the 1.26.28 iOS rule). Full screen on phones, touch scrubs the chart (touch-action none on the plot only). */
 .cpt{cursor:pointer}

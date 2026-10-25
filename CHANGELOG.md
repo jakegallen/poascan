@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.129] - 2026-10-25
+
+### Changed
+- Home grid: the Assay line (the live tx feed: Type, Agent, seal progress, Age linking the tx; 16 rows, new rows slide in) beside Closes, Graders and the Pour. Holders, Chain height and Finalized height sit in one row under the headline stats.
+- Closes: when, Agents paid, minted, burned and a pour bar per close (minted gold against burned slag, with the split on hover). Phones keep #, Paid, Minted and Pour; the rest opens on tap.
+- Graders card: the most aligned jurors with at least 10 settled seats, settled count and an aligned bar (agents.graders, cached 300 s).
+- One empty state (card body, one centered line) for the feed, closes, graders and the Pour.
+
 ## [1.26.128] - 2026-10-25
 
 ### Changed

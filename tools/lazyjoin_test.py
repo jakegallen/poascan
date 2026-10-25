@@ -39,7 +39,7 @@ try:
     pages = {r: get(base + r) for r in ("/", "/address/poa1" + "A" * 40, "/about", "/start", "/chain")}
     for r, (c, h, t) in pages.items():
         check(f"{r} ({c}): no Join dialog or trigger, app.js v89, Ask dialog still inline", c in (200, 404) and "joinmodal" not in t and "data-join" not in t
-              and 'id="jm-prompt"' not in t and 'data-rname="jclient"' not in t and "/static/app.js?v=128" in t and 'id="askmodal"' in t and 'id="toast"' in t
+              and 'id="jm-prompt"' not in t and 'data-rname="jclient"' not in t and "/static/app.js?v=129" in t and 'id="askmodal"' in t and 'id="toast"' in t
               and '<a class="joinbtn hdrjoin" href="/start">' in t)
     st = pages["/start"][2]; m = st[st.index("<main"):st.index("</main>")]
     check("/start: the three variant templates once, outside main, the full one is the canonical template",
