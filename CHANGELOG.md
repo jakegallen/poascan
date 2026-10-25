@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.124] - 2026-10-25
+
+### Changed
+- Visitor-local times: every displayed time reads in the visitor's own browser time zone through one client helper (app.js ltf, Intl.DateTimeFormat, the locale's hour cycle): "Oct 25, 8:48 AM", the year only when it is not this year. The server writes `<time datetime="ISO UTC">` with UTC text as the no-JS fallback (ui.lt, ui.utc_text). Covers the Home and Chain close lists, txs and tx pages, epoch pages (no longer fixed to PT), Agent first seen, Anchors and Releases, the Milestones and Unlock tables, Health incidents and latency hours, /upgrade, proposals, offers, and relative-age hovers.
+- Column headers that name the zone show the visitor's short zone name ("Closed (PDT)"). Status lines read "Updated Oct 25, 8:48 AM PDT".
+- Charts: x axis ends and hover tips in local time, the pop-out too; hourly latency bars label local hours. Milestone and signature hovers list local times. Day buckets that are UTC days stay marked UTC (Today (UTC), New Agents · daily UTC, Daily activity · UTC, Activity clock · UTC) and now read "Oct 25".
+- CSV and API timestamps are unchanged (ISO 8601 UTC). Method on /about.
+- Tests: tools/followups_test.py; milestones, signed, smoke and upgrade_complete tests follow the new format.
+
 ## [1.26.123] - 2026-10-25
 
 ### Added

@@ -63,7 +63,7 @@ notices(HARD, REST, HALT, DONE)
 # ---------------- pages ----------------
 h = V2.upgrade_body()
 check("/upgrade shows the completed note", "Upgrade complete" in h and "API hardening is over" in h and "Still paused" not in h and "Endpoints" not in h)
-check("/upgrade carries the dates", all(x in h for x in ("Oct 21, 2026, 19:00 UTC", "Oct 23, 2026, 16:57 UTC")) and 'datetime="2026-10-23T16:57:36Z"' in h)
+check("/upgrade carries the dates (visitor-local times, UTC fallback)", 'datetime="2026-10-21T19:00:51Z"' in h and 'datetime="2026-10-23T16:57:36Z"' in h and "16:57 UTC" in h)
 check("/upgrade links the notice tx and post 1357", "/tx/" + DONE["txid"] in h and M.POST_URL in h)
 check("no em or en dash on /upgrade", "\u2014" not in h and "\u2013" not in h)
 from poascan import agentapi as AG

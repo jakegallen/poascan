@@ -691,8 +691,8 @@ def fixture_pages(check):
             check("tx: one summary line says who did what, epoch, status and attestations; those rows are not repeated",
                   tp.count('<h1 class="txsum">') == 1 and " of 5 attestations" in tp and "<span>Status</span>" not in tp and "<span>Attestations</span>" not in tp and "\u2014" not in tp)
         ep7 = req(base + "/epoch/7")[1].decode()
-        check("epoch: header line (closed PT, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
-              '<h1 class="ephd">Epoch 7 · ' in ep7 and " PT</span>" in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
+        check("epoch: header line (closed at a visitor-local time, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
+              '<h1 class="ephd">Epoch 7 · ' in ep7 and 'closed <time class="t lt" datetime="' in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
               and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided / passed<" in ep7
               and '<th class="pc">Reward</th>' in ep7 and 'title="&lt;' not in ep7)
         tx_ = req(base + "/chain/txs")[1].decode()

@@ -161,7 +161,7 @@ check("no 36-character GUID (live key shape) in the fixture, the test or signed.
 # ---------------- badge and pages ----------------
 b = S.badge_tx(NOT["id"])
 check("Signed badge: check icon, the word Signed, fingerprint and check time in the tooltip", 'class="sigb ok"' in b and "<svg" in b and ">Signed<" in b
-      and S.fingerprint(S.TRUSTED_G0) in b and "UTC" in b and "PDT" in b)
+      and S.fingerprint(S.TRUSTED_G0) in b and __import__("re").search(r"[A-Z][a-z]{2} \d{1,2}, (\d{4}, )?\d\d:\d\d UTC", b) is not None)
 check("Unverified badge for a pending notice", ">Unverified<" in S.badge_tx(PEND["txid"]) and 'class="sigb un"' in S.badge_tx(PEND["txid"]))
 check("Invalid badge", ">Invalid<" in S.badge(dict(status="invalid", reason="Ed25519 signature does not verify", checked_at=1792790000)))
 check("no badge for an unknown tx", S.badge_tx("ef" * 32) == "")

@@ -13,9 +13,27 @@ var FMT={int:function(v){return Math.round(v).toLocaleString("en-US")},c2:functi
 
 /* times */
 function upts(root){$$("time[data-upts]",root).forEach(function(t){var ts=+t.dataset.upts;if(!ts||t.dataset.done==ts)return;var d=new Date(ts*1000),z=d.toISOString().slice(11,16)+"Z",l="";
-  try{l=new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d)}catch(e){}
-  t.textContent=l?l+" \u00b7 "+z:z;t.dataset.done=ts})}
-function times(root){upts(root);$$("time.t",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;if(!t.title)t.title=utc(ts)+" · local "+new Date(ts*1000).toLocaleString();if(t.classList.contains("rel"))t.textContent=rel(ts)})}
+  try{l=ltf(ts,"dt")+" "+tzn()}catch(e){}
+  t.textContent=l.trim()?l.trim():z;t.title=ltf(ts,"dt",1);t.dataset.done=ts})}
+/* 1.26.122 visitor-local times: one formatter for every displayed time. The server sends <time class="lt" datetime=ISO UTC
+   data-f=kind> with UTC text (the no-JS fallback); here it reads in the browser's zone and hour cycle ("Oct 25, 8:48 AM"),
+   the year only when it is not this year. Headers that name the zone carry .tzn ("Time (PDT)"); titles hold the full time. */
+var LTY=new Date().getFullYear(),TZN=null;
+function ltf(ts,f,full){var d=new Date(ts*1000),o={};if(f!=="t"){o.month="short";o.day="numeric";if(full||d.getFullYear()!==LTY)o.year="numeric"}
+ if(f!=="d"){o.hour="numeric";o.minute="2-digit";if(f==="dts")o.second="2-digit"}if(full)o.timeZoneName="short";
+ try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return utc(ts)}}
+function tzn(){if(TZN!==null)return TZN;TZN="";try{var p=new Intl.DateTimeFormat(undefined,{timeZoneName:"short"}).formatToParts(new Date());for(var i=0;i<p.length;i++)if(p[i].type==="timeZoneName")TZN=p[i].value}catch(e){}return TZN}
+function ltt(s){return s.replace(/\{t:(\d+)(?::(\w+))?\}/g,function(_,ts,f){return ltf(+ts,f||"dt")}).replace(/ \(UTC\)$/,"")}
+function lt(root){$$("time.lt",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts||t.dataset.lz==ts)return;t.textContent=ltf(ts,t.dataset.f||"dt");t.dataset.lz=ts});
+ var z=tzn();if(z)$$(".tzn",root).forEach(function(s){s.textContent=z});
+ $$("[data-ltt]",root).forEach(function(e){e.title=ltt(e.dataset.ltt);e.removeAttribute("data-ltt")});
+ $$("[data-lts]",root).forEach(function(e){e.textContent=ltf(+e.dataset.lts,e.dataset.f||"dt");e.removeAttribute("data-lts")});
+ $$("[title*=' UTC']",root).forEach(function(e){e.title=ltx(e.title)})}
+/* a dated UTC time inside hover text ("Oct 25, 15:48 UTC", ui.utc_text) reads local too; a bare "15:48 UTC" has no date and stays */
+var LTMON="JanFebMarAprMayJunJulAugSepOctNovDec";
+function ltx(s){return s.replace(/\b([A-Z][a-z]{2}) (\d{1,2})(?:, (\d{4}))?, (\d{2}):(\d{2})(?::(\d{2}))? UTC\b/g,function(m,mo,d,y,h,mi,se){var k=LTMON.indexOf(mo);if(k<0||k%3)return m;
+ var ts=Date.UTC(y?+y:new Date().getUTCFullYear(),k/3,+d,+h,+mi,se?+se:0)/1000;if(!y&&ts>Date.now()/1000+40*86400)ts=Date.UTC(new Date().getUTCFullYear()-1,k/3,+d,+h,+mi,se?+se:0)/1000;return ltf(ts,se?"dts":"dt")})}
+function times(root){upts(root);lt(root);$$("time.t",root).forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;if(!t.title)t.title=ltf(ts,t.dataset.f==="dts"?"dts":"dt",1);if(t.classList.contains("rel"))t.textContent=rel(ts)})}
 
 /* hex identicons: deterministic from the address */
 function h32(s,seed){var h=seed>>>0;for(var i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),16777619)>>>0}return h}
@@ -141,7 +159,7 @@ function chartTips(){
   /* one chart spec (1.26.119): the SVG is stretched to its plot box, so x and y scale separately; a dot marks the hovered point */
   function move(e){var r=svg.getBoundingClientRect(),br=b.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,sy=r.height/vb.height,x=(e.clientX-r.left)/sx,best=null,bd=1e9;
    items.forEach(function(it){var d=Math.abs(+it.dataset.cx-x);if(d<bd){bd=d;best=it}});if(!best)return;
-   if(on!==best){if(on)on.classList.remove("on");best.classList.add("on");on=best;xt.textContent=best.dataset.tip}
+   if(on!==best){if(on)on.classList.remove("on");best.classList.add("on");on=best;var q=best.dataset;xt.textContent=q.ts?(q.tf==="t"?ltf(+q.ts,"t"):ltf(+q.ts,"dt"))+" \u00b7 "+q.tv:q.tip}
    var px=+best.dataset.cx*sx+(r.left-br.left)+b.scrollLeft,top=r.top-br.top;xh.style.left=px+"px";xh.style.top=top+"px";xh.style.height=r.height+"px";xt.style.top=(top+4)+"px";
    if(best.dataset.cy!=null&&!best.classList.contains("col")){xd.style.display="";xd.style.left=px+"px";xd.style.top=(top+(+best.dataset.cy)*sy)+"px"}else xd.style.display="none";
    var w=xt.offsetWidth/2,bw=b.clientWidth+b.scrollLeft;xt.style.left=Math.max(w+b.scrollLeft,Math.min(bw-w,px))+"px";b.classList.add("hov")}
@@ -378,11 +396,8 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   cp=null,box,svgW=0,cur=null,data=null,opener=null,seq=0,geo=null,idx=-1,live,tip,xh,rng,ttl,now,lg,rT=0;
  function fv(v){if(v==null)return "···";var s=data&&data.fmt==="c"?c3(v):Math.round(v).toLocaleString("en-US");return data&&data.unit?s+" "+data.unit:s}
  function dtf(o,d){try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return ""}}
- /* reader's local time plus UTC, like the rest of the site: "6:35 PM PT · 01:35Z"; a date on both sides past 24h */
- function when(ts,long){var d=new Date(ts*1000),o={hour:"numeric",minute:"2-digit",timeZoneName:"shortGeneric"};if(long){o.month="short";o.day="numeric"}
-  var l=dtf(o,d);if(!l){o.timeZoneName="short";l=dtf(o,d)}var z=d.toISOString().slice(11,16)+"Z";
-  if(long&&(d.getUTCDate()!==d.getDate()||d.getUTCMonth()!==d.getMonth()))z=MON[d.getUTCMonth()]+" "+d.getUTCDate()+" "+z;
-  return l?l+" \u00b7 "+z:z}
+ /* the one site time format (1.26.122), in the reader's zone with its short name: "Oct 25, 8:48 AM PDT" */
+ function when(ts,long){var z=tzn();return ltf(ts,"dt")+(z?" "+z:"")}
  function build(){cp=D.createElement("dialog");cp.className="cpop";cp.setAttribute("aria-labelledby","cp-t");cp.setAttribute("aria-modal","true");
   cp.innerHTML='<div class="cp-in"><div class="cp-hd"><h2 id="cp-t"></h2><span class="cp-now num"></span><button type="button" class="jm-x cp-x" aria-label="Close" data-cpclose>'+XSVG+'</button></div>'
    +'<div class="chips cp-rng" role="group" aria-label="Range"></div><div class="chartbox cp-box" tabindex="0" role="group" aria-roledescription="chart"></div>'
@@ -431,7 +446,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
      Each label is centred on its line and kept inside the plot; one that fits no lane keeps its line and its title. */
   var ML=[];if(!bars&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
    d.marks.forEach(function(m){var mx=pl+(Wd-pl-pr)*(m[0]-mt0)/((mt1-mt0)||1),lw=Math.round(m[1].length*cw+14),x0=Math.max(pl+2,Math.min(Wd-pr-lw-2,mx-lw/2)),ln=-1;
-    for(var q=0;q<4;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:m[2]||m[1]})});
+    for(var q=0;q<4;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:ltx(m[2]||m[1])})});
    pt=8+20*ends.length+10}
   o.push('<svg class="cpchart" viewBox="0 0 '+Wd+' '+H+'" width="'+Wd+'" height="'+H+'" aria-hidden="true"><defs><linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+d.color+'" stop-opacity=".22"/><stop offset="1" stop-color="'+d.color+'" stop-opacity="0"/></linearGradient></defs>');
   for(var i=0;i<5;i++){var gy=Y(lo+(hi-lo)*i/4);o.push('<line x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" class="grid"/><text x="'+(pl-8)+'" y="'+(gy+4).toFixed(1)+'" class="ax" text-anchor="end">'+yl[i]+'</text>')}

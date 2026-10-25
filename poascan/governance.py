@@ -5,7 +5,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
 from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS
-from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip
+from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
 TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
@@ -236,7 +236,7 @@ def payouts(qs):
     other = pe["basis_segment"] != SG.CURRENT
     est = (f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···")
     ec = o.get("est_close")
-    nxt = (f'<time class="t" data-ts="{int(ec)}" title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(ec))} UTC, estimate">~{max(0, int(ec - time.time())) // 3600}h {max(0, int(ec - time.time())) % 3600 // 60}m</time>') if ec else "···"
+    nxt = (f'<time class="t" data-ts="{int(ec)}" title="{utc_text(ec)}, estimate">~{max(0, int(ec - time.time())) // 3600}h {max(0, int(ec - time.time())) % 3600 // 60}m</time>') if ec else "···"
     s = "".join([stat(f"E{o['epoch']} close" if o.get("epoch") is not None else "Next close", nxt, tip="Last close plus auto_epoch_seconds, an estimate"),
                  stat("Answered", intc(ans["n"]) if ans else "···", tip="Agents with a challenge answer since the last close"),
                  stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Of those, answers with {K} or more attestations"),
@@ -513,7 +513,7 @@ def forum(qs):
                  stat("Reply rate", pct(f["reply_rate"]) if f["reply_rate"] is not None else "···", tip="Posts with a comment by another author"),
                  stat("First reply", _dur(f["median_wait"]), tip="Median time to the first comment by another author"),
                  stat("Operator replies", intc(f["operator_replied"]), tip="Posts with a comment by an official network account (G0)")])
-    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"), [n]) for t, n in f["per_day"]], height=140, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
+    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d"), [n]) for t, n in f["per_day"]], height=140, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
     ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
     def who(r):
         pid = r["pid"]; nm = r["name"] or short(pid, 6, 4)
@@ -552,7 +552,7 @@ def proposals(qs):
         pid = r["pid"]; return name_link(r["author"], pid) if pid else E(r["author"] or "···")
     tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
                [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
-    bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), f'Ended {E(b["ends"][5:16].replace("T", " "))} UTC',
+    bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), "Ended " + (lt(_iso(b["ends"])) if _iso(b["ends"]) else E(b["ends"][5:16].replace("T", " ") + " UTC")),
            ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"])] for b in BALLOTS]
     bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live]
     bt = table(["Ballot", "Topics", "Window", "Tally"], bl, pri=(0, 3))

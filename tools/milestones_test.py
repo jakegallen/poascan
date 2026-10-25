@@ -120,7 +120,7 @@ g3 = MS.group(MS.events("gov-queue"), 1792876294 + 3600 - 7 * 86400, 1792876294 
 check(f"7 days, Grading queue ({[x[1] for x in g3]})", [x[1] for x in g3] == ["Upgrade begins", "Grading reopened", "Genesis cut"])
 check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for gg in (g, g2, g3) for x in gg))
 gz = MS.group([e for e in MS.events() if e["key"] in want and e["ts"] < 1792774656], 1792609251 - 3600, 1792712749 + 3600)
-check("a group's tip lists every member, in UTC", all(x[3].endswith("(UTC)") for x in gz) and sum(len(x[3].split("; ")) for x in gz) == len([k for k in want if 1792609251 <= {e["key"]: e for e in MS.events()}[k]["ts"] < 1792774656]))
+check("a group's tip lists every member with its dated UTC time (app.js shows it local, 1.26.122)", all(all(re.match(r"[A-Z][a-z]{2} \d{1,2}, (\d{4}, )?\d\d:\d\d UTC ", m) for m in x[3].split("; ")) for x in gz) and sum(len(x[3].split("; ")) for x in gz) == len([k for k in want if 1792609251 <= {e["key"]: e for e in MS.events()}[k]["ts"] < 1792774656]))
 check("a group links its lead event's source", g[1][2] == MS.POST)
 check("events outside the range are left out", MS.group(e7, 0, 1000) == [])
 for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 60 * 86400)):

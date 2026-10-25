@@ -207,10 +207,10 @@ def times(ts):
     return dict(utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts))), pt=p.strftime("%Y-%m-%dT%H:%M:%S%z")[:-2] + ":" + p.strftime("%z")[-2:])
 
 def human(ts):
-    """'Oct 23, 2026 2:50 PM PDT (21:50 UTC)' for tooltips."""
+    """'Oct 23, 2026, 21:50 UTC' for tooltips; app.js shows it in the reader's zone (1.26.122)."""
     if not ts: return "not yet"
-    p, lab = _pt(ts)
-    return p.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ") + f" {lab} ({time.strftime('%H:%M', time.gmtime(int(ts)))} UTC)"
+    from .ui import utc_text
+    return utc_text(ts)
 
 # ---------------------------------------------------------------- what POAScan shows
 def _clean(s):

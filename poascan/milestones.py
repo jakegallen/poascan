@@ -142,8 +142,9 @@ def group(evs, t0, t1, width=576, gap=64):
     out = []
     for g in groups:
         top = min(g, key=rank); lab = top["label"]   # the main event name only; the title lists the group
-        title = "; ".join(time.strftime("%m-%d %H:%M", time.gmtime(e["ts"])) + " " + e["label"] for e in g)
-        out.append((g[0]["ts"], lab, top["url"] or next((e["url"] for e in g if e["url"]), None), title + " (UTC)"))
+        from .ui import utc_text as _ut
+        title = "; ".join(_ut(e["ts"]) + " " + e["label"] for e in g)   # app.js shows these in the reader's zone (ltx)
+        out.append((g[0]["ts"], lab, top["url"] or next((e["url"] for e in g if e["url"]), None), title))
     return out
 
 def job(): observe()

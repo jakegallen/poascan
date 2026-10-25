@@ -139,7 +139,7 @@ def recon_card():
         if x is None: return '<span class="na">···</span>'
         n = num(x, 2) if unit == "poa" else intc(x)
         s = f"{src} · " if src else ""   # 1.26.88: the two holder counts are labelled by source (balances, node); method on /about#holders
-        return f'{n}<small title="read {dt.datetime.fromtimestamp(int(at), dt.timezone.utc):%Y-%m-%d %H:%M} UTC">{s}{rel_t(at)}</small>' if at else (f'{n}<small>{src}</small>' if src else n)
+        return f'{n}<small title="read {utc_text(at)}">{s}{rel_t(at)}</small>' if at else (f'{n}<small>{src}</small>' if src else n)
     HS = {"holders": ("balances", "node")}
     def tag(st): c, t = RECON_TAG[st]; return f'<span class="tag {c}">{t}</span>'
     def sub(r):
@@ -163,12 +163,12 @@ def _route_tip(v, st):
     """Tooltip for a route tag: a slow route keeps its last clear answer and its time."""
     if st != "slow": return ""
     if v["state"] in ROUTE_WORD and v.get("checked"):
-        t = time.strftime("%H:%M UTC", time.gmtime(v["checked"]))
+        t = utc_text(v["checked"])
         return f' title="Not answering our reads right now. Last answered {t} ({ROUTE_WORD[v["state"]]})."'
     return ' title="Not answering our reads right now."'
 CHECK = '<svg class="chk" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>'
 
-def _chip(text, cls): return f'<li class="chp {cls}">{CHECK if cls == "ok" else "<i></i>"}<span>{E(text)}</span></li>'
+def _chip(text, cls, html=""): return f'<li class="chp {cls}">{CHECK if cls == "ok" else "<i></i>"}<span>{E(text)}{html}</span></li>'
 
 def upgrade_sig():
     """Changes whenever anything the /upgrade view shows changes; the live snapshot carries it and app.js refetches the view."""
@@ -205,7 +205,7 @@ def upgrade_view():
     grp = (f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>'
            + (f'<div class="grp wait" data-grp="paused"><h2><i></i>Still paused</h2><ul>{"".join(_chip(t, "wait") for t in wait)}</ul></div>' if wait else "")
            + (f'<div class="grp wait slow" data-grp="slow"><h2><i></i>Slow to answer</h2><ul>'
-              + "".join(_chip(rt[k]["label"] + (f' · last answered {time.strftime("%H:%M", time.gmtime(rt[k]["checked"]))} UTC' if rt[k]["state"] in ROUTE_WORD and rt[k].get("checked") else ""), "wait") for k in slow)
+              + "".join(_chip(rt[k]["label"] + (" · last answered " if rt[k]["state"] in ROUTE_WORD and rt[k].get("checked") else ""), "wait", lt(rt[k]["checked"]) if rt[k]["state"] in ROUTE_WORD and rt[k].get("checked") else "") for k in slow)
               + '</ul></div>' if slow else "")
            + '</div>')
     fr = M.back_phrase() if r["moved"] else ""
@@ -261,15 +261,14 @@ def upgrade_details():
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
            + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.UPGRADE[1])}</pre>') + '</div>')
-    since = dt.datetime.fromtimestamp(M.STARTED, dt.timezone.utc).strftime("%b %d %H:%M UTC")
+    since = lt(M.STARTED)
     links = (f'<p class="upl small"><a href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
              f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
     return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl>{box}</details>'
 
 def _when(ts):
-    """'Oct 23, 2026, 16:57 UTC' in a <time> element (a date, so the reader sees which day)."""
-    g = time.gmtime(int(ts))
-    return f'<time datetime="{time.strftime("%Y-%m-%dT%H:%M:%SZ", g)}">{time.strftime("%b %d, %Y, %H:%M UTC", g).replace(" 0", " ", 1)}</time>'
+    """Date and time in the reader's zone (ui.lt), so the reader sees which day."""
+    return lt(ts)
 
 def _ts_row(label, ts, extra=""):
     return f"<dt>{E(label)}</dt><dd>{_when(ts) if ts else '···'}{extra}</dd>"
@@ -356,14 +355,14 @@ def status_body():
                [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
                  _okpct(e["s1"]), _okpct(e["s24"]), f'{e["p50"]:,} ms' if e["p50"] else "···", f'{e["p95"]:,} ms' if e["p95"] else "···",
                  (rel(e["last_err"]) + f' <span class="dim">{E(e["last_code"] or "")}</span>') if e["last_err"] else "···"] for e in d["eps"]], cls="wrapt")
-    it = table(["Start (UTC)", "End", "Duration", "What", "Fails"],
+    it = table([f"Start ({TZ})", "End", "Duration", "What", "Fails"],
                [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else utc(b, "%m-%d %H:%M")), dur(((b or now) - a)),
                  E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="gold", fmt=lambda v: f"{v:,.0f}", y0=0)
-    latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H"), [v]) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
+    latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
     body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}<div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly UTC", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return body
 
 def _okpct(v):

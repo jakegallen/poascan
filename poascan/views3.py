@@ -78,13 +78,13 @@ def unlock_chart():
     pts = u["past"] + [(t, c) for _, t, c, _ in u["fut"]]
     if pts and pts[0][1] > 0: pts = [(pts[0][0] - u["period"], 0.0)] + pts
     marks = [(h[1], f"{int(p*100)}%") for p, h in u["hit"].items() if h and h[0] != "done" and h[1]]
-    return line(pts, height=200, color="gold", fmt=compact, xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d"),
+    return line(pts, height=200, color="gold", fmt=compact, xk="d", xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d"),
                 marks=marks, proj_from=now, y0=0)
 
 def unlock_calendar(nrows=12):
     u = unlock_data(); tot = u["total"] or 1
     rows = [[f'E{j}', utc(t, "%m-%d %H:%M"), poa(d), poa(c), pct(c / tot)] for j, t, c, d in u["fut"][:nrows]]
-    return table(["At close", "Time (UTC)", "Unlocks", "Circulating", "%"], rows, pri=(0, 2, 3), usd=(2, 3))
+    return table(["At close", f"Time ({TZ})", "Unlocks", "Circulating", "%"], rows, pri=(0, 2, 3), usd=(2, 3))
 
 def unlock_section():
     return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), PR.ask([PR.UNLOCK, PR.SPENDABLE]), cls="")}'
@@ -217,12 +217,12 @@ def charts_body(rng=""):
     tp = [(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0]
     tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)
     ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
-    tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("gold",), fmt=lambda v: f"{v:,.0f}")
+    tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%b %-d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("gold",), fmt=lambda v: f"{v:,.0f}")
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])
     rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0 and k != "cut"] + [(e["ts"], 1, lk(e)) for e in up]
-    ml = table(["Time (UTC)", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
+    ml = table([f"Time ({TZ})", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
     chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
     pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out
     tn = "Txs" + (" / day" if rng == "all" else " / hour")

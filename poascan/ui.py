@@ -60,10 +60,38 @@ def intc(v):
 def pct(v, dec=1):
     return '<span class="na">···</span>' if v is None else f'<span class="num">{v*100:.{dec}f}%</span>'
 
-def utc(ts, fmt="%Y-%m-%d %H:%M:%S"):
+# ---------- Times (1.26.122): one format, in the visitor's own zone ----------
+# The server writes <time datetime="ISO UTC" data-f=kind> with UTC text (the no-JS fallback); app.js lt() rewrites it with
+# Intl.DateTimeFormat in the browser's zone and hour cycle: "Oct 25, 8:48 AM", the year only when it is not this year.
+# kinds: dt (date and time), dts (with seconds), d (date), t (time). CSV and API keep ISO UTC.
+TZ = '<span class="tzn">UTC</span>'   # in a header that names the zone: app.js puts the reader's short zone name ("PDT")
+
+def _kind(fmt):
+    hm = "%H" in fmt or "%I" in fmt; day = any(k in fmt for k in ("%d", "%b", "%-d", "%m"))
+    return "dt" if hm and day else "t" if hm else "d"
+
+def utc_text(ts, kind="dt"):
+    """The UTC fallback in the one format: 'Oct 25, 15:48 UTC', 'Oct 25, 2025, 15:48 UTC', 'Oct 25', '15:48 UTC'."""
+    u = dt.datetime.fromtimestamp(int(ts), dt.timezone.utc); now = dt.datetime.now(dt.timezone.utc)
+    d = f"{u:%b} {u.day}" + (f", {u.year}" if u.year != now.year else "")
+    t = f"{u:%H:%M}" + (f":{u:%S}" if kind == "dts" else "")
+    return d if kind == "d" else f"{t} UTC" if kind == "t" else f"{d}, {t} UTC"
+
+def lt(ts, kind="dt", cls=""):
+    """A time in the visitor's zone (app.js), UTC text without script."""
     if not ts: return '<span class="na">···</span>'
-    s = dt.datetime.fromtimestamp(int(ts), dt.timezone.utc).strftime(fmt)
-    return f'<time class="t" data-ts="{int(ts)}">{s} UTC</time>'
+    ts = int(ts); iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+    return f'<time class="t lt{(" " + cls) if cls else ""}" datetime="{iso}" data-ts="{ts}" data-f="{kind}">{utc_text(ts, kind)}</time>'
+
+def iso_ts(s):
+    """'2026-10-25T15:47:11Z' or '2026-10-25 15:47:11' (UTC) to unix seconds; None when unreadable."""
+    try: d = dt.datetime.fromisoformat(str(s).strip().replace("Z", "+00:00").replace(" ", "T"))
+    except (TypeError, ValueError): return None
+    return int((d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)).timestamp())
+
+def utc(ts, fmt="%Y-%m-%d %H:%M:%S"):
+    """Kept for callers: now a visitor-local time (lt) whose kind follows fmt (date, time, or both)."""
+    return lt(ts, _kind(fmt))
 
 def rel(ts):
     if not ts: return '<span class="na">···</span>'
@@ -393,7 +421,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=121">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=124">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -406,7 +434,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=120" defer></script></body></html>'''
+<script src="/static/app.js?v=124" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -580,21 +608,25 @@ def _marks(marks, X, x0, x1):
     top = 22 if not rows[1] else 42
     return "".join(svg), "".join(chips), (f'<ol class="mkleg">{"".join(leg)}</ol>' if leg else ""), top
 
-def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None):
-    """series: list of (xlabel, [v1, v2, ...]). Stacked (or grouped) bars that fit the card at any width."""
+def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None, xk="t"):
+    """series: list of (xlabel, [v1, v2, ...]) or (xlabel, [v...], ts): with a ts the label and tip read in the reader's zone
+    (app.js; xk the kind, "t" for hourly buckets). Day buckets that are UTC days keep their plain label. Bars fit the card."""
+    tss = [s[2] if len(s) > 2 else None for s in series]; series = [(s[0], s[1]) for s in series]
     if not series: return chart_skel(640, height)
     n = len(series); mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
     cls = [series_cls(c) for c in colors] if len(series[0][1]) > 1 or legend else ["s-gold"]
     step = VW / n; bw = step * (0.62 if n < 40 else 0.8)
     g, ylab, yg = _grid(0, mx, fmt)
     out = [g]
-    lw = 7.3 * max(len(str(lab)) for lab, _ in series) + 12   # x labels: as many as fit a 280px plot, the narrowest at 390px
+    lw = 7.3 * max([len(str(lab)) for lab, _ in series] + [8 if any(tss) else 0]) + 12   # a local "8:00 AM" is longer than "15:00"   # x labels: as many as fit a 280px plot, the narrowest at 390px
     every = max(1, math.ceil(n / max(2, int(280 / lw)))); xl = []
     for i, (lab, vals) in enumerate(series):
         x = step * i + (step - bw) / 2; base = VH
         tip = E(str(lab)) + " · " + " · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))
         top = VH - VH * ((sum(vals) if stacked else max(vals)) / mx)
-        out.append(f'<g class="col" data-tip="{tip}" data-cx="{_f(x + bw / 2)}" data-cy="{_f(top)}">')
+        lz = (f' data-ts="{int(tss[i])}" data-tf="{xk}" data-tv="{" · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))}"'
+              if tss[i] else "")
+        out.append(f'<g class="col" data-tip="{tip}"{lz} data-cx="{_f(x + bw / 2)}" data-cy="{_f(top)}">')
         if stacked:
             for j, v in enumerate(vals):
                 h = VH * (v / mx); base -= h
@@ -607,13 +639,14 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
         out.append("</g>")
         if i % every == 0:
             p = 100 * (x + bw / 2) / VW
-            xl.append(f'<span class="xl c" style="left:{p:.2f}%">{E(str(lab))}</span>' if 6 < p < 94 else
-                      f'<span class="xl" style="{"left:0" if p <= 6 else "right:0"}">{E(str(lab))}</span>')
+            lz = f' data-lts="{int(tss[i])}" data-f="{xk}"' if tss[i] else ""
+            xl.append(f'<span class="xl c"{lz} style="left:{p:.2f}%">{E(str(lab))}</span>' if 6 < p < 94 else
+                      f'<span class="xl"{lz} style="{"left:0" if p <= 6 else "right:0"}">{E(str(lab))}</span>')
     lg = ""
     if legend: lg = '<div class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
     return _plot("".join(out), ylab + "".join(xl), height, yg=yg) + lg
 
-def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None):
+def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None, xk="dt"):
     """marks: [(x, label)] or [(x, label, url, title)] milestone markers. proj_from: x after which the line is drawn dashed (projection).
     breaks: x values the line is not drawn across (a counter that restarted at a genesis cut). One series, always gold."""
     pts = [(x, y) for x, y in points if y is not None]
@@ -630,11 +663,13 @@ def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, p
     path = lambda ps: " ".join(f"{'M' if i == 0 or gap(ps[i - 1][0], x) else 'L'}{_f(X(x))},{_f(Y(y))}" for i, (x, y) in enumerate(ps))
     g, ylab, yg = _grid(ymin, y1, fmt)
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
-    xs = f'<span class="xl l">{E(xl(x0))}</span><span class="xl r">{E(xl(x1))} UTC</span>'
+    # x ends and tips carry their time (data-lts, data-ts): app.js shows them in the reader's zone; xk "d" for day-scale charts
+    xs = f'<span class="xl l" data-lts="{int(x0)}" data-f="{xk}">{E(xl(x0))}</span><span class="xl r" data-lts="{int(x1)}" data-f="{xk}">{E(xl(x1))} UTC</span>'
     msvg, chips, leg, top = _marks(marks, X, x0, x1)
     step = max(1, len(pts) // 160)
-    hit = "".join(f'<g data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-cx="{_f(X(x))}" data-cy="{_f(Y(y))}"></g>' for x, y in pts[::step])
-    if (len(pts) - 1) % step: hit += f'<g data-tip="{E(xl(pts[-1][0]))} UTC · {E(fmt(pts[-1][1]))}" data-cx="{_f(X(pts[-1][0]))}" data-cy="{_f(Y(pts[-1][1]))}"></g>'
+    hp = lambda x, y: f'<g data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-ts="{int(x)}" data-tv="{E(fmt(y))}" data-cx="{_f(X(x))}" data-cy="{_f(Y(y))}"></g>'
+    hit = "".join(hp(x, y) for x, y in pts[::step])
+    if (len(pts) - 1) % step: hit += hp(*pts[-1])
     lp = a[-1] if a else pts[-1]
     pb_ = f'<path d="{path(b)}" class="ln pj s-gold"/>' if len(b) > 1 else ""
     dot = f'<i class="ld s-gold" style="left:{100 * X(lp[0]) / VW:.2f}%;top:{100 * Y(lp[1]) / VH:.2f}%"></i>'

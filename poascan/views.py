@@ -50,7 +50,7 @@ def ring(o, big=False):
 def graders_tip(o):
     """Tooltip for the open epoch's Graders count: what it counts, the official count, and the halt when one is on."""
     ep = o.get("epoch") or 1; prev = o.get("graders_served_last_epoch") or ep - 1; sv = o.get("graders_served_last"); ro = o.get("graders_reopened_at")
-    t = (f"Agents that sealed a grade in epoch {ep}" + (f" since grading reopened at {time.strftime('%H:%M UTC', time.gmtime(ro))}" if ro else f" since the E{prev} close")
+    t = (f"Agents that sealed a grade in epoch {ep}" + (f" since grading reopened at {utc_text(ro)}" if ro else f" since the E{prev} close")
          + ", from POAScan's archive" + (f" ({o['graders_epoch']:,} counting seals sent while it was halted)" if ro and o.get("graders_epoch") not in (None, o.get("graders")) else "")
          + f". The close count comes with the E{ep} close. E{prev} close: " + (f"{sv:,} graders in its grade rows" if sv is not None else "unknown")
          + (", grading was halted." if ro and sv == 0 else "."))
@@ -59,7 +59,7 @@ def graders_tip(o):
               else " Grading is halted: a live read since the completion notice saw the grade route halted.")
     elif o.get("grading_state") == "unconfirmed":
         lt = o.get("last_seal_at")
-        t += " The notice says grading is open, but no grade seals have landed in the last 30 minutes" + (f" (last {time.strftime('%H:%M UTC', time.gmtime(lt))})" if lt else "") + "."
+        t += " The notice says grading is open, but no grade seals have landed in the last 30 minutes" + (f" (last {utc_text(lt)})" if lt else "") + "."
     return t
 
 def graders_tile(o):
@@ -177,7 +177,7 @@ def joins_fields():
 
 def epoch_cols():
     from . import scoresort as SS
-    return [SS.Col("epoch", "#"), SS.Col(None, "Status"), SS.Col("close_ts", "Closed (UTC)"), SS.Col("paid", "Agents paid"), SS.Col("minted", "Minted"),
+    return [SS.Col("epoch", "#"), SS.Col(None, "Status"), SS.Col("close_ts", f"Closed ({TZ})"), SS.Col("paid", "Agents paid"), SS.Col("minted", "Minted"),
             SS.Col("burned", "Burned"), SS.Col("burn_pct", "Burn %"), SS.Col("median", "Median reward")]
 EPOCH_SORTS = ("epoch", "close_ts", "paid", "minted", "burned", "burn_pct", "median")
 
@@ -203,7 +203,7 @@ def raw_fields(extra):
 def home_epochs(ep):
     """Compact closes table for the home panel. The pool split lives in the Burn meter only."""
     rows = list(reversed(ep[-8:]))
-    return table(["#", "Closed (UTC)", "Paid", "Minted", "Burn %", "Median"],
+    return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burn %", "Median"],
                [[f'<span class="okdot" title="Finalized"></span><a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
                  f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>', f'<span class="red">{r["burn_pct"]:.1f}%</span>',
                  num(r["median"], 1)] for r in rows], cls="eph")
@@ -296,7 +296,7 @@ def txs(qs):
     return page("Transactions", '<div class="sechead"><h1 class="sr-only">Transactions</h1>' + chain_tabs("/chain/txs") + '</div>' + body, "/txs")
 
 def tx_table(rows, nm):
-    return table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", "Time (UTC)"],
+    return table(["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", f"Time ({TZ})"],
                [[tx_link(t["id"], (6, 4)), badge(t["type"]), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
                  "E" + E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows], pri=(0, 1, 2))
 
@@ -340,7 +340,7 @@ def tx(tid):
     ep = d.get("epoch") if d.get("epoch") is not None else b.get("epoch", G.epoch_of_ts(d.get("ts") or 0))
     # Status, type, epoch and attestations live in the summary line above the card; the rows keep the raw facts.
     rows = [("Transaction hash", f'<span class="mono">{E(d["id"])}</span>{copy(d["id"])}'),
-            ("Timestamp", utc(d.get("ts")) + " · " + rel(d.get("ts"))), ("From", addr_link(d.get("from_addr"), nm, (48, 0)) if d.get("from_addr") else "···"),
+            ("Timestamp", lt(d.get("ts"), "dts") + " · " + rel(d.get("ts"))), ("From", addr_link(d.get("from_addr"), nm, (48, 0)) if d.get("from_addr") else "···"),
             ("To", addr_link(d.get("to_addr"), nm, (48, 0)) if d.get("to_addr") else '<span class="na">···</span>'),
             ("Amount", E(d.get("amount") or "···")),
             ('<span title="Highest finalized (checkpointed) height that covers this transaction">Finalized height</span>',
@@ -665,7 +665,7 @@ def addr_meta(a, bal, p):
     first = min([t for t in (f1, f2) if t] or [None]) if (f1 or f2) else None; last = max(t for t in (l1, l2) if t) if (l1 or l2) else None
     cur = p["streak"][1]
     parts = [f'<a href="/agents/top?tab=holders" title="Rank among holders by balance">#{rk:,} by balance</a>' if rk else "",
-             f'<span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(first))} UTC">First seen {_pt_day(first)}</span>' if first else "",
+             f'<span>First seen {lt(first, "d")}</span>' if first else "",
              f'<span>Last seen {rel(last)}</span>' if last else "",
              f'<span title="Consecutive paid epochs up to the latest close">Streak {cur} epoch{"s" if cur != 1 else ""}</span>' if cur else ""]
     parts = [x for x in parts if x]
@@ -880,7 +880,7 @@ def seg_about():
     def one(c):
         a = SG.BY_N[c["from_segment"]]; n = SG.BY_N[c["segment"]]
         arc = f' (<a href="{E(c["archive_url"])}" rel="noopener noreferrer">archive ↗</a>)' if c.get("archive_url") else ""
-        return (f'{E(n["label"])} (chain <code>{E(n.get("chain_id") or "")}</code>) began at {utc(c["ts"], "%Y-%m-%d %H:%M")} UTC'
+        return (f'{E(n["label"])} (chain <code>{E(n.get("chain_id") or "")}</code>) began at {utc(c["ts"], "%Y-%m-%d %H:%M")}'
                 + (f', continuing from checkpoint h{c["from_height"]} of {E(a["label"])}' if c.get("from_height") is not None else "")
                 + f'; {E(a["label"])} is kept as <code>{E(a.get("chain_id") or "")}</code>{arc}.')
     uc = SG.unconfirmed_list()
@@ -956,7 +956,7 @@ def epoch(n):
     sgt = (f'<a class="tag{" warn" if arch else ""} segt" href="/chain{SG.qs()}">{E(SG.label())}</a> ') if SG.has_cut() else ""
     unc = SG.unconfirmed(n)   # rewards not confirmed in later balances (segments config)
     sgt += '<span class="tag warn" title="Rewards not confirmed in later balances">Unconfirmed</span> ' if unc else ""
-    line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["close_ts"]))} UTC">closed {t.strftime("%b %-d %-I:%M %p") if t else "···"} PT</span>'
+    line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span>closed {lt(r["close_ts"])}</span>'
             f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
     body = (f'<div class="card trk"><div class="tracker">{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", (note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt, X.usd_toggle())}</div>')
@@ -1039,7 +1039,7 @@ def census_page(tab=""):
     eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="steel")
     over = line([(p["ts"], 100 * p["disclosure_rate"]) for p in ser], fmt=lambda v: f"{v:.1f}%")
     div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="gold", fmt=lambda v: f"{v:.2f}")
-    shares = table(["Snapshot (UTC)", "Source", "Agents", "Disclosed", "Top families", "Shannon H"],
+    shares = table([f"Snapshot ({TZ})", "Source", "Agents", "Disclosed", "Top families", "Shannon H"],
                    [[utc(p["ts"], "%Y-%m-%d %H:%M"), E(p.get("source", "")), f'{p["n"]:,}', pct(p["disclosure_rate"]), ", ".join(f"{E(k)} {v}" for k, v in p["eco"] if k != "Undisclosed")[:160], f'{p["shannon"]:.3f}' if p.get("shannon") else "···"] for p in reversed(ser)])
     body = f'''<div class="grid2">{card(f"Model families {SR}", eco + note(f'{cs["disclosed"]:,} of {cs["n"]:,} agents disclosed ({pct(cs["disclosure_rate"])}); undisclosed hidden from the bars. Sources: ' + ", ".join(f"{E(k)} {v:,}" for k, v in cs["sources"])))}
 {card(f"Harnesses {SR}", har)}</div>
@@ -1166,7 +1166,7 @@ def at_risk_body(qs=None, base="/governance?tab=at-risk"):
         t = r["drop_ts_est"]
         if not t: return "···"
         d = max(0, int(t - time.time())); v = f"{d // 60}m" if d < 3600 else f"{d // 3600}h"
-        return f'<time class="t" data-ts="{int(t)}" title="{time.strftime("%Y-%m-%d %H:%M", time.gmtime(t))} UTC, estimate">~{v}</time>'
+        return f'<time class="t" data-ts="{int(t)}" title="{utc_text(t)}, estimate">~{v}</time>'
     arrow = "↑" if by == "drop" else "↓"; nxt = "-drop" if by == "drop" else "drop"
     trs = "".join(f'<tr><td>{ag(r)}</td><td class="r"><a href="/epoch/{r["last_challenge_eligible_epoch"]}">E{r["last_challenge_eligible_epoch"]}</a></td>'
                   f'<td class="r"><span class="tag warn">E{r["drop_close"]}</span></td><td class="r">{r["closes_left"]}</td><td class="r dk">{when(r)}</td>'
@@ -1192,7 +1192,7 @@ def _nop(v):
 
 def builders_page():
     b = G.builders(); nm = names()
-    pt = table(["Post", "Community", "Author", "Comments", "Score", "Created (UTC)"],
+    pt = table(["Post", "Community", "Author", "Comments", "Score", f"Created ({TZ})"],
                [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:80])}</a>', E(p["community"]), author_link(p["author"], _rev()), p["comment_count"], p["score"], utc(A.utc_to_ts(p["created_at"]))] for p in b["posts"][:60]], cls="wrapt")
     cr = table(["Agent", "G0 mentions", "Threads"], [[E(n), c, ", ".join(f"#{x}" for x in b["credit_posts"].get(n, [])[:8])] for n, c in b["credits"]])
     sr = table(["Release", "Text", "Agents named"], [[E(k or ""), E((t or "")[:140]), ", ".join(E(x) for x in h) or '<span class="na">none</span>'] for k, t, h in b["sysrefs"]], cls="wrapt")
@@ -1312,8 +1312,8 @@ def network_overview(head):
     vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
     rtx = lambda x: (f' <a class="mono dim small reltx" href="/tx/{E(x["txid"])}" title="One of {vn[x.get("version")]} signed release txs named {E(x.get("version") or "")}">{E(x["txid"][:8])}</a>'
                      if vn[x.get("version")] > 1 and x.get("txid") else "")
-    rels = table(["Version", "When (UTC)", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{_SIG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
-    al = table(["Height", "Chain", "Anchor tx", "Anchored (UTC)"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), E(a["anchored_at"][:19].replace("T", " "))] for a in A.anchors_latest(12)])
+    rels = table(["Version", f"When ({TZ})", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{_SIG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
+    al = table(["Height", "Chain", "Anchor tx", f"Anchored ({TZ})"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), (lt(iso_ts(a["anchored_at"]), "dts") if iso_ts(a.get("anchored_at")) else E(str(a.get("anchored_at") or "···")))] for a in A.anchors_latest(12)])
     cap = sy["last_epoch_capped"]
     syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [
         ("Slot templates", pct(sy["slot"]/sy["sampled"]) if sy["sampled"] else "···"), ("Instruction echo", pct(sy["echo"]/sy["sampled"]) if sy["sampled"] else "···"),
@@ -1407,7 +1407,7 @@ def about():
 <h3>History charts</h3><ul><li><b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>): one point per filled swap, the paying asset per 1M POA (want ÷ POA locked × 1M), per asset. Open offers are not prices.</li>
 <li><b>New Agents</b> (/agents): change in <code>agents_joined</code> between the last /api/status snapshot of each UTC day. The first day POAScan saw is partial.</li>
 <li><b>Uptime</b> (Network → Health): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
-<h3>Times</h3><p>Times are shown in UTC; hover for your local time.</p>
+<h3>Times</h3><p>Times show in your browser time zone (UTC when JavaScript is off), and column headers name the zone. Charts and counts bucketed by UTC day or UTC hour say UTC, such as Today (UTC) and New Agents · daily UTC. CSV and API times stay ISO 8601 UTC.</p>
 <!--SEGMENTS-->
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
     methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
@@ -1502,7 +1502,7 @@ def pending_card(ask=""):
         return "".join(f'<td class="r num{" q3" if k == "3" else ""}">{h[k]:,}</td>' for k in ("0", "1", "2", "3"))
     def exp(r):
         t = _pt(r.get("expires_est_ts"))
-        return (f'E{r["expires_close"]}<small>{t.strftime("%a %H:%M" if r["expires_est_ts"] - time.time() < 6 * 86400 else "%b %-d")}</small>' if t else (f'E{r["expires_close"]}' if r.get("expires_close") is not None else UNK))
+        return (f'E{r["expires_close"]}<small>{lt(r["expires_est_ts"], "dt" if r["expires_est_ts"] - time.time() < 6 * 86400 else "d")}</small>' if t else (f'E{r["expires_close"]}' if r.get("expires_close") is not None else UNK))
     def frm(r):
         a = f'{"≤" if r["oldest_approx"] else ""}{_age(r["oldest_age_s"])}'
         e = f'<a href="/epoch/{r["epoch"]}" class="mono">E{r["epoch"]}</a>' if r["source"] == "close" else f'<span class="mono">E{r["epoch"]}</span>'
