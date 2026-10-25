@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.148] - 2026-10-25
+
+### Added
+- Home, Epoch card: a ? note on every term (Epoch, Closes in, the timeline, Answers, Graders, Pool, Last 24 min and the Answers, Attests and Seals lanes, Latest), one or two plain sentences each from minepoa go.md and skill.md, the engine and /api/params, with a Method link to the new /about#epoch-card list. Same qtip look as the Score and Active Agents notes: tap on a phone (a tap outside or Escape closes it), hover or click on a desktop. At every width the note opens right by its own ?, below it or above it when there is no room, inside the viewport and never over the ?.
+
+### Fixed
+- Home, Seals lane total: a second update during the odometer roll read the outgoing digits too ("6523" for 653) and rolled the other digits from wrong values; the roll now starts from the value it is heading to. Lane totals no longer roll in gold (the lane's +N chip carries the color) and change in place when marks age out of the 24 minute window, so the total no longer reads like "67" with a gold "3" beside it.
+- Home, Seals lane: capsules are built from seals inside the window only and the oldest is held inside its start, so they always add up to the lane total (a burst straddling the start used to merge with seals already gone and hide whole, leaving the total about 200 above the capsules).
+
+### Tests
+- tools/epoch_tips_test.py (in CI): every card term has its ?, one or two sentences with no dashes, the sourced facts, /about#epoch-card, the odometer and lane total rules, Seals capsules that add up to the lane total, the qtip hover and tap outside rules.
+
 ## [1.26.147] - 2026-10-25
 
 ### Fixed

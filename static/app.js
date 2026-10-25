@@ -139,24 +139,28 @@ function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.datas
 var SC={top:null,t:0,busy:0,max:0,tm:0};
 function scoreSlide(){var now=Date.now()/1000;$$("#score .lane").forEach(function(l){var sk=$(".sk",l);if(sk){sealSlide(l,sk,now);return}var g=$(".mk",l);if(!g)return;var tx=+g.dataset.b-(now-1440),n=0;
   g.setAttribute("transform","translate("+tx.toFixed(1)+" 0)");$$("line",g).forEach(function(m){var x=+m.getAttribute("x1")+tx;if(x<-60)m.remove();else if(x>=0)n++});g._tx=tx;
-  var c=$(".c",l);if(c&&c.textContent!==String(n))laneCount(c,n)})}
+  var c=$(".c",l);if(c&&odv(c)!==String(n))laneCount(c,n)})}
 /* the Seals lane (bench.py seal_clusters, the same algorithm): seals come in bursts, so neighbours closer than their widths plus 4 px
    merge into one capsule with a count at their weighted centre, reclustered at the lane's real width (and on resize). The newest is
    held inside the now line. Hover, or tap on touch, shows the count and the times in the visitor's zone. */
 function sealW(n){return n===1?6:12+6*String(n).length}
-function sealCluster(ts,pxs,right){var st=[],i,a,b,n;ts=ts.slice().sort(function(x,y){return x-y});
+function sealCluster(ts,pxs,right,left){var st=[],i,a,b,n;ts=ts.slice().sort(function(x,y){return x-y});
   for(i=0;i<ts.length;i++){st.push([ts[i],1,ts[i],ts[i]]);
    while(st.length>1){b=st[st.length-1];a=st[st.length-2];if((b[0]-a[0])*pxs>=(sealW(b[1])+sealW(a[1]))/2+4)break;st.pop();n=a[1]+b[1];st[st.length-1]=[(a[0]*a[1]+b[0]*b[1])/n,n,Math.min(a[2],b[2]),Math.max(a[3],b[3])]}}
   if(right!=null&&st.length){var lim=right-(sealW(st[st.length-1][1])/2+1)/pxs;for(i=st.length-1;i>=0;i--){if(st[i][0]<=lim)break;st[i][0]=lim;if(i)lim-=((sealW(st[i][1])+sealW(st[i-1][1]))/2+4)/pxs}}
+  if(left!=null&&st.length){lim=left+(sealW(st[0][1])/2+1)/pxs;for(i=0;i<st.length;i++){if(st[i][0]>=lim)break;st[i][0]=lim;if(i+1<st.length)lim+=((sealW(st[i][1])+sealW(st[i+1][1]))/2+4)/pxs}}
   return st}
 function sealTs(sk){if(!sk._s){var b=+sk.dataset.b,o=[];(sk.dataset.s||"").split(" ").forEach(function(p){if(!p)return;var q=p.split("*"),k=q[1]?+q[1]:1;for(var j=0;j<k;j++)o.push(b+(+q[0]))});sk._s=o}return sk._s}
 function sealDraw(sk,old){var w=sk.parentNode.clientWidth;if(!w)return;sk._w=w;var b=+sk.dataset.b,h="";
-  var now=Date.now()/1000;sealCluster(sealTs(sk),w/1440,now).forEach(function(c){var nw=(old&&c[3]>old&&!RM?" nw":"")+((c[0]-(now-1440))*w/1440<sealW(c[1])/2?" out":"");
+  /* epoch tips: only seals inside the window, the oldest held inside its start, so the capsules add up to the lane total */
+  var now=Date.now()/1000,lo=now-1440,inw=sealTs(sk).filter(function(t){return t>=lo});sk._n=inw.length;sk._d=1;sealCluster(inw,w/1440,now,lo).forEach(function(c){var nw=(old&&c[3]>old&&!RM?" nw":"")+((c[0]-(now-1440))*w/1440<sealW(c[1])/2?" out":"");
    h+='<i class="sm'+(c[1]===1?" s1":"")+nw+'" style="left:'+(100*(c[0]-b)/1440).toFixed(2)+'%" data-x="'+c[0].toFixed(1)+'" data-n="'+c[1]+'" data-t0="'+c[2]+'" data-t1="'+c[3]+'">'+(c[1]>1?c[1]:"")+'</i>'});
-  sk.innerHTML=h;sealSlide(sk.closest(".lane"),sk,now)}
+  sk.innerHTML=h;sealSlide(sk.closest(".lane"),sk,now);sk._d=0}
 function sealSlide(l,sk,now){if(!sk._w)sealDraw(sk);sk._p=null;sk.style.transform="translateX("+(100*(+sk.dataset.b-(now-1440))/1440).toFixed(3)+"%)";
   var w=sk._w||0;$$(".sm",sk).forEach(function(m){var o=(+m.dataset.x-(now-1440))*w/1440<sealW(+m.dataset.n)/2;if(m.classList.contains("out")!==o){m.classList.toggle("out",o);if(o&&STIP&&STIP._m===m)sealUntip()}});   /* a mark leaves whole at the window's start */
-  var n=0;sealTs(sk).forEach(function(t){if(t>=now-1440)n++});var c=$(".c",l);if(c&&c.textContent!==String(n))laneCount(c,n)}
+  var n=0,ot=0;sealTs(sk).forEach(function(t){if(t>=now-1440)n++});$$(".sm.out",sk).forEach(function(){ot++});
+  if(!sk._d&&sk._w&&(n!==sk._n||ot)){if(STIP&&STIP._m&&sk.contains(STIP._m))sealUntip();sealDraw(sk);return}   /* a seal left the window or a capsule reached its start: recluster */
+  var c=$(".c",l);if(c&&odv(c)!==String(n))laneCount(c,n)}
 function sealHms(ts){try{return new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",second:"2-digit"}).format(new Date(ts*1000))}catch(e){return utc(ts)}}
 var STIP=null;
 function sealTip(m,pin){var sc=$("#score");if(!sc)return;if(!STIP){STIP=D.createElement("div");STIP.className="stip";STIP.setAttribute("aria-hidden","true");sc.appendChild(STIP)}
@@ -198,9 +202,11 @@ function scoreLive(s){if(!$("#score")||!s.feed||BM.demo)return;var top=(s.feed.m
 var BM={on:!!$(".bench #score"),demo:D.documentElement.dataset.demo==="motion",raf:0,live:0,items:[],seen:{},cur:-1,next:0,hold:0,pend:null,lead:0,lk:null};
 function escH(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":"&quot;"})}
 /* odometer: each changed digit rolls, the old one up and out, the new one up and in, rightmost first */
-function odo(n,t){var o=n.textContent;if(o===t)return;if(RM||D.hidden){n.textContent=t;return}
+/* epoch tips: mid roll the text holds the outgoing digits too ("6523" for 653), so a second update reads the value it is heading to */
+function odv(n){return n._v!=null&&$(".od",n)?n._v:n.textContent}
+function odo(n,t){var o=odv(n);if(o===t)return;n._v=t;if(RM||D.hidden){clearTimeout(n._ot);n.textContent=t;return}
  var h="",k=0,d=o.length-t.length;for(var i=t.length-1;i>=0;i--){var c=t.charAt(i),oc=o.charAt(i+d)||"";
-  if(c===oc||!/[0-9]/.test(c))h=esc(c)+h;else{h='<span class="od" style="--d:'+(k*55)+'ms">'+(oc&&/[0-9]/.test(oc)?'<span class="o">'+oc+"</span>":"")+"<span>"+c+"</span></span>"+h;k++}}
+  if(c===oc||!/[0-9]/.test(c))h=esc(c)+h;else{h='<span class="od" style="--d:'+(k*55)+'ms">'+(oc&&/[0-9]/.test(oc)?'<span class="o" aria-hidden="true">'+oc+"</span>":"")+"<span>"+c+"</span></span>"+h;k++}}
  n.innerHTML=h;clearTimeout(n._ot);n._ot=setTimeout(function(){if(n.textContent!==t||$(".od",n))n.textContent=t},620+k*55)}
 /* +N chip: beside the number when it fits in its cell, else on the label row; fades out on its own */
 function bump(n,txt,lane){if(RM||D.hidden||!BM.live)return;var host=lane||n.parentNode,c=D.createElement("i");c.className="bump";c.textContent=txt;c.setAttribute("aria-hidden","true");
@@ -218,7 +224,7 @@ function benchFlip(n,o,v){if(RM||D.hidden){n.textContent=v;return}
  n.innerHTML='<span class="flp"><span class="fo">'+escH(o)+'</span><span class="fi">'+escH(v)+"</span></span>";clearTimeout(n._ft);n._ft=setTimeout(function(){n.textContent=v},1100);
  var b=n.closest(".bench");if(b){b.classList.remove("bclose");void b.offsetWidth;b.classList.add("bclose");setTimeout(function(){b.classList.remove("bclose")},1900)}}
 /* lane totals */
-function laneCount(c,n,k){var o=+c.textContent||0;if(o===n)return;odo(c,String(n));if(n>o)bump(c,"+"+(n-o),c.parentNode)}
+function laneCount(c,n,k){var o=+odv(c)||0;if(o===n)return;if(n<o){clearTimeout(c._ot);c._v=String(n);c.textContent=c._v;return}odo(c,String(n));bump(c,"+"+(n-o),c.parentNode)}
 /* the drift: mark groups follow the clock every frame they would move a quarter pixel or more */
 function benchFrame(){BM.raf=0;if(D.hidden||RM)return;var now=Date.now()/1000;
  $$("#score .lane").forEach(function(l){var g=l._g||(l._g=$(".mk",l)),sk=l._sk||(l._sk=$(".sk",l)),w=l._w||(l._w=(l.querySelector("svg")||l).clientWidth||1);
@@ -671,4 +677,20 @@ if(wantLive)connect();
 (function(){var D=document;function shut(k){[].slice.call(D.querySelectorAll("details.qtip[open]")).forEach(function(d){if(d!==k)d.removeAttribute("open")})}
 D.addEventListener("click",function(e){shut(e.target.closest?e.target.closest("details.qtip"):null)});
 [].slice.call(D.querySelectorAll("details.qtip")).forEach(function(q){q.addEventListener("click",function(e){e.stopPropagation();shut(q)})});   /* a ? inside a sortable header never sorts the table (1.26.112) */
-D.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=D.querySelector("details.qtip[open]");if(o){o.removeAttribute("open");var s=o.querySelector("summary");if(s)s.focus()}})})();
+D.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=D.querySelector("details.qtip[open]");if(o){o.removeAttribute("open");var s=o.querySelector("summary");if(s)s.focus()}})
+/* Epoch card tips: pointerdown outside closes too, since iOS sends no click for a tap on plain text. A .qtip.hv also opens
+   on a mouse hover and leaving closes what the hover opened; a click on its ? pins it. Its note opens right by its ?, below it or
+   above when there is no room, inside the viewport and never over the ? itself, at every width. */
+D.addEventListener("pointerdown",function(e){var k=e.target.closest?e.target.closest("details.qtip"):null;if(e.pointerType!=="mouse")shut(k)},true);
+function place(q){var b=q.querySelector(".qbox");if(!b)return;if(!q.classList.contains("hv")){b.style.left=b.style.top=b.style.transform=b.style.maxHeight="";return}
+ var vw=window.innerWidth,vh=window.innerHeight,r=q.querySelector("summary").getBoundingClientRect();b.style.transform="none";b.style.maxHeight=b.style.overflowY="";
+ var w=b.offsetWidth,h=b.offsetHeight,x=Math.max(8,Math.min(vw-w-8,r.left+r.width/2-w/2)),dn=vh-r.bottom-16,up=r.top-16,y,below=h<=dn||(h>up&&dn>=up);
+ if(!below&&h>up){b.style.maxHeight=up+"px";b.style.overflowY="auto"}else if(below&&h>dn){b.style.maxHeight=dn+"px";b.style.overflowY="auto"}   /* never over its own ? */
+ h=Math.min(h,below?dn:up);y=below?r.bottom+8:r.top-8-h;q.classList.toggle("up",!below);b.style.left=x.toFixed(0)+"px";b.style.top=y.toFixed(0)+"px";q.dataset.pl="1"}
+D.addEventListener("toggle",function(e){var q=e.target;if(!(q.matches&&q.matches("details.qtip")))return;if(q.open)place(q);else delete q.dataset.pl},true);
+/* the note is fixed to the viewport, so it follows its ? while the page scrolls or resizes */
+function qtPlaceAll(){[].slice.call(D.querySelectorAll("details.qtip.hv[open]")).forEach(place)}
+window.addEventListener("scroll",qtPlaceAll,{passive:true});window.addEventListener("resize",qtPlaceAll);
+D.addEventListener("pointerover",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||q.open||(e.relatedTarget&&q.contains(e.relatedTarget)))return;shut(q);q.open=true;q.dataset.hv="1"});
+D.addEventListener("pointerout",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv});
+D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest("details.qtip.hv");if(q&&q.dataset.hv&&e.target.closest("summary")){e.preventDefault();delete q.dataset.hv}},true)})();
