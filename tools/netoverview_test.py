@@ -234,41 +234,49 @@ check(f"wire bytes counted per endpoint for the last hour ({b})", b > 0)
 I2.flush_counts(force=True)
 check("bytes flushed to upstream_bytes and still reported", I2.bytes_1h().get("/api/txs", 0) == b)
 
-# ---- headline Agents / hr (1.26.115): total Agents in the segment / hours since the segment start (segments.json) ----
+# ---- Home Active Agents (1.26.116): distinct answerers in the current segment, last 24 h, never before the segment start ----
 cfg = json.load(open(os.path.join(ROOT, "poascan", "segments.json")))
 st2 = next(x for x in cfg["segments"] if x["n"] == SG.CURRENT)["start_ts"]
 check(f"segment start is read from segments.json, not hardcoded ({SG.CUT_TS} == {st2})", SG.CUT_TS == st2)
 src = open(os.path.join(ROOT, "poascan", "analytics.py")).read()
 check("no hardcoded cut time in analytics.py", str(st2) not in src)
-r = A.agents_rate_calc(4948, st2, st2 + int(6.5 * 3600))
-check(f"4,948 Agents over 6.5 h: 761 (whole number at 10 or more) {r and r['agent_joins_per_hour']}", r["agent_joins_per_hour"] == 761 and isinstance(r["agent_joins_per_hour"], int)
-      and r["agents_total"] == 4948 and abs(r["window_hours"] - 6.5) < .01 and r["basis"] == "total_over_hours_since_segment_start")
-r = A.agents_rate_calc(30, st2, st2 + 4 * 3600)
-check(f"30 Agents over 4 h: 7.5 (one decimal under 10) {r['agent_joins_per_hour']}", r["agent_joins_per_hour"] == 7.5)
-check("9.96 shows 10, not 10.0", A.rate_fmt(9.96) == 10 and isinstance(A.rate_fmt(9.96), int) and A.rate_fmt(2.04) == 2.0)
-check("under 1 h of the segment: None (no inflated figure)", A.agents_rate_calc(4948, st2, st2 + 600) is None)
-check("no total or no start: None", A.agents_rate_calc(None, st2, st2 + 7200) is None and A.agents_rate_calc(10, 0, 7200) is None)
-check("ui.rate1: 7.5, 761, 1,234", all(x in V.rate1(v) for v, x in ((7.5, ">7.5<"), (761, ">761<"), (1234, ">1,234<"))))
-# the same total the Agents stat shows, over hours to that status read
-asof = now - 30; db.put_blob("status", {"epochs_closed": 1, "checkpoint_height": 2415, "agents_joined": 4948, "K": 5,
-                                       "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(asof))})
-A._cache.clear(); jr = A.joins_rate()
-if now - st2 >= 3600:
-    want = A.rate_fmt(4948 / ((asof - st2) / 3600))
-    check(f"joins_rate: Agents total / hours since segment start ({jr and jr['agent_joins_per_hour']} == {want})",
-          jr and jr["agent_joins_per_hour"] == want and jr["agents_total"] == 4948 and jr["window_start"] == st2 and jr["window_end"] == asof)
-    h = V.headline()
-    check("Home Agents and Agents / hr read the same total", ">4,948<" in h["accounts"] and f">{want:,}<" in h["joins_hr"].replace(f">{want}<", f">{want:,}<"))
-    jf = V.joins_fields(); w = jf["agent_joins_per_hour_window"]
-    check(f"API: field names kept, basis total_over_hours_since_segment_start ({w.get('basis')})", jf["agent_joins_per_hour"] == want and w["basis"] == "total_over_hours_since_segment_start"
-          and w["agents_total"] == 4948 and w["start_ts"] == st2 and w["kind"] == "since_segment_start" and set(w["trailing_per_hour"]) == {"1h", "6h", "24h"})
-    check("live payload formats the value with r1", V.live_snapshot()["nums"]["joins_hr"] == [want, "r1"])
-    from poascan import agentapi as AA
-    m = AA.t_summary({})
-    check("MCP summary carries the same value and basis", m.get("agent_joins_per_hour") == want and (m.get("agent_joins_per_hour_window") or {}).get("basis") == "total_over_hours_since_segment_start")
-check("app.js r1 formatter", "r1:function(v)" in open(os.path.join(ROOT, "static", "app.js")).read())
+check("window: from the segment start when it is under 24 h old", A.active_window(st2 + 7 * 3600, st2) == (st2, "since_segment_start"))
+check("window: the last 24 h once the segment is older", A.active_window(st2 + 30 * 3600, st2) == (st2 + 6 * 3600, "24h"))
+check("window: no segment start, the last 24 h", A.active_window(st2, None) == (st2 - 86400, "24h"))
+fn = src[src.index("# ---- Active Agents"):src.index('@cached("joins_rate"')]
+check("no upstream call in the Active Agents code", not any(w in fn for w in ("urlopen", "requests", "fetch(", "POA_BASE")))
+# seed: segment 1 answers (must not count), segment 2 answers by 3 Agents (one twice), a grade and a join (not answers)
+pa = lambda i: "poa1" + str(i) * 40
+seed = [("s1a", "challenge", pa(1), st2 - 600, 1), ("s1b", "challenge", pa(9), st2 - 60, 1),
+        ("s2a", "challenge", pa(1), now - 3000, 2), ("s2b", "challenge", pa(2), now - 2000, 2), ("s2c", "challenge", pa(2), now - 1000, 2),
+        ("s2d", "challenge", pa(3), now - 500, 2), ("s2g", "grade-sealed", pa(4), now - 400, 2), ("s2j", "join", pa(5), now - 300, 2)]
+db.write("DELETE FROM txs WHERE type = 'challenge'")   # temp DB: only the seeded answers
+for i, t, f, ts, sg in seed:
+    db.write("INSERT OR REPLACE INTO txs(id, type, from_addr, ts, epoch, segment) VALUES (?,?,?,?,?,?)", (i * 8, t, f, ts, 1, sg))
+A._cache.clear(); aa = A.active_agents()
+if now - st2 < 86400:
+    check(f"Active Agents: 3 distinct segment 2 answerers, segment 1 not counted ({aa['active_agents']})", aa["active_agents"] == 3 and aa["window"] == "since_segment_start" and aa["start_ts"] == st2)
+else:
+    check(f"Active Agents: 3 distinct answerers in the last 24 h ({aa['active_agents']})", aa["active_agents"] == 3 and aa["window"] == "24h")
+check("basis distinct_answerers, source challenge_txs, segment is the current one", aa["basis"] == "distinct_answerers" and aa["source"] == "challenge_txs" and aa["segment"] == SG.CURRENT)
+h = V.headline()
+check("Home: an Active Agents card, no Agents / hr card", "Active Agents" in h["active"] and 'data-live="active"' in h["active"] and ">3<" in h["active"] and "joins_hr" not in h)
+check("Active Agents is not the Agents total or the open epoch Answers", "Active Agents" not in h["accounts"])
+home = V.home() if callable(getattr(V, "home", None)) else ""
+home = home if isinstance(home, str) else str(home)
+m = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S); k = m.group(1) if m else ""
+check("Home headline row: Total mined, Circulating supply, Agents, Active Agents; no sub-line",
+      re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k) == ["Total mined", "Circulating supply", "Agents", "Active Agents"] and 'class="sub' not in k and "Agents / hr" not in k)
+check("live payload: active is a whole number", V.live_snapshot()["nums"]["active"] == [3, "int"] and "joins_hr" not in V.live_snapshot()["nums"])
+jf = V.joins_fields(); w = jf["active_agents_window"]
+check("API: active_agents with its window", jf["active_agents"] == 3 and w["basis"] == "distinct_answerers" and w["start_ts"] == aa["start_ts"] and w["kind"] == aa["window"])
+check("API: agent_joins_per_hour stays a whole number (int or null)", jf["agent_joins_per_hour"] is None or isinstance(jf["agent_joins_per_hour"], int))
+from poascan import agentapi as AA
+m = AA.t_summary({})
+check("MCP summary carries active_agents and its window", m.get("active_agents") == 3 and (m.get("active_agents_window") or {}).get("basis") == "distinct_answerers")
 ab = V.about() if callable(getattr(V, "about", None)) else ""
 ab = ab if isinstance(ab, str) else str(ab)
-check("/about Agents / hr method: total Agents divided by hours since the segment start", "divided by the hours from the segment start" in ab)
+check("/about: Active Agents method, no total over hours line", "<b>Active Agents</b>" in ab and "divided by the hours from the segment start" not in ab and "<b>Agents / hr</b>" not in ab)
+for i, *_ in seed: db.write("DELETE FROM txs WHERE id = ?", (i * 8,))
 
 print(f"\n{len(fails)} failed" if fails else "\nall ok"); sys.exit(1 if fails else 0)

@@ -11,10 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.116] - 2026-10-24
+
+### Changed
+- Home: the Agents / hr card is replaced by **Active Agents**, distinct Agents with at least one answer (challenge tx) in the current segment over the last 24 h, starting at the segment start (segments.json) while the segment is under a day old, so segment 1 answers never count. One indexed read of POAScan's own tx archive, cached 2 min, no extra minepoa call. Its sparkline is distinct answerers per whole hour of the segment. Method on /about#home.
+- API and MCP: new `active_agents` (integer or null) and `active_agents_window` (kind, start_ts, end_ts, hours, segment, basis `distinct_answerers`, source `challenge_txs`) in /api/v1/summary, /api/v1/status and the MCP summary. `agent_joins_per_hour` is back to the 1.26.114 whole-number join rate (the segment's join txs since joining reopened), with its original window fields.
+- Tests in tools/netoverview_test.py and tools/joins_test.py.
+
 ## [1.26.115] - 2026-10-24
 
 ### Changed
-- Agents / hr (Home headline, API and MCP `agent_joins_per_hour`) is now total Agents in the current segment, the same number as the Agents stat (it includes the Agents carried over at the genesis cut), divided by the hours from the segment start in segments.json to that status read. One decimal under 10, else a whole number; null until the segment is 1 h old. `agent_joins_per_hour_window` adds `basis` (`total_over_hours_since_segment_start`), `agents_total` and `start_ts`; kind is `since_segment_start`. The value can now carry one decimal (number, was integer). The per hour chart is unchanged. Method on /about#home; a test in tools/netoverview_test.py.
+- Agents / hr (Home headline, API and MCP `agent_joins_per_hour`) is now total Agents in the current segment, the same number as the Agents stat (it includes the Agents carried over at the genesis cut), divided by the hours from the segment start in segments.json to that status read. One decimal under 10, else a whole number; null until the segment is 1 h old. `agent_joins_per_hour_window` adds `basis` (`total_over_hours_since_segment_start`), `agents_total` and `start_ts`; kind is `since_segment_start`. Correction: 1.26.116 reverts `agent_joins_per_hour` to a whole number (integer or null), so the v1 rule that no field is retyped holds; the 1.26.115 fields `basis`, `agents_total` and `start_ts` are no longer sent. The per hour chart is unchanged. Method on /about#home; a test in tools/netoverview_test.py.
 
 ## [1.26.114] - 2026-10-24
 

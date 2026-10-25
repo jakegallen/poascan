@@ -115,7 +115,8 @@ check("labels are terse with no em or en dash", all(len(c["title"]) <= 20 for c 
 # ---------------- page markup and CSS ----------------
 from poascan import views as V
 home = V.home()["body"] if isinstance(V.home(), dict) else str(V.home())
-for k in ("mined", "circ", "agents", "joins", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
+for k in ("mined", "circ", "agents", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
+check("home: no Agents / hr opener (Active Agents card since 1.26.116)", 'data-chart="joins"' not in home)
 net = str(V.network("charts", "7d"))
 for k in ("agents", "holders", "supply", "txs", "answers"): check(f"Network > Charts: {k} card opens the pop-out (card and Expand button)", f'class="cpw" data-chart="{k}"' in net and f'class="cpx" data-chart="{k}"' in net)
 tok = str(V.token())

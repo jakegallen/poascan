@@ -820,38 +820,38 @@ def joins_rate_calc(pts, now=None, floor=None, join_ts=None):
                 window="since_pause" if paused_until is not None else "since_cut" if since_cut else "24h", window_end=end, paused_until=paused_until,
                 joining_from=None, source="status", trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
 
-AGENTS_RATE_BASIS = "total_over_hours_since_segment_start"
+# ---- Active Agents: distinct Agents with an answer (challenge tx) in the current segment over the last 24 h ----
+ACTIVE_WINDOW_S = 86400
 
-def rate_fmt(v):
-    """The headline Agents / hr as shown: one decimal under 10, else a whole number (pure)."""
-    if v is None: return None
-    r = round(v, 1)
-    return r if r < 10 else int(round(v))
+def active_window(now, seg_start):
+    """Pure: (start, kind) of the Active Agents window: the last 24 h, cut back to the current segment's start (segments.json)
+    when that is newer, so no answer from an earlier segment is counted."""
+    t0 = now - ACTIVE_WINDOW_S
+    return (int(seg_start), "since_segment_start") if seg_start and seg_start > t0 else (int(t0), "24h")
 
-def agents_rate_calc(total, start, end):
-    """Pure: the headline Agents / hr in a segment = total Agents (agents_joined, the site's Agents for the current segment,
-    carried Agents included) / hours from the segment start (segments.json start_ts) to end (the read of that total).
-    None without a total or a start, or with less than JOIN_MIN_S of the segment, so a few minutes never inflate it."""
-    if total is None or not start or end is None or end - start < JOIN_MIN_S: return None
-    h = (end - start) / 3600
-    return dict(agent_joins_per_hour=rate_fmt(int(total) / h), agents_total=int(total), window_hours=round(h, 2), window_start=int(start),
-                window_end=int(end), window="since_segment_start", basis=AGENTS_RATE_BASIS)
+@cached("active_agents", 120)
+def active_agents():
+    """Cached 2 min: one indexed read (txs_seg_type) of POAScan's own tx archive, no upstream call. Distinct senders of
+    challenge txs (answers) in the current segment since the window start."""
+    now = int(time.time()); seg0 = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
+    t0, kind = active_window(now, seg0)
+    n = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE segment = ? AND type = 'challenge' AND ts > ? AND ts <= ?", (S.CURRENT, t0, now))["n"]
+    return dict(active_agents=int(n or 0), window=kind, start_ts=t0, end_ts=now, hours=round((now - t0) / 3600, 2), segment=S.CURRENT,
+                basis="distinct_answerers", source="challenge_txs")
 
-def _status_ts(st, now):
-    """The time of the status read the Agents total comes from (as_of), else now."""
-    try: t = int(dt.datetime.fromisoformat(str(st.get("as_of")).replace("Z", "+00:00")).timestamp())
-    except (TypeError, ValueError): return now
-    return t if 0 < now - t < 3600 else now
+@cached("active_hourly", 120)
+def active_hourly(hours=48):
+    """Cached 2 min: [(hour start, distinct answerers)] for whole hours of the current segment in the last `hours` (the
+    Active Agents sparkline). The hour holding the segment start and the filling hour are left out. One indexed read."""
+    now = int(time.time()); seg0 = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else 0
+    lo = max(now - hours * 3600, -(-int(seg0) // 3600) * 3600 if seg0 else 0); cur = now // 3600 * 3600
+    rows = db.q("SELECT (ts/3600)*3600 AS h, COUNT(DISTINCT from_addr) AS n FROM txs WHERE segment = ? AND type = 'challenge' AND ts >= ? AND ts < ? GROUP BY h ORDER BY h",
+                (S.CURRENT, lo, cur))
+    got = {r["h"]: r["n"] for r in rows}
+    return [(h, got.get(h, 0)) for h in range(-(-lo // 3600) * 3600, cur, 3600)]
 
 @cached("joins_rate", 120)
 def joins_rate():
-    """Cached 2 min. Since a genesis cut: total Agents in the segment over hours since its start (agents_rate_calc), with the
-    segment's join counts (join txs, trailing 1 h, 6 h, 24 h) kept beside it. Before any cut: the trailing join rate."""
+    """Cached 2 min: one indexed range read of about a day of status snapshots."""
     now = int(time.time()); fl = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
-    r = joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl, join_ts=seg_join_times() if fl else None)
-    if not fl: return r
-    st = status(); a = agents_rate_calc(st.get("agents_joined"), fl, _status_ts(st, now))
-    if not a: return None
-    a.update(joins=(r or {}).get("joins"), paused_until=None, joining_from=(r or {}).get("joining_from"), source="status",
-             trailing=(r or {}).get("trailing") or {"1h": None, "6h": None, "24h": None})
-    return a
+    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl, join_ts=seg_join_times() if fl else None)

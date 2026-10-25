@@ -57,12 +57,6 @@ def poa(v, mined=False, dec=2, sign=""):
 def intc(v):
     return '<span class="na">···</span>' if v is None else f'<span class="num" title="{v:,}">{v:,}</span>'
 
-def rate1(v):
-    """A rate as shown: one decimal under 10, else a whole number with commas (Agents / hr)."""
-    if v is None: return '<span class="na">···</span>'
-    t = f"{v:.1f}" if v < 10 else f"{int(round(v)):,}"
-    return f'<span class="num" title="{t}">{t}</span>'
-
 def pct(v, dec=1):
     return '<span class="na">···</span>' if v is None else f'<span class="num">{v*100:.{dec}f}%</span>'
 

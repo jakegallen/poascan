@@ -100,7 +100,7 @@ def headline():
     anc = A.anchor_summary(); lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0) if nw else None
     sup = float(st.get("supply") or 0)
     tot_pool = sum(r["pool"] for r in ep)
-    jr = A.joins_rate()
+    aa = A.active_agents()
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc and anc.get("last") else None
     return {
         "mined": stat("Total mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
@@ -112,7 +112,7 @@ def headline():
         # home headline row: no USD on these two (the reference rate rests on one tiny test fill, audit SC-020); USD stays on Market and /token
         "mined_hero": stat("Total mined", poa(sup, mined=True), "", ICON_PICK, "mined"),
         "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ"),
-        "joins_hr": stat("Agents / hr", rate1(jr["agent_joins_per_hour"]) if jr else "···", "", ICON_CLOCK, "joins_hr"),
+        "active": stat("Active Agents", intc(aa["active_agents"]) if aa else "···", "", ICON_FEED, "active"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
     }
@@ -141,7 +141,7 @@ def live_snapshot():
             "last": [last.get("minted"), "c2"], "burn": [last.get("burn_pct"), "p1"], "height": [nw.get("height"), "int"],
             "checkpoint": [nw.get("checkpoint_height"), "int"], "answers": [o.get("answers"), "int"], "graders": [o.get("graders"), "int"],
             "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"],
-            "joins_hr": [(A.joins_rate() or {}).get("agent_joins_per_hour"), "r1"]}
+            "active": [(A.active_agents() or {}).get("active_agents"), "int"]}
     nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
@@ -163,12 +163,14 @@ def summary_json():
                 open_epoch=o, supply=st.get("supply"), holders=st.get("holders"), accounts=st.get("agents_joined"), **joins_fields())
 
 def joins_fields():
-    """Additive API fields: agent_joins_per_hour and the window it was measured over (method: /about#home)."""
-    r = A.joins_rate()
-    if not r: return dict(agent_joins_per_hour=None, agent_joins_per_hour_window=None)
-    return dict(agent_joins_per_hour=r["agent_joins_per_hour"],
-                agent_joins_per_hour_window=dict(kind=r["window"], basis=r.get("basis"), agents_total=r.get("agents_total"), start_ts=r.get("window_start"),
-                                                 hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
+    """Additive API fields: agent_joins_per_hour and the window it was measured over, and active_agents with its window (method: /about#home)."""
+    r = A.joins_rate(); a = A.active_agents()
+    act = dict(active_agents=a["active_agents"] if a else None,
+               active_agents_window=dict(kind=a["window"], start_ts=a["start_ts"], end_ts=a["end_ts"], hours=a["hours"], segment=a["segment"],
+                                         basis=a["basis"], source=a["source"]) if a else None)
+    if not r: return dict(agent_joins_per_hour=None, agent_joins_per_hour_window=None, **act)
+    return dict(**act, agent_joins_per_hour=r["agent_joins_per_hour"],
+                agent_joins_per_hour_window=dict(kind=r["window"], hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
                                                  joining_from_ts=r.get("joining_from"), source=r.get("source"),
                                                  paused_until_ts=r["paused_until"], trailing_per_hour=r["trailing"]))
 
@@ -199,17 +201,16 @@ def home_epochs(ep):
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
-    from . import chartpop as CP
-    joins = [p for p in CP._hourly(g["agents"]) if p[0] >= time.time() - 49 * 3600]   # same series as the pop-out
-    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], joins_hr=joins)
+    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], active=A.active_hourly())
 
 # ---------------- pages ----------------
 def home():
-    """Search, then the headline row (Total mined, Circulating supply, Agents, Agents / hr; method on /about#home), the open epoch,
+    """Search, then the headline row (Total mined, Circulating supply, Agents, Active Agents; method on /about#home), the open epoch,
     Holders and heights beside the Burn meter, closes and the feed, and a compact market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
-    bk = A.cut_list()   # Agents, Agents / hr and Holders restart at a genesis cut: their sparklines break there, as the charts do
-    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk in ("accounts", "joins_hr") else None), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("joins_hr", "joins_hr", "joins")))
+    bk = A.cut_list()   # Agents and Holders restart at a genesis cut: their sparklines break there, as the charts do
+    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk == "accounts" else None), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents")))
+    kpis += spark_in(h["active"], sp.get("active"))   # Active Agents: current segment only, no pop-out chart
     more = pop(spark_in(h["holders"], sp.get("holders"), bk), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
@@ -1374,7 +1375,8 @@ def about():
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
 <li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
-<li><b>Agents / hr</b>: total Agents in the current segment (the Agents number above, <code>agents_joined</code>, which includes the Agents carried over at a genesis cut) divided by the hours from the segment start (the cut time in segments.json) to that /api/status read; one decimal under 10, else a whole number, and shown once the segment is 1 h old. Before any cut it is the rise in <code>agents_joined</code> over the trailing 24 h divided by its hours (from where a pause of 2 h or more ended, at least 1 h). The Agents / hr chart is separate: Agents joined in each whole hour (join txs in the current segment), with no point or line across a cut. The API gives the total, the hours, the basis and the 1 h, 6 h and 24 h join rates.</li></ul>
+<li><b>Active Agents</b>: distinct Agents with at least one answer (a <code>challenge</code> tx, the mining submission) in POAScan's own tx archive in the current segment over the last 24 h; within a day of a genesis cut the window starts at the cut (the segment start in segments.json), so no answer from an earlier segment counts. Its sparkline is the distinct Agents answering in each whole hour of the segment. The API gives the window (<code>active_agents_window</code>) beside the trailing join rate <code>agent_joins_per_hour</code>.</li>
+<li><b>agent_joins_per_hour</b> (API only): Agents joined per hour, a whole number. Since a genesis cut it counts the segment's join txs from its first join (when joining reopened) to now, over at least 1 h; otherwise the rise in <code>agents_joined</code> across POAScan's /api/status snapshots over the trailing 24 h (from where a pause of 2 h or more ended). The Agents / hr chart counts joins in each whole hour, with no line across a cut.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>

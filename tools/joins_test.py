@@ -1,4 +1,4 @@
-"""Home headline row and Agents / hr (1.26.24).
+"""Home headline row and Agents / hr, the API join rate (1.26.24; the Home card is Active Agents since 1.26.116).
 * joins_rate_calc: trailing 24 h by default; an ended pause (agents_joined flat 2 h or more) starts the window where it ended,
   at least 1 h; an ongoing pause keeps 24 h; 1h, 6h and 24h rates; no data is None
 * joins_rate reads POAScan's own status snapshots only (no upstream call) and is cached
@@ -107,8 +107,8 @@ try:
     m = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S)
     k = m.group(1) if m else ""
     labels = re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k)
-    check(f"headline row: Total mined, Circulating supply, Agents, Agents / hr {labels}", labels == ["Total mined", "Circulating supply", "Agents", "Agents / hr"])
-    check("Agents / hr value is live (data-live=joins_hr) and shows 36", re.search(r'data-live="joins_hr"><span class="num"[^>]*>36<', k) is not None)
+    check(f"headline row: Total mined, Circulating supply, Agents, Active Agents {labels}", labels == ["Total mined", "Circulating supply", "Agents", "Active Agents"])
+    check("Active Agents value is live (data-live=active); no Agents / hr card (1.26.116)", re.search(r'data-live="active"><span class="num"', k) is not None and "joins_hr" not in k)
     check("no sub-line, share button or 'Accounts' in the row", len(re.findall(r'class="stat[ "]', k)) == 4 and not any(x in k for x in ('class="sub', "share", "Share", "Accounts", "asof")))
     css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
     check("every stat card carries the watermark; the row is 4 across and 2 x 2 on phones",
@@ -119,7 +119,7 @@ try:
     check("live cards: circ (home) has no USD; vest (token page) keeps it", 'class="usd"' not in lc.get("circ", "x usd") and 'data-live="circ"' in lc["circ"] and 'class="usd"' in lc["vest"])
     check("Holders and heights stay on the home page", all(f'data-live="{x}"' in home for x in ("holders", "height", "checkpoint")))
     ab = get("/about"); sec = ab[ab.index('id="home"'):] if 'id="home"' in ab else ""; sec = sec[:sec.index("</ul>")] if sec else ""
-    check("/about#home explains all four", all(x in sec for x in ("Total mined", "Circulating supply", "<b>Agents</b>", "Agents / hr", "2 h", "1 h")))
+    check("/about#home explains all four and the API join rate", all(x in sec for x in ("Total mined", "Circulating supply", "<b>Agents</b>", "<b>Active Agents</b>", "agent_joins_per_hour", "2 h", "1 h")))
     for u in ("/api/v1/summary", "/api/v1/status"):
         d = json.loads(get(u)); w = d.get("agent_joins_per_hour_window") or {}
         check(f"{u}: agent_joins_per_hour 36 with its window", d.get("agent_joins_per_hour") == 36 and w.get("kind") == "24h" and set(w.get("trailing_per_hour") or {}) == {"1h", "6h", "24h"})
