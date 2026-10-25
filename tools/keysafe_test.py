@@ -5,7 +5,7 @@ import json, os, random, socket, sqlite3, string, subprocess, sys, tempfile, tim
 from urllib.parse import quote
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-FAKE = "pk" + "_" + "".join(random.choice(string.ascii_letters + string.digits) for _ in range(32))   # never a real key
+FAKE = "pk" + "_" + "".join(random.choice(string.ascii_letters + string.digits) for _ in range(31)) + random.choice(string.digits)   # never a real key; always has a digit, as the scanner requires (all letters was a 1 in 270 flake)
 TXID = "c3" * 32
 
 def seed(path):

@@ -46,6 +46,21 @@ check("dial: the arc is the Score out of 100", '72 100' in d and '>72<' in d and
 check("no Score yet: an honest empty state", "No Score in this segment yet" in PF.score_card(None, ""))
 check("no em or en dashes in profile.py", not any(ch in open(os.path.join(ROOT, "poascan/profile.py")).read() for ch in "\u2014\u2013"))
 
+from poascan import og as OG
+if OG.available():
+    t0 = time.perf_counter(); png, age = OG.render(f"/og/address/{FA}.png"); dt = time.perf_counter() - t0
+    check(f"OG: an Agent's preview is a 1200x630 PNG under 90 KB with its maker's mark, rendered quickly ({len(png) // 1024} KB, {dt * 1000:.0f} ms)",
+          png[:8] == b"\x89PNG\r\n\x1a\n" and int.from_bytes(png[16:20], "big") == 1200 and int.from_bytes(png[20:24], "big") == 630 and len(png) < 90000 and dt < 1.5)
+    check("OG: set in the site's own type (Newsreader, Instrument Sans, IBM Plex Mono from static/fonts)",
+          all(os.path.exists(os.path.join(OG.FONTS, OG._FILES[k][0])) for k in ("fig", "ui", "mono")) and "newsreader" in OG._font("fig", 40).path)
+    ep_spec = OG._epoch(A.epoch_rows()[-1]["epoch"])[0]
+    check("OG: an epoch's preview carries its hallmark, the same seed as /hallmark", ep_spec[4][0] == MK.hall_key_seed(MK.hall_seed(**{k: A.epoch_rows()[-1][k] for k in ("epoch", "paid", "minted")}))[0])
+    OG._BUCKET[:] = [0.0, time.monotonic()]
+    hit = OG.render(f"/og/address/{FA}.png"); miss = OG.render(f"/og/address/{fixture.A2}.png")
+    check("OG: over the render budget a cached preview still serves, a new one gets the generic card for 5 minutes, uncached",
+          hit == (png, age) and miss == (OG._fallback(), OG.FALLBACK_AGE) and f"/og/address/{fixture.A2}.png" not in OG._CACHE)
+    OG._BUCKET[:] = [float(OG.BURST), time.monotonic()]
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 op = urllib.request.build_opener(urllib.request.ProxyHandler({}))

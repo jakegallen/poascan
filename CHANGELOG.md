@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.133] - 2026-10-25
+
+### Changed
+- Link previews (/og/tx, /og/address, /og/epoch, /og/upgrade.png) are set in the site's own type: Newsreader titles and figures, Instrument Sans labels, IBM Plex Mono ids. An Agent's preview carries its maker's mark, an epoch's its hallmark, a transaction's its sender's mark. Quantized PNGs, about 45 KB instead of 110.
+- Previews draw from a small render budget (a burst of 6, then one every 5 s). Past it, a new preview gets the generic card for 5 minutes, so crawlers cannot spike CPU; rendered previews stay cached.
+### Fixed
+- keysafe_test: its random fake key always holds a digit, so the secret scan check no longer flakes (1.26.132's CI run).
+
 ## [1.26.132] - 2026-10-25
 
 ### Changed

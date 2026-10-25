@@ -31,23 +31,50 @@ def _curve(rad, q, k, ph, n, fn, dec=1):
         pts.append(f"{50 + rr * math.cos(t):.{dec}f} {50 + rr * math.sin(t):.{dec}f}")
     return "M" + "L".join(pts) + "Z"
 
+def _plan(seed, layers):
+    """The rosette's curves for a seed: [(radius, q, k, phase, kind, width scale, opacity)], in draw order. Shared by the SVG and
+    the link-preview raster (og.py), so both draw the same mark."""
+    r = _rng(_h32(str(seed), 2166136261)); out = []
+    for L in range(layers):
+        k = 5 + int(r() * 9); q = 0.18 + r() * 0.22; rad = 42 * (1 - L * 0.17)
+        out.append((rad, q, k, L, "cos", 1.0, round(0.85 - L * 0.14, 2)))
+        k2 = k + 2 + int(r() * 5)
+        if L < 2: out.append((rad * 0.62, q * 0.8, k2, 0, "sin", 0.8, 0.5))
+    return out
+
+def _fn(kind):
+    return (lambda q, k, t, ph: 1 - q + q * math.cos(k * t + ph)) if kind == "cos" else (lambda q, k, t, ph: 1 - q + q * math.sin(k * t))
+
+def points(seed, layers, n, scale=1.0, cx=50.0, cy=50.0):
+    """Float points per curve, for rasters: [(pts, width scale, opacity)]."""
+    out = []
+    for rad, q, k, ph, kind, ws, op in _plan(seed, layers):
+        f = _fn(kind); pts = []
+        for i in range(n + 1):
+            t = 2 * math.pi * i / n; rr = rad * f(q, k, t, ph) * scale
+            pts.append((cx + rr * math.cos(t), cy + rr * math.sin(t)))
+        out.append((pts, ws, op))
+    return out
+
 @functools.lru_cache(maxsize=4096)
 def rosette(seed, layers=4, color=GOLD, n=240, w=0.8, dec=1):
     """SVG text for one rosette in a 100 unit box. Strokes do not scale (vector-effect), so a 28 px hallmark and a 120 px maker's
     mark both draw hairlines."""
-    r = _rng(_h32(str(seed), 2166136261))
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="{color}" stroke-linejoin="round">',
          f'<g vector-effect="non-scaling-stroke"><circle cx="50" cy="50" r="49" stroke-opacity=".35" stroke-width="{w}" vector-effect="non-scaling-stroke"/>',
          f'<circle cx="50" cy="50" r="45" stroke-opacity=".2" stroke-width="{w}" stroke-dasharray="1 3" vector-effect="non-scaling-stroke"/>']
-    for L in range(layers):
-        k = 5 + int(r() * 9); q = 0.18 + r() * 0.22; rad = 42 * (1 - L * 0.17)
-        d = _curve(rad, q, k, L, n, lambda q, k, t, ph: 1 - q + q * math.cos(k * t + ph), dec)
-        o.append(f'<path d="{d}" stroke-width="{w}" stroke-opacity="{0.85 - L * 0.14:.2f}" vector-effect="non-scaling-stroke"/>')
-        k2 = k + 2 + int(r() * 5)
-        if L < 2:
-            d2 = _curve(rad * 0.62, q * 0.8, k2, 0, n, lambda q, k, t, ph: 1 - q + q * math.sin(k * t), dec)
-            o.append(f'<path d="{d2}" stroke-width="{w * 0.8:.2f}" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>')
+    for rad, q, k, ph, kind, ws, op in _plan(seed, layers):
+        d = _curve(rad, q, k, ph, n, _fn(kind), dec)
+        sw = w if ws == 1.0 else f"{w * ws:.2f}"; so = f"{op:.2f}" if kind == "cos" else ".5"
+        o.append(f'<path d="{d}" stroke-width="{sw}" stroke-opacity="{so}" vector-effect="non-scaling-stroke"/>')
     return "".join(o) + "</g></svg>"
+
+def hall_key_seed(key):
+    """(rosette seed, paid) for a strict hallmark key, or None."""
+    m = HALL_RX.match(key or "")
+    if not m: return None
+    e, p, mi = (int(x) for x in m.groups())
+    return f"E{e}:{p}:{mi}", p
 
 def agent_svg(addr):
     """The maker's mark for an address, or None when it is not a poa1 address."""
