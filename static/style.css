@@ -1142,6 +1142,47 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 @keyframes hallin{0%{clip-path:circle(0% at 50% 50%);transform:rotate(-40deg);opacity:.4}50%{opacity:1}100%{clip-path:circle(71% at 50% 50%);transform:none}}
 @media (prefers-reduced-motion:reduce){tr.in .hmark{animation:none}}
 
+/* Phase 3: the Agent page as a maker's mark profile (profile.py) */
+.prof{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:24px;align-items:center;padding:24px;margin-bottom:16px}
+.prof .mmark.pm{width:104px;height:104px}
+.prof .ahid{min-width:0}.prof .ahid>.lbl{margin-bottom:6px}
+.prof .pname{font:400 var(--t40)/1.1 var(--fig);color:var(--bone-hi);letter-spacing:-.01em;margin:0 0 6px;overflow-wrap:anywhere}
+.prof .pname a{color:inherit}.prof .pname a:hover{color:var(--gold-hi);text-decoration:none}
+.prof .pname.pa{font:500 var(--t20)/1.3 var(--mono)}
+.prof .amono{display:flex;align-items:center;gap:6px;min-width:0;color:var(--bone-2);font-size:var(--t13)}.prof .amono .mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prof .ameta{margin:8px 0 0}
+.ptags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.prof .px{align-self:start}
+.pgrid{align-items:start}
+.psc{display:grid;grid-template-columns:160px minmax(0,1fr);gap:28px;align-items:center;padding:8px 0 20px}
+.dial{position:relative;width:160px;height:160px;display:grid;place-items:center;align-content:center}
+.dial svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.dial circle{fill:none;stroke-width:8}.dial .dt{stroke:var(--rule-2)}.dial .dv{stroke:var(--gold);stroke-linecap:round;transition:stroke-dasharray var(--draw) var(--ease)}
+.dial b{font:400 56px/1 var(--fig);color:var(--bone-hi)}.dial span{font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--bone-3);margin-top:4px}
+.pparts{display:flex;flex-direction:column}
+.ppart{display:grid;grid-template-columns:110px minmax(0,1fr) 32px;gap:12px;align-items:center;height:36px;border-bottom:1px solid var(--rule)}
+.ppart:last-child{border-bottom:0}.ppart b{text-align:right;color:var(--bone)}
+.pbar2{height:4px;border-radius:var(--r-sm);background:var(--rule);overflow:hidden}.pbar2 i{display:block;height:100%;background:var(--gold)}
+.ppart:last-child .pbar2 i{background:var(--verd)}
+.pfacts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--rule);margin:0 -18px -18px}
+.pf{padding:14px 18px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.pf:nth-child(3n){border-right:0}.pf:nth-last-child(-n+3){border-bottom:0}
+.pf .lbl{margin-bottom:8px}.pf b{font:400 var(--t28)/1 var(--fig);color:var(--bone)}.pf small{font:400 var(--t13)/1 var(--mono);color:var(--bone-3);margin-left:4px}
+.pheat{display:flex;flex-direction:column;gap:3px;padding:4px 0}
+.phr,.phax{display:grid;grid-template-columns:52px repeat(24,minmax(0,1fr));gap:3px;align-items:center}
+.phr span,.phax span{font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
+.phr i{display:block;aspect-ratio:1;border-radius:var(--r-sm);background:var(--ink-3)}
+.phr i.l1{background:var(--gold-edge)}.phr i.l2{background:var(--gold-lo)}.phr i.l3{background:var(--gold-mid)}.phr i.l4{background:var(--gold)}
+.phax{grid-template-columns:52px repeat(4,minmax(0,1fr));margin-top:6px}
+@media (max-width:640px){
+ .prof{grid-template-columns:72px minmax(0,1fr);gap:16px;padding:16px}.prof .mmark.pm{width:72px;height:72px;align-self:start}
+ .prof .px{grid-column:1/-1;justify-self:start}.prof .pname{font-size:var(--t28)}
+ .psc{grid-template-columns:minmax(0,1fr);justify-items:center;gap:16px}.pparts{width:100%}
+ .ppart{grid-template-columns:96px minmax(0,1fr) 28px}
+ .pfacts{grid-template-columns:repeat(2,minmax(0,1fr));margin:0 -12px -12px}.pf{padding:12px}
+ .pf:nth-child(3n){border-right:1px solid var(--rule)}.pf:nth-child(2n){border-right:0}.pf:nth-last-child(-n+3){border-bottom:1px solid var(--rule)}.pf:nth-last-child(-n+2){border-bottom:0}
+ .pf b{font-size:var(--t20)}.phr,.phax{grid-template-columns:44px repeat(24,minmax(0,1fr));gap:2px}.phax{grid-template-columns:44px repeat(4,minmax(0,1fr))}}
+
 /* chart pop-out (app.js, chartpop.py). No entrance fade or transform anywhere in it: the dialog and the chart are visible from the
    first frame (the 1.26.28 iOS rule). Full screen on phones, touch scrubs the chart (touch-action none on the plot only). */
 .cpt{cursor:pointer}

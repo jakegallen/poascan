@@ -34,6 +34,18 @@ js = open(os.path.join(ROOT, "static/app.js")).read(); css = open(os.path.join(R
 check("the Pour: a new close refetches the card, the bar splits, the new hallmark draws in; reduced motion skips it",
       "function pourLive(s)" in js and "/fragment/pour" in js and "pourLive(s)}" in js and "tr.in .hmark{animation:hallin 1.2s" in css and "@media (prefers-reduced-motion:reduce){tr.in .hmark{animation:none}}" in css)
 
+from poascan import profile as PF
+FA = fixture.A1; ah = V.address(FA); ah = ah[1] if isinstance(ah, tuple) else ah
+check("Agent page: a profile header led by the maker's mark at 104 px, then the address with copy and its tags",
+      '<section class="card prof addrhead">' in ah and f'src="/mark/{FA}.svg" width="104"' in ah and 'class="amono"' in ah and 'class="ptags"' in ah)
+check("Agent page: the Score as a dial with its four parts and six facts, then Rewards and Activity",
+      'class="dial"' in ah and ah.count('class="ppart"') == 4 and ah.count('class="pf"') == 6 and 'class="pheat"' in ah and ah.count('class="phr"') == 7 and "Txs by hour" in ah)
+check("Agent page: tabs, the stats and the Profile card stay", 'class="stats eight"' in ah and ">Overview<" in ah and "Profile" in ah)
+d = PF.dial(72)
+check("dial: the arc is the Score out of 100", '72 100' in d and '>72<' in d and 'pathLength="100"' in d)
+check("no Score yet: an honest empty state", "No Score in this segment yet" in PF.score_card(None, ""))
+check("no em or en dashes in profile.py", not any(ch in open(os.path.join(ROOT, "poascan/profile.py")).read() for ch in "\u2014\u2013"))
+
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 op = urllib.request.build_opener(urllib.request.ProxyHandler({}))

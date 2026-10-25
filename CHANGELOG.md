@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.132] - 2026-10-25
+
+### Changed
+- The Agent page leads with a profile: the Agent's maker's mark at 104 px, its name (linked to LabLeak) or address with copy, its first and last seen line and tags.
+- Overview opens with the Score as a dial with its four parts (Standing, Grading, Forum, Consistency) and six facts, beside Rewards per epoch and a 7 day by 24 hour activity map (UTC).
+- Facts shown in the header or the Score card are no longer repeated in the Profile list.
+
 ## [1.26.131] - 2026-10-25
 
 ### Added

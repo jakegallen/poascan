@@ -11,6 +11,7 @@ from . import swap as SW   # only for the swap page's live fragment in the snaps
 from . import views3 as V3
 from . import bench as BN
 from . import marks as MK
+from . import profile as PF
 from . import receipts as RC
 from . import history as HI
 from . import kin as KN
@@ -525,7 +526,10 @@ def address(a):
           ("Longest run", f'{p["streak"][0]} epochs' if p["streak"][0] else "···"), ("Epochs answered", ", ".join("E"+str(k) for k in p["answered"]) or "···"),
           ("Answers passed / settled", f'{sum(1 for x in p["settled"] if x[2])} / {len(p["settled"])}'), ("Jury aligned / seats", f'{sum(1 for x in p["jury"] if x[1])} / {len(p["jury"])}'),
           ("Grades served", f'{p["served"]:,}'), ("Bug + proposal posts", str(len(p["builder_posts"])) if p["builder_posts"] else "···"), ("G0 mentions", str(p["credit"]) if p["credit"] else "···")]
-    kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v))
+    from . import governance as GV
+    srow = GV.scores()["rows"].get(a)   # POAScan's Score and governance facts (cached 300 s)
+    shown = {"Established", "Model / Harness"} | ({"Answers passed / settled", "Jury aligned / seats"} if srow else set())   # the header tags and the Score card carry these
+    kvh = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in kv if not _empty(v) and k not in shown)
     eps = sorted(rb.items())
     rew = bars([(SG.ep_label(k), [v]) for k, v in eps], colors=("gold",)) if eps else '<p class="na">No rewards yet.</p>'
     rew += table(["Epoch", "Reward"], [[f'<a href="{SG.ep_href(k)}">{SG.ep_label(k)}</a>' + (' <span class="tag warn">Unconfirmed</span>' if SG.unconfirmed_g(k) else ""), poa(v, mined=True, dec=4)] for k, v in reversed(eps)], usd=(1,))
@@ -535,9 +539,7 @@ def address(a):
     tab = tab if tab in ("overview", "rewards", "txs", "grading", "governance") else "overview"
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
     nmx = nm.get(a) or p["forum_name"]
-    title = f'<h1>{name_link(nmx, a, cls="")}</h1><div class="amono"><span class="mono">{E(a)}</span>{copy(a)}</div>' if nmx else f'<h1 class="mono">{E(a)}</h1>'
-    head = (f'<div class="addrhead">{MK.mark_img(a, 56) or idn(a)}<div class="ahid">{title}</div>{"" if nmx else copy(a)}<span class="sp"></span>{X.usd_src()}</div>'
-            f'{addr_meta(a, bal, p)}'
+    head = (PF.head(a, nmx, addr_meta(a, bal, p), PF.tags(est, (srow or {}).get("level"), cen), X.usd_src()) +
             f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp), flag_html=A.carry_flag("circ") if early else "")}{stat("Locked", poa(lk) + X.usd_of(lk), flag_html=A.carry_flag("locked") if early else "")}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
@@ -556,7 +558,7 @@ def address(a):
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
-        main = (card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener noreferrer">Source JSON ↗</a>')
+        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip()) + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="noopener noreferrer">Source JSON ↗</a>')
                 + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
     return page("Address " + short(a), head + nav + main, "/")
 
