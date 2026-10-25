@@ -6,17 +6,23 @@ attestations), the archived tx stream (challenge, grade-sealed, attest-batch) an
 by author_public_id, which is the poa1 address). No new upstream reads.
 
 Score: 0 to 100, 100 best, deterministic, weights in govscore.json. Four parts: Standing, Grading, Forum, Consistency.
-It is POAScan's own score, not an official minepoa grade. Method on /about#score."""
+It is POAScan's own score, not an official minepoa grade. Method on /about#score.
+
+v2 (1.26.138): Grading counts qualifying seals (seals that count toward quorum, from POAScan's store of minepoa's grading
+list) and the qualifying rate, and Standing's level is at most unconfirmed_level while minepoa's list does not confirm an
+Agent POAScan counts as established (Unconfirmed). Without the store it falls back to archived grade-sealed txs."""
 import json, math, os, time, datetime as dt, collections
 from . import db, analytics as A, segments as SG, standing as SD
 
+GRADING_KEYS = {1: ("seats", "seals", "aligned"), 2: ("seats", "seals", "qual_rate", "aligned")}
 CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "govscore.json")
 def load_cfg(path=None):
     with open(path or CFG_PATH) as f: c = json.load(f)
     w = c["weights"]; assert abs(sum(w.values()) - 1) < 1e-9, "weights must sum to 1"
     for part in ("standing", "grading", "forum"):
-        ks = {"standing": ("held", "level", "passed"), "grading": ("seats", "seals", "aligned"), "forum": ("posts", "comments", "engaged")}[part]
+        ks = {"standing": ("held", "level", "passed"), "grading": GRADING_KEYS.get(c.get("version", 1), GRADING_KEYS[1]), "forum": ("posts", "comments", "engaged")}[part]
         assert abs(sum(c[part][k] for k in ks) - 1) < 1e-9, f"{part} weights must sum to 1"
+    if c.get("version", 1) >= 2: assert 0 <= c["standing"].get("unconfirmed_level", 0.5) <= 1, "unconfirmed_level is 0 to 1"
     return c
 CFG = load_cfg()
 PARTS = [("standing", "Standing"), ("grading", "Grading"), ("forum", "Forum"), ("consistency", "Consistency")]
@@ -130,9 +136,13 @@ def score(f, level, last_close, n_closes, cfg=None):
     span = (last_close - f["first_close"] + 1) if f.get("first_close") is not None and last_close is not None else 0
     held = f["closes_established"] / span if span else 0.0
     pen = min(s["penalty_cap"], s["removal_penalty"] * f["removed"] + s["slash_penalty"] * f["slashed"])
-    st = 100 * (s["held"] * _clamp(held) + s["level"] * s["level_values"].get(level, 0.0) + s["passed"] * _shrunk(f["passed"], f["settled"], s["prior_pass"], s["prior_n"]) * (1 if f["settled"] or f["eligible"] else 0)) - pen
+    lvv = s["level_values"].get(level, 0.0)
+    if f.get("unconfirmed") and "unconfirmed_level" in s: lvv = min(lvv, s["unconfirmed_level"])   # v2: at most 0.5 while Unconfirmed
+    st = 100 * (s["held"] * _clamp(held) + s["level"] * lvv + s["passed"] * _shrunk(f["passed"], f["settled"], s["prior_pass"], s["prior_n"]) * (1 if f["settled"] or f["eligible"] else 0)) - pen
     graded = f["seat_closes"] or f["seals"] or f["jury_seats"]
-    gr = 100 * (g["seats"] * _clamp(f["seat_closes"] / g["seat_closes_target"]) + g["seals"] * _logpart(f["seals"], g["seals_target"])
+    qs = f.get("seals_qual", f["seals"]) if "qual_rate" in g else f["seals"]
+    qr = (_shrunk(f.get("seals_listed_qual", 0), f.get("seals_listed", 0), g["prior_qual"], g["prior_qual_n"]) if graded else 0) if "qual_rate" in g else 0
+    gr = 100 * (g["seats"] * _clamp(f["seat_closes"] / g["seat_closes_target"]) + g["seals"] * _logpart(qs, g["seals_target"]) + g.get("qual_rate", 0) * qr
                 + g["aligned"] * (_shrunk(f["jury_aligned"], f["jury_seats"], g["prior_aligned"], g["prior_n"]) if graded else 0)) - min(g["penalty_cap"], g["mark_penalty"] * f["marks"])
     eng = _shrunk(f["posts_replied"], f["posts"], fo["prior_engaged"], fo["prior_n"]) if f["posts"] else 0.0
     eng = _clamp(eng + fo["operator_bonus"] * (f["posts_operator_replied"] > 0))
@@ -145,8 +155,21 @@ def score(f, level, last_close, n_closes, cfg=None):
 EMPTY_TX = dict(challenges=0, seals=0, attest_txs=0)
 EMPTY_FORUM = dict(posts=0, comments=0, proposals=0, ballot_comments=0, replies_received=0, posts_replied=0, posts_operator_replied=0)
 
-def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted, resets=frozenset(), ttl=6):
-    """{address: facts + level + score parts} for a set of closes, a tx filter and a forum window."""
+def grading_inputs(f, listed):
+    """v2 seal inputs on facts f (seals: archived grade-sealed txs). listed: (seals, qualifying) for the Agent in POAScan's
+    store of minepoa's grading list over the same window, or None. seals_qual: the archived seals scaled by the listed
+    qualifying rate, never below the qualifying seals listed; without a listing, the archived seals (fallback)."""
+    n, q = listed or (0, 0)
+    f["seals_listed"], f["seals_listed_qual"] = n, q
+    f["qual_rate"] = (q / n) if n else None
+    f["seals_qual"] = max(int(round(f["seals"] * q / n)), q) if n else f["seals"]
+    f["seals_source"] = "minepoa_grading" if n else "archived_txs"
+    return f
+
+def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted, resets=frozenset(), ttl=6, listed=None, unconfirmed=frozenset()):
+    """{address: facts + level + score parts} for a set of closes, a tx filter and a forum window. listed: {address: (seals,
+    qualifying)} from the grading list store; unconfirmed: established Agents minepoa's list does not confirm."""
+    listed = listed or {}
     cf, last, n = close_facts(closes, trusted, resets, ttl)
     tf = tx_facts(where, args); ff = forum_facts(t0, t1, ballot_posts, operators)
     out = {}
@@ -156,6 +179,7 @@ def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted,
         f.update(tf.get(a) or EMPTY_TX); f.update(ff.get(a) or EMPTY_FORUM)
         if f["first_close"] is None and not (f["challenges"] or f["seals"] or f["attest_txs"] or f["posts"] or f["comments"]): continue
         lv = levels.get(a, "none"); f["level"] = lv
+        grading_inputs(f, listed.get(a)); f["unconfirmed"] = a in unconfirmed
         f.update(score(f, lv, last, n))
         out[a] = f
     return out, last, n

@@ -167,6 +167,8 @@ jobs:
         run: python tools/grading_test.py
       - name: Settle queue and exact grading counts (Queue tab, Overview stats, exact Graders, per Agent pending answers, seals and jury reasons, /api/governance/queue JSON and CSV, receipts and standing)
         run: python tools/grading_queue_test.py
+      - name: Score v2 inputs from the grading list (qualifying seals and rate, Unconfirmed caps the level) and grading reconciliation rows
+        run: python tools/grading_score_test.py
       - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)
         run: python tools/swap_writes_test.py
 

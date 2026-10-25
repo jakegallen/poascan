@@ -46,7 +46,7 @@ def agent_cell(a, name):
 def ans_link(i): return f'<a class="mono" href="/tx/{E(i)}" title="{E(i)}">{E(short(i, 6, 4))}</a>'
 
 QUEUE_COLS = [SS.Col(None, "Answer", "text"), SS.Col("name", "Agent", "text", "dk"), SS.Col("qual", "Quorum", "num"),
-              SS.Col("trusted", "Trusted", "num", "r"), SS.Col("untrusted", "Untrusted", "num", "r"), SS.Col("need", "Need", "low", "r"),
+              SS.Col("trusted", "Trusted", "num", "r dk"), SS.Col("untrusted", "Untrusted", "num", "r dk"), SS.Col("need", "Need", "low", "r"),
               SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk")]
 QUEUE_SORTS = [(c.key, c.label) for c in QUEUE_COLS if c.key]
 QUEUE_FILTERS = [("", "Pending"), ("ready", "Ready"), ("1", "Need 1"), ("2", "Need 2"), ("3", "Need 3"), ("4", "Need 4"), ("open", "Open epoch")]
@@ -86,7 +86,7 @@ def queue_tab(qs, href, qsx):
         if r["expires"] is None: return '<span class="dim">···</span>'
         return f'E{r["expires"]}' + (f' <small class="dim">in {r["expires_in"]}</small>' if r["expires_in"] is not None else "")
     trs = "".join(f'<tr{" class=rdy" if r["need"] == 0 else ""}><td>{ans_link(r["id"])}</td><td class="dk">{agent_cell(r["author"], r["name"]) if r["author"] else "···"}</td>'
-                  f'<td class="qpc">{qprog(r, qn)}</td><td class="r">{r["trusted_seals"]:,}</td><td class="r">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
+                  f'<td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]:,}</td><td class="r dk">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
                   f'<td class="r dk">{"E" + str(r["born"]) if r["born"] is not None else "···"}</td><td class="r">{exp_cell(r)}</td>'
                   f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td></tr>' for r in cur)
     tb = (SS.select(QUEUE_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov queue"><thead><tr>{SS.heads(QUEUE_COLS, by, d, link)}</tr></thead>'
@@ -125,9 +125,9 @@ def agent_cards(a):
     f = stale_flag(); qn = v["quorum"]; out = []
     asof = f'<p class="cov dim small">minepoa\'s grading list, read {lt(v["fetched_at"], "t")} · pending seals carry no verdict · <a href="/about#grading-list">Method</a></p>'
     if v["pending"]:
-        trs = "".join(f'<tr><td>{ans_link(r["id"])}</td><td class="qpc">{qprog(r, qn)}</td><td class="r">{r["trusted_seals"]}</td><td class="r">{r["untrusted_seals"]}</td>'
+        trs = "".join(f'<tr><td>{ans_link(r["id"])}</td><td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]}</td><td class="r dk">{r["untrusted_seals"]}</td>'
                       f'<td class="r">{_need(r)}</td><td class="r dk">E{r["born"]}</td><td class="r">E{r["expires"]}</td></tr>' for r in v["pending"])
-        out.append(card(f"Pending answers · {v['pending_count']:,}" + f, '<div class="tw"><table class="hist cal gov queue"><thead><tr><th>Answer</th><th>Quorum</th><th class="r">Trusted</th><th class="r">Untrusted</th>'
+        out.append(card(f"Pending answers · {v['pending_count']:,}" + f, '<div class="tw"><table class="hist cal gov queue"><thead><tr><th>Answer</th><th>Quorum</th><th class="r dk">Trusted</th><th class="r dk">Untrusted</th>'
                         f'<th class="r">Need</th><th class="r dk">Born</th><th class="r">Expires</th></tr></thead><tbody>{trs}</tbody></table></div>' + asof,
                         f'<a class="more" href="/governance?tab=queue">Queue →</a>', id="gov-pending"))
     if v["seals"]:
@@ -141,10 +141,11 @@ def agent_cards(a):
     if v["jury_seats"] or v["settled"]:
         rows = ""
         for s in v["jury_seats"]:
-            rows += (f'<tr><td>{ans_link(s["answer"])}</td><td class="r">E{s["close"]}</td><td class="r">{_res(s["passed"])}</td>'
-                     f'<td class="r">{_vote(s["aligned"])}</td><td class="r num">{s["score"] if s["score"] is not None else "···"}</td>'
-                     f'<td class="why">{E(s["reason"] or "")}</td></tr>')
-        seats = ('<div class="tw"><table class="hist cal gov why"><thead><tr><th>Answer</th><th class="r">Close</th><th class="r">Result</th><th class="r">Vote</th><th class="r">Score</th><th>Reason</th></tr></thead>'
+            rows += (f'<tr><td>{ans_link(s["answer"])}</td><td class="r dk">E{s["close"]}</td><td class="r">{_res(s["passed"])}</td>'
+                     f'<td class="r dk">{_vote(s["aligned"])}</td><td class="r num">{s["score"] if s["score"] is not None else "···"}</td>'
+                     f'<td class="why dk">{E(s["reason"] or "")}</td></tr>'
+                     f'<tr class="whym"><td colspan="6" class="why">{E(s["reason"] or "")}{_na_al(s["aligned"])}</td></tr>')   # phones: the reason under its row
+        seats = ('<div class="tw"><table class="hist cal gov why"><thead><tr><th>Answer</th><th class="r dk">Close</th><th class="r">Result</th><th class="r dk">Vote</th><th class="r">Score</th><th class="dk">Reason</th></tr></thead>'
                  f'<tbody>{rows}</tbody></table></div>') if rows else ""
         own = ""
         for s in v["settled"]:

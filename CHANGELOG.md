@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.138] - 2026-10-25
+
+### Changed
+- Score v2 (`poascan/govscore.json` version 2): Grading counts qualifying seals (archived grade-sealed txs scaled by the share of the Agent's seals that count toward quorum in POAScan's store of minepoa's grading list, never below the qualifying seals listed) and that qualifying rate as a new 15% input; seats 35%, seals 15%, aligned 35%. Standing's level is at most 0.5 while an Agent is Unconfirmed. Without a listing it falls back to archived seals. `/api/v1/address/<a>/governance` adds `score_version` and `score_inputs`. Method on /about#score.
+- Settle queue and pending answers at 390px: Trusted and Untrusted move to wide screens so Need and Expires stay visible; jury reasons sit under their row on phones.
+
+### Added
+- Reconciliation: Queue (basis.pending against the list's stats.pending), Seals since close (archived seal txs against the list's seals after the close) and Established (POAScan's fold against the list's established), from the copy POAScan already reads.
+
+### Fixed
+- 1.26.137 notes: the per Agent `grading` block is on `/api/v1/address/<a>/governance`.
+
 ## [1.26.137] - 2026-10-25
 
 ### Added

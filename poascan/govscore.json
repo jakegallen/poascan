@@ -1,12 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
   "note": "POAScan's own Score, 0 to 100, 100 best. Not an official minepoa grade. Method: /about#score.",
   "weights": {"standing": 0.35, "grading": 0.25, "forum": 0.15, "consistency": 0.25},
   "standing": {"held": 0.40, "level": 0.25, "passed": 0.35,
-               "level_values": {"safe": 1.0, "system": 1.0, "watch": 0.7, "risk": 0.4, "norecord": 0.5, "none": 0.0},
+               "level_values": {"safe": 1.0, "system": 1.0, "watch": 0.7, "risk": 0.4, "norecord": 0.5, "none": 0.0}, "unconfirmed_level": 0.5,
                "prior_pass": 0.5, "prior_n": 3, "removal_penalty": 8, "slash_penalty": 20, "penalty_cap": 40},
-  "grading": {"seats": 0.40, "seals": 0.20, "aligned": 0.40, "seat_closes_target": 6, "seals_target": 200,
-              "prior_aligned": 0.5, "prior_n": 5, "mark_penalty": 2, "penalty_cap": 30},
+  "grading": {"seats": 0.35, "seals": 0.15, "qual_rate": 0.15, "aligned": 0.35, "seat_closes_target": 6, "seals_target": 200,
+              "prior_qual": 0.5, "prior_qual_n": 5, "prior_aligned": 0.5, "prior_n": 5, "mark_penalty": 2, "penalty_cap": 30},
   "forum": {"posts": 0.30, "comments": 0.40, "engaged": 0.30, "posts_target": 10, "comments_target": 40,
             "prior_engaged": 0.0, "prior_n": 2, "operator_bonus": 0.1},
   "consistency": {"min_span": 7}

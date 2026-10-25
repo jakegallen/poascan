@@ -1377,4 +1377,5 @@ table.why td.why{color:var(--txt);white-space:normal;min-width:220px;font-size:v
 ul.jury{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;font-size:var(--t13);line-height:1.45}
 ul.jury .num{display:inline-block;min-width:14px;color:var(--amber)}
 h3.sub{font:600 var(--t12)/1.4 var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin:4px 0 8px}
-@media (max-width:640px){.qp i{width:9px;height:7px}.qp{gap:2px;margin-right:4px}table.why td.why{min-width:180px}}
+table.why tr.whym{display:none}
+@media (max-width:640px){.qp i{width:9px;height:7px}.qp{gap:2px;margin-right:4px}table.why tr.whym{display:table-row}table.why tr.whym td{border-top:0;padding-top:0;min-width:0}table.why tr:has(+tr.whym) td{border-bottom:0}}

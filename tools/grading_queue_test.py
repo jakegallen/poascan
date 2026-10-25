@@ -68,6 +68,7 @@ def main():
     check("queue page: header sorting and phone sort menu", 'class="sorth' in h or "sort=" in h)
     check("queue page: shared sort select", "<select" in h)
     check("queue page: 4 step progress with trusted and untrusted pips", 'class="qp"' in h and '<i class="t"' in h and '<i class="u"' in h and "4/4" in t)
+    check("queue page: trusted and untrusted are wide-screen columns, Need and Expires stay at 390 (1.26.138)", '<td class="r dk">1</td><td class="r dk">4</td>' in h)
     check("queue page: ready row marked", "class=rdy" in h and "Ready" in t)
     check("queue page: need chips with counts", "Need 3" in t and "Open epoch" in t)
     check("queue page: CSV and API links", "/api/v1/governance/queue.csv" in h and "/api/v1/governance/queue" in h)
@@ -92,6 +93,7 @@ def main():
     check("agent API: jury seats with reason", gj["jury_seats"] and gj["jury_seats"][0]["reason"] == "Concrete and correct." and gj["jury_seats"][0]["aligned"] is True)
     h = GVW.agent_cards(G1); nodash("agent cards", h)
     check("agent page: jury reasons card", "Jury reasons" in h and "Concrete and correct." in h)
+    check("agent page: phones get the reason under its row (1.26.138)", 'class="whym"' in h and '<td class="why dk">' in h)
     h = GVW.agent_cards(fixture.A1)
     check("agent page: pending answers and seals with tx column", "Pending answers" in h and "Seals on pending answers" in h and ">Tx<" in h)
     # API, CSV, server routes

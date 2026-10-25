@@ -1,4 +1,4 @@
-"""POAScan's Score (1.26.108): weights load from govscore.json and sum to 1, scores are deterministic integers 0 to 100,
+"""POAScan's Score (1.26.108, v2 in 1.26.138): weights load from govscore.json and sum to 1, scores are deterministic integers 0 to 100,
 the fold matches governance.segment_standing, better inputs never score lower, and a changed config changes the result.
 Usage: python3 tools/govscore_test.py"""
 import copy, json, os, sys, tempfile
@@ -53,6 +53,25 @@ def main():
     m = V.score_method()
     check("/about#score: own score, not official, every weight from the config, no dashes", 'id="score"' in m and "Not an official ranking" in m and "\u2014" not in m and "\u2013" not in m
           and all(f"({round(v * 100)}%)" in m for v in c["weights"].values()))
+    # v2 (1.26.138): qualifying seals, qualifying rate, standing level capped while Unconfirmed
+    check("govscore.json v2: grading parts seats, seals, qual_rate, aligned sum to 1", c["version"] == 2 and abs(sum(c["grading"][k] for k in ("seats", "seals", "qual_rate", "aligned")) - 1) < 1e-9)
+    bad = copy.deepcopy(c); bad["grading"]["qual_rate"] += 0.1; p2 = os.path.join(tempfile.mkdtemp(), "bad2.json"); json.dump(bad, open(p2, "w"))
+    try: GS.load_cfg(p2); check("v2 grading weights that do not sum to 1 are refused", False)
+    except AssertionError: check("v2 grading weights that do not sum to 1 are refused", True)
+    v1 = copy.deepcopy(c); v1["version"] = 1; v1["grading"] = {k: v for k, v in c["grading"].items() if k not in ("qual_rate", "prior_qual", "prior_qual_n")}; v1["grading"]["seals"] = 0.30
+    p3 = os.path.join(tempfile.mkdtemp(), "v1.json"); json.dump(v1, open(p3, "w"))
+    check("a v1 config still loads", GS.load_cfg(p3)["version"] == 1)
+    fq = GS.grading_inputs(full(C, seals=300), (100, 100)); fn = GS.grading_inputs(full(C, seals=300), (100, 0))
+    check(f"inputs: qualifying seals scale archived seals by the listed rate {fq['seals_qual']} {fn['seals_qual']}", fq["seals_qual"] == 300 and fn["seals_qual"] == 0 and fq["qual_rate"] == 1.0 and fq["seals_source"] == "minepoa_grading")
+    check("inputs: never below the qualifying seals listed", GS.grading_inputs(full(C, seals=10), (50, 40))["seals_qual"] == 40)
+    fb = GS.grading_inputs(full(C, seals=300), None)
+    check("inputs: no listing falls back to archived seals", fb["seals_qual"] == 300 and fb["qual_rate"] is None and fb["seals_source"] == "archived_txs")
+    sq, sn = GS.score(fq, "safe", last, n), GS.score(fn, "safe", last, n)
+    check(f"qualifying seals score above non-qualifying on the same seals {sn['grading']} -> {sq['grading']}", sq["grading"] > sn["grading"])
+    cu = GS.score(dict(full(A), unconfirmed=True), "safe", last, n)
+    check(f"Unconfirmed caps the level at 0.5 {s1['standing']} -> {cu['standing']}", cu["standing"] < s1["standing"] and cu["standing"] == GS.score(full(A), "norecord", last, n)["standing"])
+    check("Unconfirmed never raises At risk", GS.score(dict(full(A), unconfirmed=True), "risk", last, n)["standing"] == GS.score(full(A), "risk", last, n)["standing"])
+    check("/about#score names qualifying seals and Unconfirmed", "qualifying seals" in m and "Unconfirmed" in m and f"({round(c['grading']['qual_rate'] * 100)}%)" in m)
     check("tooltip copy", GS.TIP == "Built by POAScan from public network data. Not an official ranking. Meant to help explain how Agents become established.")
 
 if __name__ == "__main__":

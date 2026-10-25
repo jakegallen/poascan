@@ -50,6 +50,35 @@ def _held_why(gap, esc, unl, n):
     if parts and abs(gap - esc - unl) <= D("0.01"): return " plus ".join(parts)
     return "beyond " + " and ".join(parts) + ", /api/agents and close records are read at different times" if parts else "/api/agents and close records are read at different times"
 
+GR_SRC = "minepoa /api/explorer/grading"
+
+def grading_rows(E, ep_t, pend_rec):
+    """1.26.138: POAScan's own figures beside minepoa's grading list (the copy POAScan already reads; no extra calls).
+    Pending: basis.pending in the latest close against the list's stats.pending. Seals since close: archived grade-sealed
+    txs after the latest close against the list's seals after it. Established: POAScan's fold against the list's established."""
+    from . import grading as GR
+    if not GR.usable(): return []
+    d = GR.current(); at = GR.upstream_as_of(); st = d.get("stats") or {}
+    with S.use(S.CURRENT):
+        from . import governance as GV
+        t = (A.epoch_rows() or [{}])[-1].get("close_ts") or 0
+        w, a = S.sql()
+        ours_seals = (db.q1("SELECT COUNT(*) AS n FROM txs WHERE type='grade-sealed' AND ts > ?" + w, (t,) + a) or {}).get("n")
+        est = [r["address"] for r in GV.standing_rows()["rows"]]
+    list_seals = sum(1 for r in d.get("rows") or [] for g in r.get("grades") or [] if int(g.get("ts") or 0) > t)
+    tx_t = (db.q1("SELECT MAX(last_seen) AS t FROM txs") or {}).get("t")
+    c = GR.conflict_summary(est) or {}
+    behind = bool(E and at and at < int(E[-1]["ts"]))
+    return [
+        _row("grading_pending", "Queue", pend_rec, st.get("pending"), "basis.pending, latest close", ep_t, GR_SRC + " stats.pending", at,
+             reason="the grading list was read before the latest close" if behind else "a close POAScan has not read yet, or answers that settled or expired between reads"),
+        _row("grading_seals", "Seals since close", ours_seals, list_seals, "grade-sealed txs archived since the latest close", tx_t, GR_SRC + " seals after the latest close", at,
+             reason=("seals cast after the list was read" if (ours_seals or 0) > list_seals else "seal txs the archive missed during an outage or a burst, or not archived yet")),
+        _row("grading_established", "Established", len(est), len(d.get("established") or []), "POAScan's fold of the close records", ep_t, GR_SRC + " established", at,
+             reason=(f"minepoa's grading list shows none; POAScan counts {c.get('conflict', 0)} Agents from the close records and tags them Unconfirmed. Their seals still count toward quorum."
+                     if c.get("list_empty") else f"{c.get('conflict', 0)} Agents POAScan counts are not on minepoa's list (Unconfirmed)")),
+    ]
+
 @cached("reconcile", 60)
 def reconcile():
     st, st_t = db.get_blob("status"); st = st or {}; nw = A.networks(); _, nw_t = db.get_blob("networks")
@@ -128,7 +157,7 @@ def reconcile():
              reason="POAScan keeps every invalid tx it has seen; the node figure looks like a current count"),
         _row("pending", "Pending", pend_ours, pend_rec, "Pending panel, carried forward", ep_t, "basis.pending, latest close", ep_t,
              reason="not explained by the public reads"),
-    ]
+    ] + grading_rows(E, ep_t, pend_rec)
     pc = per_close()
     return dict(generated_at=int(time.time()), node_as_of=node_at, node_stale=bool(st.get("stale")), node_stale_age_s=st.get("stale_age_s"),
                 matched=sum(r["state"] == "match" for r in rows), explained=sum(r["state"] == "explained" for r in rows),

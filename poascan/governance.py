@@ -362,6 +362,10 @@ def score_tip(): return qtip(GS.TIP, SCORE_METHOD, "About Score")
 
 def ballot_posts(): return frozenset({t for b in BALLOTS for t, _ in b["topics"]} | {b[k] for b in BALLOTS for k in ("opened_post", "voting_post")})
 
+def _unconf(lv):
+    """Established Agents (Safe, Watch, At risk, No record) that minepoa's grading list does not confirm (Unconfirmed)."""
+    return GR.unconfirmed_set([a for a, v in lv.items() if v not in ("none", "system")])
+
 @A.cached("gov_scores", 300)
 def scores(scope="segment"):
     """{address: governance facts plus Score parts} for the selected segment, or every segment (scope "all": closes on the
@@ -375,11 +379,13 @@ def scores(scope="segment"):
             cs = sorted(A.segment_closes(n), key=lambda e: int(e.get("epoch", 0)))
             if cs: resets.add(SG.gkey(int(cs[0].get("epoch", 0)), n))
             closes += [dict(e, epoch=SG.gkey(int(e.get("epoch", 0)), n)) for e in cs]
-        out, last, nc = GS.build(closes, "", (), None, None, lv, ballot_posts(), ops, tr, frozenset(resets), ttl)
+        out, last, nc = GS.build(closes, "", (), None, None, lv, ballot_posts(), ops, tr, frozenset(resets), ttl, listed=GR.seal_facts(), unconfirmed=_unconf(lv))
     else:
         n = SG.selected(); seg = SG.BY_N[n]; w, a = SG.sql()
         lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
-        out, last, nc = GS.build(A.segment_closes(n), w, a, seg.get("start_ts"), seg.get("end_ts"), lv, ballot_posts(), ops, tr, ttl=ttl)
+        cur = not SG.archived()
+        out, last, nc = GS.build(A.segment_closes(n), w, a, seg.get("start_ts"), seg.get("end_ts"), lv, ballot_posts(), ops, tr, ttl=ttl,
+                                 listed=GR.seal_facts(seg.get("start_ts"), seg.get("end_ts")) if cur else {}, unconfirmed=_unconf(lv) if cur else frozenset())
     return dict(rows=out, last_close=last, closes=nc)
 
 def _score_cell(v): return f'<span class="tag score">{v}</span>' if v is not None else '<span class="dim">···</span>'
@@ -807,7 +813,10 @@ def api_agent(a, scope="segment"):
     out = {k: f.get(k) for k in keep}
     lab = (lambda xs: [SG.ep_label(x) for x in xs]) if scope == "all" else (lambda xs: list(xs))
     return dict(address=a, name=A.forum_names().get(a), scope=scope, **({} if scope == "all" else _seg()),
-                score=f["score"], score_parts={k: f[k] for k, _ in GS.PARTS},
+                score=f["score"], score_parts={k: f[k] for k, _ in GS.PARTS}, score_version=GS.CFG.get("version", 1),
+                score_inputs=dict(seals_archived=f.get("seals", 0), seals_qualifying=f.get("seals_qual", f.get("seals", 0)), seals_listed=f.get("seals_listed", 0),
+                                  seals_listed_qualifying=f.get("seals_listed_qual", 0), qual_rate=f.get("qual_rate"), seals_source=f.get("seals_source", "archived_txs"),
+                                  unconfirmed=bool(f.get("unconfirmed")), level_value_cap=GS.CFG["standing"].get("unconfirmed_level") if f.get("unconfirmed") else None),
                 score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD,
                 established=bool(st), established_source=GR.established_check(a)[0] if st else "close_records", minepoa_established=GR.minepoa_established(a),
                 level=LEVEL_KEYS[st["level"]] if st else None, closes_left=st["left"] if st else None,

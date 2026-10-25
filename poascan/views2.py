@@ -140,7 +140,7 @@ def recon_card():
         n = num(x, 2) if unit == "poa" else intc(x)
         s = f"{src} · " if src else ""   # 1.26.88: the two holder counts are labelled by source (balances, node); method on /about#holders
         return f'{n}<small title="read {utc_text(at)}">{s}{rel_t(at)}</small>' if at else (f'{n}<small>{src}</small>' if src else n)
-    HS = {"holders": ("balances", "node")}
+    HS = {"holders": ("balances", "node"), "grading_pending": ("record", "minepoa list"), "grading_seals": ("archived", "minepoa list"), "grading_established": ("fold", "minepoa list")}
     def tag(st): c, t = RECON_TAG[st]; return f'<span class="tag {c}">{t}</span>'
     def sub(r):
         dv = None if r["diff"] in (None, 0) else (f'Δ {"+" if r["diff"] > 0 else "-"}{compact(abs(r["diff"]), 2)}' if r["unit"] == "poa" else f'Δ {r["diff"]:+,}')

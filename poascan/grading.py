@@ -311,3 +311,19 @@ def row_of(answer):
     if not usable(): return None
     if _cur.get("qix") is None: _cur["qix"] = {r["id"]: r for r in queue_rows()}
     return _cur["qix"].get(answer)
+
+
+def seal_facts(t0=None, t1=None):
+    """{grader: (seals, qualifying)} from the seal store (every seal POAScan saw in minepoa's list, kept SEAL_KEEP_DAYS),
+    by seal time in [t0, t1). q is the latest value seen. Empty before the first read."""
+    w, a = [], []
+    if t0 is not None: w.append("ts >= ?"); a.append(int(t0))
+    if t1 is not None: w.append("ts < ?"); a.append(int(t1))
+    try: rs = db.q("SELECT grader AS g, COUNT(*) AS n, SUM(q) AS k FROM grading_seals" + (" WHERE " + " AND ".join(w) if w else "") + " GROUP BY grader", tuple(a))
+    except Exception: return {}
+    return {r["g"]: (int(r["n"] or 0), int(r["k"] or 0)) for r in rs}
+
+def unconfirmed_set(addrs):
+    """The addresses among addrs that are tagged Unconfirmed (POAScan counts them established, minepoa's list does not)."""
+    if not usable(): return frozenset()
+    return frozenset(a for a in addrs if established_check(a)[0] == "conflict")
