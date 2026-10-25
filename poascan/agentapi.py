@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.126"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-25T17:31:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.127"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-25T17:52:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -972,7 +972,11 @@ def openapi():
                                                           "last_good_read": {"type": ["string", "null"], "format": "date-time", "description": "last successful read, ISO 8601 UTC"},
                                                           "last_good_read_age_s": {"type": ["integer", "null"]}, "last_attempt": {"type": ["string", "null"], "format": "date-time"},
                                                           "last_attempt_status": {"type": ["string", "null"], "description": "HTTP status of the last read, e.g. 200 or 502"},
-                                                          "open_offers": {"type": "integer"}, "fresh_after_s": {"type": "integer"}, "upstream": {"type": "string"}, "url": {"type": "string"},
+                                                          "open_offers": {"type": "integer"}, "fresh_after_s": {"type": "integer"},
+                                                          "writes": {"type": "object", "description": "Order placement health from POAScan's keyless write check (about every 10 min, 30 min when unchanged)",
+                                                                     "properties": {"swap_offer": {"type": "object", "properties": {"state": {"type": "string", "enum": ["open", "paused", "down", "unknown"]}, "http": {"type": ["integer", "null"]},
+                                                                                    "checked_at": {"type": ["string", "null"], "format": "date-time"}, "since": {"type": ["string", "null"], "format": "date-time"}, "stale": {"type": "boolean"}}}}},
+                                                          "swaps_writable": {"type": ["boolean", "null"], "description": "true when order placement answers, false when paused or failing, null when unknown"}, "upstream": {"type": "string"}, "url": {"type": "string"},
                                                           "market": {"type": "object", "description": "From filled swaps only; null when there are no fills or no USD reference",
                                                                      "properties": {"last_fill_usd_per_poa": {"type": ["number", "null"]}, "last_fill_ts": {"type": ["integer", "null"]},
                                                                                     "market_cap_usd": {"type": ["number", "null"], "description": "last fill price x circulating (unlocked) supply"},

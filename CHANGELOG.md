@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.127] - 2026-10-25
+
+### Added
+- Swap write check: one keyless GET of /api/hosted/swap-offer about every 10 min with jitter (30 min after 3 identical results), always on, not only during maintenance. No key, query, body or auth header, so it can never place an offer. 4xx from the app: open; 503 with the halt text: paused; other 5xx or no answer: down.
+- /api/v1/swaps/status (additive): writes.swap_offer {state, http, checked_at, since, stale} and swaps_writable (true, false or null). When order placement is down or paused, message says so ("Order placement is failing on the network.").
+- /api/v1/health feeds: Swap writes (Down when failing, Degraded when paused), so the headline reads Partial.
+- meta.maintenance.hosted_routes.swap_offer and hosted_routes_checked_at follow each read (a failing route reads unknown there).
+- tools/swap_writes_test.py.
+
 ## [1.26.126] - 2026-10-25
 
 ### Fixed

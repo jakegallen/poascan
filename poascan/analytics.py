@@ -607,6 +607,10 @@ def _feed_state(r, every, now):
     if fails >= FEED_VIEW_DOWN or not lo or now - lo > 3600: return "Down"
     return "Degraded"
 
+def _iso_s(v):
+    try: return int(dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()) if v else None
+    except ValueError: return None
+
 @cached("feeds", 15)
 def feeds():
     """Chain state, one row per upstream feed (label, state, last_ok) and the headline: OK only when every feed is OK,
@@ -632,6 +636,11 @@ def feeds():
         st = (min if mode == ["best"] else max)(states, key=FEED_RANK.get)
         got = got or seen
         out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
+    from . import hosted as HO   # 1.26.127: swap order placement (the write check), Down when failing, Degraded when paused
+    w, _ok = HO.writes(now); ws = w["swap_offer"]
+    if ws["state"] != "unknown":
+        out.append(dict(label="Swap writes", state={"open": "OK", "paused": "Degraded", "down": "Down"}[ws["state"]],
+                        last_ok=_iso_s(ws["since"]) if ws["state"] == "open" else None, http=ws["http"], checked_at=ws["checked_at"]))
     live = [r.get("last_ok") for e, r in rows.items() if e in ("/api/status", "/api/networks") and r.get("last_ok")]
     fresh = bool(live) and now - max(live) <= LIVE_S
     moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S

@@ -157,6 +157,8 @@ jobs:
         run: python tools/followups_test.py
       - name: Supply basis at the genesis cut (cum_supply, circulating plus locked, holders total and unlocks equal the supply; reconcile Mined explained)
         run: python tools/supply_test.py
+      - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)
+        run: python tools/swap_writes_test.py
 
   deploy:
     needs: test

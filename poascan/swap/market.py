@@ -144,11 +144,22 @@ def swap_status_api():
                 last_attempt_status=h["last_attempt_status"], open_offers=h["open_offers"], fresh_after_s=h["fresh_after_s"],
                 upstream=C.UPSTREAM + C.SWAPS_EP, url=C.LINK_URL if C.LINK_URL.startswith("https://") else C.PAGE_URL, market=swap_market(), names=swap_names())
     fl = _flag()
-    if fl is None: return d
+    if fl is None: return _writes(d)
     v = swap_view()   # POASwap's flag decides status, available, message and url; POAScan's own read stays in last_good_read and open_offers
     d.update(status=v["status"], available=v["available"], state=legacy_state(v["status"], v["available"]), message=v["message"], url=v["url"],
              swaps_live=fl["swaps_live"], reason=fl["reason"], open_offer_count=fl["open_offer_count"], updated_at=fl["updated_at"],
              source=fl["source"], fetched_at=fl["fetched_at"], flag_basis=fl["basis"], flag_version=fl["version"])
+    return _writes(d)
+
+WRITE_MSG = {"down": "Order placement is failing on the network.", "paused": "Order placement is paused on the network."}
+def _writes(d):
+    """1.26.127 (additive): writes {swap_offer: {state, http, checked_at, since, stale}} and swaps_writable from the host's
+    write check; when order placement is down or paused the message says so in place of the availability line."""
+    f = getattr(H, "swap_writes", None)
+    if f is None: return d
+    w, ok = f(); d.update(writes=w, swaps_writable=ok)
+    st = w["swap_offer"]["state"]
+    if ok is False and st in WRITE_MSG: d["message"] = WRITE_MSG[st]
     return d
 
 def swap_names():

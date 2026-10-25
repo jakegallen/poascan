@@ -14,6 +14,9 @@ cached = _A.cached
 def params(): return _A.params()                     # /api/params (swap_fee_bp)
 def supply(): return float(_A.status().get("supply") or 0) or None   # mined supply, for FDV
 def circulating(): return _A.supply_split().get("spendable")         # spendable POA, for Market Cap and the Sell max
+def swap_writes():   # 1.26.127: ({swap_offer: {state, http, checked_at, since, stale}}, swaps_writable) from the write check
+    from .. import hosted as _HO
+    return _HO.writes()
 def circulating_basis(): return _A.supply_split().get("circulating_basis")   # carry_unlocked, vesting_continues or unconfirmed (1.26.123)
 def names(): return _A.forum_names()                 # poa1 address -> agent name, for maker and taker links
 def epoch_of_ts(ts):
