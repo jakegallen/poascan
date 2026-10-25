@@ -679,13 +679,18 @@ D.addEventListener("click",function(e){shut(e.target.closest?e.target.closest("d
 [].slice.call(D.querySelectorAll("details.qtip")).forEach(function(q){q.addEventListener("click",function(e){e.stopPropagation();shut(q)})});   /* a ? inside a sortable header never sorts the table (1.26.112) */
 D.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=D.querySelector("details.qtip[open]");if(o){o.removeAttribute("open");var s=o.querySelector("summary");if(s)s.focus()}})
 /* Epoch card tips: pointerdown outside closes too, since iOS sends no click for a tap on plain text. A .qtip.hv also opens
-   on a mouse hover and leaving closes what the hover opened; a click on its ? pins it. Over 640px its note sits beside the ?,
-   kept inside the viewport; on a phone it stays centred like every qtip. */
+   on a mouse hover and leaving closes what the hover opened; a click on its ? pins it. Its note opens right by its ?, below it or
+   above when there is no room, inside the viewport and never over the ? itself, at every width. */
 D.addEventListener("pointerdown",function(e){var k=e.target.closest?e.target.closest("details.qtip"):null;if(e.pointerType!=="mouse")shut(k)},true);
-function place(q){var b=q.querySelector(".qbox");if(!b)return;if(window.innerWidth<=640||!q.classList.contains("hv")){b.style.left=b.style.top=b.style.transform="";return}
- var r=q.querySelector("summary").getBoundingClientRect(),w=b.offsetWidth,h=b.offsetHeight,x=Math.max(8,Math.min(window.innerWidth-w-8,r.left+r.width/2-w/2)),y=r.bottom+8;
- if(y+h>window.innerHeight-8)y=Math.max(8,r.top-h-8);b.style.transform="none";b.style.left=x.toFixed(0)+"px";b.style.top=y.toFixed(0)+"px"}
-D.addEventListener("toggle",function(e){var q=e.target;if(q.matches&&q.matches("details.qtip")&&q.open)place(q)},true);
+function place(q){var b=q.querySelector(".qbox");if(!b)return;if(!q.classList.contains("hv")){b.style.left=b.style.top=b.style.transform=b.style.maxHeight="";return}
+ var vw=window.innerWidth,vh=window.innerHeight,r=q.querySelector("summary").getBoundingClientRect();b.style.transform="none";b.style.maxHeight=b.style.overflowY="";
+ var w=b.offsetWidth,h=b.offsetHeight,x=Math.max(8,Math.min(vw-w-8,r.left+r.width/2-w/2)),dn=vh-r.bottom-16,up=r.top-16,y,below=h<=dn||(h>up&&dn>=up);
+ if(!below&&h>up){b.style.maxHeight=up+"px";b.style.overflowY="auto"}else if(below&&h>dn){b.style.maxHeight=dn+"px";b.style.overflowY="auto"}   /* never over its own ? */
+ h=Math.min(h,below?dn:up);y=below?r.bottom+8:r.top-8-h;q.classList.toggle("up",!below);b.style.left=x.toFixed(0)+"px";b.style.top=y.toFixed(0)+"px";q.dataset.pl="1"}
+D.addEventListener("toggle",function(e){var q=e.target;if(!(q.matches&&q.matches("details.qtip")))return;if(q.open)place(q);else delete q.dataset.pl},true);
+/* the note is fixed to the viewport, so it follows its ? while the page scrolls or resizes */
+function qtPlaceAll(){[].slice.call(D.querySelectorAll("details.qtip.hv[open]")).forEach(place)}
+window.addEventListener("scroll",qtPlaceAll,{passive:true});window.addEventListener("resize",qtPlaceAll);
 D.addEventListener("pointerover",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||q.open||(e.relatedTarget&&q.contains(e.relatedTarget)))return;shut(q);q.open=true;q.dataset.hv="1"});
 D.addEventListener("pointerout",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv});
 D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest("details.qtip.hv");if(q&&q.dataset.hv&&e.target.closest("summary")){e.preventDefault();delete q.dataset.hv}},true)})();

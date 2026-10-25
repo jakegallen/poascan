@@ -1184,12 +1184,14 @@ td a.mono{display:inline-block;min-width:24px}
  .bench.final .cd,.bench.closing .cd{animation:none}}
 @media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}
 /* Epoch card tips: the ? notes (bench.py TIPS, the qtip pattern): a small ? beside each label, a bigger hit area than it draws;
-   over 640px app.js sets the note beside its ? (a bridge keeps the hover across the gap), on a phone it stays centred */
+   app.js sets the note right by its ? at every width (a bridge keeps the hover across the gap) */
 .qtip.btip{margin-left:5px;vertical-align:1px}
 .qtip.btip>summary{position:relative;width:16px;height:16px;font:600 10px/1 var(--ui);color:var(--bone-3);border-color:var(--rule-2)}
 .qtip.btip>summary::after{content:"";position:absolute;inset:-8px -5px}
 .qtip.btip>summary:hover,.qtip.btip[open]>summary{color:var(--amber);border-color:var(--gold-edge)}
 .qtip.btip .qbox::before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px}
+.qtip.btip.up .qbox::before{top:auto;bottom:-10px}
+.qtip.hv[open]:not([data-pl]) .qbox{visibility:hidden}
 .bench .lbl .qtip,.btk .lbl .qtip{letter-spacing:0}
 .bez-ax{align-items:center}.bez-ax .qtip.btip{margin:0}
 .lane .lbl{white-space:nowrap}
