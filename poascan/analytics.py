@@ -90,12 +90,20 @@ def segment_minted():
     """Sum of every reward in the selected segment's close records."""
     return sum(float(v) for e in epochs_raw() for v in (e.get("rewards") or {}).values())
 
+@cached("segment_carried", 300)
+def segment_carried():
+    """1.26.122: rewards of the selected segment's closes that later balances carry: segment_minted() minus closes in
+    segments config unconfirmed_closes or a cut's excluded_closes (segments.unconfirmed)."""
+    seg = S.selected()
+    return sum(float(v) for e in epochs_raw() if not S.unconfirmed(int(e.get("epoch", 0)), seg) for v in (e.get("rewards") or {}).values())
+
 def minted_before():
-    """Rewards minted in every segment before the selected one (cum_supply starts there; balances carried over)."""
+    """Rewards carried from every segment before the selected one (cum_supply starts there). 1.26.122: closes excluded at a
+    cut are not carried, so segment 2's E0 starts at the carried supply, not at every reward segment 1 recorded."""
     out = 0.0
     for n in S.NUMBERS:
         if n >= S.selected(): break
-        with S.use(n): out += segment_minted()
+        with S.use(n): out += segment_carried()
     return out
 
 # 1.26.89: from the E14 close minepoa's pending rows carry no "since" (origin epoch); before, every row had it. Reading a
@@ -146,10 +154,11 @@ def grade_counts(e, prev_ts=None):
 @cached("epoch_rows", 60)
 def epoch_rows():
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
-    out = []; prev = None; cum = minted_before(); pprev = None; seg = S.selected()
+    out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
     for e in epochs_raw():
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
-        pool = float(e.get("pool") or 0); m = sum(r); cum += m; t = int(e["ts"])
+        unc = S.unconfirmed(int(e["epoch"]), seg)
+        pool = float(e.get("pool") or 0); m = sum(r); cum += m; cumc += 0.0 if unc else m; t = int(e["ts"])
         pend = b.get("pending", {}) or {}
         kinds = collections.Counter(v.get("kind") for v in pend.values())
         by_origin = collections.Counter(since_of(t, v) for t, v in pend.items())
@@ -162,8 +171,8 @@ def epoch_rows():
         rs = sorted(r, reverse=True)
         out.append(dict(
             epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=pool - m,
-            rewards_state="unconfirmed" if S.unconfirmed(int(e["epoch"]), seg) else "recorded",
-            burn_pct=(100 * (1 - m / pool)) if pool else None, cum_supply=cum, paid=len(r),
+            rewards_state="unconfirmed" if unc else "recorded",
+            burn_pct=(100 * (1 - m / pool)) if pool else None, cum_supply=cum, cum_supply_confirmed=cumc, paid=len(r),
             challengers=len(e.get("challenges", {})), challenge_eligible=len(b.get("challenge_eligible", [])),
             attesters=len(b.get("attestations", {})), attestations=sum(b.get("attestations", {}).values()),
             median=statistics.median(r) if r else None, max=rs[0] if rs else None,
@@ -286,31 +295,46 @@ def vesting_split(rewards, open_ep, vest=100):
     sp = sum(v * min(1.0, max(0, open_ep - k) / vest) for k, v in rewards.items())
     return sp, sum(rewards.values()) - sp
 
+def confirmed(rb):
+    """{lifetime close: reward} without closes whose rewards later balances do not carry (segments.unconfirmed_g)."""
+    return {k: v for k, v in rb.items() if not S.unconfirmed_g(k)}
+
+def vest_split(rb, n=None, vest=None):
+    """(spendable, locked) of one address's rewards_by_addr() entry: the vesting basis is its confirmed rewards (1.26.122)."""
+    vest = vest or int(params().get("vesting_epochs") or 100); n = open_gkey() if n is None else n
+    return vesting_split(confirmed(rb), n, vest)
+
 @cached("supply", 60)
 def supply_split():
+    """Network spendable and locked over confirmed rewards, so spendable + locked is the carried supply (1.26.122)."""
     vest = int(params().get("vesting_epochs") or 100); n = open_gkey()
     sp = lk = 0.0
     for a, r in rewards_by_addr().items():
-        s, l = vesting_split(r, n, vest); sp += s; lk += l
+        s, l = vest_split(r, n, vest); sp += s; lk += l
     return dict(spendable=sp, locked=lk, vesting_epochs=vest, open_epoch=n)
 
 @cached("holders", 60)
 def holders():
-    acc = {r["addr"]: r for r in db.q("SELECT addr, balance, balance_s, invited_by FROM accounts")}
+    # 1.26.122: every address in the current segment's /api/agents counts as listed whatever its balance (a 0 balance no
+    # longer falls back to its reward sum), and the fallback for addresses not listed sums confirmed rewards only.
+    st0 = int(S.BY_N[S.CURRENT].get("start_ts") or 0)
+    acc = {r["addr"]: r for r in db.q("SELECT addr, balance, balance_s, invited_by FROM accounts WHERE COALESCE(last_seen, 0) >= ?", (st0,))}
     rb = rewards_by_addr(); rows = []
     for a, r in acc.items():
         if r["balance"] and r["balance"] > 0:
             rows.append(dict(addr=a, balance=r["balance"], balance_s=r["balance_s"], src="/api/agents"))
-    seen = {x["addr"] for x in rows}
+    seen = set(acc)
     for a, r in rb.items():
-        if a not in seen and sum(r.values()) > 0:
-            rows.append(dict(addr=a, balance=sum(r.values()), balance_s=f"{sum(r.values()):.6f}", src="reward sum (not in /api/agents)"))
+        v = sum(confirmed(r).values())
+        if a not in seen and v > 0:
+            rows.append(dict(addr=a, balance=v, balance_s=f"{v:.6f}", src="reward sum (not in /api/agents)"))
     rows.sort(key=lambda x: -x["balance"])
     tot = sum(x["balance"] for x in rows)
     for i, x in enumerate(rows, 1): x["rank"] = i; x["share"] = x["balance"] / tot if tot else 0
     bal = [x["balance"] for x in rows]
     cl = collections.Counter(round(b, 6) for b in bal).most_common(1)
-    return dict(rows=rows, total=tot, count=len(rows), in_agents=len(seen), missing=len(rows) - len(seen),
+    listed = sum(1 for x in rows if x["src"] == "/api/agents")
+    return dict(rows=rows, total=tot, count=len(rows), in_agents=listed, missing=len(rows) - listed,
                 top10_share=sum(bal[:10]) / tot if tot else None, top1_share=bal[0] / tot if tot else None,
                 gini=gini(bal), median=statistics.median(bal) if bal else None,
                 cluster_balance=cl[0][0] if cl else None, cluster_count=cl[0][1] if cl else 0,

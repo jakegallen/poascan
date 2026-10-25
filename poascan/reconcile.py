@@ -61,18 +61,26 @@ def reconcile():
     acc_t = (db.q1("SELECT MAX(last_seen) AS t FROM accounts") or {}).get("t")
     tx_t = (db.q1("SELECT MAX(last_seen) AS t FROM txs") or {}).get("t")
     mint = sum((_d(v) or D(0)) for e in EA for v in (e.get("rewards") or {}).values())
+    # 1.26.122: closes whose rewards later balances do not carry (segments config: excluded at the genesis cut). The node's
+    # supply leaves them out, so Mined and Burned read explained by exactly their sum; Held compares carried rewards.
+    xs = [(n, e) for n in S.NUMBERS for e in A.segment_closes(n) if S.unconfirmed(int(e.get("epoch", 0)), n)]
+    exc = sum((_d(v) or D(0)) for _, e in xs for v in (e.get("rewards") or {}).values())
+    exc_lab = " and ".join(f"S{n} E{int(e.get('epoch', 0))}" for n, e in xs)
+    exc_why = f"{exc_lab} rewards excluded at the genesis cut ({exc:,.6f} POA)" if xs else None
     pool = sum((_d(e.get("pool")) or D(0)) for e in EA)
     sup = _d(st.get("supply"))
     lagging = (st.get("epochs_closed") or 0) > len(E); behind = bool(E and node_at and node_at < int(E[-1]["ts"]))
     why_mint = ("the node has closed an epoch whose record POAScan has not read yet" if lagging else
                 "the node's status read predates the latest close" if behind else "not explained by the public reads")
-    held = sum((_d(r["balance_s"]) or D(0)) for r in db.q("SELECT balance_s FROM accounts WHERE balance_s IS NOT NULL"))
+    held = sum((_d(r["balance_s"]) or D(0)) for r in db.q("SELECT balance_s FROM accounts WHERE balance_s IS NOT NULL AND COALESCE(last_seen, 0) >= ?", (seg0,)))
     esc = sum((_d(v) or D(0)) for v in __import__("poascan.market", fromlist=["x"]).open_escrow())   # open offers, via /api/v1/swaps
-    listed = {r["addr"] for r in db.q("SELECT addr FROM accounts")}
+    listed = {r["addr"] for r in db.q("SELECT addr FROM accounts WHERE COALESCE(last_seen, 0) >= ?", (seg0,))}   # in the current /api/agents
     unl = collections.defaultdict(D)
-    for e in EA:
-        for a, v in (e.get("rewards") or {}).items():
-            if a not in listed: unl[a] += _d(v) or D(0)
+    for n in S.NUMBERS:
+        for e in A.segment_closes(n):
+            if S.unconfirmed(int(e.get("epoch", 0)), n): continue
+            for a, v in (e.get("rewards") or {}).items():
+                if a not in listed: unl[a] += _d(v) or D(0)
     unl_sum = sum(unl.values(), D(0))
     hold = len(A.holders()["rows"])
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")
@@ -91,11 +99,12 @@ def reconcile():
     pend_rec = len(((E[-1].get("basis") or {}).get("pending") or {})) if E else None
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None
     rows = [
-        _row("mined", "Mined", mint, sup, "sum of rewards in close records", ep_t, "/api/status supply", node_at, "poa", why_mint, tol=EPS * 10),
+        _row("mined", "Mined", mint, sup, "sum of rewards in close records", ep_t, "/api/status supply", node_at, "poa",
+             exc_why if exc_why and sup is not None and abs(mint - sup - exc) <= EPS * 10 else why_mint, explained=exc if xs else None, tol=EPS * 10),
         _row("burned", "Burned", pool - mint, (pool - sup) if sup is not None else None, "pool minus rewards, close records", ep_t, "pool minus /api/status supply", node_at, "poa",
-             "burn is pool minus mined, so it moves with Mined", tol=EPS * 10),
-        _row("held", "Held", mint, held, "sum of rewards in close records", ep_t, "sum of /api/agents balances", acc_t, "poa",
-             _held_why(mint - held, esc, unl_sum, len(unl)), explained=esc + unl_sum, tol=D("0.01")),
+             "burn is pool minus mined, so it moves with Mined", explained=-exc if xs else None, tol=EPS * 10),
+        _row("held", "Held", mint - exc, held, "sum of carried rewards in close records", ep_t, "sum of /api/agents balances", acc_t, "poa",
+             _held_why(mint - exc - held, esc, unl_sum, len(unl)), explained=esc + unl_sum, tol=D("0.01")),
         _row("holders", "Holders", hold, st.get("holders"), "balances above 0, plus reward sums missing from /api/agents", acc_t, "/api/status holders", node_at,
              reason="/api/agents and /api/status are read at different times"),
         _row("agents", "Agents", acc, st.get("agents_joined"), "addresses in /api/agents", acc_t, "/api/status agents_joined", node_at,

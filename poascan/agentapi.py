@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.121"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-25T17:08:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.122"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-25T17:16:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -159,7 +159,7 @@ def t_address(args):
     except ValueError: raise ToolError("bad cursor: pass back next_tx_cursor or grading.next_cursor exactly as returned")
     if not acc and not rb and not txs: raise ToolError("address not found in the POAScan archive")
     n = A.open_gkey()   # lifetime close number: vesting runs across the genesis cut
-    sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
+    sp, lk = A.vest_split(rb, n)
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
     from . import strain as _ST
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,

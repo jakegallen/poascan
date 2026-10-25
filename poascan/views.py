@@ -489,7 +489,7 @@ def address(a):
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None
     n = A.open_gkey()   # rewards are keyed by lifetime close number (segments.gkey): vesting runs across the genesis cut
-    sp, lk = A.vesting_split(rb, n, int(A.params().get("vesting_epochs") or 100))
+    sp, lk = A.vest_split(rb, n)
     rsum = sum(rb.values()); est = a in A.established_set(); cvn = HI.coverage(a)
     vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test agent)."
     if bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
@@ -774,8 +774,7 @@ def token_body(h2=False):
     sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
     rich = table(["#", "Agent", "Balance", "Share"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*r["share"]:.2f}%'] for r in h["rows"][:10]], pri=(0, 1, 2), usd=(2,))
     g = V3.growth_data(); u = V3.unlock_data(); circ = u["past"] + [(time.time(), u["now"])]
-    cum, run = {}, 0.0
-    for r in ep: run += r["minted"] or 0; cum[r["close_ts"]] = run
+    cum = {r["close_ts"]: r["cum_supply_confirmed"] for r in ep}   # 1.26.122: carried supply, so Locked continues across the cut
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
     stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders (node)", intc(st.get("holders"))), g["holders"]), "holders"),
                      pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"])), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"])), locked),

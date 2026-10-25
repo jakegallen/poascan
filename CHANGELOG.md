@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.122] - 2026-10-25
+
+### Fixed
+- Supply basis at the genesis cut: closes excluded at the cut (segments.json) are not carried. Segment 2 cum_supply starts at the carried supply, so the latest close equals /api/status supply; circulating plus locked equals the supply; the vesting basis, unlock calendar and its % use the carried supply.
+- Holders total and concentration: an Agent listed in the current /api/agents counts at its balance even at 0, addresses last seen only before the cut are skipped, and the fallback for unlisted addresses sums confirmed rewards. The total equals the supply.
+- Token tab Locked line continues across the cut.
+- Reconcile: Mined and Burned read explained by the closes excluded at the genesis cut; Held compares carried rewards with the current /api/agents.
+
+### Added
+- `cum_supply_confirmed` on every epoch row (additive). tools/supply_test.py.
+
 ## [1.26.121] - 2026-10-25
 
 ### Changed

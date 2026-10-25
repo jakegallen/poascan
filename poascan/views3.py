@@ -20,7 +20,7 @@ def vest_days(): return f'≈{_vest() * int(A.params().get("auto_epoch_seconds")
 def _minted_by_epoch():
     out = collections.Counter()
     for a, r in A.rewards_by_addr().items():
-        for k, v in r.items(): out[k] += v
+        for k, v in A.confirmed(r).items(): out[k] += v   # 1.26.122: the vesting basis is confirmed rewards
     return dict(out)
 
 def _close_ts(j):
