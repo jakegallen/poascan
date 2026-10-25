@@ -49,10 +49,10 @@ check("snapshot carries the open pool as a live number", snap["nums"]["pool"][0]
 a = hm.encode(); b = re.sub(rb'(class="mk" data-b="\d+" transform="translate\()[-\d.]+', rb"\g<1>-99", a)
 check("ETag ignores the strip slide", a != b and S.page_etag(a) == S.page_etag(b))
 js = open(os.path.join(ROOT, "static/app.js")).read()
-check("app.js: slide every 5 s, refetch on a new tx at most every 20 s, fade new marks, reduced motion respected",
-      "setInterval(scoreSlide,5000)" in js and "20000-(Date.now()-SC.t)" in js and "/fragment/score" in js and "!RM)" in js)
+check("app.js: drift on requestAnimationFrame (5 s steps under reduced motion), refetch on a new tx at most every 20 s, new marks slide in, reduced motion respected",
+      "setInterval(scoreSlide,BM.on&&!RM?1000:5000)" in js and "requestAnimationFrame(benchFrame)" in js and "20000-(Date.now()-SC.t)" in js and "/fragment/score" in js and "!RM)" in js)
 css = open(os.path.join(ROOT, "static/style.css")).read()
-check("style.css: reduced motion stops the live dot and mark fades", "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}" in css)
+check("style.css: reduced motion stops the live dot and mark fades", "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw,.sm.nw," in css)
 check("motion: one easing, 240 ms row slide of 8 px, 600 ms chart draw, no feed glow, still skeletons, 2.4 s live dots",
       "--state:240ms;--draw:600ms;--ease:cubic-bezier(.2,.7,.2,1)" in css and "@keyframes rowslide{from{opacity:0;transform:translateY(-8px)}" in css
       and ".js .chart.in{animation:draw var(--draw) var(--ease) both}" in css and ".skel i{animation:none" in css and ".pill.live i{animation:ldot 2.4s" in css)

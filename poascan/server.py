@@ -415,7 +415,8 @@ PAGE_VOLATILE = [(MPID, b""), (re.compile(rb'(data-close="[\d.]+">)[^<]*'), rb"\
                  (re.compile(rb'(<time class="t rel" data-ts="\d+">)[^<]*'), rb"\1"),
                  (re.compile(rb'(<g class="mk" data-b="\d+" transform="translate\()[-\d.]+'), rb"\1"),
                  (re.compile(rb'(<div class="sk" data-b="\d+" data-s="[^"]*" style="transform:translateX\()[-\d.]+'), rb"\1"),
-                 (re.compile(rb'(<i class="sm(?: s1)?" style="left:)[\d.]+'), rb"\1")]   # the Bench strip slide and the Seals clusters held inside the now line (bench.py)
+                 (re.compile(rb'(<i class="sm(?: s1)?" style="left:)[\d.]+'), rb"\1"),   # the Bench strip slide and the Seals clusters held inside the now line (bench.py)
+                 (re.compile(rb'(<div class="bzw" style="--f:)[\d.]+'), rb"\1"), (re.compile(rb'(<time class="tkt" data-ts="\d+">)[^<]*'), rb"\1")]   # the bezel head and ticker ages (1.26.145)
 PAGE_CACHE = "public, max-age=15, s-maxage=30, stale-while-revalidate=15"
 def page_etag(b):
     for r, k in PAGE_VOLATILE: b = r.sub(k, b)
@@ -792,6 +793,11 @@ class H(BaseHTTPRequestHandler):
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
                 if OG.ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
                 return self.send(404, "not found", TXT)
+            if path.startswith("/dev/"):   # dev only (devdemo.py): 404 unless POASCAN_DEV_DEMO=1 off Fly
+                from . import devdemo as DD
+                r = DD.route(path)
+                if not r: return self.send(404, "not found", TXT)
+                return self.send(r[0], r[1], r[2], {"Cache-Control": "no-store"})
             if path == "/healthz":   # answered by a request thread after a real DB read, so a hung server or locked DB fails it
                 db.q1("SELECT 1 AS x"); return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})

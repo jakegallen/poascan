@@ -1076,7 +1076,6 @@ td a.mono{display:inline-block;min-width:24px}
 .lane .ma{stroke:var(--gold);stroke-width:1.5;stroke-opacity:.4}.lane .ma.f{stroke-opacity:.95}
 .lane .mt{stroke:var(--steel);stroke-width:1.5;stroke-opacity:.85}
 .lane .ms{stroke:var(--verd);stroke-width:6;stroke-linecap:round;stroke-opacity:.9}
-.lane .nw{animation:mkin 600ms var(--ease) both}
 /* the Seals lane: clusters as HTML over the lane's SVG (bench.py seal_layer), so pills stay round and counts stay crisp */
 .score{position:relative}
 .lane .plot{position:relative;height:52px;min-width:0;overflow:hidden}
@@ -1110,7 +1109,79 @@ td a.mono{display:inline-block;min-width:24px}
  .bench .bl{border-right:0;border-bottom:1px solid var(--rule)}
  .bench .bn{font-size:84px}.bcd .cd{font-size:var(--t28)}.trio b{font-size:var(--t20)}.bnum{gap:20px}
  .lane,.sax{grid-template-columns:70px minmax(0,1fr) 36px}.lane .lbl{font-size:10px}.bench .legend{display:none}.bezel{margin-top:20px}}
-@media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}
+/* 1.26.145 Bench motion (app.js bench*): drift, arrivals at the now line, odometer counts with +N chips, the bezel head, the last
+   minute, the close flip and the ticker. Transforms and opacity only; the reduced motion block below keeps the static Bench. */
+.score{--lc:44px}
+.lane{position:relative}
+.nowg{position:absolute;top:0;right:var(--lc);width:14px;height:156px;margin-right:-7px;pointer-events:none;
+ background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--gold) 26%,transparent),transparent);animation:nowg 2.8s ease-in-out infinite}
+@keyframes nowg{0%,100%{opacity:.25}50%{opacity:1}}
+.lspk{position:absolute;top:50%;right:var(--lc);width:24px;height:24px;margin:-12px -12px 0 0;border-radius:var(--r-pill);pointer-events:none;
+ background:radial-gradient(closest-side,var(--mark-glint),color-mix(in srgb,var(--gold) 55%,transparent) 40%,transparent);animation:spk 900ms var(--ease) both}
+.lane[data-k="t"] .lspk{background:radial-gradient(closest-side,var(--white),color-mix(in srgb,var(--steel) 60%,transparent) 40%,transparent)}
+.lane[data-k="s"] .lspk{background:radial-gradient(closest-side,var(--verd-hi),color-mix(in srgb,var(--verd) 55%,transparent) 40%,transparent)}
+@keyframes spk{0%{transform:scale(.2);opacity:0}20%{opacity:1}100%{transform:scale(1.6);opacity:0}}
+.lane line.nw{animation:mkslide 1s var(--ease) both}
+@keyframes mkslide{0%{transform:translateX(calc(var(--u,1)*22px));opacity:0;stroke:var(--mark-glint);stroke-width:3}30%{opacity:1;stroke:var(--mark-glint);stroke-width:3}100%{transform:none}}
+.sm.nw{animation:smin 1s var(--ease) both}
+@keyframes smin{0%{transform:translate(calc(-50% + 22px),-50%);opacity:0;background:var(--verd-hi)}35%{opacity:1;background:var(--verd-hi)}100%{transform:translate(-50%,-50%)}}
+/* odometer digits and the +N chip */
+.od{display:inline-block;position:relative;clip-path:inset(0 -2px)}
+.od>span{display:inline-block;animation:odin .5s var(--ease) var(--d,0ms) both}
+.od>.o{position:absolute;left:0;top:0;animation-name:odout}
+@keyframes odin{0%{transform:translateY(.9em);opacity:0;color:var(--gold-hi)}60%{color:var(--gold-hi)}}
+@keyframes odout{to{transform:translateY(-.9em);opacity:0}}
+.trio>div{position:relative}
+.bump{position:absolute;z-index:1;padding:3px 6px;border-radius:var(--r-pill);font:500 11px/1 var(--mono);font-style:normal;color:var(--gold);white-space:nowrap;pointer-events:none;
+ background:color-mix(in srgb,var(--gold) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--gold) 32%,transparent);animation:bump 1.8s var(--ease) both}
+.lane>.bump{top:3px;right:0;padding:2px 5px;font-size:10px}
+.lane[data-k="t"]>.bump{color:var(--steel);background:color-mix(in srgb,var(--steel) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--steel) 32%,transparent)}
+.lane[data-k="s"]>.bump{color:var(--verd);background:color-mix(in srgb,var(--verd) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--verd) 32%,transparent)}
+@keyframes bump{0%{opacity:0;transform:translateY(4px)}14%,72%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-4px)}}
+/* the bezel head: a bright stroke at now, a wash over the elapsed part and a glint that runs up to the head */
+.bzw{position:relative;overflow:hidden}
+.bzh{position:absolute;inset:0;pointer-events:none;transform:translateX(calc(var(--f,0)*100%));transition:transform 1s linear}
+.bzw.bzrs .bzh{transition:transform .8s var(--ease)}
+.bzh::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;border-radius:var(--r-pill);background:var(--gold-hi);
+ box-shadow:0 0 6px 1px color-mix(in srgb,var(--gold) 70%,transparent),0 0 16px 4px color-mix(in srgb,var(--gold) 26%,transparent);animation:bzh 2.4s ease-in-out infinite}
+.bzh::after{content:"";position:absolute;right:100%;top:0;bottom:0;width:100%;background:linear-gradient(90deg,transparent 40%,color-mix(in srgb,var(--gold) 10%,transparent))}
+@keyframes bzh{0%,100%{opacity:.7}50%{opacity:1}}
+.bzs{position:absolute;inset:0;pointer-events:none;opacity:0;
+ background:linear-gradient(90deg,transparent calc(100% - 72px),color-mix(in srgb,var(--gold-hi) 32%,transparent) calc(100% - 6px),transparent);animation:bzs 6s var(--ease) infinite}
+@keyframes bzs{0%{transform:translateX(-100%);opacity:0}8%{opacity:1}55%{transform:translateX(calc(var(--f,0)*100% - 100%));opacity:1}68%,100%{transform:translateX(calc(var(--f,0)*100% - 100%));opacity:0}}
+/* the last minute: brighter, one beat a second; then Closing until the close lands */
+.bcd .cd{display:inline-block;transform-origin:0 100%;transition:color var(--state) var(--ease),text-shadow var(--state) var(--ease)}
+.bench.final .cd,.bench.closing .cd{color:var(--gold-hi);text-shadow:0 0 18px color-mix(in srgb,var(--gold) 45%,transparent)}
+.bench.final .bcd .lbl,.bench.closing .bcd .lbl{color:var(--gold-mid)}
+.bench.final .cd.ta{animation:cdta 1s var(--ease)}.bench.final .cd.tb{animation:cdtb 1s var(--ease)}
+@keyframes cdta{0%{transform:scale(1.05)}35%,100%{transform:none}}@keyframes cdtb{0%{transform:scale(1.05)}35%,100%{transform:none}}
+.bench.closing .cd{animation:cdcl 1.2s ease-in-out infinite}@keyframes cdcl{50%{opacity:.55}}
+.bench.final .bzh::before{animation-duration:1s;background:var(--mark-glint)}.bench.final .bzs{animation-duration:2.4s}
+.bench.final .ldot,.bench.closing .ldot{animation-duration:1s}
+/* the close: the numeral flips and a warm flare crosses the card */
+.bench{position:relative}
+.bench::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 90% at 18% 24%,color-mix(in srgb,var(--gold) 10%,transparent),transparent 70%)}
+.bench.bclose::after{animation:clfl 1.8s var(--ease)}@keyframes clfl{12%{opacity:1}100%{opacity:0}}
+.flp{display:inline-block;position:relative;perspective:600px}
+.flp>span{display:inline-block;backface-visibility:hidden;transform-origin:50% 60%}
+.flp>.fo{position:absolute;left:0;top:0;animation:flout .42s cubic-bezier(.5,0,.75,0) both}
+.flp>.fi{animation:flin .62s var(--ease) .32s both}
+@keyframes flout{to{transform:rotateX(85deg) translateY(-.12em);opacity:0}}
+@keyframes flin{0%{transform:rotateX(-85deg) translateY(.12em);opacity:0;color:var(--gold-hi)}60%{color:var(--gold-hi)}}
+/* the ticker: one line under the strip, aligned with the lanes */
+.btk{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
+.btk .lbl{font-size:11px}
+.btkl{position:relative;height:20px;overflow:hidden;font:400 var(--t13)/20px var(--ui);color:var(--bone-2)}
+.tki{position:absolute;inset:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(80%);transition:transform .5s var(--ease),opacity .5s var(--ease)}
+.tki.on{opacity:1;transform:none}.tki.out{opacity:0;transform:translateY(-80%)}
+.tki .sw{width:6px;height:6px;margin-right:8px;border-radius:var(--r-pill);vertical-align:1px}.sw.j{background:var(--bone-3)}
+.tkn{color:var(--bone);font-weight:500}.tkn:hover{color:var(--gold)}
+.tkt{margin-left:2px;font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
+.tks{color:var(--bone)}.tks .tkn{color:var(--gold)}
+@media (max-width:640px){.score{--lc:36px}.btk{grid-template-columns:70px minmax(0,1fr)}.btk .lbl{font-size:10px}.btkl{font-size:var(--t12)}}
+@media (prefers-reduced-motion:reduce){.ldot,.lane .nw,.sm.nw,.lspk,.bump,.od>span,.flp>span,.bench.bclose::after{animation:none}
+ .nowg{animation:none;opacity:.6}.bzs{animation:none;opacity:0}.bzh::before{animation:none}.bzh,.tki{transition:none}
+ .bench.final .cd,.bench.closing .cd{animation:none}}
 @media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}
 
 

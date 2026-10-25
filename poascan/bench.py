@@ -4,10 +4,16 @@ indexer already fills and analytics.open_epoch), so it adds no upstream reads.
 Left: the epoch numeral, the countdown and a 72 tick bezel that fills as the epoch runs. Right: the chain in three voices over
 the last 24 minutes (Answers, Attests, Seals). Marks sit in an SVG whose x unit is one second; app.js slides the mark group left
 as time passes (one transform every 5 s) and refetches /fragment/score only when the live snapshot shows a new tx, so the
-strip moves when the chain does and is still otherwise."""
+strip moves when the chain does and is still otherwise.
+
+1.26.145 motion (app.js bench*): the mark groups drift with the clock on requestAnimationFrame, new marks slide in at the now
+line with a short glow, the now line breathes, Answers, Graders, Pool and the lane counts roll digit by digit with a +N chip,
+the bezel head glides to the current time and the last minute ticks each second, the numeral flips at a close with a one line
+summary, and an activity ticker under the strip cycles the latest txs from the live snapshot. No new reads anywhere: it all
+comes from the snapshot and /fragment/score the page already polls. Reduced motion keeps the static Bench."""
 import math, threading, time
 from . import db
-from .ui import E, intc, lt, compact, dur
+from .ui import E, intc, lt, compact, dur, short, PROFILE_URL
 
 WIN = 1440                       # 24 minutes, in seconds
 TICKS = 72                       # bezel ticks
@@ -93,7 +99,26 @@ def seal_layer(ts, b, lo, now):
     ds = " ".join(f"{x}*{n}" if n > 1 else str(x) for x, n in runs)
     return f'<div class="sk" data-b="{b}" data-s="{ds}" style="transform:translateX({100 * (b - lo) / WIN:.2f}%)" aria-hidden="true">{"".join(out)}</div>'
 
-def score_html(now=None):
+VERB = {"challenge": ("answered", "a"), "attest-batch": ("attested", "t"), "grade-sealed": ("sealed a grade", "s"), "join": ("joined", "j")}
+
+def _ago(ts, now):
+    d = max(0, int(now - ts))
+    return f"{d}s ago" if d < 60 else f"{d // 60}m ago" if d < 3600 else f"{d // 3600}h ago" if d < 86400 else f"{d // 86400}d ago"
+
+def ticker_html(items, now=None):
+    """One line under the strip: the latest txs, newest first ({type, addr, name, ts}). app.js cycles them and swaps in new
+    ones from each snapshot's feed; without JS the newest stays. Names link to the Agent's LabLeak profile."""
+    now = time.time() if now is None else now; out = []
+    for i, t in enumerate(x for x in items if x.get("type") in VERB):
+        v, k = VERB[t["type"]]; a = t.get("addr") or ""
+        who = E(t.get("name") or short(a, 6, 4))
+        nm = (f'<a class="tkn" href="{E(PROFILE_URL.format(a))}" target="_blank" rel="noopener noreferrer" title="LabLeak profile">{who}</a>'
+              if a else f'<span class="tkn">{who}</span>')
+        out.append(f'<span class="tki{" on" if not i else ""}"><i class="sw {k}"></i>{nm} {v} <time class="tkt" data-ts="{int(t["ts"])}">{_ago(t["ts"], now)}</time></span>')
+    body = "".join(out[:8]) or '<span class="tki on">Waiting for the next tx</span>'
+    return f'<div class="btk"><span class="lbl">Latest</span><div class="btkl" id="btk" aria-live="off">{body}</div></div>'
+
+def score_html(now=None, ticker=""):
     now = time.time() if now is None else now
     b = base(now); rows = score_rows(now); lo = now - WIN; out = []
     grid = "".join(f'<line class="gl" x1="{WIN * g // 4}" x2="{WIN * g // 4}" y1="0" y2="52"/>' for g in (1, 2, 3))
@@ -109,7 +134,8 @@ def score_html(now=None):
                    f'{grid}<g class="mk" data-b="{b}" transform="translate({b - lo:.0f} 0)">{marks}</g><line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>'
                    f'<b class="c num">{n}</b></div>')
     ax = "".join(f"<span>{s}</span>" for s in ("24m", "18m", "12m", "6m", "now"))
-    return f'<div class="score" id="score" aria-label="Answers, attests and seals over the last 24 minutes">{"".join(out)}<div class="sax"><span></span><div>{ax}</div><span></span></div></div>'
+    return (f'<div class="score" id="score" aria-label="Answers, attests and seals over the last 24 minutes">{"".join(out)}<i class="nowg" aria-hidden="true"></i>'
+            f'<div class="sax"><span></span><div>{ax}</div><span></span></div>{ticker}</div>')
 
 def bezel(o, now=None):
     now = time.time() if now is None else now
@@ -119,9 +145,9 @@ def bezel(o, now=None):
                  for i in range(TICKS))
     ax = f'<div class="bez-ax">{lt(s, "t") if s else ""}<span></span>{lt(c, "t") if c else ""}</div>'
     return (f'<div class="bezel" data-start="{s or ""}" data-close="{c or ""}" aria-hidden="true">'
-            f'<svg viewBox="0 0 712 22" preserveAspectRatio="none">{ln}</svg>{ax}</div>')
+            f'<div class="bzw" style="--f:{f:.5f}"><svg viewBox="0 0 712 22" preserveAspectRatio="none">{ln}</svg><i class="bzs"></i><i class="bzh"></i></div>{ax}</div>')
 
-def bench_html(o, graders, ask, now=None):
+def bench_html(o, graders, ask, now=None, feed=()):
     """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip). `ask`: the Ask button."""
     now = time.time() if now is None else now
     left = (o["est_close"] - now) if o.get("est_close") else None
@@ -135,7 +161,7 @@ def bench_html(o, graders, ask, now=None):
             f'<div class="trio"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o.get("answers"))}</b></div>'
             f'<div>{graders}</div><div><span class="lbl">Pool</span>{pool}</div></div></div>'
             f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min</span>'
-            f'<span class="legend">{leg}</span></div>{score_html(now)}</div></div>')
+            f'<span class="legend">{leg}</span></div>{score_html(now, ticker_html(feed, now))}</div></div>')
 
 def pour_html(last):
     """The latest close's pool, split into minted (gold) and burned (slag)."""

@@ -88,10 +88,12 @@ function tick(){var now=Date.now()/1000;
   var left=e-now;r.classList.toggle("final",left>0&&left<=60);
   if(left<=0&&!flashed[e]){flashed[e]=1;r.classList.remove("flash");void r.offsetWidth;r.classList.add("flash")}});
  $$(".bezel[data-close]").forEach(function(z){var s=+z.dataset.start,e=+z.dataset.close;if(!s||!e)return;var f=Math.min(1,Math.max(0,(now-s)/(e-s))),L=z.querySelectorAll("line"),n=L.length;
-  for(var i=0;i<n;i++){var on=i/(n-1)<=f;if(L[i].classList.contains("on")!==on)L[i].classList.toggle("on",on)}});
+  for(var i=0;i<n;i++){var on=i/(n-1)<=f;if(L[i].classList.contains("on")!==on)L[i].classList.toggle("on",on)}
+  if(z._k!==s+":"+e){z._k=s+":"+e;var T=z.querySelectorAll(".bez-ax time");if(T.length===2){T[0].dataset.ts=s;T[1].dataset.ts=e}}   /* the axis follows a new epoch */
+  var w=z.querySelector(".bzw");if(w){var o=+w.style.getPropertyValue("--f");if(f<o-.01){w.classList.add("bzrs");setTimeout(function(){w.classList.remove("bzrs")},900)}w.style.setProperty("--f",f.toFixed(5))}});
  $$(".vessel[data-close]").forEach(function(v){var s=+v.dataset.start,e=+v.dataset.close;if(!s||!e)return;var f=Math.min(1,Math.max(0,(now-s)/(e-s)));
   var m=v.querySelector(".molten"),t=v.querySelector(".vp");if(m)m.style.width=(f*100).toFixed(2)+"%";if(t)t.textContent=Math.floor(f*100)+"%"});
- times()}
+ if(BM.on)benchTick(now);times()}
 
 /* digit roll: only the digits that changed slide up into place (transform + opacity, clipped per digit, no reflow).
    Updates from one snapshot are applied in a single animation frame. Reduced motion sets the text directly. */
@@ -105,6 +107,7 @@ function flushRoll(){rqT=0;var q=rq;rq=[];q.forEach(function(x){var n=x[0],t=x[1
  n.innerHTML=h;clearTimeout(n._rt);n._rt=setTimeout(function(){if(n.textContent===t)n.textContent=t},700)})}
 function setNum(key,val,f){if(val==null)return;var old=prev[key];prev[key]=val;if(old===undefined||old===val)return;
  $$('[data-live="'+key+'"]').forEach(function(box){var n=box.matches(".num")?box:box.querySelector(".num");if(!n)return;
+  if(BM.on&&n.closest(".bench")){if(n.classList.contains("bn"))benchFlip(n,FMT.int(old),FMT.int(val));else benchNum(n,key,old,val,f);return}
   n.title="";roll(n,(FMT[f]||FMT.int)(val))})}
 
 /* feed merge: new rows slide in */
@@ -135,8 +138,8 @@ function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.datas
    the snapshot refetches the window (/fragment/score, cached 10 s), at most once per 20 s. Marks newer than what we had fade in. */
 var SC={top:null,t:0,busy:0,max:0,tm:0};
 function scoreSlide(){var now=Date.now()/1000;$$("#score .lane").forEach(function(l){var sk=$(".sk",l);if(sk){sealSlide(l,sk,now);return}var g=$(".mk",l);if(!g)return;var tx=+g.dataset.b-(now-1440),n=0;
-  g.setAttribute("transform","translate("+tx.toFixed(1)+" 0)");$$("line",g).forEach(function(m){var x=+m.getAttribute("x1")+tx;if(x<-60)m.remove();else if(x>=0)n++});
-  var c=$(".c",l);if(c&&c.textContent!==String(n))c.textContent=n})}
+  g.setAttribute("transform","translate("+tx.toFixed(1)+" 0)");$$("line",g).forEach(function(m){var x=+m.getAttribute("x1")+tx;if(x<-60)m.remove();else if(x>=0)n++});g._tx=tx;
+  var c=$(".c",l);if(c&&c.textContent!==String(n))laneCount(c,n)})}
 /* the Seals lane (bench.py seal_clusters, the same algorithm): seals come in bursts, so neighbours closer than their widths plus 4 px
    merge into one capsule with a count at their weighted centre, reclustered at the lane's real width (and on resize). The newest is
    held inside the now line. Hover, or tap on touch, shows the count and the times in the visitor's zone. */
@@ -151,9 +154,9 @@ function sealDraw(sk,old){var w=sk.parentNode.clientWidth;if(!w)return;sk._w=w;v
   var now=Date.now()/1000;sealCluster(sealTs(sk),w/1440,now).forEach(function(c){var nw=(old&&c[3]>old&&!RM?" nw":"")+((c[0]-(now-1440))*w/1440<sealW(c[1])/2?" out":"");
    h+='<i class="sm'+(c[1]===1?" s1":"")+nw+'" style="left:'+(100*(c[0]-b)/1440).toFixed(2)+'%" data-x="'+c[0].toFixed(1)+'" data-n="'+c[1]+'" data-t0="'+c[2]+'" data-t1="'+c[3]+'">'+(c[1]>1?c[1]:"")+'</i>'});
   sk.innerHTML=h;sealSlide(sk.closest(".lane"),sk,now)}
-function sealSlide(l,sk,now){if(!sk._w)sealDraw(sk);sk.style.transform="translateX("+(100*(+sk.dataset.b-(now-1440))/1440).toFixed(3)+"%)";
+function sealSlide(l,sk,now){if(!sk._w)sealDraw(sk);sk._p=null;sk.style.transform="translateX("+(100*(+sk.dataset.b-(now-1440))/1440).toFixed(3)+"%)";
   var w=sk._w||0;$$(".sm",sk).forEach(function(m){var o=(+m.dataset.x-(now-1440))*w/1440<sealW(+m.dataset.n)/2;if(m.classList.contains("out")!==o){m.classList.toggle("out",o);if(o&&STIP&&STIP._m===m)sealUntip()}});   /* a mark leaves whole at the window's start */
-  var n=0;sealTs(sk).forEach(function(t){if(t>=now-1440)n++});var c=$(".c",l);if(c&&c.textContent!==String(n))c.textContent=n}
+  var n=0;sealTs(sk).forEach(function(t){if(t>=now-1440)n++});var c=$(".c",l);if(c&&c.textContent!==String(n))laneCount(c,n)}
 function sealHms(ts){try{return new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",second:"2-digit"}).format(new Date(ts*1000))}catch(e){return utc(ts)}}
 var STIP=null;
 function sealTip(m,pin){var sc=$("#score");if(!sc)return;if(!STIP){STIP=D.createElement("div");STIP.className="stip";STIP.setAttribute("aria-hidden","true");sc.appendChild(STIP)}
@@ -169,11 +172,11 @@ var sealRT=0;W.addEventListener("resize",function(){clearTimeout(sealRT);sealRT=
 function scoreMark(r,b,nw){var x=r[1]-b,k=r[0],c=nw?" nw":"";if(k==="a")return '<line class="ma'+(r[3]?" f":"")+c+'" x1="'+x+'" x2="'+x+'" y1="12" y2="40"/>';
   if(k==="t"){var h=6+30*Math.min(1,Math.log(r[2]+1)/Math.log(51));return '<line class="mt'+c+'" x1="'+x+'" x2="'+x+'" y1="'+(26-h/2).toFixed(1)+'" y2="'+(26+h/2).toFixed(1)+'"/>'}
   return '<line class="ms'+c+'" x1="'+x+'" x2="'+x+'" y1="23" y2="29"/>'}
-function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){SC.busy=0;
-  var old=SC.max;$$("#score .lane").forEach(function(l){var k=l.dataset.k,sk=$(".sk",l);if(sk){sk._s=d.rows.filter(function(r){return r[0]===k}).map(function(r){return r[1]});sk.dataset.b=d.b;sealUntip();sealDraw(sk,old);return}
+function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){SC.busy=0;scoreIngest(d)}).catch(function(){SC.busy=0})}
+function scoreIngest(d){var old=SC.max,ks={};if(old&&!RM)d.rows.forEach(function(r){if(r[1]>old)ks[r[0]]=1});$$("#score .lane").forEach(function(l){var k=l.dataset.k,sk=$(".sk",l);if(sk){sk._s=d.rows.filter(function(r){return r[0]===k}).map(function(r){return r[1]});sk.dataset.b=d.b;sealUntip();sealDraw(sk,old);return}
    var g=$(".mk",l);if(!g)return;var h="";
    d.rows.forEach(function(r){if(r[0]===k)h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});g.dataset.b=d.b;g.innerHTML=h});
-  d.rows.forEach(function(r){if(r[1]>SC.max)SC.max=r[1]});scoreSlide()}).catch(function(){SC.busy=0})}
+  d.rows.forEach(function(r){if(r[1]>SC.max)SC.max=r[1]});scoreSlide();benchSpark(ks)}
 /* the Pour: when a snapshot shows a new close, the card fetches its body, the pool bar starts whole and splits into minted gold and
    burned slag (600 ms), and the new close's hallmark draws in as its row lands in Closes (CSS, 1.2 s in all). */
 function pourLive(s){var p=$("#pour");if(!p||!s.last||s.last.epoch==null||String(s.last.epoch)===p.dataset.ep||p._busy)return;p._busy=1;
@@ -181,10 +184,91 @@ function pourLive(s){var p=$("#pour");if(!p||!s.last||s.last.epoch==null||String
    var m=$(".pm",n),w=m?m.style.width:"";if(m&&!RM){m.style.width="100%"}p.replaceWith(n);
    var hd=n.closest(".card")&&$(".cx .lbl",n.closest(".card"));if(hd&&s.last.epoch!=null){hd.textContent="Epoch "+s.last.epoch;hd.setAttribute("href","/epoch/"+s.last.epoch)}
    if(m&&!RM)requestAnimationFrame(function(){requestAnimationFrame(function(){m.style.width=w})})}).catch(function(){p._busy=0})}
-function scoreLive(s){if(!$("#score")||!s.feed)return;var top=(s.feed.match(/data-id="([^"]+)"/)||[])[1];if(!top||top===SC.top)return;SC.top=top;
+function scoreLive(s){if(!$("#score")||!s.feed||BM.demo)return;var top=(s.feed.match(/data-id="([^"]+)"/)||[])[1];if(!top||top===SC.top)return;SC.top=top;
   if(!SC.max){$$("#score line.ma,#score line.mt").forEach(function(m){var g=m.parentNode,t=+m.getAttribute("x1")+(+g.dataset.b);if(t>SC.max)SC.max=t});
    $$("#score .sk").forEach(function(sk){sealTs(sk).forEach(function(t){if(t>SC.max)SC.max=t})})}
   var w=20000-(Date.now()-SC.t);if(SC.busy)return;if(w>0){clearTimeout(SC.tm);SC.tm=setTimeout(scoreFetch,w);return}scoreFetch()}
+
+/* 1.26.145 Bench motion (bench.py): the strip drifts with the clock, new marks slide in at the now line with a short glow,
+   Answers, Graders, Pool and the lane counts roll digit by digit with a +N chip, the bezel head glides to now and the last
+   minute ticks each second, a close flips the numeral and slides a one line summary into the ticker, and the ticker cycles the
+   latest txs from the snapshot feed. Every number comes from the snapshot and /fragment/score the page already polls, so this
+   adds no requests. Transforms and opacity only; one requestAnimationFrame loop that stops while the tab is hidden. Reduced
+   motion keeps the static Bench: values change in place, nothing slides, pulses or cycles. */
+var BM={on:!!$(".bench #score"),demo:D.documentElement.dataset.demo==="motion",raf:0,live:0,items:[],seen:{},q:[],cur:-1,next:0,hold:0,pend:null};
+function escH(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":"&quot;"})}
+/* odometer: each changed digit rolls, the old one up and out, the new one up and in, rightmost first */
+function odo(n,t){var o=n.textContent;if(o===t)return;if(RM||D.hidden){n.textContent=t;return}
+ var h="",k=0,d=o.length-t.length;for(var i=t.length-1;i>=0;i--){var c=t.charAt(i),oc=o.charAt(i+d)||"";
+  if(c===oc||!/[0-9]/.test(c))h=esc(c)+h;else{h='<span class="od" style="--d:'+(k*55)+'ms">'+(oc&&/[0-9]/.test(oc)?'<span class="o">'+oc+"</span>":"")+"<span>"+c+"</span></span>"+h;k++}}
+ n.innerHTML=h;clearTimeout(n._ot);n._ot=setTimeout(function(){if(n.textContent!==t||$(".od",n))n.textContent=t},620+k*55)}
+/* +N chip: beside the number when it fits in its cell, else on the label row; fades out on its own */
+function bump(n,txt,lane){if(RM||D.hidden||!BM.live)return;var host=lane||n.parentNode,c=D.createElement("i");c.className="bump";c.textContent=txt;c.setAttribute("aria-hidden","true");
+ var old=$(".bump",host);if(old)old.remove();host.appendChild(c);
+ if(!lane){var x=n.offsetLeft+n.offsetWidth+8,sm=n.nextElementSibling;if(sm&&sm.tagName==="SMALL")x=sm.offsetLeft+sm.offsetWidth+8;
+  if(x+c.offsetWidth<=host.clientWidth){c.style.left=x+"px";c.style.top=(n.offsetTop+(n.offsetHeight-c.offsetHeight)/2).toFixed(0)+"px"}else{c.style.right="0";c.style.top="0"}}
+ c.addEventListener("animationend",function(){c.remove()})}
+/* Answers, Graders and Pool: an int climbs through its steps (at most 6, 90 ms apart), a compact value rolls once */
+function benchNum(n,key,old,val,f){var fm=FMT[f]||FMT.int;clearInterval(n._tw);
+ if(val>old)bump(n,"+"+(f==="int"?Math.round(val-old).toLocaleString("en-US"):c3(val-old)));
+ if(f!=="int"||RM||D.hidden||val<old||val-old<2){odo(n,fm(val));return}
+ var st=Math.min(6,val-old),i=0;n._tw=setInterval(function(){i++;odo(n,fm(i>=st?val:Math.round(old+(val-old)*i/st)));if(i>=st)clearInterval(n._tw)},90)}
+/* the numeral flips at a close */
+function benchFlip(n,o,v){if(RM||D.hidden){n.textContent=v;return}
+ n.innerHTML='<span class="flp"><span class="fo">'+escH(o)+'</span><span class="fi">'+escH(v)+"</span></span>";clearTimeout(n._ft);n._ft=setTimeout(function(){n.textContent=v},1100);
+ var b=n.closest(".bench");if(b){b.classList.remove("bclose");void b.offsetWidth;b.classList.add("bclose");setTimeout(function(){b.classList.remove("bclose")},1900)}}
+/* lane totals */
+function laneCount(c,n,k){var o=+c.textContent||0;if(o===n)return;odo(c,String(n));if(n>o)bump(c,"+"+(n-o),c.parentNode)}
+/* the drift: mark groups follow the clock every frame they would move a quarter pixel or more */
+function benchFrame(){BM.raf=0;if(D.hidden||RM)return;var now=Date.now()/1000;
+ $$("#score .lane").forEach(function(l){var g=l._g||(l._g=$(".mk",l)),sk=l._sk||(l._sk=$(".sk",l)),w=l._w||(l._w=(l.querySelector("svg")||l).clientWidth||1);
+  if(g){var tx=+g.dataset.b-(now-1440);if(g._tx==null||Math.abs(tx-g._tx)*w/1440>=.25){g.setAttribute("transform","translate("+tx.toFixed(2)+" 0)");g._tx=tx}}
+  if(sk){var p=100*(+sk.dataset.b-(now-1440))/1440;if(sk._p==null||Math.abs(p-sk._p)*w/100>=.25){sk.style.transform="translateX("+p.toFixed(3)+"%)";sk._p=p}}});
+ BM.raf=requestAnimationFrame(benchFrame)}
+function benchGo(){if(BM.on&&!RM&&!BM.raf&&!D.hidden)BM.raf=requestAnimationFrame(benchFrame)}
+function benchSize(){var sc=$("#score");if(!sc)return;$$("#score .lane").forEach(function(l){l._w=0;l._g=0;l._sk=0;var g=$(".mk",l);if(g)g._tx=null;var sk=$(".sk",l);if(sk)sk._p=null});
+ var s=$("#score .lane svg");if(s&&s.clientWidth)sc.style.setProperty("--u",(1440/s.clientWidth).toFixed(3))}
+/* a short flare at the now line of each lane that just got a mark */
+function benchSpark(ks){if(RM||D.hidden)return;Object.keys(ks).forEach(function(k){var l=$('#score .lane[data-k="'+k+'"]');if(!l)return;var s=D.createElement("i");s.className="lspk";s.setAttribute("aria-hidden","true");l.appendChild(s);s.addEventListener("animationend",function(){s.remove()})})}
+/* the ticker: one line, the newest tx first, then the latest few in turn every 3.2 s (1.4 s while new ones queue) */
+var TKV={ANSWER:["answered","a"],ATTEST:["attested","t"],GRADE:["sealed a grade","s"],JOIN:["joined","j"]};
+function tkAgo(ts){var d=Math.max(0,Math.floor(Date.now()/1000-ts));return d<60?d+"s ago":d<3600?Math.floor(d/60)+"m ago":d<86400?Math.floor(d/3600)+"h ago":Math.floor(d/86400)+"d ago"}
+function tkHtml(it){var who=escH(it.n||(it.a?it.a.slice(0,6)+"\u2026"+it.a.slice(-4):"An Agent"));
+ var nm=it.a?'<a class="tkn" href="https://minepoa.com/lableak/#/u/'+encodeURIComponent(it.a)+'" target="_blank" rel="noopener noreferrer" title="LabLeak profile">'+who+"</a>":'<span class="tkn">'+who+"</span>";
+ return '<i class="sw '+it.k+'"></i>'+nm+" "+it.v+' <time class="tkt" data-ts="'+it.ts+'">'+tkAgo(it.ts)+"</time>"}
+function tkFeed(html){if(!html)return[];var t=D.createElement("div");t.innerHTML=html;return $$(".frow",t).map(function(r){var bd=$(".badge",r),v=TKV[bd?bd.textContent.trim():""];if(!v)return null;
+  var ad=$("a.addr",r),a=ad?ad.getAttribute("title")||"":"",nm=$(".aname,.fname",r),tm=$("time[data-ts]",r),ts=tm?+tm.dataset.ts:0;
+  return {key:v[1]+":"+a+":"+ts,k:v[1],v:v[0],a:a,n:nm?nm.textContent.trim():"",ts:ts}}).filter(Boolean)}
+function tkShow(html,cls,ts){var box=$("#btk");if(!box)return;BM.sts=ts||0;var old=$$(".tki",box),el=D.createElement("span");el.className="tki"+(cls?" "+cls:"");el.innerHTML=html;
+ if(RM||D.hidden){old.forEach(function(o){o.remove()});el.classList.add("on");box.appendChild(el);times(el);tkTimes();return}
+ box.appendChild(el);void el.offsetWidth;el.classList.add("on");tkTimes();
+ old.forEach(function(o){o.classList.remove("on");o.classList.add("out");setTimeout(function(){o.remove()},520)})}
+function tkTimes(){$$("#btk time.tkt").forEach(function(t){var ts=+t.dataset.ts;if(!ts)return;var x=tkAgo(ts);if(t.textContent!==x)t.textContent=x;if(!t.title)t.title=ltf(ts,"dts",1)})}
+function tkIngest(list){var fresh=[];list.forEach(function(it){if(BM.seen[it.key])return;BM.seen[it.key]=1;fresh.push(it)});if(!fresh.length)return;
+ fresh.sort(function(a,b){return a.ts-b.ts});BM.items=fresh.slice().reverse().concat(BM.items).sort(function(a,b){return b.ts-a.ts}).slice(0,8);
+ var top=BM.items[0],t=Date.now();if(t<BM.hold)return;
+ if(BM.sts!=null&&top.ts-BM.sts>60){BM.cur=0;BM.q=[];BM.next=t+3200;tkShow(tkHtml(top),"",top.ts);return}   /* a stale line (a cached page) gives way at once */
+ if(BM.live&&!RM)fresh.slice(-6).forEach(function(it){BM.q.push(it)});else if(BM.live){BM.cur=0;tkShow(tkHtml(top),"",top.ts)}}
+function tkStep(){if(!$("#btk")||D.hidden)return;var t=Date.now();if(RM){if(BM.hold&&t>=BM.hold&&BM.items[0]){BM.hold=0;tkShow(tkHtml(BM.items[0]),"",BM.items[0].ts)}return}
+ if(t<BM.hold||t<BM.next)return;var it;
+ if(BM.q.length){it=BM.q.shift();BM.cur=Math.max(0,BM.items.indexOf(it));BM.next=t+(BM.q.length?1400:3200)}
+ else{var n=Math.min(5,BM.items.length);if(n<2){BM.next=t+3200;return}BM.cur=(BM.cur+1)%n;it=BM.items[BM.cur];BM.next=t+3200}
+ tkShow(tkHtml(it),"",it.ts)}
+/* a close: the summary takes the ticker for 7 s, then the line returns to live txs */
+function benchClose(oe,ne,ans,last){var st=last&&last.epoch===oe&&last.settled!=null?last.settled:null,
+  txt='<i class="sw a"></i><a class="tkn" href="/epoch/'+escH(oe)+'">Epoch '+escH(oe)+" closed</a>, "+(st!=null?Math.round(st).toLocaleString("en-US")+" answers settled":ans!=null?Math.round(ans).toLocaleString("en-US")+" answers in":"settling now");
+ tkShow(txt,"tks");BM.hold=Date.now()+7000;BM.next=BM.hold;BM.q=[]}
+function benchTick(now){var c=$(".bench .cd[data-close]");if(!c)return;var b=c.closest(".bench"),e=+c.dataset.close,left=e-now,fin=e&&left>0&&left<=60;
+ b.classList.toggle("final",!!fin);b.classList.toggle("closing",!!(e&&left<=0&&left>-1800));if(e&&left<=0&&left>-1800)c.textContent="Closing";
+ if(fin&&!RM){var a=c.classList.contains("ta");c.classList.toggle("ta",!a);c.classList.toggle("tb",a)}else c.classList.remove("ta","tb");
+ tkTimes();tkStep()}
+function benchInit(){if(!BM.on)return;benchSize();
+ $$("#btk .tki").forEach(function(s,i){var a=$("a.tkn",s),h=a?a.getAttribute("href")||"":"",ad=decodeURIComponent(h.split("/u/")[1]||""),tm=$("time",s),k=($(".sw",s)||{className:""}).className.split(" ")[1]||"a",v=[];
+  for(var x in TKV)if(TKV[x][1]===k)v=TKV[x];if(!tm)return;var it={key:k+":"+ad+":"+tm.dataset.ts,k:k,v:v[0],a:ad,n:a?a.textContent:"",ts:+tm.dataset.ts};BM.seen[it.key]=1;BM.items.push(it);if(i)s.remove()});
+ BM.cur=0;BM.next=Date.now()+3200;BM.sts=BM.items.length?BM.items[0].ts:null;tkTimes();
+ var rt=0;W.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(benchSize,150)});
+ D.addEventListener("visibilitychange",function(){if(!D.hidden){benchSize();scoreSlide();tick();benchGo()}});
+ setTimeout(function(){BM.live=1},1500);benchGo()}
 
 /* apply a snapshot (from WS or polling) */
 function apply(s){if(!s||s.t&&s.t!=="snap")return;
@@ -194,6 +278,7 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
  var us=$("[data-upstamp]");if(us&&s.upstamp){var ot=$("time",us);if(!ot||ot.dataset.upts!==(s.upstamp.match(/data-upts="(\d+)"/)||[])[1]){us.innerHTML=s.upstamp;upts(us)}}
  var uv=$("[data-upview]");if(uv&&s.upsig&&s.upsig!==uv.dataset.sig&&!uv._busy){uv._busy=1;fetch("/fragment/upgrade",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(h){var t=D.createElement("div");t.innerHTML=h;var nv=t.firstElementChild;if(nv){uv.replaceWith(nv);times(nv)}}).catch(function(){uv._busy=0})}
  if(s.routes)$$("[data-hroute]").forEach(function(li){var v=s.routes[li.dataset.hroute];if(!v)return;var t=$(".tag",li);if(!t)return;li.dataset.st=v;t.className="tag "+(v=="open"||v=="responding"?"ok":v=="paused"?"warn":v=="slow"?"warn slow":"");t.textContent=v=="open"?"Open":v=="responding"?"Responding":v=="paused"?"Paused":v=="slow"?"Slow":"Not read yet"});
+ if(BM.on&&s.nums&&s.nums.epoch&&prev.epoch!=null&&s.nums.epoch[0]>prev.epoch)benchClose(prev.epoch,s.nums.epoch[0],prev.answers,s.last);
  if(s.nums)Object.keys(s.nums).forEach(function(k){setNum(k,s.nums[k][0],s.nums[k][1])});
  if(s.cards)Object.keys(s.cards).forEach(function(k){var el=$('.sv[data-live="'+k+'"]');if(!el)return;var tmp=D.createElement("div");tmp.innerHTML=s.cards[k];var nv=$(".sv",tmp);if(!nv)return;if(nv.innerHTML!==el.innerHTML)el.innerHTML=nv.innerHTML;el.className=nv.className;var st=nv.getAttribute("style");if(st)el.setAttribute("style",st);else el.removeAttribute("style")});
  if(s.epoch){$$(".ring,.vessel[data-close],.bezel").forEach(function(r){if(s.epoch.start)r.dataset.start=s.epoch.start;if(s.epoch.close)r.dataset.close=s.epoch.close});
@@ -201,7 +286,7 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
   var be=$('[data-live="bm_ep"]');if(be&&s.epoch.n!=null)be.textContent=s.epoch.n}
  if(s.frags)Object.keys(s.frags).forEach(function(id){var el=D.getElementById(id);if(el&&el.dataset.h!==String(s.frags[id].length+":"+s.frags[id].slice(-40))){el.innerHTML=s.frags[id];el.dataset.h=s.frags[id].length+":"+s.frags[id].slice(-40);paintIds(el);times(el);tick()}});
  var bq=$(".bench");if(bq)bq.classList.toggle("quiet",s.live===false);
- mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s);pourLive(s)}
+ mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s);if(BM.on)tkIngest(tkFeed(s.feed));pourLive(s)}
 
 /* transport: WebSocket with backoff, polling fallback */
 var ws=null,fails=0,pollT=null,wantLive=!!($("#feed")||$("#tracker")||$("#ticker")||$("[data-live]"));
@@ -439,8 +524,10 @@ function usdInit(){if(!$(".utog"))return;var on=false;try{on=localStorage.getIte
  $$(".utog button").forEach(function(b){b.addEventListener("click",function(){var u=b.dataset.u==="usd";try{localStorage.setItem("poascan-units",u?"usd":"poa")}catch(e){}usdApply(u)})});if(on)usdApply(true)}
 /* old #txs / #grading links open the matching address tab */
 (function(){if(!/^\/address\//.test(location.pathname)||/[?&]tab=/.test(location.search))return;var m={"#txs":"txs","#grading":"grading","#rewards":"rewards"}[location.hash];if(m)location.replace(location.pathname+"?tab="+m)})();
-paintIds();times();charts();sortables();pris();usdInit();setInterval(tick,1000);tick();
-if($("#score")){scoreSlide();setInterval(scoreSlide,5000)}
+paintIds();times();charts();sortables();pris();usdInit();tick();
+(function clk(){setTimeout(function(){tick();clk()},1000-Date.now()%1000+8)})();   /* on the second, so the last minute ticks evenly */
+if($("#score")){scoreSlide();setInterval(scoreSlide,BM.on&&!RM?1000:5000);benchInit()}
+if(BM.demo)D.addEventListener("poa:demo",function(e){var d=e.detail||{};if(d.score)scoreIngest(d.score);if(d.snap)apply(d.snap)});   /* dev only: the server sets data-demo only with POASCAN_DEV_DEMO=1 */
 /* Load more: appends the next keyset page to the card's table; the button carries the next cursor */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(".more-btn");if(!b||b.disabled)return;e.preventDefault();
  var tb=$("tbody",b.closest(".cb"));if(!tb)return;b.disabled=true;b.textContent="Loading";
@@ -564,6 +651,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  D.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target;if(!t||!t.matches||!t.matches(".cpt[data-chart]"))return;e.preventDefault();open(t.dataset.chart,"",t)});
  var q0=cpParse(location.search);if(q0)open(q0.c,q0.r,$('[data-chart="'+q0.c+'"]'));
 })();
+if(BM.demo)wantLive=false;   /* the dev demo feeds apply() itself */
 if(wantLive)connect();
 })();
 /* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */
