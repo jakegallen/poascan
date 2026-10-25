@@ -322,6 +322,17 @@ def supply_split():
                 locked_confirmed=S.carry_unlocked() is not None or not S.has_cut(), carried_supply=carried if S.has_cut() else None,
                 excluded_rewards=excluded_rewards())
 
+def segment_transfers():
+    """{addr: net POA} from the current segment's archived transfer txs (received minus sent). Used only for addresses not
+    in /api/agents, whose balance POAScan otherwise rebuilds from rewards."""
+    out = collections.defaultdict(float)
+    for r in db.q("SELECT from_addr, to_addr, amount FROM txs WHERE type='transfer' AND segment=?", (S.CURRENT,)):
+        try: v = float(r["amount"] or 0)
+        except (TypeError, ValueError): continue
+        if r["to_addr"]: out[r["to_addr"]] += v
+        if r["from_addr"]: out[r["from_addr"]] -= v
+    return dict(out)
+
 def excluded_rewards():
     """Rewards of closes later balances do not carry (segments config), summed over every segment."""
     out = 0.0
@@ -347,11 +358,12 @@ def holders():
     for a, r in acc.items():
         if r["balance"] and r["balance"] > 0:
             rows.append(dict(addr=a, balance=r["balance"], balance_s=r["balance_s"], src="/api/agents"))
-    seen = set(acc)
-    for a, r in rb.items():
-        v = sum(confirmed(r).values())
-        if a not in seen and v > 0:
-            rows.append(dict(addr=a, balance=v, balance_s=f"{v:.6f}", src="reward sum (not in /api/agents)"))
+    seen = set(acc); net = segment_transfers()
+    for a in set(rb) | set(net):   # 1.26.124: an unlisted address also nets the current segment's archived transfers
+        if a in seen: continue
+        v = sum(confirmed(rb.get(a, {})).values()) + net.get(a, 0.0)
+        if v > 1e-9:
+            rows.append(dict(addr=a, balance=v, balance_s=f"{v:.6f}", src="reward sum and transfers (not in /api/agents)" if net.get(a) else "reward sum (not in /api/agents)"))
     rows.sort(key=lambda x: -x["balance"])
     tot = sum(x["balance"] for x in rows)
     for i, x in enumerate(rows, 1): x["rank"] = i; x["share"] = x["balance"] / tot if tot else 0

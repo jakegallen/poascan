@@ -63,6 +63,14 @@ check("reconcile Mined reads explained by the excluded closes", by["mined"]["sta
 check("reconcile Burned reads explained", by["burned"]["state"] == "explained")
 check("reconcile Held: carried rewards against current /api/agents, explained by the unlisted address", by["held"]["state"] in ("match", "explained"))
 
+# ---- 1.26.124: a transfer to an address not in /api/agents stays in the holders total ----
+V = addr("v")
+db.write("INSERT INTO txs(id, type, from_addr, to_addr, amount, epoch, ts, segment) VALUES(?,?,?,?,?,?,?,?)", ("t" * 64, "transfer", X, V, "10.000000", None, CUT + 4 * P, 2))
+db.write("UPDATE accounts SET balance=120.0, balance_s='120.000000' WHERE addr=?", (X,)); A._cache.clear()
+h3 = A.holders()
+check("transfer to an unlisted address: holders total still equals supply", abs(h3["total"] - supply) < 1e-6 and any(r["addr"] == V and abs(r["balance"] - 10) < 1e-6 for r in h3["rows"]))
+check("reconcile Held still explained with that transfer", {r["key"]: r for r in RC.reconcile()["rows"]}["held"]["state"] in ("match", "explained"))
+
 # ---- 1.26.123: segments cut.carry_unlocked (unset: bounds; true: carried rewards spendable since the cut) ----
 from poascan import agentapi as AG, views as V
 check("carry_unlocked ships unset", SG.carry_unlocked() is None and sp["circulating_basis"] == "unconfirmed" and sp["locked_confirmed"] is False)

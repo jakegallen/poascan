@@ -46,7 +46,7 @@ def per_close():
     return out
 
 def _held_why(gap, esc, unl, n):
-    parts = ([f"{n} rewarded address{'es' if n != 1 else ''} missing from /api/agents ({unl:,.6f} POA)"] if n else []) + ([f"{esc:,.6f} POA escrowed in open swap offers"] if esc else [])
+    parts = ([f"{n} address{'es' if n != 1 else ''} with rewards or transfers missing from /api/agents ({unl:,.6f} POA)"] if n else []) + ([f"{esc:,.6f} POA escrowed in open swap offers"] if esc else [])
     if parts and abs(gap - esc - unl) <= D("0.01"): return " plus ".join(parts)
     return "beyond " + " and ".join(parts) + ", /api/agents and close records are read at different times" if parts else "/api/agents and close records are read at different times"
 
@@ -81,6 +81,9 @@ def reconcile():
             if S.unconfirmed(int(e.get("epoch", 0)), n): continue
             for a, v in (e.get("rewards") or {}).items():
                 if a not in listed: unl[a] += _d(v) or D(0)
+    for a, v in A.segment_transfers().items():   # 1.26.124: transfers to and from addresses not in /api/agents
+        if a not in listed: unl[a] += _d(f"{v:.6f}") or D(0)
+    unl = {a: v for a, v in unl.items() if v}
     unl_sum = sum(unl.values(), D(0))
     hold = len(A.holders()["rows"])
     acc = (db.q1("SELECT COUNT(*) AS n FROM accounts") or {}).get("n")

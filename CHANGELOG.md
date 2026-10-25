@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.125] - 2026-10-25
+
+### Fixed
+- Holders total: an address not in /api/agents also nets the current segment's archived transfers, so POA sent to such an address stays in the total (the total equals the supply). Reconcile Held counts the same transfers.
+
 ## [1.26.124] - 2026-10-25
 
 ### Changed
