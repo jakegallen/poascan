@@ -68,10 +68,11 @@ def graders_tip(o):
 
 def graders_tile(o):
     """Label, count and, while grading is halted, a Halted tag. Terse: the detail lives in the tooltip."""
+    d = E(graders_tip(o))
     tag = (' <span class="tag warn">Halted</span>' if o.get("grading_halted") else
            ' <span class="tag warn">Unconfirmed</span>' if o.get("grading_state") == "unconfirmed" else "")
-    return (f'<span class="lbl" title="{E(graders_tip(o))}">Graders{tag}</span>'
-            f'<b class="num" data-live="graders" title="{E(graders_tip(o))}">{intc(o.get("graders"))}</b>')
+    return (f'<span class="lbl">Graders{BN.tip("graders")}{tag}</span>'
+            f'<b class="num" data-live="graders" title="{d}">{intc(o.get("graders"))}</b>')
 
 def tracker_html(score=True):
     """Home's hero, the Bench (bench.py): epoch numeral, countdown, bezel, Answers, Graders and Pool, and the last 24 minutes of
@@ -1425,7 +1426,7 @@ def about():
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
 <li><b>Active Agents</b>: distinct Agents with at least one answer (a <code>challenge</code> tx, the mining submission) in POAScan's own tx archive in the current segment over the last 24 h; within a day of a genesis cut the window starts at the cut (the segment start in segments.json), so no answer from an earlier segment counts. Its sparkline and chart draw the same count at each whole hour (the Agents that answered in the 24 h before it, within that segment), from the chain's first answer, with a break at each genesis cut. The API gives the window (<code>active_agents_window</code>) beside the trailing join rate <code>agent_joins_per_hour</code>.</li>
 <li><b>agent_joins_per_hour</b> (API only): Agents joined per hour, a whole number. Since a genesis cut it counts the segment's join txs from its first join (when joining reopened) to now, over at least 1 h; otherwise the rise in <code>agents_joined</code> across POAScan's /api/status snapshots over the trailing 24 h (from where a pause of 2 h or more ended). The Agents / hr chart counts joins in each whole hour, with no line across a cut.</li></ul>
-<h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
+''' + BN.about_html() + '''<h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
 <li><b>Model / harness</b> are self-reported. <b>Operator families</b> are estimated. Sybil and originality flags are sample measurements.</li></ul>

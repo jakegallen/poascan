@@ -117,10 +117,11 @@ def short(h, a=6, b=4):
 
 PROFILE_URL = "https://minepoa.com/lableak/#/u/{}"  # LabLeak profile; public_id == poa1 address for key-login agents
 
-def qtip(text, method_href, label):
+def qtip(text, method_href, label, cls=""):
     """A tap, click and keyboard tooltip (details/summary, no hover only): a ? button that opens a short note with a Method link.
-    The note is fixed to the viewport so table scroll boxes never clip it; app.js closes it on Escape or an outside tap."""
-    return (f'<details class="qtip"><summary aria-label="{E(label)}" title="{E(label)}">?</summary>'
+    The note is fixed to the viewport so table scroll boxes never clip it; app.js closes it on Escape or an outside tap.
+    cls "hv" also opens it on a mouse hover; leaving closes what the hover opened, a click pins it."""
+    return (f'<details class="qtip{" " + cls if cls else ""}"><summary aria-label="{E(label)}" title="{E(label)}">?</summary>'
             f'<span class="qbox" role="note">{E(text)} <a href="{E(method_href)}">Method</a></span></details>')
 
 def name_link(name, pid=None, cls="fname"):

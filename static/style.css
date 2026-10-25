@@ -1183,6 +1183,21 @@ td a.mono{display:inline-block;min-width:24px}
  .nowg{animation:none;opacity:.6}.bzs{animation:none;opacity:0}.bzh::before{animation:none}.bzh,.tki{transition:none}
  .bench.final .cd,.bench.closing .cd{animation:none}}
 @media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}
+/* Epoch card tips: the ? notes (bench.py TIPS, the qtip pattern): a small ? beside each label, a bigger hit area than it draws;
+   over 640px app.js sets the note beside its ? (a bridge keeps the hover across the gap), on a phone it stays centred */
+.qtip.btip{margin-left:5px;vertical-align:1px}
+.qtip.btip>summary{position:relative;width:16px;height:16px;font:600 10px/1 var(--ui);color:var(--bone-3);border-color:var(--rule-2)}
+.qtip.btip>summary::after{content:"";position:absolute;inset:-8px -5px}
+.qtip.btip>summary:hover,.qtip.btip[open]>summary{color:var(--amber);border-color:var(--gold-edge)}
+.qtip.btip .qbox::before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px}
+.bench .lbl .qtip,.btk .lbl .qtip{letter-spacing:0}
+.bez-ax{align-items:center}.bez-ax .qtip.btip{margin:0}
+.lane .lbl{white-space:nowrap}
+.lane,.sax{grid-template-columns:88px minmax(0,1fr) 44px}.btk{grid-template-columns:88px minmax(0,1fr)}
+.lane .c .od>span:not(.o){animation-name:odinq}
+@keyframes odinq{0%{transform:translateY(.9em);opacity:0}}
+@media (max-width:640px){.qtip.btip>summary{width:18px;height:18px;font-size:11px}.qtip.btip{margin-left:4px}
+ .lane,.sax{grid-template-columns:84px minmax(0,1fr) 36px}.btk{grid-template-columns:84px minmax(0,1fr)}}
 
 
 /* Phase 2: Home grid: the Assay line beside Closes, Graders and the Pour */
