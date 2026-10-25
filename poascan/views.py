@@ -9,6 +9,7 @@ from . import views2 as V2
 from . import market as X   # swap data via the swap module's API: ≈$, market tile, price stats, tx swap rows
 from . import swap as SW   # only for the swap page's live fragment in the snapshot
 from . import views3 as V3
+from . import chartpop as CP   # the pop-out definitions (CP.TIPS) also titled on the Home cards
 from . import bench as BN
 from . import marks as MK
 from . import profile as PF
@@ -114,7 +115,7 @@ def headline():
         # home headline row: no USD on these two (the reference rate rests on one tiny test fill, audit SC-020); USD stays on Market and /token
         "mined_hero": stat("Total mined", poa(sup, mined=True), "", ICON_PICK, "mined"),
         "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ", flag_html=A.carry_flag("circ")),
-        "active": stat("Active Agents", intc(aa["active_agents"]) if aa else "···", "", ICON_FEED, "active"),
+        "active": stat("Active Agents", intc(aa["active_agents"]) if aa else "···", "", ICON_FEED, "active", tip=CP.TIPS["active"][0]),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
     }
@@ -227,7 +228,7 @@ def home_graders(n=5):
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
-    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], active=A.active_hourly())
+    return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], active=A.active_series())
 
 # ---------------- pages ----------------
 def home():
@@ -236,8 +237,8 @@ def home():
     market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
     bk = A.cut_list()   # Agents and Holders restart at a genesis cut: their sparklines break there, as the charts do
-    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk == "accounts" else None), ck) for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents")))
-    kpis += spark_in(h["active"], sp.get("active"))   # Active Agents: current segment only, no pop-out chart
+    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk in ("accounts", "active") else None), ck)
+                   for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("active", "active", "active")))
     more = pop(spark_in(h["holders"], sp.get("holders"), bk), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
@@ -1422,7 +1423,7 @@ def about():
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
 <li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
-<li><b>Active Agents</b>: distinct Agents with at least one answer (a <code>challenge</code> tx, the mining submission) in POAScan's own tx archive in the current segment over the last 24 h; within a day of a genesis cut the window starts at the cut (the segment start in segments.json), so no answer from an earlier segment counts. Its sparkline is the distinct Agents answering in each whole hour of the segment. The API gives the window (<code>active_agents_window</code>) beside the trailing join rate <code>agent_joins_per_hour</code>.</li>
+<li><b>Active Agents</b>: distinct Agents with at least one answer (a <code>challenge</code> tx, the mining submission) in POAScan's own tx archive in the current segment over the last 24 h; within a day of a genesis cut the window starts at the cut (the segment start in segments.json), so no answer from an earlier segment counts. Its sparkline and chart draw the same count at each whole hour (the Agents that answered in the 24 h before it, within that segment), from the chain's first answer, with a break at each genesis cut. The API gives the window (<code>active_agents_window</code>) beside the trailing join rate <code>agent_joins_per_hour</code>.</li>
 <li><b>agent_joins_per_hour</b> (API only): Agents joined per hour, a whole number. Since a genesis cut it counts the segment's join txs from its first join (when joining reopened) to now, over at least 1 h; otherwise the rise in <code>agents_joined</code> across POAScan's /api/status snapshots over the trailing 24 h (from where a pause of 2 h or more ended). The Agents / hr chart counts joins in each whole hour, with no line across a cut.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>

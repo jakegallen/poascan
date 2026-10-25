@@ -543,7 +543,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    (POAScan's own archive, chartpop.py). ?chart=<key>&range=<range> opens it on load; the range follows in the URL by
    replaceState and both params go on close. No entrance fade or transform: the dialog and its chart are visible from the first frame. */
 /* chartq:begin (tools/chartpop_test.py runs cpParse and cpSearch in node) */
-var CPK=["mined","supply","circ","agents","joins","holders","txs","answers"],CPR=["24h","7d","30d","all","epoch"];
+var CPK=["mined","supply","circ","agents","joins","active","holders","txs","answers"],CPR=["24h","7d","30d","all","epoch"];
 function cpParse(search){var q;try{q=new URLSearchParams(search||"")}catch(e){return null}var c=q.getAll("chart"),r=q.getAll("range");
  if(c.length!==1||CPK.indexOf(c[0])<0)return null;return {c:c[0],r:r.length===1&&CPR.indexOf(r[0])>=0?r[0]:""}}
 function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
@@ -552,20 +552,26 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  var s=q.toString();return s?"?"+s:""}
 /* chartq:end */
 (function(){
- var CPT={mined:"Total mined",supply:"Supply",circ:"Circulating supply",agents:"Agents",joins:"Agents / hr",holders:"Holders",txs:"Txs / hour",answers:"Answers / epoch"},
+ var CPT={mined:"Total mined",supply:"Supply",circ:"Circulating supply",agents:"Agents",joins:"Agents / hr",active:"Active Agents",holders:"Holders",txs:"Txs / hour",answers:"Answers / epoch"},
   CPL={"24h":"24h","7d":"7d","30d":"30d",all:"All",epoch:"Epoch"},MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   XSVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   pr0=new URLSearchParams(location.search).get("range"),KEEP=location.pathname==="/network"&&/^(24h|7d|all)$/.test(pr0||"")?pr0:null,
-  cp=null,box,svgW=0,cur=null,data=null,opener=null,seq=0,geo=null,idx=-1,live,tip,xh,rng,ttl,now,lg,rT=0;
+  cp=null,cq,box,svgW=0,cur=null,data=null,opener=null,seq=0,geo=null,idx=-1,live,tip,xh,rng,ttl,now,lg,rT=0;
  function fv(v){if(v==null)return "···";var s=data&&data.fmt==="c"?c3(v):Math.round(v).toLocaleString("en-US");return data&&data.unit?s+" "+data.unit:s}
  function dtf(o,d){try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return ""}}
  /* the one site time format (1.26.122), in the reader's zone with its short name: "Oct 25, 8:48 AM PDT" */
  function when(ts,long){var z=tzn();return ltf(ts,"dt")+(z?" "+z:"")}
  function build(){cp=D.createElement("dialog");cp.className="cpop";cp.setAttribute("aria-labelledby","cp-t");cp.setAttribute("aria-modal","true");
-  cp.innerHTML='<div class="cp-in"><div class="cp-hd"><h2 id="cp-t"></h2><span class="cp-now num"></span><button type="button" class="jm-x cp-x" aria-label="Close" data-cpclose>'+XSVG+'</button></div>'
+  cp.innerHTML='<div class="cp-in"><div class="cp-hd"><h2 id="cp-t"></h2><span class="cp-q"></span><span class="cp-now num"></span><button type="button" class="jm-x cp-x" aria-label="Close" data-cpclose>'+XSVG+'</button></div>'
    +'<div class="chips cp-rng" role="group" aria-label="Range"></div><div class="chartbox cp-box" tabindex="0" role="group" aria-roledescription="chart"></div>'
    +'<div class="legend cp-lg" hidden></div><p class="sr-only" aria-live="polite"></p></div>';
-  D.body.appendChild(cp);box=$(".cp-box",cp);rng=$(".cp-rng",cp);ttl=$("#cp-t",cp);now=$(".cp-now",cp);lg=$(".cp-lg",cp);live=$("p[aria-live]",cp);
+  D.body.appendChild(cp);box=$(".cp-box",cp);rng=$(".cp-rng",cp);ttl=$("#cp-t",cp);now=$(".cp-now",cp);lg=$(".cp-lg",cp);live=$("p[aria-live]",cp);cq=$(".cp-q",cp);
+  /* the chart's ? (qtip pattern: tap, click or keyboard; a mouse hover opens it too and leaving closes what the hover opened).
+     Escape closes an open note first, then the dialog. */
+  cq.addEventListener("pointerenter",function(e){var q=$("details",cq);if(e.pointerType==="mouse"&&q&&!q.open){q.open=true;q.dataset.hv="1"}});
+  cq.addEventListener("pointerleave",function(e){var q=$("details",cq);if(e.pointerType==="mouse"&&q&&q.dataset.hv){q.open=false;delete q.dataset.hv}});
+  cq.addEventListener("click",function(e){var q=$("details",cq);if(q&&q.dataset.hv&&e.target.closest("summary")){e.preventDefault();delete q.dataset.hv}});
+  cp.addEventListener("keydown",function(e){var q=e.key==="Escape"&&$("details[open]",cq);if(q){e.preventDefault();e.stopPropagation();q.open=false;var s=$("summary",q);if(s)s.focus()}},true);
   cp.addEventListener("cancel",function(e){e.preventDefault();close()});
   cp.addEventListener("close",closed);
   cp.addEventListener("click",function(e){if(e.target===cp||e.target.closest("[data-cpclose]"))close();var b=e.target.closest(".cp-rng button");if(b&&cur&&b.dataset.r!==cur.r)load(cur.c,b.dataset.r)});
@@ -588,13 +594,16 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  function closed(){D.documentElement.classList.remove("jmlock");seq++;cur=null;data=null;geo=null;
   try{history.replaceState(history.state,"",location.pathname+cpSearch(location.search,null,null,KEEP)+location.hash)}catch(_){}
   var o=opener;opener=null;if(o&&o.isConnected&&o.focus)try{o.focus({preventScroll:true})}catch(_){o.focus()}}
- function load(c,r){var n=++seq;cur={c:c,r:r||""};ttl.textContent=CPT[c]||"";now.textContent="";hide();geo=null;
+ function load(c,r){var n=++seq;if(!cur||cur.c!==c)cq.innerHTML="";cur={c:c,r:r||""};ttl.textContent=CPT[c]||"";now.textContent="";hide();geo=null;
   box.innerHTML='<div class="skel cskel" aria-busy="true"><i></i></div>';box.setAttribute("aria-label",CPT[c]||"Chart");
   var w=Math.max(200,Math.round(box.clientWidth||800));
   fetch("/fragment/chart?c="+encodeURIComponent(c)+(r?"&r="+encodeURIComponent(r):"")+"&w="+w,{credentials:"omit"}).then(function(x){if(!x.ok)throw 0;return x.json()}).then(function(d){
-   if(n!==seq)return;data=d;cur.r=d.range;ttl.textContent=d.title;chips();draw();
+   if(n!==seq)return;data=d;cur.r=d.range;ttl.textContent=d.title;qt(d);chips();draw();
    try{history.replaceState(history.state,"",location.pathname+cpSearch(location.search,c,d.range)+location.hash)}catch(_){}})
   .catch(function(){if(n!==seq)return;box.innerHTML='<div class="naBox">Chart did not load</div>'})}
+ /* a one line definition from the server (chartpop.TIPS) with its Method link */
+ function qt(d){if(!d.tip){cq.innerHTML="";return}if($("details",cq))return;
+  cq.innerHTML='<details class="qtip cp-tip"><summary aria-label="About '+esc2(d.title)+'">?</summary><span class="qbox" role="note">'+esc2(d.tip)+(d.method?' <a href="'+esc2(d.method)+'">Method</a>':"")+'</span></details>'}
  function chips(){rng.innerHTML="";data.ranges.forEach(function(k){var b=D.createElement("button");b.type="button";b.className="chip"+(k===data.range?" on":"");b.dataset.r=k;b.textContent=CPL[k]||k;b.setAttribute("aria-pressed",k===data.range?"true":"false");rng.appendChild(b)});
   rng.hidden=data.ranges.length<2}
  function esc2(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}

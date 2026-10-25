@@ -167,7 +167,7 @@ if out:
     check("balance: agent row last seen before the boundary is stale, labelled with its segment", out["b3"]["stale"] is True and out["b3"]["segment"] == 1 and out["b3"]["label"] == "As of Segment 1")
     check("balance: page label As of checkpoint", out["b1"]["label"] == f"As of checkpoint {h}")
     check("rewards: S1 E12 and E14 unconfirmed, E11 and E13 recorded", out["rs"] == ["recorded", "unconfirmed", "recorded", "unconfirmed"] and out["g12"] is True)
-    check("pop-out: Agents, Holders and Agents / hr break at a boundary", sorted(out["brk"]) == ["agents", "holders", "joins"])
+    check("pop-out: Agents, Holders, Agents / hr and Active Agents break at a boundary", sorted(out["brk"]) == ["active", "agents", "holders", "joins"])
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 check("pop-out: app.js draws one subpath per run between breaks", "d.breaks" in js and "runs.push([])" in js)
 

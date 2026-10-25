@@ -1291,6 +1291,10 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .cp-hd h2{font:600 var(--t14)/1.2 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--hi);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-now{margin-left:auto;font:500 var(--t20)/1 var(--mono);color:var(--amber);white-space:nowrap}
 .cp-hd .cp-x{margin-left:0}
+/* the chart's ? (chartpop.TIPS): the note opens under the title, inside the dialog, at every width */
+.cp-hd{position:relative}.cp-q:empty{display:none}.cp-q{display:flex;flex:none}
+.cp-hd .cp-tip{margin-left:-6px}
+.cp-hd .cp-tip .qbox{position:absolute;left:0;top:calc(100% + 8px);transform:none;width:min(340px,100%)}
 .cp-rng{margin:0;flex-wrap:nowrap}.cp-rng[hidden]{display:none}
 .cp-rng .chip{cursor:pointer;background:none;font-family:var(--ui);min-width:52px;justify-content:center}
 .cp-rng .chip.on{background:color-mix(in srgb,var(--gold) 8%,transparent)}

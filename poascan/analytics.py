@@ -895,16 +895,39 @@ def active_agents():
     return dict(active_agents=int(n or 0), window=kind, start_ts=t0, end_ts=now, hours=round((now - t0) / 3600, 2), segment=S.CURRENT,
                 basis="distinct_answerers", source="challenge_txs")
 
-@cached("active_hourly", 120)
-def active_hourly(hours=48):
-    """Cached 2 min: [(hour start, distinct answerers)] for whole hours of the current segment in the last `hours` (the
-    Active Agents sparkline). The hour holding the segment start and the filling hour are left out. One indexed read."""
-    now = int(time.time()); seg0 = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else 0
-    lo = max(now - hours * 3600, -(-int(seg0) // 3600) * 3600 if seg0 else 0); cur = now // 3600 * 3600
-    rows = db.q("SELECT (ts/3600)*3600 AS h, COUNT(DISTINCT from_addr) AS n FROM txs WHERE segment = ? AND type = 'challenge' AND ts >= ? AND ts < ? GROUP BY h ORDER BY h",
-                (S.CURRENT, lo, cur))
-    got = {r["h"]: r["n"] for r in rows}
-    return [(h, got.get(h, 0)) for h in range(-(-lo // 3600) * 3600, cur, 3600)]
+def active_runs(rows, segs, now, live=None):
+    """Pure: the Active Agents series [(ts, n)] over every segment, oldest first. rows: distinct (segment, hour index, Agent)
+    of challenge txs. At each whole hour of a segment, n is the distinct Agents that answered in the 24 h before it within
+    that segment (the card's own window, so a count never reaches back across a genesis cut). A segment's run starts at
+    the first hour after its first answer (real data only, never padded) and ends at its last hour boundary; the current
+    segment ends at now with `live` (the card value) when given."""
+    from collections import Counter
+    by = {}
+    for sg, h, a in rows: by.setdefault(int(sg), {}).setdefault(int(h), set()).add(a)
+    out = []
+    for x in segs:
+        hrs = by.get(x["n"])
+        if not hrs: continue
+        end = x.get("end_ts") or now; first = min(hrs); last = int(end) // 3600
+        win = Counter(); run = []
+        for H in range(first + 1, last + 1):   # boundary H closes the window of hours H-24 .. H-1
+            for a in hrs.get(H - 1, ()): win[a] += 1
+            for a in hrs.get(H - 1 - ACTIVE_WINDOW_S // 3600, ()):
+                win[a] -= 1
+                if not win[a]: del win[a]
+            run.append((H * 3600, len(win)))
+        if x.get("end_ts") is None and live is not None and (not run or now > run[-1][0]): run.append((int(now), int(live)))
+        out += run
+    return out
+
+@cached("active_series", 300)
+def active_series():
+    """Cached 5 min: the Active Agents chart (Home sparkline and pop-out, chartpop.py) from POAScan's own tx archive, one
+    indexed read (txs_seg_type), no upstream call. Every segment, oldest first; the pop-out breaks the line at each cut."""
+    now = int(time.time())
+    rows = db.q("SELECT segment, ts/3600 AS h, from_addr FROM txs WHERE type = 'challenge' AND ts <= ? GROUP BY segment, h, from_addr", (now,))
+    a = active_agents()
+    return active_runs([(r["segment"], r["h"], r["from_addr"]) for r in rows], S.SEGMENTS, now, a["active_agents"] if a else None)
 
 @cached("joins_rate", 120)
 def joins_rate():

@@ -22,11 +22,14 @@ CHARTS = {
     "circ":    dict(title="Circulating supply", unit="POA", fmt="c", color="#FFB000", y0=True, epoch=True, marks=True),
     "agents":  dict(title="Agents", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
     "joins":   dict(title="Agents / hr", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
+    "active":  dict(title="Active Agents", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
     "holders": dict(title="Holders (node)", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
     "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
     "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#FFB000", y0=True, epoch=True, marks=False),
 }
 PARAMS = {"c", "r", "w"}
+# One line definitions shown by the pop-out's ? (a tap, click and keyboard tooltip; the title gives it on hover), with a Method link.
+TIPS = {"active": ("Agents that mined at least once in the last 24 hours. The count restarts at a genesis cut.", "/about#home")}
 
 def parse(qs):
     """(key, range or '', plot width) from the query, or ValueError. Strict: known keys only, one value each, nothing else."""
@@ -69,6 +72,7 @@ def series(key, rng=""):
     if key in ("mined", "supply"): return g["supply"]
     if key == "agents": return g["agents"]
     if key == "holders": return g["holders"]
+    if key == "active": return A.active_series()
     if key == "joins": return _hourly(g["agents"])
     if key == "txs":
         if _daily(g, rng): return [(r["d"], r["n"]) for r in g["day"]]
@@ -111,13 +115,14 @@ def _thin(pts, n=MAX_PTS):
     step = len(pts) / n
     return [pts[int(i * step)] for i in range(n)] + [pts[-1]]
 
-BREAK_AT_CUT = ("agents", "holders", "joins")
+BREAK_AT_CUT = ("agents", "holders", "joins", "active")
 
 @A.cached("chartpop", 60)
 def payload(key, rng, w):
     cfg = CHARTS[key]; now = time.time(); have = ranges(key, now); r = pick(rng, have)
     out = dict(c=key, title=cfg["title"], unit=cfg["unit"], fmt=cfg["fmt"], color=cfg["color"], ranges=have, range=r, kind="line",
                y0=cfg["y0"], pts=[], bars=[], legend=[], colors=[], marks=[], breaks=[])
+    if key in TIPS: out.update(tip=TIPS[key][0], method=TIPS[key][1])
     if not r: return out
     if key == "txs" and _daily(_growth(), r): out["title"] = "Txs / day"
     if key == "answers" or r == "epoch":

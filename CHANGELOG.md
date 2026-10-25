@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.146] - 2026-10-25
+
+### Added
+- Home, Active Agents: the card opens the same pop-out chart as Total mined, Circulating supply and Agents (24h, 7d, 30d, All; poascan.io watermark; no share buttons). Each point is the card's own count at that hour: distinct Agents with at least one answer (challenge tx) in the 24 h before it, within that segment. Built from POAScan's own tx archive in one indexed read (no upstream request), from the chain's first answer on Oct 19, with a break at the genesis cut; segment 2 starts the hour after its first answer. The sparkline draws the same series. Milestones: Upgrade begins, Mining reopened and the genesis cut (mining group in milestones.json).
+- The pop-out's ? (the qtip pattern: tap on phones, hover or click on desktop, Escape closes the note first): "Agents that mined at least once in the last 24 hours. The count restarts at a genesis cut." with a Method link to /about#home. The card label carries the same line on hover. `/fragment/chart?c=active` serves the series like the other charts.
+
 ## [1.26.145] - 2026-10-25
 
 ### Added
