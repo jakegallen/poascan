@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.134] - 2026-10-25
+
+### Changed
+- segments.json cut.carry_unlocked is now true: the operators stated that every carried balance unlocked at the genesis cut. Circulating counts rewards from earlier segments as spendable and only rewards since the cut vest, so Circulating and Locked lose their Lower bound and Upper bound tags; circulating_basis reads carry_unlocked and locked_confirmed true. /about#segments notes the basis.
+
 ## [1.26.133] - 2026-10-25
 
 ### Changed

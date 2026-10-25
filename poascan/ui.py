@@ -422,7 +422,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=133">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=134">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -435,7 +435,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=133" defer></script></body></html>'''
+<script src="/static/app.js?v=134" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

@@ -909,7 +909,7 @@ def seg_about():
     exs = SG.source_segment("explorer")
     exp = (f" minepoa.com's explorer address reads serve {E(SG.BY_N[exs]['label'])}'s final state, so an address page uses the agent list (current segment) when it "
            f"has the address, and otherwise labels the explorer balance <b>As of checkpoint</b> (<code>balance_as_of_checkpoint</code>, <code>balance_stale</code> true).") if exs != SG.CURRENT else ""
-    return (f'<h3 id="segments">Segments</h3><p>{" ".join(one(c) for c in cs)} Balances carried over. Segment boundaries, start heights and per segment '
+    return (f'<h3 id="segments">Segments</h3><p>{" ".join(one(c) for c in cs)} Balances carried over.{" Carried balances unlocked at the genesis cut, per the operators, so rewards from earlier segments count as spendable and only rewards since the cut vest." if SG.carry_unlocked() is True else ""} Segment boundaries, start heights and per segment '
             'flags are configuration (<code>poascan/segments.json</code>), not code. Epoch numbers, heights and nonces restart in each segment, so every epoch, checkpoint '
             'and nonce is read with its segment: Segment 1 E3 and Segment 2 E3 are different closes. A transaction belongs to the segment whose time span holds it; an '
             "anchor belongs to the earlier segment if it is that segment's final anchored root or was anchored before the boundary. The epoch list, epoch pages, open "
