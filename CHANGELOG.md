@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.143] - 2026-10-25
+
+### Added
+- Params changes on the protocol timeline: the hourly `/api/params` read is compared with the last copy seen (the first copy is the baseline). A `params_change` event lists the keys added, removed or changed, with old and new values (long lists and maps summarized; list items added and removed) and flags `*_from_ts`, `*_from_epoch`, `*_until_ts` and `*_until_epoch` keys as boundaries.
+- `/api/v1/protocol` rows add `changes`; `?kind=params_change` filters them. Governance, Protocol shows the keys with a boundary tag; hover lists old and new values.
+
 ## [1.26.142] - 2026-10-25
 
 ### Added

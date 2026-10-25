@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.142"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-25T20:11:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.143"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-25T20:13:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -824,7 +824,7 @@ def openapi():
                              desc="checked_at, last_ok_ts, stale (no good check for stale_after_s), check_errors, files (poa.mjs and poa-web.mjs: sha256, bytes, first_seen, last_ok), "
                                   "current (state match, older_release, unreleased or unknown; badge; release_version, release_txid, the release's engine, client and web client sha256, "
                                   "the live hashes, client_in_sync, web_client_in_sync, in_sync), then rows newest first: id, ts, first_seen, kind, file, sha256_old, sha256_new, "
-                                  "release_version, release_txid, matches_release, changed_keys, boundaries, changelog_ref. Both files are checked hourly with a conditional GET; "
+                                  "release_version, release_txid, matches_release, changed_keys, boundaries, changes (params_change: key, old, new, added and removed list items; long values summarized), changelog_ref. Both files are checked hourly with a conditional GET; "
                                   "bytes are hashed, never run. CSV: the rows."),
         "/api/swaps": _op("Swap offers and fills", SWAP_ROWS, csv=True, oid="swaps", tag="token",
                           desc="One row per offer. status is open, filled, cancelled, expired or delisted (gone from the network's book before its expiry). An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times (epoch k runs from close k-1 to close k; after the newest close, the open epoch once a status read confirms no later close); null when it cannot be determined. Unfilled rows leave fill_epoch out. fill_usd (number or null): USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd. " + SETTLE_DOC),

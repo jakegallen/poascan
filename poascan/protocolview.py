@@ -1,6 +1,6 @@
 """Protocol views: the Governance, Protocol timeline tab and the Network badge. Reads protocol.py's store only; a page
 view never calls minepoa.com."""
-import time
+import json, time
 from . import protocol as PT, scoresort as SS
 from .ui import E, card, stat, intc, short, lt, rel, flag
 
@@ -65,8 +65,12 @@ def _rel_cell(r):
 def _note(r):
     if r["kind"] == "release": return E((r.get("changelog_ref") or "")[:120])
     if r["kind"] == "params_change":
-        ks = r.get("changed_keys") or []
-        return E(", ".join(ks[:6]) + (f" and {len(ks) - 6} more" if len(ks) > 6 else ""))
+        ks = r.get("changed_keys") or []; bd = r.get("boundaries") or {}
+        txt = E(", ".join(ks[:6]) + (f" and {len(ks) - 6} more" if len(ks) > 6 else ""))
+        tip = "; ".join(f'{c["key"]}: {json.dumps(c.get("old"))} to {json.dumps(c.get("new"))}' for c in (r.get("changes") or [])[:12])
+        tag = f' <span class="tag est" title="{E(", ".join(bd))}">{len(bd)} boundar{"y" if len(bd) == 1 else "ies"}</span>' if bd else ""
+        return f'<span title="{E(tip)}">{txt}</span>{tag}'
+
     if r["kind"] == "baseline": return "First hash recorded"
     return "Matches a signed release" if r.get("matches_release") else "Not in any signed release"
 

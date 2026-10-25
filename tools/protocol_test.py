@@ -126,9 +126,30 @@ def main():
     blob = json.dumps(PT.meta()) + json.dumps(PT.events())
     check("no file bytes stored", "a new client build" not in blob)
     check("no em or en dash in module and API", all(c not in src + json.dumps(d) for c in ("\u2014", "\u2013")))
+    params_checks()
     ui_checks()
     print(f"\n{len(fails)} failed" if fails else "\nall passed")
     sys.exit(1 if fails else 0)
+
+def params_checks():
+    """params_change: first copy is the baseline, then key diffs with boundaries."""
+    p0 = dict(K=5, estab_ttl=6, trusted_graders=["a", "b"], pending_ttl_epochs=16)
+    check("params: first copy is the baseline (no event)", PT.params_check(p0, NOW) is None and not PT.events("params_change"))
+    check("params: same copy, no event", PT.params_check(dict(p0), NOW + 1) is None)
+    p1 = dict(p0, estab_ttl=8, trusted_graders=["a", "c"], new_rule_from_ts=1793000000); p1.pop("K")
+    ch = PT.params_check(p1, NOW + 2)
+    check("params: changed, added and removed keys", ch == ["K", "estab_ttl", "new_rule_from_ts", "trusted_graders"])
+    e = PT.events("params_change")[0]
+    check("params: boundaries flag *_from_ts", e["boundaries"] == {"new_rule_from_ts": 1793000000})
+    tg = [c for c in e["changes"] if c["key"] == "trusted_graders"][0]
+    check("params: list diff names added and removed items", tg["added"] == ["c"] and tg["removed"] == ["b"])
+    check("params: removed key recorded", [c for c in e["changes"] if c["key"] == "K"][0].get("removed") is True)
+    check("params: wrapped {params: ...} copies are read", PT.params_check({"params": p1}, NOW + 3) is None)
+    big = dict(p1, trusted_graders=[f"g{i}" for i in range(40)]); PT.params_check(big, NOW + 4)
+    tg = [c for c in PT.events("params_change")[0]["changes"] if c["key"] == "trusted_graders"][0]
+    check("params: long lists summarized, added capped", tg["new"] == {"n": 40} and len(tg["added"]) == PT.SAMPLE)
+    check("params: API kind filter", all(r["kind"] == "params_change" for r in SV.api("/api/protocol", {"kind": ["params_change"]})[0]["rows"]))
+    check("hourly check reads params first", "params_check(None, now)" in open(PT.__file__).read())
 
 def ui_checks():
     """Governance, Protocol and the Network badge."""
@@ -163,6 +184,8 @@ def ui_checks():
     check("unreleased hash: amber badge 'Unreleased client change'", "Unreleased client change" in PV.badge() and "pbadge warn" in PV.badge())
     db.put_blob(PT.META, m)
     ab = V.about() if hasattr(V, "about") else ""
+    hp = GV.page({"tab": ["protocol"], "kind": ["params_change"]})
+    check("tab: params rows show keys and a boundary tag", "estab_ttl" in hp and "boundar" in hp)
     check("/about#protocol explains the method", 'id="protocol"' in open(V.__file__).read())
     for name, x in (("protocol tab", h), ("network", n), ("badge", b)): check(name + ": no em or en dash", "\u2014" not in x and "\u2013" not in x)
     css = open(os.path.join(HERE, "..", "static", "style.css")).read()

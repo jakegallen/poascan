@@ -1,4 +1,4 @@
-"""Protocol timeline (1.26.141): minepoa's signed releases, the public client files and, later, params changes.
+"""Protocol timeline (1.26.141): minepoa's signed releases, the public client files and /api/params changes.
 
 Source files: https://minepoa.com/client/poa.mjs (the reference client; its sha256 is client_sha256 and engine_sha256 in
 the G0 signed release) and https://minepoa.com/poa-web.mjs (web_client_sha256). POAScan only hashes their bytes: it
@@ -12,7 +12,7 @@ for a file), source_change (a file's sha256 moved; matches_release names the sig
 it is unreleased) and params_change (/api/params keys added, removed or changed).
 
 A check that fails keeps the last good hash; past STALE_S without a good check the state is flagged Stale."""
-import gzip, hashlib, json, logging, time, urllib.error, urllib.request, zlib
+import hashlib, json, logging, re, time, urllib.error, urllib.request, zlib
 from . import db
 
 log = logging.getLogger("poascan.protocol")
@@ -182,6 +182,8 @@ def check(now=None, http=None, rel=None):
     now = int(now or time.time())
     try: _ensure(); sync_releases(rel, now)
     except Exception as e: log.warning("protocol: release sync failed (%s)", type(e).__name__)
+    try: params_check(None, now)
+    except Exception as e: log.warning("protocol: params diff failed (%s)", type(e).__name__)
     m = meta(); files = dict(m.get("files") or {}); errs = {}
     from . import indexer as I
     for f, path, field in FILES:
@@ -209,6 +211,55 @@ def check(now=None, http=None, rel=None):
     db.put_blob(META, dict(m, files=files, last_check=now, last_ok=now if ok_all else m.get("last_ok"), errors=errs or None,
                            fails=0 if ok_all else int(m.get("fails") or 0) + 1))
     return not errs
+
+# ---------------------------------------------------------------- params changes
+BOUNDARY_RX = re.compile(r"_(from|until)_(ts|epoch)$")
+SAMPLE = 10   # list items shown per side in a change
+
+def _canon(o): return json.dumps(o, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+def _summ(v):
+    """A short, JSON safe view of a params value for the timeline (lists and maps can be long)."""
+    if isinstance(v, list): return dict(n=len(v)) if len(v) > SAMPLE else v
+    if isinstance(v, dict): return dict(keys=len(v)) if len(_canon(v)) > 300 else v
+    return v
+
+def _change(k, a, b):
+    c = dict(key=k, old=_summ(a), new=_summ(b))
+    if isinstance(a, list) and isinstance(b, list):
+        sa, sb = [_canon(x) for x in a], [_canon(x) for x in b]
+        c.update(added=[json.loads(x) for x in sb if x not in sa][:SAMPLE], removed=[json.loads(x) for x in sa if x not in sb][:SAMPLE])
+    return c
+
+def diff_params(old, new):
+    """(changed_keys, boundaries, changes) between two /api/params copies. boundaries: keys named *_from_ts, *_from_epoch,
+    *_until_ts or *_until_epoch that were added or changed, with their new value."""
+    keys = sorted(set(old) | set(new)); ch, bd, out = [], {}, []
+    for k in keys:
+        if k in old and k in new and _canon(old[k]) == _canon(new[k]): continue
+        ch.append(k); out.append(_change(k, old.get(k), new.get(k)) if k in old and k in new else dict(key=k, old=_summ(old.get(k)) if k in old else None,
+                                                                                                  new=_summ(new.get(k)) if k in new else None, added=k not in old, removed=k not in new))
+        if k in new and BOUNDARY_RX.search(k): bd[k] = new[k]
+    return ch, bd, out
+
+def params_check(p=None, now=None):
+    """Compare the stored /api/params copy with the last one seen. The first copy is the baseline (no event).
+    Returns the params_change event's key list, or None."""
+    now = int(now or time.time())
+    p = p if p is not None else db.get_blob("params")[0]
+    if isinstance(p, dict) and isinstance(p.get("params"), dict): p = p["params"]
+    if not isinstance(p, dict) or not p: return None
+    h = hashlib.sha256(_canon(p).encode()).hexdigest()
+    m = meta(); pm = m.get("params") or {}
+    if pm.get("hash") == h: return None
+    old = pm.get("snapshot")
+    db.put_blob(META, dict(m, params=dict(hash=h, snapshot=p, since=now)))
+    if not isinstance(old, dict): return None
+    ch, bd, out = diff_params(old, p)
+    if not ch: return None
+    _add(f"params:{pm.get('hash')}:{h}", now, "params_change", now, sha_old=pm.get("hash"), sha_new=h,
+         detail=dict(changed_keys=ch, boundaries=bd or None, changes=out[:40]))
+    return ch
 
 # ---------------------------------------------------------------- state for pages and the API (no upstream call)
 def stale(now=None):
@@ -243,7 +294,7 @@ def events(kind=None, limit=500):
         out.append(dict(id=r["id"], ts=r["ts"], first_seen=r["first_seen"], kind=r["kind"], file=FILE_NAMES.get(r["file"]) if r["file"] else None,
                         sha256_old=r["sha_old"], sha256_new=r["sha_new"], release_version=r["version"], release_txid=r["txid"],
                         matches_release=r["matches_release"], changed_keys=d.get("changed_keys"), boundaries=d.get("boundaries"),
-                        changelog_ref=d.get("changelog_ref"), detail=d))
+                        changelog_ref=d.get("changelog_ref"), changes=d.get("changes"), detail=d))
     return out
 
 def api(kind=None, limit=500):
