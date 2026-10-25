@@ -120,7 +120,7 @@ def overview():
     f2 = lambda v: pct(v) if v is not None else "···"
     s = "".join([stat("Established", intc(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
                  stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"), stat("Safe", intc(c["safe"])),
-                 stat("Graders", intc(cal.get("graders_count"))), stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats aligned with the panel, advisory")])
+                 stat("Graders", intc(cal.get("graders_count"))), stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats that agreed with the settled outcome, advisory")])
     risky = [r for r in d["rows"] if r["level"] in ("risk", "watch")]
     t = standing_table(risky, 8) if risky else '<p class="na">No established Agent is estimated to drop in the next 3 closes.</p>'
     last = [[_ep(r["epoch"]), intc(r["established"]), intc(r["established_removed"]), intc(r["challenge_eligible"]), intc(r["paid"])] for r in reversed(ep[-6:])]
@@ -665,7 +665,7 @@ def api_overview():
     pe = payout_estimate() if not SG.archived() else None
     gs = GR.summary() if GR.usable() else None
     return dict(_seg(), established=len(d["rows"]), established_check=established_cross(),
-                grading=None if not gs else dict(pending=gs["pending"], at_quorum=gs["at_quorum"], trusted_share=gs["trusted_share"], by_need=gs["by_need"], quorum=gs["quorum"],
+                grading=None if not gs else dict(pending=gs["pending"], at_quorum=gs["at_quorum"], ready_next_close=gs["ready_next_close"], at_quorum_queued=gs["at_quorum_queued"], settle_cap=gs["settle_cap"], trusted_share=gs["trusted_share"], by_need=gs["by_need"], quorum=gs["quorum"],
                                                  open_epoch=gs["epoch"], next_close_ts_est=gs["next_close_ts"], upstream_as_of=gs["upstream_as_of"], fetched_at=gs["fetched_at"], stale=gs["stale"],
                                                  queue=BASE + "/api/v1/governance/queue"),
                 counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
@@ -828,17 +828,18 @@ def api_agent(a, scope="segment"):
 
 # ---------------- Settle queue API (1.26.137): minepoa's grading list as POAScan last read it ----------------
 QUEUE_FIELDS = ("id", "author", "name", "born", "since", "expires", "expires_in", "kind", "raw", "qual", "need", "trusted_seals", "untrusted_seals",
-                "counting_trusted", "counting_untrusted", "last_seal_ts", "open")
+                "counting_trusted", "counting_untrusted", "last_seal_ts", "open", "settle_rank", "in_settle_window", "ready_next_close", "queued_at_quorum")
 
 def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
     gs = GR.summary() if GR.usable() else None
     rs = GVW.queue_select(need, sort, d) if gs else []
     return dict(_seg(), source="minepoa_grading", available=bool(gs), need=need or None, sort=sort, dir=d, total=len(rs), offset=offset, limit=limit,
-                pending=gs["pending"] if gs else None, at_quorum=gs["at_quorum"] if gs else None, trusted_share=gs["trusted_share"] if gs else None,
+                pending=gs["pending"] if gs else None, at_quorum=gs["at_quorum"] if gs else None, settle_cap=gs["settle_cap"] if gs else None,
+                ready_next_close=gs["ready_next_close"] if gs else None, at_quorum_queued=gs["at_quorum_queued"] if gs else None, trusted_share=gs["trusted_share"] if gs else None,
                 by_need=gs["by_need"] if gs else None, quorum=gs["quorum"] if gs else None, open_epoch=gs["epoch"] if gs else None,
                 next_close_ts_est=gs["next_close_ts"] if gs else None, upstream_as_of=gs["upstream_as_of"] if gs else None, fetched_at=gs["fetched_at"] if gs else None,
                 stale=gs["stale"] if gs else None,
-                note="qual: seals that count toward quorum (q); need: quorum minus qual; pending seals carry no verdict. Read every 10 min (5 near a close). Method: " + BASE + "/about#grading-list",
+                note="qual: seals that count at the next close (minepoa's q flag, as published); need: grade_quorum minus qual; a close evaluates only the oldest settle_cap pending rows by (since, id), so ready_next_close counts at quorum rows inside that window and at_quorum_queued the rest, which carry over; pending seals carry no verdict. Read every 10 min (5 near a close). Method: " + BASE + "/about#grading-list",
                 rows=[{k: r.get(k) for k in QUEUE_FIELDS} for r in rs[offset:offset + limit]],
                 url=_url("queue", need=need, sort=sort if sort != "need" else "", dir="asc" if d == "asc" else ""))
 

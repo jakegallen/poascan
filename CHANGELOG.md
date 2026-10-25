@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.139] - 2026-10-25
+
+### Fixed
+- Settle window: a close evaluates only the oldest `settle_cap_per_close` pending rows (read from /api/params, 2,000 today), ordered by since then answer id. Ready, the At quorum stat and the close note now count only at quorum rows inside that window; rows at quorum beyond it read Queued (a chip, a tag and a +N queued flag) and are not promised to settle at the next close. The queue API adds settle_cap, ready_next_close, at_quorum_queued and per row settle_rank, in_settle_window, ready_next_close and queued_at_quorum; `need=queued` filters them.
+- Aligned means agreement with the settled outcome, not with the panel: tooltips, /about#calibration, /about#score, the API description and the agent prompt.
+- q is shown as minepoa's own flag, "Counts at the next close", never recomputed.
+- need falls back to params.grade_quorum (the engine uses a literal 4 for carried rows and grade_quorum for new ones; both are 4).
+
 ## [1.26.138] - 2026-10-25
 
 ### Changed

@@ -28,6 +28,22 @@ RAW_KEEP = 24            # pre and post copies kept (about 12 closes)
 SEAL_KEEP_DAYS = 45      # seals that left the list are kept this long
 BLOB, META = "grading", "grading_meta"
 QUORUM_DEFAULT = 4
+SETTLE_CAP_DEFAULT = 2000   # only when /api/params has no settle_cap_per_close
+
+def grade_quorum(d=None):
+    """params.grade_quorum, else the list's quorum, else 4. Note (1.26.139): the engine (poa.mjs, v1.1.2-carveout2) checks
+    carried rows against a literal quorum of 4 and new rows against grade_quorum; both are 4 today, so need reads grade_quorum."""
+    from . import analytics as A
+    try: q = int(A.params().get("grade_quorum") or 0)
+    except Exception: q = 0
+    return q or int((d or {}).get("quorum") or QUORUM_DEFAULT)
+
+def settle_cap():
+    """params.settle_cap_per_close: each close evaluates only the oldest this many pending rows, by (since, answer id);
+    the rest carry over unevaluated."""
+    from . import analytics as A
+    try: return int(A.params().get("settle_cap_per_close") or 0) or SETTLE_CAP_DEFAULT
+    except Exception: return SETTLE_CAP_DEFAULT
 
 # ---------------------------------------------------------------- storage
 def _ensure():
@@ -224,14 +240,14 @@ def tag_html(detail):
     return flag(UNCONFIRMED, detail) if detail else ""
 
 # ---------------------------------------------------------------- 1.26.137: queue, graders and per-Agent views (no upstream call)
-def _row_view(r, ep, nm, open_=False):
+def _row_view(r, ep, nm, open_=False, q=QUORUM_DEFAULT):
     gs = r.get("grades") or []
     t = sum(1 for g in gs if g.get("t")); qt = sum(1 for g in gs if g.get("t") and g.get("q")); qu = sum(1 for g in gs if g.get("q") and not g.get("t"))
     last = max((int(g.get("ts") or 0) for g in gs), default=0) or None
     exp = r.get("expires")
     return dict(id=r.get("id"), author=r.get("author"), name=nm.get(r.get("author")), born=r.get("born"), since=r.get("since"), expires=exp,
                 expires_in=(int(exp) - int(ep)) if exp is not None and ep is not None else None, kind=r.get("kind"),
-                raw=int(r.get("raw") or len(gs)), qual=int(r.get("qual") or 0), need=int(r.get("need") if r.get("need") is not None else QUORUM_DEFAULT),
+                raw=int(r.get("raw") or len(gs)), qual=int(r.get("qual") or 0), need=int(r.get("need") if r.get("need") is not None else max(0, q - int(r.get("qual") or 0))),
                 trusted_seals=t, untrusted_seals=len(gs) - t, counting_trusted=qt, counting_untrusted=qu, last_seal_ts=last, open=open_)
 
 def queue_rows():
@@ -241,7 +257,15 @@ def queue_rows():
     if _cur.get("queue") is not None: return _cur["queue"]
     from . import analytics as A
     nm = A.forum_names(); ep = d.get("epoch")
-    out = [_row_view(r, ep, nm, o) for rs, o in ((d.get("rows") or [], False), (d.get("open") or [], True)) for r in rs if isinstance(r, dict) and r.get("id")]
+    q = grade_quorum(d)
+    out = [_row_view(r, ep, nm, o, q) for rs, o in ((d.get("rows") or [], False), (d.get("open") or [], True)) for r in rs if isinstance(r, dict) and r.get("id")]
+    # settle window: the next close evaluates only the oldest settle_cap pending rows by (since, answer id); q stays the server's flag
+    cap = settle_cap(); order = sorted((r for r in out if not r["open"]), key=lambda r: (r["since"] if r["since"] is not None else 1 << 30, r["id"]))
+    for i, r in enumerate(order): r["settle_rank"] = i + 1; r["in_settle_window"] = i < cap
+    for r in out:
+        if r["open"]: r["settle_rank"] = None; r["in_settle_window"] = False
+        r["ready_next_close"] = r["need"] == 0 and r["in_settle_window"]
+        r["queued_at_quorum"] = r["need"] == 0 and not r["open"] and not r["in_settle_window"]
     _cur["queue"] = out
     return out
 
@@ -249,10 +273,11 @@ def summary():
     """Headline numbers from the copy: pending, at quorum, trusted share, next close; None without a copy."""
     d = current()
     if not d: return None
-    st = d.get("stats") or {}; ct, ep = next_close(d)
-    return dict(pending=st.get("pending"), at_quorum=st.get("at_quorum"), trusted_share=st.get("trusted_share"), by_need=st.get("by_need") or {},
+    st = d.get("stats") or {}; ct, ep = next_close(d); qr = queue_rows()
+    return dict(pending=st.get("pending"), at_quorum=st.get("at_quorum"), settle_cap=settle_cap(),
+                ready_next_close=sum(1 for r in qr if r["ready_next_close"]), at_quorum_queued=sum(1 for r in qr if r["queued_at_quorum"]), trusted_share=st.get("trusted_share"), by_need=st.get("by_need") or {},
                 grades_on_pending=st.get("grades_on_pending"), graders=st.get("graders_distinct"), open_answers=len(d.get("open") or []),
-                quorum=d.get("quorum") or QUORUM_DEFAULT, epoch=ep, next_close_ts=ct, upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"),
+                quorum=grade_quorum(d), epoch=ep, next_close_ts=ct, upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"),
                 stale=stale(), established_listed=len(d.get("established") or []))
 
 def last_close_ts(d=None):
@@ -289,7 +314,7 @@ def agent_view(a, limit=50):
     d = current(); ix = index(); ep = d.get("epoch")
     from . import analytics as A
     nm = A.forum_names()
-    mine = sorted((_row_view(r, ep, nm) for r in ix["by_author"].get(a, [])), key=lambda r: (r["need"], -(r["born"] or 0)))
+    mine = sorted((x for x in (row_of(r.get("id")) for r in ix["by_author"].get(a, [])) if x), key=lambda r: (r["need"], -(r["born"] or 0)))
     x = ix["by_g"].get(a) or dict(seals=0, qual=0, rows=[])
     seals = sorted(x["rows"], key=lambda s: -s[1])
     ids = {}
@@ -303,7 +328,7 @@ def agent_view(a, limit=50):
                     jury=[dict(grader=j.get("g"), name=nm.get(j.get("g")), aligned=j.get("aligned"), score=j.get("s"), reason=j.get("r"), trusted=j.get("t")) for j in s.get("jury") or []])
                for s in ix["settled_by"].get(a, [])]
     return dict(pending=mine[:limit], pending_count=len(mine), seals=sv, seals_count=x["seals"], seals_counting=x["qual"],
-                jury_seats=seats, settled=settled, quorum=d.get("quorum") or QUORUM_DEFAULT, epoch=ep,
+                jury_seats=seats, settled=settled, quorum=grade_quorum(d), epoch=ep,
                 upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"), stale=stale())
 
 def row_of(answer):

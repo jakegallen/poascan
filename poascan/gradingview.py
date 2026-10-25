@@ -26,7 +26,9 @@ def stats_row():
     f = stale_flag()
     nc = f'E{s["epoch"]} close' if s.get("epoch") is not None else "Next close"
     return ('<div class="stats four">' + "".join([
-        stat("At quorum", intc(s["at_quorum"]), tip=f"Pending answers with {s['quorum']} seals that count, ready to settle at the next close", flag_html=f),
+        stat("At quorum", intc(s["ready_next_close"]), tip=(f"At quorum and inside the oldest {s['settle_cap']:,} pending rows the next close evaluates"
+             + (f"; {s['at_quorum_queued']:,} more at quorum wait beyond that cap" if s["at_quorum_queued"] else "")),
+             flag_html=f or (flag(f"+{s['at_quorum_queued']:,} queued", f"{s['at_quorum_queued']:,} more answers are at quorum but outside the {s['settle_cap']:,} oldest rows a close evaluates. They carry over.", "warn") if s["at_quorum_queued"] else "")),
         stat("Pending", intc(s["pending"]), tip="Answers waiting on graders in minepoa's grading list", flag_html=f),
         stat("Trusted share", pct(s["trusted_share"]) if s.get("trusted_share") is not None else "···", tip="Share of seals on pending answers from trusted graders", flag_html=f),
         stat(nc, countdown(s["next_close_ts"]), tip="Estimate: the last close plus the median time between closes")]) + "</div>")
@@ -35,7 +37,7 @@ def qprog(r, q=4):
     """Quorum progress: q steps, gold for a trusted seal that counts, steel for an untrusted one that counts."""
     steps = ["t"] * min(q, r["counting_trusted"]) + ["u"] * max(0, min(q - r["counting_trusted"], r["counting_untrusted"]))
     steps += [""] * (q - len(steps))
-    lab = f'{r["qual"]} of {q} seals that count: {r["counting_trusted"]} trusted, {r["counting_untrusted"]} untrusted'
+    lab = f'{r["qual"]} of {q} seals count at the next close: {r["counting_trusted"]} trusted, {r["counting_untrusted"]} untrusted'
     pips = "".join(f'<i class="{c}"></i>' if c else "<i></i>" for c in steps)
     return f'<span class="qp" role="img" aria-label="{E(lab)}" title="{E(lab)}">{pips}</span><span class="num qn">{r["qual"]}/{q}</span>'
 
@@ -49,7 +51,7 @@ QUEUE_COLS = [SS.Col(None, "Answer", "text"), SS.Col("name", "Agent", "text", "d
               SS.Col("trusted", "Trusted", "num", "r dk"), SS.Col("untrusted", "Untrusted", "num", "r dk"), SS.Col("need", "Need", "low", "r"),
               SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk")]
 QUEUE_SORTS = [(c.key, c.label) for c in QUEUE_COLS if c.key]
-QUEUE_FILTERS = [("", "Pending"), ("ready", "Ready"), ("1", "Need 1"), ("2", "Need 2"), ("3", "Need 3"), ("4", "Need 4"), ("open", "Open epoch")]
+QUEUE_FILTERS = [("", "Pending"), ("ready", "Ready"), ("queued", "At quorum, queued"), ("1", "Need 1"), ("2", "Need 2"), ("3", "Need 3"), ("4", "Need 4"), ("open", "Open epoch")]
 QUEUE_PAGE = 100
 _VAL = {"name": lambda r: SS.text_key(r["name"]), "qual": lambda r: r["qual"], "trusted": lambda r: r["trusted_seals"], "untrusted": lambda r: r["untrusted_seals"],
         "need": lambda r: r["need"], "born": lambda r: r["born"], "expires": lambda r: r["expires"], "last": lambda r: r["last_seal_ts"]}
@@ -58,7 +60,8 @@ def queue_select(f="", by="need", d="desc"):
     rows = GR.queue_rows()
     if f == "open": rows = [r for r in rows if r["open"]]
     else: rows = [r for r in rows if not r["open"]]
-    if f == "ready": rows = [r for r in rows if r["need"] == 0]
+    if f == "ready": rows = [r for r in rows if r["ready_next_close"]]
+    elif f == "queued": rows = [r for r in rows if r["queued_at_quorum"]]
     elif f in ("1", "2", "3", "4"): rows = [r for r in rows if r["need"] == int(f)]
     kind = SS.kind_of(QUEUE_COLS, by)
     tie = lambda r: (r["need"], r["born"] if r["born"] is not None else 1 << 30, -(r["last_seal_ts"] or 0), r["id"])
@@ -78,14 +81,14 @@ def queue_tab(qs, href, qsx):
     keep = lambda **o: dict(dict(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f), **o)
     link = lambda k, dd: href("queue", **keep(sort=k if k != "need" else "", dir="asc" if dd == "asc" else "", page="")) + "#queue"
     pend = [r for r in allr if not r["open"]]
-    cnt = {"": len(pend), "ready": sum(1 for r in pend if r["need"] == 0), **{str(n): sum(1 for r in pend if r["need"] == n) for n in (1, 2, 3, 4)}, "open": len(allr) - len(pend)}
+    cnt = {"": len(pend), "ready": sum(1 for r in pend if r["ready_next_close"]), "queued": sum(1 for r in pend if r["queued_at_quorum"]), **{str(n): sum(1 for r in pend if r["need"] == n) for n in (1, 2, 3, 4)}, "open": len(allr) - len(pend)}
     chips = "".join(f'<a href="{href("queue", **keep(need=k, page=""))}#queue" class="chip {"on" if k == f else ""}">{t} <small>{cnt[k]:,}</small></a>'
                     for k, t in QUEUE_FILTERS if cnt[k] or k == f)
-    def need_cell(r): return READY if r["need"] == 0 else f'<span class="num">{r["need"]}</span>'
+    def need_cell(r): return (READY if r["ready_next_close"] else QUEUED) if r["need"] == 0 else f'<span class="num">{r["need"]}</span>'
     def exp_cell(r):
         if r["expires"] is None: return '<span class="dim">···</span>'
         return f'E{r["expires"]}' + (f' <small class="dim">in {r["expires_in"]}</small>' if r["expires_in"] is not None else "")
-    trs = "".join(f'<tr{" class=rdy" if r["need"] == 0 else ""}><td>{ans_link(r["id"])}</td><td class="dk">{agent_cell(r["author"], r["name"]) if r["author"] else "···"}</td>'
+    trs = "".join(f'<tr{" class=rdy" if r["ready_next_close"] else ""}><td>{ans_link(r["id"])}</td><td class="dk">{agent_cell(r["author"], r["name"]) if r["author"] else "···"}</td>'
                   f'<td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]:,}</td><td class="r dk">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
                   f'<td class="r dk">{"E" + str(r["born"]) if r["born"] is not None else "···"}</td><td class="r">{exp_cell(r)}</td>'
                   f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td></tr>' for r in cur)
@@ -97,6 +100,7 @@ def queue_tab(qs, href, qsx):
                + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg + 1)))}#queue">More</a>' if pg < pages else "") + "</div>")
     ct = s["next_close_ts"]
     foot = (f'<p class="cov dim small">E{s["epoch"]} closes about {lt(ct, "t")}, in {countdown(ct)}, an estimate · '
+            f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
             f'Read {lt(s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · <a href="/about#grading-list">Method</a></p>') if ct else ""
     q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
     links = (f'<a class="more" href="/api/v1/governance/queue.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/queue{q}">API →</a>')
@@ -110,9 +114,13 @@ def grader_badge(r): return ' <span class="tag est">trusted</span>' if r.get("tr
 
 # ---------------------------------------------------------------- per-Agent
 READY = '<span class="tag ok">Ready</span>'
+QUEUED = '<span class="tag warn" title="At quorum, but outside the oldest rows the next close evaluates (params.settle_cap_per_close). It carries over.">Queued</span>'
 def _res(passed): return '<span class="tag ok">Passed</span>' if passed else '<span class="tag bad">Failed</span>'
-def _yesno(v, yes="Counts", no="Does not count"): return f'<span class="tag ok">{yes}</span>' if v else f'<span class="tag">{no}</span>'
-def _need(r): return READY if r["need"] == 0 else str(r["need"])
+def _yesno(v, yes="Counts", no="Does not count"):
+    """The server's q flag as published, never recomputed."""
+    return (f'<span class="tag ok" title="Counts at the next close (minepoa\'s q flag)">{yes}</span>' if v
+            else f'<span class="tag" title="Does not count at the next close (minepoa\'s q flag)">{no}</span>')
+def _need(r): return (READY if r.get("ready_next_close") else QUEUED) if r["need"] == 0 else str(r["need"])
 def _txl(t): return f'<a class="mono" href="/tx/{E(t)}">Seal tx</a>' if t else '<span class="dim">Not archived</span>'
 def _vote(al): return "Aligned" if al else '<span class="dim">Not aligned</span>'
 def _na_al(al): return "" if al else ' <span class="dim">(not aligned)</span>'

@@ -106,7 +106,7 @@ GRADE_BETTER = ("Improve my grading",
     "and explain how you would score each (0-3) and why, before submitting anything." + SAFE)
 CALIB = ("Read my calibration",
     "Read my PoA (Proof of Agent) grader calibration at https://poascan.io/api/v1/agents/calibration and find the row for MY_ADDRESS. Explain my jury seats and aligned rate (split by passed and failed), "
-    "my score mean and spread against the network's, and my seals per close, and say how much the sample sizes support each. Aligned means agreeing with the panel, not being right: "
+    "my score mean and spread against the network's, and my seals per close, and say how much the sample sizes support each. Aligned means agreeing with the settled outcome, not being right: "
     "do not suggest predicting other graders' votes, only grading each answer on its merits. Method: https://poascan.io/about#calibration" + SAFE)
 
 # ---- status ----

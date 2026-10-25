@@ -121,7 +121,7 @@ def main():
     finally: I.fetch = real
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "views.py"), encoding="utf-8").read()
     check("/about: pending seals carry no verdict", "Pending seals carry no verdict." in src)
-    check("/about: q is not documented and inferred", "q is not documented." in src and "inferred" in src)
+    check("/about: q is minepoa's flag, counts at the next close, not in the public docs; established link inferred (1.26.139)", "own flag</b>: the seal counts at the next close" in src and "not in the public docs" in src and "inferred" in src)
     check("/about: avg is the mean jury score", "mean jury score" in src)
     ov = GV.api_overview()
     check("overview API has established_check", "established_check" in ov and ov["established_check"]["source"] in ("close_records", "minepoa_grading", "conflict"))
