@@ -401,7 +401,11 @@ def charts(qs):
     def chart(title, key, pts, color):
         p = cut(pts)
         if len(p) < 2: body = f'<p class="na">Needs 2 closes in {dict((k, t) for k, t, _ in RANGES)[rng]}.</p>'
-        else: body = line(p, height=140, color=color, fmt=(lambda v: f"{v:.0f}%") if key == "gov-cover" else (lambda v: f"{v:,.0f}"), xfmt=xf, y0=0)
+        else:
+            from . import milestones as MS   # only the milestones that affect this chart (milestones.json), grouped as on Network > Charts
+            mk = MS.group([e for e in MS.events(key) if e["ts"] >= t0], p[0][0], p[-1][0])
+            body = line(p, height=140, color=color, fmt=(lambda v: f"{v:.0f}%") if key == "gov-cover" else (lambda v: f"{v:,.0f}"), xfmt=xf, y0=0, marks=mk)
+            if mk: body = body.replace('<div class="chartbox', '<div class="chartbox end', 1)   # 390px: open at the newest end, where the markers are
         return card(title, body)
     chips = "".join(f'<a href="{href("charts", range=k if k != "all" else "")}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
     return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="grid2 smalls">'

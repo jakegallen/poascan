@@ -434,7 +434,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
      Each label is centred on its line and kept inside the plot; one that fits no lane keeps its line and its title. */
   var ML=[];if(!bars&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
    d.marks.forEach(function(m){var mx=pl+(Wd-pl-pr)*(m[0]-mt0)/((mt1-mt0)||1),lw=Math.round(m[1].length*cw+14),x0=Math.max(pl+2,Math.min(Wd-pr-lw-2,mx-lw/2)),ln=-1;
-    for(var q=0;q<3;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:m[2]||m[1]})});
+    for(var q=0;q<4;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:m[2]||m[1]})});
    pt=8+20*ends.length+10}
   o.push('<svg class="cpchart" viewBox="0 0 '+Wd+' '+H+'" width="'+Wd+'" height="'+H+'" aria-hidden="true"><defs><linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+d.color+'" stop-opacity=".22"/><stop offset="1" stop-color="'+d.color+'" stop-opacity="0"/></linearGradient></defs>');
   for(var i=0;i<5;i++){var gy=Y(lo+(hi-lo)*i/4);o.push('<line x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" class="grid"/><text x="'+(pl-8)+'" y="'+(gy+4).toFixed(1)+'" class="ax" text-anchor="end">'+yl[i]+'</text>')}

@@ -98,9 +98,10 @@ for k in CP.CHARTS:
         check(f"{k} {r_}: shows that range with data, no empty state", pk["range"] == r_ and pk["ranges"][:4] == FOUR and (len(pk["pts"]) > 1 if pk["kind"] == "line" else len(pk["bars"]) > 0))
 pall = CP.payload("agents", "all", 400); p7a = CP.payload("agents", "7d", 400)
 check("All and 7d on short history show the same full history", pall["pts"] == p7a["pts"])
-evs = [e for e in MS.events() if p7["pts"][0][0] <= e["ts"] <= p7["pts"][-1][0]]
+evs = [e for e in MS.events("supply") if p7["pts"][0][0] <= e["ts"] <= p7["pts"][-1][0]]   # only the milestones that affect Supply
 want = [[a, b, c] for a, b, _u, c in MS.group(evs, p7["pts"][0][0], p7["pts"][-1][0], width=1000 - 64)] if evs else []
 check("milestones grouped with milestones.group at the plot width", p7["marks"] == want)
+check("each chart gets only its own milestones (Holders: chain-wide only)", all(m[1] in {e["label"] for e in MS.events(k)} for k in ("holders", "joins", "txs", "mined") for r_ in ("24h", "7d", "30d", "all") for m in CP.payload(k, r_, 400)["marks"]))
 ge = MS.group(MS.events(), MS.events()[0]["ts"], MS.events()[-1]["ts"] + 3600, width=400 - 64)
 labs = {e["label"] for e in MS.events()}
 check(f"milestone labels read the event name only, no +N suffix ({[x[1] for x in ge]})", ge and all(x[1] in labs and not re.search(r"\+\d", x[1]) for x in ge) and any("; " in x[3] for x in ge)

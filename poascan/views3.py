@@ -179,7 +179,7 @@ def growth_data():
         if hit and agents[0][1] < th: ms.append((hit, f"{th//1000}k" if th % 1000 == 0 else f"{th/1000:g}k", "agents"))
     for r in rows: ms.append((r["close_ts"], _SG.ep_label(r["g"]), "close"))
     c = _SG.cut()
-    if c: ms.append((c["ts"], c["label"], "cut"))   # also a milestone on the Supply chart (milestones.py); here it marks Agents and Holders
+    if c: ms.append((c["ts"], c["label"], "cut"))   # chart markers for the cut come from milestones.py (every chart); kept here for callers of ms
     t1 = _X.first_offer_ts()   # from /api/v1/swaps
     if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
@@ -192,8 +192,10 @@ def charts_body(rng=""):
     span = dict((k, v) for k, _, v in RANGES)[rng]; now = time.time(); t0 = now - span if span else 0
     g = growth_data(); cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
-    am = [(t, l) for t, l, k in g["ms"] if k in ("agents", "swap", "cut") and t >= t0]
-    em = [(t, l) for t, l, k in g["ms"] if k in ("close", "cut") and t >= t0]
+    from . import milestones as MS   # each chart carries only the milestones that affect its data (milestones.json), grouped so they stay readable at 390px
+    mk = lambda key, pts: MS.group([e for e in MS.events(key) if e["ts"] >= t0], pts[0][0], pts[-1][0]) if len(pts) > 1 else []
+    am = [(t, l) for t, l, k in g["ms"] if k == "agents" and t >= t0] + mk("agents", cut(g["agents"]))   # Agent count thresholds, then joining milestones
+    em = mk("holders", cut(g["holders"]))
     c = _SG.cut(); brk = [c["ts"]] if c else []   # agents_joined and holders restarted at the genesis cut: no line or delta across it
     n24 = A.joins_between(now - DAY, now)   # joins summed within each segment: the cut is neither a drop nor a rise
     tday = g["day"][-1]["n"] if g["day"] else None
@@ -205,12 +207,13 @@ def charts_body(rng=""):
     H = 140
     ac = line(cut(g["agents"]), height=H, color="#E3A33A", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, breaks=brk)
     hc = line(cut(g["holders"]), height=H, color="#3DDC97", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, breaks=brk)
-    from . import milestones as MS   # network upgrade markers (LabLeak post 1357), grouped so they stay readable at 390px
-    up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])
-    um = MS.group(up, sp[0][0], sp[-1][0]) if len(sp) > 1 else []
+    up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])   # up: every event, for the Milestones table
+    um = mk("supply", sp)
     sc = line(sp, height=H, color="#FFB000", fmt=compact, xfmt=xf, y0=0, marks=um)
-    if um: sc = sc.replace('<div class="chartbox">', '<div class="chartbox end">', 1)   # 390px: open at the newest end, where the markers are
-    th = None if rng == "all" else line([(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0], height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0)
+    end = lambda h, m: h.replace('<div class="chartbox', '<div class="chartbox end', 1) if m else h   # 390px: a marked chart opens at its newest end
+    ac, hc, sc = end(ac, any(len(x) > 2 for x in am)), end(hc, em), end(sc, um)
+    tp = [(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0]
+    tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="#8FA3B8", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)
     ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("#E3A33A", "#3DDC97"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
     tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%m-%d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("#E3A33A",), fmt=lambda v: f"{v:,.0f}")
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py

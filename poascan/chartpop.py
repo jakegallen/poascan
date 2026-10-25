@@ -138,5 +138,5 @@ def payload(key, rng, w):
     if cfg["marks"] and len(pts) > 1:
         from . import milestones as MS
         x0, x1 = pts[0][0], pts[-1][0]
-        out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(), x0, x1, width=max(120, w - 64))]
+        out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(key), x0, x1, width=max(120, w - 64))]   # only milestones that affect this chart
     return out

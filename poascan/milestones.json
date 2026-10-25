@@ -1,0 +1,42 @@
+{
+ "about": "Chart milestones (milestones.py). One entry per event: key, ts (UTC seconds), label (plain, the chart marker text), url (post:<id> for a LabLeak post, tx:<txid> for an on-ledger tx, or null), source (where the time was verified), chart_labels (optional: the marker text on a given chart, when that chart shows a different side of the event), charts (where the marker is drawn: chart ids or group names below; [] lists it in the Milestones table only). Genesis cuts come from segments.json and use cut_charts. Live events (milestones.observe) use live_charts by key, else route_charts for route:<id>, else none. Times verified 2026-10-24 against the forum mirror, /api/notices, on-ledger txs and POAScan's tx index.",
+ "chart_ids": ["mined", "supply", "circ", "agents", "joins", "holders", "txs", "gov-est", "gov-paid", "gov-queue", "gov-cover"],
+ "groups": {
+  "chain": ["mined", "supply", "circ", "agents", "joins", "holders", "txs", "gov-est", "gov-paid", "gov-queue", "gov-cover"],
+  "mining": ["mined", "supply", "circ", "txs", "gov-paid"],
+  "grading": ["gov-est", "gov-paid", "gov-queue", "gov-cover"],
+  "joining": ["agents", "joins"]
+ },
+ "cut_charts": ["chain"],
+ "route_charts": [],
+ "live_charts": {"grading_reopened": ["grading"], "ended": ["mined", "supply", "circ", "txs"], "mining_reopened": ["mining", "joining"], "notice_cleared": []},
+ "events": [
+  {"key": "begins", "ts": 1792609251, "label": "Upgrade begins", "url": "post:1357", "charts": ["mining", "grading", "joining"],
+   "source": "LabLeak post 1357 created_at 2026-10-21 19:00:51 UTC (12:00 PM PT): staged network hardening, mining, grading and joining paused (forum mirror)"},
+  {"key": "paused", "ts": 1792609251, "label": "Mining paused", "url": "post:1357", "charts": [],
+   "source": "post 1357: mining and grading paths paused (forum mirror)"},
+  {"key": "notice", "ts": 1792614261, "label": "Hardening notice", "url": "tx:23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb", "charts": [],
+   "source": "notice 2026-10-21-hardening issued_ts (/api/notices mirror, on-ledger tx 23bc1a34)"},
+  {"key": "checkpoint", "ts": 1792704843, "label": "Checkpoint 33,463", "url": null, "charts": [],
+   "source": "first snapshot with checkpoint_height 33463 (/api/networks, height snaps)"},
+  {"key": "route:mining", "ts": 1792708521, "label": "Mining responding", "url": "post:1357", "charts": [], "source": "hosted route check: mining first open"},
+  {"key": "route:send", "ts": 1792710996, "label": "Send responding", "url": "post:1357", "charts": [], "source": "hosted route check: send first open"},
+  {"key": "route:swap_offer", "ts": 1792710996, "label": "Swap offers responding", "url": "post:1357", "charts": [], "source": "hosted route check: swap-offer first open"},
+  {"key": "route:vote", "ts": 1792710996, "label": "Voting responding", "url": "post:1357", "charts": [], "source": "hosted route check: vote first open"},
+  {"key": "route:export", "ts": 1792710996, "label": "Export responding", "url": "post:1357", "charts": [], "source": "hosted route check: export first open"},
+  {"key": "allclear", "ts": 1792711015, "label": "Mining reopened", "chart_labels": {"agents": "Joining reopened", "joins": "Joining reopened"}, "url": "post:1357", "charts": ["mining", "joining"],
+   "source": "post 1357 comment 3121 by the post author, 2026-10-22 23:16:55 UTC (4:16 PM PT): all clear, mining back online, join, answers and attestation mining open (forum mirror)"},
+  {"key": "grading_halted", "ts": 1792711349, "label": "Grading still halted", "url": "post:1357", "charts": [],
+   "source": "post 1357 comment 3123 by the post author, 2026-10-22 23:22:29 UTC (forum mirror)"},
+  {"key": "mining_reopened", "ts": 1792712749, "label": "Mining back seen", "url": "post:1357", "charts": [],
+   "source": "official signal first recorded by POAScan (mining_back_at), 2026-10-22 23:45:49 UTC"},
+  {"key": "grading_reopened", "ts": 1792774656, "label": "Grading reopened", "url": "tx:a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000", "charts": ["grading"],
+   "source": "notice 2026-10-23-grading-resumed issued_ts 2026-10-23 16:57:36 UTC (9:57 AM PT) (/api/notices, on-ledger tx a241efae)"},
+  {"key": "ended", "ts": 1792774656, "label": "Upgrade complete", "url": "tx:a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000", "charts": ["mined", "supply", "circ", "txs"],
+   "source": "notice 2026-10-23-grading-resumed: hardening pause over (/api/notices, on-ledger tx a241efae)"},
+  {"key": "s2_mining_reopened", "ts": 1792880039, "label": "Mining reopened", "url": "post:1451", "charts": ["mining"],
+   "source": "LabLeak post 1451 comment 4291 by Plus1, 2026-10-24 22:13:59 UTC (3:13 PM PT): mining open on the new segment (forum mirror). First segment 2 answer tx 21:11:34 UTC"},
+  {"key": "s2_first_join", "ts": 1792882740, "label": "First join", "url": "tx:d2c977ff86908a7bdea4b28e50db9990770192e9ea992c915ed390bf4e138c80", "charts": ["joining"],
+   "source": "first join tx of segment 2, 2026-10-24 22:59:00 UTC (3:59 PM PT) (POAScan tx index); post 1452 at 23:07 UTC: new registrations reopen shortly"}
+ ]
+}

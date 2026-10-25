@@ -468,7 +468,7 @@ a.pill:hover{text-decoration:none;filter:brightness(1.15)}
 .pair{font:600 var(--t14) var(--mono);color:var(--hi)}.pair .dim{margin:0 3px}
 .xcd{color:var(--amber)}
 .sechead .tag{margin-left:10px;vertical-align:middle}
-.mk line{stroke:#6B5420;stroke-dasharray:3 3}.mk .mkl{fill:var(--amber);font-size:12px}
+.mk line{stroke:#6B5420;stroke-dasharray:3 3}.mk .mkl{fill:var(--amber);font-size:12px}.chart .mk .mkb{fill:#14120E;opacity:.88}.chartbox.tl .xt{top:34px}
 .safety{display:grid;gap:14px}.lks{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .lk{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:var(--card2);color:var(--txt);font:600 var(--t14) var(--ui)}
 .lk:hover{text-decoration:none;border-color:#6B5420;color:var(--amber)}

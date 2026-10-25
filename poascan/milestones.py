@@ -1,4 +1,6 @@
-"""Network upgrade milestones (minepoa.com hardening, LabLeak post 1357) for Network > Charts.
+"""Network upgrade milestones (minepoa.com hardening, LabLeak post 1357, the genesis cut) for every time chart.
+Each event names the charts whose data it affects (milestones.json "charts"); events(chart=...) returns only those, so a
+marker never lands on an unrelated chart. The Milestones table on Network > Charts lists every event.
 
 Two sources, both public or POAScan's own:
 * SEED: events already past, each verified once against POAScan's own database and mirrors (forum mirror, /api/notices
@@ -7,7 +9,7 @@ Two sources, both public or POAScan's own:
   POAScan first saw them, in the blob upgrade_milestones, so they survive restarts. A state flag (notice cleared,
   grading reopened, upgrade ended) is kept only once a second look at least CONFIRM_S later still shows it, so one
   odd read never adds a marker; the stored time is still the first sighting."""
-import time
+import json, os, time
 from . import db
 
 BLOB = "upgrade_milestones"
@@ -17,41 +19,53 @@ POST = f"https://minepoa.com/lableak/#/post/{POST_ID}"
 def _tx(txid): return f"/tx/{txid}"
 DONE_TX = "a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000"   # notice 2026-10-23-grading-resumed
 
-# key, ts (UTC), label, url, source. Verified 2026-10-22 against the production database:
-SEED = [
-    ("begins", 1792609251, "Upgrade begins", POST, "LabLeak post 1357 created_at 2026-10-21 19:00:51 (forum mirror)"),
-    ("paused", 1792609251, "Mining, grading paused", POST, "post 1357: mining and grading paths paused (forum mirror)"),
-    ("notice", 1792614261, "Hardening notice", _tx("23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb"),
-     "notice 2026-10-21-hardening issued_ts (/api/notices mirror, on-ledger tx 23bc1a34)"),
-    ("checkpoint", 1792704843, "Checkpoint 33,463", None, "first snapshot with checkpoint_height 33463 (/api/networks, height snaps)"),
-    ("route:mining", 1792708521, "Mining responding", POST, "hosted route check: mining first open"),
-    ("route:send", 1792710996, "Send responding", POST, "hosted route check: send first open"),
-    ("route:swap_offer", 1792710996, "Swap offers responding", POST, "hosted route check: swap-offer first open"),
-    ("route:vote", 1792710996, "Voting responding", POST, "hosted route check: vote first open"),
-    ("route:export", 1792710996, "Export responding", POST, "hosted route check: export first open"),
-    ("allclear", 1792711015, "All-clear", POST, "post 1357 comment 3121 by the post author, 2026-10-22 23:16:55 (forum mirror)"),
-    ("grading_halted", 1792711349, "Grading still halted", POST, "post 1357 comment 3123 by the post author, 2026-10-22 23:22:29 (forum mirror)"),
-    ("mining_reopened", 1792712749, "Mining reopened", POST, "official signal recorded by POAScan (mining_back_at)"),
-    # Verified 2026-10-23 against /api/notices and the on-ledger notice tx a241efae (G0): "GRADING IS BACK, all paths OPEN ...
-    # Hardening pause over, resume normal cadence." One notice, so both markers carry its issued_ts.
-    ("grading_reopened", 1792774656, "Grading reopened", _tx(DONE_TX), "notice 2026-10-23-grading-resumed issued_ts (/api/notices, on-ledger tx a241efae)"),
-    ("ended", 1792774656, "Upgrade complete", _tx(DONE_TX), "notice 2026-10-23-grading-resumed: hardening pause over (/api/notices, on-ledger tx a241efae)"),
-]
-SEEDED = {k for k, *_ in SEED}
-# Keys that always get their own marker (never folded into a nearby group), so both real events stay labelled.
+# The verified events, their plain labels and the charts each one belongs on live in milestones.json (config, not code).
+CONFIG_PATH = os.environ.get("POASCAN_MILESTONES_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "milestones.json")
+with open(CONFIG_PATH, encoding="utf-8") as _f: CFG = json.load(_f)
+CHART_IDS = tuple(CFG["chart_ids"])
+GROUPS = {k: tuple(v) for k, v in CFG["groups"].items()}
+
+def _url(u):
+    if not u: return None
+    if u.startswith("post:"): return f"https://minepoa.com/lableak/#/post/{int(u[5:])}"
+    if u.startswith("tx:"): return _tx(u[3:])
+    return u
+
+def expand(charts):
+    """Chart ids for a relevance list of chart ids and group names (unknown names raise: the config test catches them)."""
+    out = []
+    for c in charts or ():
+        for x in (GROUPS[c] if c in GROUPS else (c,)):
+            if x not in CHART_IDS: raise ValueError(f"milestones.json: unknown chart {x}")
+            if x not in out: out.append(x)
+    return tuple(out)
+
+# key, ts (UTC), label, url, source
+SEED = [(e["key"], int(e["ts"]), e["label"], _url(e.get("url")), e["source"]) for e in CFG["events"]]
+RELEVANT = {e["key"]: expand(e.get("charts")) for e in CFG["events"]}
+CHART_LABELS = {e["key"]: dict(e["chart_labels"]) for e in CFG["events"] if e.get("chart_labels")}
 # Segment boundaries (segments.json): one milestone per cut, linked to its notice tx when the config names one.
 from . import segments as _SG
 for _c in _SG.cuts():
     _k = "genesis_cut" if _c["segment"] == 2 else f"genesis_cut_s{_c['segment']}"
     SEED.append((_k, _c["ts"], _c["label"], _tx(_c["txid"]) if _c.get("txid") else None,
                  f"segments.json: {_c['label']} at the start of segment {_c['segment']}" + (f" (notice {_c['notice_id']})" if _c.get("notice_id") else "")))
+    RELEVANT[_k] = expand(CFG.get("cut_charts") or ["chain"])
 SEEDED = {k for k, *_ in SEED}
-SOLO = {"grading_reopened", "ended", "genesis_cut"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
+# Keys that always get their own marker (never folded into a nearby group), so each real event stays labelled.
+SOLO = {"begins", "allclear", "grading_reopened", "ended", "genesis_cut", "s2_mining_reopened", "s2_first_join"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
+
+def charts_of(key):
+    """The chart ids a milestone is drawn on (seeded: milestones.json; live: live_charts, route_charts; else none)."""
+    if key in RELEVANT: return RELEVANT[key]
+    if key in (CFG.get("live_charts") or {}): return expand(CFG["live_charts"][key])
+    if key.startswith("route:"): return expand(CFG.get("route_charts") or [])
+    return ()
 
 # Routes the route check covers: (route id, label). A route seen open gets "<label> responding" at its first open read.
 ROUTE_LABEL = {"mining": "Mining", "grading": "Grading", "send": "Send", "swap_offer": "Swap offers", "vote": "Voting", "export": "Export"}
 # Chart priority when markers are grouped: the group shows its most telling label (no count suffix).
-PRIORITY = ["genesis_cut", "ended", "grading_reopened", "mining_reopened", "notice_cleared", "allclear", "checkpoint", "begins", "route:mining", "grading_halted"]
+PRIORITY = ["genesis_cut", "s2_mining_reopened", "s2_first_join", "ended", "grading_reopened", "allclear", "mining_reopened", "notice_cleared", "checkpoint", "begins", "route:mining", "grading_halted"]
 
 def _route_since():
     """{route: since} for routes whose newest route-check read is open (POAScan's own hosted_routes record)."""
@@ -106,11 +120,13 @@ def observe(now=None):
     if changed: db.put_blob(BLOB, dict(events=ev, pending=pend))
     return ev
 
-def events():
-    """Every upgrade milestone, oldest first: [{key, ts, label, url, source}]."""
-    out = [dict(key=k, ts=t, label=l, url=u, source=s) for k, t, l, u, s in SEED]
+def events(chart=None):
+    """Every upgrade milestone, oldest first: [{key, ts, label, url, source, charts}]. chart: only those drawn on that chart
+    (milestones.json relevance), for chart markers; without it, every event (the Milestones table, signed badges)."""
+    out = [dict(key=k, ts=t, label=l, url=u, source=s, charts=charts_of(k)) for k, t, l, u, s in SEED]
     for k, v in ((db.get_blob(BLOB)[0] or {}).get("events") or {}).items():
-        if k not in SEEDED: out.append(dict(key=k, ts=v["ts"], label=v["label"], url=v.get("url"), source=v.get("src")))
+        if k not in SEEDED: out.append(dict(key=k, ts=v["ts"], label=v["label"], url=v.get("url"), source=v.get("src"), charts=charts_of(k)))
+    if chart is not None: out = [dict(e, label=CHART_LABELS.get(e["key"], {}).get(chart, e["label"])) for e in out if chart in e["charts"]]
     return sorted(out, key=lambda e: (e["ts"], e["key"]))
 
 def group(evs, t0, t1, width=576, gap=64):

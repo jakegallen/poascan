@@ -18,20 +18,22 @@ iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
 
 # ---------------- verified past events ----------------
 ev = {e["key"]: e for e in MS.events()}
-want = {"begins": ("2026-10-21T19:00:51Z", "Upgrade begins"), "paused": ("2026-10-21T19:00:51Z", "Mining, grading paused"),
+want = {"begins": ("2026-10-21T19:00:51Z", "Upgrade begins"), "paused": ("2026-10-21T19:00:51Z", "Mining paused"),
         "notice": ("2026-10-21T20:24:21Z", "Hardening notice"), "checkpoint": ("2026-10-22T21:34:03Z", "Checkpoint 33,463"),
         "route:mining": ("2026-10-22T22:35:21Z", "Mining responding"), "route:send": ("2026-10-22T23:16:36Z", "Send responding"),
         "route:swap_offer": ("2026-10-22T23:16:36Z", "Swap offers responding"), "route:vote": ("2026-10-22T23:16:36Z", "Voting responding"),
-        "route:export": ("2026-10-22T23:16:36Z", "Export responding"), "allclear": ("2026-10-22T23:16:55Z", "All-clear"),
-        "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining reopened"),
-        "grading_reopened": ("2026-10-23T16:57:36Z", "Grading reopened"), "ended": ("2026-10-23T16:57:36Z", "Upgrade complete")}
+        "route:export": ("2026-10-22T23:16:36Z", "Export responding"), "allclear": ("2026-10-22T23:16:55Z", "Mining reopened"),
+        "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining back seen"),
+        "grading_reopened": ("2026-10-23T16:57:36Z", "Grading reopened"), "ended": ("2026-10-23T16:57:36Z", "Upgrade complete"),
+        "s2_mining_reopened": ("2026-10-24T22:13:59Z", "Mining reopened"), "s2_first_join": ("2026-10-24T22:59:00Z", "First join"),
+        "genesis_cut": ("2026-10-24T21:01:00Z", "Genesis cut")}
 for k, (t, lab) in want.items():
     check(f"{lab} at {t}", k in ev and iso(ev[k]["ts"]) == t and ev[k]["label"] == lab)
 check("upgrade begins at the post 1357 time (maint.STARTED)", ev["begins"]["ts"] == M.STARTED)
 check("events are oldest first", [e["ts"] for e in MS.events()] == sorted(e["ts"] for e in MS.events()))
 check("labels are terse (at most 24 characters) with no em dash", all(len(e["label"]) <= 24 and "\u2014" not in e["label"] + (e["source"] or "") for e in MS.events()))
-pub = re.compile(r"^(https://minepoa\.com/lableak/#/post/1357|/tx/[0-9a-f]{64})$")
-check("links only to public anchors (post 1357 or an on-ledger notice tx)", all(e["url"] is None or pub.match(e["url"]) for e in MS.events()))
+pub = re.compile(r"^(https://minepoa\.com/lableak/#/post/\d+|/tx/[0-9a-f]{64})$")
+check("links only to public anchors (a LabLeak post or an on-ledger tx)", all(e["url"] is None or pub.match(e["url"]) for e in MS.events()))
 src = open(os.path.join(ROOT, "poascan", "milestones.py"), encoding="utf-8").read().lower()
 check("no private sources and no key wording in the module", not any(w in src for w in ("halt_src", "pulse_src", "halts.", "pulse.", "vulnerab", "api key", "?key=")))
 
@@ -81,18 +83,44 @@ check("completion: the events list has no 'Notice cleared'", "notice_cleared" no
 check("a stale live 'Upgrade ends' never shows (the seed replaces it)", [e["label"] for e in MS.events() if e["key"] == "ended"] == ["Upgrade complete"])
 check("seeded keys are never replaced by live reads", ev["mining_reopened"]["ts"] == {e["key"]: e for e in MS.events()}["mining_reopened"]["ts"])
 
+# ---------------- per-chart relevance (milestones.json) ----------------
+import json
+cfg = json.load(open(os.path.join(ROOT, "poascan", "milestones.json"), encoding="utf-8"))
+from poascan import chartpop as CP
+check("every pop-out time chart with markers is a known chart id", all(k in MS.CHART_IDS for k, c in CP.CHARTS.items() if c["marks"]))
+check("every config event names its charts ([] = Milestones table only), with known ids or groups", all("charts" in e and MS.expand(e["charts"]) is not None for e in cfg["events"]))
+rel = {k: [e["key"] for e in MS.events(k)] for k in MS.CHART_IDS}
+check(f"Genesis cut on every chart (chain-wide) {[k for k in rel if 'genesis_cut' not in rel[k]]}", all("genesis_cut" in v for v in rel.values()))
+check("hardening start on mining, grading and joining charts", all("begins" in rel[k] for k in ("mined", "supply", "circ", "txs", "gov-paid", "gov-queue", "gov-cover", "joins", "agents")) and "begins" not in rel["holders"])
+check("mining reopened (Oct 22 and segment 2) on mining charts; Oct 22 also on joining charts, as Joining reopened",
+      all({"allclear", "s2_mining_reopened"} <= set(rel[k]) for k in ("mined", "supply", "circ", "txs")) and "s2_mining_reopened" not in rel["joins"]
+      and [e["label"] for e in MS.events("joins") if e["key"] == "allclear"] == ["Joining reopened"] and [e["label"] for e in MS.events("mined") if e["key"] == "allclear"] == ["Mining reopened"])
+check("First join only on Agents and Agents / hr", [k for k, v in rel.items() if "s2_first_join" in v] == ["agents", "joins"])
+check("Grading reopened only on grading charts; Upgrade complete never on them (no two labels at one time)",
+      [k for k, v in rel.items() if "grading_reopened" in v] == ["gov-est", "gov-paid", "gov-queue", "gov-cover"] and not any("ended" in rel[k] for k in ("gov-est", "gov-paid", "gov-queue", "gov-cover")))
+check("Holders carries only chain-wide events", rel["holders"] == ["genesis_cut"])
+check("route reads, checkpoint, notices and the back signal are table only", not any(k in v for v in rel.values() for k in ("checkpoint", "notice", "paused", "grading_halted", "mining_reopened", "route:mining", "route:send")))
+check("labels are plain: no +N, no em or en dash, at most 24 characters, per chart too",
+      all(len(e["label"]) <= 24 and not re.search(r"\+\d|[\u2013\u2014]", e["label"]) for k in MS.CHART_IDS for e in MS.events(k)))
+check("no em or en dash anywhere in the config", not re.search(r"[\u2013\u2014]", open(os.path.join(ROOT, "poascan", "milestones.json"), encoding="utf-8").read()))
+check("a live event of an unknown kind is table only", MS.charts_of("route:grading") == () and MS.charts_of("something_new") == ())
+
 # ---------------- grouping ----------------
-e7 = [e for e in MS.events() if e["key"] in want and e["ts"] < 1792774656]
+e7 = [e for e in MS.events("mined") if e["ts"] < 1792774656]
 t1 = 1792712749 + 3600; g = MS.group(e7, t1 - 7 * 86400, t1)
-check(f"7 days: two groups before completion ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
-g2 = MS.group([e for e in MS.events() if e["key"] in want], 1792774656 + 3600 - 7 * 86400, 1792774656 + 3600)
-check(f"7 days with completion: both completion markers labelled ({[x[1] for x in g2]})", [x[1] for x in g2][-2:] == ["Upgrade complete", "Grading reopened"] and not any(re.search(r"\+\d", x[1]) for x in g2))
-check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for x in g))
-check("a group's tip lists every member", all(e["label"] in g[1][3] for e in e7 if e["ts"] >= 1792704843) and g[1][3].endswith("(UTC)"))
+check(f"7 days, Total mined, before completion: two markers ({[x[1] for x in g]})", [x[1] for x in g] == ["Upgrade begins", "Mining reopened"])
+g2 = MS.group(MS.events("mined"), 1792880039 + 3600 - 7 * 86400, 1792880039 + 3600)
+check(f"7 days, Total mined, with segment 2: every event labelled ({[x[1] for x in g2]})", [x[1] for x in g2] == ["Upgrade begins", "Mining reopened", "Upgrade complete", "Genesis cut", "Mining reopened"])
+g3 = MS.group(MS.events("gov-queue"), 1792880039 + 3600 - 7 * 86400, 1792880039 + 3600)
+check(f"7 days, Grading queue ({[x[1] for x in g3]})", [x[1] for x in g3] == ["Upgrade begins", "Grading reopened", "Genesis cut"])
+check("group labels carry no +N count suffix", not any(re.search(r"\+\d", x[1]) for gg in (g, g2, g3) for x in gg))
+gz = MS.group([e for e in MS.events() if e["key"] in want and e["ts"] < 1792774656], 1792609251 - 3600, 1792712749 + 3600)
+check("a group's tip lists every member, in UTC", all(x[3].endswith("(UTC)") for x in gz) and sum(len(x[3].split("; ")) for x in gz) == len([k for k in want if 1792609251 <= {e["key"]: e for e in MS.events()}[k]["ts"] < 1792774656]))
 check("a group links its lead event's source", g[1][2] == MS.POST)
-g1 = MS.group(e7, 1792704843 - 600, 1792712749 + 600)
-check(f"zoomed in, close events still group, far ones split ({[x[1] for x in g1]})", len(g1) >= 3 and sum(len(x[3].split("; ")) for x in g1) == 9 and not any("+" in x[1] for x in g1))
 check("events outside the range are left out", MS.group(e7, 0, 1000) == [])
+for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 60 * 86400)):
+    x1 = 1792880039 + 7200; gg = MS.group(MS.events("joins"), x1 - sp_, x1, width=326)
+    check(f"{r_} at 390px (Agents / hr): markers present, plain labels {[x[1] for x in gg]}", gg and all(not re.search(r"\+\d", x[1]) for x in gg) and "Genesis cut" in [x[1] for x in gg])
 
 # ---------------- Supply chart and Milestones table ----------------
 s = 1.0e9
@@ -104,12 +132,20 @@ from poascan import views3 as V3
 h = V3.charts_body("7d")
 sup = h[h.find(">Supply<"):h.find(">Txs")]
 check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
+check("Supply has no table-only markers (route reads, checkpoint)", ">Checkpoint 33,463<" not in sup and "responding<" not in sup)
+hol = h[h.find(">Holders"):h.find(">Supply<")]
+check("Holders has no epoch close or swap markers", not re.search(r">(S\d+ )?E\d+<", hol) and "1st swap" not in hol)
+agt = h[h.find(">Agents<"):h.find(">Holders")]
+check("Agents has no swap marker", "1st swap" not in agt)
 check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
 mls = h[h.find(">Milestones<"):]
-check("Milestones table lists every upgrade event", all(lab in mls for _, lab in want.values()))
-check("table links the all-clear to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>All-clear<', mls) is not None)
+check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
+check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)
 check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls)
 check("no em dash, no share button in the charts section", "\u2014" not in h and "share" not in h.lower())
+from poascan import governance as GV
+gh_ = GV.charts({})
+check("Governance charts carry their own milestones (Grading reopened, not Upgrade complete or route reads)", ">Grading reopened<" in gh_ and ">Upgrade complete<" not in gh_ and "responding<" not in gh_ and ">Checkpoint" not in gh_)
 from poascan import indexer as I
 check("the milestones job runs every 5 min", {j[0]: j[2] for j in I.JOBS}.get("milestones") == 300)
 I.flush_counts(force=True); before = db.q1("SELECT COALESCE(SUM(n),0) AS n FROM upstream_counts")["n"]

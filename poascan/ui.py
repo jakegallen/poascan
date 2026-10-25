@@ -392,7 +392,7 @@ def layout(title, body, active="/", live=None, head=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
-<link rel="stylesheet" href="/static/style.css?v=113">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v=114">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -405,7 +405,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=89" defer></script></body></html>'''
+<script src="/static/app.js?v=90" defer></script></body></html>'''
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
@@ -567,6 +567,8 @@ def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None
         end = X(x) + 3 + CW * len(l) + 2 > W - 2 if low else X(x) > W - 60
         txt = "" if low and ln is None else (f'<text x="{(X(x)-3 if end else X(x)+3):.1f}" y="{(H-pb-6 - ln * 13) if low else (pt+8 + (i % 2) * 11)}" '
                                              f'class="ax mkl"{" text-anchor=\"end\"" if end else ""}>{E(l)}</text>')
+        if low and ln is not None:   # a backing plate so a bottom label stays readable where the line runs low (Txs, Agents / hr)
+            lw = CW * len(l) + 4; txt = f'<rect class="mkb" x="{(X(x)-3-lw+2 if end else X(x)+1):.1f}" y="{H-pb-6 - ln * 13 - 10:.1f}" width="{lw:.1f}" height="13" rx="2"/>' + txt
         g_ = (f'<g class="mk">{"<title>" + E(tip) + "</title>" if tip else ""}<line x1="{X(x):.1f}" x2="{X(x):.1f}" y1="{pt}" y2="{H-pb}"/>{txt}</g>')
         ext = url and url.startswith("http")
         return f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}>{g_}</a>' if url else g_
@@ -574,7 +576,8 @@ def line(points, height=170, color="#FFB000", fmt=compact, xfmt=None, marks=None
     step = max(1, len(pts) // 60)
     circ = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="2.6" fill="{color}" data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-cx="{X(x):.1f}"/>' for x, y in pts[::step])
     pb_ = f'<path d="{path(b)}" fill="none" stroke="{color}" stroke-width="2" stroke-dasharray="5 4" opacity=".7"/>' if len(b) > 1 else ""
-    return f'<div class="chartbox"><svg class="chart" viewBox="0 0 {W} {H}">{g}{mk}<path d="{path(a)}" fill="none" stroke="{color}" stroke-width="2"/>{pb_}{circ}{xs}</svg></div>'
+    tl = any(x0 <= m[0] <= x1 and i not in lanes for i, m in enumerate(marks or []))   # labels along the top: the hover tip sits below them
+    return f'<div class="chartbox{" tl" if tl else ""}"><svg class="chart" viewBox="0 0 {W} {H}">{g}<path d="{path(a)}" fill="none" stroke="{color}" stroke-width="2"/>{pb_}{circ}{mk}{xs}</svg></div>'
 
 def hbars(items, total=None, color="#FFB000", maxn=12):
     items = items[:maxn]; mx = max((v for _, v in items), default=1) or 1; tot = total or sum(v for _, v in items) or 1
