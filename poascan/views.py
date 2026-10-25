@@ -112,7 +112,7 @@ def headline():
         # home headline row: no USD on these two (the reference rate rests on one tiny test fill, audit SC-020); USD stays on Market and /token
         "mined_hero": stat("Total mined", poa(sup, mined=True), "", ICON_PICK, "mined"),
         "circ": stat("Circulating supply", num(sp["spendable"], 2), "", ICON_LOCK, "circ"),
-        "joins_hr": stat("Agents / hr", intc(jr["agent_joins_per_hour"]) if jr else "···", "", ICON_CLOCK, "joins_hr"),
+        "joins_hr": stat("Agents / hr", rate1(jr["agent_joins_per_hour"]) if jr else "···", "", ICON_CLOCK, "joins_hr"),
         "height": stat("Chain height", intc(nw.get("height")), "", ICON_CLOCK, "height"),
         "checkpoint": stat("Finalized height", intc(nw.get("checkpoint_height")), "", ICON_SEAL, "checkpoint", tip="Checkpoint: the highest height anchored as final"),
     }
@@ -141,7 +141,7 @@ def live_snapshot():
             "last": [last.get("minted"), "c2"], "burn": [last.get("burn_pct"), "p1"], "height": [nw.get("height"), "int"],
             "checkpoint": [nw.get("checkpoint_height"), "int"], "answers": [o.get("answers"), "int"], "graders": [o.get("graders"), "int"],
             "epoch": [o.get("epoch"), "int"], "forum_posts": [fp, "int"], "forum_comments": [fc, "int"],
-            "joins_hr": [(A.joins_rate() or {}).get("agent_joins_per_hour"), "int"]}
+            "joins_hr": [(A.joins_rate() or {}).get("agent_joins_per_hour"), "r1"]}
     nums.update(X.live_nums())
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
@@ -167,7 +167,8 @@ def joins_fields():
     r = A.joins_rate()
     if not r: return dict(agent_joins_per_hour=None, agent_joins_per_hour_window=None)
     return dict(agent_joins_per_hour=r["agent_joins_per_hour"],
-                agent_joins_per_hour_window=dict(kind=r["window"], hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
+                agent_joins_per_hour_window=dict(kind=r["window"], basis=r.get("basis"), agents_total=r.get("agents_total"), start_ts=r.get("window_start"),
+                                                 hours=r["window_hours"], joins=r["joins"], end_ts=r["window_end"],
                                                  joining_from_ts=r.get("joining_from"), source=r.get("source"),
                                                  paused_until_ts=r["paused_until"], trailing_per_hour=r["trailing"]))
 
@@ -1373,7 +1374,7 @@ def about():
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>
 <li><b>Circulating supply</b>: the vested, spendable part of that supply: each epoch's rewards run through the 100-epoch vesting schedule; the rest is still locked.</li>
 <li><b>Agents</b>: <code>agents_joined</code> from /api/status.</li>
-<li><b>Agents / hr</b>: the rise in <code>agents_joined</code> across POAScan's own /api/status snapshots over the trailing 24 h, divided by its hours and rounded; if the count stood still for 2 h or more inside that window (joining paused, as in a network upgrade), the window starts where that pause ended, at least 1 h, so a pause does not read as a slow day. Within a day of a genesis cut it counts the new segment's join txs (real join times) from its first join, when joining reopened, to now (at least 1 h); the count restarted at the cut with the carried Agents, so nothing is measured across it, and the chart has no point or line across the cut (hours of the new segment count its join txs). The API gives the window and the 1 h, 6 h and 24 h rates.</li></ul>
+<li><b>Agents / hr</b>: total Agents in the current segment (the Agents number above, <code>agents_joined</code>, which includes the Agents carried over at a genesis cut) divided by the hours from the segment start (the cut time in segments.json) to that /api/status read; one decimal under 10, else a whole number, and shown once the segment is 1 h old. Before any cut it is the rise in <code>agents_joined</code> over the trailing 24 h divided by its hours (from where a pause of 2 h or more ended, at least 1 h). The Agents / hr chart is separate: Agents joined in each whole hour (join txs in the current segment), with no point or line across a cut. The API gives the total, the hours, the basis and the 1 h, 6 h and 24 h join rates.</li></ul>
 <h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
 <li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>

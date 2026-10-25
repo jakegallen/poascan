@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.115] - 2026-10-24
+
+### Changed
+- Agents / hr (Home headline, API and MCP `agent_joins_per_hour`) is now total Agents in the current segment, the same number as the Agents stat (it includes the Agents carried over at the genesis cut), divided by the hours from the segment start in segments.json to that status read. One decimal under 10, else a whole number; null until the segment is 1 h old. `agent_joins_per_hour_window` adds `basis` (`total_over_hours_since_segment_start`), `agents_total` and `start_ts`; kind is `since_segment_start`. The value can now carry one decimal (number, was integer). The per hour chart is unchanged. Method on /about#home; a test in tools/netoverview_test.py.
+
 ## [1.26.114] - 2026-10-24
 
 ### Changed

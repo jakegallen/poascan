@@ -820,8 +820,38 @@ def joins_rate_calc(pts, now=None, floor=None, join_ts=None):
                 window="since_pause" if paused_until is not None else "since_cut" if since_cut else "24h", window_end=end, paused_until=paused_until,
                 joining_from=None, source="status", trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
 
+AGENTS_RATE_BASIS = "total_over_hours_since_segment_start"
+
+def rate_fmt(v):
+    """The headline Agents / hr as shown: one decimal under 10, else a whole number (pure)."""
+    if v is None: return None
+    r = round(v, 1)
+    return r if r < 10 else int(round(v))
+
+def agents_rate_calc(total, start, end):
+    """Pure: the headline Agents / hr in a segment = total Agents (agents_joined, the site's Agents for the current segment,
+    carried Agents included) / hours from the segment start (segments.json start_ts) to end (the read of that total).
+    None without a total or a start, or with less than JOIN_MIN_S of the segment, so a few minutes never inflate it."""
+    if total is None or not start or end is None or end - start < JOIN_MIN_S: return None
+    h = (end - start) / 3600
+    return dict(agent_joins_per_hour=rate_fmt(int(total) / h), agents_total=int(total), window_hours=round(h, 2), window_start=int(start),
+                window_end=int(end), window="since_segment_start", basis=AGENTS_RATE_BASIS)
+
+def _status_ts(st, now):
+    """The time of the status read the Agents total comes from (as_of), else now."""
+    try: t = int(dt.datetime.fromisoformat(str(st.get("as_of")).replace("Z", "+00:00")).timestamp())
+    except (TypeError, ValueError): return now
+    return t if 0 < now - t < 3600 else now
+
 @cached("joins_rate", 120)
 def joins_rate():
-    """Cached 2 min: one indexed range read of about a day of status snapshots."""
+    """Cached 2 min. Since a genesis cut: total Agents in the segment over hours since its start (agents_rate_calc), with the
+    segment's join counts (join txs, trailing 1 h, 6 h, 24 h) kept beside it. Before any cut: the trailing join rate."""
     now = int(time.time()); fl = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
-    return joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl, join_ts=seg_join_times() if fl else None)
+    r = joins_rate_calc(_join_points(now - JOIN_RATE_WINDOW_S - 3 * 3600), now, floor=fl, join_ts=seg_join_times() if fl else None)
+    if not fl: return r
+    st = status(); a = agents_rate_calc(st.get("agents_joined"), fl, _status_ts(st, now))
+    if not a: return None
+    a.update(joins=(r or {}).get("joins"), paused_until=None, joining_from=(r or {}).get("joining_from"), source="status",
+             trailing=(r or {}).get("trailing") or {"1h": None, "6h": None, "24h": None})
+    return a
