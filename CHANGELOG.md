@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.106] - 2026-10-24
+
+### Added
+- Governance API: `/api/v1/governance` (overview), `/governance/at-risk?level=`, `/governance/payouts`, `/governance/graders`, `/governance/directory?sort=&filter=&limit=&offset=`, `/governance/forum?range=` and `/governance/proposals`. Every one takes `?segment=`. Directory, at-risk and proposals also serve CSV.
+- MCP: `get_governance_overview`, `list_governance_standing`, `get_payout_outlook`, `get_governance_graders`, `list_governance_directory`, `get_forum_activity`, `list_proposals` (32 tools). In OpenAPI, /api and llms.txt.
+- Governance Directory: CSV download and API links that keep sort, filter and segment.
+- Governance Overview: Est. per Agent card, labelled Estimate, with Answered and K-attested since the last close.
+
 ## [1.26.105] - 2026-10-24
 
 ### Changed

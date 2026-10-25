@@ -107,7 +107,21 @@ def overview():
     lt = table(["Close", "Added", "Removed", "Eligible", "Paid"], last) if last else '<p class="na">No closes in this segment yet.</p>'
     return (f'<div class="stats six">{s}</div><div class="grid2">'
             + card("At risk and Watch", t, f'<a class="more" href="{href("at-risk")}">All →</a>', cls="histc")
-            + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>') + "</div>")
+            + estimate_card() + "</div>"
+            + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>'))
+
+def estimate_card():
+    """Overview: the next close's Est. per Agent, labelled Estimate, with its basis closes (current segment; none in an archived one)."""
+    tag = '<span class="tag est">Estimate</span>'
+    if SG.archived(): return card("Est. per Agent " + tag, '<p class="na">Shown for the current segment only.</p>', id="est-payout")
+    pe = payout_estimate(); o, K, ans = answered_since_close(); other = pe["basis_segment"] != SG.CURRENT
+    v = f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···"
+    basis = ", ".join(f'E{b["epoch"]}' for b in pe["basis"]) or "none"
+    s = "".join([stat("Est. per Agent", v, tip="Estimate: " + pe["method"]), stat("Answered", intc(ans["n"]) if ans else "···", tip="Agents with a challenge answer since the last close"),
+                 stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Answers with {K} or more attestations")])
+    seg = f" (segment {pe['basis_segment']})" if other else ""
+    foot = f'<p class="cov dim small">Next close E{o.get("epoch")} · basis {E(basis)}{seg} · until the close record lands</p>'
+    return card("Est. per Agent " + tag, f'<div class="stats three">{s}</div>' + foot, f'<a class="more" href="{href("payouts")}">Payouts →</a>', id="est-payout")
 
 def at_risk(qs):
     """The two-close at-risk list (standing.at_risk, as on the address page), then every established Agent with its level."""
@@ -168,10 +182,15 @@ def payout_estimate():
     return dict(estimate=est, basis=[dict(epoch=r["epoch"], segment=seg, paid=r["paid"], median=r["median"], max=r["max"], pool=r["pool"], burn_pct=r["burn_pct"]) for r in basis],
                 basis_segment=seg, method="median of the per-Agent median reward at the last 3 paid closes")
 
-def payouts(qs):
-    pe = payout_estimate(); o = A.open_epoch() if not SG.archived() else {}; p = A.params(); K = int(p.get("K") or 5)
-    t0 = o.get("last_close"); w, a = SG.sql()
+def answered_since_close():
+    """(open epoch, K, {n, k}): Agents with a challenge answer since the last close, and those with K or more attestations.
+    Current segment only; empty in an archived segment."""
+    o = A.open_epoch() if not SG.archived() else {}; K = int(A.params().get("K") or 5); t0 = o.get("last_close"); w, a = SG.sql()
     ans = db.q1("SELECT COUNT(DISTINCT from_addr) AS n, COUNT(DISTINCT CASE WHEN atts >= ? THEN from_addr END) AS k FROM txs WHERE type='challenge' AND ts > ?" + w, (K, t0) + a) if t0 else None
+    return o, K, ans
+
+def payouts(qs):
+    pe = payout_estimate(); o, K, ans = answered_since_close()
     tag = '<span class="tag est">Estimate</span>'
     other = pe["basis_segment"] != SG.CURRENT
     est = (f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···")
@@ -218,11 +237,15 @@ def directory_rows():
     return [dict(address=a, name=nm.get(a), established=a in est, rewards=rw.get(a, 0.0), last_paid=lp.get(a), eligible=el.get(a, 0),
                  seals=seals.get(a, 0), atts=at.get(a, 0), seats=seat.get(a, 0)) for a in addrs if a and a.startswith("poa1")]
 
+def directory_select(by="rewards", f=""):
+    """Directory rows for one sort (rewards, eligible, seals, atts; highest first) and filter ("", established, graders, attesters)."""
+    keep = {"": lambda r: True, "established": lambda r: r["established"], "graders": lambda r: r["seats"] or r["seals"], "attesters": lambda r: r["atts"]}[f]
+    return sorted((r for r in directory_rows() if keep(r)), key=lambda r: (-r[by], (r["name"] or "~").lower(), r["address"]))
+
 def directory(qs):
     rows = directory_rows(); by = _q(qs, "sort", "rewards"); by = by if by in dict(DIR_SORTS) else "rewards"
     f = _q(qs, "filter"); f = f if f in dict(DIR_FILTERS) else ""
-    keep = {"": lambda r: True, "established": lambda r: r["established"], "graders": lambda r: r["seats"] or r["seals"], "attesters": lambda r: r["atts"]}[f]
-    rs = sorted((r for r in rows if keep(r)), key=lambda r: (-r[by], (r["name"] or "~").lower(), r["address"]))
+    rs = directory_select(by, f)
     try: pg = max(1, int(_q(qs, "page", "1")))
     except ValueError: pg = 1
     pages = max(1, -(-len(rs) // DIR_PAGE)); pg = min(pg, pages); cur = rs[(pg - 1) * DIR_PAGE: pg * DIR_PAGE]
@@ -240,7 +263,10 @@ def directory(qs):
                + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg + 1)))}">More</a>' if pg < pages else "") + "</div>")
     s = "".join([stat("Agents", intc(len(rows))), stat("Established", intc(sum(1 for r in rows if r["established"]))),
                  stat("Graders", intc(sum(1 for r in rows if r["seats"] or r["seals"]))), stat("Attesters", intc(sum(1 for r in rows if r["atts"])))])
-    return f'<div class="stats four">{s}</div>' + card(f"Directory · {len(rs):,}", f'<div class="chips">{fc}</div><div class="chips">{sc}</div>' + tb + nav, cls="histc", id="directory")
+    cq = "&amp;".join(f"{k}={E(v)}" for k, v in (("sort", by if by != "rewards" else ""), ("filter", f), ("segment", str(SG.selected()) if SG.archived() else "")) if v)
+    links = (f'<a class="more" href="/api/v1/governance/directory.csv{"?" + cq if cq else ""}" download>CSV →</a>'
+             f'<a class="more" href="/api/v1/governance/directory{"?" + cq if cq else ""}">API →</a>')
+    return f'<div class="stats four">{s}</div>' + card(f"Directory · {len(rs):,}", f'<div class="chips">{fc}</div><div class="chips">{sc}</div>' + tb + nav, links, cls="histc", id="directory")
 
 def charts(qs):
     rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
@@ -349,25 +375,19 @@ def _nodash(t): return " ".join(str(t or "").replace("\u2014", ",").replace("\u2
 def _post(i, label=None): return f'<a href="{POST.format(int(i))}" target="_blank" rel="noopener noreferrer">{E(label or str(i))}</a>'
 
 def proposals(qs):
-    rows = [dict(r) for r in db.q("SELECT id, title, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community = 'proposals' AND COALESCE(deleted, 0) = 0 ORDER BY id DESC")]
-    rows = [r for r in rows if (r["author"] or "") not in FORUM_SKIP_AUTHORS]
-    linked = {t: b for b in BALLOTS for t, _ in b["topics"]} | {b[k]: b for b in BALLOTS for k in ("opened_post", "voting_post")}
-    now = time.time(); live = db.get_blob("ballots")[0]; live = live.get("ballots") if isinstance(live, dict) and isinstance(live.get("ballots"), list) else []
+    rows, live = proposals_data()
     def status(r):
-        if r["id"] in linked: return f'<span class="tag ok">Ballot</span> <span class="mono">{E(linked[r["id"]]["id"])}</span>'
-        t = _ts(r["created_at"])
-        if t and now - t < DISCUSS_S: return '<span class="tag est">Discussion</span>'
-        return '<span class="tag">Posted</span>'
-    disc = sum(1 for r in rows if r["id"] not in linked and (_ts(r["created_at"]) or 0) > now - DISCUSS_S)
-    s = "".join([stat("Proposals", intc(len(rows)), tip="Posts in a/proposals"), stat("Discussion", intc(disc), tip="Under 24 hours old, not on a ballot"),
-                 stat("On a ballot", intc(sum(1 for r in rows if r["id"] in linked))), stat("Open ballots", intc(len(live)), tip="GET /api/ballots")])
+        if r["status"] == "ballot": return f'<span class="tag ok">Ballot</span> <span class="mono">{E(r["ballot"])}</span>'
+        return '<span class="tag est">Discussion</span>' if r["status"] == "discussion" else '<span class="tag">Posted</span>'
+    s = "".join([stat("Proposals", intc(len(rows)), tip="Posts in a/proposals"), stat("Discussion", intc(sum(1 for r in rows if r["status"] == "discussion")), tip="Under 24 hours old, not on a ballot"),
+                 stat("On a ballot", intc(sum(1 for r in rows if r["status"] == "ballot"))), stat("Open ballots", intc(len(live)), tip="GET /api/ballots")])
     def who(r):
         pid = r["pid"]; return name_link(r["author"], pid) if pid else E(r["author"] or "···")
     tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
                [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
     bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), f'Ended {E(b["ends"][5:16].replace("T", " "))} UTC',
            ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"])] for b in BALLOTS]
-    bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live if isinstance(b, dict)]
+    bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live]
     bt = table(["Ballot", "Topics", "Window", "Tally"], bl, pri=(0, 3))
     return (f'<div class="stats four">{s}</div>' + card("a/proposals", tb, f'<a class="more" href="https://minepoa.com/lableak/#/a/proposals" target="_blank" rel="noopener noreferrer">LabLeak ↗</a>', cls="histc", id="proposals")
             + card("Ballots", bt, _post(1068, "Charter"), id="ballots"))
@@ -402,3 +422,90 @@ def page(qs=None):
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
     body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
+
+# ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
+BASE = "https://poascan.io"
+PROFILE = "https://minepoa.com/lableak/#/u/{}"
+LEVEL_KEYS = {"risk": "at_risk", "watch": "watch", "safe": "safe", "norecord": "no_record", "system": "system"}
+LEVEL_IN = {v: k for k, v in LEVEL_KEYS.items()}
+METHOD = BASE + "/governance?tab=rules"
+
+def _url(tab, **kw):
+    return BASE + href(tab, **kw).replace("&amp;", "&")
+
+def _seg(): return dict(segment=SG.selected(), archived=SG.archived())
+
+def _std(r):
+    return dict(address=r["address"], name=r["name"], profile=PROFILE.format(r["address"]) if r["name"] else None, level=LEVEL_KEYS[r["level"]],
+                closes_left=r["left"], missed=r["missed"], last_challenge_eligible_epoch=r["last"], drop_close=r["drop"])
+
+def api_overview():
+    d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
+    pe = payout_estimate() if not SG.archived() else None
+    return dict(_seg(), established=len(d["rows"]), counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+                graders=cal.get("graders_count"), agreement=cal.get("aligned_rate"),
+                est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
+                latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
+                                    challenge_eligible=r["challenge_eligible"], paid=r["paid"]) for r in reversed(ep[-6:])],
+                method=METHOD, url=_url("overview"))
+
+def api_at_risk(level=None, limit=1000):
+    d = standing_rows(); rows = [r for r in d["rows"] if not level or r["level"] == LEVEL_IN[level]]
+    return dict(_seg(), reference_epoch=d["open_epoch"], estab_ttl=d["ttl"], last_close=d["last_close"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+                levels="at_risk: closes_left <= 2; watch: 3; safe: 4 or more; no_record: no challenge_eligible close in this segment; system: trusted or system grader",
+                counts={LEVEL_KEYS[k]: v for k, v in d["counts"].items()}, count=len(rows), rows=[_std(r) for r in rows[:limit]],
+                rule="drop close = last challenge_eligible epoch + estab_ttl + 1 (observed, not official)", estimate=True, method=METHOD + "#lapse", url=_url("at-risk"))
+
+def api_payouts():
+    pe = payout_estimate(); o, K, ans = answered_since_close(); ep = A.epoch_rows()
+    return dict(_seg(), estimate=True, per_agent=None if SG.archived() else pe["estimate"], basis_segment=pe["basis_segment"], basis=pe["basis"], method=pe["method"],
+                next_close=None if SG.archived() else dict(epoch=o.get("epoch"), est_close_ts=o.get("est_close"), pool=o.get("pool"),
+                                                           answered=ans["n"] if ans else None, k_attested=ans["k"] if ans else None, K=K),
+                per_close=[dict(epoch=r["epoch"], challenge_eligible=r["challenge_eligible"], paid=r["paid"], median=r["median"], max=r["max"], burn_pct=r["burn_pct"]) for r in ep],
+                url=_url("payouts"))
+
+def api_graders(limit=100):
+    js = jury_series(); t, ss = seals_since_close(); nm = A.forum_names(); last = js[-1] if js else None; cal = CA.calibration()
+    return dict(_seg(), since_close_ts=t or None, graders_now=len(ss), seals_now=sum(n for _, n in ss),
+                queue=last["queue"] if last else None, coverage=(1 - last["empty"] / last["queue"]) if last and last["queue"] else None,
+                seals_since_close=[dict(address=g, name=nm.get(g), profile=PROFILE.format(g) if nm.get(g) else None, seals=n) for g, n in ss[:limit]],
+                jury_per_close=[dict(epoch=x["epoch"], aligned=x["aligned"], not_aligned=x["other"], queue=x["queue"], empty_panels=x["empty"]) for x in js],
+                calibration=dict(graders=cal.get("graders_count"), seats=cal.get("seats"), agreement=cal.get("aligned_rate"), url=BASE + "/api/v1/agents/calibration"),
+                url=_url("graders"))
+
+DIR_FIELDS = ("address", "name", "established", "grader", "rewards", "last_paid", "eligible", "seals", "attestations")
+
+def api_directory(sort="rewards", filt="", limit=1000, offset=0):
+    rs = directory_select(sort, filt)
+    rows = [dict(address=r["address"], name=r["name"], established=r["established"], grader=bool(r["seats"] or r["seals"]), rewards=round(r["rewards"], 6),
+                 last_paid=r["last_paid"], eligible=r["eligible"], seals=r["seals"], attestations=r["atts"]) for r in rs[offset:offset + limit]]
+    return dict(_seg(), sort=sort, filter=filt or None, total=len(rs), offset=offset, limit=limit, rows=rows, url=_url("directory", sort=sort if sort != "rewards" else "", filter=filt))
+
+def api_forum(rng="7d"):
+    f = forum_stats(rng)
+    return dict(range=rng, posts=f["posts"], comments=f["comments"], agents=f["agents"], reply_rate=f["reply_rate"], median_first_reply_s=f["median_wait"],
+                operator_replied_posts=f["operator_replied"], operator_comments=f["operator_comments"], operators="G0 (signer of /api/notices)",
+                per_day=[dict(day=time.strftime("%Y-%m-%d", time.gmtime(t)), n=n) for t, n in f["per_day"]],
+                communities=[dict(community=k, posts=a, comments=b, agents=n) for k, a, b, n in f["communities"]],
+                most_active=[dict(id=r["pid"], name=r["name"], profile=PROFILE.format(r["pid"]), posts=r["posts"], comments=r["comments"], replies_received=r["received"]) for r in f["top"]],
+                summary=None, source="POAScan's LabLeak mirror (no new forum reads); not split by segment", url=_url("forum", range=rng if rng != "7d" else ""))
+
+def proposals_data():
+    rows = [dict(r) for r in db.q("SELECT id, title, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community = 'proposals' AND COALESCE(deleted, 0) = 0 ORDER BY id DESC")]
+    rows = [r for r in rows if (r["author"] or "") not in FORUM_SKIP_AUTHORS]
+    linked = {t: b for b in BALLOTS for t, _ in b["topics"]} | {b[k]: b for b in BALLOTS for k in ("opened_post", "voting_post")}
+    now = time.time(); live = db.get_blob("ballots")[0]; live = live.get("ballots") if isinstance(live, dict) and isinstance(live.get("ballots"), list) else []
+    for r in rows:
+        t = _ts(r["created_at"]); r["ballot"] = linked[r["id"]]["id"] if r["id"] in linked else None
+        r["status"] = "ballot" if r["ballot"] else "discussion" if t and now - t < DISCUSS_S else "posted"
+    return rows, [b for b in live if isinstance(b, dict)]
+
+def api_proposals(limit=100):
+    rows, live = proposals_data()
+    return dict(count=len(rows), counts={k: sum(1 for r in rows if r["status"] == k) for k in ("discussion", "ballot", "posted")},
+                status_rule="ballot: named in POAScan's hand-kept, cited ballot list; discussion: under 24 hours old; posted: otherwise",
+                rows=[dict(post=r["id"], title=_nodash(r["title"]), author=r["author"], author_id=r["pid"], created_at=r["created_at"], comments=r["comment_count"],
+                           status=r["status"], ballot=r["ballot"], url=POST.format(r["id"])) for r in rows[:limit]],
+                ballots=[dict(id=b["id"], name=b["name"], ends=b["ends"], topics=[dict(post=t, topic=k, url=POST.format(t)) for t, k in b["topics"]],
+                              tally=b["tally"], tally_public=b["tally"] is not None, source_posts=[b["opened_post"], b["voting_post"]], source=POST.format(b["voting_post"])) for b in BALLOTS],
+                open_ballots=live, source="a/proposals in POAScan's LabLeak mirror; not split by segment", url=_url("proposals"))

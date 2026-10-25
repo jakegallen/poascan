@@ -158,6 +158,46 @@ def live():
         check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
         ru = tabs["rules"]; check("Rules: anchors for every rule link", all(f'id="{a}"' in ru for a in ("earn", "lapse", "removal", "no-record", "system", "seats", "votes", "carryover")))
         check("Governance segment chips keep the tab", 'href="/governance?tab=at-risk&amp;segment=' in r or "segs" not in r)
+        check("Overview: Est. per Agent card labelled Estimate, links to Payouts", 'id="est-payout"' in g and '<span class="tag est">Estimate</span>' in g and ">Est. per Agent<" in g
+              and 'href="/governance?tab=payouts' in g)
+        check("Directory: CSV and API links keep sort, filter and segment", re.search(r'href="/api/v1/governance/directory\.csv\?sort=atts&amp;filter=graders[^"]*" download', d2) is not None)
+        # Governance API: JSON per endpoint, ?segment=, CSV, 400s
+        import json as J
+        apis = {}
+        for u in ("/api/v1/governance", "/api/v1/governance/at-risk", "/api/v1/governance/payouts", "/api/v1/governance/graders", "/api/v1/governance/directory",
+                  "/api/v1/governance/forum?range=30d", "/api/v1/governance/proposals"):
+            c, b, h = get(u); apis[u.split("?")[0].rsplit("/", 1)[-1]] = J.loads(b) if c == 200 else {}
+            check(f"GET {u} 200 JSON", c == 200 and h.get("Content-Type", "").startswith("application/json"))
+        ov2, ar, po, gd, di, fr, pp = (apis[k] for k in ("governance", "at-risk", "payouts", "graders", "directory", "forum", "proposals"))
+        check(f"API overview: counts and estimate {sorted(ov2)}", isinstance(ov2.get("established"), int) and set(ov2.get("counts", {})) >= {"at_risk", "watch", "safe"} and (ov2.get("est_payout") or {}).get("estimate") is True)
+        check("API at-risk: rows with level", ar.get("rows") and all(r["level"] in ("at_risk", "watch", "safe", "no_record", "system") for r in ar["rows"]))
+        lv = J.loads(get("/api/v1/governance/at-risk?level=safe")[1]); check("API at-risk ?level=safe", all(r["level"] == "safe" for r in lv["rows"]))
+        check("API payouts: estimate true, per_agent", po.get("estimate") is True and po.get("per_agent") is not None)
+        check("API graders, directory, forum, proposals shapes", "seals_since_close" in gd and di.get("total", 0) >= len(di.get("rows", [])) > 0 and "posts" in fr and "rows" in pp and "ballots" in pp)
+        c, b, h = get("/api/v1/governance/directory.csv?sort=seals&filter=graders")
+        check(f"Directory CSV: text/csv attachment with a header row {h.get('Content-Type')} {h.get('Content-Disposition')}", c == 200 and h.get("Content-Type", "").startswith("text/csv")
+              and "attachment" in h.get("Content-Disposition", "") and b.splitlines()[0].startswith("address,"))
+        c1, b1, _ = get("/api/v1/governance?segment=1"); c2, _, _ = get("/api/v1/governance/directory?segment=99")
+        check(f"API ?segment=1 OK, unknown segment 400 ({c1} {c2})", c1 == 200 and J.loads(b1).get("segment") == 1 and c2 == 400)
+        bad = [get(u)[0] for u in ("/api/v1/governance/directory?sort=x", "/api/v1/governance/at-risk?level=x", "/api/v1/governance/forum?range=1y", "/api/v1/governance/graders?limit=a", "/api/v1/governance?x=1", "/api/v1/governance/nope")]
+        check(f"API bad params 400, unknown endpoint 404 {bad}", bad == [400, 400, 400, 400, 400, 404])
+        sp = J.loads(get("/openapi.json")[1]); ap = get("/api")[1]
+        check("OpenAPI and /api docs list every governance endpoint with segment", all(f"/api/v1/governance{x}" in sp["paths"] for x in ("", "/at-risk", "/payouts", "/graders", "/directory", "/forum", "/proposals"))
+              and all(any(q.get("name") == "segment" for q in sp["paths"][f"/api/v1/governance{x}"]["get"]["parameters"]) for x in ("", "/directory")) and "/governance/directory" in ap and "list_governance_directory" in ap)
+        # MCP
+        def rpc(m, prm):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+            c.request("POST", "/mcp", J.dumps({"jsonrpc": "2.0", "id": 1, "method": m, "params": prm}), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
+            r = c.getresponse(); b = r.read(); c.close(); return J.loads(b)
+        GT = ("get_governance_overview", "list_governance_standing", "get_payout_outlook", "get_governance_graders", "list_governance_directory", "get_forum_activity", "list_proposals")
+        tl = {t["name"]: t for t in rpc("tools/list", {})["result"]["tools"]}
+        check("MCP: 7 governance tools, each takes segment", all(t in tl and "segment" in tl[t]["inputSchema"]["properties"] for t in GT))
+        res = {t: rpc("tools/call", {"name": t, "arguments": {"segment": 1}}) for t in GT}
+        check(f"MCP tools/call each governance tool {[t for t, r in res.items() if 'result' not in r or r['result'].get('isError')]}", all("result" in r and not r["result"].get("isError") for r in res.values()))
+        e = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "x"}})
+        check("MCP bad sort is an error", ("result" in e and e["result"].get("isError")) or "error" in e)
+        dd = rpc("tools/call", {"name": "list_governance_directory", "arguments": {"sort": "seals", "limit": 2}})["result"]["structuredContent"]
+        check("MCP directory limit and sort", len(dd["rows"]) <= 2 and dd["sort"] == "seals")
         # sitemap and llms.txt
         sm = get("/sitemap.xml")[1]; ll = get("/llms.txt")[1]
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
@@ -165,6 +205,7 @@ def live():
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
         check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=proposals)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)
+        check("llms.txt: governance API and MCP tools", "/governance/directory.csv" in ll and "list_governance_standing" in ll and "?segment=" in ll)
     finally:
         p.terminate()
 
