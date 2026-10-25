@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.107] - 2026-10-24
+
+### Changed
+- Refused txs (`invalid`) refresh again while the explorer path is healthy: one conditional `/api/txs` read (If-None-Match) every 30 minutes (`POASCAN_INVALID_REFRESH_S`, floor 10 min). Any other `/api/txs` read (fallback, backfill) resets that clock.
+- `/api/health` `load_1h.txlist_reads_1h` adds `refresh` next to `fallback` and `backfill`.
+
+### Tests
+- tools/netoverview_test.py: refresh not due at 17 min, one read at 32 min with refused rows stored, a 304 is fine, env knob with floor and bad value, a read during an explorer failure counts as fallback.
+
 ## [1.26.106] - 2026-10-24
 
 ### Added

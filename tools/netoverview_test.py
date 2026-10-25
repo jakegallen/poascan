@@ -121,6 +121,7 @@ except I.Missing: r = "missing"
 except I.Busy: r = "busy"
 check(f"an id the chain path says is unknown is Missing even when the old path errors ({r})", r == "missing")
 MODE2.clear()
+_refresh_s = I.INVALID_REFRESH_S; I.INVALID_REFRESH_S = 10 ** 10   # the invalid refresh is tested on its own below
 db.write("DELETE FROM fetch_log"); CALLS.clear(); used = I.live_list()
 check(f"1.26.105: live_list reads the explorer page first ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200"])
 db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/explorer/txs',?,0,0)", (int(time.time()),))   # the fake fetch writes no log
@@ -143,6 +144,42 @@ check(f"a gap larger than one page backfills from /api/txs once ({CALLS})", CALL
 CALLS.clear(); I.live_list()
 check(f"no backfill when the page overlaps stored rows ({CALLS})", CALLS == ["/api/explorer/txs?limit=1"])
 I.LIVE_LIMIT = 200; I.fetch = fake2
+# 1.26.107: one conditional /api/txs read per INVALID_REFRESH_S while the explorer path is healthy refreshes refused txs
+I.INVALID_REFRESH_S = _refresh_s
+check(f"INVALID_REFRESH_S default 30 min ({I.INVALID_REFRESH_S})", I.INVALID_REFRESH_S == 1800)
+import subprocess
+_env = lambda v: subprocess.run([sys.executable, "-c", "from poascan import indexer as I; print(I.INVALID_REFRESH_S)"], env={**os.environ, "POASCAN_INVALID_REFRESH_S": v}, capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout.strip()
+check(f"POASCAN_INVALID_REFRESH_S sets it, floor 600 s, bad value -> default ({_env('900')}, {_env('5')}, {_env('x')})", (_env("900"), _env("5"), _env("x")) == ("900", "600", "1800"))
+def fake4(path, **k):
+    CALLS.append(path)
+    if path.startswith("/api/txs"): return {"valid": [], "invalid": [{"txid": "7" * 64, "error": "bad sig"}]}
+    if path.startswith("/api/explorer/txs"): return [{"id": "e" * 64, "type": "challenge", "from_addr": "poa1x", "ts": now}]
+    return NW
+I.fetch = fake4; db.write("DELETE FROM fetch_log"); _ev0 = I.txlist_events_1h()["refresh"]
+db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0)", (int(time.time()) - 1000,))
+CALLS.clear(); used = I.live_list()
+check(f"explorer healthy, /api/txs read 17 min ago: no refresh ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200"])
+db.write("DELETE FROM fetch_log"); db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0)", (int(time.time()) - 1900,))
+CALLS.clear(); used = I.live_list()
+check(f"explorer healthy, /api/txs read 32 min ago: one refresh read ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200", "/api/txs"] and I.txlist_events_1h()["refresh"] == _ev0 + 1)
+check("refresh stored the refused tx", db.q1("SELECT 1 AS x FROM invalid_txs WHERE txid=?", ("7" * 64,)))
+check("load_1h counters keep fallback and backfill and add refresh", set(I.txlist_events_1h()) == {"fallback", "backfill", "refresh"})
+db.write("DELETE FROM fetch_log"); db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0)", (int(time.time()) - 1900,))
+def fake304(path, **k):
+    if path.startswith("/api/txs"): CALLS.append(path); return I.NOT_MODIFIED
+    return fake4(path, **k)
+I.fetch = fake304
+CALLS.clear(); used = I.live_list()
+check(f"a 304 on the refresh read is fine ({used}, {CALLS})", used == "/api/explorer/txs" and CALLS == ["/api/explorer/txs?limit=200", "/api/txs"])
+db.write("DELETE FROM fetch_log"); db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/txs',?,0,0)", (int(time.time()) - 1900,))
+db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at) VALUES('/api/explorer/txs',?,1,0)", (int(time.time()) - 200,))
+def fake5(path, **k):
+    if path.startswith("/api/explorer/txs"): CALLS.append(path); raise I.Busy("HTTP 404")
+    return fake4(path, **k)
+I.fetch = fake5; _ev1 = I.txlist_events_1h(); CALLS.clear(); used = I.live_list()
+_ev2 = I.txlist_events_1h()
+check(f"explorer failing: the read is a fallback, not a refresh ({used}, {_ev1} -> {_ev2})", used == "/api/txs" and _ev2["refresh"] == _ev1["refresh"] and _ev2["fallback"] == _ev1["fallback"] + 1)
+I.fetch = fake2; db.write("DELETE FROM fetch_log")
 check("TXLIST_S floor 60 s, Tx list cadence in EVERY for both paths", I.TXLIST_S >= 60 and I.EVERY["/api/txs"] == I.TXLIST_S == I.EVERY["/api/explorer/txs"])
 # feed rows after the move
 t = int(time.time())

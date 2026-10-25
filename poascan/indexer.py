@@ -25,6 +25,7 @@ STATUS_DEGRADED_S = _ei("POASCAN_STATUS_DEGRADED_S", 120, 60)
 NETWORKS_S = _ei("POASCAN_NETWORKS_S", 120, 60)                # /api/networks (height, checkpoint)
 TXLIST_S = _ei("POASCAN_TXLIST_S", 120, 60)                  # /api/txs, the keyless tx list (1.26.98); /api/explorer/txs is its fallback
 TXLIST_IDLE_S = _ei("POASCAN_TXLIST_IDLE_S", 300, 120)        # /api/txs while a read brought no new rows (304 or same ids); back to TXLIST_S on new rows
+INVALID_REFRESH_S = _ei("POASCAN_INVALID_REFRESH_S", 1800, 600)  # 1.26.107: one conditional /api/txs read this often while the explorer path is healthy, to refresh refused txs
 SWAPS_S = _ei("POASCAN_SWAPS_S", 60, 30, 120)                  # /api/swaps (swap mirrors read our cached copy, never minepoa.com)
 FORUM_S = _ei("POASCAN_FORUM_S", 3600, 900)                    # communities plus one posts list per community
 META_S = _ei("POASCAN_META_S", 300, 120)                       # anchors, notices, ballots
@@ -438,11 +439,11 @@ def _ok_within(ep, s):
 
 _txlist_every = [TXLIST_S]   # current /api/txs cadence: TXLIST_S after new rows, TXLIST_IDLE_S after a 304 or no new rows
 
-_txlist_events = collections.deque(maxlen=500)   # (ts, "fallback" | "backfill"): /api/txs reads, for /api/health load_1h
+_txlist_events = collections.deque(maxlen=500)   # (ts, "fallback" | "backfill" | "refresh"): /api/txs reads, for /api/health load_1h
 
 def txlist_events_1h(now=None):
     t = (now or time.time()) - 3600
-    return {k: sum(1 for ts, e in list(_txlist_events) if ts >= t and e == k) for k in ("fallback", "backfill")}
+    return {k: sum(1 for ts, e in list(_txlist_events) if ts >= t and e == k) for k in ("fallback", "backfill", "refresh")}
 
 def _txs_read(kind):
     """One conditional /api/txs read (fallback or backfill). Returns the number of new rows, or None on a 304."""
@@ -466,6 +467,14 @@ def _explorer_read():
         except Busy as e: log.warning("/api/txs backfill: %s", e)
     return len(fresh) - len(seen)
 
+def _invalid_refresh(now):
+    """1.26.107: refused txs (invalid_txs) come only from /api/txs. While the explorer path is healthy, one conditional
+    /api/txs read per INVALID_REFRESH_S keeps them fresh. Any /api/txs attempt (backfill, fallback) resets the clock."""
+    if now - _last_try("/api/txs") < INVALID_REFRESH_S - 5 or not can_fetch("/api/txs"): return False
+    try: _txs_read("refresh"); return True
+    except Busy as e: log.warning("/api/txs refresh: %s", e)
+    return False
+
 def live_list():
     """The tx list (1.26.105): /api/explorer/txs first, once per TXLIST_S (2 min). While it fails, /api/txs is the
     fallback: conditional (If-None-Match), every TXLIST_S after new rows and TXLIST_IDLE_S (5 min) after a 304 or no
@@ -476,6 +485,7 @@ def live_list():
     if can_fetch("/api/explorer/txs") or now - _last_try("/api/explorer/txs") >= TXLIST_S - 5:
         try:
             _explorer_read(); _txlist_every[0] = TXLIST_S
+            _invalid_refresh(now)
             return "/api/explorer/txs"
         except Busy as e: log.warning("/api/explorer/txs: %s", e)
     else: skip_backoff("/api/explorer/txs")
