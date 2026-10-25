@@ -6,7 +6,7 @@ Static checks (always run, no browser needed):
 * the fixed full-screen blend layer (body::before, mix-blend-mode) is off on phones, tablets and touch screens
 * one spacing step between stacked sections on phones (grid gap only, no card margin on top of it)
 * charts held back for the draw-in have a scroll and pageshow backstop, and reduced motion turns the draw-in off
-* the CSS and JS cache keys moved with this change
+* the CSS and JS cache keys are hashes of the files, so they move with every change
 Browser checks (run when Playwright is installed, else skipped): the home page on an empty fixture at 360, 390 and 430 wide
 in WebKit and Chromium: main is fully opaque with no transform, every section in main is opaque and painted, no horizontal
 overflow, and the vertical gap between stacked sections is at most 16 px at each scroll position.
@@ -38,8 +38,11 @@ check("phones: 12 px between sections", re.search(r"@media \(max-width:640px\)\{
 check("chart draw-in has a scroll and pageshow backstop", 'W.addEventListener("pageshow",rv)' in js and "{passive:true}" in js and "chart.pre" in js)
 check("reduced motion turns the chart draw-in off", re.search(r"prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation-duration:\.001ms", flat) is not None
       and ".js .chart,.js .chart.pre{clip-path:none;animation:none}" in flat)
-v_css = int(re.search(r"style\.css\?v=(\d+)", ui).group(1)); v_js = int(re.search(r"app\.js\?v=(\d+)", ui).group(1))
-check("cache keys moved (style.css v92+, app.js v44+)", v_css >= 92 and v_js >= 44)
+sys.path.insert(0, ROOT)
+from poascan import ui as _ui
+import hashlib
+check("cache keys follow the files (sha256 of style.css and app.js, 1.26.150)", 'style.css?v={ASSET_V["style.css"]}' in ui and 'app.js?v={ASSET_V["app.js"]}' in ui
+      and _ui.ASSET_V == {n: hashlib.sha256(open(os.path.join(ROOT, "static", n), "rb").read()).hexdigest()[:12] for n in ("style.css", "app.js")})
 
 # ---------------- browser ----------------
 try:

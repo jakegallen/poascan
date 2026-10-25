@@ -424,7 +424,7 @@ def layout(title, body, active="/", live=None, head=""):
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v=139">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
+<link rel="stylesheet" href="/static/style.css?v={ASSET_V["style.css"]}">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
 {DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
@@ -437,7 +437,17 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v=138" defer></script>{_dd.script()}</body></html>'''
+<script src="/static/app.js?v={ASSET_V["app.js"]}" defer></script>{_dd.script()}</body></html>'''
+
+# 1.26.150: the CSS and JS cache keys are a hash of the file, so every deploy that changes one gets a new URL. The assets are served
+# immutable for a year under ?v=, and the hand-kept numbers (139 and 138) had not moved since Oct 20, so returning visitors could
+# keep an old style.css or app.js.
+def _asset_v(name):
+    import hashlib
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", name), "rb") as f: return hashlib.sha256(f.read()).hexdigest()[:12]
+    except OSError: return "0"
+ASSET_V = {n: _asset_v(n) for n in ("style.css", "app.js")}
 
 def card(title, body, extra="", cls="", id=""):
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'

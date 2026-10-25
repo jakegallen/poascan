@@ -16,7 +16,7 @@ dv = re.search(r"\.devbar\{([^}]*)\}", css).group(1)   # 1.26.118: token form of
 check("banner uses the POASwap amber tint", "var(--gold-mid) 20%" in dv and "--gold-hi:" in css and "color:var(--gold-hi)" in css)
 up = re.search(r"\.upstrip\{([^}]*)\}", css).group(1)
 check("Upgrading strip stays steel, not a second amber bar", "var(--steel)" in up and "--gold" not in up and "--amber" not in up)
-check("cache key moved (style.css v104+)", int(re.search(r"style\.css\?v=(\d+)", ui).group(1)) >= 104)
+check("cache key follows the file (style.css?v= is its hash since 1.26.150)", 'style.css?v={ASSET_V["style.css"]}' in ui)
 
 TEXT = "System development in progress. Follow @Jakegallen for updates."
 tmp = tempfile.mkdtemp(); s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"

@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.150] - 2026-10-25
+
+### Fixed
+- Header on phones: at 430 px and below the status pill is a compact status line under the POASCAN wordmark (dot and word in the state color, still the Status link), so the logo, POASwap, Start and the menu stay on one row with any pill state. Before, a Live or Partial pill pushed the menu to a second row under the logo at 360 and 390 px. 1280 px is unchanged.
+- Asset cache keys: `style.css?v=` and `app.js?v=` are now the first 12 hex of each file's sha256, so every deploy that changes one gets a new URL. They are served immutable for a year, and the hand-kept keys had not moved since Oct 20, so returning visitors could keep an old stylesheet or script.
+
+### Tests
+- tools/header_row_test.py (new, in CI): renders the fixture site in Chromium at 360, 390, 430 and 1280 px on / and /chain with every shown pill state, the longest included, and checks one row, the word in full, no overlap, the Status link and no horizontal overflow. CI installs Playwright 1.64.1 (Chromium headless shell) for it; a missing Playwright fails in CI.
+- tools/mobile_render_test.py, tools/lazyjoin_test.py, tools/devbar_test.py and tools/signed_test.py: the cache keys are the file hashes.
+
 ## [1.26.149] - 2026-10-25
 
 ### Changed

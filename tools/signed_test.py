@@ -182,7 +182,7 @@ srcs = {f: open(os.path.join(ROOT, f), encoding="utf-8").read() for f in ["CHANG
 check("the credit is on /about only (not CHANGELOG, README, other views or the API docs)", all("TMCC_Patches" not in t for t in srcs.values()))
 check("no em or en dash in signed.py strings or the about line", "\u2014" not in sec and "\u2013" not in sec and not re.search('"[^"\\n]*[\u2013\u2014][^"\\n]*"', open(os.path.join(ROOT, "poascan", "signed.py"), encoding="utf-8").read()))
 css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
-check("badge CSS present, cache version bumped", ".sigb{" in css and ".sigb.ok{" in css and ".sigb.bad{" in css and int(re.search(r"style\.css\?v=(\d+)", open(os.path.join(ROOT, "poascan", "ui.py")).read()).group(1)) >= 103)
+check("badge CSS present, cache key follows the file", ".sigb{" in css and ".sigb.ok{" in css and ".sigb.bad{" in css and 'style.css?v={ASSET_V["style.css"]}' in open(os.path.join(ROOT, "poascan", "ui.py")).read())
 
 # ---------------- docs ----------------
 spec = AG.openapi(); llms = AG.llms_txt()

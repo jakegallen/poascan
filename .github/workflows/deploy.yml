@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
@@ -183,6 +183,14 @@ jobs:
         run: python tools/active_series_test.py
       - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)
         run: python tools/swap_writes_test.py
+      - name: Install Playwright and Chromium (pinned, headless shell only) for the header render check
+        run: |
+          python -m pip install --disable-pip-version-check -q playwright==1.64.1
+          python -m playwright install --with-deps --only-shell chromium
+      - name: Header on one row at 360 and 390 px with every status pill, the longest included (compact status line under the wordmark, never hidden or clipped)
+        env:
+          CI: "true"
+        run: python tools/header_row_test.py
 
   deploy:
     needs: test
