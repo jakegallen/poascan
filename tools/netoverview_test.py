@@ -180,7 +180,7 @@ I.fetch = fake5; _ev1 = I.txlist_events_1h(); CALLS.clear(); used = I.live_list(
 _ev2 = I.txlist_events_1h()
 check(f"explorer failing: the read is a fallback, not a refresh ({used}, {_ev1} -> {_ev2})", used == "/api/txs" and _ev2["refresh"] == _ev1["refresh"] and _ev2["fallback"] == _ev1["fallback"] + 1)
 I.fetch = fake2; db.write("DELETE FROM fetch_log")
-check("TXLIST_S floor 60 s, Tx list cadence in EVERY for both paths", I.TXLIST_S >= 60 and I.EVERY["/api/txs"] == I.TXLIST_S == I.EVERY["/api/explorer/txs"])
+check("TXLIST_S default 60 s (1.26.149, was 120), Tx list cadence in EVERY for both paths", I.TXLIST_S == 60 and I.EVERY["/api/txs"] == I.TXLIST_S == I.EVERY["/api/explorer/txs"])
 # feed rows after the move
 t = int(time.time())
 db.write("DELETE FROM fetch_log")
@@ -216,7 +216,7 @@ def _open(req, timeout=None):
 _U.urlopen = _open
 db.write("DELETE FROM fetch_log"); I2._etags.clear(); I2._lastmod.clear()
 used = I2.live_list()
-check(f"first /api/txs read: new rows keep the 2 min cadence ({used}, {I2._txlist_every[0]})", used == "/api/txs" and I2._txlist_every[0] == I2.TXLIST_S == 120)
+check(f"first /api/txs read: new rows keep the 60 s cadence ({used}, {I2._txlist_every[0]})", used == "/api/txs" and I2._txlist_every[0] == I2.TXLIST_S == 60)
 BODY[0] = None; db.write("UPDATE fetch_log SET last_ok=last_ok-200 WHERE endpoint='/api/txs'")
 I2.live_list()
 check("conditional headers sent: If-None-Match and If-Modified-Since", SENT[-1].get("If-none-match") == '"e1"' and SENT[-1].get("If-modified-since") == "Sat, 24 Oct 2026 23:00:00 GMT")
@@ -228,7 +228,7 @@ db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/txs'", (int(time.t
 check(f"a 200 with no new rows stays at 5 min ({I2._txlist_every[0]})", I2._txlist_every[0] == 300)
 BODY[0] = json.dumps({"valid": [{"id": "2" * 64, "type": "challenge", "ts": now}], "invalid": []}).encode()
 db.write("UPDATE fetch_log SET last_ok=? WHERE endpoint='/api/txs'", (int(time.time()) - 310,)); I2._etags.clear(); I2.live_list()
-check(f"new rows bring back the 2 min cadence ({I2._txlist_every[0]})", I2._txlist_every[0] == 120)
+check(f"new rows bring back the 60 s cadence ({I2._txlist_every[0]})", I2._txlist_every[0] == 60)
 b = I2.bytes_1h().get("/api/txs", 0)
 check(f"wire bytes counted per endpoint for the last hour ({b})", b > 0)
 I2.flush_counts(force=True)

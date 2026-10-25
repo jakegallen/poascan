@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.149] - 2026-10-25
+
+### Changed
+- Tx list: `/api/explorer/txs` is read every 60 s (TXLIST_S, was 2 min since 1.26.105), so the Bench strip, the Latest ticker and the tx pages trail minepoa.com by about 30 s on average instead of about 60 s. One page per read, conditional as before; `POASCAN_TXLIST_S` still overrides it (floor 60 s). While the explorer read fails, the `/api/txs` fallback follows the same 60 s after new rows and keeps 5 min after a 304 or no new rows.
+- About, Sources: the tx feed reads every 60 s; the degraded 2 min cadence applies to `/api/status` (a 429, 5xx, timeout or 3 401s in a row).
+
+### Tests
+- tools/netoverview_test.py: the default TXLIST_S is 60 and new rows keep the 60 s cadence.
+
 ## [1.26.148] - 2026-10-25
 
 ### Added

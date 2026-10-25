@@ -23,7 +23,7 @@ LIVE_DEGRADED_S = _ei("POASCAN_LIVE_DEGRADED_S", 120, 30)      # /api/explorer/t
 STATUS_S = _ei("POASCAN_STATUS_S", 60, 60)                     # /api/status, one shared read for every feature
 STATUS_DEGRADED_S = _ei("POASCAN_STATUS_DEGRADED_S", 120, 60)
 NETWORKS_S = _ei("POASCAN_NETWORKS_S", 120, 60)                # /api/networks (height, checkpoint)
-TXLIST_S = _ei("POASCAN_TXLIST_S", 120, 60)                  # /api/txs, the keyless tx list (1.26.98); /api/explorer/txs is its fallback
+TXLIST_S = _ei("POASCAN_TXLIST_S", 60, 60)                   # the tx list: /api/explorer/txs, /api/txs while it fails (60 s since 1.26.149, was 120)
 TXLIST_IDLE_S = _ei("POASCAN_TXLIST_IDLE_S", 300, 120)        # /api/txs while a read brought no new rows (304 or same ids); back to TXLIST_S on new rows
 INVALID_REFRESH_S = _ei("POASCAN_INVALID_REFRESH_S", 1800, 600)  # 1.26.107: one conditional /api/txs read this often while the explorer path is healthy, to refresh refused txs
 SWAPS_S = _ei("POASCAN_SWAPS_S", 60, 30, 120)                  # /api/swaps (swap mirrors read our cached copy, never minepoa.com)
@@ -487,7 +487,7 @@ def _invalid_refresh(now):
     return False
 
 def live_list():
-    """The tx list (1.26.105): /api/explorer/txs first, once per TXLIST_S (2 min). While it fails, /api/txs is the
+    """The tx list (1.26.105): /api/explorer/txs first, once per TXLIST_S (60 s; 2 min before 1.26.149). While it fails, /api/txs is the
     fallback: conditional (If-None-Match), every TXLIST_S after new rows and TXLIST_IDLE_S (5 min) after a 304 or no
     new rows. The explorer path is tried again every TXLIST_S during fallback (a 429 hold still applies) and takes
     over the moment it answers. Returns the path read, or None when nothing was due or every read failed."""
