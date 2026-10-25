@@ -154,7 +154,7 @@ def current():
     if _cur.get("ts") == r["ts"]: _cur["chk"] = now; return _cur["v"]
     v = db.get_blob(BLOB)[0]
     if not valid(v): return None
-    _cur.clear(); _cur.update(ts=r["ts"], v=v, idx=None, chk=now)
+    _cur.clear(); _cur.update(ts=r["ts"], v=v, idx=None, chk=now, queue=None, graders=None, qix=None)
     return v
 
 def fetched_at():
@@ -222,3 +222,92 @@ def conflict_summary(ours):
 def tag_html(detail):
     from .ui import flag
     return flag(UNCONFIRMED, detail) if detail else ""
+
+# ---------------------------------------------------------------- 1.26.137: queue, graders and per-Agent views (no upstream call)
+def _row_view(r, ep, nm, open_=False):
+    gs = r.get("grades") or []
+    t = sum(1 for g in gs if g.get("t")); qt = sum(1 for g in gs if g.get("t") and g.get("q")); qu = sum(1 for g in gs if g.get("q") and not g.get("t"))
+    last = max((int(g.get("ts") or 0) for g in gs), default=0) or None
+    exp = r.get("expires")
+    return dict(id=r.get("id"), author=r.get("author"), name=nm.get(r.get("author")), born=r.get("born"), since=r.get("since"), expires=exp,
+                expires_in=(int(exp) - int(ep)) if exp is not None and ep is not None else None, kind=r.get("kind"),
+                raw=int(r.get("raw") or len(gs)), qual=int(r.get("qual") or 0), need=int(r.get("need") if r.get("need") is not None else QUORUM_DEFAULT),
+                trusted_seals=t, untrusted_seals=len(gs) - t, counting_trusted=qt, counting_untrusted=qu, last_seal_ts=last, open=open_)
+
+def queue_rows():
+    """Every pending answer in the copy (rows, then the open epoch's answers), one dict each, or [] without a copy."""
+    d = current()
+    if not d: return []
+    if _cur.get("queue") is not None: return _cur["queue"]
+    from . import analytics as A
+    nm = A.forum_names(); ep = d.get("epoch")
+    out = [_row_view(r, ep, nm, o) for rs, o in ((d.get("rows") or [], False), (d.get("open") or [], True)) for r in rs if isinstance(r, dict) and r.get("id")]
+    _cur["queue"] = out
+    return out
+
+def summary():
+    """Headline numbers from the copy: pending, at quorum, trusted share, next close; None without a copy."""
+    d = current()
+    if not d: return None
+    st = d.get("stats") or {}; ct, ep = next_close(d)
+    return dict(pending=st.get("pending"), at_quorum=st.get("at_quorum"), trusted_share=st.get("trusted_share"), by_need=st.get("by_need") or {},
+                grades_on_pending=st.get("grades_on_pending"), graders=st.get("graders_distinct"), open_answers=len(d.get("open") or []),
+                quorum=d.get("quorum") or QUORUM_DEFAULT, epoch=ep, next_close_ts=ct, upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"),
+                stale=stale(), established_listed=len(d.get("established") or []))
+
+def last_close_ts(d=None):
+    d = d if d is not None else current()
+    ro = [r.get("ts") for r in (d or {}).get("rollups") or [] if isinstance(r, dict) and r.get("ts")]
+    return max(ro) if ro else None
+
+def grader_rows():
+    """Per grader in the copy: seals and counting seals since the last close, on every pending answer, the counting rate,
+    trusted (listed by minepoa) and minepoa's avg (mean jury score)."""
+    d = current()
+    if not d: return []
+    if _cur.get("graders") is not None: return _cur["graders"]
+    ix = index(); t0 = last_close_ts(d) or 0; out = []
+    for g, x in ix["by_g"].items():
+        if not g: continue
+        since = [s for s in x["rows"] if s[1] > t0]
+        lb = ix["lb"].get(g) or {}
+        out.append(dict(address=g, seals_since_close=len(since), counting_since_close=sum(1 for s in since if s[2]),
+                        pending_seals=x["seals"], pending_counting=x["qual"], qual_rate=(x["qual"] / x["seals"]) if x["seals"] else None,
+                        trusted=g in ix["trusted"], minepoa_avg=lb.get("avg"), last_seal_ts=x["last"] or None))
+    _cur["graders"] = out
+    return out
+
+def seal_tx(grader, ts):
+    """The archived grade-sealed tx for one seal (grader and timestamp match the tx exactly), or None."""
+    r = db.q1("SELECT id FROM txs WHERE type='grade-sealed' AND from_addr=? AND ts=? LIMIT 1", (grader, int(ts)))
+    return r["id"] if r else None
+
+def agent_view(a, limit=50):
+    """One Agent in the copy: its pending answers, its seals on pending answers (with the seal tx when archived) and its
+    settled jury seats and settled answers with the jurors' reasons. None without a usable copy."""
+    if not usable(): return None
+    d = current(); ix = index(); ep = d.get("epoch")
+    from . import analytics as A
+    nm = A.forum_names()
+    mine = sorted((_row_view(r, ep, nm) for r in ix["by_author"].get(a, [])), key=lambda r: (r["need"], -(r["born"] or 0)))
+    x = ix["by_g"].get(a) or dict(seals=0, qual=0, rows=[])
+    seals = sorted(x["rows"], key=lambda s: -s[1])
+    ids = {}
+    if seals:
+        ts = [s[1] for s in seals[:limit]]
+        for r in db.q(f"SELECT id, ts FROM txs WHERE type='grade-sealed' AND from_addr=? AND ts IN ({','.join('?' * len(ts))})", (a, *ts)): ids.setdefault(r["ts"], r["id"])
+    sv = [dict(answer=s[0], ts=s[1], counting=s[2], trusted=s[3], need=s[4], author=s[5], author_name=nm.get(s[5]), tx=ids.get(s[1])) for s in seals[:limit]]
+    seats = [dict(answer=s.get("id"), author=s.get("author"), author_name=nm.get(s.get("author")), close=s.get("close"), passed=s.get("passed"),
+                  aligned=j.get("aligned"), score=j.get("s"), reason=j.get("r"), trusted=j.get("t")) for s, j in ix["seats"].get(a, [])]
+    settled = [dict(answer=s.get("id"), close=s.get("close"), passed=s.get("passed"), expired=s.get("expired"),
+                    jury=[dict(grader=j.get("g"), name=nm.get(j.get("g")), aligned=j.get("aligned"), score=j.get("s"), reason=j.get("r"), trusted=j.get("t")) for j in s.get("jury") or []])
+               for s in ix["settled_by"].get(a, [])]
+    return dict(pending=mine[:limit], pending_count=len(mine), seals=sv, seals_count=x["seals"], seals_counting=x["qual"],
+                jury_seats=seats, settled=settled, quorum=d.get("quorum") or QUORUM_DEFAULT, epoch=ep,
+                upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"), stale=stale())
+
+def row_of(answer):
+    """The pending row for an answer id in the copy (a dict from queue_rows), or None."""
+    if not usable(): return None
+    if _cur.get("qix") is None: _cur["qix"] = {r["id"]: r for r in queue_rows()}
+    return _cur["qix"].get(answer)

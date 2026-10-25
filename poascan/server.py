@@ -12,7 +12,7 @@ from . import checkin as CK
 from . import opsdash as OD
 from . import chartpop as CP
 from . import standing as SD
-from . import governance as GV
+from . import governance as GV, gradingview as GVW
 from . import offer as OF
 from . import kin as KN
 from . import segments as SG
@@ -289,7 +289,7 @@ AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public ver
 
 STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
-                 "/governance?tab=established", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
+                 "/governance?tab=established", "/governance?tab=queue", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
 MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
@@ -303,7 +303,7 @@ OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
 GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "sort", "dir"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
-           "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}}
+           "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"}}
 def governance_api(path, qs):
     """Governance tabs as JSON (?segment= is read before routing). Unknown parameters and values are a 400."""
     if path not in GOV_API: raise KeyError(path)
@@ -341,6 +341,9 @@ def governance_api(path, qs):
     if path == "/api/governance/forum":
         so, d = sd(GV.FORUM_SORTS, "items")
         return GV.api_forum(pick("range", [k for k, _, _ in GV.RANGES], "7d"), so, d)
+    if path == "/api/governance/queue":
+        so, d = sd(GVW.QUEUE_SORTS, "need")
+        return GV.api_queue(pick("need", [k for k, _ in GVW.QUEUE_FILTERS], ""), so, d, num("limit", 1000, 1, 10000), num("offset", 0, 0, 10 ** 6))
     return GV.api_proposals(num("limit", 100, 1, 1000))
 
 # 1.26.96 header merge (Chain, Agents, Network, Governance): list and tab URLs 301 to their new home and keep every query
@@ -930,7 +933,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})

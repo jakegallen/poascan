@@ -53,8 +53,12 @@ def pending(a, limit=50):
             if g["grader"] in seen: continue
             seen.add(g["grader"]); scores.append(g.get("score"))
         panel = len(p.get("panel") or [])
-        out["answers"].append(dict(tx=r["id"], since=p.get("since", r["epoch"]), kind=p.get("kind"), panel=panel, has_panel=panel > 0,
-                                   grades=len(seen), scores=scores, ts=r["ts"]))
+        x = dict(tx=r["id"], since=p.get("since", r["epoch"]), kind=p.get("kind"), panel=panel, has_panel=panel > 0,
+                 grades=len(seen), scores=scores, ts=r["ts"], counting=None, need=None, grades_source="close_record")
+        from . import grading as GR   # 1.26.137: exact seals and counting seals from minepoa's grading list when POAScan has a copy
+        g = GR.row_of(r["id"])
+        if g: x.update(grades=g["raw"], counting=g["qual"], need=g["need"], grades_source="minepoa_grading")
+        out["answers"].append(x)
     out["answers"].sort(key=lambda x: (-(x["since"] if x["since"] is not None else -1), -(x["ts"] or 0)))
     out["count"] = len(out["answers"]); out["with_panel"] = sum(1 for x in out["answers"] if x["has_panel"])
     out["without_panel"] = out["count"] - out["with_panel"]; out["grades"] = sum(x["grades"] for x in out["answers"])

@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.137] - 2026-10-25
+
+### Added
+- Governance, Queue: the settle queue from minepoa's grading list. Every pending answer with 4 step quorum progress (gold for a trusted seal that counts, steel for an untrusted one), trusted and untrusted seals, need, born, expiry and the last seal; chips for Ready, Need 1 to 4 and the open epoch; header sorting via the shared sort component, a sort menu at 640px and below; a countdown to the next close (an estimate) in the visitor's time.
+- Overview stats from the same copy: At quorum, Pending, Trusted share and the next close countdown. Stale copies carry a Stale tag.
+- `/api/v1/governance/queue` (JSON and CSV; need, sort, dir, limit, offset) with pending, at_quorum, trusted_share, by_need, quorum, next_close_ts_est, upstream_as_of and fetched_at.
+- Agent pages (Governance tab): pending answers, seals on pending answers with the seal tx when archived, and jury reasons on settled seats (as juror and on the Agent's own answers). `/api/v1/governance/agent/<a>` adds `grading`.
+- `/api/v1/governance` adds `grading` (the queue summary).
+
+### Changed
+- Graders: seals since the close are exact from the list, with the seals that count, the counting rate, seals on the queue, minepoa's jury avg and a trusted badge. The API adds qual, qual_rate, pending_seals, minepoa_avg, trusted_listed, seals_source, upstream_as_of and fetched_at. Without a current copy it falls back to archived txs as before.
+- Receipts and standing: seals on a pending answer are exact from the list, with the seals that count and need (`seals_counting`, `seals_need`, `seals_source`, `seals_as_of`); no lower bound mark.
+
 ## [1.26.136] - 2026-10-25
 
 ### Added

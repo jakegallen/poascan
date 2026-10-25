@@ -4,11 +4,11 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR
+from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW
 from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
-TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 AGENT_COL = SS.Col("name", "Agent", "text")   # header sorting (1.26.117): Agent sorts by name A to Z, unnamed Agents last
 LEVEL_ORDER = {k: i for i, (k, _) in enumerate(LEVELS)}
@@ -125,7 +125,7 @@ def overview():
     t = standing_table(risky, 8) if risky else '<p class="na">No established Agent is estimated to drop in the next 3 closes.</p>'
     last = [[_ep(r["epoch"]), intc(r["established"]), intc(r["established_removed"]), intc(r["challenge_eligible"]), intc(r["paid"])] for r in reversed(ep[-6:])]
     lt = table(["Close", "Added", "Removed", "Eligible", "Paid"], last) if last else '<p class="na">No closes in this segment yet.</p>'
-    return (f'<div class="stats six">{s}</div><div class="grid2">'
+    return (f'<div class="stats six">{s}</div>' + GVW.stats_row() + '<div class="grid2">'
             + card("At risk and Watch", t, f'<a class="more" href="{href("at-risk")}">All →</a>', cls="histc")
             + estimate_card() + "</div>"
             + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>'))
@@ -189,13 +189,26 @@ def seals_since_close():
     rows = db.q("SELECT from_addr AS g, COUNT(*) AS n FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL AND ts > ?" + w + " GROUP BY from_addr ORDER BY n DESC", (t,) + a)
     return t, [(r["g"], r["n"]) for r in rows]
 
-GRADER_SORTS = [("seals", "Seals")] + SS.PARTS + [("name", "Agent")]
+GRADER_SORTS = [("seals", "Seals")] + SS.PARTS + [("name", "Agent"), ("counting", "Count"), ("rate", "Rate"), ("pending", "On queue"), ("avg", "Jury avg")]
 
-def grader_cols(): return [AGENT_COL, SS.Col("seals", "Seals", "num", "r"), SS.Col("score", "Score", "num", "r", score_tip())]
+def grader_cols():
+    if not GR.usable(): return [AGENT_COL, SS.Col("seals", "Seals", "num", "r"), SS.Col("score", "Score", "num", "r", score_tip())]
+    return [AGENT_COL, SS.Col("seals", "Seals", "num", "r"), SS.Col("counting", "Count", "num", "r"), SS.Col("rate", "Rate", "num", "r dk"),
+            SS.Col("pending", "On queue", "num", "r dk"), SS.Col("avg", "Jury avg", "num", "r dk"), SS.Col("score", "Score", "num", "r", score_tip())]
 
 def seals_select(by="seals", d="desc"):
-    t, ss = seals_since_close(); sc = scores()["rows"]; nm = A.forum_names()
-    rows = [dict(address=g, name=nm.get(g), seals=n, **parts_of(g, sc)) for g, n in ss]
+    """Seals since the last close per grader. 1.26.137: exact from minepoa's grading list when POAScan has a copy (seals,
+    counting seals, rate, seals on the queue, minepoa's jury avg, trusted); else grade-sealed txs archived since the close."""
+    sc = scores()["rows"]; nm = A.forum_names()
+    if GR.usable():
+        t = GR.last_close_ts() or 0
+        rows = [dict(address=r["address"], name=nm.get(r["address"]), seals=r["seals_since_close"], counting=r["counting_since_close"],
+                     rate=(r["counting_since_close"] / r["seals_since_close"]) if r["seals_since_close"] else None, pending=r["pending_seals"],
+                     avg=r["minepoa_avg"], trusted=r["trusted"], exact=True, **parts_of(r["address"], sc)) for r in GR.grader_rows() if r["seals_since_close"]]
+    else:
+        t, ss = seals_since_close()
+        rows = [dict(address=g, name=nm.get(g), seals=n, exact=False, **parts_of(g, sc)) for g, n in ss]
+    if by in ("counting", "rate", "pending", "avg") and not GR.usable(): by = "seals"
     if by == "name": return t, SS.sort_rows(rows, lambda r: SS.text_key(r["name"]), "text", d, tie=lambda r: r["address"])
     return t, SS.sort_rows(rows, lambda r: r[by], "num", d, tie=lambda r: r["address"])
 
@@ -205,19 +218,32 @@ def graders(qs):
     t, rows = seals_select(by, d)
     seats = sum(x["aligned"] + x["other"] for x in js)
     cov = (1 - last["empty"] / last["queue"]) if last and last["queue"] else None
-    s = "".join([stat("Graders now", intc(len(rows)), tip="Agents with a grade-sealed tx since the last close"), stat("Seals now", intc(sum(r["seals"] for r in rows)), tip="grade-sealed txs since the last close"),
-                 stat("Queue", intc(last["queue"]) if last else "···", tip="Pending answers at the last close"), stat("Coverage", pct(cov) if cov is not None else "···", tip="Pending answers with a panel at the last close")])
+    if GR.usable():   # 1.26.137: exact, from minepoa's grading list
+        gs = GR.summary(); f = GVW.stale_flag(); ns = sum(r["seals"] for r in rows); nc = sum(r["counting"] for r in rows)
+        s = "".join([stat("Graders now", intc(len(rows)), tip="Agents with a seal since the last close in minepoa's grading list", flag_html=f),
+                     stat("Seals now", intc(ns), tip="Seals since the last close in minepoa's grading list", flag_html=f),
+                     stat("Queue", intc(gs["pending"]), tip="Pending answers in minepoa's grading list", flag_html=f),
+                     stat("Counting", pct(nc / ns) if ns else "···", tip="Share of seals since the last close that count toward quorum", flag_html=f)])
+    else:
+        s = "".join([stat("Graders now", intc(len(rows)), tip="Agents with a grade-sealed tx since the last close"), stat("Seals now", intc(sum(r["seals"] for r in rows)), tip="grade-sealed txs since the last close"),
+                     stat("Queue", intc(last["queue"]) if last else "···", tip="Pending answers at the last close"), stat("Coverage", pct(cov) if cov is not None else "···", tip="Pending answers with a panel at the last close")])
     ch = bars([(f'E{x["epoch"]}', [x["aligned"], x["other"]]) for x in js], height=150, colors=("verd", "ember"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else '<p class="na">No settled jury seats in this segment yet.</p>'
     def ag(g):
         a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
         return (name_link(nm[g], g) + f"<small>{a}</small>") if nm.get(g) else a
-    trs = "".join(f'<tr><td>{ag(r["address"])}</td><td class="r">{intc(r["seals"])}</td><td class="r">{_score_cell(r["score"])}</td></tr>' for r in rows[:10])
+    def _avg(v): return f'<span class="num">{v:.2f}</span>' if v is not None else '<span class="dim">···</span>'
+    def ex(r):
+        if not r.get("exact"): return ""
+        return (f'<td class="r">{intc(r["counting"])}</td><td class="r dk">{pct(r["rate"]) if r["rate"] is not None else "···"}</td>'
+                f'<td class="r dk">{intc(r["pending"])}</td><td class="r dk">{_avg(r["avg"])}</td>')
+    trs = "".join(f'<tr><td>{ag(r["address"])}{GVW.grader_badge(r)}</td><td class="r">{intc(r["seals"])}</td>{ex(r)}<td class="r">{_score_cell(r["score"])}</td></tr>' for r in rows[:15])
     link = lambda k, dd: href("graders", sort=k if k != "seals" else "", dir="asc" if dd == "asc" else "") + "#seals"
     st = (SS.select(grader_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(grader_cols(), by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
           if rows else '<p class="na">No seals since the last close.</p>')
     q = qsx(sort=by if by != "seals" else "", dir="asc" if d == "asc" else "")
+    sub = '<p class="cov dim small">Exact, from minepoa\'s grading list. Count: seals that count toward quorum. Jury avg: minepoa\'s mean jury score. <a href="/about#grading-list">Method</a></p>' if GR.usable() and rows else ""
     return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Jury seats per close", ch)
-            + card("Seals since close", st, f'<a class="more" href="/api/v1/governance/graders{q}">API →</a>', id="seals") + "</div>"
+            + card("Seals since close", st + sub, f'<a class="more" href="/api/v1/governance/graders{q}">API →</a>', id="seals") + "</div>"
             + V.graders_body(qs, href("graders")))
 
 def payout_estimate():
@@ -592,13 +618,13 @@ def rules():
                "<p>Segment 2 E0 closed with no established_after or established_removed entries. Segment 2 standing starts at the cut; segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
@@ -631,7 +657,12 @@ def established_cross():
 def api_overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
     pe = payout_estimate() if not SG.archived() else None
-    return dict(_seg(), established=len(d["rows"]), established_check=established_cross(), counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+    gs = GR.summary() if GR.usable() else None
+    return dict(_seg(), established=len(d["rows"]), established_check=established_cross(),
+                grading=None if not gs else dict(pending=gs["pending"], at_quorum=gs["at_quorum"], trusted_share=gs["trusted_share"], by_need=gs["by_need"], quorum=gs["quorum"],
+                                                 open_epoch=gs["epoch"], next_close_ts_est=gs["next_close_ts"], upstream_as_of=gs["upstream_as_of"], fetched_at=gs["fetched_at"], stale=gs["stale"],
+                                                 queue=BASE + "/api/v1/governance/queue"),
+                counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
                 graders=cal.get("graders_count"), agreement=cal.get("aligned_rate"),
                 est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
@@ -660,7 +691,10 @@ def api_graders(limit=100, sort="seals", d="desc"):
     js = jury_series(); t, rows = seals_select(sort, d); nm = A.forum_names(); last = js[-1] if js else None; cal = CA.calibration()
     return dict(_seg(), since_close_ts=t or None, graders_now=len(rows), seals_now=sum(r["seals"] for r in rows), sort=sort, dir=d,
                 queue=last["queue"] if last else None, coverage=(1 - last["empty"] / last["queue"]) if last and last["queue"] else None,
-                seals_since_close=[dict(address=r["address"], name=nm.get(r["address"]), profile=PROFILE.format(r["address"]) if nm.get(r["address"]) else None, seals=r["seals"], **_sflat(r)) for r in rows[:limit]],
+                seals_since_close=[dict(address=r["address"], name=nm.get(r["address"]), profile=PROFILE.format(r["address"]) if nm.get(r["address"]) else None, seals=r["seals"],
+                                        **({"qual": r["counting"], "qual_rate": r["rate"], "pending_seals": r["pending"], "minepoa_avg": r["avg"], "trusted_listed": r["trusted"]} if r.get("exact") else {}),
+                                        **_sflat(r)) for r in rows[:limit]],
+                seals_source="minepoa_grading" if GR.usable() else "archived_txs", upstream_as_of=GR.upstream_as_of() if GR.usable() else None, fetched_at=GR.fetched_at() if GR.usable() else None,
                 jury_per_close=[dict(epoch=x["epoch"], aligned=x["aligned"], not_aligned=x["other"], queue=x["queue"], empty_panels=x["empty"]) for x in js],
                 calibration=dict(graders=cal.get("graders_count"), seats=cal.get("seats"), agreement=cal.get("aligned_rate"), url=BASE + "/api/v1/agents/calibration"),
                 url=_url("graders"))
@@ -761,8 +795,9 @@ def agent_tab(a, qs):
     q = f"?scope=all" if scope == "all" else (f"?segment={SG.selected()}" if SG.archived() else "")
     api = f'<a class="more" href="/api/v1/address/{E(a)}/governance{q}">API →</a>'
     head = card("Score" + tip, f'<div class="stats five">{s}</div>', f'<a class="more" href="{href("established")}">Established →</a>', id="score")
+    live = GVW.agent_cards(a) if scope == "segment" else ""   # 1.26.137: pending answers, seals and jury reasons from minepoa's grading list
     return (chips + head + '<div class="grid2">' + card("Standing", kv(std_rows), api, id="gov-standing") + card("Grading", kv(gr_rows))
-            + "</div>" + card("Forum", kv(fo_rows), f'<a class="more" href="{href("forum")}">Forum →</a>', id="gov-forum"))
+            + "</div>" + live + card("Forum", kv(fo_rows), f'<a class="more" href="{href("forum")}">Forum →</a>', id="gov-forum"))
 
 def api_agent(a, scope="segment"):
     d = agent_data(a, scope); f = d["f"]; st = d["std"]
@@ -777,5 +812,33 @@ def api_agent(a, scope="segment"):
                 established=bool(st), established_source=GR.established_check(a)[0] if st else "close_records", minepoa_established=GR.minepoa_established(a),
                 level=LEVEL_KEYS[st["level"]] if st else None, closes_left=st["left"] if st else None,
                 added_closes=lab(f["added_epochs"]), removed_closes=lab(f["removed_epochs"]), rewards=round(f["rewards"], 6), facts=out, votes="not public per Agent",
+                grading=_agent_grading(a) if scope == "segment" else None,
                 closes_in_scope=d["closes"], sources="close records, archived txs and POAScan's LabLeak mirror; forum and txs limited to the segment's time window unless scope is all",
                 url=f"{BASE}/address/{a}?tab=governance" + ("&scope=all" if scope == "all" else (f"&segment={SG.selected()}" if SG.archived() else "")))
+
+
+# ---------------- Settle queue API (1.26.137): minepoa's grading list as POAScan last read it ----------------
+QUEUE_FIELDS = ("id", "author", "name", "born", "since", "expires", "expires_in", "kind", "raw", "qual", "need", "trusted_seals", "untrusted_seals",
+                "counting_trusted", "counting_untrusted", "last_seal_ts", "open")
+
+def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
+    gs = GR.summary() if GR.usable() else None
+    rs = GVW.queue_select(need, sort, d) if gs else []
+    return dict(_seg(), source="minepoa_grading", available=bool(gs), need=need or None, sort=sort, dir=d, total=len(rs), offset=offset, limit=limit,
+                pending=gs["pending"] if gs else None, at_quorum=gs["at_quorum"] if gs else None, trusted_share=gs["trusted_share"] if gs else None,
+                by_need=gs["by_need"] if gs else None, quorum=gs["quorum"] if gs else None, open_epoch=gs["epoch"] if gs else None,
+                next_close_ts_est=gs["next_close_ts"] if gs else None, upstream_as_of=gs["upstream_as_of"] if gs else None, fetched_at=gs["fetched_at"] if gs else None,
+                stale=gs["stale"] if gs else None,
+                note="qual: seals that count toward quorum (q); need: quorum minus qual; pending seals carry no verdict. Read every 10 min (5 near a close). Method: " + BASE + "/about#grading-list",
+                rows=[{k: r.get(k) for k in QUEUE_FIELDS} for r in rs[offset:offset + limit]],
+                url=_url("queue", need=need, sort=sort if sort != "need" else "", dir="asc" if d == "asc" else ""))
+
+def _agent_grading(a):
+    v = GR.agent_view(a)
+    if not v: return None
+    return dict(source="minepoa_grading", upstream_as_of=v["upstream_as_of"], fetched_at=v["fetched_at"], stale=v["stale"], quorum=v["quorum"],
+                pending_answers=[{k: r.get(k) for k in QUEUE_FIELDS if k not in ("author", "name")} for r in v["pending"]], pending_count=v["pending_count"],
+                seals_on_pending=[dict(answer=s["answer"], ts=s["ts"], counts=s["counting"], trusted=s["trusted"], answer_need=s["need"], answer_author=s["author"], seal_tx=s["tx"]) for s in v["seals"]],
+                seals_count=v["seals_count"], seals_counting=v["seals_counting"],
+                jury_seats=[dict(answer=s["answer"], author=s["author"], close=s["close"], passed=s["passed"], aligned=s["aligned"], score=s["score"], reason=s["reason"]) for s in v["jury_seats"]],
+                settled_answers=v["settled"], note="Pending seals carry no verdict; scores and reasons come from settled juries.")

@@ -1,4 +1,4 @@
-"""minepoa grading list (1.26.134): read schedule, backoff with Retry-After, one read per run and never per page view,
+"""minepoa grading list (1.26.136): read schedule, backoff with Retry-After, one read per run and never per page view,
 raw copies only before and after a close, seal changes, the compact copy, the Unconfirmed tag with established_source
 and minepoa_established, the Health feed row and the /about notes.
 Usage: python3 tools/grading_test.py (temp database, no network)."""

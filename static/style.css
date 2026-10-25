@@ -1366,3 +1366,15 @@ th.hs .qtip{margin-left:2px}
 @media (max-width:640px){.qtip.sflag>summary{width:auto;height:auto}}
 /* 1.26.126 phones: a stat label with a state tag wraps, so the tag drops below the label instead of running past the card or over the pop-out icon */
 @media (max-width:640px){.sl:has(.sflag){flex-wrap:wrap;row-gap:4px}.sl:has(.sflag) .sflag{max-width:100%}}
+/* 1.26.137 settle queue: quorum progress in four steps (gold: a trusted seal that counts, steel: an untrusted one) */
+.qp{display:inline-flex;gap:3px;vertical-align:middle;margin-right:6px}
+.qp i{display:block;width:12px;height:8px;border-radius:var(--r-sm);background:var(--line2)}
+.qp i.t{background:var(--gold)}.qp i.u{background:var(--steel)}
+.qn{font-size:var(--t12);color:var(--steel)}
+td.qpc{white-space:nowrap}
+table.queue tr.rdy td:first-child{box-shadow:inset 2px 0 0 var(--verd)}
+table.why td.why{color:var(--txt);white-space:normal;min-width:220px;font-size:var(--t13);line-height:1.45}
+ul.jury{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;font-size:var(--t13);line-height:1.45}
+ul.jury .num{display:inline-block;min-width:14px;color:var(--amber)}
+h3.sub{font:600 var(--t12)/1.4 var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin:4px 0 8px}
+@media (max-width:640px){.qp i{width:9px;height:7px}.qp{gap:2px;margin-right:4px}table.why td.why{min-width:180px}}

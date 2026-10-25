@@ -79,6 +79,11 @@ def _receipt(tid, fetch, row):
         n = ix["seals"].get(tid); g = r.get("graded")
         if g is not None and (n or 0) <= g: seals, seals_exact, seals_close = g, True, r.get("last")   # exact as of that close
         else: seals, seals_exact = (n, False) if n else (None, False)
+    counting = need = None; src = "close_record" if seals_exact else "archived_txs" if seals is not None else None; seals_as_of = None
+    if not st:   # 1.26.137: a pending answer in minepoa's grading list: exact seals, the ones that count, and need
+        from . import grading as GR
+        g = GR.row_of(tid)
+        if g: seals, seals_exact, seals_close, counting, need, src, seals_as_of = g["raw"], True, None, g["qual"], g["need"], "minepoa_grading", GR.upstream_as_of(); q = int((GR.current() or {}).get("quorum") or q)
     paid_close = None; paid = None
     if st:
         if st["passed"] and author: paid = author in ix["credited"].get(st["close"], set()); paid_close = st["close"] if paid else None
@@ -94,7 +99,7 @@ def _receipt(tid, fetch, row):
                 seed=body.get("seed"), submitted_at=ts, age_s=int(time.time() - ts) if ts else None,
                 closes_waited=(last - int(since)) if (last is not None and since is not None and status in ("pending", "vanished")) else None,
                 status=status, kind=r.get("kind"), panel=r.get("panel") if status in ("pending", "vanished") else None,
-                seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q,
+                seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q, seals_counting=counting, seals_need=need, seals_source=src, seals_as_of=seals_as_of,
                 settled_close=st["close"] if st else None, passed=st["passed"] if st else None,
                 paid_close=paid_close, address_credited=paid, reward_attributable=None,
                 paid_state=("unconfirmed" if S.unconfirmed(paid_close, (row or {}).get("segment") or S.selected()) else "recorded") if paid_close is not None else None,
@@ -128,6 +133,7 @@ def status_tag(r):
 def seals_txt(r):
     q = r["quorum"]
     if r["seals"] is None: return f'{UNK} <span class="dim">/ {q}</span>'
+    if r.get("seals_counting") is not None: return f'<span class="num">{r["seals_counting"]}</span> <span class="dim">/ {q} · {r["seals"]} seal{"" if r["seals"] == 1 else "s"}</span>'
     return f'<span class="num">{"" if r["seals_exact"] else "≥"}{r["seals"]}</span> <span class="dim">/ {q}</span>'
 
 def paid_txt(r):
