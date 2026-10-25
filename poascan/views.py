@@ -75,8 +75,10 @@ def graders_tile(o):
 def tracker_html(score=True):
     """Home's hero, the Bench (bench.py): epoch numeral, countdown, bezel, Answers, Graders and Pool, and the last 24 minutes of
     answers, attests and seals. score=False leaves the strip out (the /api/summary field stays small)."""
-    o = A.open_epoch()
-    h = BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]))
+    o = A.open_epoch(); nm = names()
+    feed = [dict(type=r["type"], addr=r["from_addr"], name=nm.get(r["from_addr"]), ts=int(r["ts"] or 0)) for r in
+            db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")] if score else ()
+    h = BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]), feed=feed)
     return h if score else re.sub(r'<div class="score".*?</div></div></div></div>$', "</div></div>", h, flags=re.S)
 
 def burnmeter_html():
@@ -148,7 +150,7 @@ def live_snapshot():
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
                 cards=dict({k: v for k, v in h.items() if k in ("vest", "circ")}, **_swap_cards()), frags=SW.live(),
                 epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
-                last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct")),
+                last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct"), settled=last.get("settled")),
                 feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live(), **joins_fields())
 
 def _swap_cards():

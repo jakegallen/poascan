@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.145] - 2026-10-25
+
+### Added
+- Home, the Bench: the strip drifts with the clock and new answers, attests and seals slide in at the now line with a short glow; the now line breathes. Answers, Graders, Pool and the lane counts roll digit by digit with a +N chip. The bezel head glides to the current time with a glint running up to it; in the last minute the countdown brightens and beats each second, then reads Closing. At a close the numeral flips and the ticker reads "Epoch N closed, M answers settled" (the close record's settled count when it has landed) for 7 s. A Latest line under the strip cycles the newest txs from the live snapshot, Agent names linking to their LabLeak profiles, ages in seconds and times in the visitor's zone. No new requests: it all comes from the snapshot and /fragment/score. Reduced motion keeps the static Bench. The live snapshot's `last` gains `settled`.
+- Dev only: `POASCAN_DEV_DEMO=1` on a local server enables `?demo=motion` (devdemo.py), which replays the archive's latest minutes and a close for previews; it is never on Fly and /dev/* answers 404 there.
+
 ## [1.26.144] - 2026-10-25
 
 ### Fixed

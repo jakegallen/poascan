@@ -103,7 +103,7 @@ check("app.js: Seals recluster at the real width and on resize, slide with the s
       and 'e.pointerType==="mouse"' in js and "sealTip(m,1)" in js)
 check("style.css: round capsules, a separating ring, a hit area for touch, no motion when reduced",
       ".sm{position:absolute;top:50%" in css and "box-shadow:0 0 0 2px var(--ink-2)" in css and ".sm::after{" in css
-      and "@media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}" in css and "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw{animation:none}}" in css)
+      and "@media (prefers-reduced-motion:reduce){.sm,.stip{transition:none}}" in css and "@media (prefers-reduced-motion:reduce){.ldot,.lane .nw,.sm.nw," in css)
 for p in ("poascan/bench.py", "poascan/profile.py", "static/app.js", "static/style.css", "tools/localmap_seals_test.py"):
     check(f"no em or en dashes in {p}", not any(ch in open(os.path.join(ROOT, p), encoding="utf-8").read() for ch in "\u2014\u2013"))
 if fails: print(f"FAIL: {len(fails)}: {fails}"); sys.exit(1)
