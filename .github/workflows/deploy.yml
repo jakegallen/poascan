@@ -185,6 +185,10 @@ jobs:
         run: python tools/active_series_test.py
       - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)
         run: python tools/swap_writes_test.py
+      - name: Apt from archive.ubuntu.com with retries and a 20 s timeout (the Azure mirror stalled 1.26.159's WebKit deps past the job timeout twice)
+        run: |
+          sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99poascan > /dev/null
       - name: Install Playwright and Chromium (pinned, headless shell only) for the header render check
         run: |
           python -m pip install --disable-pip-version-check -q playwright==1.64.1

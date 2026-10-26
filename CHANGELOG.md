@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.160] - 2026-10-26
+
+### Fixed
+- Site slow or not answering after 1.26.158 (shared vCPUs out of burst credit, 70%+ steal; the guard restarted the machine at 10:08 AM PT). The grade history sync re-read every close record of every segment and re-matched every score every 5 minutes, and the open seat job refolded standing every minute. Now the sync reads each close once (per segment, by close), matches scores only to rows still without one (partial index), skips the grading copy when it has not changed and runs every 15 minutes; the open seat target list is kept per epoch (or 30 minutes).
+- `POASCAN_GRADEHIST=off` stops both jobs at once; pages keep what is stored.
+- CI: apt uses archive.ubuntu.com with retries and a 20 s timeout. The Azure mirror stalled 1.26.159's WebKit deps past the 25 minute job timeout twice, so 1.26.159 ships with this release.
+
 ## [1.26.159] - 2026-10-26
 
 ### Changed

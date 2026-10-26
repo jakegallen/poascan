@@ -35,7 +35,8 @@ def main():
     from poascan import grading as GR; GR._ensure(); GR._cur.clear(); A._cache.clear()
     n = GH.sync()
     check("sync stores every settled jury seat in both segments", n == 7 and db.q1("SELECT COUNT(*) AS c FROM grade_history")["c"] == 7)
-    check("sync twice adds nothing", GH.sync() == 7 and db.q1("SELECT COUNT(*) AS c FROM grade_history")["c"] == 7)
+    check("sync twice adds nothing (a read close is skipped)", GH.sync() == 0 and db.q1("SELECT COUNT(*) AS c FROM grade_history")["c"] == 7)
+    check("sync remembers the last close read per segment", (db.get_blob("gradehist_meta")[0] or {}).get("closes_seen") == {"1": 5, str(SG.CURRENT): 2})
     sc = {(r["answer"], r["grader"]): r["score"] for r in db.q("SELECT answer, grader, score FROM grade_history")}
     check("scores only from settled juries, 0 to 3 integers", sc[("a1", G1)] == 3 and sc[("a1", G2)] == 2 and sc[("a2", G1)] is None and sc[("a2", G2)] is None)
     check("pending answers and pending scores never enter grade_history", db.q1("SELECT COUNT(*) AS c FROM grade_history WHERE answer=?", (SECRET,))["c"] == 0)
@@ -49,10 +50,26 @@ def main():
     GH.sync()
     check("raw copies fill a missing settled score", db.q1("SELECT score FROM grade_history WHERE answer='a3' AND grader=?", (G1,))["score"] == 1)
 
+    # a new close is read on the next pass, alone
+    eps = db.get_blob("epochs")[0]; db.put_blob("epochs", eps + [close(3, NOW - 5000, [st("a4", True, [(G2, True)])])]); A._cache.clear(); A._epochs.clear()
+    check("a new close is added incrementally", GH.sync() == 1 and db.q1("SELECT COUNT(*) AS c FROM grade_history")["c"] == 8)
+    db.put_blob("epochs", eps); db.write("DELETE FROM grade_history WHERE answer='a4'"); A._cache.clear(); A._epochs.clear()
+
+    # flag: POASCAN_GRADEHIST=off stops both jobs
+    GH.ENABLED = False
+    check("flag off: sync and open seat job do nothing", GH.sync() == 0 and GH.job(NOW, lambda a: 1 / 0) == 0)
+    GH.ENABLED = True
+
     # open seats: background reads, counts only
     check("allowlist: /api/assignments/<addr>?limit=1", bool(IX.ALLOWED.match(f"/api/assignments/{G1}?limit=1")) and not IX.ALLOWED.match("/api/assignments/x/../../hosted/me"))
     A.established_set = lambda *a, **k: {G1, G2}
     check("targets: established Agents plus recent graders", GH.targets() == sorted([G1, G2, G3]))
+    folds = []; real = GH.targets; GH.targets = lambda: folds.append(1) or real()
+    GH.targets_for(3, NOW); GH.targets_for(3, NOW + 60); GH.targets_for(3, NOW + 120)
+    check("targets kept per epoch: one fold for three runs", len(folds) == 1)
+    GH.targets_for(4, NOW + 180)
+    check("a new epoch rebuilds targets", len(folds) == 2)
+    GH.targets = real; GH._targets.update(ep=None, at=0, list=[])
     calls = []
     def get(a):
         calls.append(a)

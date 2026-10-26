@@ -9,9 +9,14 @@ Open seats: minepoa's public, keyless count GET /api/assignments/<addr> (total, 
 background at most once per epoch per Agent, PER_RUN reads a minute at most, through indexer.fetch (shared 429 hold, its own
 backoff key). Only the counts are kept: the assignments list in the reply is dropped on read, never stored or logged.
 A page view or API call never reads minepoa.com; it reads table open_seats."""
-import time
+import os, time
 from html import escape as E
 from . import db
+
+# 1.26.160: both background jobs sit behind POASCAN_GRADEHIST (on by default; off stops the sync and the open seat reads,
+# pages keep showing what is stored). sync() is incremental: a close is read once, scores are matched only to rows still
+# without one, and a pass with nothing new costs one small query. targets() is kept per epoch, not rebuilt every minute.
+ENABLED = os.environ.get("POASCAN_GRADEHIST", "on").strip().lower() not in ("0", "off", "false", "no")
 
 OPEN_EP = "/api/assignments/:addr"
 PER_RUN = 3                 # reads per job run (the job ticks every 60 s): at most 3 a minute, far under minepoa's 30
@@ -23,6 +28,7 @@ def _ensure():
     db.write("CREATE TABLE IF NOT EXISTS grade_history(seg INTEGER NOT NULL, answer TEXT NOT NULL, grader TEXT NOT NULL, close INTEGER NOT NULL, "
              "aligned INTEGER NOT NULL, passed INTEGER NOT NULL, score INTEGER, PRIMARY KEY(seg, answer, grader)) WITHOUT ROWID")
     db.write("CREATE INDEX IF NOT EXISTS grade_history_g ON grade_history(grader, seg, close)")
+    db.write("CREATE INDEX IF NOT EXISTS grade_history_null ON grade_history(answer, grader) WHERE score IS NULL")
     db.write("CREATE TABLE IF NOT EXISTS open_seats(addr TEXT PRIMARY KEY, epoch INTEGER, total INTEGER, graded INTEGER, has_seat INTEGER, read_at INTEGER NOT NULL)")
 
 # ---------------------------------------------------------------- sync (no upstream call)
@@ -36,32 +42,43 @@ def _settled_scores(d):
             if j.get("g") and isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 3: out[(s["id"], j["g"])] = v
     return out
 
-def sync():
-    """Fill grade_history from every segment's close records, then scores from the grading list (current copy and kept raw copies)."""
+def sync(force=False):
+    """Fill grade_history from close records not read yet (per segment, by close), then scores for rows still without one,
+    from the grading list (current copy when it changed, and raw copies newer than the last pass)."""
     from . import analytics as A, segments as SG, grading as GR
+    if not (ENABLED or force): return 0
     _ensure(); n_rows = 0
+    m = db.get_blob("gradehist_meta")[0] or {}; seen = {str(k): int(v) for k, v in (m.get("closes_seen") or {}).items()}
     for n in SG.NUMBERS:
-        rows = []
+        rows = []; top = seen.get(str(n), -1)
         for e in A.segment_closes(n):
-            c = int(e.get("epoch", 0)); b = e.get("basis") or {}
+            c = int(e.get("epoch", 0))
+            if c <= seen.get(str(n), -1): continue
+            top = max(top, c); b = e.get("basis") or {}
             for s in b.get("settled") or []:
                 ans = s.get("answer"); ok = 1 if s.get("passed") else 0
                 for j in s.get("jury") or []:
                     g = (j or {}).get("grader")
                     if g and ans: rows.append((n, ans, g, c, 1 if j.get("aligned") else 0, ok))
         if rows: db.write("INSERT OR IGNORE INTO grade_history(seg, answer, grader, close, aligned, passed) VALUES(?,?,?,?,?,?)", rows, many=True)
+        if top >= 0: seen[str(n)] = top
         n_rows += len(rows)
-    sc = _settled_scores(GR.current())
-    m = db.get_blob("gradehist_meta")[0] or {}; last_raw = int(m.get("raw_ts") or 0); top = last_raw
+    cur = GR.current() or {}
+    r = db.q1("SELECT ts FROM blobs WHERE kind=?", (GR.BLOB,)); sig = r["ts"] if r else None   # the stored copy's write time
+    sc = _settled_scores(cur) if (n_rows or sig != m.get("cur_sig")) else {}
+    last_raw = int(m.get("raw_ts") or 0); top_raw = last_raw
     try:
         import gzip, json
         for r in db.q("SELECT ts, body FROM grading_raw WHERE ts > ? ORDER BY ts", (last_raw,)):
             for k, v in _settled_scores(json.loads(gzip.decompress(r["body"]))).items(): sc.setdefault(k, v)
-            top = max(top, int(r["ts"]))
+            top_raw = max(top_raw, int(r["ts"]))
     except Exception: pass   # no raw table yet (fresh database)
     if sc:
-        db.write("UPDATE grade_history SET score=? WHERE answer=? AND grader=? AND score IS NULL", [(v, a, g) for (a, g), v in sc.items()], many=True)
-    db.put_blob("gradehist_meta", dict(m, synced_at=int(time.time()), raw_ts=top, seats=n_rows))
+        need = {(r["answer"], r["grader"]) for r in db.q("SELECT answer, grader FROM grade_history WHERE score IS NULL")}
+        up = [(v, a, g) for (a, g), v in sc.items() if (a, g) in need]
+        if up: db.write("UPDATE grade_history SET score=? WHERE answer=? AND grader=? AND score IS NULL", up, many=True)
+    tot = db.q1("SELECT COUNT(*) AS n FROM grade_history") or {}
+    db.put_blob("gradehist_meta", dict(m, synced_at=int(time.time()), raw_ts=top_raw, closes_seen=seen, cur_sig=sig, seats=tot.get("n") or 0))
     return n_rows
 
 # ---------------------------------------------------------------- open seats (background, rate limited)
@@ -71,6 +88,16 @@ def _open_epoch():
     if d.get("epoch") is not None: return int(d["epoch"])
     try: return int(A.open_epoch().get("epoch"))
     except Exception: return None
+
+_targets = {"ep": None, "at": 0, "list": []}
+TARGETS_TTL = 1800   # rebuild the target list once per epoch, or every 30 minutes at most
+
+def targets_for(ep, now=None):
+    """targets(), kept for the epoch (or TARGETS_TTL): the open seat job runs every minute and must not refold standing each time."""
+    now = now or time.time()
+    if _targets["ep"] != ep or now - _targets["at"] >= TARGETS_TTL:
+        _targets.update(ep=ep, at=now, list=targets())
+    return _targets["list"]
 
 def targets():
     """Who gets an open seat read: established Agents in the current segment, plus graders with a settled seat in the last RECENT_CLOSES closes."""
@@ -89,12 +116,13 @@ def _get(a):
 def job(now=None, get=None):
     """Indexer job (every 60 s): up to PER_RUN reads of Agents not yet read this epoch, oldest first. Stops at the first failure."""
     from . import indexer as IX
+    if not ENABLED: return 0
     _ensure(); now = int(now or time.time()); get = get or _get
     if IX.degraded() or not IX.can_fetch(OPEN_EP): return 0
     ep = _open_epoch()
     if ep is None: return 0
     have = {r["addr"]: r for r in db.q("SELECT addr, epoch, read_at FROM open_seats")}
-    due = [a for a in targets() if (have.get(a) or {}).get("epoch") != ep]
+    due = [a for a in targets_for(ep, now) if (have.get(a) or {}).get("epoch") != ep]
     due.sort(key=lambda a: ((have.get(a) or {}).get("read_at") or 0, a))
     done = 0
     for a in due[:PER_RUN]:
