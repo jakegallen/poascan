@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Fixed (preview/health-fix)
+- Health Partial with Tx lookup and Swaps not OK while minepoa served them: minepoa now answers a tx id its edge does not hold with `503 origin busy` and `Retry-After: 60` (it used to be a 307 or 404), and the chain tx path `/chain/<id>/api/tx/<txid>` answers `503 global capacity guard` when its cross-IP ceiling (60 a minute for every caller) is full. POAScan counted both as endpoint failures: one unknown id put tx reads in backoff for every visitor, and the rarely read swap tx key stayed Down for an hour. These single-id sheds are now `Shed`: not a feed failure, the id negative cached for at least the Retry-After (120 s), and a full ceiling holds that path for its Retry-After so the explorer path answers alone. Five sheds in a row with no good read still count as a failure. A shed swap tx is never taken as dropped.
+- One budget for every single-tx request to minepoa.com (visitor pages, API, MCP, answer sample, wallet links, signed txs and swap fills, both paths): at most 30 in any 60 s (sliding window, POASCAN_TX_PER_MIN can only lower it).
+- A failed hourly read (params, release, chains) is retried once its own backoff ends (job every 5 min, one read), instead of an hour later: one timeout kept Params Degraded for the rest of the hour.
+- `/api/health` adds `tx_reads`: sheds since the last good read per key, tx paths on hold, tx requests in the last minute and the cap. No ids.
+
+### Tests
+- tools/healthfix_test.py (in CI): a local fake minepoa with both 503 shapes, the hold, the negative cache, the budget, the run rule and the hourly retry.
+
 ## [1.26.162] - 2026-10-26
 
 ### Changed

@@ -126,7 +126,7 @@ for i in range(4):
 check(f"SC-003 global budget across clients ({g})", g[-1] == "limited" and g.count("missing") == 2)
 I.GLOBAL_BUDGET = I.Bucket(100, 100); I.CLIENT_BUDGET = I.Bucket(100, 100)
 MODE["tx"] = "busy"
-for i in range(3):
+for i in range(I.SHED_RUN):   # health-fix 1026: a 503 "origin busy" with retry is a single-id shed; SHED_RUN in a row with no good read is a failure
     try: tx_req("%064x" % (0x4000 + i))
     except I.Busy: pass
 MODE["tx"] = "normal"

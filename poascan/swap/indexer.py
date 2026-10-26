@@ -102,6 +102,9 @@ def ingest_events(now):
                 H.write("UPDATE swap_events SET dropped=1, checked=? WHERE txid=?", (now, tid)); touched.add(k["offer_id"])
             elif k: H.write("UPDATE swap_events SET checked=? WHERE txid=?", (now, tid))
             continue
+        except H.Shed:   # health-fix 1026: minepoa shed this one id (negative cached by the host); the others still read
+            if k: H.write("UPDATE swap_events SET checked=? WHERE txid=?", (now, tid))
+            continue
         except H.Busy: break
         if not d or not d.get("id"): continue
         o = ingest_swap_tx(d, final=_is_final(d, marks), now=now)

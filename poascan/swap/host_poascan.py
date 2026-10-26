@@ -50,7 +50,7 @@ def swap_tx_ids():
 
 # ---- upstream reads: the host's rate-limited, backed-off client for minepoa.com ----
 # fetch(path, timeout, endpoint, cond), get_tx_detail(txid, bg=SWAP_TX_EP), Busy (rate limit hit), Missing (unknown id), NOT_MODIFIED (304), UA
-_LAZY = ("fetch", "get_tx_detail", "Busy", "Missing", "NOT_MODIFIED", "SWAP_TX_EP", "UA")
+_LAZY = ("fetch", "get_tx_detail", "Busy", "Missing", "Shed", "NOT_MODIFIED", "SWAP_TX_EP", "UA")
 def __getattr__(n):   # resolved on first use, so the host indexer can import the swap jobs without a cycle
     if n in _LAZY:
         from .. import indexer as _I
