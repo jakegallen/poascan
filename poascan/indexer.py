@@ -47,6 +47,11 @@ class Missing(Busy):
     """The node does not know this id (HTTP 404, or a detail answer without an id). Never an endpoint failure."""
 class Limited(Busy):
     """An on-demand read was refused by the upstream budget (per client or global); retry is in seconds."""
+class Shed(Busy):
+    """health-fix 1026: minepoa shed one single-id read with a 503 and a Retry-After (its edge answers an id it does not
+    hold with "origin busy", and the chain tx path answers "global capacity guard" when its cross-IP ceiling is full).
+    Not an endpoint failure: the id is negative cached for at least the Retry-After; SHED_RUN sheds in a row with no
+    good read in between do count as a failure (minepoa really busy)."""
 class Notice(Busy):
     """minepoa answered with a notice in place of data (strain.py). Nothing from it is stored; callers keep their last real copy."""
 NOTICE_RETRY_S = _ei("POASCAN_NOTICE_RETRY_S", 300, 60)   # back-off floor after a notice response (polite to a strained endpoint)
@@ -101,7 +106,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
         if hit:
             _ST.record(path, hit, retry=NOTICE_RETRY_S); _probe(ep, False, t0, "notice"); count(ep, "notice")
             raise Notice("upstream notice instead of data: " + ";".join(hit["signals"])[:120], NOTICE_RETRY_S)
-        _probe(ep, True, t0, "200"); count(ep, 200); _ST.clear(path)
+        _probe(ep, True, t0, "200"); count(ep, 200); _ST.clear(path); _sheds.pop(ep, None)
         if cond:
             if et: _etags[path] = et
             else: _etags.pop(path, None)
@@ -136,6 +141,11 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
             pass
         if soft and e.code in MISSING_CODES:
             _probe(ep, True, t0, str(e.code)); raise Missing("not found")
+        msg = re.sub(r"\s*[\u2013\u2014]\s*", ", ", str((body or {}).get("error") or ""))[:120] if isinstance(body, dict) else ""   # no dashes in our copy
+        if soft and e.code == 503 and not halt and retry and SHED_RX.search(msg):
+            _probe(ep, False, t0, "503 shed")
+            run = _shed_note(ep, path, msg, retry)
+            if run < SHED_RUN: raise Shed("HTTP 503 shed: " + msg, retry)
         _probe(ep, False, t0, str(e.code))
         if e.code == 429: _hold[0] = max(_hold[0], time.time() + min(RETRY_AFTER_MAX_S, retry or BACKOFF_BASE_S))
         _fail(ep, f"HTTP {e.code}" + (" halted" if halt else ""), retry)
@@ -180,6 +190,46 @@ def rollup_uptime(now=None):
       FROM probes WHERE ts >= ? GROUP BY 1, 2""", DERIVED + (d0,))
     db.write("DELETE FROM uptime_daily WHERE day >= ? AND endpoint IN (?,?,?)", (d0,) + DERIVED)
     db.write("DELETE FROM uptime_daily WHERE day < ?", (now - 365 * 86400,))
+
+# ---- health-fix 1026: shed single-id reads, the chain path's global ceiling, and one tx budget for everything ----
+SHED_RX = re.compile(r"origin busy|capacity guard|ceiling|retry shortly", re.I)
+GLOBAL_SHED_RX = re.compile(r"capacity guard|ceiling", re.I)   # the path is full for every caller, not just this id
+SHED_RUN = _ei("POASCAN_SHED_RUN", 5, 2)          # sheds in a row on one endpoint key (no good read between) that count as a failure
+NEG_SHED_TTL = _ei("POASCAN_NEG_SHED_TTL", 120, 60)   # a shed id is not asked again for this long (at least minepoa's 60 s)
+TX_PER_MIN = min(30, _ei("POASCAN_TX_PER_MIN", 30, 1))   # every single-tx request to minepoa.com, visitor and scheduled, both paths
+_sheds = {}                    # endpoint key -> {"run", "last", "err"}: sheds since its last good read (memory only)
+_path_hold = {}                # "chain" | "explorer" -> time before which that tx path is not tried (its global ceiling was full)
+_tx_window = collections.deque(); _tx_window_lock = threading.Lock()
+
+def _path_kind(path): return "chain" if path.startswith("/chain/") else "explorer"
+
+def _shed_note(ep, path, msg, retry, now=None):
+    """Count one shed on ep; hold the whole path when minepoa says its global ceiling is full. Returns the run length."""
+    now = now or time.time()
+    r = _sheds.setdefault(ep, {"run": 0, "last": 0, "err": ""}); r["run"] += 1; r["last"] = int(now); r["err"] = msg[:80]
+    if GLOBAL_SHED_RX.search(msg): _path_hold[_path_kind(path)] = now + max(60.0, float(retry or 60))
+    return r["run"]
+
+def shed_state(now=None):
+    """For /api/health endpoints: sheds since the last good read per key, and the tx paths on hold (seconds left)."""
+    now = now or time.time()
+    return dict(sheds={k: dict(v) for k, v in _sheds.items()}, path_hold={k: int(t - now) for k, t in _path_hold.items() if t > now},
+                tx_requests_last_min=tx_budget_used(now), tx_per_min=TX_PER_MIN)
+
+def tx_budget_used(now=None):
+    now = now or time.time()
+    with _tx_window_lock:
+        while _tx_window and now - _tx_window[0] >= 60: _tx_window.popleft()
+        return len(_tx_window)
+
+def tx_budget_take(now=None):
+    """One single-tx request to minepoa.com. At most TX_PER_MIN in any 60 s, all callers together (a sliding window,
+    so a burst can never double up at a minute edge). Returns 0 when taken, else seconds to wait."""
+    now = now or time.time()
+    with _tx_window_lock:
+        while _tx_window and now - _tx_window[0] >= 60: _tx_window.popleft()
+        if len(_tx_window) >= TX_PER_MIN: return int(60 - (now - _tx_window[0])) + 1
+        _tx_window.append(now); return 0
 
 _hold = [0.0]   # host-wide pause after a 429: every read waits it out (minepoa rate limits per client, not per path)
 
@@ -574,6 +624,21 @@ def job_hourly_meta():
     try: __import__("poascan.protocol", fromlist=["x"]).check()   # 1.26.141: hash both client files (conditional GET), log protocol events
     except Exception as e: log.warning("protocol check: %s", type(e).__name__)
 
+HOURLY_EPS = ("/api/params", "/api/release", "/api/chains")
+def job_hourly_retry(now=None):
+    """health-fix 1026: an hourly read that failed is tried again once its own backoff is over, instead of an hour later
+    (one timeout kept Params Degraded for the rest of the hour). Only rows whose latest attempt failed; one read each."""
+    now = now or time.time(); n = 0
+    for kind, path in (("params", "/api/params"), ("release", "/api/release"), ("chains", "/api/chains")):
+        r = db.q1("SELECT last_ok, last_err, fails, next_at FROM fetch_log WHERE endpoint=?", (path,))
+        if not r or not r["fails"] or (r["last_ok"] or 0) >= (r["last_err"] or 0) or (r["next_at"] or 0) > now: continue
+        try:
+            d = fetch(path, cond=True); n += 1
+            if d is not NOT_MODIFIED: db.put_blob(kind, d)
+        except Busy as e: log.warning("%s retry: %s", path, e); n += 1
+        time.sleep(1)
+    return n
+
 def job_epochs(force=False):
     """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
     cut), so a new segment with no close yet reads nothing; the ~21 MB list is fetched only when a close is missing."""
@@ -752,9 +817,9 @@ def neg_get(key):
         if hit and hit[0] > time.time(): return hit[1]
         if hit: _neg.pop(key, None)
     return None
-def neg_put(key, missing, ttl=None):
+def neg_put(key, missing, ttl=None, cls=None):
     with _neg_lock:
-        _neg[key] = (time.time() + (ttl or (NEG_TTL if missing else NEG_ERR_TTL)), Missing if missing else Busy); _neg.move_to_end(key)
+        _neg[key] = (time.time() + (ttl or (NEG_TTL if missing else NEG_ERR_TTL)), cls or (Missing if missing else Busy)); _neg.move_to_end(key)
         while len(_neg) > NEG_MAX: _neg.popitem(last=False)
 def neg_size(): return len(_neg)
 
@@ -775,14 +840,22 @@ def tx_paths(tid):
 def fetch_tx(tid, endpoint, timeout):
     """One tx detail by tx_paths(): the first path that returns the tx wins. Missing when a path says the id is unknown
     and none returns it; otherwise the last failure. A 429 hold (Limited) stops at once."""
-    missing = last = None
-    for p in tx_paths(tid):
+    missing = last = None; now = time.time()
+    paths = [p for p in tx_paths(tid) if _path_hold.get(_path_kind(p), 0) <= now]   # a full global ceiling: skip that path
+    if not paths: raise Shed("tx paths on hold (minepoa capacity guard)", max(1, int(min(_path_hold.values()) - now)))
+    for p in paths:
+        if _path_hold.get(_path_kind(p), 0) > time.time(): continue
+        wait = tx_budget_take()
+        if wait: deny(endpoint, "visitor_cap:global"); raise Limited("tx lookup budget spent (30 a minute); try again shortly", wait)
         try:
             d = fetch(p, timeout=timeout, endpoint=endpoint, soft=True)
             if isinstance(d, dict) and d.get("id"): return d
             missing = Missing("not found")
         except Limited: raise
         except Missing as e: missing = e
+        except Shed as e:
+            last = e
+            if not GLOBAL_SHED_RX.search(str(e)): break   # this id was shed (minepoa's own negative cache): no second path for it
         except Busy as e: last = e
     raise missing or last or Missing("not found")
 
@@ -811,17 +884,20 @@ def fetch_ondemand(path, endpoint, key):
         return d
     except Missing: neg_put(endpoint + key, True); raise
     except Limited: raise
+    except Shed as e: neg_put(endpoint + key, False, max(NEG_SHED_TTL, int(e.retry or 0)), cls=Shed); raise
     except Busy: neg_put(endpoint + key, False); raise
     finally: _ondemand.release()
 
 def _bg_fetch_tx(tid, endpoint):
     """A scheduled job's tx detail read: its own endpoint key and backoff, no visitor budget; unknown ids are negative cached."""
     if not TX_ID.match(tid): raise Missing("not a valid id")
-    if neg_get(endpoint + tid): raise Missing("not found (cached)")
+    k = neg_get(endpoint + tid)
+    if k: raise k("not found (cached)" if k is Missing else "shed recently (cached)")
     if not can_fetch(endpoint): skip_backoff(endpoint); raise Busy("backing off")
     try:
         d = fetch_tx(tid, endpoint, 20)
     except Missing: neg_put(endpoint + tid, True, NEG_BG_TTL); raise
+    except Shed as e: neg_put(endpoint + tid, False, max(NEG_SHED_TTL, int(e.retry or 0)), cls=Shed); raise
     return d
 
 def get_tx_detail(tid, allow_fetch=True, bg=None):
@@ -857,7 +933,7 @@ def job_sample(n=20):
     for r in rows[:n]:
         time.sleep(1.0)
         try: d = get_tx_detail(r["id"], bg=BG_TX_EP)
-        except Missing: continue
+        except (Missing, Shed): continue
         except Busy: break
         body = (d or {}).get("body") or {}
         c = classify(body.get("answer", ""))
@@ -872,7 +948,7 @@ def job_links(n=10):
                    AND (d.id IS NULL OR (d.final = 0 AND t.final = 1)) ORDER BY t.ts DESC LIMIT ?""", (n,))
     for r in rows:
         try: get_tx_detail(r["id"], bg=BG_TX_EP)
-        except Missing: pass
+        except (Missing, Shed): pass
         except Busy: break
         time.sleep(1.0)
 
@@ -952,6 +1028,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("epochs", job_epochs, 300, "/api/epochs"),
     ("agents", job_agents, 900, "/api/agents"),
     ("hourly", job_hourly_meta, 3600, None),
+    ("hourly_retry", job_hourly_retry, 300, None),   # health-fix 1026: a failed hourly read retried after its backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each

@@ -43,6 +43,8 @@ jobs:
         run: python tools/govnav_test.py
       - name: Grade history and open seats (settled seats only, scores only from settled juries, open seat counts read in the background at most 3 a minute and once per epoch, assignment lists never kept; header sort, CSV, API, MCP get_grade_history; UPGRADE prompt; join-pow in halts)
         run: python tools/gradehist_test.py
+      - name: Health fix (minepoa's single-id 503 sheds are not feed failures; shed ids negative cached at least 60 s; a full chain tx ceiling holds that path; at most 30 tx requests a minute in all; a failed hourly read retried after its backoff)
+        run: python tools/healthfix_test.py
       - name: Sortable column headers (one shared component; arrows and aria-sort; numbers highest first, text A to Z; blanks last; server side with the URL; phone sort menu)
         run: python tools/headersort_test.py
       - name: POAScan's Score (weights from govscore.json sum to 1; deterministic 0 to 100; fold matches segment standing; monotonic; config driven; /about#score)
