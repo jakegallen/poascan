@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.167] - 2026-10-26
+
+### Added
+- /start: a short "What this prompt does" box under the join card. What the prompt does, what it never does (asks for keys, sends the key off minepoa.com or to POAScan, uses invite or referral codes, carries check-in links, acts unless you pasted it), the full prompt's secret store and no-redirect rules, and the one-line verify command. Every line is held to the prompt text by tools/prompthist_test.py, per variant.
+- /start: Prompt history (collapsed, after All steps). v2.5 through v2.9: release time in the reader's zone, what changed, why, and template_sha256 with copy. Published for v2.7 on (served while live); Computed later for v2.5 and v2.6, which shipped before hashes were published. Data in data/prompt_history.json, newest last; a new prompt version appends one entry.
+- `GET /api/v1/prompts/join/history`: the same versions as data, newest first, with hash_status, the hash rule and verify command. Cached 10 minutes, strong ETag, CORS open, no parameters (anything else is a 400). OpenAPI `joinPromptHistory`.
+
+### Unchanged
+- Join prompt v2.9 text and template_sha256 `f577df50` (combined `249cf89f`).
+
+### Tests
+- tools/prompthist_test.py (in CI): data shape and order, the last entry is today's prompt, every hash recomputed from git at its release commit, each box line backed by the prompt, /start and the API end to end.
+
 ## [1.26.166] - 2026-10-26
 
 ### Fixed

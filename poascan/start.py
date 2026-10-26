@@ -358,7 +358,7 @@ def strip():
 def page(page_fn, card=None, apps=None):
     """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
     (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
-    from . import maint as M, onboarding_prompt as OP
+    from . import maint as M, onboarding_prompt as OP, prompthist as PH
     from .join import CLOSE, pbox
     nm = default_name()
     # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
@@ -388,6 +388,6 @@ def page(page_fn, card=None, apps=None):
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
     body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
-            f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
-            f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details></div>')
+            + PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
+            f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history() + '</div>')
     return page_fn("Start", body, "/start")

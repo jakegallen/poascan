@@ -922,6 +922,12 @@ class H(BaseHTTPRequestHandler):
                         VS.COUNTER.event("pjoin", "poaswap-server" if (self.headers.get("User-Agent") or "").startswith("POASwap") else (cq[0] if cq else "") or "none")
                     return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
                                      {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
+                if p == "/api/prompts/join/history":   # join prompt versions (poascan/prompthist.py, data/prompt_history.json); static, keyless
+                    if qs: return self.send(400, json.dumps({"error": "no parameters"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                    from . import prompthist as PHI
+                    body = json.dumps(PHI.api(), ensure_ascii=False, separators=(",", ":"))
+                    return self.cond(body, hashlib.sha256(body.encode()).hexdigest(), "public, max-age=600",
+                                     {"X-API-Version": AG.VERSION, "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Vary": "Accept-Encoding"})
                 if p == "/api/prompts/combined":   # combined prompt slot (poascan/combined.py): nulls until the text lands; static, keyless
                     if qs: return self.send(400, json.dumps({"error": "no parameters"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                     from . import combined as CBP

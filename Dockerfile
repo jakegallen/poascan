@@ -9,7 +9,7 @@ COPY tools/geoip_fetch.py /tmp/geoip_fetch.py
 RUN mkdir -p data && echo "geoip month $GEOIP_MONTH" && python3 /tmp/geoip_fetch.py data/country.mmdb && rm /tmp/geoip_fetch.py
 COPY poascan/ poascan/
 COPY static/ static/
-COPY data/census.csv data/tools.json data/declared_families.json data/clients.json data/
+COPY data/census.csv data/tools.json data/declared_families.json data/clients.json data/prompt_history.json data/
 ENV PORT=8080 HOST=0.0.0.0 POASCAN_DB=/data/poascan.db PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2
 RUN groupadd -r -g 10001 poascan && useradd -r -u 10001 -g 10001 poascan && mkdir -p /data && chown poascan:poascan /data
 EXPOSE 8080

@@ -93,6 +93,8 @@ jobs:
         run: python tools/walletsafe_test.py
       - name: /start three steps, client wiring, frozen prompt template, /api/v1/prompts/join (blocks, ETag 304, 400s)
         run: python tools/start_test.py
+      - name: Join prompt history and the /start box (hashes recomputed from git, every box line backed by the prompt, /api/v1/prompts/join/history)
+        run: python tools/prompthist_test.py
       - name: swap cutover test
         run: python tools/swap_cutover_test.py
       - name: Swap status page /swap/<offer_id> (read only, castle offer from post 1332) and community status board link
