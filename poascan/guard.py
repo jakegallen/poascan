@@ -7,8 +7,12 @@
    VM is CPU throttled (most of the interval was steal time: a shared vCPU out of burst credit) does not count toward
    that limit, only toward the much larger THROTTLED_FAILS: a restart cannot add CPU, it resets the burst balance to
    a few seconds and reruns startup, which deepened the 2026-10-22 outage into a restart loop.
-3. A memory guard: memory freed by Python is handed back to the OS (malloc_trim) every minute, and if the
-   resident size still sits above RSS_EXIT_MB the process exits cleanly rather than waiting for the kernel OOM killer.
+3. A memory guard: memory freed by Python is handed back to the OS (malloc_trim) at most once a minute, a full
+   gc.collect() runs at most every GC_EVERY s (or right before a memory exit is decided), and if the resident size still
+   sits above RSS_EXIT_MB the process exits cleanly rather than waiting for the kernel OOM killer.
+   2026-10-26: trim() used to run gc.collect() on every 15 s check while RSS sat above RSS_TRIM_MB, which it now always
+   does (a ~340 MB working set). A full collection of that heap every 15 s was the largest CPU user in the process and
+   ran the shared vCPUs out of burst credit (83% steal, 15 to 40 s responses). due_trim() and due_gc() bound both.
 """
 import ctypes, gc, logging, os, threading, time, urllib.request
 
@@ -20,20 +24,31 @@ STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # sh
 CHECK_EVERY = 15
 RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "300"))
 RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "430"))   # the VM has ~460 MB usable
+TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
+GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
 
 slots = threading.BoundedSemaphore(MAX_WORKERS)
-state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0}
+state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0}
 
 try:
     _libc = ctypes.CDLL("libc.so.6"); _libc.malloc_trim.argtypes = [ctypes.c_size_t]
 except Exception:
     _libc = None
 
-def trim():
-    gc.collect()
+def trim(full=False):
+    """Hand freed memory back to the OS; full=True runs a full gc.collect() first (costly on a large heap)."""
+    if full: gc.collect(); state["gcs"] += 1
     if _libc:
         try: _libc.malloc_trim(0); state["trims"] += 1
         except Exception: pass
+
+def due_trim(now, last_trim):
+    """A trim is due once TRIM_EVERY s have passed, never on every check (RSS over RSS_TRIM_MB no longer forces one)."""
+    return now - last_trim >= TRIM_EVERY
+
+def due_gc(now, last_gc, rss):
+    """A full collection is due every GC_EVERY s, or at once when RSS is over RSS_EXIT_MB (last try before exiting)."""
+    return now - last_gc >= GC_EVERY or bool(rss and rss > RSS_EXIT_MB)
 
 def rss_mb():
     try:
@@ -72,7 +87,7 @@ def _exit(why):
     logging.shutdown(); os._exit(70)
 
 def _watch(port):
-    url = f"http://127.0.0.1:{port}/healthz"; over = 0; last_trim = 0
+    url = f"http://127.0.0.1:{port}/healthz"; over = 0; last_trim = 0; last_gc = time.time()
     time.sleep(30)
     cpu = cpu_times()
     while True:
@@ -87,8 +102,11 @@ def _watch(port):
         why = on_check(ok, st)
         if why: _exit(why)
         m = rss_mb(); state["rss_mb"] = m
-        if m and (m > RSS_TRIM_MB or time.time() - last_trim > 60):
-            trim(); last_trim = time.time(); m = rss_mb(); state["rss_mb"] = m
+        now = time.time()
+        if due_trim(now, last_trim) or (m and m > RSS_EXIT_MB):
+            full = due_gc(now, last_gc, m)
+            trim(full); last_trim = now; m = rss_mb(); state["rss_mb"] = m
+            if full: last_gc = now
         if m and m > RSS_EXIT_MB:
             over += 1; log.warning("guard: resident memory %d MB over %d MB (%d)", m, RSS_EXIT_MB, over)
             if over >= 2: _exit(f"resident memory {m} MB stayed over {RSS_EXIT_MB} MB")

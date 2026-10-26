@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.156] - 2026-10-26
+
+### Fixed
+- Site slow or not answering (Oct 26 morning PT: 15 to 40 s responses, /api/v1/health timing out, chart pop-outs stuck empty). The memory guard ran a full gc.collect() on every 15 s self-check while resident memory sat above 300 MB, which it now always does with a ~340 MB working set. That full collection was the largest CPU user in the process (28% of sampled CPU) and ran the shared vCPUs out of burst credit (83% steal). Trims now run once a minute and a full collection every 15 minutes, or at once before a memory exit is decided.
+- The API freshness stamp (meta) is single flight: one thread rebuilds it every 5 s and the rest serve the previous copy. A throttled rebuild took longer than 5 s, so every API request rebuilt it.
+
+### Tests
+- tools/incident_test.py: no trim on back to back checks, trims once a minute, no full collection just for RSS over 300 MB, full collection every GC_EVERY s and at once over RSS_EXIT_MB.
+- tools/milestones_test.py: the Governance charts milestone check no longer depends on the clock (the fixture's 72 h of closes passed Grading reopened on Oct 26); relevance is checked on the event list and the drawn label while it is in the plotted span.
+
 ## [1.26.155] - 2026-10-25
 
 ### Added

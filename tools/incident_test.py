@@ -51,6 +51,21 @@ check("guard: success resets both counters", GD.state["fails"] == 0 and GD.state
 check("guard: low steal counts as a hang", GD.on_check(False, 0.1) is None and GD.state["fails"] == 1)
 GD.state.update(fails=0, throttled_fails=0)
 
+# 2026-10-26: the memory guard ran a full gc.collect() on every 15 s check while RSS sat over RSS_TRIM_MB (always, at a
+# ~340 MB working set), the largest CPU user in the process; trims are now once a minute and full collections every GC_EVERY s
+check("guard: no trim on back to back checks", not GD.due_trim(1000.0, 1000.0 - GD.CHECK_EVERY))
+check("guard: trim once TRIM_EVERY has passed", GD.due_trim(1000.0, 1000.0 - GD.TRIM_EVERY) and GD.TRIM_EVERY >= 60)
+check("guard: RSS over RSS_TRIM_MB alone forces no full gc", not GD.due_gc(1000.0, 1000.0 - GD.TRIM_EVERY, GD.RSS_TRIM_MB + 50))
+check("guard: full gc every GC_EVERY s", GD.due_gc(1000.0, 1000.0 - GD.GC_EVERY, 100) and GD.GC_EVERY >= 300)
+check("guard: full gc at once over RSS_EXIT_MB", GD.due_gc(1000.0, 999.0, GD.RSS_EXIT_MB + 1))
+calls = {"gc": 0}; _gc = GD.gc.collect; GD.gc.collect = lambda *a: calls.__setitem__("gc", calls["gc"] + 1)
+GD.trim(); check("guard: trim() without full skips gc.collect", calls["gc"] == 0)
+GD.trim(True); check("guard: trim(full=True) collects", calls["gc"] == 1)
+GD.gc.collect = _gc
+import inspect
+src = inspect.getsource(GD._watch)
+check("guard: the watch loop no longer trims on every check over RSS_TRIM_MB", "m > RSS_TRIM_MB or" not in src and "due_trim(" in src and "due_gc(" in src)
+
 d = tempfile.mkdtemp(); p1, p2 = os.path.join(d, "a"), os.path.join(d, "b")
 open(p1, "w").write("cpu  100 0 50 800 0 0 0 50 0 0\ncpu0 1 2 3\n")
 open(p2, "w").write("cpu  110 0 52 800 0 0 0 138 0 0\ncpu0 1 2 3\n")
