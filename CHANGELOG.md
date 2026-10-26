@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.157] - 2026-10-26
+
+### Fixed
+- Chart pop-out on phones no longer sits as an empty panel. While the server was throttled, /fragment/chart took 15 to 40 s and the pop-out showed only its title, close button and a blank box: the still loading skeleton read as nothing, there was no timeout and no way to retry. The panel now says Loading chart, a load that fails or takes longer than 15 s ends in "Chart did not load." with a Retry button, Retry loads it again, and closing the dialog cancels a pending load. Home hero cards and Network charts alike.
+- Home headline numbers (Total mined, Circulating supply, Agents, Active Agents) and Holders get a Stale tag instead of passing old values off as current: on the server when POAScan has no fresh read of the live network for 5 minutes or the node reports stale data (views.hero_stale), and live in the browser when a snapshot says so or the newest data's as_of is over 6 minutes old because no snapshot arrived. The tag shows when the data was last read and clears on the next fresh snapshot.
+- CI job timeout 15 to 25 minutes: the 1.26.156 run was cancelled at 15 minutes while the runner was still installing Playwright and WebKit, so it never deployed.
+
+### Tests
+- tools/chartpop_blank_test.py (new, in CI): at 390 px in Chromium and WebKit and 1280 px in Chromium, on the Home Active Agents and Agents cards and a Network chart, a chart request that never answers shows a visible Loading line and then the retry state, a 500 shows the retry state, and Retry draws the chart; the Stale tag on the headline numbers from the server (stale live read) and in the browser (old as_of, no snapshot).
+
 ## [1.26.156] - 2026-10-26
 
 ### Fixed

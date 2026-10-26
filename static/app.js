@@ -292,7 +292,24 @@ function apply(s){if(!s||s.t&&s.t!=="snap")return;
   var be=$('[data-live="bm_ep"]');if(be&&s.epoch.n!=null)be.textContent=s.epoch.n}
  if(s.frags)Object.keys(s.frags).forEach(function(id){var el=D.getElementById(id);if(el&&el.dataset.h!==String(s.frags[id].length+":"+s.frags[id].slice(-40))){el.innerHTML=s.frags[id];el.dataset.h=s.frags[id].length+":"+s.frags[id].slice(-40);paintIds(el);times(el);tick()}});
  var bq=$(".bench");if(bq)bq.classList.toggle("quiet",s.live===false);
- mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s);if(BM.on)tkIngest(tkFeed(s.feed));pourLive(s)}
+ mergeFeed(s.feed);setTicker(s.ticker);liveRows(s);scoreLive(s);if(BM.on)tkIngest(tkFeed(s.feed));hsApply(s);pourLive(s)}
+
+/* 1.26.157 hero freshness: stale data is flagged, never shown as current. The Home headline numbers (and Holders) get a Stale tag
+   when the snapshot says the live read is stale or the node is, or when the newest data's as_of is over HS_S old because no
+   snapshot came (a slow or throttled server, a dropped socket). The tag clears on the next fresh snapshot. Server side: views.hero_stale. */
+var HS={el:null,asof:0,bad:false,why:""},HS_S=360;
+function hsAgo(x){x=Math.max(0,x|0);return x<3600?Math.floor(x/60)+"m":Math.floor(x/3600)+"h "+Math.floor(x%3600/60)+"m"}
+function hsEsc(x){return String(x).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function hsCheck(){if(!HS.el)return;var age=HS.asof?Date.now()/1000-HS.asof:0,why=HS.bad?HS.why:(HS.asof&&age>HS_S?"Last read "+hsAgo(age)+" ago":"");
+ $$('.kpis .stat>.sl,.krow [data-chart="holders"]>.sl').forEach(function(sl){var f=$(".hstale",sl);
+  if(!why){if(f)f.remove();return}
+  if(!f){sl.insertAdjacentHTML("beforeend",'<details class="qtip sflag hstale"><summary class="tag warn">Stale</summary><span class="qbox" role="note"></span></details>');f=$(".hstale",sl)}
+  var sm=$("summary",f),qb=$(".qbox",f);if(qb.textContent!==why){qb.textContent=why;sm.title=why;sm.setAttribute("aria-label","Stale: "+why)}});
+ HS.el.toggleAttribute("data-stale",!!why)}
+function hsApply(s){if(!HS.el||!s)return;var t=Date.parse(s.as_of||"");if(!isNaN(t))HS.asof=t/1000;
+ HS.bad=s.live===false||s.stale===true;HS.why=s.live===false?((s.pill&&s.pill.why)||"No fresh read from minepoa.com"):s.stale===true?"The node reports stale data":"";hsCheck()}
+function hsInit(){var k=$(".kpis[data-asof]");if(!k)return;HS.el=k;HS.asof=+k.dataset.asof||0;HS.bad=k.hasAttribute("data-stale");
+ var f=$(".hstale .qbox",k);HS.why=f?f.textContent:"";setInterval(hsCheck,15000);D.addEventListener("visibilitychange",function(){if(!D.hidden)hsCheck()});hsCheck()}
 
 /* transport: WebSocket with backoff, polling fallback */
 var ws=null,fails=0,pollT=null,wantLive=!!($("#feed")||$("#tracker")||$("#ticker")||$("[data-live]"));
@@ -562,7 +579,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   CPL={"24h":"24h","7d":"7d","30d":"30d",all:"All",epoch:"Epoch"},MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   XSVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   pr0=new URLSearchParams(location.search).get("range"),KEEP=location.pathname==="/network"&&/^(24h|7d|all)$/.test(pr0||"")?pr0:null,
-  cp=null,cq,box,svgW=0,cur=null,data=null,opener=null,seq=0,geo=null,idx=-1,live,tip,xh,rng,ttl,now,lg,rT=0;
+  cp=null,cq,box,svgW=0,cur=null,data=null,opener=null,seq=0,geo=null,idx=-1,live,tip,xh,rng,ttl,now,lg,rT=0,cpAc=null,CPT_MS=+W.POASCAN_CPT_MS||15000;
  function fv(v){if(v==null)return "···";var s=data&&data.fmt==="c"?c3(v):Math.round(v).toLocaleString("en-US");return data&&data.unit?s+" "+data.unit:s}
  function dtf(o,d){try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return ""}}
  /* the one site time format (1.26.122), in the reader's zone with its short name: "Oct 25, 8:48 AM PDT" */
@@ -580,7 +597,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   cp.addEventListener("keydown",function(e){var q=e.key==="Escape"&&$("details[open]",cq);if(q){e.preventDefault();e.stopPropagation();q.open=false;var s=$("summary",q);if(s)s.focus()}},true);
   cp.addEventListener("cancel",function(e){e.preventDefault();close()});
   cp.addEventListener("close",closed);
-  cp.addEventListener("click",function(e){if(e.target===cp||e.target.closest("[data-cpclose]"))close();var b=e.target.closest(".cp-rng button");if(b&&cur&&b.dataset.r!==cur.r)load(cur.c,b.dataset.r)});
+  cp.addEventListener("click",function(e){if(e.target===cp||e.target.closest("[data-cpclose]"))close();if(e.target.closest("[data-cpretry]")&&cur){load(cur.c,cur.r);return}var b=e.target.closest(".cp-rng button");if(b&&cur&&b.dataset.r!==cur.r)load(cur.c,b.dataset.r)});
   /* focus stays inside while open */
   cp.addEventListener("keydown",function(e){if(e.key!=="Tab")return;var f=$$("button,[tabindex='0']",cp).filter(function(x){return !x.disabled&&x.getClientRects().length});if(!f.length)return;
    var i=f.indexOf(D.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}});
@@ -597,16 +614,21 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   if(!cp.open){if(cp.showModal)cp.showModal();else cp.setAttribute("open","");D.documentElement.classList.add("jmlock")}
   var x=$(".cp-x",cp);try{x.focus({preventScroll:true,focusVisible:false})}catch(_){x.focus()}load(c,r)}
  function close(){if(!cp||!cp.hasAttribute("open"))return;if(cp.close)cp.close();else{cp.removeAttribute("open");closed()}}
- function closed(){D.documentElement.classList.remove("jmlock");seq++;cur=null;data=null;geo=null;
+ function closed(){D.documentElement.classList.remove("jmlock");seq++;if(cpAc){try{cpAc.abort()}catch(_){}cpAc=null}cur=null;data=null;geo=null;
   try{history.replaceState(history.state,"",location.pathname+cpSearch(location.search,null,null,KEEP)+location.hash)}catch(_){}
   var o=opener;opener=null;if(o&&o.isConnected&&o.focus)try{o.focus({preventScroll:true})}catch(_){o.focus()}}
+ /* 1.26.157: the load has a visible Loading line, a CPT_MS timeout (a slow or throttled server used to leave the panel empty
+    with no chips and no line forever) and a terse retry state on any failure; closing the dialog aborts it. */
  function load(c,r){var n=++seq;if(!cur||cur.c!==c)cq.innerHTML="";cur={c:c,r:r||""};ttl.textContent=CPT[c]||"";now.textContent="";hide();geo=null;
-  box.innerHTML='<div class="skel cskel" aria-busy="true"><i></i></div>';box.setAttribute("aria-label",CPT[c]||"Chart");
-  var w=Math.max(200,Math.round(box.clientWidth||800));
-  fetch("/fragment/chart?c="+encodeURIComponent(c)+(r?"&r="+encodeURIComponent(r):"")+"&w="+w,{credentials:"omit"}).then(function(x){if(!x.ok)throw 0;return x.json()}).then(function(d){
-   if(n!==seq)return;data=d;cur.r=d.range;ttl.textContent=d.title;qt(d);chips();draw();
+  box.innerHTML='<div class="skel cskel" aria-busy="true"><i></i><span>Loading chart</span></div>';box.setAttribute("aria-label",CPT[c]||"Chart");
+  var w=Math.max(200,Math.round(box.clientWidth||800)),ac=W.AbortController?new AbortController():null,to;if(cpAc)try{cpAc.abort()}catch(_){}cpAc=ac;
+  var fail=function(){if(n!==seq)return;clearTimeout(to);cpAc=null;data=null;rng.hidden=true;
+   box.innerHTML='<div class="naBox cp-err" role="status">Chart did not load. <button type="button" class="chip" data-cpretry>Retry</button></div>'};
+  to=setTimeout(function(){if(ac)try{ac.abort()}catch(_){}fail()},CPT_MS);
+  fetch("/fragment/chart?c="+encodeURIComponent(c)+(r?"&r="+encodeURIComponent(r):"")+"&w="+w,ac?{credentials:"omit",signal:ac.signal}:{credentials:"omit"}).then(function(x){if(!x.ok)throw 0;return x.json()}).then(function(d){
+   if(n!==seq)return;clearTimeout(to);cpAc=null;if(!d||(!d.pts&&!d.bars))return fail();data=d;cur.r=d.range;ttl.textContent=d.title;qt(d);chips();draw();
    try{history.replaceState(history.state,"",location.pathname+cpSearch(location.search,c,d.range)+location.hash)}catch(_){}})
-  .catch(function(){if(n!==seq)return;box.innerHTML='<div class="naBox">Chart did not load</div>'})}
+  .catch(fail)}
  /* a one line definition from the server (chartpop.TIPS) with its Method link */
  function qt(d){if(!d.tip){cq.innerHTML="";return}if($("details",cq))return;
   cq.innerHTML='<details class="qtip cp-tip"><summary aria-label="About '+esc2(d.title)+'">?</summary><span class="qbox" role="note">'+esc2(d.tip)+(d.method?' <a href="'+esc2(d.method)+'">Method</a>':"")+'</span></details>'}
@@ -667,6 +689,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  var q0=cpParse(location.search);if(q0)open(q0.c,q0.r,$('[data-chart="'+q0.c+'"]'));
 })();
 if(BM.demo)wantLive=false;   /* the dev demo feeds apply() itself */
+hsInit();
 if(wantLive)connect();
 })();
 /* one "Ask agent" label per page: later Ask buttons keep the icon, title and aria-label */

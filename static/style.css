@@ -1334,6 +1334,10 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .chartbox.cp-box{height:min(58vh,480px);overflow:hidden;touch-action:none;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--inset);outline-offset:3px;user-select:none;-webkit-user-select:none}
 .cp-box::before{width:min(440px,46%)}
 .cp-box .skel,.cp-box .naBox{height:100%;margin:0}
+/* 1.26.157: the pop-out's loading line is visible (the still skeleton alone read as an empty panel) and a failed load is a terse retry state */
+.cp-box .cskel span{color:var(--bone-3);font:500 var(--t13) var(--ui)}
+.cp-box .cp-err{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;color:var(--bone-3)}
+.cp-err .chip{cursor:pointer;background:none;font-family:var(--ui);min-height:36px;min-width:72px;justify-content:center}
 .cpchart{display:block;width:100%;height:100%;overflow:visible}
 .cpchart .grid{stroke:var(--rule);stroke-width:1}.cpchart .ax{fill:var(--bone-3);font:400 var(--t12) var(--mono)}
 .cpchart .mk line{stroke:var(--gold-edge);stroke-dasharray:3 3}.cpchart .mk .mkb{fill:color-mix(in srgb,var(--gold) 7%,transparent);stroke:color-mix(in srgb,var(--gold-edge) 70%,transparent);stroke-width:1}.cpchart .mk .mkl{fill:var(--amber);font-size:var(--t12)}

@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
@@ -197,6 +197,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/mobile_menu_test.py
+      - name: Chart pop-out never blank (visible Loading line, retry state after a failure or a CPT_MS timeout, Retry draws; Home hero cards and Network charts at 390 px in Chromium and WebKit and 1280 px; Stale tag on the Home headline numbers)
+        env:
+          CI: "true"
+        run: python tools/chartpop_blank_test.py
       - name: Agent cells (one shared cell in every table and list; name to LabLeak or the short address, copy right after, ellipsis; no overlap at 360, 390 and 1280 px with 40+ character names)
         env:
           CI: "true"

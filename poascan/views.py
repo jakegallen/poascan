@@ -231,12 +231,32 @@ def home_sparks():
     g = V3.growth_data(); u = V3.unlock_data()
     return dict(mined=g["supply"], accounts=g["agents"], holders=g["holders"], vest=u["past"] + [(time.time(), u["now"])], active=A.active_series())
 
+HERO_KEYS = ("mined_hero", "circ", "accounts", "active", "holders")
+
+def hero_stale():
+    """1.26.157: why the Home headline numbers are not current, or None. Stale data is flagged, never shown as current: no
+    fresh read of the live network for LIVE_S (5 min; Agents comes from /api/status, Active Agents from the tx archive the
+    feed fills) or the node itself reports stale data. app.js applies the same rule live (snapshot live, stale and as_of)."""
+    f = A.freshness()
+    if f["state"] == "stale":
+        t = f.get("fetched_at"); return f"Last read {_ui._ago(time.time() - t)} ago" if t else "No fresh read yet"
+    if A.status().get("stale"): return "The node reports stale data"
+    return None
+
+def _hero_flag(stat_html, why):
+    """Put a Stale tag (ui.flag, class hstale so app.js can clear it live) at the end of a stat card's label."""
+    i = stat_html.find('<div class="sl">'); j = stat_html.find("</div>", i) if i >= 0 else -1
+    if j < 0 or "hstale" in stat_html: return stat_html
+    return stat_html[:j] + flag("Stale", why).replace('class="qtip sflag"', 'class="qtip sflag hstale"', 1) + stat_html[j:]
+
 # ---------------- pages ----------------
 def home():
     """Search, the Bench (open epoch and the last 24 min, bench.py), the headline row (Total mined, Circulating supply, Agents, Active
     Agents; method on /about#home), Holders and heights, then the Assay line beside Closes, Graders and the Pour, and a compact
     market tile. One representation per fact."""
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
+    why = hero_stale(); asof = A._ts(A.status().get("as_of")) or ""
+    if why: h = dict(h, **{k: _hero_flag(h[k], why) for k in HERO_KEYS if k in h})
     bk = A.cut_list()   # Agents and Holders restart at a genesis cut: their sparklines break there, as the charts do
     from . import milestones as MS   # Home Total Agents sparkline: only milestones that name it (milestones.json spark_ids)
     smk = {"accounts": MS.events("home-agents")}
@@ -246,7 +266,7 @@ def home():
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
-<section class="stats four kpis" aria-label="Headline numbers">{kpis}</section>
+<section class="stats four kpis" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section>
 <section class="stats three kstats kmore krow" aria-label="Holders and heights">{more}</section>
 <div class="grid2 hgrid">
 {card(ICON_FEED + 'Assay line', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed">{feed_rows(16)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
