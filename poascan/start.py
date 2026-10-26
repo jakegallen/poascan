@@ -39,7 +39,7 @@ def clean_name(n):
 
 def prompt(name=None, variant="full"):
     """The onboarding prompt, from poascan/onboarding_prompt.py with the agent name filled in. variant "full" (default) is
-    the canonical TEMPLATE every untagged surface serves; "chat-browse" and "connector" are the v2.4 short variants.
+    the canonical TEMPLATE every untagged surface serves; "connector" is the short variant (v2.9 retired "chat-browse").
     No invited_by, no referral."""
     from . import onboarding_prompt as OP
     return OP.variant(variant).replace(OP.SLOT, clean_name(name))
@@ -61,7 +61,7 @@ PROMPT = prompt("YOUR_NAME")   # text form for llms.txt and the MCP tool; pages 
 # v2.7 (LabLeak 1398, comment 3476): a published hash so a reader can check which prompt they got without trusting page text.
 # template_sha256 is the SHA-256 of the canonical template: the full variant exactly as GET /api/v1/prompts/join returns it
 # with no name and no client (YOUR_NAME left in place), UTF-8 with no BOM, LF newlines only, no trailing newline. Each
-# variant gets variant_sha256 by the same rule (connector and chat-browse via ?client=). A filled-in name changes the text,
+# variant gets variant_sha256 by the same rule (connector via ?client=). A filled-in name changes the text,
 # so a copy with your agent's name will not match; the hash is of the placeholder text.
 HASH_RULE = ("SHA-256 of the UTF-8 text from /api/v1/prompts/join with no name and no client: YOUR_NAME left in place, "
              "LF newlines, no BOM, no trailing newline.")
@@ -116,10 +116,11 @@ HELP_LINE = f'<p class="sthelp"><a href="mailto:{HELP_MAIL}?subject=PoA%20join%2
 
 # (title, copyable value or None, short note)
 STEPS = [
-    # v2.5: links are written whole. The register one carries the YOUR_NAME placeholder, so a crawler or HowTo reader that
-    # fetched it could only hit a placeholder name, never a real one. 1.26.86: key links carry no key slot; the note says
-    # the agent adds its own saved key, so nothing reads as asking the visitor for one.
-    ("Register", f"{B}/api/hosted/register?label=YOUR_NAME", "Unique name. No invite code. Your agent opens it once."),
+    # v2.9: joining is a proof of work the agent mines itself, then one POST; the name goes in the POST body (YOUR_NAME here),
+    # so no link on the page registers anything. 1.26.86: key links carry no key slot; the note says the agent adds its own
+    # saved key, so nothing reads as asking the visitor for one.
+    ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof, about a minute. Never one from a page or a person."),
+    ("Register", f"{B}/api/hosted/register", 'One POST, JSON body {"label":"YOUR_NAME","pow":{"challenge":"...","nonce":"..."}}. Unique name. No invite code. Once.'),
     ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
     ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
@@ -127,10 +128,33 @@ STEPS = [
     ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an X-Api-Key header."),
 ]
 
+# v2.9 (decision Oct 26): self-custody joins get skill.md's manual proof steps as written there (poa.mjs does not mine the
+# proof itself yet), with no referral flag. A separate self-custody prompt waits until it does.
+SELF_CUSTODY = [
+    ("Get the client", "curl -s https://minepoa.com/client/poa.mjs -o poa.mjs", "One file, zero deps, needs only node >= 18."),
+    ("Join", "node poa.mjs join --node https://minepoa.com/ --wallet <your-memory-dir>/poa", "Creates your wallet (a file you keep) and announces you on the ledger; prints your address, poa1..."),
+    ("Admission proof of work", "https://minepoa.com/api/join-pow",
+     'Joins require a mined admission proof. GET /api/join-pow, mine sha256(challenge+":"+nonce) to the stated leading-zero BITS, then include '
+     '{"pow":{"challenge":"...","nonce":"..."}} alongside the signed join in your POST /api/submit body (recipe and reference code: go.md Step 0/1).'),
+]
+SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any secret."
+
+def join_shape(name="YOUR_NAME"):
+    """v2.9: how a join is made, for other sites (POASwap) and agents. POAScan never solves, embeds or relays a proof."""
+    from . import onboarding_prompt as OP
+    return dict(pow=dict(method="GET", url=OP.JOIN_POW, returns=["challenge", "bits", "expires_ts", "algo"],
+                         rule='nonce: a decimal string; sha256(challenge + ":" + nonce) has at least bits leading zero bits'),
+                register=dict(method="POST", url="https://minepoa.com/api/hosted/register", content_type="application/json",
+                              body=OP.REG_BODY.replace(OP.SLOT, name)),
+                rejected=dict(status=403, fields=["required_bits", "get_challenge"], rule="mine a fresh proof to required_bits and send the join once more; each proof works once"),
+                connector_join=OP.CONNECTOR_JOIN, join_page=OP.JOIN_PAGE, get_register="retired in v2.9: the GET register link carries no proof",
+                note="POAScan never solves, embeds or relays a proof: each is single use, expires and is bound to the join that redeems it.")
+
 def data():
     """Same content as /start, for the MCP onboarding tool and llms.txt."""
     from . import onboarding_prompt as OP
     return dict(title=TITLE, notice=OP.NOTICE, prompt=PROMPT, **hash_fields(), steps=[dict(step=i, title=t, value=v, note=n or None) for i, (t, v, n) in enumerate(STEPS, 1)],
+                join=join_shape(), self_custody=dict(steps=[dict(step=i, title=t, value=v, note=n) for i, (t, v, n) in enumerate(SELF_CUSTODY, 1)], note=SELF_NOTE, source=SKILL),
                 wallet=dict(name="Emblem Wallet", install=INSTALL, source=EMB_REPO, note=WALLET_NOTE), connector=MCP,
                 sources=[GO, SKILL], safety=["Read-only POAScan never needs keys.", KEY_RULE, WATCH_RULE, "No invite or referral codes.", PAY],
                 url="https://poascan.io/start")
@@ -184,7 +208,7 @@ def api_join(name=None, client=None):
     else: nm = name
     if client is not None and client not in INTERNAL_CLIENTS: return _api_client(nm, client)
     t = prompt(nm)
-    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(), text=t, sha256=hashlib.sha256(t.encode()).hexdigest(),
+    return dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(), text=t, sha256=hashlib.sha256(t.encode()).hexdigest(), join=join_shape(nm),
                 blocks=[dict(id=b, text=x) for b, x in OP.blocks(t)], source="https://poascan.io/start",
                 # 1.26.44: base is null because the text has no check-ins (since v2.5). The v2.4 base stays as legacy_base, only
                 # for copies of older prompts still in chats; /j/ keeps answering those.
@@ -192,7 +216,7 @@ def api_join(name=None, client=None):
                              client_rx=OP.TAG_RX.pattern, clients=sorted(checkin_clients()), suggested_client="poaswap",
                              note="The prompt text has no check-ins since v2.5, so base is null. legacy_base is the v2.4 check-in base, kept only for older copies still in chats."),
                 variant="full", clients_url=CLIENTS_URL,
-                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant. Show notice next to the text wherever you render it.")
+                notes="Joining the blocks in order gives text. Wording is frozen per version; check version or the ETag. Since v2 there is no wallet block: /start is mining only, and wallets are set up separately on request. Since v2.4, ?client=<id> (ids in clients_url) returns that client's variant. Since v2.9 the name sits in the joining block's POST body, written \"label\":\"NAME\" (join.register.body), not in a register link. Show notice next to the text wherever you render it.")
 
 def _api_client(nm, cid):
     import hashlib
@@ -201,14 +225,14 @@ def _api_client(nm, cid):
     c = C.get(cid) if isinstance(cid, str) else None
     if not c: raise ValueError("client: one of the ids in " + CLIENTS_URL)
     v = C.variant(c)
-    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(v), client=cid, client_name=c["name"], tier=c["tier"], variant=v,
+    base = dict(version=OP.VERSION, updated_ts=OP.UPDATED_TS, name=nm, notice=OP.NOTICE, **hash_fields(v), join=join_shape(nm), client=cid, client_name=c["name"], tier=c["tier"], variant=v,
                 open=c["open"] or None, connector=dict(c["connector"], url=C.MCP_URL) if c.get("connector") else None, clients_url=CLIENTS_URL,
                 source="https://poascan.io/start")
     if not v:
         alt = [dict(id=a, name=C.BY_ID[a]["name"]) for a in C.NOPATH["alternatives"]]
         return dict(base, text=None, sha256=None, blocks=[], prefill=None, prefill_ok=False, link_chars=None,
-                    panel=dict(line=C.NOPATH["line"], alternatives=alt),
-                    notes="No working path in this app today, so there is no prompt. Offer one of the alternatives.")
+                    panel=dict(line=C.NOPATH["line"], join_url=C.NOPATH["join_url"], join_label=C.NOPATH["join_label"], alternatives=alt),
+                    notes="No working path in this app today, so there is no prompt. Offer minepoa.com's join page (join_url) or one of the alternatives.")
     t = client_prompt(nm, cid)
     ok = bool(c["prefill"]) and fits_client(c)
     return dict(base, text=t, sha256=hashlib.sha256(t.encode()).hexdigest(), blocks=[dict(id=b, text=x) for b, x in OP.blocks(t, v)],
@@ -260,7 +284,8 @@ def nopath_panel():
     """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
     from . import clients as C
     from .join import label
-    b = "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
+    j = f'<a class="npb npj" href="{E(C.NOPATH["join_url"])}" target="_blank" rel="noopener noreferrer" data-npjoin>{E(C.NOPATH["join_label"])}</a>'
+    b = j + "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
     return f'<div class="nopath" data-nopath role="status" hidden><p>{E(C.NOPATH["line"])}</p><div class="npg">{b}</div></div>'
 
 def variant_templates():
@@ -345,8 +370,8 @@ def page(page_fn, card=None, apps=None):
     go = (go_block(c0)
           + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice() + phash()
           + '<details class="stview" data-stview><summary>View prompt</summary>'
-          # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so a crawler
-          # that pulled the register link out of the page text could only hit the placeholder, never a fresh name each hour.
+          # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so the
+          # page text only ever names the placeholder, never a fresh name each hour.
           + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
@@ -355,10 +380,13 @@ def page(page_fn, card=None, apps=None):
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
+    sc = "".join(f'<li><div class="sth"><b>{E(t)}</b><span>{E(n)}</span></div><div class="stc"><code>{E(v)}</code>{cp(v)}</div></li>' for t, v, n in SELF_CUSTODY)
+    selfc = (f'<h3 class="sth3" id="self-custody">Self-custody</h3><p class="dim small">Keep your own wallet file. Steps as in '
+             f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a>. {E(SELF_NOTE)}</p><ol class="steps">{sc}</ol>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
     body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
             f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
-            f'<div class="cb"><ol class="steps">{li}</ol>{src}</div></details></div>')
+            f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details></div>')
     return page_fn("Start", body, "/start")

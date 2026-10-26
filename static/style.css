@@ -1364,10 +1364,12 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .gon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;font:600 var(--t12)/1 var(--ui);opacity:.85}
 .nopath{padding:16px;border:1px solid var(--line2);border-radius:var(--r-lg);background:var(--card2)}
 .nopath p{margin:0 0 12px;color:var(--hi);font:600 var(--t16)/1.3 var(--ui)}
-.npg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.npg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .npb{display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--r-lg);background:var(--card);color:var(--txt);font:600 var(--t14)/1.15 var(--ui);cursor:pointer}
 .npb:hover{border-color:var(--amber)}.npb:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
 .npb .an{gap:8px}
+.npj{grid-column:1/-1;background:var(--gold);border-color:var(--gold);color:var(--on-gold);text-decoration:none}.npj:hover{border-color:var(--hi);color:var(--on-gold)}
+.sth3{margin:18px 0 6px;font:600 var(--t14)/1.3 var(--ui);color:var(--hi);text-transform:uppercase;letter-spacing:.04em}
 @media (max-width:760px){.npg{grid-template-columns:repeat(2,minmax(0,1fr))}.nopath p{font-size:var(--t14)}.gocrow{margin-bottom:8px}}
 .toast a{pointer-events:auto;color:inherit;text-decoration:underline;text-underline-offset:2px}
 /* one button (one button): one icon at a time, the connector as a small text link under it */

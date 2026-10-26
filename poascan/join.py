@@ -10,21 +10,16 @@ PROMPT = _S.PROMPT  # one onboarding prompt, shared with /start
 # Re-tested logged out 2026-10-20 (Playwright, Chrome).
 # kind "auto": the URL itself carries the prompt into a new chat; "paste": we copy, open the site, user pastes.
 # top: shown up front; the rest sit behind the More toggle, auto first.
+# v2.9 (Oct 26): only apps with a working path (full or connector tier in data/clients.json); Kimi, Z.ai, Muse, DeepSeek,
+# MiniMax and OpenRouter left the list (no-path tier; their /start choice shows the no-path panel).
 APPS = [
     ("ChatGPT", "auto", "https://chatgpt.com/", "https://chatgpt.com/?q=", 1),          # logged out: auto-sends; logged in: prefilled
     ("Claude", "auto", "https://claude.ai/new", "https://claude.ai/new?q=", 1),        # login keeps returnTo=/new?q=...
     ("Grok", "auto", "https://grok.com/", "https://grok.com/?q=", 1),                  # prefilled + one-tap "Send this message?"
     ("Perplexity", "auto", "https://www.perplexity.ai/", "https://www.perplexity.ai/search?q=", 1),  # runs immediately
-    ("Kimi", "auto", "https://www.kimi.com/", "https://www.kimi.com/_prefill_chat?send_immediately=false&prefill_prompt=", 0),  # prefilled, full prompt
-    ("Z.ai", "auto", "https://chat.z.ai/", "https://chat.z.ai/?q=", 0),                # prefilled, full prompt
-    # Meta's Muse at meta.ai. ?prompt= is documented but did not prefill logged out; passed anyway, always copied first.
-    ("Muse", "paste", "https://www.meta.ai/", "https://www.meta.ai/?prompt=", 0),
     ("Gemini", "paste", "https://gemini.google.com/app", "", 0),                       # ?q= / ?prompt= ignored
-    ("DeepSeek", "paste", "https://chat.deepseek.com/", "", 0),                        # ?q= dropped by the sign-in redirect
     ("Le Chat", "paste", "https://chat.mistral.ai/chat", "", 0),                       # login wall, ?q= not confirmed
     ("HuggingChat", "paste", "https://huggingface.co/chat/", "", 0),                   # login wall, ?prompt= not confirmed
-    ("MiniMax", "paste", "https://agent.minimax.io/", "", 0),                          # ?q= ignored
-    ("OpenRouter", "paste", "https://openrouter.ai/chat", "", 0),                      # ?q= ignored
     ("Grok Bot", "paste", "", "", 0),                                                  # deep link needs a per-user bot id
 ]
 ARROW = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -61,7 +56,7 @@ def label(n):
            if f else f'<i class="blogo mono" aria-hidden="true">{E(n[:1])}</i>')
     return f'<span class="an">{img}<span class="ant">{E(n)}</span></span>'
 
-# Muse on phones (only the Ask dialog lists it; /start gives it the no-path panel): iOS copies only and
+# Muse on phones (v2.9: no longer in APPS; kept for a later return): iOS copies only and
 # points to Muse from Meta in the App Store; Android opens Muse from Meta (com.facebook.aura) by intent. app.js reads these.
 MOBILE = {"Muse": ("https://apps.apple.com/app/id6760173601", "intent://www.meta.ai/#Intent;scheme=https;package=com.facebook.aura;end",
                    "Prompt copied. Open Muse from Meta and paste.")}

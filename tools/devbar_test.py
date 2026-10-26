@@ -39,7 +39,7 @@ try:
         check(f"{p}: banner first in body, above the header, exact text and link, no dismiss", ok)
     home = get("/"); check("home: Upgrading strip still renders below the header", home.index('class="upstrip"') > home.index('<header class="top">'))
     import json
-    j = json.loads(get("/api/v1/prompts/join")); check("join prompt unchanged (6762aa1c)", j.get("template_sha256", "").startswith("6762aa1c"))
+    j = json.loads(get("/api/v1/prompts/join")); check("join prompt unchanged (f577df50, v2.9)", j.get("template_sha256", "").startswith("f577df50"))
 finally:
     srv.terminate(); srv.wait(10)
 sys.exit(1 if fails else 0)

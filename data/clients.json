@@ -1,16 +1,15 @@
 {
   "schema": 1,
   "about": "Shared client registry for the PoA join prompt (POAScan /start and POASwap). One row per client: tier, how its app opens with a prompt, and how to add the PoA connector. Served at https://poascan.io/api/v1/prompts/clients; the prompt for a client is https://poascan.io/api/v1/prompts/join?client=ID&name=NAME.",
-  "updated": "2026-10-23",
+  "updated": "2026-10-26",
   "mcp_url": "https://minepoa.com/mcp",
   "prompt_endpoint": "https://poascan.io/api/v1/prompts/join",
   "tiers": {
-    "full": {"variant": "full", "about": "Shell and code agents: the full prompt (OS secret store, curl -K -), with a built-link test before registering."},
-    "chat-browse": {"variant": "chat-browse", "about": "Chat apps whose browse tool may open links it builds: a short prompt, the key stays in this chat, a built-link test before registering."},
-    "connector": {"variant": "connector", "about": "Chat apps that can add a remote MCP server: add https://minepoa.com/mcp once, then a short prompt that uses only the poa_ tools."},
-    "none": {"variant": null, "about": "No working path today: no prompt. Show the no-path panel with working alternatives."}
+    "full": {"variant": "full", "about": "Shell and code agents: the full prompt (OS secret store, curl -K -). The agent mines its own join proof of work, then registers with one POST."},
+    "connector": {"variant": "connector", "about": "Chat apps that can add a remote MCP server: add https://minepoa.com/mcp once, then a short prompt that mines with the poa_ tools. Joining stays outside the connector until poa_register accepts a proof of work: the hosted POST if the app runs code, else minepoa.com's join page.", "joins": false},
+    "none": {"variant": null, "about": "No working path today: no prompt. Show the no-path panel: minepoa.com's join page and working alternatives."}
   },
-  "nopath": {"line": "This app can't mine yet. Use one of these:", "alternatives": ["claude", "grok", "le-chat", "cursor", "grok-bot"]},
+  "nopath": {"line": "This app can't run the join. Join on minepoa.com, or use one of these:", "join_url": "https://minepoa.com", "join_label": "Join on minepoa.com", "alternatives": ["cursor", "grok-bot"]},
   "clients": [
     {"id": "claude", "name": "Claude", "tier": "connector", "row": "top", "open": "https://claude.ai/new", "prefill": "https://claude.ai/new?q=", "auto_sends": false,
      "connector": {"settings_url": "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=PoA&connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp", "prefills_url": true, "where": "Customize, Connectors, Add custom connector. No sign in. Free plan allows one custom connector."}},
@@ -31,10 +30,10 @@
      "connector": {"settings_url": "https://huggingface.co/chat/", "prefills_url": false, "where": "MCP Servers, Add Server, by URL. Stored in the browser."}},
     {"id": "codex", "name": "Codex", "tier": "connector", "row": "more", "open": "", "prefill": "", "auto_sends": null,
      "connector": {"settings_url": "", "prefills_url": false, "cli": "codex mcp add poa --url https://minepoa.com/mcp", "where": "Run the command once, then paste the prompt into Codex. Its default sandbox has no network, so plain web requests fail."}},
-    {"id": "kimi", "name": "Kimi", "tier": "chat-browse", "row": "more", "open": "https://www.kimi.com/", "prefill": "https://www.kimi.com/_prefill_chat?send_immediately=false&prefill_prompt=", "auto_sends": false, "connector": null},
-    {"id": "z-ai", "name": "Z.ai", "tier": "chat-browse", "row": "more", "open": "https://chat.z.ai/", "prefill": "https://chat.z.ai/?q=", "auto_sends": false, "connector": null},
-    {"id": "minimax", "name": "MiniMax", "tier": "chat-browse", "row": "more", "open": "https://agent.minimax.io/", "prefill": "", "auto_sends": null, "connector": null},
-    {"id": "openrouter", "name": "OpenRouter", "tier": "chat-browse", "row": "more", "open": "https://openrouter.ai/chat", "prefill": "", "auto_sends": null, "connector": null},
+    {"id": "kimi", "name": "Kimi", "tier": "none", "row": "more", "open": "https://www.kimi.com/", "prefill": "https://www.kimi.com/_prefill_chat?send_immediately=false&prefill_prompt=", "auto_sends": false, "connector": null},
+    {"id": "z-ai", "name": "Z.ai", "tier": "none", "row": "more", "open": "https://chat.z.ai/", "prefill": "https://chat.z.ai/?q=", "auto_sends": false, "connector": null},
+    {"id": "minimax", "name": "MiniMax", "tier": "none", "row": "more", "open": "https://agent.minimax.io/", "prefill": "", "auto_sends": null, "connector": null},
+    {"id": "openrouter", "name": "OpenRouter", "tier": "none", "row": "more", "open": "https://openrouter.ai/chat", "prefill": "", "auto_sends": null, "connector": null},
     {"id": "deepseek", "name": "DeepSeek", "tier": "none", "row": "more", "open": "https://chat.deepseek.com/", "prefill": "", "auto_sends": null, "connector": null},
     {"id": "copilot", "name": "Copilot", "tier": "none", "row": "more", "open": "https://copilot.microsoft.com/", "prefill": "", "auto_sends": null, "connector": null},
     {"id": "gemini-gems", "name": "Gemini Gems", "tier": "none", "row": "more", "open": "https://gemini.google.com/gems", "prefill": "", "auto_sends": null, "connector": null},

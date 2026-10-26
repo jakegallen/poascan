@@ -374,7 +374,7 @@ D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(
  D.addEventListener("toggle",function(e){var d=e.target;if(d&&d.id==="xemb"&&d.open){var wp=$("pre[data-reg]",d);if(regOn(wp))ev("wallet.regshow")}},true)})();
 /* /swaps#xemb opens the Add Emblem Wallet prompt (its toggle adds the setup code) */
 (function(){function op(){if(W.location.hash!=="#xemb")return;var d=D.getElementById("xemb");if(d&&!d.open){d.open=true;d.scrollIntoView({block:"center"})}}op();W.addEventListener("hashchange",op)})();
-/* Join name: the prompt carries the full register link; a fresh default name per visit, live-filled from /start's Name field */
+/* Join name: the prompt carries the name in its register POST body; a fresh default name per visit, live-filled from /start's Name field */
 (function(){var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar maple nimble opal quartz rapid sable tidal velvet".split(" "),N="otter heron lynx falcon badger comet cedar delta finch harbor kestrel lark marten osprey pike raven sparrow tern vole wren".split(" "),
  R=function(a){return a[Math.floor(Math.random()*a.length)]},gen=function(){return R(A)+"-"+R(N)+"-"+(100+Math.floor(Math.random()*900))},nm=gen(),RX=/(register\?label=)[^\s`]*/;W.poaNewName=gen;
  function fill(pre,v){if(pre&&RX.test(pre.textContent))pre.textContent=pre.textContent.replace(RX,"$1"+v)}
@@ -409,7 +409,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    mcp-poa.add for the connector options under More. The second click of a paste app copies again but sends no beacon. */
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
- /* v2.4: one prompt variant per client tier (full, chat-browse, connector) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
+ /* v2.4: one prompt variant per client tier (full, connector; v2.9 retired chat-browse) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
  var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0="",CT;
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}

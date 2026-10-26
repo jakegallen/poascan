@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.159] - 2026-10-26
+
+### Changed
+- Join prompt v2.9 (go.md Step 0/1, admission proof of work). The agent mines its own one-time proof from `GET https://minepoa.com/api/join-pow` (a decimal nonce so sha256(challenge + ":" + nonce) has `bits` leading zero bits) and joins with one `POST https://minepoa.com/api/hosted/register`, JSON body `{"label":"NAME","pow":{"challenge":"...","nonce":"..."}}`. A 403 with `required_bits` gets one recovery line: mine a fresh proof to that many bits and send the join once more. The GET register link is gone. POAScan never solves, embeds or relays a proof.
+- The capability check is now "run code and send a POST". An app that can't is sent to minepoa.com, whose join page mines the proof in the browser.
+- Connector variant: mines with the poa_ tools but does not join through the connector until poa_register accepts a proof (`CONNECTOR_JOIN`, off). It joins with the hosted POST when the app runs code, else points to minepoa.com.
+- Kimi, Z.ai, MiniMax and OpenRouter move to the no-path panel, which now leads with Join on minepoa.com (alternatives Cursor and Grok Bot). The chat-browse variant is retired. Cursor's full prompt no longer fits a prefill link, so its button copies, then opens.
+- The Ask dialog's Open in list keeps only apps with a working path.
+- /start All steps: Proof of work and Register (POST) replace the register link, plus skill.md's self-custody steps with the admission proof as skill.md writes it.
+- `/api/v1/prompts/join` adds `join` (the endpoint shape); clients.json drops the chat-browse tier and adds `nopath.join_url`. Combined prompt: v2.9 join core, pow on the connected join. llms.txt, OpenAPI, FAQ and the MCP onboarding tool follow.
+
 ## [1.26.158] - 2026-10-26
 
 ### Added

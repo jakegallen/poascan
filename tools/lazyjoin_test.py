@@ -1,6 +1,6 @@
 """Join dialog retired (1.26.86; lazy since 1.26.54) and swap state names. The header Start goes to /start, so pages carry no
 Join dialog: no shell, no /fragment/join fetch, no [data-join] trigger. An old cached page that asks for /fragment/join gets a 301
-to /start, and an old /#join link lands on /start. /start carries the three variant templates once, outside main. llms.txt,
+to /start, and an old /#join link lands on /start. /start carries the variant templates (two since v2.9) once, outside main. llms.txt,
 llms-full.txt and the MCP tool descriptions write the swap state value coming_soon, never "coming soon", where they name it.
 Usage: python3 tools/lazyjoin_test.py"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -12,9 +12,9 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-TS = "6762aa1cb3bf173a20f6d25af3045b10ef4463a962754e8f1f58dc28878b5cdd"
+TS = "f577df5001123c45113345b71da0d73cfda91e1aae852933a1e39551da8d9a2a"
 from poascan import onboarding_prompt as OP, start as S, swapflag as SF
-check("join prompt template_sha256 unchanged (6762aa1c, v2.8)", hashlib.sha256(S.prompt("YOUR_NAME", "full").encode()).hexdigest() == TS == S.template_sha256())
+check("join prompt template_sha256 unchanged (f577df50, v2.9)", hashlib.sha256(S.prompt("YOUR_NAME", "full").encode()).hexdigest() == TS == S.template_sha256())
 check("coming_soon is the swap status value in the code", "coming_soon" in SF.STATUSES)
 
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
@@ -42,8 +42,8 @@ try:
               and 'id="jm-prompt"' not in t and 'data-rname="jclient"' not in t and re.search(r'/static/app\.js\?v=[0-9a-f]{12}"', t) is not None and 'id="askmodal"' in t and 'id="toast"' in t
               and '<a class="joinbtn hdrjoin" href="/start">' in t)
     st = pages["/start"][2]; m = st[st.index("<main"):st.index("</main>")]
-    check("/start: the three variant templates once, outside main, the full one is the canonical template",
-          re.findall(r'<pre hidden data-variant="([^"]+)">', st) == ["full", "chat-browse", "connector"] and "data-variant" not in m
+    check("/start: the variant templates (two since v2.9) once, outside main, the full one is the canonical template",
+          re.findall(r'<pre hidden data-variant="([^"]+)">', st) == ["full", "connector"] and "data-variant" not in m
           and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', st, re.S).group(1)) == OP.TEMPLATE)
     check("other pages carry no variant templates", all("data-variant" not in t for r, (c, h, t) in pages.items() if r != "/start"))
     nr = urllib.request.build_opener(urllib.request.ProxyHandler({}), type("NR", (urllib.request.HTTPRedirectHandler,), {"redirect_request": lambda *a, **k: None})())

@@ -55,6 +55,6 @@ check("SAFE: X-Api-Key header preferred on /me, key= only as fallback, token= pe
 check("llms.txt Safety: key shapes, token=AUTH_TOKEN main, key= legacy, header preferred", "PoA keys (pk_ or GUID)" in safety and "token=AUTH_TOKEN is the main one and key= is legacy" in safety
       and "X-Api-Key header" in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.8, 6762aa1c", S.template_sha256() == "6762aa1cb3bf173a20f6d25af3045b10ef4463a962754e8f1f58dc28878b5cdd")
+check("join prompt v2.9, f577df50", S.template_sha256() == "f577df5001123c45113345b71da0d73cfda91e1aae852933a1e39551da8d9a2a")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)
