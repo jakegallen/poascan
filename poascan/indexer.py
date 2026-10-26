@@ -37,7 +37,7 @@ BACKOFF_MAX_S = _ei("POASCAN_BACKOFF_MAX_S", 900, 60)
 RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After beyond this is treated as this
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
-ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|"
+ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|assignments/poa1[1-9A-HJ-NP-Za-km-z]+|"
                      r"epochs|agents|anchors|params|release|notices|ballots|chains|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
@@ -962,6 +962,8 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),
     ("swap_writes", lambda: __import__("poascan.hosted", fromlist=["x"]).write_job(), 60, None),   # 1.26.127: one keyless swap-offer GET about every 10 min (30 min when unchanged); the stored next_at decides
     ("grading", lambda: __import__("poascan.grading", fromlist=["x"]).job(), 60, None),   # 1.26.134: /api/explorer/grading every 10 min (5 near a close), backoff to 30 min; the stored next_at decides
+    ("gradehist", lambda: __import__("poascan.gradehist", fromlist=["x"]).sync(), 300, None),   # 1.26.158: grade_history from close records and the grading list; no upstream call
+    ("open_seats", lambda: __import__("poascan.gradehist", fromlist=["x"]).job(), 60, None),   # 1.26.158: public /api/assignments/<addr> counts, at most 3 a minute, once per epoch per Agent
     ("milestones", lambda: __import__("poascan.milestones", fromlist=["x"]).job(), 300, None),   # upgrade milestones from live state; no upstream call   # one keyless GET per hosted route, only while maintenance is on
 ]
 

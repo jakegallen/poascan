@@ -310,7 +310,8 @@ OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
 GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "sort", "dir"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
-           "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"}}
+           "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"},
+           "/api/governance/grade-history": {"addr", "sort", "dir", "limit", "offset"}}
 def governance_api(path, qs):
     """Governance tabs as JSON (?segment= is read before routing). Unknown parameters and values are a 400."""
     if path not in GOV_API: raise KeyError(path)
@@ -351,6 +352,12 @@ def governance_api(path, qs):
     if path == "/api/governance/queue":
         so, d = sd(GVW.QUEUE_SORTS, "need")
         return GV.api_queue(pick("need", [k for k, _ in GVW.QUEUE_FILTERS], ""), so, d, num("limit", 1000, 1, 10000), num("offset", 0, 0, 10 ** 6))
+    if path == "/api/governance/grade-history":
+        from . import gradehist as GH
+        a = one("addr")
+        if a is not None and not re.fullmatch(r"poa1[1-9A-HJ-NP-Za-km-z]{20,60}", a): raise BadRequest("addr must be a poa1 address")
+        so, d = sd(GH.SORTS, "seats")
+        return GH.api(a, so, d, num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
     return GV.api_proposals(num("limit", 100, 1, 1000))
 
 # 1.26.96 header merge (Chain, Agents, Network, Governance): list and tab URLs 301 to their new home and keep every query
@@ -946,7 +953,7 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue", "/api/protocol") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue", "/api/governance/grade-history", "/api/protocol") else [data])
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})

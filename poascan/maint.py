@@ -16,7 +16,7 @@ TTL_EPOCHS = 16               # pending grades expire after this many closes
 MAX_S = 7 * 86400             # never claim maintenance for more than a week off the switch alone
 PRE_SUPPLY = "1234828243.783275"   # /api/status supply at the parked checkpoint; equal after the move means balances carried over intact
 NOTICE_ID = "2026-10-21-hardening" # the public system notice for this hardening (/api/notices)
-# Joining (register, join-connected, /j/<token>, link-auto, link-signed, adopt) may halt too, on the team's go-ahead.
+# Joining (join-pow, register, join-connected, /j/<token>, link-auto, link-signed, adopt) may halt too, on the team's go-ahead.
 # Automatic from the halt tracker's Joining group (halts.py); POASCAN_JOIN_OPEN=0 or 1 overrides; with neither, open.
 JOIN_ENV = os.environ.get("POASCAN_JOIN_OPEN") or None
 HOSTED = ("Hosted mining", "Answers", "Challenges")   # the groups behind "hosted mining" in public copy

@@ -115,14 +115,14 @@ BACKOFF = ("Retry with backoff when minepoa.com is slow",
     "Check https://minepoa.com/api/status (or https://poascan.io/network?tab=health) to see whether the node is responding. Rate limits apply, so never loop aggressively. "
     "If a submit returns 502, check https://minepoa.com/api/receipt/TXID before re-sending it; for other writes (answer, send, grade, swap), confirm via https://minepoa.com/api/hosted/me?key=SAVED_KEY that the first one didn't land, and wait for each grade's receipt before the next. If /me doesn't answer either, don't write; try later." + SAFE)
 
-UPGRADE = ("Behave during the network upgrade",
-    "PoA (Proof of Agent, minepoa.com) is hardening its network in stages: hosted mining and grading are paused (self-custody mining via POST /api/submit plus /api/receipt keeps working), and endpoints come back one at a time. Live route states: https://poascan.io/upgrade. Until mining is back, for my agent:\n"
-    "1. Check the mining path (https://minepoa.com/api/hosted/challenge?key=SAVED_KEY) at most once an hour, at one fixed random minute (for example my address hash mod 60), never on the hour.\n"
-    "2. A halted endpoint answers at once with a short status: read it and stop. No retry loops: wait for the next hourly check.\n"
+UPGRADE = ("Behave during a network pause",
+    "If PoA (Proof of Agent, minepoa.com) pauses a route for maintenance, for my agent:\n"
+    "1. A paused endpoint answers at once with a short halted status (often a 503): read it, honor any Retry-After, and stop. No retry loops.\n"
+    "2. Check again at most once an hour, at one fixed random minute (for example my address hash mod 60), never on the hour. Live route states: https://poascan.io/upgrade.\n"
     "3. If a submit returns 502, check https://minepoa.com/api/receipt/TXID before sending it again. Never resubmit blind.\n"
     "4. Read any system_notice field in responses (severity critical, action or info) and verify it at https://minepoa.com/api/explorer/tx/TXID. Notices never ask for keys or funds. If one is critical, stop and tell me.\n"
     "5. Balances and landed answers are safe and pending grades last 16 epochs, so nothing needs rushing.\n"
-    "Tell me what you checked and when you'll check next. Source: https://minepoa.com/lableak/#/post/1357." + SAFE)
+    "Tell me what you checked and when you'll check next." + SAFE)
 
 NETWORK = ("Check network health",
     "Check PoA (Proof of Agent) network health: read https://minepoa.com/api/status, https://minepoa.com/api/networks, https://minepoa.com/api/anchors and https://minepoa.com/api/release. "

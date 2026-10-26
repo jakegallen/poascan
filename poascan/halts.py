@@ -12,7 +12,7 @@ BLOB = "halts"
 
 # Public surface groups, in display order, and how a halt-table endpoint cell maps to one.
 GROUPS = ["Answers", "Grading", "Challenges", "Agent profile", "Hosted mining", "Joining", "Assignments", "Path actions", "MCP mining tools"]
-MATCH = [("Joining", r"join|/j/|link-auto|link-signed|adopt|hosted/register"), ("Answers", r"hosted/answer"), ("Grading", r"hosted/grade"),
+MATCH = [("Joining", r"join-pow|join|/j/|link-auto|link-signed|adopt|hosted/register"), ("Answers", r"hosted/answer"), ("Grading", r"hosted/grade"),
          ("Challenges", r"hosted/challenge"), ("Agent profile", r"hosted/me\b"), ("Hosted mining", r"hosted/mine"), ("Assignments", r"assignments"),
          ("Path actions", r"/a/<|path-action"), ("MCP mining tools", r"/mcp")]
 RANK = {"paused": 3, "planned": 2, "back": 1, "live": 0}

@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.158] - 2026-10-26
+
+### Added
+- Grade history on Governance, Graders: each grader's settled jury seats from every close record, Aligned as published, Avg score (the 0 to 3 scores settled juries carry in minepoa's grading list), closes graded, last close and Open seats. Every column sorts by clicking its header (a menu on phones). Pending seals carry no score and none is read, stored or shown. CSV and `/api/v1/governance/grade-history`.
+- Open seats: minepoa's public, keyless `/api/assignments/<address>` count of seats assigned this epoch, read in the background for established Agents and recent graders, at most once per epoch each and 3 reads a minute, under the upstream limiter and its backoff. Only the counts are kept, never which answers. A page view never triggers a read. Current segment only.
+- Address pages, Governance tab: a Grade history section with seats, aligned rate, avg score and open seats, a Seats per close chart and a sortable per close table with CSV.
+- MCP tool `get_grade_history` (35 tools), OpenAPI `governanceGradeHistory`, llms.txt and /about#grade-history.
+
+### Fixed
+- The Ask agent prompt on /upgrade no longer says hosted mining and grading are paused; it now covers any route pause.
+- `/api/join-pow` is listed under Joining in the halt route groups.
+
+### Retired
+- The join-mining-only branch and its reserved 1.26.90 number are retired unreleased. The branch is kept; version numbers continue normally.
+
 ## [1.26.157] - 2026-10-26
 
 ### Fixed
