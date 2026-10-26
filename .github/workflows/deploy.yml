@@ -51,6 +51,8 @@ jobs:
         run: python tools/balance_lag_test.py
       - name: Join epoch (Never established joined segment from the join time and config boundaries, never the source; a missing epoch worked out from that segment's close records; S1 labels in By join epoch)
         run: python tools/joinepoch_test.py
+      - name: Extras (Unverifiable tag on server-only signed releases; Sealed and Graded times per settle queue row from the last close record, timestamps only, never a pending score; header sort, API, Agent governance)
+        run: python tools/extras1026_test.py
       - name: Sortable column headers (one shared component; arrows and aria-sort; numbers highest first, text A to Z; blanks last; server side with the URL; phone sort menu)
         run: python tools/headersort_test.py
       - name: POAScan's Score (weights from govscore.json sum to 1; deterministic 0 to 100; fold matches segment standing; monotonic; config driven; /about#score)

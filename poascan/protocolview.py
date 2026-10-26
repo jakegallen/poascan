@@ -40,9 +40,10 @@ def _file_val(s, f):
 
 def stats_row():
     s = PT.state(); m = PT.meta(); f = stale_flag()
+    uv = unverifiable_tag() if s.get("release_txid") and s["release_txid"] in PT.server_only_txids() else ""
     ver = (f'<span class="mono ver" title="{E(s["release_version"])}">{E(s["release_version"])}</span>' if s["release_version"] else '<span class="na">···</span>')
     return ('<div class="stats four">' + "".join([
-        stat("Release", ver, tip="The current G0 signed release in /api/release"),
+        stat("Release", ver, tip="The current G0 signed release in /api/release", flag_html=uv),
         stat("poa.mjs", _file_val(s, "client"), tip="Live sha256 of minepoa.com/client/poa.mjs against the signed releases", flag_html=f),
         stat("poa-web.mjs", _file_val(s, "web_client"), tip="Live sha256 of minepoa.com/poa-web.mjs against the signed releases", flag_html=f),
         stat("Last check", rel(m.get("last_ok")) if m.get("last_ok") else '<span class="na">···</span>', tip="Both files are checked once an hour", flag_html=f)]) + "</div>")
@@ -54,10 +55,12 @@ def _sha_cell(r):
     if r.get("sha256_old"): return f'<span class="mono dim" title="{E(r["sha256_old"])}">{E(r["sha256_old"][:10])}</span> → {new}'
     return new
 
+def unverifiable_tag(): return flag("Unverifiable", PT.UNVERIFIABLE_TIP)
+
 def _rel_cell(r):
     if r["kind"] == "release":
-        v = E(r["release_version"] or "")
-        return f'<a class="mono" href="/tx/{E(r["release_txid"])}">{v}</a>' if r.get("release_txid") else f'<span class="mono">{v}</span>'
+        v = E(r["release_version"] or ""); tag = " " + unverifiable_tag() if r.get("server_only") else ""
+        return (f'<a class="mono" href="/tx/{E(r["release_txid"])}">{v}</a>' if r.get("release_txid") else f'<span class="mono">{v}</span>') + tag
     if r["kind"] in ("source_change", "baseline"):
         return f'<span class="mono">{E(r["matches_release"])}</span>' if r.get("matches_release") else '<span class="tag warn">Unreleased</span>'
     return '<span class="dim">···</span>'
@@ -75,8 +78,10 @@ def _note(r):
     return "Matches a signed release" if r.get("matches_release") else "Not in any signed release"
 
 def select(kind="", by="when", d="desc"):
-    rows = PT.events(kind or None, 5000)
-    for r in rows: r["changelog_ref"] = (r.get("detail") or {}).get("changelog_ref")
+    rows = PT.events(kind or None, 5000); so = PT.server_only_txids()
+    for r in rows:
+        r["changelog_ref"] = (r.get("detail") or {}).get("changelog_ref")
+        r["server_only"] = r["kind"] == "release" and r.get("release_txid") in so
     tie = lambda r: (-r["ts"], -r["id"])
     return SS.sort_rows(rows, _VAL.get(by, _VAL["when"]), SS.kind_of(COLS, by), d, tie=tie)
 

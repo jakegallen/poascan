@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.170] - 2026-10-26
+
+### Added
+- Unverifiable tag on server-only signed releases: on the Governance, Protocol timeline and on the Release stat when the current release is one. A release is server-only when its `client_sha256` and `web_client_sha256` equal the previous signed release's, or it names neither: only server, worker or params hashes moved, and none of those is a public file, so the hourly check has nothing to hash against it. Hover or tap: "Server-only release. No public artifact to verify." v1.1.3 through v1.5 (v1.4-stalets-finals at 11:42 AM PT and v1.5-listcap-capkeys at 1:17 PM PT on Oct 26) are tagged. `/api/v1/protocol` release rows add `server_only` and `verifiable`. Method: /about#protocol.
+- Sealed and Graded on the settle queue (Governance, Queue): per pending row, the first and latest seal time in the last close record's `basis.pending` grades, one per distinct grader, in the reader's time zone, sortable from the header. Timestamps only; a pending grade's score is never read. `/api/v1/governance/queue` rows (and CSV) add `sealed_ts`, `graded_ts` and `seal_times`, with `sort=sealed|graded`; the same fields on `grading.pending_answers` in `/api/v1/address/<addr>/governance` and MCP `get_agent_governance`. No new upstream reads. Method: /about#gov-v2.
+
+### Tests
+- tools/extras1026_test.py (in CI): server-only detection, tag and tooltip, API fields; Sealed and Graded from the last close only, earliest per grader, blanks last in either sort, page, API, CSV, Agent governance and OpenAPI; never a pending score.
+
 ## [1.26.169] - 2026-10-26
 
 ### Changed

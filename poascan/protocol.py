@@ -297,16 +297,42 @@ def events(kind=None, limit=500):
                         changelog_ref=d.get("changelog_ref"), changes=d.get("changes"), detail=d))
     return out
 
+# ---------------------------------------------------------------- server-only releases
+PUBLIC_FIELDS = ("client_sha256", "web_client_sha256")   # the only release hashes with a public file POAScan can hash
+UNVERIFIABLE_TIP = "Server-only release. No public artifact to verify."
+
+def _pub(d):
+    d = d or {}
+    return (d.get("client_sha256") or d.get("engine_sha256"), d.get("web_client_sha256"))
+
+def server_only_txids():
+    """txids of signed releases that change no public file: both client hashes equal the previous signed release's (by ts),
+    or the release names no client hash at all. What changed is server_sha256, worker_sha256 or params_sha256, which name
+    no public artifact, so the hourly file check cannot verify them. The first release POAScan holds is never flagged."""
+    _ensure()
+    rows = db.q("SELECT txid, ts, id, detail FROM protocol_events WHERE kind='release' ORDER BY ts ASC, id ASC")
+    out, prev = set(), None
+    for r in rows:
+        cur = _pub(json.loads(r["detail"]) if r["detail"] else {})
+        if r["txid"] and (not any(cur) or (prev is not None and cur == prev)): out.add(r["txid"])
+        if any(cur): prev = cur
+    return out
+
 def api(kind=None, limit=500):
     """GET /api/protocol: freshness, the live state and the timeline (rows; the CSV is the rows)."""
     m = meta(); now = time.time()
-    rows = events(kind, limit)
-    for r in rows: r.pop("detail", None)
+    rows = events(kind, limit); so = server_only_txids()
+    for r in rows:
+        r.pop("detail", None)
+        r["server_only"] = r["kind"] == "release" and r.get("release_txid") in so
+        r["verifiable"] = None if r["kind"] != "release" else not r["server_only"]
     return dict(source="minepoa_release_and_client_files", checked_at=m.get("last_check"), last_ok_ts=m.get("last_ok"),
                 stale=stale(now), stale_after_s=STALE_S, check_errors=m.get("errors"),
                 files=[dict(file=FILE_NAMES[f], url=BASE + p, sha256=(m.get("files") or {}).get(f, {}).get("sha"), bytes=(m.get("files") or {}).get(f, {}).get("bytes"),
                             first_seen=(m.get("files") or {}).get(f, {}).get("first_seen"), last_ok=(m.get("files") or {}).get(f, {}).get("last_ok")) for f, p, _ in FILES],
                 current=state(), kind=kind, total=len(rows), rows=rows,
                 note="Hourly: conditional GET of both client files (HEAD plus a full GET every 6 h when the host sends no validator); bytes are hashed, never run. "
-                     "matches_release names the G0 signed release whose client_sha256 or web_client_sha256 equals the hash.",
+                     "matches_release names the G0 signed release whose client_sha256 or web_client_sha256 equals the hash. "
+                     "server_only (release rows): its client_sha256 and web_client_sha256 equal the previous signed release's, so only server, worker or params hashes moved; "
+                     "none of those names a public file, so verifiable is false.",
                 url="https://poascan.io/governance?tab=protocol")
