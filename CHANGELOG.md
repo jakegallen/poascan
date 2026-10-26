@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.155] - 2026-10-25
+
+### Added
+- Chart milestone "Signup surge" at the first join of the Oct 25 burst, 2026-10-26 02:17:28 UTC (7:17 PM PT), linked to its join tx 0628afd6. 33 Agents joined by 02:31 UTC after about 1 to 4 an hour all day (POAScan tx index; status agents_joined 5,058 at 02:14 UTC, 5,091 at 02:44 UTC). Joins never stopped before it, so it is a surge, not a reopening. Drawn only where the data changes: the Agents and Agents / hr charts (Network > Charts and the pop-out) and the Home Total Agents sparkline; never on Holders, mined, supply, circulating, Active Agents or txs. Listed in the Milestones table like every event.
+- milestones.json `spark_ids`: sparklines that draw a milestone tick and its terse label only for events that name them (`home-agents`, the Home Total Agents sparkline; in no chart group, so chain-wide events stay off it).
+
+### Tests
+- tools/milestones_test.py: Signup surge time, tx link and charts (Agents and Agents / hr, plus the Home Agents sparkline only), sparkline tick and label inside its span, plain sparkline unchanged without marks.
+- tools/swap_state_test.py: the steady 503 check runs once per tx POAScan checks (releases, notices and milestone txs) instead of a fixed 12, so a new milestone tx no longer breaks it.
+
 ## [1.26.154] - 2026-10-25
 
 ### Fixed

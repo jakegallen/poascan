@@ -517,9 +517,10 @@ def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text
         return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
 
-def spark(points, n=40, breaks=None):
+def spark(points, n=40, breaks=None, marks=None):
     """Tiny trend line (no axes): the last n points, scaled to their own range. breaks: x values the line is not drawn across
-    (a counter that restarted at a genesis cut), as line() and the pop-out."""
+    (a counter that restarted at a genesis cut), as line() and the pop-out. marks: milestones drawn as a dashed tick with
+    its terse label ([{ts, label}], milestones.events for a spark id), only those inside the line's span."""
     pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
     if len(pts) < 2: return ""
     if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
@@ -530,11 +531,16 @@ def spark(points, n=40, breaks=None):
         if i and any(pts[i - 1][0] < k <= t for k in bk): runs.append([])
         runs[-1].append((t, v))
     pl = "".join(f'<polyline points="{" ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in r)}" vector-effect="non-scaling-stroke"/>' for r in runs if r)
-    return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}</svg>'
+    mk = [(xs(m["ts"]), m) for m in (marks or []) if t0 <= m["ts"] <= t1]
+    if not mk: return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}</svg>'
+    tk = "".join(f'<line class="spkt" x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="24" vector-effect="non-scaling-stroke"/>' for x, _ in mk)
+    lb = "".join(f'<span class="spkl{" r" if x > 50 else ""}" style="{"right" if x > 50 else "left"}:{(100 - x if x > 50 else x):.1f}%" '
+                 f'title="{E(utc_text(m["ts"]) + " " + m["label"])}">{E(m["label"])}</span>' for x, m in mk)
+    return (f'<div class="spkw"><svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}{tk}</svg>{lb}</div>')
 
-def spark_in(stat_html, points, breaks=None):
-    """Put a sparkline under a stat card's value."""
-    sv = spark(points, breaks=breaks)
+def spark_in(stat_html, points, breaks=None, marks=None):
+    """Put a sparkline under a stat card's value (marks: milestone ticks, see spark)."""
+    sv = spark(points, breaks=breaks, marks=marks)
     return stat_html[:-len("</div>")] + sv + "</div>" if sv and stat_html.endswith("</div>") else stat_html
 
 ICON_EXPAND = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'

@@ -1037,6 +1037,9 @@ td a.mono{display:inline-block;min-width:24px}
 .kpis .sv .unit{display:none}
 .kpis .sv.fit>.usd{font-size:var(--t13)}
 .kpis .stat .spk{height:28px;margin-top:14px}
+.stat .spkw{position:relative}
+.stat .spk .spkt{stroke:var(--gold-edge);stroke-width:1;stroke-dasharray:3 3}
+.stat .spkl{position:absolute;bottom:100%;margin-bottom:2px;font:400 var(--t12)/1 var(--mono);color:var(--bone-3);white-space:nowrap;pointer-events:auto}
 .kpis .stat::after{width:min(112px,42%);right:14px;bottom:12px;--wm-o:.1}
 @media (min-width:1241px){.herogrid:has(.kmore){grid-template-columns:minmax(280px,1fr) minmax(0,2fr)}}
 .herogrid .kmore{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:1fr;gap:10px}

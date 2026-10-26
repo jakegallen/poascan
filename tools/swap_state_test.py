@@ -123,9 +123,10 @@ first = busy[0]; r0 = db.get_blob(S.BLOB)[0]["records"][first]
 check("the failed tx waits 20 min (fails 1), then 40 min", r0["fails"] == 1 and r0["next_try"] == T + 1200)
 S.refresh(fetch_tx=busy_fetch, now=T + 600)
 check("next run reads a different pending tx, not the one that just failed", len(busy) == 2 and busy[1] != first)
-for k in range(2, 12): S.refresh(fetch_tx=busy_fetch, now=T + 600 * k)
+NP = len({t for _k, t, _x in S.wanted() if t})   # every tx POAScan checks (releases, notices, milestone txs): grows with milestones.json
+for k in range(2, NP): S.refresh(fetch_tx=busy_fetch, now=T + 600 * k)
 check(f"under a steady 503, every pending tx still gets a turn, one read per run ({len(set(busy))} distinct in {len(busy)} runs)",
-      set(busy) >= {r["txid"] for r in REL} and len(busy) == 12)
+      set(busy) >= {r["txid"] for r in REL} and len(busy) == NP and len(set(busy)) == NP)
 # reads skipped without a request cost no slot and no try
 db.put_blob(S.BLOB, {}); seen = []
 def skip(t): seen.append(t); raise I.Busy("backing off")
