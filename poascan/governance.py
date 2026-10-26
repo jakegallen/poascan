@@ -822,7 +822,7 @@ def api_agent(a, scope="segment"):
 
 # ---------------- Settle queue API (1.26.137): minepoa's grading list as POAScan last read it ----------------
 QUEUE_FIELDS = ("id", "author", "name", "born", "since", "age", "panel", "expires", "expires_in", "kind", "raw", "qual", "need", "trusted_seals", "untrusted_seals",
-                "counting_trusted", "counting_untrusted", "last_seal_ts", "open", "settle_rank", "in_settle_window", "ready_next_close", "queued_at_quorum")
+                "counting_trusted", "counting_untrusted", "last_seal_ts", "sealed_ts", "graded_ts", "seal_times", "open", "settle_rank", "in_settle_window", "ready_next_close", "queued_at_quorum")
 
 def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
     gs = GR.summary() if GR.usable() else None
@@ -833,7 +833,7 @@ def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
                 by_need=gs["by_need"] if gs else None, quorum=gs["quorum"] if gs else None, open_epoch=gs["epoch"] if gs else None,
                 next_close_ts_est=gs["next_close_ts"] if gs else None, upstream_as_of=gs["upstream_as_of"] if gs else None, fetched_at=gs["fetched_at"] if gs else None,
                 stale=gs["stale"] if gs else None,
-                note="qual: seals that count at the next close (minepoa's q flag, as published); need: grade_quorum minus qual; a close evaluates only the oldest settle_cap pending rows by (since, id), so ready_next_close counts at quorum rows inside that window and at_quorum_queued the rest, which carry over; pending seals carry no verdict. Read every 10 min (5 near a close). Method: " + BASE + "/about#grading-list",
+                note="qual: seals that count at the next close (minepoa's q flag, as published); need: grade_quorum minus qual; a close evaluates only the oldest settle_cap pending rows by (since, id), so ready_next_close counts at quorum rows inside that window and at_quorum_queued the rest, which carry over; pending seals carry no verdict. sealed_ts (first seal), graded_ts (latest seal) and seal_times (one per distinct grader, ascending) come from the last close record's basis.pending grades, timestamps only, never scores. Read every 10 min (5 near a close). Method: " + BASE + "/about#grading-list",
                 rows=[{k: r.get(k) for k in QUEUE_FIELDS} for r in rs[offset:offset + limit]],
                 url=_url("queue", need=need, sort=sort if sort != "need" else "", dir="asc" if d == "asc" else ""))
 

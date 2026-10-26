@@ -44,17 +44,23 @@ def qprog(r, q=4):
 def agent_cell(a, name):
     return agent(a, name or "")   # the shared Agent cell (1.26.152)
 
+def _ts_cell(t):
+    """Date over time in the visitor's zone (app.js; the hover has both and the zone), muted ··· when blank."""
+    return f'{lt(t, "d")}<small>{lt(t, "t")}</small>' if t else '<span class="dim">···</span>'
+
 def ans_link(i): return f'<a class="mono" href="/tx/{E(i)}" title="{E(i)}">{E(short(i, 6, 4))}</a>'
 
 PANEL_TIP = "Panel size at the last close, from its close record. Blank when the answer was not pending then."
 QUEUE_COLS = [SS.Col(None, "Answer", "text"), SS.Col("name", "Agent", "text", "dk"), SS.Col("qual", "Quorum", "num"),
               SS.Col("trusted", "Trusted", "num", "r dk"), SS.Col("untrusted", "Untrusted", "num", "r dk"), SS.Col("need", "Need", "low", "r"),
-              SS.Col("panel", "Panel", "num", "r", qtip(PANEL_TIP, "/about#gov-v2", "About Panel")), SS.Col("age", "Age", "num", "r dk"), SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk")]
+              SS.Col("panel", "Panel", "num", "r", qtip(PANEL_TIP, "/about#gov-v2", "About Panel")), SS.Col("age", "Age", "num", "r dk"), SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk"),
+              SS.Col("sealed", "Sealed", "num", "r"), SS.Col("graded", "Graded", "num", "r")]
 QUEUE_SORTS = [(c.key, c.label) for c in QUEUE_COLS if c.key]
 QUEUE_FILTERS = [("", "Pending"), ("ready", "Ready"), ("queued", "At quorum, queued"), ("1", "Need 1"), ("2", "Need 2"), ("3", "Need 3"), ("4", "Need 4"), ("open", "Open epoch")]
 QUEUE_PAGE = 100
 _VAL = {"name": lambda r: SS.text_key(r["name"]), "qual": lambda r: r["qual"], "trusted": lambda r: r["trusted_seals"], "untrusted": lambda r: r["untrusted_seals"],
-        "need": lambda r: r["need"], "panel": lambda r: r.get("panel"), "age": lambda r: r.get("age"), "born": lambda r: r["born"], "expires": lambda r: r["expires"], "last": lambda r: r["last_seal_ts"]}
+        "need": lambda r: r["need"], "panel": lambda r: r.get("panel"), "age": lambda r: r.get("age"), "born": lambda r: r["born"], "expires": lambda r: r["expires"], "last": lambda r: r["last_seal_ts"],
+        "sealed": lambda r: r.get("sealed_ts"), "graded": lambda r: r.get("graded_ts")}
 
 def queue_select(f="", by="need", d="desc"):
     from . import govv2 as GV2   # gov-v2: panel size at the last close and age in epochs, public counts only
@@ -67,6 +73,10 @@ def queue_select(f="", by="need", d="desc"):
     kind = SS.kind_of(QUEUE_COLS, by)
     tie = lambda r: (r["need"], r["born"] if r["born"] is not None else 1 << 30, -(r["last_seal_ts"] or 0), r["id"])
     return SS.sort_rows(rows, _VAL.get(by, _VAL["need"]), kind, d, tie=tie)
+
+def _last_close():
+    from . import govv2 as GV2
+    return GV2.panels()[1]
 
 def queue_tab(qs, href, qsx):
     """Governance, Queue: every pending answer with quorum progress, trusted and untrusted seals, need and expiry."""
@@ -93,17 +103,19 @@ def queue_tab(qs, href, qsx):
                   f'<td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]:,}</td><td class="r dk">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
                   f'<td class="r">{r["panel"] if r.get("panel") is not None else "<span class=dim>···</span>"}</td><td class="r dk">{str(r["age"]) if r.get("age") is not None else "<span class=dim>···</span>"}</td>'
                   f'<td class="r dk">{"E" + str(r["born"]) if r["born"] is not None else "···"}</td><td class="r">{exp_cell(r)}</td>'
-                  f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td></tr>' for r in cur)
+                  f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td>'
+                  f'<td class="r">{_ts_cell(r.get("sealed_ts"))}</td><td class="r">{_ts_cell(r.get("graded_ts"))}</td></tr>' for r in cur)
     tb = (SS.select(QUEUE_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov queue"><thead><tr>{SS.heads(QUEUE_COLS, by, d, link)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=11 class=na>No answers in this view.</td></tr>"}</tbody></table></div>')
+          f'<tbody>{trs or "<tr><td colspan=13 class=na>No answers in this view.</td></tr>"}</tbody></table></div>')
     nav = ""
     if pages > 1:
         nav = ('<div class="chips">' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg - 1) if pg > 2 else ""))}#queue">Previous</a>' if pg > 1 else "")
                + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg + 1)))}#queue">More</a>' if pg < pages else "") + "</div>")
-    ct = s["next_close_ts"]
+    ct = s["next_close_ts"]; cl = _last_close()
     foot = (f'<p class="cov dim small">E{s["epoch"]} closes about {lt(ct, "t")}, in {countdown(ct)}, an estimate · '
             f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
-            f'Read {lt(s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · <a href="/about#grading-list">Method</a></p>') if ct else ""
+            f'Read {lt(s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · '
+            f'Sealed and Graded: first and latest seal in the {"E" + str(cl) + " " if cl is not None else ""}close record · <a href="/about#grading-list">Method</a></p>') if ct else ""
     q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
     links = (f'<a class="more" href="/api/v1/governance/queue.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/queue{q}">API →</a>')
     return stats_row() + card(f"Settle queue · {len(rs):,}", f'<div class="chips">{chips}</div>' + tb + nav + foot, links, cls="histc", id="queue")

@@ -22,14 +22,37 @@ def panels():
     pend = (last.get("basis") or {}).get("pending") or {}
     return {k: len(v.get("panel") or []) for k, v in pend.items() if isinstance(v, dict)}, int(last.get("epoch", 0))
 
+@A.cached("govv2_seal_times", 120)
+def seal_times():
+    """{answer id: sorted seal times} from the current segment's last close record: the ts of each grader's first entry in
+    basis.pending[id].grades (one per distinct grader). Only grader and ts are read; a grade's score is never touched."""
+    with SG.use(SG.CURRENT): eps = A.epochs_raw()
+    if not eps: return {}
+    last = max(eps, key=lambda e: int(e.get("epoch", 0)))
+    out = {}
+    for k, v in ((last.get("basis") or {}).get("pending") or {}).items():
+        if not isinstance(v, dict) or not isinstance(v.get("grades"), list): continue
+        first = {}
+        for g in v["grades"]:
+            if not isinstance(g, dict): continue
+            t = g.get("ts"); who = g.get("grader")
+            if not isinstance(t, (int, float)) or t <= 0: continue
+            if who not in first or t < first[who]: first[who] = int(t)
+        out[k] = sorted(first.values())
+    return out
+
 def add_panel_age(rows, open_epoch):
-    """Adds panel (size at the last close, None when the answer was not pending then) and age (epochs since its origin)."""
-    pm, _ = panels()
+    """Adds panel (size at the last close, None when the answer was not pending then), age (epochs since its origin) and,
+    from the same close record, sealed_ts (its first seal), graded_ts (its latest) and seal_times (every distinct grader's
+    seal time, ascending). Timestamps only; None when the record has none."""
+    pm, _ = panels(); st = seal_times()
     for r in rows:
         if "panel" in r: continue
         r["panel"] = None if r.get("open") else pm.get(r.get("id"))
         o = r.get("since") if r.get("since") is not None else r.get("born")
         r["age"] = (int(open_epoch) - int(o)) if open_epoch is not None and o is not None else None
+        ts = [] if r.get("open") else st.get(r.get("id")) or []
+        r["seal_times"] = list(ts); r["sealed_ts"] = ts[0] if ts else None; r["graded_ts"] = ts[-1] if ts else None
     return rows
 
 # ---------------------------------------------------------------- (e) settlement by origin epoch, per close
