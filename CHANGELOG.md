@@ -22,6 +22,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Tests
 - tools/agent_cell_test.py (new, in CI): the cell markup, then the fixture site in Chromium at 360, 390 and 1280 px on 15 pages with a 46-character name, a 45-character name with no spaces and no-name addresses: no Agent cell spills out of its cell or overlaps a neighbouring cell or another Agent cell, its parts never overlap, the copy button sits right after the label and cut text ends in an ellipsis.
 - tools/kin_groups_test.py: Kin members are Agent cells.
+- tools/mobile_menu_test.py: after the tap it waits up to 2.5 s for the drawer to finish its opening fade before measuring (the first page in a cold WebKit on CI read opacity 0 at 500 ms twice); it still fails when the drawer never opens.
 
 ## [1.26.152] - 2026-10-25
 

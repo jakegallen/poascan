@@ -55,6 +55,8 @@ if sync_playwright:
                                 pg.evaluate("scrollTo(0, Math.max(600, document.documentElement.scrollHeight - innerHeight - 200))"); pg.wait_for_timeout(300)
                             y0 = pg.evaluate("Math.round(scrollY)")
                             pg.tap(".burger"); pg.wait_for_timeout(500)
+                            try: pg.wait_for_function("()=>{const n=document.getElementById('nav');return document.body.classList.contains('navopen')&&+getComputedStyle(n).opacity>.9}", timeout=2500)
+                            except Exception: pass   # 1.26.153: a cold WebKit on CI can take longer than 500 ms to finish the opening fade; still fails below if it never opens
                             r = pg.evaluate(PROBE); tag = f"{eng} {w} {path} {mode} (scrollY {y0})"
                             if mode == "scrolled": check(f"{tag}: the page really scrolled", y0 >= 300)
                             check(f"{tag}: the drawer is open and visible ({r['vis']}, opacity {r['op']})", r["open"] and r["vis"] == "visible" and r["op"] > .9)
