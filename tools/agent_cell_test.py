@@ -1,5 +1,5 @@
 """The shared Agent cell (1.26.152): every table and list that names an Agent uses ui.agent(): identicon, the name linking to its
-LabLeak profile when it has one, otherwise the short address linking to /address, the copy button right after it, then any tag.
+LabLeak profile when it has one, otherwise the short address linking to /address, in one color, the named style (1.26.172), the copy button right after it, then any tag.
 One line; the label ends in an ellipsis when the column is narrow. Static checks on the HTML, then Playwright renders the fixture
 site with a 47-character name with spaces, a 44-character name with no spaces and a no-name address at 360, 390 and 1280 px and
 checks that no Agent cell overlaps a neighbouring cell or another Agent cell, and that its parts never overlap each other. In CI
@@ -31,6 +31,8 @@ src = {f: open(os.path.join(ROOT, "poascan", f), encoding="utf-8").read() for f 
 check("no hand-built name over a <small> address left in views, governance and gradingview",
       not any(re.search(r'name_link\([^)]*\)\s*\+[^\n]*<small>', s) for s in src.values()))
 css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
+check("style.css: named and no-name labels share one color (inherit, no gold address), gold underline on hover",
+      re.search(r"(^|[,}])a\.aname,[^{]*:where\(\.ag\)>a\.agn\{color:inherit;", css, re.M) is not None and re.search(r":where\(\.ag\)>a\.agn:hover[^{]*\{color:var\(--hi\);border-bottom-color:var\(--amber\)", css) is not None)
 check("style.css: the label shrinks first and ends in an ellipsis", re.search(r"\.ag>\.agn\{[^}]*min-width:0[^}]*overflow:hidden;text-overflow:ellipsis;white-space:nowrap", css) is not None)
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 check("ticker: reads the address from the cell; a name links LabLeak, no name links /address", '$(".ag",r)' in js and "it.a&&it.n?" in js and 'href="/address/\'+encodeURIComponent(it.a)' in js)
@@ -57,8 +59,10 @@ PROBE = """()=>{const R=e=>e.getBoundingClientRect(),vis=e=>{const r=R(e);return
    if(n.classList.contains('addr')&&n.scrollWidth>n.clientWidth+1)bad.push(['short address cut a second time',g.dataset.a,n.scrollWidth-n.clientWidth]);
    if(n.scrollWidth>n.clientWidth+1&&(getComputedStyle(n).textOverflow!=='ellipsis'||getComputedStyle(n).overflowX==='visible'))bad.push(['text runs past its box',g.dataset.a,n.scrollWidth-n.clientWidth]);
    if(cp&&vis(cp)&&(R(cp).left<R(n).right-1||R(cp).left-R(n).right>12))bad.push(['copy not right after the label',g.dataset.a,Math.round(R(cp).left-R(n).right)])}
+  if(n&&n.tagName==='A'){const k=n.classList.contains('addr')?'a':'n',c=getComputedStyle(n).color,ctx=(g.closest('[class]:not(.ag):not(td):not(tr)')||document.body).className;(window.__agc=window.__agc||{})[ctx]=window.__agc[ctx]||{};window.__agc[ctx][k]=window.__agc[ctx][k]||new Set();window.__agc[ctx][k].add(c);if(c==='rgb(255, 176, 0)')bad.push(['label in gold',g.dataset.a,c])}
   cells.slice(i+1).forEach(h=>{if(ov(gr,R(h)))bad.push(['two Agent cells overlap',g.dataset.a,h.dataset.a])})});
  const cut=cells.filter(g=>{const n=g.querySelector('.agn');return n&&n.scrollWidth>n.clientWidth+1}).length;
+ const mix=Object.entries(window.__agc||{}).filter(([k,v])=>v.a&&v.n&&[...v.a].some(c=>!v.n.has(c))).map(([k,v])=>[k,[...v.a],[...v.n]]);if(mix.length)bad.push(['named and no-name labels differ in color',mix.slice(0,2)]);
  return {n:cells.length,named:cells.filter(g=>g.querySelector('.aname')).length,cut,bad:bad.slice(0,6),nbad:bad.length,ox:document.documentElement.scrollWidth-innerWidth}}"""
 if sync_playwright:
     def free_port():

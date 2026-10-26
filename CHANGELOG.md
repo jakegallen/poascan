@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.172] - 2026-10-26
+
+### Changed
+- Agent cells use one color. A short address (an Agent with no LabLeak name) now takes the named Agent style instead of gold: the row's text color, a gold underline on hover, in every table and list that uses the shared Agent cell. Names still link to the LabLeak profile, addresses to the address page.
+
+### Tests
+- tools/agent_cell_test.py checks that named and no-name labels share one computed color in each list at 360, 390 and 1280 px and that no label is gold.
+
 ## [1.26.171] - 2026-10-26
 
 ### Fixed

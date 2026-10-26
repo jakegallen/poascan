@@ -515,9 +515,9 @@ table.sortable th[data-dir=asc]::after{content:"↑";opacity:1;color:var(--amber
 .am .am-c{margin-bottom:12px}.am .am-c[hidden]{display:none}.am .chip{cursor:pointer;background:none;color:var(--lbl);font-family:var(--ui)}.am .chip.on{color:var(--amber);border-color:var(--gold-edge);background:color-mix(in srgb,var(--gold) 6%,transparent)}
 .am .jm-p{max-height:38vh;overflow:auto}
 @media (max-width:640px){.askb{height:36px;padding:0 12px}}
-/* agent names -> LabLeak profile */
-a.aname,.al a.fname{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color var(--fast),color var(--fast)}
-a.aname:hover,a.aname:focus-visible{color:var(--hi);border-bottom-color:var(--amber);text-decoration:none}
+/* agent names -> LabLeak profile; 1.26.172: an Agent cell short address takes the name style too (same specificity, so context rules color both alike) */
+a.aname,.al a.fname,:where(.ag)>a.agn{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color var(--fast),color var(--fast)}
+a.aname:hover,a.aname:focus-visible,:where(.ag)>a.agn:hover,:where(.ag)>a.agn:focus-visible{color:var(--hi);border-bottom-color:var(--amber);text-decoration:none}
 /* home head: h1 + Join / Find my agent */
 .findf{display:flex;gap:8px}
 .findf input{flex:1;min-width:0;height:44px;border:1px solid var(--line2);border-radius:var(--r-lg);background:var(--inset);color:var(--txt);font:400 var(--t14) var(--mono);padding:0 12px;outline:none}
