@@ -2,7 +2,7 @@
 the per-Agent pending answers, seals and jury reasons. Reads grading.py's stored copy only; no upstream call."""
 import time
 from . import grading as GR, scoresort as SS, segments as SG
-from .ui import E, card, stat, intc, pct, short, name_link, lt, rel, dur, flag, agent
+from .ui import qtip, E, card, stat, intc, pct, short, name_link, lt, rel, dur, flag, agent
 
 def _ago(s):
     s = max(0, int(s)); return f"{s // 60}m" if s < 3600 else f"{s // 3600}h {s % 3600 // 60}m"
@@ -46,17 +46,19 @@ def agent_cell(a, name):
 
 def ans_link(i): return f'<a class="mono" href="/tx/{E(i)}" title="{E(i)}">{E(short(i, 6, 4))}</a>'
 
+PANEL_TIP = "Panel size at the last close, from its close record. Blank when the answer was not pending then."
 QUEUE_COLS = [SS.Col(None, "Answer", "text"), SS.Col("name", "Agent", "text", "dk"), SS.Col("qual", "Quorum", "num"),
               SS.Col("trusted", "Trusted", "num", "r dk"), SS.Col("untrusted", "Untrusted", "num", "r dk"), SS.Col("need", "Need", "low", "r"),
-              SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk")]
+              SS.Col("panel", "Panel", "num", "r", qtip(PANEL_TIP, "/about#gov-v2", "About Panel")), SS.Col("age", "Age", "num", "r dk"), SS.Col("born", "Born", "low", "r dk"), SS.Col("expires", "Expires", "low", "r"), SS.Col("last", "Last seal", "num", "r dk")]
 QUEUE_SORTS = [(c.key, c.label) for c in QUEUE_COLS if c.key]
 QUEUE_FILTERS = [("", "Pending"), ("ready", "Ready"), ("queued", "At quorum, queued"), ("1", "Need 1"), ("2", "Need 2"), ("3", "Need 3"), ("4", "Need 4"), ("open", "Open epoch")]
 QUEUE_PAGE = 100
 _VAL = {"name": lambda r: SS.text_key(r["name"]), "qual": lambda r: r["qual"], "trusted": lambda r: r["trusted_seals"], "untrusted": lambda r: r["untrusted_seals"],
-        "need": lambda r: r["need"], "born": lambda r: r["born"], "expires": lambda r: r["expires"], "last": lambda r: r["last_seal_ts"]}
+        "need": lambda r: r["need"], "panel": lambda r: r.get("panel"), "age": lambda r: r.get("age"), "born": lambda r: r["born"], "expires": lambda r: r["expires"], "last": lambda r: r["last_seal_ts"]}
 
 def queue_select(f="", by="need", d="desc"):
-    rows = GR.queue_rows()
+    from . import govv2 as GV2   # gov-v2: panel size at the last close and age in epochs, public counts only
+    rows = GV2.add_panel_age(GR.queue_rows(), (GR.current() or {}).get("epoch"))
     if f == "open": rows = [r for r in rows if r["open"]]
     else: rows = [r for r in rows if not r["open"]]
     if f == "ready": rows = [r for r in rows if r["ready_next_close"]]
@@ -89,10 +91,11 @@ def queue_tab(qs, href, qsx):
         return f'E{r["expires"]}' + (f' <small class="dim">in {r["expires_in"]}</small>' if r["expires_in"] is not None else "")
     trs = "".join(f'<tr{" class=rdy" if r["ready_next_close"] else ""}><td>{ans_link(r["id"])}</td><td class="dk">{agent_cell(r["author"], r["name"]) if r["author"] else "···"}</td>'
                   f'<td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]:,}</td><td class="r dk">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
+                  f'<td class="r">{r["panel"] if r.get("panel") is not None else "<span class=dim>···</span>"}</td><td class="r dk">{str(r["age"]) if r.get("age") is not None else "<span class=dim>···</span>"}</td>'
                   f'<td class="r dk">{"E" + str(r["born"]) if r["born"] is not None else "···"}</td><td class="r">{exp_cell(r)}</td>'
                   f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td></tr>' for r in cur)
     tb = (SS.select(QUEUE_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov queue"><thead><tr>{SS.heads(QUEUE_COLS, by, d, link)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=9 class=na>No answers in this view.</td></tr>"}</tbody></table></div>')
+          f'<tbody>{trs or "<tr><td colspan=11 class=na>No answers in this view.</td></tr>"}</tbody></table></div>')
     nav = ""
     if pages > 1:
         nav = ('<div class="chips">' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg - 1) if pg > 2 else ""))}#queue">Previous</a>' if pg > 1 else "")
