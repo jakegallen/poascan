@@ -136,7 +136,7 @@ def ever_established():
 def never_established():
     """Agents in the live agent list who were never established: joined, answers and last tx in the current segment's
     archive, closes paid in this segment, balance."""
-    ever = ever_established(); nm = A.forum_names(); first = first_joins()
+    ever = ever_established(); nm = A.forum_names(); first = first_joins(); closes = {}
     accts = db.q("SELECT addr, balance, api_ts, api_joined_epoch, first_seen FROM accounts")
     ans = {r["a"]: r["n"] for r in db.q("SELECT from_addr AS a, COUNT(*) AS n FROM txs WHERE type='challenge' AND segment=? GROUP BY from_addr", (SG.CURRENT,))}
     last = {r["a"]: r["t"] for r in db.q("SELECT from_addr AS a, MAX(ts) AS t FROM txs WHERE segment=? AND from_addr IS NOT NULL GROUP BY from_addr", (SG.CURRENT,))}
@@ -148,7 +148,7 @@ def never_established():
     for r in accts:
         a = r["addr"]
         if not a or not a.startswith("poa1") or a in ever: continue
-        jt, je, js = joined_of(r, first)
+        jt, je, js = joined_of(r, first, closes)
         out.append(dict(address=a, name=nm.get(a), joined_epoch=je, joined_segment=js, joined_ts=jt,
                         answers=ans.get(a, 0), closes_paid=paid.get(a, 0), last_ts=last.get(a), balance=float(r["balance"] or 0)))
     return out
@@ -160,13 +160,36 @@ def first_joins():
         out[r["a"]] = (int(r["t"]), r["e"], r["s"])
     return out
 
-def joined_of(acc, first):
+def epoch_at(t, closes=None):
+    """(segment, epoch) open at UTC time t, from the configured segment boundaries (segments.of_ts) and that segment's
+    close records: epoch k is open after close k-1 up to close k; before the first close it is the first record's epoch;
+    after the last close, the last close + 1. Epoch None when the segment has no close records."""
+    if not t: return None, None
+    n = SG.of_ts(t)
+    cl = (closes or {}).get(n) if closes is not None else None
+    if cl is None:
+        cl = sorted((ct, int(e["epoch"])) for e in A.segment_closes(n) for ct in [_ts(e.get("ts"))] if ct and isinstance(e.get("epoch"), (int, float)))
+        if closes is not None: closes[n] = cl
+    if not cl: return n, None
+    k = None
+    for ct, ep in cl:
+        if ct <= t: k = ep + 1
+        else: break
+    return n, (k if k is not None else cl[0][1])
+
+def joined_of(acc, first, closes=None):
     """(ts, epoch, segment) an Agent joined: minepoa's agent list fields, unless our own first join tx is earlier
-    (1.26.166: minepoa's joined fields restart for some carried or re-registered Agents)."""
+    (1.26.166: minepoa's joined fields restart for some carried or re-registered Agents). 1.26.168: the segment always
+    comes from the join time (config boundaries), never from the source; a missing epoch is worked out from the time."""
     mt = _ts(acc["api_ts"]) or acc["first_seen"]; me = acc["api_joined_epoch"]
     f = first.get(acc["addr"])
-    if f and (mt is None or f[0] < mt): return f[0], f[1], f[2] if f[2] is not None else SG.of_ts(f[0])
-    return mt, me, SG.CURRENT
+    if f and (mt is None or f[0] < mt): t, ep, seg = f[0], f[1], f[2]
+    else: t, ep, seg = mt, me, None
+    if not t: return t, ep, seg if seg is not None else SG.CURRENT
+    dseg, dep = epoch_at(t, closes)
+    seg = SG.of_ts(t) if seg is None else seg
+    if ep is None and seg == dseg: ep = dep
+    return t, ep, seg
 
 def _ts(v):
     if v is None: return None

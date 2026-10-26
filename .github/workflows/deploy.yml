@@ -49,6 +49,8 @@ jobs:
         run: python tools/govv2_test.py
       - name: Balance lag (fresher copy by checkpoint, not read time; an address read of 0 never beats a nonzero agent list row under 30 min old; a read past the explorer segment's final checkpoint is current; As of checkpoint N on the Balance stat)
         run: python tools/balance_lag_test.py
+      - name: Join epoch (Never established joined segment from the join time and config boundaries, never the source; a missing epoch worked out from that segment's close records; S1 labels in By join epoch)
+        run: python tools/joinepoch_test.py
       - name: Sortable column headers (one shared component; arrows and aria-sort; numbers highest first, text A to Z; blanks last; server side with the URL; phone sort menu)
         run: python tools/headersort_test.py
       - name: POAScan's Score (weights from govscore.json sum to 1; deterministic 0 to 100; fold matches segment standing; monotonic; config driven; /about#score)

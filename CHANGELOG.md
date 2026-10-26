@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.168] - 2026-10-26
+
+### Fixed
+- Never established, By join epoch (page chart, API, CSV, MCP `list_never_established`): the joined segment now comes from the join time and the configured segment boundaries, never from where the date came from, so Agents whose minepoa joined_epoch is a segment 1 epoch (E12 to E14) are S1 E12 to S1 E14, not E12 to E14 of segment 2. A missing joined_epoch (archived segment 1 join txs such as hdr's, or none from minepoa) is worked out from that segment's close records: epoch k runs from close k-1 to close k; after the last close of a segment it is that close + 1. Those Agents now appear in the chart.
+
+### Tests
+- tools/joinepoch_test.py (in CI): two segments from the config, hdr's case, an E12 case, joins before the first and after the last close.
+
 ## [1.26.167] - 2026-10-26
 
 ### Added
