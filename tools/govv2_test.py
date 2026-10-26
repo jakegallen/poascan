@@ -70,6 +70,16 @@ nv = {r["address"]: r for r in GV2.never_established()}
 check(f"never established: D and X only (B was, then removed) ({sorted(nv)})", set(nv) == {D, X})
 check(f"X: answers, last tx, joined epoch, balance ({nv[X]})", nv[X]["answers"] == 1 and nv[X]["last_ts"] == now - 600 and nv[X]["joined_epoch"] == 2 and nv[X]["balance"] == 7.0)
 check("sort by balance, highest first", [r["address"] for r in GV2.never_select("balance", "desc")] == [X, D])
+# 1.26.166: minepoa's joined fields restart for some carried Agents (hdr: agent list said E8 today, join tx Oct 23): our earlier join tx wins
+db.write("INSERT INTO txs(id,type,from_addr,epoch,ts,final,segment) VALUES(?,?,?,?,?,?,?)", (aid(30), "join", D, 0, t0 - 3 * 86400, 1, 1))
+db.write("INSERT INTO txs(id,type,from_addr,epoch,ts,final,segment) VALUES(?,?,?,?,?,?,?)", (aid(31), "join", D, 1, t0 - 2 * 86400, 1, 1))
+db.write("INSERT INTO txs(id,type,from_addr,epoch,ts,final,segment) VALUES(?,?,?,?,?,?,?)", (aid(32), "join", X, 2, t0 + 500, 1, 1))
+db.write("UPDATE accounts SET api_ts=?, api_joined_epoch=2 WHERE addr=?", (now - 60, D)); A_._cache.clear()
+nv = {r["address"]: r for r in GV2.never_established()}
+check(f"hdr case: our first join tx is earlier than minepoa's joined fields, so it wins ({nv[D]['joined_ts'] - t0}, E{nv[D]['joined_epoch']})",
+      nv[D]["joined_ts"] == t0 - 3 * 86400 and nv[D]["joined_epoch"] == 0 and nv[D]["joined_segment"] == 1)
+check(f"minepoa's joined fields stay when they are earlier than our join tx ({nv[X]['joined_ts'] - t0}, E{nv[X]['joined_epoch']})", nv[X]["joined_ts"] == t0 + 50 and nv[X]["joined_epoch"] == 2)
+check("sort by joined uses the corrected time (oldest last when newest first)", [r["address"] for r in GV2.never_select("joined", "desc")] == [X, D])
 
 # (a) queue panel and age
 from poascan import gradingview as GVW

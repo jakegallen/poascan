@@ -194,10 +194,11 @@ def rollup_uptime(now=None):
 # ---- health-fix 1026: shed single-id reads, the chain path's global ceiling, and one tx budget for everything ----
 SHED_RX = re.compile(r"origin busy|capacity guard|ceiling|retry shortly", re.I)
 GLOBAL_SHED_RX = re.compile(r"capacity guard|ceiling", re.I)   # the path is full for every caller, not just this id
-SHED_RUN = _ei("POASCAN_SHED_RUN", 5, 2)          # sheds in a row on one endpoint key (no good read between) that count as a failure
+SHED_RUN = _ei("POASCAN_SHED_RUN", 5, 2)          # sheds of one id (path) on one endpoint key, no good read between, that count as a failure (1.26.166: per id; sheds of different ids, such as the answer sample's, never add up)
+SHED_IDS_MAX = 500                                # shed ids remembered per key (oldest dropped)
 NEG_SHED_TTL = _ei("POASCAN_NEG_SHED_TTL", 120, 60)   # a shed id is not asked again for this long (at least minepoa's 60 s)
 TX_PER_MIN = min(30, _ei("POASCAN_TX_PER_MIN", 30, 1))   # every single-tx request to minepoa.com, visitor and scheduled, both paths
-_sheds = {}                    # endpoint key -> {"run", "last", "err"}: sheds since its last good read (memory only)
+_sheds = {}                    # endpoint key -> {"run", "last", "err", "ids"}: sheds since its last good read, in all and per id (memory only)
 _path_hold = {}                # "chain" | "explorer" -> time before which that tx path is not tried (its global ceiling was full)
 _tx_window = collections.deque(); _tx_window_lock = threading.Lock()
 
@@ -206,14 +207,16 @@ def _path_kind(path): return "chain" if path.startswith("/chain/") else "explore
 def _shed_note(ep, path, msg, retry, now=None):
     """Count one shed on ep; hold the whole path when minepoa says its global ceiling is full. Returns the run length."""
     now = now or time.time()
-    r = _sheds.setdefault(ep, {"run": 0, "last": 0, "err": ""}); r["run"] += 1; r["last"] = int(now); r["err"] = msg[:80]
+    r = _sheds.setdefault(ep, {"run": 0, "last": 0, "err": "", "ids": collections.OrderedDict()}); r["run"] += 1; r["last"] = int(now); r["err"] = msg[:80]
     if GLOBAL_SHED_RX.search(msg): _path_hold[_path_kind(path)] = now + max(60.0, float(retry or 60))
-    return r["run"]
+    ids = r["ids"]; n = ids.pop(path, 0) + 1; ids[path] = n   # 1.26.166: the run that counts is per id (path), not per key
+    while len(ids) > SHED_IDS_MAX: ids.popitem(last=False)
+    return n
 
 def shed_state(now=None):
     """For /api/health endpoints: sheds since the last good read per key, and the tx paths on hold (seconds left)."""
     now = now or time.time()
-    return dict(sheds={k: dict(v) for k, v in _sheds.items()}, path_hold={k: int(t - now) for k, t in _path_hold.items() if t > now},
+    return dict(sheds={k: dict(run=v["run"], id_run=max(v["ids"].values(), default=0), last=v["last"], err=v["err"]) for k, v in _sheds.items()}, path_hold={k: int(t - now) for k, t in _path_hold.items() if t > now},
                 tx_requests_last_min=tx_budget_used(now), tx_per_min=TX_PER_MIN)
 
 def tx_budget_used(now=None):
@@ -677,6 +680,8 @@ def job_agents():
         api_joined_epoch=excluded.api_joined_epoch, last_seen=excluded.last_seen,
         invited_by=COALESCE(accounts.invited_by, excluded.invited_by)""", rows, many=True)
     db.add_snap("accounts", {"total": len(d), "with_balance": sum(1 for a in d if float(a.get("balance") or 0) > 0)})
+    nw = next((c for c in (db.get_blob("networks")[0] or {}).get("chains") or [] if c.get("chain_id") == "poa-mainnet-1"), {})
+    db.put_blob("agents_cp", {"ts": now, "checkpoint": nw.get("checkpoint_height")})   # 1.26.166: the checkpoint this roster stands at (at least), for views.address_balance
 
 def job_forum():
     B = "/lableak/api"

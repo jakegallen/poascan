@@ -71,8 +71,9 @@ b = V.address_balance(ODD)
 check("no copy at all: balance null, no source", b["balance"] is None and b["as_of"] is None and b["source"] is None)
 with V._addr_lock: V._addr_cache.pop(T1, None)
 acc(T1, "20000.000000", now - 60); UPBAL[T1] = "0.000000"; MODE["addr"] = "ok"
+I.upsert_txs([{"id": "a0" * 32, "type": "transfer", "from_addr": T1, "to_addr": T2, "amount": "20000", "ts": now - 30, "final": 1}], "test")   # 1.26.166: a 0 beats a fresh nonzero agent list row only after an archived outgoing tx
 r, _ = SV.api(f"/api/address/{T1}", {})
-check("API: a live read just now beats the agent list (swept to 0)", r["balance"] == "0.000000" and r["balance_source"] == "explorer/address" and r["fetch_error"] is None)
+check("API: a live read just now beats the agent list (swept to 0, the sweep tx archived)", r["balance"] == "0.000000" and r["balance_source"] == "explorer/address" and r["fetch_error"] is None)
 check("one upstream read for that address", sum(1 for p in SEEN if p.endswith(T1)) == 1)
 r, _ = SV.api(f"/api/address/{T1}", {})
 check("a second read within 60 s is served from cache, no new upstream read", sum(1 for p in SEEN if p.endswith(T1)) == 1 and r["balance"] == "0.000000")

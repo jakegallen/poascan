@@ -136,7 +136,7 @@ def ever_established():
 def never_established():
     """Agents in the live agent list who were never established: joined, answers and last tx in the current segment's
     archive, closes paid in this segment, balance."""
-    ever = ever_established(); nm = A.forum_names()
+    ever = ever_established(); nm = A.forum_names(); first = first_joins()
     accts = db.q("SELECT addr, balance, api_ts, api_joined_epoch, first_seen FROM accounts")
     ans = {r["a"]: r["n"] for r in db.q("SELECT from_addr AS a, COUNT(*) AS n FROM txs WHERE type='challenge' AND segment=? GROUP BY from_addr", (SG.CURRENT,))}
     last = {r["a"]: r["t"] for r in db.q("SELECT from_addr AS a, MAX(ts) AS t FROM txs WHERE segment=? AND from_addr IS NOT NULL GROUP BY from_addr", (SG.CURRENT,))}
@@ -148,9 +148,25 @@ def never_established():
     for r in accts:
         a = r["addr"]
         if not a or not a.startswith("poa1") or a in ever: continue
-        out.append(dict(address=a, name=nm.get(a), joined_epoch=r["api_joined_epoch"], joined_ts=_ts(r["api_ts"]) or r["first_seen"],
+        jt, je, js = joined_of(r, first)
+        out.append(dict(address=a, name=nm.get(a), joined_epoch=je, joined_segment=js, joined_ts=jt,
                         answers=ans.get(a, 0), closes_paid=paid.get(a, 0), last_ts=last.get(a), balance=float(r["balance"] or 0)))
     return out
+
+def first_joins():
+    """address -> (ts, epoch, segment) of its first archived join tx, in any segment."""
+    out = {}
+    for r in db.q("SELECT from_addr AS a, ts AS t, epoch AS e, segment AS s FROM txs WHERE type='join' AND from_addr IS NOT NULL AND ts > 0 ORDER BY ts DESC"):
+        out[r["a"]] = (int(r["t"]), r["e"], r["s"])
+    return out
+
+def joined_of(acc, first):
+    """(ts, epoch, segment) an Agent joined: minepoa's agent list fields, unless our own first join tx is earlier
+    (1.26.166: minepoa's joined fields restart for some carried or re-registered Agents)."""
+    mt = _ts(acc["api_ts"]) or acc["first_seen"]; me = acc["api_joined_epoch"]
+    f = first.get(acc["addr"])
+    if f and (mt is None or f[0] < mt): return f[0], f[1], f[2] if f[2] is not None else SG.of_ts(f[0])
+    return mt, me, SG.CURRENT
 
 def _ts(v):
     if v is None: return None
@@ -246,8 +262,9 @@ def never_tab(qs, href, qsx):
     total = db.q1("SELECT COUNT(*) AS n FROM accounts")["n"] or 0
     s = "".join([stat("Agents", intc(total)), stat("Never established", intc(len(rows))),
                  stat("Share", f'<span class="num">{100 * len(rows) / total:.1f}%</span>' if total else "···"), stat("With answers", intc(sum(1 for r in rows if r["answers"])), tip="Answered at least once this segment")])
-    by_ep = collections.Counter(r["joined_epoch"] for r in rows if r["joined_epoch"] is not None)
-    ch = bars([(f"E{k}", [v]) for k, v in sorted(by_ep.items())[-30:]], height=150, colors=("steel",), fmt=lambda z: f"{z:,.0f}", legend=["Never established, by join epoch"]) if by_ep else ""
+    by_ep = collections.Counter((r["joined_segment"] or SG.CURRENT, r["joined_epoch"]) for r in rows if r["joined_epoch"] is not None)
+    ep_l = lambda k: f"E{k[1]}" if k[0] == SG.CURRENT else f"S{k[0]} E{k[1]}"
+    ch = bars([(ep_l(k), [v]) for k, v in sorted(by_ep.items())[-30:]], height=150, colors=("steel",), fmt=lambda z: f"{z:,.0f}", legend=["Never established, by join epoch"]) if by_ep else ""
     trs = "".join(f'<tr><td>{agent(r["address"], r["name"] or "")}</td><td class="r">{lt(r["joined_ts"], "d") if r["joined_ts"] else "<span class=dim>···</span>"}</td>'
                   f'<td class="r">{_n(r["answers"])}</td><td class="r dk">{_n(r["closes_paid"])}</td><td class="r dk">{lt(r["last_ts"], "d") if r["last_ts"] else "<span class=dim>···</span>"}</td>'
                   f'<td class="r">{r["balance"]:,.2f}</td></tr>' for r in cur)

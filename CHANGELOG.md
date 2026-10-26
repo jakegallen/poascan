@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.166] - 2026-10-26
+
+### Fixed
+- Address balance lag (LabLeak 5527 and 5770: an address read 0 for about 2.5 h while the agent list had 511,996.651201). The balance is now the fresher of minepoa.com's address read and the agent list row by the checkpoint each reflects (the read's `balance_as_of.checkpoint_height`; the agent list stands at least at the checkpoint current when the agents job read it), not by read time. An address read of 0 never overrides a nonzero agent list row under 30 min old, unless the archive holds an outgoing transfer or swap from the address since that row (a real sweep). An address read naming a checkpoint past the explorer config segment's final checkpoint (44003) is the current segment's state, no longer labelled As of checkpoint 44003. The Balance stat flags Stale "As of checkpoint N" when the read is behind the current checkpoint, and says it in the label tooltip when at it; `/api/v1/address` carries `balance_as_of_checkpoint` for address reads.
+- Joined on Never established (page, API, CSV, MCP `list_never_established`): our own first join tx wins when it is earlier than minepoa's agent list joined fields, which restart for some carried or re-registered Agents (hdr showed E8 today; its join tx is Oct 23). Rows add `joined_segment`; the By join epoch chart labels earlier segments (S1 E5).
+- Tx lookup health: the run of sheds that counts as a failure is per id, not per endpoint key, so the answer sample reading ids minepoa's edge does not hold no longer turns Tx lookup Degraded. `/api/health` tx_reads sheds add `id_run`. The 30 a minute tx budget and the 120 s shed hold are unchanged.
+
+### Tests
+- tools/balance_lag_test.py (in CI); the sweep case in tools/addr_cache_search_test.py now archives its sweep tx; tools/strain_notice_test.py's address read stands one checkpoint past the agent list; hdr's join case in tools/govv2_test.py; per id runs in tools/healthfix_test.py and tools/audit_test.py.
+
 ## [1.26.165] - 2026-10-26
 
 ### Changed

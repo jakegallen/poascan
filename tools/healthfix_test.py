@@ -83,15 +83,23 @@ db.write("INSERT OR REPLACE INTO fetch_log(endpoint,last_ok,fails,next_at) VALUE
 A._cache.clear(); st = {f["label"]: f["state"] for f in A.feeds()["feeds"]}
 check(f"Tx lookup and Swaps OK after sheds only ({st.get('Tx lookup')}, {st.get('Swaps')})", st.get("Tx lookup") == "OK" and st.get("Swaps") in ("OK", None))
 
-# 5) minepoa really busy: SHED_RUN sheds in a row with no good read count as a failure (endpoint backoff, Degraded)
-MODE["explorer"] = "down"; I._path_hold.clear(); MODE["chain"] = "ok"
+# 5) 1.26.166: sheds of different ids never add up (the answer sample reads ids minepoa's edge may not hold), on any key
+MODE["explorer"] = "down"; I._path_hold.clear(); MODE["chain"] = "full"
+for i in range(I.SHED_RUN + 3):
+    I._neg.clear(); I._path_hold.clear(); I._tx_window.clear()
+    try: I._bg_fetch_tx("%064x" % (i + 200), I.BG_TX_EP)
+    except I.Busy: pass
+check(f"{I.SHED_RUN + 3} sheds of different ids on the sample key: no failure, no backoff ({log(I.BG_TX_EP).get('fails')}, {I.shed_state()['sheds'].get(I.BG_TX_EP)})",
+      not log(I.BG_TX_EP).get("fails") and I.can_fetch(I.BG_TX_EP) and I.shed_state()["sheds"][I.BG_TX_EP]["id_run"] == 1)
+A._cache.clear(); st = {f["label"]: f["state"] for f in A.feeds()["feeds"]}
+check(f"Tx lookup stays OK after sample sheds of many ids ({st.get('Tx lookup')})", st.get("Tx lookup") == "OK")
+# 5b) minepoa really busy for one id: SHED_RUN sheds of the same id with no good read count as a failure (endpoint backoff, Degraded)
+tid = "%064x" % 100
 for i in range(I.SHED_RUN):
-    tid = "%064x" % (i + 100); I._neg.clear()
-    MODE["chain"] = "full"
+    I._neg.clear(); I._path_hold.clear(); I._tx_window.clear(); MODE["chain"] = "full"
     try: I.fetch_tx(tid, I.SWAP_TX_EP, 5)
     except I.Busy: pass
-    I._path_hold.clear()
-check(f"{I.SHED_RUN} sheds in a row with no good read: a failure ({log(I.SWAP_TX_EP).get('fails')})", (log(I.SWAP_TX_EP).get("fails") or 0) >= 1)
+check(f"{I.SHED_RUN} sheds of one id in a row with no good read: a failure ({log(I.SWAP_TX_EP).get('fails')})", (log(I.SWAP_TX_EP).get("fails") or 0) >= 1)
 MODE["explorer"] = "edge"; I._path_hold.clear(); I._neg.clear()
 I.fetch_tx(KNOWN, I.SWAP_TX_EP, 5)
 check("a good read ends the run and clears the failure", not log(I.SWAP_TX_EP).get("fails") and I.SWAP_TX_EP not in I._sheds)

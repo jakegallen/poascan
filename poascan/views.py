@@ -497,6 +497,49 @@ def bal_asof(bb):
     if not bb.get("stale") or not bb.get("segment") or bb["segment"] == SG.CURRENT: return None
     return f"As of checkpoint {bb['as_of_checkpoint']}" if bb.get("as_of_checkpoint") is not None else f"As of {SG.BY_N[bb['segment']]['label']}"
 
+ROSTER_ZERO_GUARD_S = 1800   # 1.26.166: an address read of 0 never beats a nonzero agent list row younger than this
+
+def _explorer_cp(d):
+    """The checkpoint minepoa.com's address read stands at (balance_as_of.checkpoint_height), or None."""
+    b = d.get("balance_as_of") if isinstance(d, dict) else None
+    v = b.get("checkpoint_height") if isinstance(b, dict) else None
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+def roster_cp(sat):
+    """The checkpoint the agent list stood at when the row was written (agents job, same run as last_seen), or None."""
+    b, ts = db.get_blob("agents_cp")
+    if not isinstance(b, dict) or not sat or abs(int(b.get("ts") or 0) - int(sat)) > 600: return None
+    v = b.get("checkpoint"); return int(v) if isinstance(v, (int, float)) else None
+
+def _sent_since(a, ts):
+    """True when the archive holds a value moving tx from a (transfer, swap) at or after ts: a real sweep to 0."""
+    if not a: return False
+    return bool(db.q1("SELECT 1 AS x FROM txs WHERE from_addr=? AND ts>=? AND type NOT IN ('challenge','grade-sealed','attest-batch','join') LIMIT 1", (a, int(ts))))
+
+def _explorer_wins(live, stored, sat, at, xcp, now=None, addr=None):
+    """1.26.166: the fresher copy by the checkpoint each reflects, not by read time. The address read stands at its
+    balance_as_of checkpoint; the agent list is live, so at least at the checkpoint current when it was read. A 0 from
+    the address read never overrides a nonzero agent list row under 30 min old (a recruit the read node had not caught up on),
+    unless the archive holds a value moving tx from the address since that row (a real sweep)."""
+    now = now or time.time()
+    try: lv, sv = float(live), float(stored)
+    except (TypeError, ValueError): lv = sv = None
+    if lv == 0 and sv and now - (sat or 0) < ROSTER_ZERO_GUARD_S and not _sent_since(addr, (sat or 0) - 60): return False
+    rcp = roster_cp(sat)
+    if xcp is not None and rcp is not None: return xcp > rcp
+    return (at or 0) >= sat
+
+def balance_tag(bb):
+    """(asof_text, tip) for the Balance stat: an earlier segment's fixed point is flagged Stale; an address read behind
+    the current checkpoint is flagged Stale "As of checkpoint N"; at the current checkpoint the label tooltip says so."""
+    t = bal_asof(bb)
+    if t: return t, None
+    if bb.get("source") == "explorer/address" and bb.get("as_of_checkpoint") is not None:
+        cur = A.networks().get("checkpoint_height")
+        txt = f"As of checkpoint {bb['as_of_checkpoint']}"
+        return (txt, None) if isinstance(cur, int) and bb["as_of_checkpoint"] < cur else (None, txt)
+    return None, None
+
 def address_balance(a, d=None, at=None, acc=None):
     """The newer of two balance copies: the minepoa.com address read (d, read at `at`) and the stored agent-list row
     (accounts, written by the 15 min agents job at last_seen). Returns dict(balance (text), as_of (unix s), source)."""
@@ -506,6 +549,9 @@ def address_balance(a, d=None, at=None, acc=None):
     if acc: stored = acc["balance_s"] if acc["balance_s"] is not None else (None if acc["balance"] is None else f'{float(acc["balance"]):.6f}')
     sat = acc["last_seen"] if acc and stored is not None else None
     xs = SG.source_segment("explorer")   # the segment minepoa.com's explorer serves (segments config sources)
+    xcp = _explorer_cp(d)
+    if xs != SG.CURRENT and xcp is not None and xcp > (SG.checkpoint_of(xs, db.get_blob("networks")[0]) or 0):
+        xs = SG.CURRENT   # 1.26.166: the copy names a checkpoint past that segment's final one, so it is the current segment's state
     if xs != SG.CURRENT:   # explorer state is that segment's final checkpoint: the agent list (current segment) wins when present
         st0 = (SG.BY_N[SG.CURRENT].get("start_ts") or 0)
         if stored is not None and (sat or 0) >= st0: return dict(balance=stored, as_of=sat, source="agents", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
@@ -515,9 +561,11 @@ def address_balance(a, d=None, at=None, acc=None):
         if stored is not None:   # last seen in an earlier segment's agent list, not in the current one
             return dict(balance=stored, as_of=sat, source="agents", stale=True, as_of_checkpoint=None, segment=SG.of_ts(sat))
         return dict(balance=None, as_of=None, source=None, stale=False, as_of_checkpoint=None, segment=None)
-    if live is not None and (stored is None or not sat or (at or 0) >= sat):
-        return dict(balance=live, as_of=int(at) if at else None, source="explorer/address", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
-    if stored is not None: return dict(balance=stored, as_of=sat, source="agents", stale=False, as_of_checkpoint=None, segment=SG.CURRENT)
+    if live is not None and (stored is None or not sat or _explorer_wins(live, stored, sat, at, xcp, addr=a)):
+        return dict(balance=live, as_of=int(at) if at else None, source="explorer/address", stale=False, as_of_checkpoint=xcp, segment=SG.CURRENT)
+    if stored is not None:
+        old = (sat or 0) < (SG.BY_N[SG.CURRENT].get("start_ts") or 0)   # last seen in an earlier segment's agent list only
+        return dict(balance=stored, as_of=sat, source="agents", stale=old, as_of_checkpoint=None, segment=SG.of_ts(sat) if old and sat else SG.CURRENT)
     return dict(balance=None, as_of=None, source=None, stale=False, as_of_checkpoint=None, segment=None)
 
 _chains = {"ts": None, "v": frozenset()}
@@ -532,7 +580,7 @@ def address(a):
     if not ADDR_RX.match(a): return page("Bad address", card("Address", na("That is not a poa1… address.")), "/")
     d, err, at = address_read(a); nm = names(); p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
-    bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None
+    bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None; btag = balance_tag(bb)
     n = A.open_gkey()   # rewards are keyed by lifetime close number (segments.gkey): vesting runs across the genesis cut
     sp, lk = A.vest_split(rb, n); early = any(k < SG.offset(SG.CURRENT) for k in A.confirmed(rb))   # carried rewards: bounds while unconfirmed
     rsum = sum(rb.values()); est = a in A.established_set(); cvn = HI.coverage(a)
@@ -566,7 +614,7 @@ def address(a):
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
     nmx = nm.get(a) or p["forum_name"]
     head = (PF.head(a, nmx, addr_meta(a, bal, p), PF.tags(est, (srow or {}).get("level"), cen, a), X.usd_src()) +
-            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=bal_asof(bb))}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
+            f'<div class="stats eight">{stat("Balance", poa(bal, mined=True) + X.usd_of(bal) if bal is not None else "···", asof_text=btag[0], tip=btag[1])}{stat("Total rewards", poa(rsum, mined=True) + X.usd_of(rsum), flag_html=flag("Unconfirmed", "Includes Unconfirmed rewards") if any(SG.unconfirmed_g(k) for k in rb) else "")}'
             f'{stat("Spendable", poa(sp) + X.usd_of(sp), flag_html=A.carry_flag("circ") if early else "")}{stat("Locked", poa(lk) + X.usd_of(lk), flag_html=A.carry_flag("locked") if early else "")}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
     tabs = [("overview", "Overview", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng), ("governance", "Governance", None)]

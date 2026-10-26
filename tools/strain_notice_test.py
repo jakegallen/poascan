@@ -24,7 +24,7 @@ AX = "poa1" + "S" * 40   # synthetic address
 REAL = {
     "/api/status": {"network": "PoA prototype", "K": 5, "supply": "100.000000", "txs": 10, "final": 5, "invalid": 0, "agents_joined": 3,
                     "epochs_closed": 2, "holders": 2, "as_of": "2026-10-24T03:43:47.600Z", "checkpoint_height": 100, "state_root": "00" * 32},
-    "/api/explorer/address/" + AX: {"address": AX, "balance": "42.000000", "balance_as_of": {"checkpoint_height": 100}, "vault_pub": None,
+    "/api/explorer/address/" + AX: {"address": AX, "balance": "42.000000", "balance_as_of": {"checkpoint_height": 101}, "vault_pub": None,   # 1.26.166: a checkpoint past the agent list's, so the read is the fresher copy
                                     "vault_pub_note": "core-only field", "txs": [], "as_of": "2026-10-24T03:43:57.872Z", "checkpoint_height": 100, "source": "read-node-v0.2"},
     "/api/explorer/txs?limit=5": [{"id": "aa" * 32, "type": "challenge", "from_addr": AX, "to_addr": "", "amount": "", "epoch": 2, "ts": 1, "memo": "", "atts": 5, "final": 1}],
     "/api/notices": {"g0": AX, "active": [{"id": "x", "severity": "action", "msg": "Mining OPEN. Paths return instantly with status.", "show": "always"}], "total_ever": 1, "rule": "r"},
