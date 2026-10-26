@@ -159,7 +159,7 @@ def addr_link(a, names=None, n=(8, 6)):
     """An address in a table or list is the shared Agent cell (agent()); the full address (n of 48, key/value rows) keeps its name after it."""
     if not a: return '<span class="na">···</span>'
     if not ADDR_RX.match(a): return f'<span class="mono bad" title="Not a valid poa1 address">{E(short(a, *n))}</span>'   # malformed upstream value: no link
-    if n[0] < 40: return agent(a, names=names, n=n)
+    if n[0] < 40: return agent(a, names=names)   # every Agent cell uses the same 6 + 4 short address (1.26.154)
     nm = (names or {}).get(a)
     label = E(short(a, *n))
     extra = " " + name_link(nm, a, cls="fname agn") if nm else ""

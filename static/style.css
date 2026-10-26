@@ -193,7 +193,7 @@ td:first-child,th:first-child{padding-left:4px}
    ends in an ellipsis, so a long name never runs under the copy button or into the next column */
 .ag{min-width:0;white-space:nowrap;gap:4px}.ag>.agn{display:block;min-width:0;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ag>.agi,.ag>.idn,.ag>.cp,.ag>.tag,.ag>.sflag{flex:none}.ag>.agi{display:inline-flex;border-bottom:0}.ag>.tag{margin:0}
-.ag>.agn.addr{flex-shrink:0}.ag>.cp{width:24px;height:24px}   /* a short address is already short: it keeps its 11 characters; the copy hit area stays 40 px+ (.cp::after) */
+.ag>.agn.addr{flex-shrink:0;max-width:none}.ag>.cp{width:24px;height:24px}   /* a short address is already short: it keeps its 11 characters; the copy hit area stays 40 px+ (.cp::after) */
 td>.ag,li>.ag,.fw>.ag{max-width:100%}
 @media (max-width:640px){.ag>.agn{max-width:14ch}}
 .idn{width:18px;height:18px;flex:none;display:inline-block;border-radius:var(--r-sm);background:var(--rule)}

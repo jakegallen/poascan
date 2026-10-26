@@ -24,7 +24,7 @@ check("no name: the short address links /address, copy right after it", re.searc
 check("one label per cell: a named cell does not also print the address", H.short(A1, 6, 4) not in H.agent(A1, LONG))
 check("a tag goes after the copy button", H.agent(A3, tail='<span class="tag">system</span>').endswith('</button><span class="tag">system</span></span>'))
 check("#standing reaches both address links", H.agent(A1, LONG, frag="#standing").count('/address/%s#standing"' % A1) == 1 and H.agent(A3, frag="#standing").count('#standing"') == 1)
-check("addr_link in tables is the Agent cell", H.addr_link(A1, {A1: LONG}, (6, 4)) == H.agent(A1, LONG) and H.addr_link(A3, {}, (8, 6)).startswith('<span class="al ag"'))
+check("addr_link in tables is the Agent cell, always with the 6 + 4 short address", H.addr_link(A1, {A1: LONG}, (6, 4)) == H.agent(A1, LONG) and H.addr_link(A3, {}, (8, 6)) == H.agent(A3) and H.addr_link(A3, {}, (10, 6)) == H.agent(A3))
 check("author_link with a poa1 id is the Agent cell", H.author_link(LONG, {LONG: A1}) == H.agent(A1, LONG))
 check("malformed and empty addresses keep their plain forms", 'class="mono bad"' in H.agent("poa1-bad") and 'class="na"' in H.agent(""))
 src = {f: open(os.path.join(ROOT, "poascan", f), encoding="utf-8").read() for f in ("views.py", "governance.py", "gradingview.py", "views4.py")}
@@ -41,7 +41,7 @@ except Exception:
     sync_playwright = None
     check("Playwright is installed in CI", not os.environ.get("CI"))
     print("skip browser checks (Playwright not installed)")
-PAGES = ["/", "/chain/txs", "/agents", "/agents/top", "/agents/top?tab=grading", "/agents/community", "/network?tab=token",
+PAGES = ["/", "/chain/txs", "/agents", "/agents/top", "/agents/top?tab=grading", "/agents/top?tab=referrals", "/agents/community", "/network?tab=token",
          "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=payouts",
          "/governance?tab=graders", "/governance?tab=directory", "/governance?tab=forum", f"/address/{A2}"]
 PROBE = """()=>{const R=e=>e.getBoundingClientRect(),vis=e=>{const r=R(e);return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'};
@@ -54,6 +54,7 @@ PROBE = """()=>{const R=e=>e.getBoundingClientRect(),vis=e=>{const r=R(e);return
   const parts=[...g.children].filter(vis);for(let a=0;a<parts.length;a++)for(let b=a+1;b<parts.length;b++)if(ov(R(parts[a]),R(parts[b])))bad.push(['parts overlap',g.dataset.a,parts[a].className+' / '+parts[b].className]);
   const n=g.querySelector('.agn'),cp=g.querySelector('.cp');
   if(n&&vis(n)){if(R(n).width<20)bad.push(['label squeezed',g.dataset.a,Math.round(R(n).width)]);
+   if(n.classList.contains('addr')&&n.scrollWidth>n.clientWidth+1)bad.push(['short address cut a second time',g.dataset.a,n.scrollWidth-n.clientWidth]);
    if(n.scrollWidth>n.clientWidth+1&&(getComputedStyle(n).textOverflow!=='ellipsis'||getComputedStyle(n).overflowX==='visible'))bad.push(['text runs past its box',g.dataset.a,n.scrollWidth-n.clientWidth]);
    if(cp&&vis(cp)&&(R(cp).left<R(n).right-1||R(cp).left-R(n).right>12))bad.push(['copy not right after the label',g.dataset.a,Math.round(R(cp).left-R(n).right)])}
   cells.slice(i+1).forEach(h=>{if(ov(gr,R(h)))bad.push(['two Agent cells overlap',g.dataset.a,h.dataset.a])})});

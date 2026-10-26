@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.154] - 2026-10-25
+
+### Fixed
+- Agent cells: a no-name Agent's short address is no longer cut a second time. Leaderboards, rewards and search used the longer 8 + 6 short address, which a 14 character label limit on phones ended in a second ellipsis (`poa1EHt1…eXJ…`). Every Agent cell now uses the same 6 + 4 short address and never cuts it; only names end in an ellipsis.
+
+### Tests
+- tools/agent_cell_test.py: a short address is never cut, addr_link always gives the 6 + 4 form, and the Referrals leaderboard is covered.
+
 ## [1.26.153] - 2026-10-25
 
 ### Fixed
