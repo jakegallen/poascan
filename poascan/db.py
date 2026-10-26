@@ -84,6 +84,7 @@ def conn():
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA synchronous=NORMAL")
+        c.execute("PRAGMA journal_size_limit=16777216")   # 1.26.161: the WAL file is cut back to 16 MB after a checkpoint (it had grown to 77 MB)
         _local.c = c
     return c
 

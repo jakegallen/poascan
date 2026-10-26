@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.161] - 2026-10-26
+
+### Fixed
+- Pages render with less CPU: the network upgrade facts (maint.recovery) and the segment cut supply check (maint.cut_baseline) ran on every page and API render, the second scanning stored status snapshots with json_extract each time (19% of request CPU in a 2 minute profile of the live VM). recovery() is now kept 15 s and re-read at once when a new /api/status read lands; cut_baseline() is kept 10 minutes.
+- The SQLite WAL file is cut back to 16 MB after a checkpoint (it had grown to 77 MB next to a 275 MB database on a 512 MB VM).
+
 ## [1.26.160] - 2026-10-26
 
 ### Fixed

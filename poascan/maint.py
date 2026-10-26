@@ -421,7 +421,17 @@ def _close_rows(c, key):
         tot += float(r["minted"] or 0); got.append(f"S{x['segment']} E{x['epoch']}")
     return tot, got
 
+# 1.26.161: cut_baseline() and recovery() ran on every page render (py-spy on the live VM: 19% of request CPU). Both are kept in
+# analytics' TTL cache (single flight, cleared with it), and callers get a copy, so no caller can change the kept value.
+def _memo_get(name, ttl, fn, key=()):
+    v = A.cached("maint_" + name, ttl)(lambda *_: fn())(*key)
+    return dict(v) if isinstance(v, dict) else v
+
 def cut_baseline():
+    """cut_baseline_now(), kept 10 minutes: historical status snapshots scanned with json_extract, the same answer every time."""
+    return _memo_get("cut_baseline", 600, cut_baseline_now)
+
+def cut_baseline_now():
     """Supply carried over the newest segment boundary (segments config), from POAScan's own /api/status snapshots and
     stored close records. Primary basis: the last supply read of the earlier segment, less the rewards of the closes the
     config lists under cut.excluded_closes. Cross check: the first read once the earlier segment's checkpoint reached its
@@ -451,6 +461,11 @@ def cut_baseline():
                 cross_check=p2 if p1 and p2 else None, segment=c["segment"])
 
 def recovery():
+    """recovery_now(), kept 15 s (A.status() itself refreshes on its own schedule)."""
+    st = A.status()   # keyed on the status read too, so a new /api/status read shows at once
+    return _memo_get("recovery", 15, recovery_now, (repr(sorted(st.items())) if isinstance(st, dict) else repr(st),))
+
+def recovery_now():
     """Public recovery facts from our own mirror: checkpoint moved, new state root, supply carried over, status freshness, counters."""
     st = dict(A.status()); sup = _num(st.get("supply")); pre = _num(PRE_SUPPLY)
     for k in ("checkpoint_height", "state_root", "as_of"):   # /api/status now and then answers without these: use our newest read that had them
