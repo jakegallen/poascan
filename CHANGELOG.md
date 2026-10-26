@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.162] - 2026-10-26
+
+### Changed
+- The Fly machine moves from shared-cpu-2x 512 MB to shared-cpu-4x 1 GB in sjc: twice the shared CPU baseline and burst balance, so busy minutes stop running into steal.
+- Memory guard thresholds follow the bigger VM: exit over 860 MB resident (was 430), trim reference 600 MB (was 300). Both still read POASCAN_RSS_EXIT_MB and POASCAN_RSS_TRIM_MB.
+
 ## [1.26.161] - 2026-10-26
 
 ### Fixed

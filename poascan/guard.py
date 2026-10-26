@@ -22,8 +22,8 @@ HANG_FAILS = int(os.environ.get("POASCAN_HANG_FAILS", "4"))
 THROTTLED_FAILS = int(os.environ.get("POASCAN_THROTTLED_FAILS", "40"))   # about 10 minutes of throttled failures
 STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # share of CPU time that was steal over a check interval (1.26.82: 0.5 let 40 to 50% steal intervals count as hangs, so a throttled VM still restarted)
 CHECK_EVERY = 15
-RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "300"))
-RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "430"))   # the VM has ~460 MB usable
+RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "600"))
+RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "860"))   # 1 GB VM (1.26.162), ~950 MB usable; was 430 on 512 MB
 TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
 GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
 
