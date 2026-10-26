@@ -876,29 +876,37 @@ def joins_rate_calc(pts, now=None, floor=None, join_ts=None):
                 window="since_pause" if paused_until is not None else "since_cut" if since_cut else "24h", window_end=end, paused_until=paused_until,
                 joining_from=None, source="status", trailing={k: (v["per_hour"] if v else None) for k, v in trailing.items()})
 
-# ---- Active Agents: distinct Agents with an answer (challenge tx) in the current segment over the last 24 h ----
-ACTIVE_WINDOW_S = 86400
+# ---- Active Agents (1.26.173): distinct Agents with an answer (challenge tx) in the current segment over the last epoch length ----
+# An Agent answers at most once per epoch, so one epoch (params.auto_epoch_seconds, 6 h) is the shortest window in which every
+# Agent mining right now shows up, and a rolling one never drops to zero at a close. Was the last 24 h (1.26.116 to 1.26.172).
+ACTIVE_WINDOW_S = 21600
 
-def active_window(now, seg_start):
-    """Pure: (start, kind) of the Active Agents window: the last 24 h, cut back to the current segment's start (segments.json)
-    when that is newer, so no answer from an earlier segment is counted."""
-    t0 = now - ACTIVE_WINDOW_S
-    return (int(seg_start), "since_segment_start") if seg_start and seg_start > t0 else (int(t0), "24h")
+def active_window_s(p=None):
+    """Window length in whole hours: params.auto_epoch_seconds (the epoch target, already read with /api/params), else 6 h."""
+    try: s = int((params() if p is None else p).get("auto_epoch_seconds") or ACTIVE_WINDOW_S)
+    except (TypeError, ValueError, AttributeError): s = ACTIVE_WINDOW_S
+    return max(3600, min(86400, s // 3600 * 3600))
+
+def active_window(now, seg_start, win=ACTIVE_WINDOW_S):
+    """Pure: (start, kind) of the Active Agents window: the last epoch length (kind '6h' for 6 h), cut back to the current
+    segment's start (segments.json) when that is newer, so no answer from an earlier segment is counted."""
+    t0 = now - win
+    return (int(seg_start), "since_segment_start") if seg_start and seg_start > t0 else (int(t0), f"{win // 3600}h")
 
 @cached("active_agents", 120)
 def active_agents():
     """Cached 2 min: one indexed read (txs_seg_type) of POAScan's own tx archive, no upstream call. Distinct senders of
     challenge txs (answers) in the current segment since the window start."""
-    now = int(time.time()); seg0 = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None
-    t0, kind = active_window(now, seg0)
+    now = int(time.time()); seg0 = S.CUT_TS if S.has_cut() and now >= S.CUT_TS else None; win = active_window_s()
+    t0, kind = active_window(now, seg0, win)
     n = db.q1("SELECT COUNT(DISTINCT from_addr) AS n FROM txs WHERE segment = ? AND type = 'challenge' AND ts > ? AND ts <= ?", (S.CURRENT, t0, now))["n"]
     return dict(active_agents=int(n or 0), window=kind, start_ts=t0, end_ts=now, hours=round((now - t0) / 3600, 2), segment=S.CURRENT,
-                basis="distinct_answerers", source="challenge_txs")
+                basis="distinct_answerers", source="challenge_txs", window_s=win)
 
-def active_runs(rows, segs, now, live=None):
+def active_runs(rows, segs, now, live=None, win=ACTIVE_WINDOW_S):
     """Pure: the Active Agents series [(ts, n)] over every segment, oldest first. rows: distinct (segment, hour index, Agent)
-    of challenge txs. At each whole hour of a segment, n is the distinct Agents that answered in the 24 h before it within
-    that segment (the card's own window, so a count never reaches back across a genesis cut). A segment's run starts at
+    of challenge txs. At each whole hour of a segment, n is the distinct Agents that answered in the `win` seconds (whole
+    hours) before it within that segment (the card's own window, so a count never reaches back across a genesis cut). A segment's run starts at
     the first hour after its first answer (real data only, never padded) and ends at its last hour boundary; the current
     segment ends at now with `live` (the card value) when given."""
     from collections import Counter
@@ -909,13 +917,13 @@ def active_runs(rows, segs, now, live=None):
         hrs = by.get(x["n"])
         if not hrs: continue
         end = x.get("end_ts") or now; first = min(hrs); last = int(end) // 3600
-        win = Counter(); run = []
-        for H in range(first + 1, last + 1):   # boundary H closes the window of hours H-24 .. H-1
-            for a in hrs.get(H - 1, ()): win[a] += 1
-            for a in hrs.get(H - 1 - ACTIVE_WINDOW_S // 3600, ()):
-                win[a] -= 1
-                if not win[a]: del win[a]
-            run.append((H * 3600, len(win)))
+        cnt = Counter(); hw = win // 3600; run = []
+        for H in range(first + 1, last + 1):   # boundary H closes the window of hours H-w .. H-1 (w = win in hours)
+            for a in hrs.get(H - 1, ()): cnt[a] += 1
+            for a in hrs.get(H - 1 - hw, ()):
+                cnt[a] -= 1
+                if not cnt[a]: del cnt[a]
+            run.append((H * 3600, len(cnt)))
         if x.get("end_ts") is None and live is not None and (not run or now > run[-1][0]): run.append((int(now), int(live)))
         out += run
     return out
@@ -927,7 +935,8 @@ def active_series():
     now = int(time.time())
     rows = db.q("SELECT segment, ts/3600 AS h, from_addr FROM txs WHERE type = 'challenge' AND ts <= ? GROUP BY segment, h, from_addr", (now,))
     a = active_agents()
-    return active_runs([(r["segment"], r["h"], r["from_addr"]) for r in rows], S.SEGMENTS, now, a["active_agents"] if a else None)
+    return active_runs([(r["segment"], r["h"], r["from_addr"]) for r in rows], S.SEGMENTS, now, a["active_agents"] if a else None,
+                       a["window_s"] if a else active_window_s())
 
 @cached("joins_rate", 120)
 def joins_rate():

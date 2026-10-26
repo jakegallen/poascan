@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.173] - 2026-10-26
+
+### Changed
+- Home, Active Agents now counts the Agents mining right now: distinct Agents with an answer (challenge tx) in the current segment over the last epoch length (`auto_epoch_seconds` in /api/params, 6 h), not the last 24 h. An Agent answers at most once per epoch, so this is the shortest window that counts every Agent still mining, and a rolling one never falls to zero at a close. Within one epoch length of a genesis cut the window starts at the cut.
+- The sparkline and the pop-out chart draw the same 6 h count at each whole hour, from the chain's first answer, with a break at each genesis cut. The tooltip reads "Agents mining right now: those that mined in the last 6 hours, one epoch." Method on /about#home.
+- API and MCP: `active_agents_window.kind` is `6h` (the window in whole hours) or `since_segment_start`; `hours`, `start_ts` and `end_ts` follow the new window. No field added or retyped. Same single indexed read of POAScan's own tx archive, no new minepoa request.
+
+### Tests
+- tools/active_series_test.py and tools/netoverview_test.py cover the 6 h window, the params read and its fallback, and that a 10 h old answer no longer counts.
+
 ## [1.26.172] - 2026-10-26
 
 ### Changed

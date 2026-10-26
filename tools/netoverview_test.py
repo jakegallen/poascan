@@ -234,15 +234,16 @@ check(f"wire bytes counted per endpoint for the last hour ({b})", b > 0)
 I2.flush_counts(force=True)
 check("bytes flushed to upstream_bytes and still reported", I2.bytes_1h().get("/api/txs", 0) == b)
 
-# ---- Home Active Agents (1.26.116): distinct answerers in the current segment, last 24 h, never before the segment start ----
+# ---- Home Active Agents (1.26.116; 1.26.173 window one epoch length, 6 h): distinct answerers in the current segment, never before the segment start ----
 cfg = json.load(open(os.path.join(ROOT, "poascan", "segments.json")))
 st2 = next(x for x in cfg["segments"] if x["n"] == SG.CURRENT)["start_ts"]
 check(f"segment start is read from segments.json, not hardcoded ({SG.CUT_TS} == {st2})", SG.CUT_TS == st2)
 src = open(os.path.join(ROOT, "poascan", "analytics.py")).read()
 check("no hardcoded cut time in analytics.py", str(st2) not in src)
-check("window: from the segment start when it is under 24 h old", A.active_window(st2 + 7 * 3600, st2) == (st2, "since_segment_start"))
-check("window: the last 24 h once the segment is older", A.active_window(st2 + 30 * 3600, st2) == (st2 + 6 * 3600, "24h"))
-check("window: no segment start, the last 24 h", A.active_window(st2, None) == (st2 - 86400, "24h"))
+check("window: from the segment start when it is under one epoch length (6 h) old", A.active_window(st2 + 5 * 3600, st2) == (st2, "since_segment_start"))
+check("window: the last 6 h once the segment is older", A.active_window(st2 + 30 * 3600, st2) == (st2 + 24 * 3600, "6h"))
+check("window: a 24 h length still reads 24h", A.active_window(st2 + 30 * 3600, st2, 86400) == (st2 + 6 * 3600, "24h"))
+check("window: no segment start, the last 6 h", A.active_window(st2, None) == (st2 - 21600, "6h"))
 fn = src[src.index("# ---- Active Agents"):src.index('@cached("joins_rate"')]
 check("no upstream call in the Active Agents code", not any(w in fn for w in ("urlopen", "requests", "fetch(", "POA_BASE")))
 # seed: segment 1 answers (must not count), segment 2 answers by 3 Agents (one twice), a grade and a join (not answers)
@@ -254,10 +255,10 @@ db.write("DELETE FROM txs WHERE type = 'challenge'")   # temp DB: only the seede
 for i, t, f, ts, sg in seed:
     db.write("INSERT OR REPLACE INTO txs(id, type, from_addr, ts, epoch, segment) VALUES (?,?,?,?,?,?)", (i * 8, t, f, ts, 1, sg))
 A._cache.clear(); aa = A.active_agents()
-if now - st2 < 86400:
+if now - st2 < A.active_window_s():
     check(f"Active Agents: 3 distinct segment 2 answerers, segment 1 not counted ({aa['active_agents']})", aa["active_agents"] == 3 and aa["window"] == "since_segment_start" and aa["start_ts"] == st2)
 else:
-    check(f"Active Agents: 3 distinct answerers in the last 24 h ({aa['active_agents']})", aa["active_agents"] == 3 and aa["window"] == "24h")
+    check(f"Active Agents: 3 distinct answerers in the last 6 h ({aa['active_agents']})", aa["active_agents"] == 3 and aa["window"] == "6h")
 check("basis distinct_answerers, source challenge_txs, segment is the current one", aa["basis"] == "distinct_answerers" and aa["source"] == "challenge_txs" and aa["segment"] == SG.CURRENT)
 h = V.headline()
 check("Home: an Active Agents card, no Agents / hr card", "Active Agents" in h["active"] and 'data-live="active"' in h["active"] and ">3<" in h["active"] and "joins_hr" not in h)

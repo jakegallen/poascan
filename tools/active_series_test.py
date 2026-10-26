@@ -1,5 +1,6 @@
 """Active Agents chart (1.26.146): the Home card's sparkline and pop-out from POAScan's own tx archive.
-* active_runs: at each whole hour, the distinct Agents that answered (challenge txs) in the 24 h before it, within that
+* active_runs: at each whole hour, the distinct Agents that answered (challenge txs) in the last epoch length (6 h, 1.26.173;
+  was 24 h) before it, within that
   segment only; a run starts at the first hour after its first answer (never padded) and the current one ends at now
   with the card value
 * the pop-out: all four ranges, a break at each genesis cut, mining milestones only, the one line definition and Method
@@ -33,7 +34,12 @@ r = A.active_runs(rows, segs, now, live=3)
 s1 = [p for p in r if p[0] <= c]; s2 = [p for p in r if p[0] > c]
 check(f"segment 1 starts the hour after its first answer ({s1[0]})", s1[0] == ((h0 + 1) * H, 2))
 check("no point before the first real answer (never padded)", min(t for t, _ in r) == (h0 + 1) * H)
-check("rolling 24 h: an Agent drops out 24 h after its last answer", dict(s1)[(h0 + 25) * H] == 2 and dict(s1)[(h0 + 26) * H] == 1 and dict(s1)[(h0 + 6) * H] == 3)
+check("rolling 6 h: an Agent drops out 6 h after its last answer", dict(s1)[(h0 + 7) * H] == 2 and dict(s1)[(h0 + 8) * H] == 1 and dict(s1)[(h0 + 6) * H] == 3)
+r24 = dict(A.active_runs(rows, segs, now, win=86400))
+check("the window is a parameter: 24 h keeps an Agent a day", r24[(h0 + 25) * H] == 2 and r24[(h0 + 26) * H] == 1)
+check("window length from params.auto_epoch_seconds in whole hours, 6 h when missing or bad",
+      A.active_window_s({"auto_epoch_seconds": 21600}) == 21600 and A.active_window_s({}) == 21600 and A.active_window_s({"auto_epoch_seconds": "x"}) == 21600
+      and A.active_window_s({"auto_epoch_seconds": 7200}) == 7200 and A.active_window_s({"auto_epoch_seconds": 5400}) == 3600 and A.active_window_s({"auto_epoch_seconds": 10 ** 6}) == 86400)
 check("segment 1 ends at its last hour boundary before the cut", s1[-1][0] == c // H * H)
 check("segment 2 starts the hour after its first answer, counting segment 2 only", s2[0] == ((c // H + 3) * H, 2))
 check(f"no window crosses the cut: a segment 1 Agent never counts in segment 2 ({s2})", all(v <= 3 for _, v in s2) and dict(s2)[(c // H + 4) * H] == 3)
@@ -46,7 +52,7 @@ check("an archived segment never takes the live value", A.active_runs([(1, h0, "
 cut = SG.CUT_TS; tnow = int(time.time())
 pa = lambda i: "poa1" + str(i) * 40
 seed = [("s1a", "challenge", pa(1), cut - 30 * H, 1), ("s1b", "challenge", pa(2), cut - 29 * H, 1), ("s1c", "challenge", pa(9), cut - 60, 1),
-        ("s2a", "challenge", pa(1), tnow - 3 * H, 2), ("s2b", "challenge", pa(3), tnow - 2 * H, 2), ("s2c", "challenge", pa(3), tnow - H, 2),
+        ("s2o", "challenge", pa(7), tnow - 10 * H, 2), ("s2a", "challenge", pa(1), tnow - 3 * H, 2), ("s2b", "challenge", pa(3), tnow - 2 * H, 2), ("s2c", "challenge", pa(3), tnow - H, 2),
         ("s2g", "grade-sealed", pa(4), tnow - 400, 2), ("s2j", "join", pa(5), tnow - 300, 2)]
 db.write("DELETE FROM txs")
 for i, t, f, ts, sg in seed: db.write("INSERT INTO txs(id, type, from_addr, ts, epoch, segment) VALUES (?,?,?,?,?,?)", (i * 8, t, f, ts, 1, sg))
@@ -55,6 +61,7 @@ ser = A.active_series(); card = A.active_agents()["active_agents"]
 check(f"series starts at the chain's first archived answer, an hour boundary after it ({ser[:1]})", ser and ser[0][0] == (cut - 30 * H) // H * H + H)
 check(f"series ends at now with the card value ({ser[-1]}, card {card})", ser[-1][1] == card == 2 and ser[-1][0] >= tnow - 5)
 check("grades and joins are not answers", max(v for _, v in ser) <= 3)
+check("card: an answer older than one epoch length (10 h) is not mining now", card == 2 and A.active_agents()["window_s"] == 21600)
 check("segment 1 points stop at the cut", not any(cut < t < cut + 1 for t, _ in ser) and all(t <= cut for t, v in ser if t < cut))
 src = open(os.path.join(ROOT, "poascan", "analytics.py")).read()
 fn = src[src.index("def active_runs"):src.index('@cached("joins_rate"')]
@@ -70,7 +77,7 @@ check(f"milestones: the cut and mining pauses and reopenings only ({ev})", "gene
       and not any(k in ev for k in ("s2_first_join", "grading_reopened", "ended")))
 check("milestone labels on this chart read Mining, not Joining", all(e["label"] != "Joining reopened" for e in MS.events("active")))
 tip = p.get("tip") or ""
-check(f"tooltip: one plain definition matching the window ({tip!r})", tip == CP.TIPS["active"][0] and "24 hours" in tip and "mined" in tip and "genesis cut" in tip and p.get("method") == "/about#home")
+check(f"tooltip: one plain definition matching the window ({tip!r})", tip == CP.TIPS["active"][0] and "6 hours" in tip and "right now" in tip and "24 hours" not in tip and "mined" in tip and "genesis cut" in tip and p.get("method") == "/about#home")
 check("tooltip: terse, says Agents, no Accounts, no em or en dash", len(tip) <= 120 and "Agents" in tip and "ccount" not in tip and not re.search("[\u2013\u2014]", tip))
 check("other charts carry no tip", "tip" not in CP.payload("mined", "7d", 800))
 check("parse accepts the active key", CP.parse({"c": ["active"], "r": ["24h"]})[0] == "active")

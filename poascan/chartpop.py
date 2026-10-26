@@ -29,7 +29,7 @@ CHARTS = {
 }
 PARAMS = {"c", "r", "w"}
 # One line definitions shown by the pop-out's ? (a tap, click and keyboard tooltip; the title gives it on hover), with a Method link.
-TIPS = {"active": ("Agents that mined at least once in the last 24 hours. The count restarts at a genesis cut.", "/about#home")}
+TIPS = {"active": ("Agents mining right now: those that mined in the last 6 hours, one epoch. The count restarts at a genesis cut.", "/about#home")}
 
 def parse(qs):
     """(key, range or '', plot width) from the query, or ValueError. Strict: known keys only, one value each, nothing else."""
