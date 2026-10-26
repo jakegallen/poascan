@@ -71,8 +71,8 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 
 /* nav drawer */
 var burger=$(".burger"),navEl=$("#nav");
-function setHdr(){var h=$(".hdr");if(h)D.documentElement.style.setProperty("--hdr-h",Math.round(h.getBoundingClientRect().bottom)+"px")}
-function navOpen(o){D.body.classList.toggle("navopen",o);D.documentElement.classList.toggle("navlock",o);if(burger)burger.setAttribute("aria-expanded",o?"true":"false");if(o){setHdr();var f=navEl&&navEl.querySelector("a");if(f)f.focus({preventScroll:true})}}
+function setHdr(){var h=$(".hdr");if(h){var b=h.getBoundingClientRect().bottom;if(!(b>0))b=h.offsetHeight;D.documentElement.style.setProperty("--hdr-h",Math.round(b)+"px")}}
+function navOpen(o){if(o)setHdr();D.body.classList.toggle("navopen",o);D.documentElement.classList.toggle("navlock",o);if(burger)burger.setAttribute("aria-expanded",o?"true":"false");if(o){setHdr();var f=navEl&&navEl.querySelector("a");if(f)f.focus({preventScroll:true})}}
 if(burger){burger.addEventListener("click",function(e){e.stopPropagation();navOpen(!D.body.classList.contains("navopen"))});
  D.addEventListener("keydown",function(e){if(e.key==="Escape"&&D.body.classList.contains("navopen")){navOpen(false);burger.focus()}});
  D.addEventListener("click",function(e){if(!D.body.classList.contains("navopen"))return;var a=e.target.closest&&e.target.closest("#nav a");if(a||!e.target.closest("#nav"))navOpen(false)});

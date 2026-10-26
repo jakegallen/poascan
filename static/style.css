@@ -301,7 +301,7 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
  .nav{position:fixed;left:0;right:0;top:var(--hdr-h,118px);bottom:0;z-index:100;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:0;padding:8px 24px 32px;background:var(--ink-1);box-shadow:0 -1px 0 var(--line);
   transform:translateY(-8px);opacity:0;visibility:hidden;transition:opacity var(--fast),transform var(--fast),visibility 0s var(--fast);overflow-y:auto}
  body.navopen .nav{transform:none;opacity:1;visibility:visible;transition:opacity var(--fast),transform var(--fast)}
- html.navlock,html.navlock body{overflow:hidden;touch-action:none}html.navlock .nav{touch-action:pan-y}
+ html.navlock{overflow:hidden;touch-action:none}html.navlock body{overflow:clip;touch-action:none}html.navlock .nav{touch-action:pan-y}
  .ticker{position:relative;z-index:1}
  .nav a{min-height:52px;display:flex;align-items:center;font-size:var(--t16);border-bottom:1px solid var(--row);border-radius:0;padding:0 4px}
  .grid2,.grid3{grid-template-columns:minmax(0,1fr)}

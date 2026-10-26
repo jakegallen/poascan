@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.152] - 2026-10-25
+
+### Fixed
+- Mobile menu: opening the hamburger menu after scrolling down showed a blank dark panel. The scroll lock set `overflow:hidden` on body as well as html, which made body a scroll container, so the sticky header jumped back to the top of the document; the drawer then measured the header bottom as a large negative number and drew its links far above the screen. The lock now keeps `overflow:hidden` on html and uses `overflow:clip` on body (no scroll container, the header stays stuck), and the header bottom is measured before the lock, with the header height as a fallback if it is ever zero or negative.
+
+### Tests
+- tools/mobile_menu_test.py (in CI): at 360 and 390 px, on Home and /chain, on a fresh load and after scrolling, the menu opens under the header with every nav link visible and clickable and a tap navigates, in Chromium and WebKit.
+
 ## [1.26.151] - 2026-10-25
 
 ### Fixed
