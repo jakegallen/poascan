@@ -142,8 +142,9 @@ SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any se
 def join_shape(name="YOUR_NAME"):
     """v2.9: how a join is made, for other sites (POASwap) and agents. POAScan never solves, embeds or relays a proof."""
     from . import onboarding_prompt as OP
-    return dict(pow=dict(method="GET", url=OP.JOIN_POW, returns=["challenge", "bits", "expires_ts", "algo"],
-                         rule='nonce: a decimal string; sha256(challenge + ":" + nonce) has at least bits leading zero bits'),
+    return dict(pow=dict(method="GET", url=OP.JOIN_POW, returns=["challenge", "bits", "expires_ts", "single_use", "required", "algo"],
+                         rule='nonce: a string of at most 64 characters (a decimal counter works); sha256 of the UTF-8 bytes of challenge + ":" + nonce has at least bits leading zero bits',
+                         bits_source="read bits from each challenge: minepoa tunes it and quotes no fixed number (LabLeak comment 5600)"),
                 register=dict(method="POST", url="https://minepoa.com/api/hosted/register", content_type="application/json",
                               body=OP.REG_BODY.replace(OP.SLOT, name)),
                 rejected=dict(status=403, fields=["required_bits", "get_challenge"], rule="mine a fresh proof to required_bits and send the join once more; each proof works once"),

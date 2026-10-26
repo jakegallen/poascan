@@ -254,6 +254,9 @@ check("v2.9: api_join carries the join shape (GET join-pow, POST register body w
       _js9["pow"]["url"] == "https://minepoa.com/api/join-pow" and _js9["register"]["method"] == "POST" and _js9["register"]["url"] == "https://minepoa.com/api/hosted/register"
       and _js9["register"]["body"] == '{"label":"test-agent-7","pow":{"challenge":"CHALLENGE","nonce":"NONCE"}}' and _js9["rejected"]["status"] == 403 and _js9["connector_join"] is False
       and ac["join"]["register"]["body"].startswith('{"label":"test-agent-7"') and S.data()["join"]["register"]["body"].startswith('{"label":"YOUR_NAME"'))
+check("joinpow 1026: join.pow matches minepoa's live /api/join-pow (single_use, required; nonce a string of at most 64 chars; UTF-8; bits read per challenge, never a fixed number)",
+      _js9["pow"]["returns"] == ["challenge", "bits", "expires_ts", "single_use", "required", "algo"] and "at most 64 characters" in _js9["pow"]["rule"] and "UTF-8" in _js9["pow"]["rule"]
+      and "bits" in _js9["pow"]["bits_source"] and not any(ch.isdigit() for ch in _js9["pow"]["bits_source"].split("(")[0]) and not any(c in str(_js9) for c in "\u2013\u2014"))
 check("api_join(client=): tagged variant text, tier, connector with the MCP URL, prefill and link length; no-path gives the panel and no text",
       ac["text"] == S.client_prompt("test-agent-7", "claude") and ac["variant"] == "connector" and ac["tier"] == "connector" and ac["connector"]["url"] == "https://minepoa.com/mcp"
       and ac["sha256"] == hashlib.sha256(ac["text"].encode()).hexdigest() and ac["prefill_ok"] and ac["link_chars"] < 8000
