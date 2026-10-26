@@ -102,4 +102,7 @@ for f in ("govv2.py", "gradingview.py", "protocol.py", "protocolview.py"):
     check(f"{f}: no em or en dash, says Agents not Accounts", "\u2014" not in src and "\u2013" not in src and "Accounts" not in src)
 src = open(os.path.join(ROOT, "poascan", "govv2.py")).read()
 check("govv2.py never reads a grade score", '"score"' not in src and "'score'" not in src)
+css = open(os.path.join(ROOT, "static", "style.css")).read()
+check("settle queue fits at 1280: desktop only, 4px cell padding and names capped at 16ch, scoped to table.queue",
+      "@media (min-width:641px){table.queue td,table.queue th{padding-left:4px;padding-right:4px}table.queue .ag>.agn{max-width:16ch}}" in css)
 print("all passed" if not fails else f"{len(fails)} failed"); sys.exit(1 if fails else 0)

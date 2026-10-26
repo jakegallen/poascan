@@ -1514,7 +1514,7 @@ th.hs .qtip{margin-left:2px}
 .qn{font-size:var(--t12);color:var(--steel)}
 td.qpc{white-space:nowrap}
 table.queue tr.rdy td:first-child{box-shadow:inset 2px 0 0 var(--verd)}
-@media (min-width:641px){table.queue td,table.queue th{padding-left:6px;padding-right:6px}}
+@media (min-width:641px){table.queue td,table.queue th{padding-left:4px;padding-right:4px}table.queue .ag>.agn{max-width:16ch}}   /* 1.26.171: the settle queue fits its box at 1280 with live names (full name on hover) */
 table.why td.why{color:var(--txt);white-space:normal;min-width:220px;font-size:var(--t13);line-height:1.45}
 ul.jury{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;font-size:var(--t13);line-height:1.45}
 ul.jury .num{display:inline-block;min-width:14px;color:var(--amber)}

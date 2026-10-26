@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.171] - 2026-10-26
+
+### Fixed
+- Settle queue (Governance, Queue): the whole table, Graded included, now fits its box at 1280 px with live names, with no sideways scroll. On desktop only, its cells use 4 px side padding (was 6) and Agent names cap at 16 characters with an ellipsis (the full name is on hover). Phones are unchanged.
+
+### Tests
+- tools/extras1026_test.py checks the scoped rule.
+
 ## [1.26.170] - 2026-10-26
 
 ### Added
