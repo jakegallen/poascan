@@ -7,8 +7,9 @@ import time, datetime as dt, collections
 from . import db, gradehist as GH, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
 from .ui import E, card, stat, intc, pct, short, name_link, agent, author_link, ADDR_RX, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
+from . import govv2 as GV2
 
-TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 AGENT_COL = SS.Col("name", "Agent", "text")   # header sorting (1.26.117): Agent sorts by name A to Z, unnamed Agents last
 LEVEL_ORDER = {k: i for i, (k, _) in enumerate(LEVELS)}
@@ -610,13 +611,13 @@ def rules():
                f"<p>The genesis import (/api/genesis-import, checkpoint 44003) flags {len(EF.imported(2))} Agents established; segment 2 starts from them. They carry no segment 2 challenge_eligible until they earn one, so L is -1. Segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "settlement": "Governance · Settlement", "changes": "Governance · Changes", "never": "Governance · Never established", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "settlement": lambda q: GV2.settlement_tab(q, href, qsx), "changes": lambda q: GV2.changes_tab(q, href, qsx), "never": lambda q: GV2.never_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
@@ -820,7 +821,7 @@ def api_agent(a, scope="segment"):
 
 
 # ---------------- Settle queue API (1.26.137): minepoa's grading list as POAScan last read it ----------------
-QUEUE_FIELDS = ("id", "author", "name", "born", "since", "expires", "expires_in", "kind", "raw", "qual", "need", "trusted_seals", "untrusted_seals",
+QUEUE_FIELDS = ("id", "author", "name", "born", "since", "age", "panel", "expires", "expires_in", "kind", "raw", "qual", "need", "trusted_seals", "untrusted_seals",
                 "counting_trusted", "counting_untrusted", "last_seal_ts", "open", "settle_rank", "in_settle_window", "ready_next_close", "queued_at_quorum")
 
 def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
@@ -839,6 +840,7 @@ def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
 def _agent_grading(a):
     v = GR.agent_view(a)
     if not v: return None
+    GV2.add_panel_age(v["pending"], (GR.current() or {}).get("epoch"))   # gov-v2: panel size at the last close and age, counts only
     return dict(source="minepoa_grading", upstream_as_of=v["upstream_as_of"], fetched_at=v["fetched_at"], stale=v["stale"], quorum=v["quorum"],
                 pending_answers=[{k: r.get(k) for k in QUEUE_FIELDS if k not in ("author", "name")} for r in v["pending"]], pending_count=v["pending_count"],
                 seals_on_pending=[dict(answer=s["answer"], ts=s["ts"], counts=s["counting"], trusted=s["trusted"], answer_need=s["need"], answer_author=s["author"], seal_tx=s["tx"]) for s in v["seals"]],

@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.164] - 2026-10-26
+
+### Added
+- Governance, Queue: **Panel** (the answer's panel size in the latest close record, a public list of graders; only its length is shown) and **Age** (epochs since its origin) beside seals so far and need. Both sort, and the queue API and CSV carry `panel` and `age`. Some close records carry a score on pending grades: never read, stored or shown.
+- Governance, **Settlement**: per close, settled answers by origin epoch with Sealed (at least one jury seat), Paid (passed, and the author has a challenge payout at that close), and the rows still Open at that close with how many had a Panel. Close chips, header sort, Paid per close and by origin charts, `/api/v1/governance/settlement` (CSV), MCP `get_settlement_by_origin`.
+- Governance, **Changes**: per close standing changes from minepoa's engine fold (Before, Added, Removed, Net, After; relisted Agents are not added, pardoned removals do not count); `?close=` lists who was added and removed. Chart, header sort, `/api/v1/governance/standing-changes` (CSV), MCP `get_standing_changes`.
+- Governance, **Never established**: Agents in minepoa's agent list that no genesis import, no close record and minepoa's established list ever named, with joined, answers, paid closes, last tx and balance. Chart by join epoch, header sort, `/api/v1/governance/never-established` (CSV), MCP `list_never_established`.
+- /about#gov-v2 method. MCP now has 38 tools. No new request to minepoa.com.
+
+### Tests
+- tools/govv2_test.py (in CI).
+
 ## [1.26.163] - 2026-10-26
 
 ### Fixed

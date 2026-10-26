@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.163"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-26T19:40:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.164"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-26T19:48:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -252,6 +252,19 @@ def t_grade_history(args):
     a = args.get("address")
     if a is not None and not ADDR_RX.match(str(a)): raise ToolError("address must be a poa1 address")
     return GH.api(a, _sort(args, GH.SORTS, "seats"), _dir(args), _int(args, "limit", 100, 1, 5000), _int(args, "offset", 0, 0, 10 ** 6))
+
+def t_settlement(args):   # gov-v2
+    from . import govv2 as GV2
+    return GV2.api_settlement(_int(args, "close", None, 0, 10 ** 6) if args.get("close") is not None else None, _sort(args, GV2.SET_SORTS, "close"), _dir(args),
+                              _int(args, "limit", 200, 1, 5000), _int(args, "offset", 0, 0, 10 ** 6))
+
+def t_standing_changes(args):
+    from . import govv2 as GV2
+    return GV2.api_changes(_int(args, "close", None, 0, 10 ** 6) if args.get("close") is not None else None, _sort(args, GV2.CHG_SORTS, "close"), _dir(args))
+
+def t_never_established(args):
+    from . import govv2 as GV2
+    return GV2.api_never(_sort(args, GV2.NEV_SORTS, "joined"), _dir(args), _int(args, "limit", 100, 1, 5000), _int(args, "offset", 0, 0, 10 ** 6))
 
 def t_gov_directory(args):
     GV = _gov()
@@ -605,6 +618,19 @@ TOOLS += [
      S(address=ADDR_P, sort={"type": "string", "enum": ["seats", "name", "aligned", "rate", "avg", "closes", "last", "open"], "default": "seats", "description": "row order without address: seats (default), name (A to Z), aligned, rate, avg, closes, last or open"},
        dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default: highest first, A to Z for names) or asc (reversed); blanks last"},
        limit=LIMD(100, 5000, "graders"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_grade_history),
+    ("get_settlement_by_origin", "Settlement by origin epoch",
+     "Per close of a segment, settled answers bucketed by the epoch each answer was born (origin): settled, sealed (at least one jury seat), passed, paid (passed and the author got a challenge payout at that close), "
+     "beside the rows still open at that close and how many had a panel. From the public close records. Pending scores are never read. close= keeps one close. CSV at /api/v1/governance/settlement.csv. Use it to see how answers from each origin epoch settled, sealed and got paid.",
+     S(close={"type": "integer", "minimum": 0, "description": "one close (epoch number); omit for every close"}, sort={"type": "string", "enum": ["close", "origin", "settled", "sealed", "paid", "open", "open_panel"], "default": "close", "description": "sort key"},
+       dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default) or asc; blanks last"}, limit=LIMD(200, 5000, "rows"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_settlement),
+    ("get_standing_changes", "Standing changes per close",
+     "Per close of a segment, minepoa's engine fold one close at a time: established before, added (not already established), removed (pardons honoured), after and net. With close=, the added and removed addresses. CSV at /api/v1/governance/standing-changes.csv. Use it to see who became or stopped being established at each close.",
+     S(close={"type": "integer", "minimum": 0, "description": "one close: adds added_list and removed_list"}, sort={"type": "string", "enum": ["close", "before", "added", "removed", "net", "after"], "default": "close", "description": "sort key"},
+       dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default) or asc; blanks last"}, segment=SEG_P), t_standing_changes),
+    ("list_never_established", "Agents never established",
+     "Agents in minepoa's agent list never established in any segment POAScan holds (no genesis import, no established_after, not on minepoa's established list): joined, answers and last tx this segment, closes paid, balance. CSV at /api/v1/governance/never-established.csv. Use it to list Agents that have never been established.",
+     S(sort={"type": "string", "enum": ["joined", "name", "answers", "paid", "last", "balance"], "default": "joined", "description": "sort key"}, dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default) or asc; blanks last"},
+       limit=LIMD(100, 5000, "Agents"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}), t_never_established),
     ("list_governance_directory", "Agent directory",
      "Every Agent in a segment's close records or archived txs: established, grader, Score (POAScan's own, 0 to 100), rewards in the segment, last paid close, eligible closes, seals and attestations. "
      "sort is score, rewards, eligible, seals or atts (highest first); filter is established, graders or attesters. CSV at /api/v1/governance/directory.csv. Use it to list or rank all Agents in a segment.",

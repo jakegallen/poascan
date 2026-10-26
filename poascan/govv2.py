@@ -1,0 +1,282 @@
+"""Governance v2 (preview/gov-v2): settlement by origin epoch per close, standing changes per close, Agents never
+established, and panel size plus age on the settle queue. Public data only, from close records POAScan already archives,
+minepoa's grading list copy and the agent list. No new upstream reads.
+
+Never shown: a pending grade's score or a seal's content. Pending rows are counted (panel size from the last close record's
+public panel list, seals from the grading list's plain counts); the scores some close records carry on pending grades are
+never read here."""
+import collections
+from . import db, analytics as A, segments as SG, scoresort as SS, estfold as EF
+from .ui import E, card, stat, intc, agent, bars, lt, qtip
+
+METHOD = "/about#gov-v2"
+
+# ---------------------------------------------------------------- (a) panel size and age for the settle queue
+@A.cached("govv2_panels", 120)
+def panels():
+    """{answer id: panel size} from the current segment's last close record (basis.pending[id].panel is a public list of
+    grader addresses; only its length is used), and that close's epoch."""
+    with SG.use(SG.CURRENT): eps = A.epochs_raw()
+    if not eps: return {}, None
+    last = max(eps, key=lambda e: int(e.get("epoch", 0)))
+    pend = (last.get("basis") or {}).get("pending") or {}
+    return {k: len(v.get("panel") or []) for k, v in pend.items() if isinstance(v, dict)}, int(last.get("epoch", 0))
+
+def add_panel_age(rows, open_epoch):
+    """Adds panel (size at the last close, None when the answer was not pending then) and age (epochs since its origin)."""
+    pm, _ = panels()
+    for r in rows:
+        if "panel" in r: continue
+        r["panel"] = None if r.get("open") else pm.get(r.get("id"))
+        o = r.get("since") if r.get("since") is not None else r.get("born")
+        r["age"] = (int(open_epoch) - int(o)) if open_epoch is not None and o is not None else None
+    return rows
+
+# ---------------------------------------------------------------- (e) settlement by origin epoch, per close
+def _origin(aid, prev, tx_ep):
+    if aid in prev: return A.since_of(aid, prev[aid])
+    return tx_ep.get(aid)
+
+@A.cached("govv2_settlement", 300)
+def settlement():
+    """One row per (close, origin epoch) in the selected segment: settled rows of that close (basis.settled), how many had a
+    jury seat (sealed), passed, and paid (passed and the author got a challenge payout at that close), beside the rows
+    still open at that close (basis.pending) and how many of those had a panel. Origin: the answer's since in the previous
+    close's pending list, else its archived tx epoch, else unknown (-1)."""
+    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
+    ids = [s.get("answer") for e in eps for s in ((e.get("basis") or {}).get("settled") or []) if s.get("answer")]
+    tx_ep = {}
+    for i in range(0, len(ids), 500):
+        ch = ids[i:i + 500]
+        for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)):
+            if r["epoch"] is not None: tx_ep[r["id"]] = int(r["epoch"])
+    out, prev = [], {}
+    for e in eps:
+        n = int(e.get("epoch", 0)); b = e.get("basis") or {}; ts = int(e.get("ts") or 0)
+        paid_to = {a for a, v in (e.get("challenges") or {}).items() if _pos(v)}
+        g = collections.defaultdict(lambda: dict(settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0))
+        for s in b.get("settled") or []:
+            o = _origin(s.get("answer"), prev, tx_ep); o = -1 if o is None else o; x = g[o]
+            x["settled"] += 1; x["sealed"] += 1 if s.get("jury") else 0
+            if s.get("passed"): x["passed"] += 1; x["paid"] += 1 if s.get("from") in paid_to else 0
+        pend = b.get("pending") or {}
+        for aid, v in pend.items():
+            if not isinstance(v, dict): continue
+            x = g[A.since_of(aid, v)]; x["open"] += 1; x["open_panel"] += 1 if v.get("panel") else 0
+        for o in sorted(g):
+            out.append(dict(close=n, close_ts=ts, origin=None if o == -1 else o, **g[o]))
+        prev = pend if isinstance(pend, dict) else {}
+    return out
+
+def _pos(v):
+    try: return float(v) > 0
+    except (TypeError, ValueError): return False
+
+def settlement_closes(rows=None):
+    """Per close totals (the chart and the close chips)."""
+    t = collections.OrderedDict()
+    for r in rows if rows is not None else settlement():
+        x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0))
+        for k in ("settled", "sealed", "passed", "paid", "open", "open_panel"): x[k] += r[k]
+    return list(t.values())
+
+SET_COLS = [SS.Col("close", "Close", "num"), SS.Col("origin", "Origin", "num", "r"), SS.Col("settled", "Settled", "num", "r"),
+            SS.Col("sealed", "Sealed", "num", "r dk"), SS.Col("paid", "Paid", "num", "r"), SS.Col("open", "Open", "num", "r"),
+            SS.Col("open_panel", "Panel", "num", "r dk")]
+SET_SORTS = [(c.key, c.label) for c in SET_COLS]
+SET_TIP = ("Settled: rows the close settled, by the epoch the answer was born. Sealed: settled with at least one jury seat. "
+           "Paid: passed, and the author got a challenge payout at that close. Open: still pending at that close. Panel: open rows with a panel.")
+
+def settlement_select(close=None, by="close", d="desc"):
+    rows = [r for r in settlement() if close is None or r["close"] == close]
+    tie = lambda r: (-r["close"], r["origin"] if r["origin"] is not None else 1 << 30)
+    return SS.sort_rows(rows, lambda r: r[by], "num", d, tie=tie)
+
+# ---------------------------------------------------------------- (d) standing changes per close
+@A.cached("govv2_changes", 300)
+def standing_changes():
+    """Per close of the selected segment, minepoa's engine fold (estfold.fold) one close at a time: established before,
+    added (established_after not already established), relisted (already established), removed (established_removed,
+    pardons honoured), after, net. Address lists are public close record fields."""
+    seg = SG.selected(); eps = sorted(A.segment_closes(seg), key=lambda e: int(e.get("epoch", 0)))
+    pardons = A.params().get("slash_pardons"); est = set(EF.imported(seg)); out = []
+    for e in eps:
+        n = int(e.get("epoch", 0)); b = e.get("basis") or {}; before = len(est); sl = set(b.get("slashed") or [])
+        add = [a for a in b.get("established_after") or [] if a not in est]; rel = [a for a in b.get("established_after") or [] if a in est]
+        est.update(add)
+        rem = [a for a in b.get("established_removed") or [] if a in est and not EF._pardoned(pardons, n, a, sl)]
+        est.difference_update(rem)
+        out.append(dict(close=n, close_ts=int(e.get("ts") or 0), before=before, added=len(add), relisted=len(rel), removed=len(rem),
+                        after=len(est), net=len(est) - before, added_list=sorted(add), removed_list=sorted(rem)))
+    return out
+
+CHG_COLS = [SS.Col("close", "Close", "num"), SS.Col("before", "Before", "num", "r dk"), SS.Col("added", "Added", "num", "r"),
+            SS.Col("removed", "Removed", "num", "r"), SS.Col("net", "Net", "num", "r"), SS.Col("after", "After", "num", "r")]
+CHG_SORTS = [(c.key, c.label) for c in CHG_COLS]
+
+# ---------------------------------------------------------------- (c) Agents never established
+def ever_established():
+    """Every address established at any time in any segment POAScan holds (genesis imports, established_after), plus
+    minepoa's current established list from the grading copy."""
+    s = set()
+    for sg in SG.SEGMENTS:
+        n = sg.get("n") if isinstance(sg, dict) else None
+        if n is None: continue
+        s |= set(EF.imported(n))
+        for e in A.segment_closes(n): s |= set((e.get("basis") or {}).get("established_after") or [])
+    try:
+        from . import grading as GR
+        d = GR.current() or {}
+        s |= {x if isinstance(x, str) else (x or {}).get("address") or (x or {}).get("addr") for x in d.get("established") or []}
+    except Exception: pass
+    s.discard(None)
+    return s
+
+@A.cached("govv2_never", 300)
+def never_established():
+    """Agents in the live agent list who were never established: joined, answers and last tx in the current segment's
+    archive, closes paid in this segment, balance."""
+    ever = ever_established(); nm = A.forum_names()
+    accts = db.q("SELECT addr, balance, api_ts, api_joined_epoch, first_seen FROM accounts")
+    ans = {r["a"]: r["n"] for r in db.q("SELECT from_addr AS a, COUNT(*) AS n FROM txs WHERE type='challenge' AND segment=? GROUP BY from_addr", (SG.CURRENT,))}
+    last = {r["a"]: r["t"] for r in db.q("SELECT from_addr AS a, MAX(ts) AS t FROM txs WHERE segment=? AND from_addr IS NOT NULL GROUP BY from_addr", (SG.CURRENT,))}
+    paid = collections.Counter()
+    for e in A.segment_closes(SG.CURRENT):
+        for a, v in (e.get("rewards") or {}).items():
+            if _pos(v): paid[a] += 1
+    out = []
+    for r in accts:
+        a = r["addr"]
+        if not a or not a.startswith("poa1") or a in ever: continue
+        out.append(dict(address=a, name=nm.get(a), joined_epoch=r["api_joined_epoch"], joined_ts=_ts(r["api_ts"]) or r["first_seen"],
+                        answers=ans.get(a, 0), closes_paid=paid.get(a, 0), last_ts=last.get(a), balance=float(r["balance"] or 0)))
+    return out
+
+def _ts(v):
+    if v is None: return None
+    try: return int(float(v)) if float(v) < 1e11 else int(float(v) / 1000)
+    except (TypeError, ValueError):
+        import datetime as dt
+        try: return int(dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp())
+        except ValueError: return None
+
+NEV_COLS = [SS.Col("name", "Agent", "text"), SS.Col("joined", "Joined", "num", "r"), SS.Col("answers", "Answers", "num", "r"),
+            SS.Col("paid", "Paid closes", "num", "r dk"), SS.Col("last", "Last tx", "num", "r dk"), SS.Col("balance", "Balance", "num", "r")]
+NEV_SORTS = [(c.key, c.label) for c in NEV_COLS]
+_NV = {"name": lambda r: SS.text_key(r["name"] or r["address"]), "joined": lambda r: r["joined_ts"], "answers": lambda r: r["answers"],
+       "paid": lambda r: r["closes_paid"], "last": lambda r: r["last_ts"], "balance": lambda r: r["balance"]}
+
+def never_select(by="joined", d="desc"):
+    kind = "text" if by == "name" else "num"
+    return SS.sort_rows(never_established(), _NV.get(by, _NV["joined"]), kind, d, tie=lambda r: r["address"])
+
+# ---------------------------------------------------------------- pages (Governance tabs)
+PAGE = 100
+
+def _n(v): return f'<span class="num">{v:,}</span>' if v is not None else '<span class="dim">···</span>'
+def _q(qs, k, dflt=""): return ((qs or {}).get(k) or [dflt])[0]
+def _pg(qs, total):
+    try: pg = max(1, int(_q(qs, "page", "1")))
+    except ValueError: pg = 1
+    pages = max(1, -(-total // PAGE)); return min(pg, pages), pages
+
+def _nav(pg, pages, url):
+    if pages < 2: return ""
+    return ('<div class="chips">' + (f'<a class="chip" href="{url(pg - 1)}">Previous</a>' if pg > 1 else "")
+            + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{url(pg + 1)}">More</a>' if pg < pages else "") + "</div>")
+
+def settlement_tab(qs, href, qsx):
+    rows = settlement(); closes = settlement_closes(rows)
+    if not closes: return card("Settlement", '<p class="na">No close record in this segment yet.</p>')
+    cl = _q(qs, "close"); cl = int(cl) if cl.isdigit() and any(c["close"] == int(cl) for c in closes) else None
+    by = SS.page_sort(qs, dict(SET_SORTS), "close"); d = SS.page_dir(qs)
+    rs = settlement_select(cl, by, d)
+    keep = lambda **o: dict(dict(sort=by if by != "close" else "", dir="asc" if d == "asc" else "", close=str(cl) if cl is not None else ""), **o)
+    link = lambda k, dd: href("settlement", **keep(sort=k if k != "close" else "", dir="asc" if dd == "asc" else "")) + "#settlement"
+    chips = (f'<a href="{href("settlement", **keep(close=""))}#settlement" class="chip {"on" if cl is None else ""}">All</a>'
+             + "".join(f'<a href="{href("settlement", **keep(close=str(c["close"])))}#settlement" class="chip {"on" if c["close"] == cl else ""}">E{c["close"]}</a>' for c in reversed(closes)))
+    last = closes[-1]
+    s = "".join([stat("Settled", intc(last["settled"]), tip=f'At the E{last["close"]} close'), stat("Paid", intc(last["paid"]), tip="Passed, and the author got a challenge payout at that close"),
+                 stat("Open", intc(last["open"]), tip=f'Still pending at the E{last["close"]} close'), stat("Panel", intc(last["open_panel"]), tip="Open rows with a panel at that close")])
+    ch = bars([(f'E{c["close"]}', [c["paid"], c["settled"] - c["paid"]]) for c in closes], height=150, colors=("verd", "ember"), fmt=lambda z: f"{z:,.0f}", legend=["Paid", "Settled, not paid"])
+    org = [r for r in rows if r["close"] == (cl if cl is not None else last["close"])]
+    ch2 = bars([(f'E{r["origin"]}' if r["origin"] is not None else "?", [r["settled"], r["open"]]) for r in org], height=150, colors=("gold", "steel"), fmt=lambda z: f"{z:,.0f}",
+               legend=["Settled", "Open"], stacked=False)
+    trs = "".join(f'<tr><td><a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a></td><td class="r">{"E" + str(r["origin"]) if r["origin"] is not None else "<span class=dim>···</span>"}</td>'
+                  f'<td class="r">{_n(r["settled"])}</td><td class="r dk">{_n(r["sealed"])}</td><td class="r">{_n(r["paid"])}</td><td class="r">{_n(r["open"])}</td><td class="r dk">{_n(r["open_panel"])}</td></tr>' for r in rs)
+    tb = (SS.select(SET_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(SET_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>')
+    q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "", close=str(cl) if cl is not None else "")
+    links = f'<a class="more" href="/api/v1/governance/settlement.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/settlement{q}">API →</a>'
+    cov = f'<p class="cov dim small">{E(SET_TIP)} From the close records. <a href="{METHOD}">Method</a></p>'
+    sub = f'E{cl if cl is not None else last["close"]} by origin'
+    return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Paid per close", ch) + card(sub, ch2) + "</div>"
+            + card(f"Settlement · {len(rs):,}", f'<div class="chips scroll">{chips}</div>' + tb + cov, links, cls="histc", id="settlement"))
+
+def changes_tab(qs, href, qsx):
+    rows = standing_changes()
+    if not rows: return card("Changes", '<p class="na">No close record in this segment yet.</p>')
+    by = SS.page_sort(qs, dict(CHG_SORTS), "close"); d = SS.page_dir(qs)
+    rs = SS.sort_rows(list(rows), lambda r: r[by], "num", d, tie=lambda r: -r["close"])
+    link = lambda k, dd: href("changes", sort=k if k != "close" else "", dir="asc" if dd == "asc" else "") + "#changes"
+    last = rows[-1]
+    s = "".join([stat("Established", intc(last["after"]), tip=f'After the E{last["close"]} close'), stat("Added", intc(last["added"]), tip=f'At E{last["close"]}'),
+                 stat("Removed", intc(last["removed"]), tip=f'At E{last["close"]}'), stat("Net", f'<span class="num">{last["net"]:+,}</span>', tip=f'At E{last["close"]}')])
+    ch = bars([(f'E{r["close"]}', [r["added"], r["removed"]]) for r in rows], height=150, colors=("verd", "ember"), fmt=lambda z: f"{z:,.0f}", legend=["Added", "Removed"], stacked=False)
+    sel = _q(qs, "close"); one = next((r for r in rows if str(r["close"]) == sel), None)
+    trs = "".join(f'<tr><td><a href="{href("changes", close=str(r["close"]))}#changes-list">E{r["close"]}</a></td><td class="r dk">{_n(r["before"])}</td><td class="r">{_n(r["added"])}</td>'
+                  f'<td class="r">{_n(r["removed"])}</td><td class="r">{r["net"]:+,}</td><td class="r">{_n(r["after"])}</td></tr>' for r in rs)
+    tb = SS.select(CHG_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(CHG_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
+    q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "")
+    links = f'<a class="more" href="/api/v1/governance/standing-changes.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/standing-changes{q}">API →</a>'
+    cov = f'<p class="cov dim small">minepoa\'s engine, one close at a time: genesis import, plus established_after, minus established_removed. Relisted rows are not counted as added. <a href="{METHOD}">Method</a></p>'
+    det = ""
+    if one:
+        nm = A.forum_names()
+        li = lambda xs: "".join(f'<li>{agent(a, nm.get(a) or "")}</li>' for a in xs) or '<li class="dim">None</li>'
+        det = card(f'E{one["close"]} changes', f'<div class="grid2"><div><h3>Added · {one["added"]:,}</h3><ul class="plain">{li(one["added_list"])}</ul></div>'
+                   f'<div><h3>Removed · {one["removed"]:,}</h3><ul class="plain">{li(one["removed_list"])}</ul></div></div>', id="changes-list")
+    return f'<div class="stats four">{s}</div>' + card("Added and removed per close", ch) + card(f"Changes · {len(rs):,}", tb + cov, links, cls="histc", id="changes") + det
+
+def never_tab(qs, href, qsx):
+    if SG.archived(): return card("Never established", '<p class="na">Shown for the current segment only.</p>')
+    rows = never_established(); by = SS.page_sort(qs, dict(NEV_SORTS), "joined"); d = SS.page_dir(qs)
+    rs = never_select(by, d); pg, pages = _pg(qs, len(rs)); cur = rs[(pg - 1) * PAGE: pg * PAGE]
+    keep = lambda **o: dict(dict(sort=by if by != "joined" else "", dir="asc" if d == "asc" else ""), **o)
+    link = lambda k, dd: href("never", **keep(sort=k if k != "joined" else "", dir="asc" if dd == "asc" else "", page="")) + "#never"
+    total = db.q1("SELECT COUNT(*) AS n FROM accounts")["n"] or 0
+    s = "".join([stat("Agents", intc(total)), stat("Never established", intc(len(rows))),
+                 stat("Share", f'<span class="num">{100 * len(rows) / total:.1f}%</span>' if total else "···"), stat("With answers", intc(sum(1 for r in rows if r["answers"])), tip="Answered at least once this segment")])
+    by_ep = collections.Counter(r["joined_epoch"] for r in rows if r["joined_epoch"] is not None)
+    ch = bars([(f"E{k}", [v]) for k, v in sorted(by_ep.items())[-30:]], height=150, colors=("steel",), fmt=lambda z: f"{z:,.0f}", legend=["Never established, by join epoch"]) if by_ep else ""
+    trs = "".join(f'<tr><td>{agent(r["address"], r["name"] or "")}</td><td class="r">{lt(r["joined_ts"], "d") if r["joined_ts"] else "<span class=dim>···</span>"}</td>'
+                  f'<td class="r">{_n(r["answers"])}</td><td class="r dk">{_n(r["closes_paid"])}</td><td class="r dk">{lt(r["last_ts"], "d") if r["last_ts"] else "<span class=dim>···</span>"}</td>'
+                  f'<td class="r">{r["balance"]:,.2f}</td></tr>' for r in cur)
+    tb = (SS.select(NEV_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(NEV_COLS, by, d, link)}</tr></thead>'
+          f'<tbody>{trs or "<tr><td colspan=6 class=na>Every Agent has been established.</td></tr>"}</tbody></table></div>')
+    nav = _nav(pg, pages, lambda p: href("never", **keep(page=str(p) if p > 1 else "")) + "#never")
+    q = qsx(sort=by if by != "joined" else "", dir="asc" if d == "asc" else "")
+    links = f'<a class="more" href="/api/v1/governance/never-established.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/never-established{q}">API →</a>'
+    cov = (f'<p class="cov dim small">Agents in minepoa\'s agent list never in any close record\'s established_after, any genesis import or minepoa\'s current established list, '
+           f'in every segment POAScan holds. <a href="{METHOD}">Method</a></p>')
+    return f'<div class="stats four">{s}</div>' + (card("By join epoch", ch) if ch else "") + card(f"Never established · {len(rs):,}", tb + nav + cov, links, cls="histc", id="never")
+
+# ---------------------------------------------------------------- API
+BASE = "https://poascan.io"
+def _seg(): return dict(segment=SG.selected(), archived=SG.archived())
+
+def api_settlement(close=None, sort="close", d="desc", limit=1000, offset=0):
+    rs = settlement_select(close, sort, d)
+    return dict(_seg(), source="close records", close=close, sort=sort, dir=d, total=len(rs), offset=offset, limit=limit,
+                closes=settlement_closes(), definitions=SET_TIP, method=BASE + METHOD, rows=rs[offset:offset + limit])
+
+def api_changes(close=None, sort="close", d="desc"):
+    rs = SS.sort_rows(list(standing_changes()), lambda r: r[sort], "num", d, tie=lambda r: -r["close"])
+    if close is not None: rs = [r for r in rs if r["close"] == close]
+    keep = lambda r: r if close is not None else {k: v for k, v in r.items() if not k.endswith("_list")}
+    return dict(_seg(), source="close records (minepoa's engine fold)", close=close, sort=sort, dir=d, total=len(rs), method=BASE + METHOD,
+                note="added excludes relisted (already established); with close= each row carries added_list and removed_list.", rows=[keep(r) for r in rs])
+
+def api_never(sort="joined", d="desc", limit=1000, offset=0):
+    rs = never_select(sort, d) if not SG.archived() else []
+    return dict(_seg(), source="minepoa agent list, close records of every segment held, minepoa's established list", sort=sort, dir=d, total=len(rs),
+                offset=offset, limit=limit, method=BASE + METHOD, rows=rs[offset:offset + limit])
