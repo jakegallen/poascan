@@ -5,7 +5,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
 from . import db, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
-from .ui import E, card, stat, intc, pct, short, name_link, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
+from .ui import E, card, stat, intc, pct, short, name_link, agent, author_link, ADDR_RX, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 
 TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
@@ -62,9 +62,8 @@ def standing_rows():
 def _agent(r, est=False):
     """Agent cell: name (LabLeak) with the short address under it. est: an established row, tagged Unconfirmed when
     minepoa's grading list does not have it (grading.established_check)."""
-    a = r["address"]; al = f'<a class="mono" href="/address/{E(a)}#standing" title="{E(a)}">{E(short(a, 6, 4))}</a>'
-    tg = GR.tag_html(GR.established_check(a)[2]) if est else ""
-    return ((name_link(r["name"], a) + tg + f"<small>{al}</small>") if r["name"] else al + tg)
+    a = r["address"]; tg = GR.tag_html(GR.established_check(a)[2]) if est else ""
+    return agent(a, r["name"] or "", frag="#standing", tail=tg)
 
 def unconfirmed_flag(addrs):
     """The Unconfirmed tag for an Established count when minepoa's grading list leaves out some of these Agents."""
@@ -215,8 +214,7 @@ def graders(qs):
                      stat("Queue", intc(last["queue"]) if last else "···", tip="Pending answers at the last close"), stat("Coverage", pct(cov) if cov is not None else "···", tip="Pending answers with a panel at the last close")])
     ch = bars([(f'E{x["epoch"]}', [x["aligned"], x["other"]]) for x in js], height=150, colors=("verd", "ember"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else '<p class="na">No settled jury seats in this segment yet.</p>'
     def ag(g):
-        a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
-        return (name_link(nm[g], g) + f"<small>{a}</small>") if nm.get(g) else a
+        return agent(g, nm.get(g) or "")
     def _avg(v): return f'<span class="num">{v:.2f}</span>' if v is not None else '<span class="dim">···</span>'
     def ex(r):
         if not r.get("exact"): return ""
@@ -546,8 +544,9 @@ def forum(qs):
     pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d"), [n]) for t, n in f["per_day"]], height=140, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
     ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
     def who(r):
-        pid = r["pid"]; nm = r["name"] or short(pid, 6, 4)
-        return name_link(nm, pid)
+        pid = r["pid"]
+        if ADDR_RX.match(pid or ""): return agent(pid, r["name"] or "")
+        n = r["name"] or short(pid, 6, 4); return author_link(n, {n: pid})
     by = SS.page_sort(qs, dict(FORUM_SORTS), "items"); d = SS.page_dir(qs)
     top = most_active_select(f["top"], by, d)
     trs = "".join(f'<tr><td>{who(r)}</td><td class="r">{intc(r["posts"])}</td><td class="r">{intc(r["comments"])}</td><td class="r dk">{intc(r["received"])}</td>{score_cells(r)}</tr>' for r in top)
@@ -579,7 +578,7 @@ def proposals(qs):
     s = "".join([stat("Proposals", intc(len(rows)), tip="Posts in a/proposals"), stat("Discussion", intc(sum(1 for r in rows if r["status"] == "discussion")), tip="Under 24 hours old, not on a ballot"),
                  stat("On a ballot", intc(sum(1 for r in rows if r["status"] == "ballot"))), stat("Open ballots", intc(len(live)), tip="GET /api/ballots")])
     def who(r):
-        pid = r["pid"]; return name_link(r["author"], pid) if pid else E(r["author"] or "···")
+        pid = r["pid"]; return author_link(r["author"], {r["author"]: pid}) if r["author"] else "···"
     tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
                [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
     bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), "Ended " + (lt(_iso(b["ends"])) if _iso(b["ends"]) else E(b["ends"][5:16].replace("T", " ") + " UTC")),

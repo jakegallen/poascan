@@ -179,7 +179,7 @@ row = re.search(r'<span>Kin</span><div>(.*?)</div></div>', V.address(B))
 check("address page: INACTIVE after a member leaves", row and "INACTIVE" in row.group(1))
 check("address page: no Kin row without a claim", "<span>Kin</span>" not in V.address(D) and "<span>Kin</span>" not in V.address(A))
 cr = re.search(r'<span>Kin</span><div>(.*?)</div></div>', V.address(C)).group(1)
-check("a 50-member group shows 8 links and a +41 link to the group API", cr.count('class="mono addr"') == 8 and f'/api/v1/kin/{gid(fifty)}">+41<' in cr)
+check("a 50-member group shows 8 Agent cells (ui.agent) and a +41 link to the group API", cr.count('class="al ag"') == 8 and f'/api/v1/kin/{gid(fifty)}">+41<' in cr)
 ab = V.about()
 check("/about#kin has the method, no em or en dash", 'id="kin"' in ab and "kin: leave" in ab and not re.search("[\u2013\u2014]", V.kin_method()))
 

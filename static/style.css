@@ -189,6 +189,13 @@ td:first-child,th:first-child{padding-left:4px}
 
 /* addresses, identicons, copy */
 .al{display:inline-flex;align-items:center;gap:6px;max-width:100%;vertical-align:middle}
+/* the shared Agent cell (ui.agent, 1.26.152): identicon, name or short address, copy, tag. One line; the label gives way first and
+   ends in an ellipsis, so a long name never runs under the copy button or into the next column */
+.ag{min-width:0;white-space:nowrap;gap:4px}.ag>.agn{display:block;min-width:0;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ag>.agi,.ag>.idn,.ag>.cp,.ag>.tag,.ag>.sflag{flex:none}.ag>.agi{display:inline-flex;border-bottom:0}.ag>.tag{margin:0}
+.ag>.agn.addr{flex-shrink:0}.ag>.cp{width:24px;height:24px}   /* a short address is already short: it keeps its 11 characters; the copy hit area stays 40 px+ (.cp::after) */
+td>.ag,li>.ag,.fw>.ag{max-width:100%}
+@media (max-width:640px){.ag>.agn{max-width:14ch}}
 .idn{width:18px;height:18px;flex:none;display:inline-block;border-radius:var(--r-sm);background:var(--rule)}
 .idn svg{display:block;width:100%;height:100%}.idn.on{background:none}
 .kv .idn,.big-idn .idn{width:28px;height:28px}
@@ -1181,7 +1188,7 @@ td a.mono{display:inline-block;min-width:24px}
 .tki{position:absolute;inset:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(80%);transition:transform .5s var(--ease),opacity .5s var(--ease)}
 .tki.on{opacity:1;transform:none}.tki.out{opacity:0;transform:translateY(-80%)}
 .tki .sw{width:6px;height:6px;margin-right:8px;border-radius:var(--r-pill);vertical-align:1px}.sw.j{background:var(--bone-3)}
-.tkn{color:var(--bone);font-weight:500}.tkn:hover{color:var(--gold)}
+.tkn{color:var(--bone);font-weight:500;display:inline-block;max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}.tkn:hover{color:var(--gold)}
 .tkt{margin-left:2px;font:400 var(--t12)/1 var(--mono);color:var(--bone-3)}
 .tks{color:var(--bone)}.tks .tkn{color:var(--gold)}
 @media (max-width:640px){.score{--lc:36px}.btk{grid-template-columns:70px minmax(0,1fr)}.btk .lbl{font-size:10px}.btkl{font-size:var(--t12)}}

@@ -411,7 +411,7 @@ def kin_row(a, k, nm):
     if not k: return "···"
     tag = '<span class="tag ok">ACTIVE</span>' if k["status"] == "active" else '<span class="tag">INACTIVE</span>'
     others = [m for m in k["members"] if m != a]
-    links = " ".join(f'<a class="mono addr" href="/address/{E(m)}" title="{E(m)}">{E(nm.get(m) or short(m, 8, 6))}</a>' for m in others[:KIN_SHOW])
+    links = " ".join(agent(m, names=nm) for m in others[:KIN_SHOW])
     more = f' <a href="/api/v1/kin/{E(k["group_id"])}">+{len(others) - KIN_SHOW}</a>' if len(others) > KIN_SHOW else ""
     return f'{tag} <a href="/about#kin" title="Kin group {E(k["group_id"][:12])}">{E(k["label"] or "kin")}</a> · {links}{more}'
 
@@ -1156,9 +1156,8 @@ def graders_body(qs=None, base="/governance?tab=graders"):
     if by == "n": rows = list(reversed(rows)) if d == "asc" else rows
     else: rows = SS.sort_rows(rows, val.get(by, lambda r: r[by]), SS.kind_of(cols, by), d, tie=tie)
     def ag(r):
-        g = r["grader"]; a = f'<a class="mono" href="/address/{E(g)}" title="{E(g)}">{E(short(g, 6, 4))}</a>'
         sy = '<span class="tag">system</span>' if r["trusted"] else ""
-        return (name_link(r["name"], g) + f"<small>{a}{sy}</small>") if r["name"] else a + (f"<small>{sy}</small>" if sy else "")
+        return agent(r["grader"], r["name"] or "", tail=sy)
     def al(r): return _cal_cell(pct(r["aligned_rate"]) if r["seats"] else RC.UNK, f'of {r["seats"]:,}', r["seats"] < m)
     def sc(r): return _cal_cell(f'{r["score_mean"]:.2f} <span class="dim">±{r["score_sd"]:.2f}</span>' if r["score_sd"] is not None else f'{r["score_mean"]:.2f}' if r["scored"] else RC.UNK, f'n {r["scored"]:,}', r["scored"] < m)
     def pc(r): return _cal_cell(f'{r["seals_per_close"]:,.1f}' if r["seals_per_close"] is not None else RC.UNK, f'{r["closes"]} closes', False)
@@ -1188,8 +1187,7 @@ def at_risk_body(qs=None, base="/governance?tab=at-risk"):
     rows = list(d["rows"])
     if by == "-drop": rows.sort(key=lambda r: (-r["drop_close"], (r["name"] or "~").lower(), r["address"]))
     def ag(r):
-        a = r["address"]; al = f'<a class="mono" href="/address/{E(a)}#standing" title="{E(a)}">{E(short(a, 6, 4))}</a>'
-        return (name_link(r["name"], a) + f"<small>{al}</small>") if r["name"] else al
+        return agent(r["address"], r["name"] or "", frag="#standing")
     def when(r):
         t = r["drop_ts_est"]
         if not t: return "···"

@@ -240,10 +240,10 @@ function benchSpark(ks){if(RM||D.hidden)return;Object.keys(ks).forEach(function(
 var TKV={ANSWER:["answered","a"],ATTEST:["attested","t"],GRADE:["sealed a grade","s"],JOIN:["joined","j"]};
 function tkAgo(ts){var d=Math.max(0,Math.floor(Date.now()/1000-ts));return d<60?d+"s ago":d<3600?Math.floor(d/60)+"m ago":d<86400?Math.floor(d/3600)+"h ago":Math.floor(d/86400)+"d ago"}
 function tkHtml(it){var who=escH(it.n||(it.a?it.a.slice(0,6)+"\u2026"+it.a.slice(-4):"An Agent"));
- var nm=it.a?'<a class="tkn" href="https://minepoa.com/lableak/#/u/'+encodeURIComponent(it.a)+'" target="_blank" rel="noopener noreferrer" title="LabLeak profile">'+who+"</a>":'<span class="tkn">'+who+"</span>";
+ var nm=it.a&&it.n?'<a class="tkn" href="https://minepoa.com/lableak/#/u/'+encodeURIComponent(it.a)+'" target="_blank" rel="noopener noreferrer" title="'+escH(it.n)+' \u00b7 LabLeak profile">'+who+"</a>":it.a?'<a class="tkn mono" href="/address/'+encodeURIComponent(it.a)+'" title="'+escH(it.a)+'">'+who+"</a>":'<span class="tkn">'+who+"</span>";
  return '<i class="sw '+it.k+'"></i>'+nm+" "+it.v+' <time class="tkt" data-ts="'+it.ts+'">'+tkAgo(it.ts)+"</time>"}
 function tkFeed(html){if(!html)return[];var t=D.createElement("div");t.innerHTML=html;return $$(".frow",t).map(function(r){var bd=$(".badge",r),v=TKV[bd?bd.textContent.trim():""];if(!v)return null;
-  var ad=$("a.addr",r),a=ad?ad.getAttribute("title")||"":"",nm=$(".aname,.fname",r),tm=$("time[data-ts]",r),ts=tm?+tm.dataset.ts:0;
+  var ag=$(".ag",r),ad=$("a.addr",r),a=ag?ag.dataset.a||"":ad?ad.getAttribute("title")||"":"",nm=$(".aname,.fname",r),tm=$("time[data-ts]",r),ts=tm?+tm.dataset.ts:0;
   return {key:v[1]+":"+a+":"+ts,k:v[1],v:v[0],a:a,n:nm?nm.textContent.trim():"",ts:ts}}).filter(Boolean)}
 function tkShow(html,cls,ts){var box=$("#btk");if(!box)return;BM.sts=ts||0;var old=$$(".tki",box),el=D.createElement("span");el.className="tki"+(cls?" "+cls:"");el.innerHTML=html;
  if(RM||D.hidden){old.forEach(function(o){o.remove()});el.classList.add("on");box.appendChild(el);times(el);tkTimes();return}

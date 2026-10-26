@@ -2,7 +2,7 @@
 the per-Agent pending answers, seals and jury reasons. Reads grading.py's stored copy only; no upstream call."""
 import time
 from . import grading as GR, scoresort as SS, segments as SG
-from .ui import E, card, stat, intc, pct, short, name_link, lt, rel, dur, flag
+from .ui import E, card, stat, intc, pct, short, name_link, lt, rel, dur, flag, agent
 
 def _ago(s):
     s = max(0, int(s)); return f"{s // 60}m" if s < 3600 else f"{s // 3600}h {s % 3600 // 60}m"
@@ -42,8 +42,7 @@ def qprog(r, q=4):
     return f'<span class="qp" role="img" aria-label="{E(lab)}" title="{E(lab)}">{pips}</span><span class="num qn">{r["qual"]}/{q}</span>'
 
 def agent_cell(a, name):
-    al = f'<a class="mono" href="/address/{E(a)}" title="{E(a)}">{E(short(a, 6, 4))}</a>'
-    return (name_link(name, a) + f"<small>{al}</small>") if name else al
+    return agent(a, name or "")   # the shared Agent cell (1.26.152)
 
 def ans_link(i): return f'<a class="mono" href="/tx/{E(i)}" title="{E(i)}">{E(short(i, 6, 4))}</a>'
 

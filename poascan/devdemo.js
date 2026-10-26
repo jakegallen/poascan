@@ -8,8 +8,8 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
 function FMTI(v){return Math.round(v||0).toLocaleString("en-US")}
 function emit(d){D.dispatchEvent(new CustomEvent("poa:demo",{detail:d}))}
 function frow(r,i){var a=r[5]||"",t=TY[r[4]]||["b-other","TX"],s=a.slice(0,6)+"\u2026"+a.slice(-4);
- return '<div class="frow" data-id="demo-'+i+'"><span class="badge '+t[0]+'">'+t[1]+'</span><span class="fw"><span class="al"><i class="idn" data-a="'+esc(a)+'" aria-hidden="true"></i>'+
-  '<a class="mono addr" href="/address/'+esc(a)+'" title="'+esc(a)+'">'+esc(s)+"</a>"+(r[6]?' <a class="fname aname" href="https://minepoa.com/lableak/#/u/'+esc(a)+'" target="_blank" rel="noopener noreferrer">'+esc(r[6])+"</a>":"")+
+ return '<div class="frow" data-id="demo-'+i+'"><span class="badge '+t[0]+'">'+t[1]+'</span><span class="fw"><span class="al ag" data-a="'+esc(a)+'">'+(r[6]?'<a class="agi" href="/address/'+esc(a)+'"><i class="idn" data-a="'+esc(a)+'" aria-hidden="true"></i></a>'+
+  '<a class="agn aname" href="https://minepoa.com/lableak/#/u/'+esc(a)+'" target="_blank" rel="noopener noreferrer">'+esc(r[6])+"</a>":'<i class="idn" data-a="'+esc(a)+'" aria-hidden="true"></i><a class="agn mono addr" href="/address/'+esc(a)+'" title="'+esc(a)+'">'+esc(s)+"</a>")+
   '</span></span><span class="fa"></span><a class="ft" href="/address/'+esc(a)+'"><time class="t rel" data-ts="'+Math.floor(r[1])+'"></time></a></div>'}
 fetch("/dev/demo-seed",{cache:"no-store"}).then(function(r){return r.json()}).then(function(S){
  var t0=Date.now()/1000,shift=t0-S.cut,hist=[],fut=[],n=0;

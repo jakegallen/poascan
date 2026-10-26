@@ -131,17 +131,38 @@ def name_link(name, pid=None, cls="fname"):
     return f'<a class="{cls} aname" href="{E(PROFILE_URL.format(pid))}" target="_blank" rel="noopener noreferrer" title="LabLeak profile">{E(name)}</a>'
 
 def author_link(name, rev):
-    """Forum author name -> profile link via a {name: public_id} map."""
-    return name_link(name, (rev or {}).get(name), cls="") if name else ""
+    """Forum author name -> profile link via a {name: public_id} map, in the shared Agent cell (agent()) when the id is a poa1 address."""
+    if not name: return ""
+    pid = (rev or {}).get(name)
+    if pid and ADDR_RX.match(pid): return agent(pid, name)
+    return f'<span class="al ag">{name_link(name, pid, cls="agn")}</span>'
 
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 
+def agent(a, name=None, names=None, frag="", tail="", n=(6, 4)):
+    """The one Agent cell (1.26.152), used by every table and list that names an Agent: identicon, then the name linking to its
+    LabLeak profile when it has one, otherwise the short address linking to /address; the copy button right after it, then any
+    tail (a tag). One line; the label ends in an ellipsis when the column is narrow (style.css .ag), so nothing spills into the
+    next cell. A named Agent's identicon links to its POAScan address page. frag: a fragment for the address links (#standing)."""
+    if not a: return '<span class="na">···</span>'
+    if not ADDR_RX.match(a): return f'<span class="mono bad" title="Not a valid poa1 address">{E(short(a, *n))}</span>'
+    if name is None and names: name = names.get(a)
+    href = f"/address/{E(a)}{E(frag)}"
+    if name:
+        ic = f'<a class="agi" href="{href}" title="{E(a)}" aria-label="Address page of {E(name)}">{idn(a)}</a>'
+        lab = f'<a class="agn aname" href="{E(PROFILE_URL.format(a))}" target="_blank" rel="noopener noreferrer" title="{E(name)} · LabLeak profile">{E(name)}</a>'
+    else:
+        ic, lab = idn(a), f'<a class="agn mono addr" href="{href}" title="{E(a)}">{E(short(a, *n))}</a>'
+    return f'<span class="al ag" data-a="{E(a)}">{ic}{lab}{copy(a)}{tail}</span>'
+
 def addr_link(a, names=None, n=(8, 6)):
+    """An address in a table or list is the shared Agent cell (agent()); the full address (n of 48, key/value rows) keeps its name after it."""
     if not a: return '<span class="na">···</span>'
     if not ADDR_RX.match(a): return f'<span class="mono bad" title="Not a valid poa1 address">{E(short(a, *n))}</span>'   # malformed upstream value: no link
+    if n[0] < 40: return agent(a, names=names, n=n)
     nm = (names or {}).get(a)
     label = E(short(a, *n))
-    extra = " " + name_link(nm, a) if nm else ""
+    extra = " " + name_link(nm, a, cls="fname agn") if nm else ""
     return f'<span class="al">{idn(a)}<a class="mono addr" href="/address/{E(a)}" title="{E(a)}">{label}</a>{copy(a)}{extra}</span>'
 
 def tx_link(t, n=(8, 6)):

@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.153] - 2026-10-25
+
+### Fixed
+- Agent names no longer crowd their cells. On the Home Graders card at 390 px a named Agent's name and copy button were drawn over its address and ran into the Settled column: the first column has a fixed width, the address could shrink to 24 px (`td a.mono`) while its text stayed visible, and the name after it had no limit, so it spilled out of the cell.
+
+### Changed
+- One shared Agent cell (`ui.agent`) in every table and list that names an Agent: Home Graders and the Assay line, the ticker, Established, At risk, Queue, Graders, Directory, Forum, Agents, the leaderboards, epoch rewards, tx lists, holders, swaps, search results and Kin rows. It shows the identicon, then the name linking to the LabLeak profile when the Agent has one, otherwise the short address linking to its address page, then the copy button right after it and any tag. One line: a long name ends in an ellipsis to fit the column, and the full name is in its tooltip. A named Agent's identicon links to its address page. The short address under names in Established, At risk, Graders and Queue is gone. In the ticker, an Agent with no name links to its address page instead of LabLeak.
+
+### Tests
+- tools/agent_cell_test.py (new, in CI): the cell markup, then the fixture site in Chromium at 360, 390 and 1280 px on 15 pages with a 46-character name, a 45-character name with no spaces and no-name addresses: no Agent cell spills out of its cell or overlaps a neighbouring cell or another Agent cell, its parts never overlap, the copy button sits right after the label and cut text ends in an ellipsis.
+- tools/kin_groups_test.py: Kin members are Agent cells.
+
 ## [1.26.152] - 2026-10-25
 
 ### Fixed
