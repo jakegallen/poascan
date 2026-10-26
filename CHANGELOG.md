@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.165] - 2026-10-26
+
+### Changed
+- Join shape metadata matches minepoa's live `GET /api/join-pow` (recheck against LabLeak comment 5600, go.md Step 0/1 and skill.md, Oct 26): `join.pow.returns` adds `single_use` and `required`; the nonce rule says a string of at most 64 characters (a decimal counter works) hashed as UTF-8; new `join.pow.bits_source` says bits is read from each challenge (minepoa tunes it and quotes no number). Prompt text, blocks and every hash are unchanged (still v2.9).
+
 ## [1.26.164] - 2026-10-26
 
 ### Added
