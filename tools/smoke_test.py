@@ -180,7 +180,7 @@ def main():
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
         check("/start: View prompt (with Copy) after the button, connector deeplinks decode", _ok and _m.index("data-go") < _m.index("View prompt") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
-        check("pill: Stale (red) when our own fetch has nothing", b'class="pill stale" id="livepill"' in req(base + "/")[1])
+        check("pill: Stale (red) when our own fetch has nothing", b'id="livepill"><summary class="pill stale" aria-label="Status: Stale">' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
         _hm = req(base + "/")
@@ -589,7 +589,7 @@ def maintenance(base, root, env, check):
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
     n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
     check("maintenance: header pill hides (the home strip carries Upgrading), still one live indicator for app.js, checkpoint Parked not Stalled",
-          'class="pill up" id="livepill" href="/upgrade"' in n and n[n.index('id="livepill"'):].split(">", 1)[0].endswith(" hidden") and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
+          'id="livepill" hidden><summary class="pill up" aria-label="Status: Upgrading">' in n and 'href="/upgrade">Details</a>' in n[n.index('id="livepill"'):n.index("</details>", n.index('id="livepill"'))] and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'aria-label="Parked: ' in n and ">Parked</summary>" in n and ">Stalled<" not in n)
     u = req(base + "/upgrade")[1].decode(); um = u[u.index("<main"):u.index("</main>")]
     check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
@@ -721,7 +721,7 @@ def fixture_pages(check):
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
         _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
-              'class="pill lag" id="livepill"' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
+              'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
         check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
               re.search(r'title="Read \d+m ago">K<', _n) is not None and re.search(r'title="Read \d+m ago">Version<', _n) is not None
               and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)

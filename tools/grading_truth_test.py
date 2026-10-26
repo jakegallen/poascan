@@ -2,7 +2,7 @@
 * open: the notice plus grade seals in POAScan's archive in the last GRADE_RECENT_S (at least GRADE_MIN_SEALS), feed fresh
 * unconfirmed: the notice alone (no recent seals, old seals only, or our feed is not fresh)
 * halted: a newer official halt notice, or a live read since the notice (probe Grading group, grading route) saw it halted
-Covers meta.maintenance, the home strip (full and 390px lines), /upgrade, the graders tile, og, route display, surfaces,
+Covers meta.maintenance, the header status note (1.26.169, was the home strip), /upgrade, the graders tile, og, route display, surfaces,
 open_epoch / MCP fields, and today's case (seals 10:00 to 11:07 AM PT, none from 11:36 to 11:56 AM PT).
 No network: the route check is never called. Usage: python3 tools/grading_truth_test.py"""
 import os, re, sys, tempfile, time
@@ -14,7 +14,9 @@ def check(name, ok):
 
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "g.db"); os.environ["POA_BASE"] = "http://127.0.0.1:9"
 import fixture; fixture.seed()
-from poascan import db, maint as M, analytics as A, hosted as R, views as V, views2 as V2, og as OG, pulse as P
+from poascan import db, maint as M, analytics as A, hosted as R, views as V, views2 as V2, og as OG, pulse as P, ui as U
+LIVE = {"state": "live", "label": "Live", "why": "Live", "href": "/network?tab=health", "fetched_at": int(time.time())}
+def pl(f=None): return U.status_pill(dict(f or LIVE))
 now = int(time.time())
 HALT = {"id": "2026-10-22-grading-halted", "issued_ts": 1792711337, "expires_ts": now + 86400, "msg": "Challenge GRADING is HALTED, grading + challenge-pool payouts paused until further notice."}
 DONE = {"id": "2026-10-23-grading-resumed", "issued_ts": 1792774656, "expires_ts": now + 3600, "txid": "a241efae5b315b9f4dfdd4030990321d3d794cf800acdb76932029c6be267000",
@@ -47,11 +49,14 @@ check("open_epoch: grading_state unconfirmed, not halted", o["grading_state"] ==
 t = V.graders_tile(o)
 check("graders tile: Unconfirmed tag, no Halted", '<span class="tag warn">Unconfirmed</span>' in t and "Halted" not in t)
 check("graders tooltip explains it", "no grade seals have landed in the last 30 minutes" in t)
-s = V.upgrade_strip()
-check("home strip shows, badge Grading, links /upgrade", s.startswith('<p class="upstrip"') and "<b>Grading</b>" in s and 'href="/upgrade"' in s)
-check("strip full line", "<b>Notice says open</b>" in s and "not yet confirmed" in s and "No grade seals in the last 30 min." in s)
-check("strip 390px line is short", '<span class="upm"><b>Grading not yet confirmed</b>. No recent seals.</span>' in s)
-check("live snapshot carries the strip line", V.upgrade_live()["upline"] == V.upline() and V.upline() != "")
+check("no home strip (1.26.169: the header status carries it)", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "")
+p = pl(); s = p["pop"]
+check("header: Live turns Partial, the note names grading and links /upgrade and Health", p["state"] == "partial" and p["label"] == "Partial"
+      and p["reasons"] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/network?tab=health">Health</a>' in s)
+check("header note: Updated time in the reader's zone (data-upts)", f'<time data-upts="{LIVE["fetched_at"]}"' in s and "Updated" in s)
+p2 = pl(dict(LIVE, state="partial", label="Partial", why="Chain live. Not OK: Networks"))
+check("header: a feed not OK and grading both listed", p2["reasons"] == ["Feed not OK: Networks.", "Grading not yet confirmed. No recent seals."])
+check("header: the live snapshot pill carries the note", "pop" in V.pill() and "Grading not yet confirmed" in V.pill()["pop"])
 h = V2.upgrade_body()
 check("/upgrade: per notice title, Not yet confirmed group", "Upgrade complete per notice" in h and "Not yet confirmed" in h and 'data-grp="grading"' in h)
 wk = h.split('data-grp="working"', 1)[1].split("</ul>", 1)[0]
@@ -70,6 +75,8 @@ g = M.grading_state(); st = M.state()
 check(f"two recent seals confirm open ({g['state']}, {g['basis']})", g["state"] == "open" and g["basis"] == "notice+seals" and g["seals_recent"] == 2)
 check("open: working has grading, unconfirmed empty", "grading" in st["working"] and st["unconfirmed"] == [] and st["headline"] == M.DONE_HEAD)
 check("open: no home strip, graders tile untagged", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "" and "tag warn" not in V.graders_tile(A.open_epoch()))
+p = pl()
+check("open: header Live, note says all systems normal, Health link only", p["state"] == "live" and p["reasons"] == ["All systems normal."] and "/upgrade" not in p["pop"] and 'href="/network?tab=health">Health</a>' in p["pop"])
 h = V2.upgrade_body()
 check("open: /upgrade says Upgrade complete, Grading in Working", '<h1 class="uph-t" id="uph-t">Upgrade complete</h1>' in h and "<span>Grading</span>" in h and 'data-grp="grading"' not in h)
 check("open: evidence counts", st["grading"]["seals_since_notice"] == 2 and st["grading"]["sealers_since_notice"] == 2 and st["grading"]["last_seal_at"])
@@ -94,8 +101,8 @@ check("halted: route display paused, surfaces paused", st["hosted_routes_display
 check("halted: open_epoch grading_halted true, basis probe, no notice id", o["grading_halted"] is True and o["grading_basis"] == "probe" and o["grading_halt_notice"] is None)
 t = V.graders_tile(o)
 check("halted: graders tile Halted tag, tooltip names the live read", '<span class="tag warn">Halted</span>' in t and "live read" in t)
-s = V.upgrade_strip()
-check("halted: strip says Halted", "<b>Halted</b>" in s and "Mining and joining open." in s)
+s = pl()["pop"]
+check("halted: header note says Grading halted", pl()["state"] == "partial" and "Grading halted. Mining open." in s and V.upgrade_strip() == "")
 check("halted: pool payouts paused", M.pool_payouts() == "paused")
 check("halted: /upgrade Halted group", 'data-grp="grading"><h2><i></i>Halted</h2>' in V2.upgrade_body())
 db.put_blob(P.BLOB, {"groups": {"Grading": "paused"}, "seen": ["Grading"], "ok": True, "ts": DONE["issued_ts"] - 600})

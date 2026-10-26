@@ -278,7 +278,7 @@ function benchInit(){if(!BM.on)return;benchSize();
 
 /* apply a snapshot (from WS or polling) */
 function apply(s){if(!s||s.t&&s.t!=="snap")return;
- var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""};p.className="pill "+f.state;p.hidden=f.state=="up";if(f.href)p.setAttribute("href",f.href);p.title=f.state=="live"?"Status":(f.why||f.label);var l=p.querySelector("span");if(l)l.textContent=f.label}
+ var p=$("#livepill");if(p){var f=s.pill||{state:s.live?"live":"stale",label:s.live?"Live":"Stale",why:""},sm=$("summary",p)||p;sm.className="pill "+f.state;p.hidden=f.state=="up";sm.setAttribute("aria-label","Status: "+f.label);var l=sm.querySelector("span");if(l)l.textContent=f.label;var pb=$(".qbox",p);if(pb&&f.pop&&pb._src!==f.pop&&!pb.contains(D.activeElement)){pb._src=f.pop;pb.innerHTML=f.pop;upts(pb);if(p.open)W.dispatchEvent(new Event("resize"))}}   /* header status note (1.26.169): reasons, read time, links */
  var ud=$("#updot");if(ud&&s.pill)ud.hidden=s.pill.state!="up";
  var ul=$("[data-upline]");if(ul&&s.upline!=null){if(s.upline&&ul.innerHTML!==s.upline)ul.innerHTML=s.upline;ul.parentNode.hidden=!s.upline}
  var us=$("[data-upstamp]");if(us&&s.upstamp){var ot=$("time",us);if(!ot||ot.dataset.upts!==(s.upstamp.match(/data-upts="(\d+)"/)||[])[1]){us.innerHTML=s.upstamp;upts(us)}}
@@ -716,4 +716,7 @@ function qtPlaceAll(){[].slice.call(D.querySelectorAll("details.qtip.hv[open]"))
 window.addEventListener("scroll",qtPlaceAll,{passive:true});window.addEventListener("resize",qtPlaceAll);
 D.addEventListener("pointerover",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||q.open||(e.relatedTarget&&q.contains(e.relatedTarget)))return;shut(q);q.open=true;q.dataset.hv="1"});
 D.addEventListener("pointerout",function(e){if(e.pointerType!=="mouse")return;var q=e.target.closest&&e.target.closest("details.qtip.hv");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv});
-D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest("details.qtip.hv");if(q&&q.dataset.hv&&e.target.closest("summary")){e.preventDefault();delete q.dataset.hv}},true)})();
+D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest("details.qtip.hv");if(q&&q.dataset.hv&&e.target.closest("summary")){e.preventDefault();delete q.dataset.hv}},true)
+/* header status (1.26.169): keyboard focus on the dot opens its note like a hover; moving focus out of it closes what focus opened */
+D.addEventListener("focusin",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||q.open||!e.target.matches("summary:focus-visible"))return;shut(q);q.open=true;q.dataset.hv="1"});
+D.addEventListener("focusout",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv})})();

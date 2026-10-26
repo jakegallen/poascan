@@ -25,7 +25,8 @@ from . import strain as ST   # 1.26.89: halted-lookup note and empty state on /t
 def is_live(): return A.freshness()["state"] != "stale"
 
 def pill():
-    f = A.freshness(); return dict(state=f["state"], label=f["label"], why=f["why"], href=f["href"])
+    """Header pill for the live snapshot: freshness plus grading (ui.status_pill), with the note's HTML (pop) app.js swaps in."""
+    return _ui.status_pill(A.freshness())
 
 # One Ask button per page, in the first card header, unless the page already has one.
 PAGE_ASKS = {"/chain": lambda: [PR.BURN, PR.UNLOCK],
@@ -283,40 +284,21 @@ def upgrade_strip():
     """Home only, while the network upgrade is on (maint.py): one quiet steel line to /upgrade. It carries the Upgrading status
     (the header pill hides while maintenance is on) next to the hosted mining and joining line."""
     from . import maint as M
-    if _grading_strip():
-        return (f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Grading</b></span><span data-upline>{upline()}</span>'
-                f'<span data-upstamp>{stamp(_grading_stamp())}</span><a href="/upgrade">Details</a></p>')
     if not M.state()["active"]: return ""
     return (f'<p class="upstrip" role="note"><span class="ups"><i aria-hidden="true"></i><b>Upgrading</b></span><span data-upline>{upline()}</span>'
             f'<span data-upstamp>{stamp(M.stamp_ts())}</span><a href="/upgrade">Details</a></p>')
 
-def _grading_strip():
-    """After the completion notice the strip stays only while grading is not confirmed open (maint.grading_state)."""
-    from . import maint as M
-    return bool(M.complete()) and M.grading_state()["state"] != "open"
-
-def _grading_stamp():
-    """The strip's time after completion: the newest archived tx (what the seal check read), else now."""
-    r = db.q1("SELECT MAX(ts) AS t FROM txs"); return int(r["t"]) if r and r["t"] else int(time.time())
-
-GRADING_STRIP = {"unconfirmed": (("Notice says open", ", not yet confirmed", "No grade seals in the last 30 min."), ("Grading not yet confirmed", "No recent seals.")),
-                 "halted": (("Halted", "", "Mining and joining open."), ("Grading halted", "Mining open."))}
-
 def upline():
     """The strip's text: the full line, and a shorter one for 390px (CSS shows one). The live snapshot re-sends it, so it updates in place."""
     from . import maint as M
-    if _grading_strip():
-        (lead, aside, tail), (ml, mt) = GRADING_STRIP[M.grading_state()["state"]]
-    else:
-        lead, aside, tail = M.strip_text(); ml, mt = M.strip_mobile()
+    lead, aside, tail = M.strip_text(); ml, mt = M.strip_mobile()
     t = f" {E(tail)}" if tail else ""; m = f" {E(mt)}" if mt else ""
     return f'<span class="upd"><b>{E(lead)}</b><span class="upx">{E(aside)}</span>.{t}</span><span class="upm"><b>{E(ml)}</b>.{m}</span>'
 
 def upgrade_live():
     """Snapshot fields for the strip and the /upgrade route list; empty strings when maintenance is off (app.js hides the strip)."""
     from . import maint as M, hosted as R
-    if _grading_strip(): return dict(upline=upline(), upstamp=stamp(_grading_stamp()), routes=M.route_display(), upsig="")
-    if not M.state()["active"]: return dict(upline="", upstamp="", routes={}, upsig="")
+    if not M.state()["active"]: return dict(upline="", upstamp="", routes=M.route_display() if M.complete() else {}, upsig="")   # /upgrade route tags stay live after completion
     return dict(upline=upline(), upstamp=stamp(M.stamp_ts()), routes=M.route_display(), upsig=V2.upgrade_sig())
 
 def txs(qs):
@@ -1508,7 +1490,8 @@ def about():
 <h3>Times</h3><p>Times show in your browser time zone (UTC when JavaScript is off), and column headers name the zone. Charts and counts bucketed by UTC day or UTC hour say UTC, such as Today (UTC) and New Agents · daily UTC. CSV and API times stay ISO 8601 UTC.</p>
 <!--SEGMENTS-->
 <h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
-    methods = card("More methodology", '''<h3 id="freshness">Live, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal. <b>Live</b>: our last read of the live feed is under 5 minutes old.
+    methods = card("More methodology", '''<h3 id="freshness">Live, Partial, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal; tap or hover it for the reason and the time of the last read. <b>Live</b>: our last read of the live feed is under 5 minutes old.
+<b>Partial</b>: the chain is live, but a feed on <a href="/network?tab=health">Network → Health</a> is not OK, or grading is not yet confirmed since the completion notice.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
 <b>Upgrading</b>: only while minepoa.com is in staged maintenance (hosted mining and grading paused, endpoints reopening in stages). It replaces Lagging and ends by itself once an official notice says the upgrade is over. While it is on, the header pill steps aside and the home status line shows it. The last upgrade ran Oct 21 to 23, 2026 and is complete; dates on <a href="/upgrade">/upgrade</a>.
 <b>Stale</b>: we have not read the feed for 5+ minutes, and it outranks every other state. Per-source read times are on <a href="/network?tab=health">Network → Health</a>.</p><h3 id="receipts">Answer receipts</h3><p>Built from the answer tx and close records only. <b>Accepted</b>: the tx is on the ledger; refused submissions never create one. <b>Seed</b>: from the tx body, unknown until its detail is archived.

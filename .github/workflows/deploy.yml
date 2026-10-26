@@ -207,6 +207,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/header_row_test.py
+      - name: Header status note (no strip under the header; tap at 390 px inside the viewport, hover, keyboard focus and Escape at 1280 px)
+        env:
+          CI: "true"
+        run: python tools/statusdot_test.py
       - name: Install WebKit (pinned Playwright) for the mobile menu check
         run: python -m playwright install --with-deps webkit
       - name: Mobile menu at 360 and 390 px (opens under the header with visible, clickable links on a fresh load and after scrolling; Chromium and WebKit)

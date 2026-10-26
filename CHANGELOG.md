@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.169] - 2026-10-26
+
+### Changed
+- Header status: the dot and word under the logo (Live, Partial and the rest) are now a button that opens a small note, the same tooltip as the ? notes: tap on a phone, hover or keyboard focus on desktop, Escape or a tap outside closes it. The note says what drives the state (a feed not OK on Health, grading not yet confirmed), the time of our last read in your zone, and links to Details (/upgrade, while grading is not confirmed) and Health. Live with nothing wrong says All systems normal. It updates with the live snapshot; no new reads from minepoa.com.
+- Grading not yet confirmed (or halted) after the completion notice now turns a Live header Partial.
+
+### Removed
+- The Grading strip under the header on Home and /start ("Grading not yet confirmed. No recent seals.", Updated, Details). Its reason, time and link are in the header status note. The Unconfirmed tag on the Epoch Graders stat, the development banner and the maintenance Upgrading strip are unchanged.
+
+### Tests
+- tools/statusdot_test.py (in CI): no strip on Home or /start, the note's reasons and links, tap at 390 px inside the viewport, hover, keyboard focus and Escape at 1280 px. header_row_test, grading_truth_test, routes_test and smoke_test follow the new markup.
+
 ## [1.26.168] - 2026-10-26
 
 ### Fixed

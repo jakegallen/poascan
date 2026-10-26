@@ -430,6 +430,42 @@ def _strain_bar():
         from . import strain as _ST; return _ST.banner()
     except Exception: return ""
 
+# Header status (1.26.169): the dot and word open a small note (the qtip pattern: tap, click, keyboard, mouse hover) with what
+# drives the state, the read time in the reader's zone, and links. Grading not confirmed after the completion notice turns a
+# Live header Partial; it was the home strip, which is gone. Local data only (freshness, maint.grading_state): no new reads.
+GRADING_REASON = {"unconfirmed": "Grading not yet confirmed. No recent seals.", "halted": "Grading halted. Mining open."}
+
+def _grading_reason():
+    try:
+        from . import maint as M
+        if not M.complete() or M.state()["active"]: return ""
+        return GRADING_REASON.get(M.grading_state()["state"], "")
+    except Exception: return ""
+
+def status_pill(f):
+    """The header pill from analytics.freshness(): state, label, why, href, reasons and the note's HTML (pop)."""
+    state, label, why = f["state"], f["label"], f.get("why") or ""
+    reasons = []
+    if state == "partial" and why.startswith("Chain live. Not OK: "):
+        bad = why[len("Chain live. Not OK: "):]; reasons.append(("Feeds" if "," in bad else "Feed") + f" not OK: {bad}.")
+    elif state not in ("live", "up") and why: reasons.append(why.rstrip(".") + ".")
+    g = _grading_reason()
+    if g:
+        reasons.append(g)
+        if state == "live": state, label = "partial", "Partial"
+    if not reasons: reasons.append("All systems normal." if state == "live" else (why.rstrip(".") + "." if why else label + "."))
+    links = ([("/upgrade", "Details")] if g else []) + [("/network?tab=health", "Health")]
+    if state == "up": links = [("/upgrade", "Details")]
+    ts = f.get("fetched_at")   # our last fresh read of the live network; none yet: no time
+    pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{E(r)}</span>' for r in reasons)
+           + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>')
+    return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
+
+def pill_html(live):
+    p = status_pill(live)
+    return (f'<details class="qtip hv spill" id="livepill"{" hidden" if p["state"] == "up" else ""}><summary class="pill {p["state"]}" aria-label="Status: {E(p["label"])}">'
+            f'<i aria-hidden="true"></i><span>{E(p["label"])}</span></summary><span class="qbox" role="note">{p["pop"]}</span></details>')
+
 def layout(title, body, active="/", live=None, head=""):
     active = NAV_OF.get(active, active)
     body = _quiet_h1(body, active)
@@ -437,7 +473,7 @@ def layout(title, body, active="/", live=None, head=""):
     if not isinstance(live, dict):
         from . import analytics as _A
         live = _A.freshness()
-    live_cls, live_txt, live_why = live["state"], live["label"], (live["why"] if live["state"] != "live" else "Status")
+    live_cls = live["state"]
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
     meta = head_meta(full, title)
     from . import devdemo as _dd
@@ -450,7 +486,7 @@ def layout(title, body, active="/", live=None, head=""):
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
-<a class="pill {live_cls}" id="livepill" href="{live.get("href", "/network?tab=health")}" title="{E(live_why)}"{" hidden" if live_cls == "up" else ""}><i></i><span>{live_txt}</span></a>
+{pill_html(live)}
 {"" if req_path() == "/" else updot(live_cls)}{SWAP_BTN}
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
