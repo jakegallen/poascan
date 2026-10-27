@@ -124,6 +124,11 @@ def checked_at():
 # Anything else (404, 429, edge pages): unknown, which keeps the last state.
 WRITE_BLOB, WRITE_PATH = "swap_writes", "/api/hosted/swap-offer"
 WRITE_EVERY, WRITE_JITTER, WRITE_SLOW, WRITE_SAME = 600, 60, 1800, 3
+# 1.26.191: a clear read is stale once it is older than the longest gap the cadence allows (WRITE_SLOW + WRITE_JITTER,
+# so 31 min after 3 identical reads; 9 to 11 min otherwise) plus WRITE_GRACE (the 1 min indexer tick, the probe timeout
+# and a restart). Was 2 * WRITE_SLOW (60 min), which kept a missed check looking current for half an hour.
+WRITE_GRACE = 300
+WRITE_STALE_S = WRITE_SLOW + WRITE_JITTER + WRITE_GRACE   # 2160 s (36 min)
 
 def write_classify(code, body=b""):
     """open, paused, down or None (unknown) for one swap-offer probe answer."""
@@ -191,11 +196,11 @@ def _swap_read():
 
 def writes(now=None):
     """{swap_offer: {state, http, checked_at, since, stale}} and swaps_writable (True open, False paused or down, None
-    never read or the last read over WRITE_SLOW * 2 s old). checked_at is ISO 8601 UTC."""
+    never read or the last read over WRITE_STALE_S old). checked_at is ISO 8601 UTC."""
     now = now or time.time(); d = _swap_read()
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
     st = d.get("state") if d.get("state") in ("open", "paused", "down") else "unknown"
-    stale = bool(d.get("checked_at") and now - d["checked_at"] > 2 * WRITE_SLOW)
+    stale = bool(d.get("checked_at") and now - d["checked_at"] > WRITE_STALE_S)
     ok = None if st == "unknown" or stale else st == "open"
     return dict(swap_offer=dict(state=st, http=d.get("http"), checked_at=iso(d.get("checked_at")), since=iso(d.get("since")), stale=stale)), ok
 
@@ -203,20 +208,22 @@ def writes(now=None):
 # /api/v1/swaps/status (writes, swaps_writable, swap_route), the Swap writes feed on Health and /api/health, the header
 # status note and MCP all read swap_route(). Open needs the write check's newest clear read to be open and fresh: an
 # unknown, stale or Down read is never shown as open.
-SWAP_DISPLAY = {"open": "open", "paused": "paused", "unknown": "unknown"}   # down: slow (no answer) or unknown (5xx), never open
+# 1.26.191: display, label, feed and writable all come from state alone (display is the lowercase label). Down no longer
+# reads slow (a timeout) or unknown (a 5xx): POASwap shows display as its banner, and slow is not down.
+SWAP_DISPLAY = {"open": "open", "paused": "paused", "down": "down", "unknown": "unknown"}
 SWAP_FEED = {"open": "OK", "paused": "Degraded", "down": "Down"}
 SWAP_LABEL = {"open": "Open", "paused": "Paused", "down": "Down", "unknown": "Unknown"}
 
 def swap_route(now=None):
     """dict(state, display, writable, probe_state, http, checked_at, since, stale, feed, label, basis).
     probe_state: the write check's newest clear read (open, paused, down, unknown when never read clearly).
-    state: probe_state, except unknown when that read is stale (older than 2 * WRITE_SLOW s).
-    display: the hosted_routes_display enum: open, paused, slow (down, no answer), unknown (down with an HTTP 5xx, stale, never read).
+    state: probe_state, except unknown when that read is stale (older than WRITE_STALE_S).
+    display: from state only: open, paused, down, unknown; always label.lower(). http says whether down was a timeout (null) or a 5xx.
     writable: True only when state is open; False paused or down; None unknown (same rule as swaps_writable).
     feed: the Swap writes feed row (OK, Degraded, Down), Down also when the last clear read is stale; None when never read."""
     now = now or time.time(); w, _ok = writes(now); s = w["swap_offer"]; basis = _swap_read().get("basis") or "write_check"
     probe = s["state"]; st = "unknown" if s["stale"] else probe
-    disp = ("slow" if s["http"] is None else "unknown") if st == "down" else SWAP_DISPLAY[st]
+    disp = SWAP_DISPLAY[st]
     feed = SWAP_FEED.get(st) or ("Down" if s["stale"] else None)
     return dict(state=st, display=disp, writable=None if st == "unknown" else st == "open", probe_state=probe, http=s["http"],
                 checked_at=s["checked_at"], since=s["since"], stale=s["stale"], feed=feed, label=SWAP_LABEL[st], basis=basis)

@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.191] - 2026-10-27
+
+### Fixed
+- `swap_route.display` now comes from `state` alone: open, paused, down, unknown, always `label` in lowercase. While the write check was Down with no answer it read `slow` (and `unknown` on a 5xx), so POASwap's banner said slow while order placement was down. `http` still tells a timeout (null) from a 5xx. hosted_routes_display.swap_offer, meta.maintenance, /api/v1/swaps/status, /api/v1/health, MCP get_swap_status and the Swap writes feed agree; /upgrade tags the route Down and lists it under Still paused as Swap offers (down).
+- Stale swap write reads: a clear read is stale (state unknown, feed Down, stale true) once it is older than the longest gap the write check's cadence allows plus grace: 30 min after 3 identical reads (10 min otherwise), plus 1 min jitter and 5 min grace, so 36 min. It was 60 min (2 x 30 min), which kept a missed check looking current for half an hour. A read 31 min old during a long outage is inside the cadence and still reads current.
+
+### Changed
+- OpenAPI: `swap_route.display` enum is open, paused, down, unknown (slow is gone from it); hosted_routes_display adds down; `swap_route.stale` documents the 36 min rule.
+
+### Tests
+- swap_route_test: display, label, writable and feed against state for every read (timeout, 500, 502, halt, 400, 401, then an unclear 404, never read) at three ages (fresh, just inside and just past the stale limit) and both bases (write check, newer route check), across hosted_routes_display, swaps/status, swaps_writable and MCP; the 31 min and 40 min Down cases.
+
 ## [1.26.190] - 2026-10-27
 
 ### Fixed

@@ -171,7 +171,7 @@ def _upgrade():
     r = M.recovery()
     if r["moved"]:
         from . import hosted as R
-        rt = R.current(); ds = M.route_display(); lab = {"open": "Open", "responding": "Responding", "paused": "Paused", "slow": "Slow"}
+        rt = R.current(); ds = M.route_display(); lab = {"open": "Open", "responding": "Responding", "paused": "Paused", "slow": "Slow", "down": "Down"}
         return ("Network upgrade", lead, [f'Checkpoint {r["checkpoint"]:,}' + (" · balances intact" if r["supply_intact"] else "")],
                 [(rt[k]["label"], lab.get(ds[k], "Not read yet")) for k in ("mining", "grading")] + [("Self-custody", "Working")])
     return ("Network upgrade", lead, ["Rewards paying · epochs closing"],

@@ -156,7 +156,7 @@ def recon_card():
     return card("Reconciliation", tb + per + foot, '<a class="more" href="/api/v1/reconcile">API →</a>', cls="histc", id="reconcile")
 
 # ================= /upgrade: the recovery page (its own layout; Health keeps uptime and latency) =================
-ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "slow": ("warn slow", "Slow"), "unknown": ("", "Not read yet")}
+ROUTE_TAG = {"open": ("ok", "Open"), "responding": ("ok", "Responding"), "paused": ("warn", "Paused"), "slow": ("warn slow", "Slow"), "down": ("warn", "Down"), "unknown": ("", "Not read yet")}   # down: swap_offer (1.26.191)
 ROUTE_WORD = {"open": "open", "paused": "paused"}
 
 def _route_tip(v, st):
@@ -199,6 +199,7 @@ def upgrade_view():
     if M.pool_payouts() == "live": ok.append("Challenge-pool payouts")
     ok += [f'{rt[k]["label"]} {"open" if ds[k] == "open" else "responding"}' for k in back]
     wait = [rt[k]["label"] for k in rt if ds[k] == "paused"] + [f'{rt[k]["label"]} (not read yet)' for k in rt if ds[k] == "unknown"]   # slow routes are not paused
+    wait += [f'{rt[k]["label"]} (down)' for k in rt if ds[k] == "down"]   # 1.26.191: swap_route.display down
     wait += (["Challenge-pool payouts"] if M.pool_payouts() == "paused" else []) + (["Attestation earnings"] if M.attestation_earnings() == "paused" else [])
     slow = [k for k in rt if ds[k] == "slow"]
     if M.join_state() == "paused": wait.append("Joining")
