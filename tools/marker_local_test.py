@@ -1,6 +1,6 @@
 """Milestone hover text in the visitor's zone (1.26.179). Every milestone marker's hover (Home sparkline labels and their
 hover-only ticks, chart milestone chips, legend entries, the SVG title on the milestone line, aria labels) reads in the
-reader's zone in the one format ("Oct 25, 7:17 PM Signup surge"); the UTC text is only the no-script fallback. Chromium with
+reader's zone in the one format ("Oct 25, 7:17 PM Sample mark"); the UTC text is only the no-script fallback. Chromium with
 the zone set to America/Los_Angeles and to Asia/Tokyo. In CI (CI set) a missing Playwright is a failure, locally it is skipped.
 Usage: python3 tools/marker_local_test.py"""
 import os, re, sys, tempfile, shutil, threading, functools, http.server
@@ -11,15 +11,15 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 from poascan import ui, milestones as MS, bench as BN
-T0 = 1792800000; SURGE = 1792981020   # Oct 26, 02:17 UTC (Oct 25, 7:17 PM PDT; Oct 26, 11:17 AM JST)
-pts = [(T0 + i * 3600, 100 + i) for i in range(60)] + [(SURGE + 3600 * k, 300 + k) for k in range(1, 30)]
-marks = [dict(ts=SURGE, label="Signup surge"), dict(ts=SURGE - 7200, label="Genesis cut")]   # close together: one label, one hover-only tick
+T0 = 1792800000; SAMPLE = 1792981020   # Oct 26, 02:17 UTC (Oct 25, 7:17 PM PDT; Oct 26, 11:17 AM JST)
+pts = [(T0 + i * 3600, 100 + i) for i in range(60)] + [(SAMPLE + 3600 * k, 300 + k) for k in range(1, 30)]
+marks = [dict(ts=SAMPLE, label="Sample mark"), dict(ts=SAMPLE - 7200, label="Genesis cut")]   # close together: one label, one hover-only tick
 sp = ui.spark(pts, marks=marks)
-check("sparkline: UTC fallback on the title, the local template in data-ltt", 'title="Oct 26, 02:17 UTC Signup surge"' in sp and f'data-ltt="{{t:{SURGE}}} Signup surge"' in sp)
-check("sparkline: the hover-only tick carries the same", 'class="spkd"' in sp and f'data-ltt="{{t:{SURGE - 7200}}} Genesis cut"' in sp)
-gm = MS.group([dict(key="signup_surge", ts=SURGE, label="Signup surge", url=None), dict(key="genesis_cut", ts=T0 + 3600 * 20, label="Genesis cut", url="/segments")], pts[0][0], pts[-1][0])
+check("sparkline: UTC fallback on the title, the local template in data-ltt", 'title="Oct 26, 02:17 UTC Sample mark"' in sp and f'data-ltt="{{t:{SAMPLE}}} Sample mark"' in sp)
+check("sparkline: the hover-only tick carries the same", 'class="spkd"' in sp and f'data-ltt="{{t:{SAMPLE - 7200}}} Genesis cut"' in sp)
+gm = MS.group([dict(key="sample_mark", ts=SAMPLE, label="Sample mark", url=None), dict(key="genesis_cut", ts=T0 + 3600 * 20, label="Genesis cut", url="/segments")], pts[0][0], pts[-1][0])
 ln = ui.line(pts, marks=gm)
-check("chart: milestone title text is the UTC fallback", "Oct 26, 02:17 UTC Signup surge" in ln and "<title>" in ln)
+check("chart: milestone title text is the UTC fallback", "Oct 26, 02:17 UTC Sample mark" in ln and "<title>" in ln)
 S0 = 1793060990   # 00:29:50 UTC Oct 27 (5:29:50 PM PDT Oct 26)
 seal = "".join(f'<i class="sm" title="{BN.seal_tip(c)}" data-ltt="{BN.seal_ltt(c)}">{c[1]}</i>' for c in ([0, 76, S0, S0 + 266], [0, 1, S0 + 300, S0 + 300]))
 check("Live strip seals: UTC fallback title plus the local template", 'title="76 Seals · 00:29:50 to 00:34:16 UTC"' in seal and f'data-ltt="76 Seals · {{t:{S0}:ts}} to {{t:{S0 + 266}:ts}}"' in seal)
@@ -36,7 +36,7 @@ except Exception:
     print("skip browser checks (Playwright not installed)")
 GET = """()=>{const o=[];document.querySelectorAll('.spkl,.spkd,.mkc,.mk title,.mkl [title],ol [title],[aria-label]').forEach(e=>{
  if(e.tagName.toLowerCase()==='title')o.push(['svg',e.textContent]);else{if(e.title)o.push(['title',e.title]);const a=e.getAttribute('aria-label');if(a&&/\\d:\\d/.test(a))o.push(['aria',a])}});
- return o.filter(x=>/Signup surge|Genesis cut/.test(x[1]))}"""
+ return o.filter(x=>/Sample mark|Genesis cut/.test(x[1]))}"""
 if sync_playwright:
     H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.path.join(tmp, "www"))
     class Q(H.func):
@@ -47,13 +47,13 @@ if sync_playwright:
         with sync_playwright() as p:
             kw = {"executable_path": os.environ["PW_CHROME"]} if os.environ.get("PW_CHROME") else {}
             b = p.chromium.launch(args=["--no-sandbox"], **kw)
-            for tz, want, w in (("America/Los_Angeles", "Oct 25, 7:17 PM Signup surge", 390), ("America/Los_Angeles", "Oct 25, 7:17 PM Signup surge", 1280), ("Asia/Tokyo", "Oct 26, 11:17 AM Signup surge", 1280)):
+            for tz, want, w in (("America/Los_Angeles", "Oct 25, 7:17 PM Sample mark", 390), ("America/Los_Angeles", "Oct 25, 7:17 PM Sample mark", 1280), ("Asia/Tokyo", "Oct 26, 11:17 AM Sample mark", 1280)):
                 ctx = b.new_context(timezone_id=tz, locale="en-US", viewport={"width": w, "height": 900})
                 pg = ctx.new_page(); pg.goto(base + "/t.html", wait_until="load"); pg.wait_for_timeout(200)
                 got = pg.evaluate(GET)
                 kinds = sorted({k for k, _ in got})
-                check(f"{tz} {w}: every Signup surge hover reads {want!r} ({len(got)} texts: {', '.join(kinds)})",
-                      got and all(want in t for k, t in got if "Signup surge" in t) and {"title", "svg"} <= set(kinds))
+                check(f"{tz} {w}: every Sample mark hover reads {want!r} ({len(got)} texts: {', '.join(kinds)})",
+                      got and all(want in t for k, t in got if "Sample mark" in t) and {"title", "svg"} <= set(kinds))
                 check(f"{tz} {w}: no UTC left in any milestone hover", all(" UTC" not in t for _, t in got))
                 st = pg.evaluate("[...document.querySelectorAll('.sealx .sm')].map(e=>e.title)")
                 want_s = {"America/Los_Angeles": ["76 Seals · 5:29:50 PM to 5:34:16 PM", "Seal · 5:34:50 PM"], "Asia/Tokyo": ["76 Seals · 9:29:50 AM to 9:34:16 AM", "Seal · 9:34:50 AM"]}[tz]

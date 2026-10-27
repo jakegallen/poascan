@@ -26,7 +26,6 @@ want = {"begins": ("2026-10-21T19:00:51Z", "Upgrade begins"), "paused": ("2026-1
         "grading_halted": ("2026-10-22T23:22:29Z", "Grading still halted"), "mining_reopened": ("2026-10-22T23:45:49Z", "Mining back seen"),
         "grading_reopened": ("2026-10-23T16:57:36Z", "Grading reopened"), "ended": ("2026-10-23T16:57:36Z", "Upgrade complete"),
         "s2_mining_reopened": ("2026-10-24T21:11:34Z", "Mining reopened"), "s2_first_join": ("2026-10-24T22:59:00Z", "First join"),
-        "s2_signup_surge": ("2026-10-26T02:17:28Z", "Signup surge"),
         "genesis_cut": ("2026-10-24T21:01:00Z", "Genesis cut")}
 for k, (t, lab) in want.items():
     check(f"{lab} at {t}", k in ev and iso(ev[k]["ts"]) == t and ev[k]["label"] == lab)
@@ -97,25 +96,24 @@ check("mining reopened (Oct 22 and segment 2) on mining charts; Oct 22 also on j
       all({"allclear", "s2_mining_reopened"} <= set(rel[k]) for k in ("mined", "supply", "circ", "txs")) and "s2_mining_reopened" not in rel["joins"]
       and [e["label"] for e in MS.events("joins") if e["key"] == "allclear"] == ["Joining reopened"] and [e["label"] for e in MS.events("mined") if e["key"] == "allclear"] == ["Mining reopened"])
 check("First join only on Agents and Agents / hr", [k for k, v in rel.items() if "s2_first_join" in v] == ["agents", "joins"])
-check("Signup surge only on Agents and Agents / hr (no Holders, mined, circulating, Active Agents or txs)",
-      [k for k, v in rel.items() if "s2_signup_surge" in v] == ["agents", "joins"])
-check("Signup surge is the first join of the Oct 25 burst (tx 0628afd6, 7:17:28 PM PT)",
-      {e["key"]: e for e in MS.events()}["s2_signup_surge"]["url"] == "/tx/0628afd6289cc8b8f2fdbca3355e144306d784f68898f7f405ea5ca588ec7e74")
-check("Home sparklines: Agents carries the genesis cut and Signup surge; Active Agents and Holders the genesis cut only (1.26.175, in place of a break)",
-      MS.SPARK_IDS == ("home-agents", "home-active", "home-holders") and [e["key"] for e in MS.events("home-agents")] == ["genesis_cut", "s2_signup_surge"]
+check("Signup surge milestone removed (1.26.193): not seeded, on no chart, not in the Milestones table",
+      "s2_signup_surge" not in ev and "s2_signup_surge" not in MS.SEEDED and not any("s2_signup_surge" in v for v in rel.values())
+      and "Signup surge" not in [e["label"] for e in MS.events()] and "s2_signup_surge" not in MS.SOLO and "s2_signup_surge" not in MS.PRIORITY)
+check("Home sparklines: Agents, Active Agents and Holders carry the genesis cut only (1.26.175, in place of a break; Signup surge removed 1.26.193)",
+      MS.SPARK_IDS == ("home-agents", "home-active", "home-holders") and [e["key"] for e in MS.events("home-agents")] == ["genesis_cut"]
       and [e["key"] for e in MS.events("home-active")] == ["genesis_cut"] and [e["key"] for e in MS.events("home-holders")] == ["genesis_cut"]
       and not any("home-" + k in MS.charts_of("genesis_cut") for k in ("mined", "circ")))
-_m2 = [dict(ts=1000 + 60 * 3600, label="Genesis cut"), dict(ts=1000 + 88 * 3600, label="Signup surge")]
+_m2 = [dict(ts=1000 + 60 * 3600, label="Genesis cut"), dict(ts=1000 + 88 * 3600, label="Sample mark")]
 _sv = UI.spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2) if "UI" in dir() else __import__("poascan.ui", fromlist=["x"]).spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2)
-check("sparkline: two marks closer than 40% show the newest label; the older keeps its tick and a hover target", _sv.count('class="spkl') == 1 and "Signup surge</span>" in _sv
+check("sparkline: two marks closer than 40% show the newest label; the older keeps its tick and a hover target", _sv.count('class="spkl') == 1 and "Sample mark</span>" in _sv
       and _sv.count('class="spkd"') == 1 and "Genesis cut" in _sv and _sv.count('class="spkt"') == 2)
 check("spark ids are not in any chart group (no group event lands on a sparkline)", not any(x in v for v in MS.GROUPS.values() for x in MS.SPARK_IDS))
 from poascan import ui as UI
-_sp = [(1792981048 - 7200 + i * 900, 5000 + i) for i in range(16)]
+_GC = {e["key"]: e for e in MS.events()}["genesis_cut"]["ts"]
+_sp = [(_GC - 7200 + i * 900, 5000 + i) for i in range(16)]
 _sv = UI.spark(_sp, marks=MS.events("home-agents"))
-check("sparkline draws the Signup surge tick and label inside its span", _sv.count('class="spkt"') == 1 and ">Signup surge</span>" in _sv and 'class="spkw"' in _sv)
+check("sparkline draws the Genesis cut tick and label inside its span", _sv.count('class="spkt"') == 1 and ">Genesis cut</span>" in _sv and 'class="spkw"' in _sv)
 check("sparkline without marks in its span is unchanged (plain svg)", UI.spark(_sp[:4], marks=MS.events("home-agents")) == UI.spark(_sp[:4]) and UI.spark(_sp[:4]).startswith('<svg class="spk"'))
-check("Signup surge is not a Mining or Active marker", "s2_signup_surge" not in rel["active"] and "s2_signup_surge" not in rel["mined"] and "s2_signup_surge" not in rel["circ"] and "s2_signup_surge" not in rel["holders"])
 check("Grading reopened only on grading charts; Upgrade complete never on them (no two labels at one time)",
       [k for k, v in rel.items() if "grading_reopened" in v] == ["gov-est", "gov-paid", "gov-queue", "gov-cover"] and not any("ended" in rel[k] for k in ("gov-est", "gov-paid", "gov-queue", "gov-cover")))
 check(f"Holders carries the chain-wide cut and its own step-ups, the E4 and E5 closes (1.26.174) ({rel['holders']})", sorted(rel["holders"]) == ["genesis_cut", "s2_e4_close", "s2_e5_close"])

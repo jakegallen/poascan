@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.193] - 2026-10-27
+
+### Removed
+- The Signup surge milestone on the Agents, Agents / hr and Home Agents charts and in the Milestones table.
+
 ## [1.26.192] - 2026-10-27
 
 ### Added

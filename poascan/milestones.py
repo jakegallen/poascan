@@ -54,7 +54,7 @@ for _c in _SG.cuts():
     RELEVANT[_k] = expand(CFG.get("cut_charts") or ["chain"])
 SEEDED = {k for k, *_ in SEED}
 # Keys that always get their own marker (never folded into a nearby group), so each real event stays labelled.
-SOLO = {"begins", "allclear", "grading_reopened", "ended", "genesis_cut", "s2_mining_reopened", "s2_first_join", "s2_signup_surge"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
+SOLO = {"begins", "allclear", "grading_reopened", "ended", "genesis_cut", "s2_mining_reopened", "s2_first_join"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
 
 def charts_of(key):
     """The chart ids a milestone is drawn on (seeded: milestones.json; live: live_charts, route_charts; else none)."""
@@ -66,7 +66,7 @@ def charts_of(key):
 # Routes the route check covers: (route id, label). A route seen open gets "<label> responding" at its first open read.
 ROUTE_LABEL = {"mining": "Mining", "grading": "Grading", "send": "Send", "swap_offer": "Swap offers", "vote": "Voting", "export": "Export"}
 # Chart priority when markers are grouped: the group shows its most telling label (no count suffix).
-PRIORITY = ["genesis_cut", "s2_mining_reopened", "s2_first_join", "s2_signup_surge", "ended", "grading_reopened", "allclear", "mining_reopened", "notice_cleared", "checkpoint", "begins", "route:mining", "grading_halted"]
+PRIORITY = ["genesis_cut", "s2_mining_reopened", "s2_first_join", "ended", "grading_reopened", "allclear", "mining_reopened", "notice_cleared", "checkpoint", "begins", "route:mining", "grading_halted"]
 
 def _route_since():
     """{route: since} for routes whose newest route-check read is open (POAScan's own hosted_routes record)."""

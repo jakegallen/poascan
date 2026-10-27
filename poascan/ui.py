@@ -636,7 +636,7 @@ def spark(points, n=40, marks=None):
     shown = []   # 1.26.175: labels from the newest back; one closer than 40% to a shown label keeps its tick and a hover target only
     for x, m in sorted(mk, key=lambda p: -p[0]):
         if all(abs(x - y) >= 40 for y, _ in shown): shown.append((x, m))
-    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 25, 7:17 PM Signup surge"): app.js fills the title
+    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 24, 2:01 PM Genesis cut"): app.js fills the title
     # from data-ltt ({t:ts}); the UTC text stays as the no-script fallback
     ttl = lambda m: E(utc_text(m["ts"]) + " " + m["label"])
     ltt = lambda m: f'title="{ttl(m)}" data-ltt="{{t:{int(m["ts"])}}} {E(m["label"])}"'
