@@ -8,6 +8,7 @@ from . import db, gradehist as GH, graderpat as GP, analytics as A, standing as 
 from .ui import E, card, stat, intc, pct, short, name_link, agent, author_link, ADDR_RX, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 from . import govv2 as GV2
+from . import netparams as NP
 
 TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
@@ -594,10 +595,11 @@ def _side(id_, title, docs, obs):
     return card(title, f'<div class="grid2 rules"><div><div class="sl">Docs</div>{docs}</div><div><div class="sl">Observed</div>{obs}</div></div>', id=id_)
 
 def rules():
+    _et = NP.estab_ttl()   # 1.26.186: per segment from /api/params (Proposal L may change it without a ballot)
     b = _side("earn", "Earn", f"<p>Earned by answering challenges that pass grading ({GO}, Continuous mining).</p>",
               "<p>130 of 131 Agents added to established_after in segment 1 were in challenge_eligible at the same close.</p>")
-    b += _side("lapse", "Lapse window", f"<p>Kept while there is a passing answer within the last 6 epochs, about 36 hours ({GO}, Continuous mining; {SK}). estab_ttl is 6 in /api/params.</p>",
-               f"<p>The engine removes an Agent at close L + estab_ttl + 1 (L + 7), where L is the last close in this segment that listed it in challenge_eligible, -1 when none. Only challenge_eligible keeps standing.</p>"
+    b += _side("lapse", "Lapse window", f"<p>Kept while there is a passing answer within the last 6 epochs, about 36 hours ({GO}, Continuous mining; {SK}). estab_ttl is {_et['value']} in {E(_et['source']) if _et['confirmed'] else 'POAScan fallback (not read from /api/params)'}.</p>",
+               f"<p>The engine removes an Agent at close L + estab_ttl + 1 (L + {_et['value'] + 1}), where L is the last close in this segment that listed it in challenge_eligible, -1 when none. Only challenge_eligible keeps standing.</p>"
                f"<p>Closes left = drop close minus the open epoch, plus 1. At risk: {SD.AT_RISK_CLOSES} or fewer. Watch: {SD.AT_RISK_CLOSES + 1}. Safe: {SD.AT_RISK_CLOSES + 2} or more.</p>")
     b += _side("removal", "Removal at close", f"<p>Removal is not described beyond the lapse window ({GO}).</p>",
                "<p>The other 8 segment 1 removals are in the same close as a slash. 61 removals have no L on record.</p>")
@@ -666,6 +668,7 @@ def api_overview():
                 est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
                                     challenge_eligible=r["challenge_eligible"], paid=r["paid"]) for r in reversed(ep[-6:])],
+                ttl=NP.api_block(), pending_horizon=BASE + "/api/v1/governance/pending-horizon",
                 method=METHOD, url=_url("overview"))
 
 def api_at_risk(level=None, limit=1000, sort="level", d="desc"):

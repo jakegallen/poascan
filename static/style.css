@@ -1529,3 +1529,5 @@ a.pbadge:hover{border-color:currentColor}
 /* Grader patterns (1.26.183): settled score mix, 0 to 3, in one small bar */
 .mixb{display:inline-flex;vertical-align:middle;height:8px;border-radius:var(--r-sm);overflow:hidden}.mixb i{display:block;height:8px}
 .mixb .m0{background:var(--ember)}.mixb .m1{background:var(--gold-lo)}.mixb .m2{background:var(--gold)}.mixb .m3{background:var(--verd)}
+/* Expiry horizon (1.26.186): the Watched cohorts (E18 to E20, LabLeak post 1582 comment 6150) carry a gold edge */
+table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}

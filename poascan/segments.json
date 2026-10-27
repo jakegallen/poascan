@@ -15,7 +15,12 @@
    "archive_url": "https://github.com/EmblemCompany/ProofOfAgent/tree/poa-mainnet-1-segment1",
    "unconfirmed_closes": [
     12
-   ]
+   ],
+   "params": {
+    "pending_ttl_epochs": 16,
+    "estab_ttl": 6,
+    "source": "/api/params during Segment 1 (pending_ttl_epochs 16, estab_ttl 6); the G0 notice 2026-10-21-hardening says pending TTL 16 epochs"
+   }
   },
   {
    "n": 2,

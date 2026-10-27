@@ -709,7 +709,8 @@ def pending_by_epoch():
             rows = [x for x in rows if x["epoch"] != cur]
             rows.append(dict(epoch=cur, pending=r["n"], short_panel=None, appeal=None, oldest_ts=r["t"], oldest_age_s=int(now - r["t"]),
                              oldest_approx=False, stale=False, source="open"))
-    pr = params(); ttl = pr.get("pending_ttl_epochs"); period = int(pr.get("auto_epoch_seconds") or 21600)
+    from . import netparams as NP   # 1.26.186: /api/params per segment, 16 only as a flagged fallback
+    pr = params(); tt = NP.pending_ttl(); ttl = tt["value"]; period = int(pr.get("auto_epoch_seconds") or 21600)
     bl = backlog(); lc = bl["closes"][-1] if bl["closes"] else None
     for x in rows:
         ep = x["epoch"]; h = bl["hist"].get(ep) if x["source"] == "close" else None
@@ -721,7 +722,8 @@ def pending_by_epoch():
     tot = collections.Counter()
     for h in bl["hist"].values(): tot.update(h)
     return dict(current_epoch=cur, as_of_close=int(last["epoch"]) if last else None, total=sum(x["pending"] for x in rows),
-                stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=ttl, merge_from_epoch=bl["merge_from"],
+                stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=ttl,
+                ttl_source=tt["source"], ttl_confirmed=tt["confirmed"], ttl_stale=tt["stale"], merge_from_epoch=bl["merge_from"],
                 quorum=pr.get("grade_quorum"), epoch_seconds=period, seals_basis=bl["basis"], seals_exact=bl["exact"],
                 seals_total={k: tot.get(k, 0) for k in SEAL_KEYS} if bl["hist"] else None,
                 last_close=lc, closes=bl["closes"], rows=rows)

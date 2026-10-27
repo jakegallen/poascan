@@ -12,7 +12,7 @@ POST_URL = f"https://minepoa.com/lableak/#/post/{POST_ID}"
 STARTED = 1792609251          # 2026-10-21 19:00:51 UTC, when the post went up
 PARKED = 24371                # checkpoint height held on purpose during the anchoring fix
 WINDOW_H = (24, 72)           # expected mining downtime, hours
-TTL_EPOCHS = 16               # pending grades expire after this many closes
+TTL_EPOCHS = 16               # fallback only (1.26.186): the live value is /api/params pending_ttl_epochs, read by netparams
 MAX_S = 7 * 86400             # never claim maintenance for more than a week off the switch alone
 PRE_SUPPLY = "1234828243.783275"   # /api/status supply at the parked checkpoint; equal after the move means balances carried over intact
 NOTICE_ID = "2026-10-21-hardening" # the public system notice for this hardening (/api/notices)
@@ -533,6 +533,12 @@ def _cleared():
 
 def _active(): return _cleared() is None
 
+def _ttl():
+    """The current segment's pending TTL (netparams: /api/params, TTL_EPOCHS only as the fallback)."""
+    from . import netparams as NP, segments as _SG
+    try: return NP.value("pending_ttl_epochs", _SG.CURRENT)
+    except Exception: return TTL_EPOCHS
+
 def state():
     from . import hosted as R
     cp = A.status().get("checkpoint_height"); cleared = _cleared(); active = cleared is None
@@ -546,7 +552,7 @@ def state():
     return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
-                expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=TTL_EPOCHS,
+                expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=_ttl(),
                 parked_checkpoint=PARKED, checkpoint=cp, auto_clear="when an official notice says grading is back and the hardening is over (complete); before that, 6 hours after mining is officially back",
                 halted_list_public=False, url="https://poascan.io/upgrade",
                 phase="complete" if c else "recovery" if rec["moved"] else "parked", headline=head, headline_short=short,

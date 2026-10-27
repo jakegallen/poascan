@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.186] - 2026-10-27
+
+### Added
+- Expiry horizon on Governance, Queue: one line per pending cohort (answers pending since the same entry epoch in the latest close record, plus the open epoch's answers) with Pending, No seal, Expires (entry epoch + pending TTL), Left (closes after the open epoch) and In (a ticking countdown to that close, an estimate). Every header sorts. The E18 to E20 cohorts in segment 2 are tagged Watched, the zero seal cohorts tracked in LabLeak post 1582, comment 6150. Segment aware: Segment 1 shows its own last cohorts, ended.
+- `GET /api/v1/governance/pending-horizon` (sort, dir; CSV with .csv) and MCP tool `get_pending_horizon` (40 tools). `/api/v1/governance` adds `ttl` (both TTLs with source and flags). Method at /about#ttl.
+
+### Changed
+- The pending TTL is read from minepoa's `/api/params` `pending_ttl_epochs` (POAScan's hourly copy; no new request) per segment, instead of a fixed 16. An archived segment uses the value it closed under (segments.json). 16 is only a fallback, tagged Stale and Unconfirmed; an old params copy is tagged Stale; a disagreement with the grading list's expires minus since is tagged Differs. The establishment TTL (`estab_ttl`) is read the same way, so an operational change like Proposal L (LabLeak post 1582, establishment TTL 26) shows at the next params read.
+- These follow the live value: `/api/v1/pending-by-epoch` (adds ttl_source, ttl_confirmed, ttl_stale), the /upgrade Agents line and Ask agent prompt, the Home epoch card Answers tip, `meta.maintenance.pending_ttl_epochs`, and the Rules tab lapse window (L + estab_ttl + 1).
+
+### Tests
+- horizon_test (new): TTL source order and flags, a param flip to 26, fallback, stale copy, grading list cross check, cohorts and Watched, Segment 1, Queue card, header sort, API, CSV, MCP, OpenAPI, llms.txt, /about; never a pending score.
+- tip_layer_test opens every Expiry horizon note (Expires ?, Stale and Unconfirmed tags) at 390 and 1280. smoke_test: 40 MCP tools.
+
 ## [1.26.185] - 2026-10-27
 
 ### Fixed

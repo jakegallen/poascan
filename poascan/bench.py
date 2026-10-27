@@ -40,12 +40,17 @@ TIPS = (
 )
 TIP = {k: (t, x) for k, t, x in TIPS}
 
+def _live(x):
+    from . import netparams as NP   # 1.26.186: the pending TTL in the Answers line follows /api/params
+    try: return NP.live_text(x)
+    except Exception: return x
+
 def tip(k):
-    t, x = TIP[k]; return qtip(x, METHOD, "About " + t, cls="hv btip")
+    t, x = TIP[k]; return qtip(_live(x), METHOD, "About " + t, cls="hv btip")
 
 def about_html():
     """The /about section the card's Method links point to: the same lines as the tooltips."""
-    li = "".join(f"<li><b>{E(t)}</b>: {E(x)}</li>" for _, t, x in TIPS)
+    li = "".join(f"<li><b>{E(t)}</b>: {E(_live(x))}</li>" for _, t, x in TIPS)
     return (f'<h3 id="epoch-card">Epoch card</h3><p>The live Epoch card on Home. Each ? on it opens one of these lines. Counts come from POAScan\'s '
             f'own tx archive; the rules come from minepoa go.md and skill.md, the engine and <code>/api/params</code>.</p><ul>{li}</ul>')
 
