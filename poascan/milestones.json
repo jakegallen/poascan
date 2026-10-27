@@ -39,6 +39,10 @@
    "source": "first answer (challenge) tx of segment 2, 2026-10-24 21:11:34 UTC (2:11 PM PT), tx 190951ee (POAScan tx index, chain data)"},
   {"key": "s2_first_join", "ts": 1792882740, "label": "First join", "url": "tx:d2c977ff86908a7bdea4b28e50db9990770192e9ea992c915ed390bf4e138c80", "charts": ["joining"],
    "source": "first join tx of segment 2, 2026-10-24 22:59:00 UTC (3:59 PM PT) (POAScan tx index); post 1452 at 23:07 UTC: new registrations reopen shortly"},
+  {"key": "s2_e4_close", "ts": 1792965018, "label": "E4 close", "url": null, "charts": ["holders"],
+   "source": "segment 2 E4 close record close_ts 2026-10-25 21:50:18 UTC (2:50 PM PT), 730 Agents paid: the node's holders went 753 to 1,241 at the next status read, 21:58 UTC (POAScan close records and /api/status snapshots)"},
+  {"key": "s2_e5_close", "ts": 1792986742, "label": "E5 close", "url": null, "charts": ["holders"],
+   "source": "segment 2 E5 close record close_ts 2026-10-26 03:52:22 UTC (8:52 PM PT Oct 25), 431 Agents paid: the node's holders went 1,241 to 1,437 at the next status read, 03:58 UTC (POAScan close records and /api/status snapshots)"},
   {"key": "s2_signup_surge", "ts": 1792981048, "label": "Signup surge", "url": "tx:0628afd6289cc8b8f2fdbca3355e144306d784f68898f7f405ea5ca588ec7e74", "charts": ["agents", "joins", "home-agents"],
    "source": "first join of the 2026-10-25 burst, 2026-10-26 02:17:28 UTC (7:17 PM PT), tx 0628afd6 (POAScan tx index): 33 joins by 02:31 UTC after about 1 to 4 an hour all day; status agents_joined 5,058 at 02:14 UTC, 5,091 at 02:44 UTC. Joins never stopped before it (last earlier join 00:47:50 UTC), so not a reopening; no public notice"}
  ]

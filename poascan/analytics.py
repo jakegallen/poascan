@@ -376,6 +376,15 @@ def holders():
                 cluster_balance=cl[0][0] if cl else None, cluster_count=cl[0][1] if cl else 0,
                 cluster_share=(cl[0][1] / len(bal)) if bal else None)
 
+def holders_count():
+    """1.26.174: the one Holders number shown everywhere (Home, /token, FAQ, charts, API, MCP): the node's own count (/api/status
+    holders, read every minute, the ledger itself). POAScan's list (holders()) is rebuilt from /api/agents balances read every
+    15 min plus reward sums for unlisted addresses, so it trails the node after each paying close; it stays the basis of the rich
+    list and concentration, and Network > Health reconciles the two. Falls back to the list count only when the node gives none."""
+    v = status().get("holders")
+    try: return int(v)
+    except (TypeError, ValueError): return holders()["count"]
+
 @cached("established_set", 60)
 def established_set():
     """Who is ESTABLISHED now, per minepoa's engine (estfold.py, 1.26.140): the selected segment's genesis import flags,
@@ -660,7 +669,7 @@ def concentration():
     rb = rewards_by_addr()
     low = [r for r in rows if len([v for v in rb.get(r["addr"], {}).values() if v > 0]) <= MIN_ACTIVITY_EPOCHS]
     top = {f"top{n}_share": (sum(bal[:n]) / tot if tot else None) for n in (1, 5, 10, 20)}
-    return dict(holders=len(rows), total_balance=tot, **top, gini=h["gini"], median_balance=h["median"],
+    return dict(holders=holders_count(), holders_in_list=len(rows), total_balance=tot, **top, gini=h["gini"], median_balance=h["median"],
                 min_activity=dict(agents=len(low), share_of_holders=(len(low) / len(rows)) if rows else None,
                                   share_of_supply=(sum(r["balance"] for r in low) / tot) if tot else None,
                                   definition=f"holders paid in at most {MIN_ACTIVITY_EPOCHS} epoch"))

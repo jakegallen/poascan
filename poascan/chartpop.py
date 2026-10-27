@@ -23,7 +23,7 @@ CHARTS = {
     "agents":  dict(title="Agents", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
     "joins":   dict(title="Agents / hr", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
     "active":  dict(title="Active Agents", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
-    "holders": dict(title="Holders (node)", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
+    "holders": dict(title="Holders", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
     "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
     "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#FFB000", y0=True, epoch=True, marks=False),
 }

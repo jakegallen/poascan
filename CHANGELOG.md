@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.174] - 2026-10-26
+
+### Changed
+- One Holders number everywhere: the node's own count (`holders` in /api/status, read every minute) on Home, /token, the FAQ stats, Network charts, the pop-out, the API and MCP. Labels read Holders (was Holders (node)). `/api/v1/concentration` and the summary's `concentration.holders`, the MCP rich list `holders` and the ops network `holders` now carry that number; POAScan's own list count moves to the new `holders_in_list`. The rich list and concentration shares still come from the list.
+- Why the two counts differed (1,665 against 1,567): holders only change at a paying close, the node's count updates within a minute of it, and POAScan's list is rebuilt from /api/agents balances read every 15 minutes plus reward sums for addresses missing from it. 1,567 was the list read at 11:59 AM PT, before the E8 close at 3:01 PM PT paid 335 Agents; the node read 1,570 at that time. Once both have read past a close they agree within a few (1,663 against 1,665 now); Network > Health keeps the two side by side. Method on /about#holders.
+- Holders chart milestones: E4 close (Oct 25, 2:50 PM PT, 730 Agents paid; holders 753 to 1,241) and E5 close (Oct 25, 8:52 PM PT, 431 paid; 1,241 to 1,437), from the close records, on the Holders chart only.
+
+### Tests
+- tools/holders_label_test.py covers the one number, `holders_in_list`, the fallback when the node gives no count and the two milestones; tools/milestones_test.py checks Holders carries only the cut, E4 and E5.
+
 ## [1.26.173] - 2026-10-26
 
 ### Changed

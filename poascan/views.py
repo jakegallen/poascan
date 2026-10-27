@@ -109,7 +109,7 @@ def headline():
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc and anc.get("last") else None
     return {
         "mined": stat("Total mined", poa(sup, mined=True) + X.usd_of(sup), "", ICON_PICK, "mined"),
-        "holders": stat("Holders (node)", intc(st.get("holders")), "", ICON_USERS, "holders"),
+        "holders": stat("Holders", intc(st.get("holders")), "", ICON_USERS, "holders"),
         "accounts": stat("Agents", intc(st.get("agents_joined")), "", ICON_BOT, "accounts"),
         "last": stat(f"Epoch {last.get('epoch','···')} minted", poa(last.get("minted"), mined=True) + X.usd_of(last.get("minted")), "", ICON_CUBE, "last"),
         "burn": stat(f"Epoch {last.get('epoch','···')} burned", f'<span class="num red">{last.get("burn_pct",0):.1f}%</span>', "", ICON_FLAME, "burn"),
@@ -856,7 +856,7 @@ def token_body(h2=False):
     g = V3.growth_data(); u = V3.unlock_data(); circ = u["past"] + [(time.time(), u["now"])]
     cum = {r["close_ts"]: r["cum_supply_confirmed"] for r in ep}   # 1.26.122: carried supply, so Locked continues across the cut
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
-    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders (node)", intc(st.get("holders"))), g["holders"]), "holders"),
+    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]), "holders"),
                      pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"]), flag_html=A.carry_flag("circ")), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"]), flag_html=A.carry_flag("locked")), locked),
                      stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
     c = A.concentration(); ma = c["min_activity"]
@@ -1478,7 +1478,7 @@ def about():
 <li><b>agent_joins_per_hour</b> (API only): Agents joined per hour, a whole number. Since a genesis cut it counts the segment's join txs from its first join (when joining reopened) to now, over at least 1 h; otherwise the rise in <code>agents_joined</code> across POAScan's /api/status snapshots over the trailing 24 h (from where a pause of 2 h or more ended). The Agents / hr chart counts joins in each whole hour, with no line across a cut.</li></ul>
 ''' + BN.about_html() + '''<h3>Derived numbers</h3><ul><li><b>Spendable / locked</b>: each epoch's rewards × the 100-epoch vesting schedule (verified exactly against the network's own agent view).</li>
 <li><b>Burned</b>: pool minus rewards paid per epoch. It is unissued supply, not destroyed balances.</li>
-<li id="holders"><b>Holders</b>: two counts. <b>Holders (node)</b> on the home page, /token and charts is <code>holders</code> from /api/status, the node's own count. <b>Holders (balances)</b> is POAScan's count of addresses with a balance above zero in /api/agents, plus paid addresses missing from it; Network → Health sets the two side by side, marked balances and node. The two are read at different times (status every minute, /api/agents every 15 minutes) and can differ by a few. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
+<li id="holders"><b>Holders</b>: one number everywhere (Home, /token, the FAQ, every chart, the API and MCP): <code>holders</code> from /api/status, the node's own count of addresses with a balance above zero, read every minute. Balances only change at a paying close, so the count steps up at closes (E4 and E5 on Oct 25 paid 730 and 431 Agents). POAScan also keeps its own list, addresses with a balance above zero in /api/agents plus paid addresses missing from it, rebuilt from reward sums and archived transfers (<code>holders_in_list</code> in the API). It is read every 15 minutes, so for up to 15 minutes after a close it trails the node by that close's new holders, and the reconstruction can differ by a few. The list is the basis of the rich list and concentration; Network → Health sets the two counts side by side, marked balances and node. The rich list is built from the same balances and per-epoch rewards (paid addresses missing from /api/agents are marked).</li>
 <li><b>Model / harness</b> are self-reported. <b>Operator families</b> are estimated. Sybil and originality flags are sample measurements.</li></ul>
 <h3>Not measurable (yet)</h3><ul><li><b>Lifetime transaction count</b>: the network publishes a rolling window only. POAScan counts what it has archived since it started.</li>
 <li><b>Transfers history</b>: no endpoint; none observed so far.</li>

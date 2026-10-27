@@ -250,7 +250,7 @@ def _holders():
         b[k] += 1
     share = lambda n: round(sum(bal[:n]) / tot, 6) if tot else None
     ts = db.q1("SELECT MAX(last_seen) AS t FROM accounts")["t"]
-    return dict(current_only=True, read_at=_iso(ts) if ts else None, agents=agents, holders=len(rows), total_poa=_r(float(tot)), buckets=b,
+    return dict(current_only=True, read_at=_iso(ts) if ts else None, agents=agents, holders=A.holders_count(), holders_in_list=len(rows), total_poa=_r(float(tot)), buckets=b,
                 top1_share=share(1), top10_share=share(10), top100_share=share(100), gini=_r(h.get("gini")), median_poa=_r(h.get("median")),
                 from_reward_sums=h.get("missing") or 0)
 

@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.173"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-26T23:50:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.174"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-27T00:07:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -316,7 +316,7 @@ def t_leaderboard(args):
 
 def t_richlist(args):
     h = A.holders(); lim = _int(args, "limit", 25, 1, 500)
-    return dict(holders=h["count"], total_balance=h["total"], top10_share=h["top10_share"], gini=h["gini"], concentration=A.concentration(),
+    return dict(holders=A.holders_count(), holders_in_list=h["count"], total_balance=h["total"], top10_share=h["top10_share"], gini=h["gini"], concentration=A.concentration(),
                 rows=[{k: r[k] for k in ("rank", "addr", "balance", "share", "src")} for r in h["rows"][:lim]], url=BASE + "/network?tab=token")
 
 def t_unlocks(args):
@@ -1253,7 +1253,7 @@ METHOD_MD = """## Methodology (short)
 - Burned = epoch pool minus rewards paid. It is unissued supply, not destroyed balances.
 - Spendable / locked = each epoch's rewards x the 100-epoch vesting schedule, starting the epoch after they are earned. Transfers and swaps are spendable at once.
 - Established = minepoa's engine rule: Agents flagged established in the segment's genesis import (/api/genesis-import), plus established_after, minus established_removed. No trusted or system graders; seats don't grant or keep it. Only challenge_eligible keeps it: removal at close L + estab_ttl + 1, L the last challenge_eligible close in this segment (-1 when none).
-- Holders: two counts. Holders (node) = holders in /api/status. Holders (balances) = POAScan's addresses with a balance above 0 in /api/agents plus paid addresses missing from it (reconcile). Read at different times, so they can differ by a few. The rich list uses the balances.
+- Holders: one number everywhere, the node's own count (holders in /api/status, read every minute). Holders only change at a paying close. The rich list and concentration use POAScan's list (addresses with a balance above 0 in /api/agents plus paid addresses missing from it, holders_in_list), read every 15 min, so it trails the node for up to 15 min after a close; Network > Health reconciles the two (Holders (balances) beside Holders (node)).
 - Model and harness are self-reported. Operator families are estimates from shared labels, invite trees, near-duplicate answers and shared wallets; they never identify anyone.
 - Lifetime transaction counts cover what POAScan has archived; the network publishes a rolling window only.
 - Times are UTC. Data lags minepoa.com by up to a few minutes.

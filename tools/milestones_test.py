@@ -111,7 +111,7 @@ check("sparkline without marks in its span is unchanged (plain svg)", UI.spark(_
 check("Signup surge is not a Mining or Active marker", "s2_signup_surge" not in rel["active"] and "s2_signup_surge" not in rel["mined"] and "s2_signup_surge" not in rel["circ"] and "s2_signup_surge" not in rel["holders"])
 check("Grading reopened only on grading charts; Upgrade complete never on them (no two labels at one time)",
       [k for k, v in rel.items() if "grading_reopened" in v] == ["gov-est", "gov-paid", "gov-queue", "gov-cover"] and not any("ended" in rel[k] for k in ("gov-est", "gov-paid", "gov-queue", "gov-cover")))
-check("Holders carries only chain-wide events", rel["holders"] == ["genesis_cut"])
+check(f"Holders carries the chain-wide cut and its own step-ups, the E4 and E5 closes (1.26.174) ({rel['holders']})", sorted(rel["holders"]) == ["genesis_cut", "s2_e4_close", "s2_e5_close"])
 check("route reads, checkpoint, notices and the back signal are table only", not any(k in v for v in rel.values() for k in ("checkpoint", "notice", "paused", "grading_halted", "mining_reopened", "route:mining", "route:send")))
 check("labels are plain: no +N, no em or en dash, at most 24 characters, per chart too",
       all(len(e["label"]) <= 24 and not re.search(r"\+\d|[\u2013\u2014]", e["label"]) for k in MS.CHART_IDS for e in MS.events(k)))
