@@ -49,6 +49,10 @@ jobs:
         run: python tools/wallet_binding_test.py
       - name: Grader patterns (Agreement, Peers, Spread, Top score, Distance and Mix from settled seats only; system graders out of percentiles and charts; n 20 minimum; Segment 1 Agreement and Peers only; timing network wide only; API, CSV, MCP) and settled only Calibration scores
         run: python tools/graderpat_test.py
+      - name: Pending TTL from /api/params per segment (16 only as a flagged fallback, grading list cross check) and the expiry horizon per pending cohort (Watched E18 to E20; header sort, CSV, API, MCP get_pending_horizon; never a pending score)
+        run: python tools/horizon_test.py
+      - name: Intake per close (Set, Eligible, Cap, Admitted, Not admitted, Door and the draw Check from the engine fold; Eligible, not admitted per Agent with its draw place; Proposal L params; header sort, CSV, API, MCP get_intake; never a pending score)
+        run: python tools/intake_test.py
       - name: Health fix (minepoa's single-id 503 sheds are not feed failures; shed ids negative cached at least 60 s; a full chain tx ceiling holds that path; at most 30 tx requests a minute in all; a failed hourly read retried after its backoff)
         run: python tools/healthfix_test.py
       - name: Governance v2 (Settlement by origin epoch per close with sealed, paid and open; Changes per close from the engine fold; Never established; Panel and Age on the settle queue; header sort, CSV, API, MCP; never a pending score)

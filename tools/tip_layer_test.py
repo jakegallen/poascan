@@ -2,7 +2,7 @@
 Governance Established Unconfirmed note rendered behind the next row of stat cards). In Chromium at 390 px (tap) and 1280 px
 (click) on Home, Governance (overview and tabs), Network, Token, an address page, /start, Census and an epoch page, this opens
 every kind of note: the ? tips, the Stale, Unconfirmed and estimate tags, table header tips, the header status note, the chart
-? and chart hover readouts, the seal timeline tip, the Ask agent dialog, every Grader patterns note, every Expiry horizon note (1.26.186) and the Health Routes Stale tag. For each open note it checks with
+? and chart hover readouts, the seal timeline tip, the Ask agent dialog, every Grader patterns note, every Expiry horizon note (1.26.186), the Health Routes Stale tag and every Intake note (1.26.189). For each open note it checks with
 document.elementFromPoint at the centre and four corners (inside the rounded edge) that the note (or something inside it) is the topmost element,
 and that its whole box is inside the viewport. Fixture site; no request leaves the box. In CI (CI set) a missing Playwright is
 a failure, locally it is skipped. Usage: python3 tools/tip_layer_test.py"""
@@ -48,7 +48,7 @@ ch["poa1" + "A" * 40] = {"solana": {"addr": "J6kWfKRfvJGBJQu5EbZiYiURgUDWPZih2zv
 db.put_blob("chains", ch)
 db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final) VALUES(?,?,?,?,1)", [("b" * 64, "identity-link", "poa1" + "A" * 40, now - 7200), ("c" * 64, "chains-update", "poa1" + "A" * 40, now - 7100), ("d" * 64, "join", "poa1" + "B" * 40, now - 3700)], many=True)
 """
-PAGES = ["/", "/wallet", "/wallet?address=poa1" + "A" * 40, "/wallet?address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=graders",
+PAGES = ["/", "/wallet", "/wallet?address=poa1" + "A" * 40, "/wallet?address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=intake", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
          "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10"]
 
@@ -221,6 +221,11 @@ def run(base, p, w, h, mobile, kinds):
             except Exception as e:
                 check(f"{w}: Routes Stale tag opens ({type(e).__name__})", False); bad += 1
             pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
+        # Intake (1.26.189): the Cap ? on the per close table and the Draw ? on the Agents table
+        if "tab=intake" in path:
+            ok_, n_ = every_note(pg, "#intake details.qtip, #intake-list details.qtip", "ik", mobile, judge, path, w)
+            check(f"{w}: Intake: {ok_} of {n_} notes topmost and inside (Cap ?, Draw ?)", n_ >= 2 and ok_ == n_)
+            if n_ and ok_ == n_: kinds.add("intake")
         check(f"{w}: {path}: {good} notes topmost and inside the viewport, {bad} not", bad == 0)
     b.close()
     return n_all
@@ -243,7 +248,7 @@ if sync_playwright:
             for w, h, mob in ((390, 844, True), (1280, 900, False)):
                 n = run(base, p, w, h, mob, kinds)
                 check(f"{w}: opened {n} notes", n >= 30)
-        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding", "routes stale"):
+        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding", "routes stale", "intake"):
             check(f"covered: {k} ({sorted(kinds)})" if k not in kinds else f"covered: {k}", k in kinds)
     finally:
         srv.terminate()

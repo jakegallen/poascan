@@ -11,6 +11,22 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.189] - 2026-10-27
+
+### Added
+- Intake on Governance (new Intake tab): for every close of the selected segment, Set (established before the close), Eligible (challenge_eligible Agents not yet established), Cap (the door, max(5, ceil(10% of Set)), LabLeak post 1582 and comment 6193), Admitted (new in established_after), Not admitted, Door (Binding when Eligible exceeds Cap) and Check (Match when the first Cap Agents in sha256('intake:' + address + ':' + close) order are exactly the Admitted). Every header sorts. Stat cards for the latest close with intake.
+- Per close Agent list: each eligible Agent with its Draw place and state, Admitted, Eligible, not admitted, or Admitted, not eligible; filter chips, header sort, 100 a page. Agent cells link named Agents to their LabLeak profiles.
+- Proposal L ready: when /api/params carries estab_intake_floor and estab_intake_rate (from estab_intake_from_epoch when given), Cap uses them; Check shows whether the published records follow.
+- `GET /api/v1/governance/intake` (close, state, sort, dir, limit, offset; CSV with .csv) and MCP tool `get_intake` (43 tools). Method at /about#intake.
+- From the close records POAScan already holds; no new request to minepoa.com. No pending row, seal or score is read.
+
+### Fixed
+- CI now runs horizon_test (1.26.186) as well as intake_test.
+
+### Tests
+- intake_test (new): cap arithmetic, the draw order and Check (Match and Differs), removals shrinking the Set, Admitted, not eligible, Proposal L params, the tab, filters, paging, LabLeak profile links, API, CSV, MCP, OpenAPI, llms.txt, /about; never a pending score.
+- tip_layer_test opens the Intake Cap and Draw notes at 390 and 1280. smoke_test: 43 MCP tools.
+
 ## [1.26.188] - 2026-10-27
 
 ### Added
