@@ -116,9 +116,15 @@ check("job_live while backing off sends no status read and stores nothing", st2 
 
 # banner and meta
 html = ui.layout("Home", "<p>x</p>")
-check("notice strip renders under the development banner", 'id="ntbar"' in html and html.index('id="devbar"') < html.index('id="ntbar"') < html.index('<header class="top"'))
-check("strip text is sanitized and plain", "Network under strain, serving an instant response. Retry later." in html and "\u2014" not in html.split('id="ntbar"')[1].split("</div>")[0])
-check("strip copy: no em or en dash", all(ch not in ST.banner() for ch in "\u2013\u2014"))
+check("no notice strip on any page, ever (1.26.176): the development banner stays", 'id="ntbar"' not in html and 'class="ntbar' not in html and 'id="devbar"' in html and not hasattr(ST, "banner") and not hasattr(ui, "_strain_bar"))
+pill = html[html.index('id="livepill"'):html.index("</details>", html.index('id="livepill"'))]
+check("the reason is one line in the header status note, terse, and turns Live into Partial", f'<span class="sp-r">{ui.NOTICE_REASON}</span>' in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
+      and (lambda p: p["state"] == "partial" and p["label"] == "Partial" and ui.NOTICE_REASON in p["reasons"])(ui.status_pill({"state": "live", "label": "Live", "why": ""})))
+check("status note copy: no em or en dash", all(ch not in ui.NOTICE_REASON for ch in "\u2013\u2014"))
+from poascan import views as _V
+check("the live snapshot's note (app.js swaps it in) carries the same reason", ui.NOTICE_REASON in _V.pill()["pop"])
+css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
+check("no notice strip CSS left", ".ntbar" not in css)
 AG._META[0] = 0; m = AG.meta()
 check("meta.upstream_notice is set and meta.stale is true", m["upstream_notice"] and m["stale"] is True and "/api/status" in m["upstream_notice"]["endpoints"])
 
@@ -167,7 +173,8 @@ except I.Notice: pass
 check("notice active before recovery", "/api/status" in ST.active())
 MODE.clear(); db.write("UPDATE fetch_log SET next_at=0"); I.fetch("/api/status")
 check("the next real read clears that endpoint's notice", "/api/status" not in ST.active())
-check("strip gone when no notice is active", ST.reset() is None and 'id="ntbar"' not in ui.layout("Home", "<p>x</p>"))
+_h0 = (ST.reset(), ui.layout("Home", "<p>x</p>"))[1]
+check("no notice reason in the status note once the notice clears, and still no strip", 'id="ntbar"' not in _h0 and ui.NOTICE_REASON not in _h0)
 AG._META[0] = 0; check("meta.upstream_notice null when clear", AG.meta()["upstream_notice"] is None)
 ST.record("/api/status", {"signals": ["schema:x"], "text": ""}, now=time.time() - ST.NOTICE_TTL_S - 5)
 check("a notice expires NOTICE_TTL_S after its last sighting", not ST.active()); ST.reset()

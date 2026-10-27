@@ -1440,14 +1440,8 @@ code.brk{overflow-wrap:anywhere}
 .devbar a{color:var(--gold-hi);font-weight:600;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--gold-hi) 45%,transparent);text-underline-offset:2px}
 .devbar a:hover,.devbar a:focus-visible{color:var(--gold-pale);text-decoration-color:currentColor}
 @media (max-width:640px){.devbar-in{padding-top:6px;padding-bottom:6px}.devbar p{font-size:var(--t12)}}
-/* Strain notice strip (strain.banner): under the development banner while minepoa.com answers with a notice in place of data. Plain, not dismissible */
-.ntbar{border-bottom:1px solid color-mix(in srgb,var(--note) 34%,transparent);background:linear-gradient(90deg,color-mix(in srgb,var(--note) 16%,transparent),color-mix(in srgb,var(--note) 7%,transparent))}
-.ntbar p{margin:0;color:var(--note-2);font-size:var(--t13);line-height:1.4;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
-.ntbar b{color:var(--note-3);font-weight:600;letter-spacing:.02em}
-.ntbar .ntk{color:var(--note-1)}
-@media (max-width:640px){.ntbar p{font-size:var(--t12)}}
 
-/* 1.26.89: in-page note while minepoa.com has a lookup paused (ui.upnote), same palette as .ntbar */
+/* 1.26.89: in-page note while minepoa.com has a lookup paused (ui.upnote), note palette */
 .ntin{margin:0 0 12px;padding:8px 12px;border:1px solid color-mix(in srgb,var(--note) 34%,transparent);border-radius:var(--r-lg);background:linear-gradient(90deg,color-mix(in srgb,var(--note) 16%,transparent),color-mix(in srgb,var(--note) 7%,transparent));color:var(--note-2);font-size:var(--t13);line-height:1.4;overflow-wrap:anywhere}
 .ntin a{color:var(--note-3)}
 

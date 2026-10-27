@@ -54,7 +54,7 @@ for ep in ("/api/notices", "/api/chains"):
     r = db.q1("SELECT err, next_at, last_err FROM fetch_log WHERE endpoint=?", (ep,))
     check(f"{ep}: logged HTTP 503 halted, next read at least 3600 s away (Retry-After)", r and r["err"] == "HTTP 503 halted" and r["next_at"] - r["last_err"] >= 3600)
 check("last real copies kept (chains, notices)", "poa1" + "K" * 40 in db.get_blob("chains")[0] and db.get_blob("notices")[0]["active"] == [])
-check("halted() for notices and chains; not shown as strain (no site strip, meta flag null)", I.halted(I.NOTICES_TPL) and I.halted(I.CHAINS_TPL) and ST.public() is None and ST.banner() == "")
+check("halted() for notices and chains; not shown as strain (no site strip, meta flag null)", I.halted(I.NOTICES_TPL) and I.halted(I.CHAINS_TPL) and ST.public() is None and not hasattr(ST, "banner"))
 n0 = len(HITS); I.job_meta(); I.job_hourly_meta()
 check("backing off: a second run reads neither endpoint", not [h for h in HITS[n0:] if h in ("/api/notices", "/api/chains")])
 try: I.fetch("/api/explorer/tx/" + "cd" * 32, endpoint="/api/explorer/tx/:id (test)", soft=True); check("tx fetch raises", False)

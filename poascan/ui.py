@@ -424,12 +424,6 @@ def updot(state):
 DEV_BANNER = ('<div class="devbar" id="devbar" role="note"><div class="wrap devbar-in"><p><b>System development in progress.</b> '
               'Follow <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">@Jakegallen</a> for updates.</p></div></div>')
 
-def _strain_bar():
-    """Notice strip under the development banner while minepoa.com answers with a notice in place of data (strain.py)."""
-    try:
-        from . import strain as _ST; return _ST.banner()
-    except Exception: return ""
-
 # Header status (1.26.169): the dot and word open a small note (the qtip pattern: tap, click, keyboard, mouse hover) with what
 # drives the state, the read time in the reader's zone, and links. Grading not confirmed after the completion notice turns a
 # Live header Partial; it was the home strip, which is gone. Local data only (freshness, maint.grading_state): no new reads.
@@ -442,6 +436,16 @@ def _grading_reason():
         return GRADING_REASON.get(M.grading_state()["state"], "")
     except Exception: return ""
 
+# 1.26.176: while minepoa.com answers with a notice in place of data (strain.py), the reason is one line in this note, never a
+# site strip; the affected numbers keep their own Stale and Unconfirmed tags.
+NOTICE_REASON = "minepoa.com sent a notice instead of data. Showing the last real data."
+
+def _notice_reason():
+    try:
+        from . import strain as _ST
+        return NOTICE_REASON if _ST.public() else ""
+    except Exception: return ""
+
 def status_pill(f):
     """The header pill from analytics.freshness(): state, label, why, href, reasons and the note's HTML (pop)."""
     state, label, why = f["state"], f["label"], f.get("why") or ""
@@ -452,6 +456,10 @@ def status_pill(f):
     g = _grading_reason()
     if g:
         reasons.append(g)
+        if state == "live": state, label = "partial", "Partial"
+    nr = _notice_reason()
+    if nr:
+        reasons.append(nr)
         if state == "live": state, label = "partial", "Partial"
     if not reasons: reasons.append("All systems normal." if state == "live" else (why.rstrip(".") + "." if why else label + "."))
     links = ([("/upgrade", "Details")] if g else []) + [("/network?tab=health", "Health")]
@@ -482,7 +490,7 @@ def layout(title, body, active="/", live=None, head=""):
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={ASSET_V["style.css"]}">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
-{DEV_BANNER}{_strain_bar()}<header class="top"><div class="wrap hdr">
+{DEV_BANNER}<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}

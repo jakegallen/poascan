@@ -222,9 +222,3 @@ def public(now=None):
     return dict(text=v["text"], endpoints=sorted(a), first_seen=min(x["first_seen"] for x in a.values()), last_seen=v["last_seen"],
                 signals=v["signals"], data="last real values kept; nothing from the notice response was stored")
 
-def banner(now=None):
-    """The site notice strip, or '' when no notice is active."""
-    p = public(now)
-    if not p: return ""
-    return ('<div class="ntbar" id="ntbar" role="status"><div class="wrap devbar-in"><p><b>minepoa.com notice:</b> '
-            f'<span class="ntx">{html.escape(p["text"])}</span> <span class="ntk">Showing the last real data.</span></p></div></div>')

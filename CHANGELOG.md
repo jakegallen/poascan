@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.176] - 2026-10-26
+
+### Removed
+- The site-wide minepoa.com notice strip under the development banner. It no longer renders on any page, in any state. The reason now sits in the header status note, which turns Live into Partial while minepoa.com sends a notice instead of data: "minepoa.com sent a notice instead of data. Showing the last real data." Affected data keeps its stale and unconfirmed tags. The development banner stays.
+- Dead code and CSS for the strip (strain.banner, the layout strip, .ntbar). Notice detection is unchanged.
+
+### Tests
+- strain_notice_test asserts the strip never renders and the reason appears in the status note; halt_test follows.
+
 ## [1.26.175] - 2026-10-26
 
 ### Changed
