@@ -159,6 +159,9 @@ ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
 
 def _upgrade():
     from . import maint as M
+    rh = M.probe_halts()
+    if M.complete() and rh:   # 1.26.188: routes halted per POAScan's probes outrank the completion notice
+        return ("Network status", "Routes halted", ["Per POAScan probes"], [(r["label"], "Halted" if r["state"] == "halted" else "Down") for r in rh[:3]])
     if M.complete():
         g = M.grading_state()["state"]
         if g == "open": return ("Network upgrade", "Upgrade complete", ["Mining, grading and joining open"], [("Mining", "Open"), ("Grading", "Open"), ("Joining", "Open")])

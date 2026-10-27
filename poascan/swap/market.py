@@ -159,7 +159,7 @@ def _writes(d):
     if f is None: return d
     w, ok = f(); d.update(writes=w, swaps_writable=ok)
     g = getattr(H, "swap_route", None)
-    if g is not None: d["swap_route"] = g()   # 1.26.184 (additive): the host's one swap order placement resolver
+    if g is not None: d["swap_route"] = g()   # 1.26.185 (additive): the host's one swap order placement resolver
     st = w["swap_offer"]["state"]
     if ok is False and st in WRITE_MSG: d["message"] = WRITE_MSG[st]
     return d

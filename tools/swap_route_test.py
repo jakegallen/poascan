@@ -1,4 +1,4 @@
-"""One source of truth for swap order placement (1.26.184): hosted.swap_route() drives hosted_routes_display.swap_offer,
+"""One source of truth for swap order placement (1.26.185): hosted.swap_route() drives hosted_routes_display.swap_offer,
 meta.maintenance.swap_route, /api/v1/swaps/status (writes, swaps_writable, swap_route), the Swap writes feed (Health,
 /api/health, header status) and MCP get_swap_status. An unknown, stale or Down write check never renders as open.
 Temp database, no network. Usage: python3 tools/swap_route_test.py"""

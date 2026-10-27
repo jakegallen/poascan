@@ -13,6 +13,27 @@ BLOB = "pulse"
 MAP = [(r"hosted/challenge", ("Challenges", "Hosted mining")), (r"hosted/me\b", ("Agent profile", "Hosted mining")),
        (r"hosted/assignments", ("Assignments",)), (r"hosted/grade\b", ("Grading",)), (r"/a/<|path-action", ("Path actions",))]   # grade: read only if the probe already reports it
 
+# 1.26.188: per route answers of each run for routewatch.py (ok, halt or fail), from the same probe JSON. Nothing else is kept.
+ROUTE_MAP = [(r"hosted/(?:challenge|me\b|mine|answer)", "hosted_mining"), (r"assignments", "assignments"), (r"hosted/grade\b", "grading"),
+             (r"/a/<|path-action", "path_actions")]
+
+def route_kinds(d):
+    """{route id: ok|halt|fail} for one probe run: halt when any endpoint of the route answers 503 halted, else fail when
+    any times out or answers 5xx, else ok when every one answers 200. Other answers are not route reads."""
+    per = {}
+    for r in d.get("results") or []:
+        if not isinstance(r, dict): continue
+        e = str(r.get("endpoint", "")).lower(); c = r.get("code")
+        k = "halt" if _halted(r) else "ok" if c == 200 else "fail" if c is None or (isinstance(c, int) and c >= 500) else None
+        for rx, rid in ROUTE_MAP:
+            if re.search(rx, e): per.setdefault(rid, []).append(k)
+    out = {}
+    for rid, ks in per.items():
+        if "halt" in ks: out[rid] = "halt"
+        elif "fail" in ks: out[rid] = "fail"
+        elif all(k == "ok" for k in ks): out[rid] = "ok"
+    return out
+
 def _halted(r):
     b = r.get("body"); b = b if isinstance(b, str) else json.dumps(b or "")
     return r.get("code") == 503 and "temporarily halted" in b.lower()
@@ -44,11 +65,11 @@ def job():
     try:
         req = urllib.request.Request(SRC + "/probe", headers={"User-Agent": "POAScan/1 (+https://poascan.io/about)"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r: d = json.loads(r.read(500_000))
-        groups, seen = parse(d, prev.get("seen") or ())
+        groups, seen = parse(d, prev.get("seen") or ()); routes = route_kinds(d)
     except Exception as e:
         log.warning("pulse: probe unusable, doc decides (%s)", type(e).__name__)
         db.put_blob(BLOB, dict(prev, ok=False)); return
-    db.put_blob(BLOB, dict(groups=groups, seen=seen, ok=True, ts=int(time.time())))
+    db.put_blob(BLOB, dict(groups=groups, seen=seen, routes=routes, ok=True, ts=int(time.time())))
 
 def current():
     """Fresh derived groups, or None (no source, unusable or older than MAX_AGE)."""

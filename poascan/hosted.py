@@ -182,7 +182,7 @@ def write_job(now=None, get=None, force=False):
 
 def _swap_read():
     """The newest clear read of /api/hosted/swap-offer: the write check (always on), or the maintenance route check when it
-    read the same path later (1.26.184). dict(state, http, checked_at, since) or {} when neither read it clearly."""
+    read the same path later (1.26.185). dict(state, http, checked_at, since) or {} when neither read it clearly."""
     w = db.get_blob(WRITE_BLOB)[0] or {}
     r = ((db.get_blob(BLOB)[0] or {}).get("routes") or {}).get("swap_offer") or {}
     if r.get("state") in ("open", "paused", "down") and r.get("checked") and r["checked"] > (w.get("checked_at") or 0):
@@ -199,7 +199,7 @@ def writes(now=None):
     ok = None if st == "unknown" or stale else st == "open"
     return dict(swap_offer=dict(state=st, http=d.get("http"), checked_at=iso(d.get("checked_at")), since=iso(d.get("since")), stale=stale)), ok
 
-# ---- 1.26.184: one resolver for swap order placement. hosted_routes_display.swap_offer, meta.maintenance.swap_route,
+# ---- 1.26.185: one resolver for swap order placement. hosted_routes_display.swap_offer, meta.maintenance.swap_route,
 # /api/v1/swaps/status (writes, swaps_writable, swap_route), the Swap writes feed on Health and /api/health, the header
 # status note and MCP all read swap_route(). Open needs the write check's newest clear read to be open and fresh: an
 # unknown, stale or Down read is never shown as open.

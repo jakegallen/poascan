@@ -187,12 +187,16 @@ def attestation_earnings():
     return "paused" if any(ATTEST_PAUSED_RX.search(str(x.get("msg") or "")) for x in _active_notices()) else "live"
 
 # Only the hosted mining paths pause; self-custody miners (POST /api/submit plus /api/receipt) keep working.
+def _probe_ids(): return {r["id"] for r in probe_halts()}
+
 def paused():
     from . import hosted as R
-    return ((["hosted_mining"] if hosted_state() == "paused" else []) + (["grading"] if grading_state()["state"] == "halted" else []) + ([] if join_open() else ["onboarding"])
+    ph = _probe_ids()   # 1.26.188: a route Halted or Down per the probes counts as paused here too
+    return ((["hosted_mining"] if hosted_state() == "paused" or "hosted_mining" in ph else []) + (["grading"] if grading_state()["state"] == "halted" or "grading" in ph else []) + ([] if join_open() else ["onboarding"])
             + (["challenge_pool_payouts"] if pool_payouts() == "paused" else []) + (["attestation_earnings"] if attestation_earnings() == "paused" else []))
 def working():
-    return ((["onboarding"] if join_open() else []) + (["hosted_mining"] if hosted_state() == "back" else []) + (["grading"] if grading_open() else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
+    ph = _probe_ids()
+    return ((["onboarding"] if join_open() else []) + (["hosted_mining"] if hosted_state() == "back" and "hosted_mining" not in ph else []) + (["grading"] if grading_open() and "grading" not in ph else []) + ["self_custody_mining", "epoch_closes"] + (["attestation_earnings"] if attestation_earnings() == "live" else [])
             + (["challenge_pool_payouts"] if pool_payouts() == "live" else []) + ["balances", "explorer"])
 def unconfirmed(): return ["grading"] if grading_state()["state"] == "unconfirmed" else []   # the notice says open, the archive shows no recent seals
 PAUSED = ["hosted_mining", "grading", "challenge_pool_payouts"]; WORKING = ["onboarding", "self_custody_mining", "epoch_closes", "attestation_earnings", "balances", "explorer"]   # defaults
@@ -352,10 +356,12 @@ def route_display():
             elif k == "mining" and mining_back(): st = "open"   # officially back; an unknown or single halted read does not undo it
             elif st == "open": st = "open" if of["routes"] else "responding"
             out[k] = st
-    if "swap_offer" in out: out["swap_offer"] = R.swap_display(official=bool(complete()) or of["routes"])   # 1.26.184: the one swap resolver, never open on unknown or Down
+    if "swap_offer" in out: out["swap_offer"] = R.swap_display(official=bool(complete()) or of["routes"])   # 1.26.185: the one swap resolver, never open on unknown or Down
     return out
 
 def og_desc():
+    rh = probe_halts()
+    if complete() and rh: return halt_line(rh)[0] + " Live status on POAScan."
     if complete():
         g = grading_state()["state"]
         if g == "open": return "Network upgrade complete: mining, grading and joining are open. Dates on POAScan."
@@ -547,6 +553,8 @@ def state():
     head, short = (" ".join(x for x in (hl[0] + hl[1] + ".", hl[2]) if x), " ".join(x for x in (hm[0] + ".", hm[1]) if x))
     gs = grading_state()
     if c: head, short = DONE_LINE[gs["state"]]
+    rh = probe_halts()
+    if c and rh: head, short = halt_line(rh)   # 1.26.188: never 'Upgrade complete' while probes show routes halted
     sn = segment_notice()
     if sn and sn["active"]: head, short = f'{sn["label"]}: {sn["note"]} {head}', f'{sn["label"]}. {short}'   # the active boundary notice first, tersely
     return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
@@ -560,7 +568,7 @@ def state():
                 updated_at=iso(c["at"] if c else stamp_ts()),
                 hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(), swap_route=R.swap_route(),
                 official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
-                notice=notice(), segment_notice=sn, recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), **_hs())
+                notice=notice(), segment_notice=sn, recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), route_halts=_route_halts_meta(), **_hs())
 
 def segment_notice():
     """The newest segment boundary's notice (segments config) with its state in our /api/notices mirror: active is true
@@ -577,6 +585,27 @@ def segment_notice():
                 segment=c["segment"], from_segment=c["from_segment"], from_height=c["from_height"], url="https://poascan.io/about#segments")
 
 DONE_HEAD = "Upgrade complete. Mining, grading and joining are open."
+
+# 1.26.188: routes Halted or Down per POAScan's own probes (routewatch.py, with hysteresis) outrank the completion notice in
+# every headline: the notice said all paths open, the probes say otherwise now.
+def probe_halts():
+    """[route dicts] Halted or Down per routewatch, [] when none or unreadable."""
+    try:
+        from . import routewatch as RW
+        return RW.halted()
+    except Exception: return []
+
+def halt_line(rh):
+    """(headline, short) while probes show routes halted."""
+    from . import routewatch as RW
+    word = "halted" if all(r["state"] == "halted" for r in rh) else "halted or down"
+    return (f"Probes show {RW.names(rh)} {word}. The upgrade notice said all paths open.", "Routes halted.")
+
+def _route_halts_meta():
+    try:
+        from . import routewatch as RW
+        return RW.meta()
+    except Exception: return None
 DONE_LINE = {"open": (DONE_HEAD, "Upgrade complete."),
              "unconfirmed": ("Upgrade complete per notice. Grading not yet confirmed: no recent grade seals.", "Grading not yet confirmed."),
              "halted": ("Upgrade complete per notice, but grading is halted.", "Grading halted.")}

@@ -472,6 +472,29 @@ def _halt_reason(now=None):
     which = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     return f"minepoa.com paused {which} lookups. Showing indexed data."
 
+# 1.26.188: routes Halted or Down per POAScan's own probes (routewatch.py, two bad reads in a row): one line each, the start
+# time in the reader's zone (UTC without script), and one as-of line for the probe reads. Turns Live into Partial.
+def _ztime(ts):
+    """A time that app.js shows in the reader's zone (upts); 'HH:MMZ' without script."""
+    iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts)))
+    return f'<time data-upts="{int(ts)}" datetime="{iso}">{time.strftime("%H:%MZ", time.gmtime(int(ts)))}</time>'
+
+def _route_lines():
+    """[(text, html)] for the header status note, [] when no route is Halted or Down."""
+    try:
+        from . import routewatch as _RW
+        d = _RW.state(); rs = [r for r in d["routes"] if r["state"] in ("halted", "down")]
+    except Exception: return []
+    out = []
+    for r in rs:
+        w = "halted" if r["state"] == "halted" else "down"
+        t = r["since_ts"]
+        out.append((f'{r["label"]} {w} since {time.strftime("%H:%MZ", time.gmtime(t))}.' if t else f'{r["label"]} {w}.',
+                    f'{E(r["label"])} {w} since {_ztime(t)}.' if t else f'{E(r["label"])} {w}.'))
+    if out and d.get("as_of_ts"):
+        a = d["as_of_ts"]; out.append((f'Probes as of {time.strftime("%H:%MZ", time.gmtime(a))}.', f'Probes as of {_ztime(a)}.'))
+    return out
+
 def status_pill(f):
     """The header pill from analytics.freshness(): state, label, why, href, reasons and the note's HTML (pop)."""
     state, label, why = f["state"], f["label"], f.get("why") or ""
@@ -487,7 +510,11 @@ def status_pill(f):
     if nr:
         reasons.append(nr)
         if state == "live": state, label = "partial", "Partial"
-    hr = _halt_reason()
+    rl = _route_lines(); rhtml = {}
+    for t, h in rl:
+        reasons.append(t); rhtml[t] = h
+    if rl and state == "live": state, label = "partial", "Partial"
+    hr = _halt_reason() if not any(t.startswith("Tx lookup ") for t, _ in rl) else ""   # the route line already says tx lookups are halted
     if hr:
         reasons.append(hr)
         if state == "live": state, label = "partial", "Partial"
@@ -497,7 +524,7 @@ def status_pill(f):
     links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
-    pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{E(r)}</span>' for r in reasons)
+    pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{rhtml.get(r) or E(r)}</span>' for r in reasons)
            + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>')
     return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
 

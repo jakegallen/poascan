@@ -3,7 +3,7 @@ import json, time, math, collections, statistics, datetime as dt
 from . import db, analytics as A, agents as G
 from .ui import *
 from . import prompts as PR, indexer as I
-from .ui import _ic
+from .ui import _ic, _ago
 
 def page(title, body, active):
     from . import views
@@ -283,14 +283,24 @@ def upgrade_done():
     c = M.complete(); tx = c.get("txid"); g = M.grading_state(); gst = g["state"]
     from . import signed as SG
     nl = f' · <a href="/tx/{E(tx)}">notice <code>{E(c.get("notice_id") or "")}</code></a>{SG.badge_tx(tx)}' if tx else ""
-    ok = ["Hosted mining"] + (["Grading"] if gst == "open" else []) + ["Joining", "Answers", "Attestation earnings"] + (["Challenge-pool payouts"] if M.pool_payouts() == "live" else []) + ["Self-custody mining", "Explorer"]
+    rh = M.probe_halts(); hid = {r["id"] for r in rh}   # 1.26.188: routes Halted or Down per POAScan's probes outrank the notice
+    ok = ([] if "hosted_mining" in hid else ["Hosted mining"]) + (["Grading"] if gst == "open" and "grading" not in hid else []) + ["Joining"] + ([] if "hosted_mining" in hid else ["Answers"]) + ["Attestation earnings"] + (["Challenge-pool payouts"] if M.pool_payouts() == "live" else []) + ["Self-custody mining", "Explorer"]
     sub = {"open": "The API hardening is over. Mining, grading and joining are open, and Agents can return to their normal cadence.",
            "unconfirmed": "The notice says grading is open. POAScan's archive shows no grade seals in the last 30 minutes, so grading is not yet confirmed. Mining and joining are open.",
            "halted": "The notice says the upgrade is over, but grading is halted" + (f" (notice {g['halt_notice']})" if g["halt_notice"] else " (a live read saw the grade route halted)") + ". Mining and joining are open."}[gst]
-    wait = ("" if gst == "open" else f'<div class="grp wait" data-grp="grading"><h2><i></i>{"Not yet confirmed" if gst == "unconfirmed" else "Halted"}</h2><ul>'
+    wait = ("" if gst == "open" or (rh and "grading" in hid) else f'<div class="grp wait" data-grp="grading"><h2><i></i>{"Not yet confirmed" if gst == "unconfirmed" else "Halted"}</h2><ul>'
             + _chip("Grading", "wait") + ("" if M.pool_payouts() == "live" else _chip("Challenge-pool payouts", "wait")) + '</ul></div>')
-    hero = (f'<section class="uph done" aria-labelledby="uph-t"><div class="uph-top"><span class="upb ok"><i></i>Network upgrade</span><span class="upts">Completed {_when(c["at"])}</span></div>'
-            f'<h1 class="uph-t" id="uph-t">{"Upgrade complete" if gst == "open" else "Upgrade complete per notice"}</h1>'
+    title = "Upgrade complete" if gst == "open" else "Upgrade complete per notice"
+    if rh:   # never 'Upgrade complete' while the probes show routes halted
+        title = "Routes halted"
+        sub = f"POAScan's probes show {_RWn(rh)} {'halted' if all(r['state'] == 'halted' for r in rh) else 'halted or down'}. The upgrade notice said all paths open."
+        wait = (f'<div class="grp wait" data-grp="halted"><h2><i></i>Halted</h2><ul>'
+                + "".join(_chip(r["label"] + (" down" if r["state"] == "down" else " halted") + (" since " if r["since_ts"] else ""), "wait", lt(r["since_ts"]) if r["since_ts"] else "") for r in rh)
+                + '</ul></div>')
+    pa = _RWasof() if rh else None
+    hero = (f'<section class="uph done{" halt" if rh else ""}" aria-labelledby="uph-t"><div class="uph-top"><span class="upb{"" if rh else " ok"}"><i></i>Network upgrade</span>'
+            + (stamp(pa, "Probes as of") if rh and pa else f'<span class="upts">Completed {_when(c["at"])}</span>') + '</div>'
+            f'<h1 class="uph-t" id="uph-t">{title}</h1>'
             f'<p class="uph-s">{E(sub)}</p>'
             f'<div class="grps"><div class="grp ok" data-grp="working"><h2><i></i>Working</h2><ul>{"".join(_chip(t, "ok") for t in ok)}</ul></div>{wait}</div></section>')
     ls = g.get("last_seal_at")
@@ -300,10 +310,18 @@ def upgrade_done():
     back = next((e["ts"] for e in MS.events() if e["key"] == "mining_reopened"), None) or M.back_since()
     dl = (_ts_row("Started", M.STARTED, f' · <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>')
           + (_ts_row("Mining reopened", back) if back else "")
-          + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade complete", c["at"]) + f"<dt>Release</dt><dd>{_release()}</dd>")
+          + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade notice" if rh else "Upgrade complete", c["at"]) + f"<dt>Release</dt><dd>{_release()}</dd>")
     links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
              f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
     return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'
+
+def _RWn(rh):
+    from . import routewatch as RW
+    return RW.names(rh)
+
+def _RWasof():
+    from . import routewatch as RW
+    return RW.state().get("as_of_ts")
 
 def upgrade_body():
     """The whole /upgrade page body: live recovery while maintenance is on, the completed note once it is officially over,
@@ -337,6 +355,24 @@ def feeds_html(fd=None):
             f'<span class="lbl">Chain</span><span class="tag {FEED_TAG[fd["chain"]]}">{fd["chain"]}</span></div>')
     return card("Feeds", head + f'<ul class="feeds" aria-label="Feeds">{li}</ul>' )
 
+ROUTE_TAG2 = {"open": "ok", "halted": "bad", "down": "bad", "unknown": ""}
+
+def routes_html(d=None):
+    """1.26.188: Health, Routes: each watched route Open, Halted or Down (since when) or No read, from POAScan's existing probes
+    (routewatch.py: two bad reads in a row turn it, two good reads clear it). As of the newest read; a route read over 2 h ago is Stale."""
+    from . import routewatch as RW
+    d = d or RW.state(); now = time.time()
+    def row(r):
+        st = r["state"]; tag = f'<span class="tag {ROUTE_TAG2[st]}">{r["word"]}</span>'
+        sf = flag("Stale", f'Last read {_ago(now - r["as_of_ts"])} ago') if r["stale"] else ""
+        since = f'since {lt(r["since_ts"])}' if st in ("halted", "down") and r["since_ts"] else '<span class="na">···</span>'
+        return f'<li data-route="{E(r["id"])}" data-st="{st}"><b>{E(r["label"])}</b><span class="rtg">{tag}{sf}</span><span class="fdt">{since}</span></li>'
+    n = len([r for r in d["routes"] if r["state"] in ("halted", "down")])
+    head = (f'<div class="fdh"><span class="lbl">Halted</span><span class="tag {"bad" if n else "ok"}" data-halted="{n}">{n}</span>'
+            + (f'<span class="lbl">As of</span>{lt(d["as_of_ts"])}' if d.get("as_of_ts") else "") + '</div>')
+    return card("Routes", head + f'<ul class="feeds rtes" aria-label="Routes">{"".join(row(r) for r in d["routes"])}</ul>',
+                '<a class="more" href="/api/v1/routes">API →</a>', id="routes")
+
 def status_body():
     """Network → Health (was /status)."""
     d = status_data(); now = time.time()
@@ -365,7 +401,7 @@ def status_body():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="gold", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
-    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}<div class="stats eight">{st}</div>
+    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}{routes_html()}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
     return body
 

@@ -17,7 +17,7 @@ def circulating(): return _A.supply_split().get("spendable")         # spendable
 def swap_writes():   # 1.26.127: ({swap_offer: {state, http, checked_at, since, stale}}, swaps_writable) from the write check
     from .. import hosted as _HO
     return _HO.writes()
-def swap_route():   # 1.26.184: the one resolver (hosted.swap_route): state, display, writable, feed, as of the write check
+def swap_route():   # 1.26.185: the one resolver (hosted.swap_route): state, display, writable, feed, as of the write check
     from .. import hosted as _HO
     return _HO.swap_route()
 def circulating_basis(): return _A.supply_split().get("circulating_basis")   # carry_unlocked, vesting_continues or unconfirmed (1.26.123)

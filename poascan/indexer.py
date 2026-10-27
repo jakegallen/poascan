@@ -1056,6 +1056,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("grading", lambda: __import__("poascan.grading", fromlist=["x"]).job(), 60, None),   # 1.26.134: /api/explorer/grading every 10 min (5 near a close), backoff to 30 min; the stored next_at decides
     ("gradehist", lambda: __import__("poascan.gradehist", fromlist=["x"]).sync(), 900, None),   # 1.26.158: grade_history from close records and the grading list; no upstream call (1.26.160: every 15 min, incremental)
     ("open_seats", lambda: __import__("poascan.gradehist", fromlist=["x"]).job(), 60, None),   # 1.26.158: public /api/assignments/<addr> counts, at most 3 a minute, once per epoch per Agent
+    ("routewatch", lambda: __import__("poascan.routewatch", fromlist=["x"]).job(), 60, None),   # 1.26.188: route halts from the reads above; no upstream call
     ("milestones", lambda: __import__("poascan.milestones", fromlist=["x"]).job(), 300, None),   # upgrade milestones from live state; no upstream call   # one keyless GET per hosted route, only while maintenance is on
 ]
 

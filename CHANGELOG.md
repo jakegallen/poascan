@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.188] - 2026-10-27
+
+### Added
+- Route halts from POAScan's own probes, not only from notices. The E10 halt never got a notice, so nothing showed it and /upgrade still said Upgrade complete. A new local job (routewatch, every minute, no request to minepoa.com) folds reads POAScan already makes into one state per route: Hosted mining, Assignments, Grading and Path actions from the live prober; Swap writes from the swap write check; Tx lookup, Address lookup and keyless assignments from POAScan's own lookups; the hosted route check while maintenance is on. A read is good, halted (HTTP 503 with the halt text) or failing (5xx, timeout, no answer, a notice in place of data); 401, 404, 429 and sheds are not route reads.
+- Hysteresis: Halted (or Down, without the halt text) after 2 bad reads in a row, since the first of them; Open again after 2 good reads in a row. Reads from different sources are ordered by time, and an older read never breaks a newer run.
+- Header status note: one line per Halted or Down route ("Tx lookup halted since 7:23 AM PDT.") and "Probes as of", in the visitor's time zone (HH:MMZ UTC without script); Live turns Partial.
+- Network, Health: a Routes card under Feeds (Open, Halted, Down or No read, since when, as of the newest read; Stale tag when a route was last read over 2 h ago).
+- /upgrade: while any route is Halted or Down the block reads "Routes halted" with a Halted group (each route and its since time), Probes as of, and an "Upgrade notice" row in place of "Upgrade complete". meta.maintenance.headline, og:description and the share card follow; maintenance.paused lists hosted_mining and grading when the probes show them halted.
+- `GET /api/v1/routes` (every route: state, since, as_of, stale, bad_reads, good_reads, last_ok_at, last_bad_at, sources, ended; halted ids; swap_route), `route_halts` in /api/v1/health, `meta.maintenance.route_halts` (as_of and the Halted or Down routes) and MCP `get_route_status` (42 tools). Method at /about#route-halts; llms.txt.
+- The prober's per route answers are kept per run (ok, halt or fail) for this; nothing else from it is stored.
+
+### Tests
+- routewatch_test (new, in CI): hysteresis (one bad or good read never flips a route, out of order reads), each source (lookups as live, prober runs counted once, swap write timeouts, route check), 401 and 404 ignored, API, MCP, meta, header note times, Health Routes card and Stale tag, /upgrade and headline never Upgrade complete while halted, clearing after two good reads, no request added.
+- tip_layer_test opens the Health Routes Stale tag at 390 and 1280. smoke_test: 42 MCP tools; wallet_binding_test: 41 or more.
+
 ## [1.26.187] - 2026-10-27
 
 ### Added

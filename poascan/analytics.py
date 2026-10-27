@@ -633,7 +633,7 @@ def feeds():
         got = got or seen
         out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
     from . import hosted as HO   # 1.26.127: swap order placement (the write check), Down when failing, Degraded when paused
-    ws = HO.swap_route(now)      # 1.26.184: the one swap resolver; a stale last clear read is Down, never OK
+    ws = HO.swap_route(now)      # 1.26.185: the one swap resolver; a stale last clear read is Down, never OK
     if ws["feed"]:
         out.append(dict(label="Swap writes", state=ws["feed"], last_ok=_iso_s(ws["since"]) if ws["state"] == "open" else None, http=ws["http"],
                         checked_at=ws["checked_at"], stale=ws["stale"]))

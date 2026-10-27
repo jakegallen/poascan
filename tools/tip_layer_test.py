@@ -2,7 +2,7 @@
 Governance Established Unconfirmed note rendered behind the next row of stat cards). In Chromium at 390 px (tap) and 1280 px
 (click) on Home, Governance (overview and tabs), Network, Token, an address page, /start, Census and an epoch page, this opens
 every kind of note: the ? tips, the Stale, Unconfirmed and estimate tags, table header tips, the header status note, the chart
-? and chart hover readouts, the seal timeline tip, the Ask agent dialog, every Grader patterns note and every Expiry horizon note (1.26.186). For each open note it checks with
+? and chart hover readouts, the seal timeline tip, the Ask agent dialog, every Grader patterns note, every Expiry horizon note (1.26.186) and the Health Routes Stale tag. For each open note it checks with
 document.elementFromPoint at the centre and four corners (inside the rounded edge) that the note (or something inside it) is the topmost element,
 and that its whole box is inside the viewport. Fixture site; no request leaves the box. In CI (CI set) a missing Playwright is
 a failure, locally it is skipped. Usage: python3 tools/tip_layer_test.py"""
@@ -33,6 +33,9 @@ db.write("INSERT OR IGNORE INTO grade_history(seg, answer, grader, close, aligne
          [(SG.CURRENT, "gp%062x" % i, g, 10, 1 if (i + k) % 3 else 0, 1, (i + k) % 4) for i in range(40) for k, g in enumerate(gs)], many=True)
 db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?)",
          [("gp%062x" % i, "challenge", gs[0], 9, now - 90000, 5, 5, 1) for i in range(40)], many=True)
+# Route halts (routewatch): a halted route and one last read 9 h ago, so the Health Routes card shows its Stale tag
+db.put_blob("routewatch", {"routes": {"tx_lookup": {"state": "halted", "since": now - 3600, "as_of": now - 120, "bad": 3, "sources": ["fetch_log"]},
+                                      "path_actions": {"state": "open", "since": now - 40000, "as_of": now - 9 * 3600, "sources": ["pulse"]}}, "seen": {}, "ts": now})
 db.write("INSERT OR IGNORE INTO grading_seals(answer, grader, ts, t, q, first_seen) VALUES(?,?,?,?,?,?)",
          [("gp%062x" % i, g, now - 90000 + 3600 * (1 + i % 30), 0, 1, now) for i in range(40) for g in gs[:2]], many=True)
 """
@@ -206,6 +209,18 @@ def run(base, p, w, h, mobile, kinds):
                 pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
             check(f"{w}: {path}: wallet binding {wb_ok} of {len(ids)} notes topmost and inside", len(ids) >= 2 and wb_ok == len(ids))
             if wb_ok and wb_ok == len(ids): kinds.add("wallet binding")
+        # Route halts (routewatch): the Stale tag on a Health Routes row, opened on its own
+        if "tab=health" in path:
+            sel = '#routes li[data-route="path_actions"] details.qtip'
+            pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
+            try:
+                s = pg.locator(sel + " > summary").first; s.scroll_into_view_if_needed(timeout=3000); (s.tap if mobile else s.click)(timeout=3000); pg.wait_for_timeout(150)
+                res = pg.evaluate(PROBE, pg.locator(sel + " .qbox").first.element_handle())
+                if judge(f"{path} Routes Stale tag '{res.get('text')}'", res): good += 1; kinds.add("routes stale")
+                else: bad += 1
+            except Exception as e:
+                check(f"{w}: Routes Stale tag opens ({type(e).__name__})", False); bad += 1
+            pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
         check(f"{w}: {path}: {good} notes topmost and inside the viewport, {bad} not", bad == 0)
     b.close()
     return n_all
@@ -228,7 +243,7 @@ if sync_playwright:
             for w, h, mob in ((390, 844, True), (1280, 900, False)):
                 n = run(base, p, w, h, mob, kinds)
                 check(f"{w}: opened {n} notes", n >= 30)
-        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding"):
+        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding", "routes stale"):
             check(f"covered: {k} ({sorted(kinds)})" if k not in kinds else f"covered: {k}", k in kinds)
     finally:
         srv.terminate()
