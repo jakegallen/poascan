@@ -130,6 +130,9 @@ box-shadow:inset 0 1px 0 color-mix(in srgb,var(--bone) 7%,transparent);transitio
 .cb .stat{background:var(--inset)}
 .sl{display:flex;align-items:center;gap:8px;font-size:var(--t12);font-weight:600;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl);line-height:var(--lh-tight)}
 .asof{font-size:var(--t12);color:var(--mute);margin-top:6px}
+/* 1.26.177: census clock under the Census tabs: last and next run, visitor-local; Stale tag on a missed run */
+.cclk{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;margin:0 0 12px;color:var(--mute);font:500 var(--t12)/1.4 var(--ui)}
+.cclk time{color:var(--txt);font-variant-numeric:tabular-nums}.cclk .cdue{color:var(--amber)}.cclk .sflag{margin:0}
 .sv{font:400 var(--fig-l)/var(--lh-tight) var(--fig);font-variant-numeric:tabular-nums lining-nums;color:var(--hi);margin-top:12px;letter-spacing:0;overflow-wrap:anywhere}
 .sv .tag{font-size:var(--t12)}
 .unit{font:500 max(12px,.5em) var(--mono);color:var(--dim);letter-spacing:0}

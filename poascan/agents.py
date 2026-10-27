@@ -108,6 +108,19 @@ def census_job():
     s = census_summary(); s["ts"] = int(time.time()); s["source"] = "POASCAN classifier"
     db.add_snap("census", s)
 
+CENSUS_EVERY_S = 86400       # the indexer's census job interval (indexer.JOBS)
+CENSUS_STALE_S = 26 * 3600   # a missed daily run: the last snapshot is older than this
+
+def census_clock(now=None):
+    """1.26.177: when the daily census last ran (its newest stored snapshot) and when it runs next (last + one day; the
+    indexer schedules from the last run). stale: a run was missed. due: the next run time has passed and it has not run yet."""
+    now = int(now if now is not None else time.time())
+    r = db.q1("SELECT MAX(ts) AS t FROM snaps WHERE kind='census'")
+    last = int(r["t"]) if r and r["t"] else None
+    nxt = last + CENSUS_EVERY_S if last else None
+    return dict(last_run=last, next_run=nxt, every_s=CENSUS_EVERY_S, due=bool(nxt and nxt <= now),
+                stale=bool(last and now - last > CENSUS_STALE_S), age_s=(now - last) if last else None)
+
 def census_series():
     pts = [census_seed_point()]
     for r in db.q("SELECT ts, json FROM snaps WHERE kind='census' ORDER BY ts"):

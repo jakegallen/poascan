@@ -1112,9 +1112,18 @@ def ai_cards():
 
 CENSUS_TABS = [("models", "Models"), ("journey", "Journey")]
 
+def census_clock_html(c=None):
+    """1.26.177: when the daily census last ran and runs next, in the visitor's zone (lt; UTC text without script).
+    A missed run (last run over 26 h ago) carries a Stale tag; a passed next run time reads Due."""
+    c = c or G.census_clock()
+    if not c["last_run"]: return '<p class="cclk" id="census-clock"><span>Census not run yet</span></p>'
+    nxt = '<span class="cdue">Due</span>' if c["due"] else lt(c["next_run"])
+    tag = flag("Stale", f"The daily census last ran {_ui._ago(c['age_s'])} ago; a run was missed") if c["stale"] else ""
+    return (f'<p class="cclk" id="census-clock"><span>Last run {lt(c["last_run"])}</span><span>Next run {nxt}</span>{tag}</p>')
+
 def census_page(tab=""):
     if tab == "journey": return journey_page()
-    cs = G.census_summary(); ser = G.census_series(); c0 = A.census()
+    cs = G.census_summary(); ser = G.census_series(); c0 = A.census(); clk = census_clock_html()
     eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="steel")
     over = line([(p["ts"], 100 * p["disclosure_rate"]) for p in ser], fmt=lambda v: f"{v:.1f}%")
     div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="gold", fmt=lambda v: f"{v:.2f}")
@@ -1124,7 +1133,7 @@ def census_page(tab=""):
 {card(f"Harnesses {SR}", har)}</div>
 <div class="grid2">{card("Disclosure rate", over + note("First point: the Oct 19 sample (census.csv); then one POAScan classifier run per day."))}{card("Model diversity", div + note("Effective number of model families = exp(Shannon H) over disclosed, named families. Higher means more diverse."))}</div>
 {card("Snapshots", shares + note("Classifier inputs: LabLeak self-descriptions (manual truth table from the Oct 19 census) and registration labels (join memos). New intro posts change results only once added to the rules; the rules are versioned with the code."))}'''
-    return apage("Census", subtabs("/agents/census", CENSUS_TABS, "models") + body, "/agents/census")
+    return apage("Census", subtabs("/agents/census", CENSUS_TABS, "models") + clk + body, "/agents/census")
 
 def journey_page():
     f = G.funnel(); ret = G.retention(); tta = G.time_to_answer(); cu = G.custody(); first_join = db.q1("SELECT MIN(ts) AS t FROM labels WHERE source='join memo' AND ts>0")["t"]
@@ -1467,7 +1476,7 @@ def about():
 <h3>Sources</h3><ul><li><code>/api/explorer/txs</code>: every 60 s. <code>/api/status</code>: every 60 s, every 2 min while minepoa.com is degraded (a 429, 5xx, timeout or 3 401s in a row in the last 15 min); one <code>/api/status</code> read is shared by every page. <code>/api/networks</code>: every 2 min. The tx feed reads one page per cycle, and older pages only to fill a gap, stopping at the first tx already seen. Failures back off exponentially with jitter and honour Retry-After; a 429 pauses every read.</li>
 <li><code>/api/txs</code> (current-epoch window, including invalid txs): every 10 min. <code>/api/anchors</code>, notices, ballots: every 5 min. <code>/api/swaps</code>: every 60 s, plus each swap tx once (pending ones until final). Requests send gzip and If-None-Match.</li>
 <li><code>/api/epochs</code>: whenever a new close appears (checked every 5 min). <code>/api/agents</code>: every 15 min. <code>/api/params</code>, <code>/api/release</code>, <code>/api/chains</code>: hourly.</li>
-<li>LabLeak communities and posts: hourly (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Wallet links: each <code>chains-update</code> tx once (up to 10 per 10 min). Signed notices and the 12 newest releases: each G0 tx once (up to 2 per 10 min). Census classifier: daily.</li>
+<li>LabLeak communities and posts: hourly (detail only for threads whose comment count changed). Answer texts: random sample of 20 per 30 min via <code>/api/explorer/tx/&lt;id&gt;</code>. Wallet links: each <code>chains-update</code> tx once (up to 10 per 10 min). Signed notices and the 12 newest releases: each G0 tx once (up to 2 per 10 min). <span id="census-clock-method">Census classifier: daily, 24 h after its last run; the Census page shows the last and next run in your time zone and tags Stale when the last run is over 26 h old (a run was missed). The model bars classify the current Agents on every view; the charts and Snapshots table come from the daily runs.</span></li>
 <li>Uptime: the first 1 KB of <code>/</code> and <code>/go.md</code> every 10 min. During a network upgrade only (last one: Oct 21 to 23, 2026): one keyless GET of each hosted route (mine, grade, send, swap-offer, vote, export; first 2 KB, no key, no query) every 15 min, to show which are paused or open. It stops once an official notice says the upgrade is over. USD reference: CoinGecko SOL and ETH every 15 min.</li>
 <li>Address and tx pages, the API and MCP fetch <code>/api/explorer/address</code> and <code>/api/explorer/tx</code> on demand (cached; failed ids cached 10 min; new ids limited per client and overall).</li></ul>
 <h3 id="home">Homepage numbers</h3><ul><li><b>Total mined</b>: <code>supply</code> from /api/status, every reward paid at a close (it equals the sum of the close records' rewards; see Reconciliation).</li>

@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.177] - 2026-10-26
+
+### Added
+- Census clock. The Census page shows when the daily census last ran and when it runs next, in your time zone (UTC without script). Once the next run time passes it reads Due, and a missed run (last run over 26 h ago) gets a Stale tag. /api/health (`census`) and the MCP census tool carry the same `last_run`, `next_run` and `stale`. The schedule is on /about.
+
+### Tests
+- census_clock_test covers the clock, Due, Stale, the page, /api/health and MCP.
+
 ## [1.26.176] - 2026-10-26
 
 ### Removed

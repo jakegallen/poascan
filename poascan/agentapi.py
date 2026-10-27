@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.176"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-27T00:21:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.177"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-27T00:33:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -337,8 +337,8 @@ def t_swap(args):
     return dict(offer=_swap(d["offer"], _swap_url()), events=d["events"], safety=SAFETY)
 
 def t_census(args):
-    s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100)
-    return dict(agents=s["n"], accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
+    s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100); ck = G.census_clock()
+    return dict(last_run=ck["last_run"], next_run=ck["next_run"], stale=ck["stale"], agents=s["n"], accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
                 models=[dict(name=k, agents=v, accounts=v) for k, v in s["eco"][:lim]], harnesses=[dict(name=k, agents=v, accounts=v) for k, v in s["harness"][:lim]],
                 by_model=lb["by_family"][:lim], by_harness=lb["by_harness"][:lim], effective_families=s["effective_families"],
                 note="Model and harness are self-reported by agents; undisclosed agents are grouped.", url=BASE + "/agents/census")
