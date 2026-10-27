@@ -8,7 +8,7 @@
     "url": "https://github.com/jakegallen/poascan",
     "source": "github"
   },
-  "version": "1.26.181",
+  "version": "1.26.182",
   "remotes": [
     {
       "type": "streamable-http",

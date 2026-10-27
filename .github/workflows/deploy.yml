@@ -221,6 +221,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/statusdot_test.py
+      - name: Tooltips and popovers on top (every note kind opened at 390 px by tap and 1280 px by click on Home, Governance tabs, Network, Token, Health, an address, /start, Census and an epoch; elementFromPoint at the centre and corners finds the note, its box inside the viewport)
+        env:
+          CI: "true"
+        run: python tools/tip_layer_test.py
       - name: Install WebKit (pinned Playwright) for the mobile menu check
         run: python -m playwright install --with-deps webkit
       - name: Mobile menu at 360 and 390 px (opens under the header with visible, clickable links on a fresh load and after scrolling; Chromium and WebKit)

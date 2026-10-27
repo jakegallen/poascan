@@ -333,6 +333,8 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
  .sy{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .minis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .tw td:first-child,.tw th:first-child{position:sticky;left:0;z-index:1;background:var(--card);box-shadow:1px 0 0 var(--line)}
+ /* tipfix: the pinned column never covers the whole table (tags after an Agent wrap under it), so every column and its ? stays reachable */
+ .tw td:first-child{white-space:normal}
  td,th{padding:12px 10px}
  .chip{min-height:44px;padding:0 14px}.pager a{min-height:44px;padding:0 14px}.more{min-height:44px}
  .cp{width:32px;height:32px}
@@ -1445,6 +1447,11 @@ code.brk{overflow-wrap:anywhere}
 .qtip>summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}.qtip[open]>summary{color:var(--amber);border-color:var(--gold-edge)}
 .qtip .qbox{position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);width:min(300px,86vw);background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-lg);padding:12px 14px;font-size:var(--t13);line-height:1.45;font-weight:400;letter-spacing:0;text-transform:none;color:var(--txt);white-space:normal;text-align:left;box-shadow:0 10px 30px color-mix(in srgb,var(--black) 55%,transparent)}
 .qtip .qbox a{color:var(--amber);margin-left:2px}
+/* tipfix (2026-10-26): app.js shows an open note as a manual popover (top layer), so cards with isolation, z-index or
+   overflow never cover it. Undo the popover defaults that would move or clip it; left and top stay this file's (or place()'s). */
+.qtip .qbox[popover]{right:auto;bottom:auto;margin:0;overflow:visible;inset-inline-end:auto;inset-block-end:auto}
+/* no popover support: lift the card that holds an open note over its neighbours */
+:is(.stat,.chartbox,.hbars,.funnel,.bmcard .cb,.xempty,.livehero,.uph,.stp2):has(details.qtip[open]){z-index:81}
 @media (max-width:640px){.qtip>summary{width:24px;height:24px;font-size:var(--t12)}}
 .tag.score{color:var(--hi);border-color:var(--line2);min-width:34px;text-align:center}
 /* 1.26.112 score sorting: chip row on wide screens, a compact menu at 390 */

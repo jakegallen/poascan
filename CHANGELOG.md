@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.182] - 2026-10-26
+
+### Fixed
+- Tooltips no longer open behind the cards around them. Tapping or clicking the Unconfirmed tag on the Governance Established stat card showed its note under the next row of cards (Pending covered it), so it could not be read. Cause: every stat card, chart box and similar panel is its own stacking context (isolation: isolate, for the watermark behind it), which trapped the note's z-index inside its card, so later cards painted over it. Every note that opens from a ?, a Stale, Unconfirmed or estimate tag, a table header, the header status dot or a chart ? now opens in the browser's top layer (a manual popover), above every card, table, header and dialog, and still sits inside the viewport. It stays in the page where it was, so hover, tap, a tap outside and Escape work as before. Browsers without popovers lift the card that holds the open note instead.
+- Affected before: the Unconfirmed tag on the Governance Established card and the Stale tags on the Governance Protocol tab stat cards, at 390 and 1280 px; any note in a stat card whose box overlapped a later card.
+- At 390 px the Governance Directory table's pinned Agent column was wider than the table (name plus Established, Unconfirmed and Grader tags on one line), so every other column, the Score ? included, sat under it and could not be tapped. Tags after an Agent in a pinned first column now wrap under it.
+
+### Tests
+- tip_layer_test (new, in CI): in Chromium at 390 px (tap) and 1280 px (click) it opens every kind of note on Home, Governance (overview and nine tabs), Network, Token, Health, an address page, /start, Census and an epoch page (about 90 per width: ? tips, Stale and Unconfirmed tags, table header tips, the header status note, chart ? tips, chart hover readouts and the Ask agent dialog) and checks with elementFromPoint at the centre and four corners that the note is the topmost element and that its box is inside the viewport.
+
 ## [1.26.181] - 2026-10-26
 
 ### Removed

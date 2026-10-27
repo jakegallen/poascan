@@ -709,7 +709,12 @@ function place(q){var b=q.querySelector(".qbox");if(!b)return;if(!q.classList.co
  var w=b.offsetWidth,h=b.offsetHeight,x=Math.max(8,Math.min(vw-w-8,r.left+r.width/2-w/2)),dn=vh-r.bottom-16,up=r.top-16,y,below=h<=dn||(h>up&&dn>=up);
  if(!below&&h>up){b.style.maxHeight=up+"px";b.style.overflowY="auto"}else if(below&&h>dn){b.style.maxHeight=dn+"px";b.style.overflowY="auto"}   /* never over its own ? */
  h=Math.min(h,below?dn:up);y=below?r.bottom+8:r.top-8-h;q.classList.toggle("up",!below);b.style.left=x.toFixed(0)+"px";b.style.top=y.toFixed(0)+"px";q.dataset.pl="1"}
-D.addEventListener("toggle",function(e){var q=e.target;if(!(q.matches&&q.matches("details.qtip")))return;if(q.open)place(q);else delete q.dataset.pl},true);
+/* tipfix (2026-10-26): an open note goes to the browser's top layer (a manual popover), so no card around it (isolation,
+   z-index, transform, overflow, containment) can paint over it or clip it; it stays in the DOM inside its details, so
+   hover, tap, outside clicks and Escape work as before. Browsers without popovers keep the CSS fallback (style.css). */
+function qtLayer(q,on){var b=q.querySelector(".qbox");if(!b||!b.showPopover)return;
+ try{if(on){if(!b.hasAttribute("popover"))b.setAttribute("popover","manual");if(!b.matches(":popover-open"))b.showPopover()}else if(b.matches(":popover-open"))b.hidePopover()}catch(_){}}
+D.addEventListener("toggle",function(e){var q=e.target;if(!(q.matches&&q.matches("details.qtip")))return;qtLayer(q,q.open);if(q.open)place(q);else delete q.dataset.pl},true);
 /* the note is fixed to the viewport, so it follows its ? while the page scrolls or resizes */
 function qtPlaceAll(){[].slice.call(D.querySelectorAll("details.qtip.hv[open]")).forEach(place)}
 window.addEventListener("scroll",qtPlaceAll,{passive:true});window.addEventListener("resize",qtPlaceAll);
