@@ -137,7 +137,7 @@ def main():
         check("archived segment: queue not shown", "current segment only" in GV.page({"tab": ["queue"]}))
     # stale
     cur["fetched_at"] = NOW - 7200
-    db.put_blob(GR.BLOB, cur); GR._cur.clear(); A._cache.clear()
+    db.put_blob(GR.BLOB, cur); db.put_blob(GR.META, dict(GR.meta(), last_check=NOW - 7200)); GR._cur.clear(); A._cache.clear()   # 1.26.184: Stale follows the last check
     check("stale copy is flagged", GR.stale() and "Stale" in GV.page({"tab": ["queue"]}))
     print(f"\n{len(fails)} failed" if fails else "\nall passed")
     sys.exit(1 if fails else 0)

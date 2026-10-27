@@ -75,12 +75,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _NOREDIR = urllib.request.build_opener(_NoRedirect)
 MISSING_CODES = (404, 301, 302, 303, 307, 308)   # minepoa answers an unknown tx id with a 307 to its HTML app
 
-def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
+GATE_WIRE_BYTES = 48_000   # 1.26.184: measured wire cost of a gated read (TLS, headers, body bytes already in flight when we close)
+
+def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
     Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
     returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): redirects are
     not followed, and a 404 or a redirect (minepoa's answer for an unknown id) raises Missing without counting as an
-    endpoint failure."""
+    endpoint failure. gate (1.26.184): called with the response headers before the body is read; when it returns a truthy
+    value the body is not read, the connection is closed, GATE_WIRE_BYTES is counted and NOT_MODIFIED is returned (used
+    where the origin sends no ETag but says how old its copy is)."""
     if not ALLOWED.match(path):
         raise ValueError("path not allowlisted")
     from . import keysafe as _KS   # POAScan holds no PoA key and never sends one
@@ -96,6 +100,11 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False):
     now = int(time.time()); t0 = time.time()
     try:
         with (_NOREDIR.open(req, timeout=timeout) if soft else urllib.request.urlopen(req, timeout=timeout)) as r:
+            if gate is not None and gate(r.headers):
+                count_bytes(ep, GATE_WIRE_BYTES); _probe(ep, True, t0, "304"); count(ep, 304)
+                db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,err) VALUES(?,?,0,0,NULL) "
+                         "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, run401=0", (ep, now))
+                return NOT_MODIFIED   # leaving the with block closes the connection before the body is read
             wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag"); lm = r.headers.get("Last-Modified")
         count_bytes(ep, len(wire))
         if raw[:1] not in (b"{", b"["):

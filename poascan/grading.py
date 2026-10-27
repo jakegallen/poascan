@@ -3,6 +3,12 @@
 One server-side read feeds every page, API and CSV; a page view never calls minepoa.com. The list is large (about 4 MB,
 1.8 MB gzipped) and costly to build at the origin (gen_ms near 90 s; edge cache 30 s), so the read is slow on purpose:
 every READ_S (10 min), every NEAR_S (5 min) within NEAR_WINDOW_S (30 min) of a close on either side, with If-None-Match.
+1.26.184: minepoa sends no ETag or Last-Modified for this list, ignores Range and hangs on HEAD, but every response carries
+X-Poa-Blob-Age-S, the age of the copy it serves (its as_of). Each read is a gated check: the headers arrive first, and
+when the served copy is the one POAScan already holds (now minus that age is not after the stored as_of plus GATE_SLACK_S)
+the connection is closed before the body (about 48 KB on the wire instead of about 2.7 MB). A changed copy is downloaded,
+at most every MIN_FULL_S outside the close windows; inside them every check that sees a change downloads. A full download
+also runs at least every FULL_MAX_S as a safety read, and whenever the header is missing.
 A failed read doubles the wait from READ_S up to BACKOFF_MAX_S (30 min); a Retry-After (header or retry_after_seconds in
 the body) is a floor on top of that. The schedule lives in the database, so a restart or deploy never adds a read.
 
@@ -23,7 +29,12 @@ log = logging.getLogger("poascan.grading")
 PATH = "/api/explorer/grading"
 READ_S, NEAR_S, NEAR_WINDOW_S, BACKOFF_MAX_S, JITTER_S = 600, 300, 1800, 1800, 20
 TIMEOUT_S = 150          # the origin can take about 90 s to build the list
-STALE_S = 3600           # a copy older than this is shown with a Stale tag
+STALE_S = 3600           # no good check (download or gated) in this long: Stale tag
+UPSTREAM_STALE_S = 7200  # 1.26.184: minepoa's own copy (as_of) older than this: Stale tag too (it rebuilt every 5 to 30 min)
+GATE_SLACK_S = 120       # served copy within this of the stored as_of counts as the same copy
+MIN_FULL_S = 1200        # a changed copy outside the close windows is downloaded at most every 20 min
+FULL_MAX_S = 21600       # a full download at least every 6 h even when the header says unchanged
+AGE_HEADER = "X-Poa-Blob-Age-S"
 RAW_KEEP = 24            # pre and post copies kept (about 12 closes)
 SEAL_KEEP_DAYS = 45      # seals that left the list are kept this long
 BLOB, META = "grading", "grading_meta"
@@ -121,28 +132,63 @@ def backoff(fails, retry=None):
     w = min(BACKOFF_MAX_S, READ_S * (2 ** max(0, fails - 1)))
     return int(max(w, float(retry or 0)))
 
-def _get():
+def gate_decision(age, now, m, as_of, close_ts):
+    """What to do with a response whose headers say the served copy is age seconds old (None: no header).
+    Returns "read" (download the body), "same" (the copy POAScan holds) or "defer" (changed, but a download ran under
+    MIN_FULL_S ago and no close is near: the next check downloads it)."""
+    last_full = int(m.get("last_full") or 0)
+    if age is None or as_of is None or now - last_full >= FULL_MAX_S: return "read"
+    served = now - age
+    if served <= int(as_of) + GATE_SLACK_S: return "same"
+    near = close_ts is not None and -NEAR_WINDOW_S <= close_ts - now <= NEAR_WINDOW_S
+    if not near and now - last_full < MIN_FULL_S: return "defer"
+    return "read"
+
+def header_age(headers):
+    try:
+        v = headers.get(AGE_HEADER)
+        return None if v is None else max(0, int(float(v)))
+    except Exception: return None
+
+_gate_seen = {}
+def _get(now=None):
     from . import indexer as I
-    d = I.fetch(PATH, timeout=TIMEOUT_S, cond=True)
-    return None if d is I.NOT_MODIFIED else d
+    now = int(now or time.time()); m = meta(); d0 = current(); ct, _ = next_close(None, now)
+    _gate_seen.clear()
+    def gate(h):
+        age = header_age(h); dec = gate_decision(age, now, m, (d0 or {}).get("as_of"), ct)
+        _gate_seen.update(age=age, decision=dec)
+        return dec != "read"
+    d = I.fetch(PATH, timeout=TIMEOUT_S, cond=True, gate=gate)
+    if d is I.NOT_MODIFIED: return DEFERRED if _gate_seen.get("decision") == "defer" else None
+    return d
+
+DEFERRED = object()   # _get: a newer copy exists upstream, download deferred (MIN_FULL_S)
 
 def job(now=None, get=None, force=False):
     """Indexer job (ticks every minute; the stored next_at decides). One GET at most per run."""
-    now = int(now or time.time()); get = get or _get
+    now = int(now or time.time()); get = get or (lambda: _get(now))
     m = db.get_blob(META)[0] or {}
     if not force and (m.get("next_at") or 0) > now: return False
     from . import indexer as I
     try:
         d = get()
-        if d is not None and not valid(d): raise I.Busy("unexpected shape")
+        if d is not None and d is not DEFERRED and not valid(d): raise I.Busy("unexpected shape")
     except I.Busy as e:
         fails = int(m.get("fails") or 0) + 1; w = backoff(fails, getattr(e, "retry", None))
         db.put_blob(META, dict(m, fails=fails, last_err=now, err=str(e)[:120], retry=getattr(e, "retry", None), next_at=now + w))
         log.warning("grading: %s, next read in %ss", e, w); return False
     prev_epoch = m.get("epoch")
-    if d is None:   # 304: nothing changed
+    if d is DEFERRED:   # newer upstream copy; download once MIN_FULL_S has passed since the last one
+        w = max(60, int(m.get("last_full") or now) + MIN_FULL_S - now)
+        db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, err=None, retry=None, deferred=now, gated=int(m.get("gated") or 0) + 1,
+                               upstream_age=_gate_seen.get("age"), next_at=now + w + random.randint(0, JITTER_S)))
+        return True
+    if d is None:   # 304 or the gate saw the same copy: nothing changed
         ct, _ = next_close(None, now)
-        db.put_blob(META, dict(m, fails=0, last_ok=now, err=None, retry=None, not_modified=now, next_at=now + cadence(now, ct) + random.randint(-JITTER_S, JITTER_S)))
+        db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, err=None, retry=None, not_modified=now, deferred=None,
+                               gated=int(m.get("gated") or 0) + 1, upstream_age=_gate_seen.get("age"),
+                               next_at=now + cadence(now, ct) + random.randint(-JITTER_S, JITTER_S)))
         return True
     ct, ep = next_close(d, now)
     try: added, gone, flipped = store_seals(d, now)
@@ -153,7 +199,7 @@ def job(now=None, get=None, force=False):
     except Exception as e: log.warning("grading: raw copy failed (%s)", type(e).__name__)
     db.put_blob(BLOB, dict(compact(d), fetched_at=now))
     _cur.clear()
-    db.put_blob(META, dict(m, fails=0, last_ok=now, err=None, retry=None, epoch=d.get("epoch"), as_of=d.get("as_of"),
+    db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, last_full=now, deferred=None, full=int(m.get("full") or 0) + 1, err=None, retry=None, epoch=d.get("epoch"), as_of=d.get("as_of"),
                            seals_added=added, seals_gone=gone, q_flipped=flipped, next_at=now + cadence(now, ct) + random.randint(-JITTER_S, JITTER_S)))
     return True
 
@@ -180,9 +226,24 @@ def fetched_at():
 def upstream_as_of():
     d = current(); return (d or {}).get("as_of")
 
+def checked_at():
+    """When POAScan last confirmed its copy against minepoa (a download, a 304 or a gated check), else the download time."""
+    t = fetched_at()
+    if not t: return None
+    c = meta().get("last_check") or 0
+    return max(int(t), int(c))
+
+def stale_reason(now=None):
+    """None when fresh, else "check" (no good check in STALE_S) or "upstream" (minepoa's own copy older than UPSTREAM_STALE_S)."""
+    now = now or time.time(); t = checked_at()
+    if not t or now - t > STALE_S: return "check"
+    a = upstream_as_of()
+    if a and now - int(a) > UPSTREAM_STALE_S: return "upstream"
+    return None
+
 def stale(now=None):
-    """True when the copy is older than STALE_S (or there is none)."""
-    t = fetched_at(); return not t or (now or time.time()) - t > STALE_S
+    """True when no good check in STALE_S, minepoa's own copy is older than UPSTREAM_STALE_S, or there is no copy."""
+    return stale_reason(now) is not None
 
 def usable():
     """A copy exists and applies to what is shown: the current segment only (the list is the live network's)."""
@@ -279,7 +340,7 @@ def summary():
                 ready_next_close=sum(1 for r in qr if r["ready_next_close"]), at_quorum_queued=sum(1 for r in qr if r["queued_at_quorum"]), trusted_share=st.get("trusted_share"), by_need=st.get("by_need") or {},
                 grades_on_pending=st.get("grades_on_pending"), graders=st.get("graders_distinct"), open_answers=len(d.get("open") or []),
                 quorum=grade_quorum(d), epoch=ep, next_close_ts=ct, upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"),
-                stale=stale(), established_listed=len(d.get("established") or []))
+                checked_at=checked_at(), stale_reason=stale_reason(), stale=stale(), established_listed=len(d.get("established") or []))
 
 def last_close_ts(d=None):
     d = d if d is not None else current()
@@ -330,7 +391,7 @@ def agent_view(a, limit=50):
                for s in ix["settled_by"].get(a, [])]
     return dict(pending=mine[:limit], pending_count=len(mine), seals=sv, seals_count=x["seals"], seals_counting=x["qual"],
                 jury_seats=seats, settled=settled, quorum=grade_quorum(d), epoch=ep,
-                upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"), stale=stale())
+                upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"), checked_at=checked_at(), stale=stale())
 
 def row_of(answer):
     """The pending row for an answer id in the copy (a dict from queue_rows), or None."""

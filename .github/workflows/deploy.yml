@@ -43,6 +43,8 @@ jobs:
         run: python tools/govnav_test.py
       - name: Grade history and open seats (settled seats only, scores only from settled juries, open seat counts read in the background at most 3 a minute and once per epoch, assignment lists never kept; header sort, CSV, API, MCP get_grade_history; UPGRADE prompt; join-pow in halts)
         run: python tools/gradehist_test.py
+      - name: Grading list gated checks (no ETag upstream, so X-Poa-Blob-Age-S decides; body never read when unchanged; a rebuilt list downloaded at most every 20 min outside close windows; full read every 6 h; Stale follows the last check and minepoa's own as_of)
+        run: python tools/grading_gate_test.py
       - name: Grader patterns (Agreement, Peers, Spread, Top score, Distance and Mix from settled seats only; system graders out of percentiles and charts; n 20 minimum; Segment 1 Agreement and Peers only; timing network wide only; API, CSV, MCP) and settled only Calibration scores
         run: python tools/graderpat_test.py
       - name: Health fix (minepoa's single-id 503 sheds are not feed failures; shed ids negative cached at least 60 s; a full chain tx ceiling holds that path; at most 30 tx requests a minute in all; a failed hourly read retried after its backoff)

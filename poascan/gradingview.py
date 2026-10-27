@@ -9,8 +9,9 @@ def _ago(s):
 
 def stale_flag():
     """Stale tag when the copy is older than grading.STALE_S (hover: when it was read)."""
-    t = GR.fetched_at()
-    if t and GR.stale(): return flag("Stale", f"Grading list read {_ago(time.time() - t)} ago")
+    t = GR.checked_at(); why = GR.stale_reason() if t else None
+    if why == "check": return flag("Stale", f"Grading list checked {_ago(time.time() - t)} ago")
+    if why == "upstream": return flag("Stale", f"minepoa's grading list is from {_ago(time.time() - int(GR.upstream_as_of()))} ago; checked {_ago(time.time() - t)} ago")
     return ""
 
 def countdown(ts):
@@ -82,7 +83,7 @@ def queue_tab(qs, href, qsx):
     """Governance, Queue: every pending answer with quorum progress, trusted and untrusted seals, need and expiry."""
     q1 = lambda k, dflt="": ((qs or {}).get(k) or [dflt])[0]
     if SG.archived(): return card("Settle queue", '<p class="na">The grading list is the live network\'s: shown for the current segment only.</p>')
-    if not GR.usable(): return card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is read every 10 minutes.</p>')
+    if not GR.usable(): return card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is checked every 10 minutes.</p>')
     by = SS.page_sort(qs, dict(QUEUE_SORTS), "need"); d = SS.page_dir(qs)
     f = q1("need"); f = f if f in dict(QUEUE_FILTERS) else ""
     rs = queue_select(f, by, d); allr = GR.queue_rows(); s = GR.summary(); qn = s["quorum"]
@@ -114,7 +115,7 @@ def queue_tab(qs, href, qsx):
     ct = s["next_close_ts"]; cl = _last_close()
     foot = (f'<p class="cov dim small">E{s["epoch"]} closes about {lt(ct, "t")}, in {countdown(ct)}, an estimate · '
             f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
-            f'Read {lt(s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · '
+            f'Checked {lt(s["checked_at"] or s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · '
             f'Sealed and Graded: first and latest seal in the {"E" + str(cl) + " " if cl is not None else ""}close record · <a href="/about#grading-list">Method</a></p>') if ct else ""
     q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
     links = (f'<a class="more" href="/api/v1/governance/queue.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/queue{q}">API →</a>')

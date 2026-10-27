@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.184] - 2026-10-27
+
+### Changed
+- minepoa's grading list (`/api/explorer/grading`) is now a gated check instead of a full download every time. minepoa sends no ETag or Last-Modified for it (If-None-Match and If-Modified-Since are still sent and honoured if it ever does), ignores Range and hangs on HEAD, and documents no cursor or since parameter, but every response carries `X-Poa-Blob-Age-S`, the age of the copy it serves. POAScan reads the headers first and closes the connection before the body when minepoa still serves the copy it holds (about 48 KB on the wire instead of about 2.7 MB). A rebuilt list is downloaded at the next check within 30 minutes of a close and at most every 20 minutes otherwise; a full download runs at least every 6 hours and whenever the header is missing. Check cadence unchanged: every 10 minutes, every 5 near a close, backoff to 30.
+- Upstream load: the grading list was about 13.8 to 16.6 MB of POAScan's 17 to 20 MB an hour (5 or 6 full downloads of 2.75 MB); with minepoa's list unchanged it is about 0.3 MB an hour of checks plus one 2.75 MB safety read every 6 hours.
+- Stale on grading data now follows the last check that confirmed the copy (a download or a gated check), not the last download, and also shows when minepoa's own list is over 2 hours old (hover says how old it is and when POAScan checked). The settle queue footer reads Checked, minepoa as of. API: `checked_at` and `stale_reason` (check, upstream or null) beside `fetched_at` (last download) and `upstream_as_of` on /governance/queue and the governance overview.
+
+### Tests
+- grading_gate_test (new, in CI): the gate decision, a local server proving the body is never read when unchanged and the gated byte count, deferral and the 20 minute floor, the 6 hour safety read, no header fallback, both Stale reasons and the /about copy. grading_queue_test ages the last check for its Stale case.
+
 ## [1.26.183] - 2026-10-27
 
 ### Added
