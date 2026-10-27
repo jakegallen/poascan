@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.192] - 2026-10-27
+
+### Added
+- Paused closes, ready ahead of the data (LabLeak comment 6258 asked minepoa for maintenance windows or an `overlapped_halt` flag on `/api/epochs` close records). If a close record POAScan already stores carries `overlapped_halt` (top level or in `basis`) or a halt or maintenance window field (`maintenance_windows`, `maintenance_window`, `halt_windows`, `halt_window`, `maintenance`, `halts`), that close is tagged Paused on its epoch page, in the Chain close history and on Governance, Settlement, Changes and Intake. The hover gives the window times in the visitor's time zone (UTC without script). `overlapped_halt` false means not paused even when windows are listed; without the flag, any readable window counts. Window times are read from seconds, milliseconds or ISO 8601.
+- API: close rows in `/api/v1/epochs` (and CSV), `/api/v1/epoch/<n>`, MCP get_epoch, the Governance settlement `closes`, standing-changes and intake rows and the overview's `latest_closes` carry `paused` (true or false) and `pause` (null, or `overlapped_halt`, `windows` [{start_ts, end_ts}] and `fields`). Method at /about#paused-closes; llms.txt and OpenAPI describe both.
+- No request is added: this only reads stored close records. No close record carries these fields yet (E10 and E11 checked Oct 27), so nothing is tagged today and every row reads `paused` false, `pause` null.
+
+### Tests
+- closepause_test (new, in CI): each field and place, seconds, milliseconds and ISO times, false and null flags, empty window lists; a four close fixture with a flagged close (window) and a flag only close, checked on the epoch page, Chain, Governance Settlement, Changes and Intake, the APIs, CSV and MCP; the same closes without the fields show no tag; no request in the module.
+
 ## [1.26.191] - 2026-10-27
 
 ### Fixed

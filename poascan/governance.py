@@ -668,7 +668,7 @@ def api_overview():
                 graders=cal.get("graders_count"), agreement=cal.get("aligned_rate"),
                 est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
-                                    challenge_eligible=r["challenge_eligible"], paid=r["paid"]) for r in reversed(ep[-6:])],
+                                    challenge_eligible=r["challenge_eligible"], paid=r["paid"], paused=r.get("paused", False), pause=r.get("pause")) for r in reversed(ep[-6:])],
                 ttl=NP.api_block(), pending_horizon=BASE + "/api/v1/governance/pending-horizon",
                 method=METHOD, url=_url("overview"))
 

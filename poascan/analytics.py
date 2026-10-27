@@ -153,6 +153,7 @@ def grade_counts(e, prev_ts=None):
 
 @cached("epoch_rows", 60)
 def epoch_rows():
+    from . import closepause as _CP
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
     for e in epochs_raw():
@@ -188,7 +189,8 @@ def epoch_rows():
             audit_sampled=(b.get("audit") or {}).get("sampled"), audit_slashed=len((b.get("audit") or {}).get("slashed", [])),
             ceiling_capped=len((b.get("final_payout") or {}).get("capped", {})),
             paid_at_max=sum(1 for v in r if rs and round(v, 6) == round(rs[0], 6)) if r else 0,   # from the rewards row, not final_payout (E12: 152 at the top tier, 210 capped)
-            referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {})), segment=seg))
+            referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {})), segment=seg,
+            **_CP.fields_for(e)))   # 1.26.192: paused and pause (closepause.py; false and null while the record has no halt fields)
         prev = t
     return out
 

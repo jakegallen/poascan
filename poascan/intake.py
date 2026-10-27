@@ -13,7 +13,7 @@ govv2.standing_changes (genesis import, plus established_after, minus establishe
             should be exactly the admitted set; Check says Match when they are, Differs when not.
 Finalized close records only: no pending row, seal or score is read."""
 import collections, hashlib, math
-from . import analytics as A, segments as SG, scoresort as SS, estfold as EF
+from . import analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ
 from .ui import E, card, stat, intc, agent, qtip
 
 METHOD = "/about#intake"
@@ -66,7 +66,7 @@ def closes():
         na = sum(1 for r in rows if r["state"] == "not_admitted")
         out.append(dict(close=n, close_ts=int(e.get("ts") or 0), established_before=size, eligible=len(elig), cap=cap, cap_basis=basis,
                         admitted=len(adm), not_admitted=na, door="binding" if len(elig) > cap else "open",
-                        check=("n/a" if not elig and not adm else "match" if ok else "differs"), rows=rows))
+                        check=("n/a" if not elig and not adm else "match" if ok else "differs"), **CPZ.fields_for(e), rows=rows))
         est.update(b.get("established_after") or [])
         est.difference_update(a for a in b.get("established_removed") or [] if not EF._pardoned(pardons, n, a, sl))
     return out
@@ -120,7 +120,7 @@ def tab(qs, href, qsx):
                  stat("Not admitted", intc(last["not_admitted"]), tip=f'Eligible at E{last["close"]} but not admitted')])
     T = lambda: qtip(TIP, METHOD, "About Intake", "hv")
     cols = [c._replace(tip=T()) if c.key == "cap" else c for c in COLS]
-    trs = "".join(f'<tr{" class=on" if r["close"] == one["close"] else ""}><td><a href="{href("intake", **keep(close=str(r["close"]), state=""))}#intake-list">E{r["close"]}</a></td>'
+    trs = "".join(f'<tr{" class=on" if r["close"] == one["close"] else ""}><td><a href="{href("intake", **keep(close=str(r["close"]), state=""))}#intake-list">E{r["close"]}</a>{CPZ.tag(r.get("pause"))}</td>'
                   f'<td class="r dk">{_n(r["established_before"])}</td><td class="r">{_n(r["eligible"])}</td><td class="r">{_n(r["cap"])}</td><td class="r">{_n(r["admitted"])}</td>'
                   f'<td class="r">{_n(r["not_admitted"])}</td><td class="r dk">{"Binding" if r["door"] == "binding" else "<span class=dim>Open</span>"}</td><td class="r dk">{_chk(r["check"])}</td></tr>' for r in rs)
     tb = SS.select(cols, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(cols, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'

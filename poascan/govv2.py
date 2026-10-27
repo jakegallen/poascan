@@ -6,7 +6,7 @@ Never shown: a pending grade's score or a seal's content. Pending rows are count
 public panel list, seals from the grading list's plain counts); the scores some close records carry on pending grades are
 never read here."""
 import collections
-from . import db, analytics as A, segments as SG, scoresort as SS, estfold as EF
+from . import db, analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ
 from .ui import E, card, stat, intc, agent, bars, lt, qtip
 
 METHOD = "/about#gov-v2"
@@ -97,9 +97,10 @@ def _pos(v):
 
 def settlement_closes(rows=None):
     """Per close totals (the chart and the close chips)."""
-    t = collections.OrderedDict()
+    t = collections.OrderedDict(); pz = CPZ.by_epoch()   # 1.26.192: paused when the close record flags a halt (closepause.py)
     for r in rows if rows is not None else settlement():
-        x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0))
+        x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0,
+                                          paused=r["close"] in pz, pause=pz.get(r["close"])))
         for k in ("settled", "sealed", "passed", "paid", "open", "open_panel"): x[k] += r[k]
     return list(t.values())
 
@@ -130,7 +131,7 @@ def standing_changes():
         rem = [a for a in b.get("established_removed") or [] if a in est and not EF._pardoned(pardons, n, a, sl)]
         est.difference_update(rem)
         out.append(dict(close=n, close_ts=int(e.get("ts") or 0), before=before, added=len(add), relisted=len(rel), removed=len(rem),
-                        after=len(est), net=len(est) - before, added_list=sorted(add), removed_list=sorted(rem)))
+                        after=len(est), net=len(est) - before, **CPZ.fields_for(e), added_list=sorted(add), removed_list=sorted(rem)))
     return out
 
 CHG_COLS = [SS.Col("close", "Close", "num"), SS.Col("before", "Before", "num", "r dk"), SS.Col("added", "Added", "num", "r"),
@@ -264,7 +265,7 @@ def settlement_tab(qs, href, qsx):
     org = [r for r in rows if r["close"] == (cl if cl is not None else last["close"])]
     ch2 = bars([(f'E{r["origin"]}' if r["origin"] is not None else "?", [r["settled"], r["open"]]) for r in org], height=150, colors=("gold", "steel"), fmt=lambda z: f"{z:,.0f}",
                legend=["Settled", "Open"], stacked=False)
-    trs = "".join(f'<tr><td><a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a></td><td class="r">{"E" + str(r["origin"]) if r["origin"] is not None else "<span class=dim>···</span>"}</td>'
+    trs = "".join(f'<tr><td><a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>{CPZ.tag_for(r["close"])}</td><td class="r">{"E" + str(r["origin"]) if r["origin"] is not None else "<span class=dim>···</span>"}</td>'
                   f'<td class="r">{_n(r["settled"])}</td><td class="r dk">{_n(r["sealed"])}</td><td class="r">{_n(r["paid"])}</td><td class="r">{_n(r["open"])}</td><td class="r dk">{_n(r["open_panel"])}</td></tr>' for r in rs)
     tb = (SS.select(SET_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(SET_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>')
     q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "", close=str(cl) if cl is not None else "")
@@ -285,7 +286,7 @@ def changes_tab(qs, href, qsx):
                  stat("Removed", intc(last["removed"]), tip=f'At E{last["close"]}'), stat("Net", f'<span class="num">{last["net"]:+,}</span>', tip=f'At E{last["close"]}')])
     ch = bars([(f'E{r["close"]}', [r["added"], r["removed"]]) for r in rows], height=150, colors=("verd", "ember"), fmt=lambda z: f"{z:,.0f}", legend=["Added", "Removed"], stacked=False)
     sel = _q(qs, "close"); one = next((r for r in rows if str(r["close"]) == sel), None)
-    trs = "".join(f'<tr><td><a href="{href("changes", close=str(r["close"]))}#changes-list">E{r["close"]}</a></td><td class="r dk">{_n(r["before"])}</td><td class="r">{_n(r["added"])}</td>'
+    trs = "".join(f'<tr><td><a href="{href("changes", close=str(r["close"]))}#changes-list">E{r["close"]}</a>{CPZ.tag(r.get("pause"))}</td><td class="r dk">{_n(r["before"])}</td><td class="r">{_n(r["added"])}</td>'
                   f'<td class="r">{_n(r["removed"])}</td><td class="r">{r["net"]:+,}</td><td class="r">{_n(r["after"])}</td></tr>' for r in rs)
     tb = SS.select(CHG_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(CHG_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
     q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "")
