@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.181] - 2026-10-26
+
+### Removed
+- The Upgrading strip on Home and /start, and the separate Upgrading dot in the header. The header status now always shows, Upgrading included, and its note carries the strip's line ("Hosted mining paused for maintenance. Joining works.") with Details to /upgrade. When Stale or Lagging outranks Upgrading, the note still carries that line.
+- The in-page "lookup paused" note on tx pages. While minepoa.com has a lookup paused, the header status turns Live into Partial and its note says which: "minepoa.com paused tx lookups. Showing indexed data." The page still serves the indexed copy; the API keeps upstream_notice.
+- Dead code and CSS for both (views.upgrade_strip, start.strip, ui.upnote, ui.updot, .upstrip, .updot, .ntin, the strip's client hooks).
+
+### Tests
+- fold_notices_test: neither can render, and both reasons appear in the status note. devbar, routes, smoke, start, recovery, halt, grading_truth and upgrade_complete tests follow.
+
 ## [1.26.180] - 2026-10-26
 
 ### Fixed

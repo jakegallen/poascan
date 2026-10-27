@@ -49,7 +49,7 @@ check("open_epoch: grading_state unconfirmed, not halted", o["grading_state"] ==
 t = V.graders_tile(o)
 check("graders tile: Unconfirmed tag, no Halted", '<span class="tag warn">Unconfirmed</span>' in t and "Halted" not in t)
 check("graders tooltip explains it", "no grade seals have landed in the last 30 minutes" in t)
-check("no home strip (1.26.169: the header status carries it)", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "")
+check("no home strip (1.26.169: the header status carries it)", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live())
 p = pl(); s = p["pop"]
 check("header: Live turns Partial, the note names grading and links /upgrade and Health", p["state"] == "partial" and p["label"] == "Partial"
       and p["reasons"] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/network?tab=health">Health</a>' in s)
@@ -74,7 +74,7 @@ seal(now - 120, "A"); seal(now - 300, "B")
 g = M.grading_state(); st = M.state()
 check(f"two recent seals confirm open ({g['state']}, {g['basis']})", g["state"] == "open" and g["basis"] == "notice+seals" and g["seals_recent"] == 2)
 check("open: working has grading, unconfirmed empty", "grading" in st["working"] and st["unconfirmed"] == [] and st["headline"] == M.DONE_HEAD)
-check("open: no home strip, graders tile untagged", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "" and "tag warn" not in V.graders_tile(A.open_epoch()))
+check("open: no home strip, graders tile untagged", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live() and "tag warn" not in V.graders_tile(A.open_epoch()))
 p = pl()
 check("open: header Live, note says all systems normal, Health link only", p["state"] == "live" and p["reasons"] == ["All systems normal."] and "/upgrade" not in p["pop"] and 'href="/network?tab=health">Health</a>' in p["pop"])
 h = V2.upgrade_body()
@@ -102,7 +102,7 @@ check("halted: open_epoch grading_halted true, basis probe, no notice id", o["gr
 t = V.graders_tile(o)
 check("halted: graders tile Halted tag, tooltip names the live read", '<span class="tag warn">Halted</span>' in t and "live read" in t)
 s = pl()["pop"]
-check("halted: header note says Grading halted", pl()["state"] == "partial" and "Grading halted. Mining open." in s and V.upgrade_strip() == "")
+check("halted: header note says Grading halted", pl()["state"] == "partial" and "Grading halted. Mining open." in s and not hasattr(V, "upgrade_strip"))
 check("halted: pool payouts paused", M.pool_payouts() == "paused")
 check("halted: /upgrade Halted group", 'data-grp="grading"><h2><i></i>Halted</h2>' in V2.upgrade_body())
 db.put_blob(P.BLOB, {"groups": {"Grading": "paused"}, "seen": ["Grading"], "ok": True, "ts": DONE["issued_ts"] - 600})

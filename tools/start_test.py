@@ -400,8 +400,9 @@ try:
           and m.count('<p class="pnote" data-pnote>' + NOTICE + '</p>') == 1 and m.index('data-pnote') < m.index("stview"))
     check("/start: one short key line, no red warning and no repeat outside the prompt", m.count(S.KEYLINE) == 1 and 'class="kwarn"' not in m
           and "Treat a leaked key" not in m and "Never paste your pk_" not in m)
-    check("/start: live status strip with the Updated stamp and responding wording, never reopened", m.count('<p class="upstrip stup" role="status" data-live>') == 1
-          and "<span data-upstamp>" in m and "<span data-upline>" in m and "reopened" not in m.lower())
+    _pn = h[h.index('id="livepill"'):h.index("</details>", h.index('id="livepill"'))] if 'id="livepill"' in h else ""
+    check("/start (1.26.181): no status strip; the header status note carries the upgrade line and Details, never reopened", 'class="upstrip' not in h
+          and '<span class="sp-r">Hosted mining' in _pn and 'href="/upgrade">Details</a>' in _pn and "reopened" not in m.lower() and "reopened" not in _pn.lower())
     st = m[m.index('<details class="card stepsd">'):]
     check("/start: collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
           "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st

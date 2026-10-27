@@ -699,11 +699,6 @@ i.blogo.mono{display:grid;place-items:center;border-radius:var(--r-sm);backgroun
 .usdsrc{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid var(--line2);border-radius:var(--r-pill);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--dim);white-space:nowrap}
 .usdsrc:hover{color:var(--hi);text-decoration:none;border-color:var(--gold-edge)}.usdsrc.thin{color:var(--amber);border-color:color-mix(in srgb,var(--gold) 35%,transparent)}
 .addrhead .sp,.tokhead .sp{flex:1}
-.upstrip{display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:7px 12px;border:1px solid color-mix(in srgb,var(--steel) 35%,transparent);border-radius:var(--r-lg);background:color-mix(in srgb,var(--steel) 6%,transparent);color:var(--steel);font:500 var(--t13)/1.35 var(--ui);white-space:nowrap;overflow:hidden}
-.upstrip>span{overflow:hidden;text-overflow:ellipsis;min-width:0}.upstrip b{color:var(--txt);font-weight:600}
-.upstrip i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--steel)}
-.upstrip a{margin-left:auto;flex:none;color:var(--hi);display:inline-flex;align-items:center;min-height:24px}
-@media (max-width:420px){.upstrip .upx{display:none}.upstrip{font-size:var(--t12);padding:6px 10px;gap:7px}}
 .nf{display:flex;flex-direction:column;gap:10px;align-items:flex-start}.nf p{margin:0;color:var(--txt)}
 .nf-c{font:500 var(--t40)/1 var(--mono);color:var(--amber)}.nf-s a{font-family:var(--mono)}
 .hints{margin:0;padding-left:18px;color:var(--dim);font-size:var(--t14);display:grid;gap:4px}
@@ -840,29 +835,13 @@ td a.mono{display:inline-block;min-width:24px}
  #livepill{order:1}#livepill[hidden]~.swaplink{margin-left:auto}}
 @media (prefers-reduced-motion:reduce){.swaplink,.swaplink .swmark{transition:none}}
 /* home strip: the network upgrade status (was the header Upgrading pill) folded into the Hosted mining line */
-.upstrip .ups{flex:none;display:inline-flex;align-items:center;gap:7px;color:var(--steel);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase}
-.upstrip .ups b{color:inherit;font-weight:600}
-.upstrip .ups i{width:9px;height:9px;border-radius:50%;background:transparent;border:2px solid currentColor;border-right-color:transparent;animation:spin 2.4s linear infinite}
-.upstrip .ups+span{padding-left:9px;border-left:1px solid color-mix(in srgb,var(--steel) 30%,transparent)}
-@media (max-width:520px){.upstrip .ups b{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.upstrip .ups+span{padding-left:0;border-left:0}}
-@media (prefers-reduced-motion:reduce){.upstrip .ups i{animation:none}}
 
 /* non-home status dot: the Upgrading state while the header pill steps aside for maintenance (links to /upgrade) */
-.updot{display:inline-grid;place-items:center;width:28px;height:28px;flex:none;border-radius:50%;text-decoration:none}
-.updot[hidden]{display:none}
-.updot i{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:breatheA 2.4s ease-in-out infinite}
-.updot:hover,.updot:focus-visible{background:color-mix(in srgb,var(--gold) 10%,transparent);text-decoration:none}
-.updot:focus-visible{outline:2px solid color-mix(in srgb,var(--gold) 70%,transparent);outline-offset:1px}
-@media (max-width:1100px){.updot{order:2;width:32px;height:40px;border-radius:var(--r-lg)}#livepill[hidden]~.updot:not([hidden]){margin-left:auto}#livepill[hidden]~.updot:not([hidden])~.swaplink{margin-left:0}}
-@media (max-width:420px){.updot{width:24px;margin-right:-4px}}
-@media (prefers-reduced-motion:reduce){.updot i{animation:none!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 22%,transparent)}}
 .more.mswap{gap:6px}.more.mswap img{flex:none;opacity:.85}.more.mswap:hover img{opacity:1}
 /* 1.26.3: footer links are at least 24 px tall (WCAG 2.5.8 target size) */
 .foot a{display:inline-block;min-height:24px;line-height:24px;padding-block:0}
 
 /* /upgrade recovery: per-route list (hosted.py) and the strip's 390px line */
-.upstrip .upm{display:none}
-@media (max-width:420px){.upstrip .upd{display:none}.upstrip .upm{display:inline}}
 .hrl{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px;max-width:520px}
 .hrl li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,color-mix(in srgb,var(--steel) 18%,transparent))}
 .hrl li>span:first-child{color:var(--txt)}
@@ -871,9 +850,7 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:480px){.hrl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .upts{color:var(--mute);font:500 var(--t12)/1.35 var(--ui);white-space:nowrap}
 .upts time{font-variant-numeric:tabular-nums}
-.upstrip [data-upstamp]{flex:none;margin-left:auto}.upstrip [data-upstamp]+a{margin-left:0}
 .upc .cx .upts{margin-right:2px}
-@media (max-width:420px){.upstrip{flex-wrap:wrap;row-gap:2px}.upstrip>span[data-upline]{flex:1 1 0}.upstrip [data-upstamp]{order:3;flex-basis:100%;margin-left:0;padding-left:16px;box-sizing:border-box}}
 /* ---- /upgrade v2: hero, routes meter, Working and Still paused, tiles. Gold and dark with green and amber accents. */
 .upv2{max-width:1180px;margin:0 auto}
 .uph{position:relative;isolation:isolate;overflow:hidden;margin:4px 0 14px;padding:26px 30px 24px;border:1px solid var(--line2);border-radius:var(--r-lg);
@@ -930,7 +907,6 @@ td a.mono{display:inline-block;min-width:24px}
  .uptiles{grid-template-columns:repeat(2,minmax(0,1fr))!important}.uptiles .sv{font-size:var(--fig-m)}}
 /* /start v2: three numbered steps, one button. Same gold and dark as /upgrade. */
 .stv2{max-width:760px;margin:0 auto;padding-top:4px}
-.stv2 .stup{margin:0 0 16px}
 .stp2{position:relative;isolation:isolate;overflow:hidden;padding:34px 40px 30px;border:1px solid var(--line2);border-radius:var(--r-lg);
  background:radial-gradient(120% 70% at 0% 0%,color-mix(in srgb,var(--gold) 7.5%,transparent),transparent 60%),linear-gradient(180deg,var(--card2),var(--card));
  box-shadow:0 1px 0 color-mix(in srgb,var(--mark-hi) 6%,transparent) inset,0 24px 60px -36px color-mix(in srgb,var(--black) 80%,transparent)}
@@ -1031,7 +1007,6 @@ td a.mono{display:inline-block;min-width:24px}
  .stkey{font-size:var(--t12)}
 }
 @media (prefers-reduced-motion:reduce){.gobtn,.clb,.stin{transition:none}.stview>summary::after{transition:none}}
-.stup .upd{display:none}.stup .upm{display:inline}
 .gorow{display:flex;gap:10px;align-items:stretch}
 .gorow .gobtn{flex:1;min-width:0}
 .gobtn span{min-width:0;text-align:center}
@@ -1444,9 +1419,6 @@ code.brk{overflow-wrap:anywhere}
 .devbar a:hover,.devbar a:focus-visible{color:var(--gold-pale);text-decoration-color:currentColor}
 @media (max-width:640px){.devbar-in{padding-top:6px;padding-bottom:6px}.devbar p{font-size:var(--t12)}}
 
-/* 1.26.89: in-page note while minepoa.com has a lookup paused (ui.upnote), note palette */
-.ntin{margin:0 0 12px;padding:8px 12px;border:1px solid color-mix(in srgb,var(--note) 34%,transparent);border-radius:var(--r-lg);background:linear-gradient(90deg,color-mix(in srgb,var(--note) 16%,transparent),color-mix(in srgb,var(--note) 7%,transparent));color:var(--note-2);font-size:var(--t13);line-height:1.4;overflow-wrap:anywhere}
-.ntin a{color:var(--note-3)}
 
 /* 1.26.91 genesis cut: segment toggle, cut note, segment tag on epoch pages */
 .sechead .segs{margin:0}

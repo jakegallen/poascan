@@ -1,6 +1,6 @@
 """Network upgrade, recovery phase: the checkpoint moved on, hosted routes reopen in stages.
 Seeds the public facts of 2026-10-22 (checkpoint 33463, supply unchanged, hardening notice active, every hosted route paused),
-then opens mining, then clears the notice, and checks the home strip (desktop and 390px line), /upgrade, the API and the
+then opens mining, then clears the notice, and checks the header status note (1.26.181: the home strip is gone), /upgrade, the API and the
 live snapshot follow by themselves. Also the route check itself: classification, fixed paths, no key, the 10 minute floor.
 Usage: python3 tools/recovery_test.py"""
 import json, os, re as _re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -200,10 +200,11 @@ try:
         try: urllib.request.urlopen(base + "/healthz", timeout=2); break
         except Exception: time.sleep(0.2)
     c, hm = get("/"); main = hm[hm.index("<main"):hm.index("</main>")]
-    check("home strip: desktop line and the 390px line, Details to /upgrade, live hook",
-          hm.count('class="upstrip"') == 1 and '<span data-upline><span class="upd"><b>Recovery in progress</b><span class="upx">: new checkpoint 33,463, balances intact</span>. Mining and grading reopen in stages.</span>'
-          '<span class="upm"><b>Recovering</b>. Mining still paused.</span></span><span data-upstamp><span class="upts">Updated <time data-upts="' in hm
-          and _re.search(r'<span data-upstamp><span class="upts">Updated <time data-upts="\d+" datetime="[0-9T:-]+Z">\d\d:\d\dZ</time></span></span><a href="/upgrade">Details</a>', hm))
+    _pn = lambda h: h[h.index('id="livepill"'):h.index("</details>", h.index('id="livepill"'))]
+    check("1.26.181: no home strip; the header status note carries the recovery line, the Updated stamp and Details to /upgrade",
+          'class="upstrip' not in hm and '<summary class="pill up" aria-label="Status: Upgrading">' in hm
+          and '<span class="sp-r">Recovery in progress: new checkpoint 33,463, balances intact. Mining and grading reopen in stages.</span>' in _pn(hm)
+          and _re.search(r'<span class="upts">Updated <time data-upts="\d+" datetime="[0-9T:-]+Z">\d\d:\d\dZ</time></span><a href="/upgrade">Details</a>', _pn(hm)))
     check(f"home main: no em dash, no 'Accounts', no outside docs {clean(main)}", not clean(main))
     c, up = get("/upgrade"); card = up[up.index("<main"):up.index("</main>")]
     hero = card[card.index('class="uph"'):card.index('class="stats four uptiles"')]
@@ -232,7 +233,7 @@ try:
     check("/upgrade: no reopen time, no 24 to 72, never 'reopened' while nothing is official", "24 to 72" not in card and "reopened" not in card and " hours" not in card.split('class="upa"')[0])
     check(f"/upgrade: clean {clean(card)}", not clean(card))
     c, stp = get("/start")
-    check("/start: the live status strip carries the Updated stamp", '<p class="upstrip stup" role="status" data-live>' in stp and '<span class="upts">Updated <time data-upts=' in stp.split('class="upstrip stup"')[1][:1500])
+    check("/start: no status strip; the header status note carries the Updated stamp", 'class="upstrip' not in stp and '<span class="upts">Updated <time data-upts=' in _pn(stp))
     c, hl = get("/network?tab=health")
     check("Health: one compact recovery line with the headline and stamp, links /upgrade; no hero, groups or route meter",
           hl.count('class="uphl"') == 1 and "Recovery in progress: new checkpoint 33,463, balances intact." in hl and '<a href="/upgrade">Recovery details</a>' in hl
@@ -248,14 +249,14 @@ try:
     # mining reopens: nothing restarts, the pages follow
     seed({"mining": "open"})
     c, hm = get("/"); c, up = get("/upgrade")
-    check("probe open, not official: strip reads Mining endpoint responding (desktop and 390px), /upgrade shows Mining Responding and Grading Paused, never reopened",
-          "<b>Mining endpoint responding</b><span class=\"upx\">: some endpoints are back</span>. Grading still paused.</span>" in hm and '<span class="upm"><b>Mining endpoint responding</b>. Grading paused.</span>' in hm
+    check("probe open, not official: the header note reads Mining endpoint responding, /upgrade shows Mining Responding and Grading Paused, never reopened",
+          '<span class="sp-r">Mining endpoint responding: some endpoints are back. Grading still paused.</span>' in _pn(hm)
           and '<li class="seg" data-hroute="mining" data-st="responding">' in up and ">Responding<" in up and "<span>Mining responding</span>" in up
           and '<h1 class="uph-t" id="uph-t">Mining endpoint responding</h1>' in up and '<p class="uph-s">Some endpoints are back. Grading still paused.</p>' in up
           and '<span class="green">1</span> of 6' in up and "reopened" not in hm[hm.index("<main"):] and "reopened" not in up[up.index("<main"):])
     js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
-    check("client: snapshot updates the strip line and the route tags in place; 390px shows the short line",
-          'var ul=$("[data-upline]")' in js and "s.upline" in js and "s.upstamp" in js and 'timeZoneName:"short"' in js and '" \\u00b7 "' in js and "[data-hroute]" in js and ".upstrip .upd{display:none}.upstrip .upm{display:inline}" in css)
+    check("client: the snapshot updates the header note and the route tags in place; no strip hooks left (1.26.181)",
+          'var ul=$("[data-upline]")' not in js and "s.upstamp" not in js and "pb.innerHTML=f.pop" in js and 'timeZoneName:"short"' in js and "[data-hroute]" in js and ".upstrip" not in css)
     # notice cleared with mining open: maintenance ends by itself
     seed({"mining": "open"}, notice=False); db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60})
     import http.client

@@ -1,6 +1,6 @@
 """Development banner (1.26.69): first element in <body> on every HTML page, above the sticky header, normal flow (not fixed or
 sticky), exact text with no em or en dash, @Jakegallen links x.com/Jakegallen in a new tab with rel noopener noreferrer (keysafe rule), no dismiss control,
-same look as POASwap's .devbar, the Upgrading strip stays steel, join prompt unchanged. Usage: python3 tools/devbar_test.py"""
+same look as POASwap's .devbar, no Upgrading strip (1.26.181: the header status note carries it), join prompt unchanged. Usage: python3 tools/devbar_test.py"""
 import os, re, socket, subprocess, sys, tempfile, time, urllib.request
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 fails = []
@@ -14,8 +14,7 @@ check("banner CSS present", ".devbar{" in css and ".devbar p{" in css and ".devb
 check("banner is in normal flow (no fixed, sticky or absolute)", not re.search(r"position\s*:", dev))
 dv = re.search(r"\.devbar\{([^}]*)\}", css).group(1)   # 1.26.118: token form of the same tint (gold-mid 20%, gold-hi text)
 check("banner uses the POASwap amber tint", "var(--gold-mid) 20%" in dv and "--gold-hi:" in css and "color:var(--gold-hi)" in css)
-up = re.search(r"\.upstrip\{([^}]*)\}", css).group(1)
-check("Upgrading strip stays steel, not a second amber bar", "var(--steel)" in up and "--gold" not in up and "--amber" not in up)
+check("no Upgrading strip CSS left (1.26.181)", ".upstrip" not in css and ".updot" not in css)
 check("cache key follows the file (style.css?v= is its hash since 1.26.150)", 'style.css?v={ASSET_V["style.css"]}' in ui)
 
 TEXT = "System development in progress. Follow @Jakegallen for updates."
@@ -37,7 +36,7 @@ try:
               and '<a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">@Jakegallen</a>' in inner
               and "\u2014" not in inner and "\u2013" not in inner and "<button" not in inner)
         check(f"{p}: banner first in body, above the header, exact text and link, no dismiss", ok)
-    home = get("/"); check("home: Upgrading strip still renders below the header", home.index('class="upstrip"') > home.index('<header class="top">'))
+    home = get("/"); check("home: no Upgrading strip; the header status shows Upgrading", 'class="upstrip' not in home and '<summary class="pill up" aria-label="Status: Upgrading">' in home)
     import json
     j = json.loads(get("/api/v1/prompts/join")); check("join prompt unchanged (f577df50, v2.9)", j.get("template_sha256", "").startswith("f577df50"))
 finally:

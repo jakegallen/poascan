@@ -69,7 +69,7 @@ check("no em or en dash on /upgrade", "\u2014" not in h and "\u2013" not in h)
 from poascan import agentapi as AG
 check("completed /upgrade shows the Release row with the release line", "<dt>Release</dt>" in h and AG.VERSION in h and AG.RELEASE_LINE in h)
 check("og description says complete", M.og_desc().startswith("Network upgrade complete"))
-check("no home strip", V.upgrade_strip() == "" and V.upgrade_live()["upline"] == "")
+check("no home strip", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live())
 check("graders tile has no Halted tag", "Halted" not in V.graders_tile(A.open_epoch()))
 
 # ---------------- route check stops; markers ----------------

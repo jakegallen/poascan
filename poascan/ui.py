@@ -416,8 +416,6 @@ SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noop
 
 # Non-home pages: the header pill hides while maintenance is on (the home strip carries Upgrading), so a small amber dot to /upgrade
 # keeps the status visible there. Same source as the strip and the API pill (analytics.freshness state "up"); hidden otherwise.
-def updot(state):
-    return f'<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"{"" if state == "up" else " hidden"}><i aria-hidden="true"></i></a>'
 
 # Site-wide development banner (1.26.69): the first thing in <body>, in normal flow above the sticky header, so it scrolls away and
 # never covers content or the header. Same look as POASwap's top banner (.devbar, amber tint); like POASwap's it has no dismiss button.
@@ -446,6 +444,34 @@ def _notice_reason():
         return NOTICE_REASON if _ST.public() else ""
     except Exception: return ""
 
+# 1.26.181: the Home Upgrading strip and the in-page "lookup paused" note are folded into the header status note too.
+HALT_NAMES = {"/api/explorer/tx/:id": "tx", "/api/notices": "notices", "/api/chains": "wallet link"}
+
+def _upgrade_reason():
+    """While maintenance is on: the strip's line as one sentence ("Hosted mining paused for maintenance. Joining works.")."""
+    try:
+        from . import maint as _M
+        if not _M.state()["active"]: return ""
+        lead, aside, tail = _M.strip_text()
+        return f"{lead}{aside}." + (f" {tail}" if tail else "")
+    except Exception: return ""
+
+def _upgrade_ts():
+    try:
+        from . import maint as _M
+        return _M.stamp_ts()
+    except Exception: return None
+
+def _halt_reason(now=None):
+    """minepoa.com has a lookup paused (HTTP 503 halted): which, in one line. Pages serve indexed data meanwhile."""
+    try:
+        from . import indexer as _I
+        names = [n for t, n in HALT_NAMES.items() if _I.halted(t, now)]
+    except Exception: return ""
+    if not names: return ""
+    which = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return f"minepoa.com paused {which} lookups. Showing indexed data."
+
 def status_pill(f):
     """The header pill from analytics.freshness(): state, label, why, href, reasons and the note's HTML (pop)."""
     state, label, why = f["state"], f["label"], f.get("why") or ""
@@ -461,17 +487,23 @@ def status_pill(f):
     if nr:
         reasons.append(nr)
         if state == "live": state, label = "partial", "Partial"
+    hr = _halt_reason()
+    if hr:
+        reasons.append(hr)
+        if state == "live": state, label = "partial", "Partial"
+    ur = _upgrade_reason()   # while maintenance is on, its line is in the note whatever state outranks it (Stale, Lagging)
+    if ur: reasons.insert(0, ur) if state == "up" else reasons.append(ur)
     if not reasons: reasons.append("All systems normal." if state == "live" else (why.rstrip(".") + "." if why else label + "."))
-    links = ([("/upgrade", "Details")] if g else []) + [("/network?tab=health", "Health")]
+    links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
-    ts = f.get("fetched_at")   # our last fresh read of the live network; none yet: no time
+    ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
     pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{E(r)}</span>' for r in reasons)
            + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>')
     return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
 
 def pill_html(live):
     p = status_pill(live)
-    return (f'<details class="qtip hv spill" id="livepill"{" hidden" if p["state"] == "up" else ""}><summary class="pill {p["state"]}" aria-label="Status: {E(p["label"])}">'
+    return (f'<details class="qtip hv spill" id="livepill"><summary class="pill {p["state"]}" aria-label="Status: {E(p["label"])}">'
             f'<i aria-hidden="true"></i><span>{E(p["label"])}</span></summary><span class="qbox" role="note">{p["pop"]}</span></details>')
 
 def layout(title, body, active="/", live=None, head=""):
@@ -481,7 +513,6 @@ def layout(title, body, active="/", live=None, head=""):
     if not isinstance(live, dict):
         from . import analytics as _A
         live = _A.freshness()
-    live_cls = live["state"]
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
     meta = head_meta(full, title)
     from . import devdemo as _dd
@@ -495,7 +526,7 @@ def layout(title, body, active="/", live=None, head=""):
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
 {pill_html(live)}
-{"" if req_path() == "/" else updot(live_cls)}{SWAP_BTN}
+{SWAP_BTN}
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
@@ -637,10 +668,6 @@ def note(t): return ""  # caveat notes removed site-wide; methodology lives on /
 
 def na(why): return f'<div class="naBox">{why}</div>'   # empty and error states: say what is missing, no stock label
 
-def upnote(text):
-    """1.26.89: one line, in the site notice palette, where a page serves indexed or last-known data because minepoa.com
-    paused the lookup it would have made (strain.HALT_NOTE). Method on /about#halts."""
-    return f'<p class="ntin" role="status">{E(text)}</p>'
 
 # ---------- Charts: one spec (1.26.119) ----------
 # Geometry lives in an SVG stretched to the plot box (preserveAspectRatio none, non-scaling strokes); every label is HTML in

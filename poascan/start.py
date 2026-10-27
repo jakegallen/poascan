@@ -348,13 +348,6 @@ def _step(n, title, body, cls=""):
     return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'
             f'<h2 class="stt" id="st{n}">{title}</h2>{body}</div></li>')
 
-def strip():
-    """The home strip, compact and live (app.js apply() refreshes [data-upline] and [data-upstamp]); empty when maintenance is off."""
-    from . import views as V, maint as M
-    s = V.upgrade_strip()
-    if not s: return ""
-    return s.replace('<p class="upstrip" role="note">', '<p class="upstrip stup" role="status" data-live>', 1)
-
 def page(page_fn, card=None, apps=None):
     """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
     (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
@@ -387,7 +380,7 @@ def page(page_fn, card=None, apps=None):
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
-    body = (f'<div class="stv2">{strip()}<section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
+    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
             + PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history() + '</div>')
     return page_fn("Start", body, "/start")

@@ -77,10 +77,11 @@ def main():
         ok = "fill_final" not in o and "fee_poa" not in o and "taker_chains" not in o and "fill_epoch" not in o
         print(("ok   " if ok else "FAIL ") + "open offers leave fill-only fields out"); ok or fails.append("open fields")
         pages = {u: urllib.request.urlopen(base + u, timeout=20).read().decode() for u in ("/chain", "/about", "/address/poa1" + "A" * 40, "/privacy")}
-        dot = '<a class="updot" id="updot" href="/upgrade" title="Upgrading" aria-label="Upgrading"><i aria-hidden="true"></i></a>'
         pl = json.loads(urllib.request.urlopen(base + "/api/v1/summary", timeout=20).read()).get("pill") or {}
-        ok = pl.get("state") == "up" and 'id="updot"' not in home and 'class="upstrip"' in home and all(h.count(dot) == 1 and '<details class="qtip hv spill" id="livepill" hidden><summary class="pill up" aria-label="Status: Upgrading">' in h for h in pages.values())
-        print(("ok   " if ok else "FAIL ") + "Upgrading: amber dot to /upgrade on every page but home (home has the strip); header pill hidden"); ok or fails.append("updot")
+        pages["/"] = home
+        ok = pl.get("state") == "up" and all('id="updot"' not in h and 'class="upstrip' not in h and h.count('<details class="qtip hv spill" id="livepill"><summary class="pill up" aria-label="Status: Upgrading">') == 1
+                                               and '<span class="sp-r">Hosted mining' in h and 'href="/upgrade">Details</a>' in h for h in pages.values())
+        print(("ok   " if ok else "FAIL ") + "Upgrading (1.26.181): the header status shows Upgrading on every page, home too, its note gives the reason and links /upgrade; no strip, no separate dot"); ok or fails.append("updot")
         A1, A2 = "poa1" + "A" * 40, "poa1" + "B" * 40
         ad = json.loads(urllib.request.urlopen(base + f"/api/v1/agents/{A1}/addresses", timeout=20).read())
         vt = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(time.time()) - 7200))

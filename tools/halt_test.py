@@ -8,7 +8,7 @@ answers /api/explorer/tx/<id>, /api/notices and /api/chains the way minepoa's AP
 * Dropped at close: answers pending at one close and in neither pending nor settled at the next are counted as dropped,
   never as settled; pending rows without since (minepoa from E14) take the archived answer epoch, not E0.
 Usage: python3 tools/halt_test.py"""
-import json, os, re, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
+import re as _re, json, os, re, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
@@ -79,7 +79,9 @@ try:
         except Exception: time.sleep(0.2)
     n0 = len(HITS)
     c1, h1 = get("/tx/" + IDX)
-    check("/tx/<indexed>: 200 with the indexed copy and the one line note", c1 == 200 and '<p class="ntin" role="status">minepoa.com paused this lookup. Showing indexed data.</p>' in h1 and IDX in h1)
+    _pn = h1[h1.index('id="livepill"'):h1.index("</details>", h1.index('id="livepill"'))]
+    check("/tx/<indexed>: 200 with the indexed copy; no in-page note (1.26.181), the header status note carries the reason",
+          c1 == 200 and IDX in h1 and 'class="ntin' not in h1 and _re.search(r'<span class="sp-r">minepoa\.com paused tx(?:(?:, | and )[a-z ]+)* lookups\. Showing indexed data\.</span>', _pn) is not None)
     c2, h2 = get("/tx/" + NEW)
     check("/tx/<never indexed>: 200, the paused state, the txid and a retry link, no error wording",
           c2 == 200 and "Not available while minepoa.com has this lookup paused." in h2 and NEW in h2 and f'href="/tx/{NEW}"' in h2 and "Try again later" in h2

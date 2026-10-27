@@ -159,6 +159,8 @@ jobs:
         run: python tools/kin_groups_test.py
       - name: Strain notice guard (a notice in place of data is never stored or cached; last real values kept and labelled stale; sanitized notice strip; meta.upstream_notice and balance_stale in API, MCP, OpenAPI, llms.txt; synthetic fixtures; no upstream read)
         run: python tools/strain_notice_test.py
+      - name: Upgrading strip and lookup-paused note folded into the header status note (never render; reasons in the note)
+        run: python tools/fold_notices_test.py
       - name: Request cost under load (grading state memo per db write, API micro cache with gzip reuse, no health or search caching, plainjson fast path)
         run: python tools/perf_test.py
       - name: Accuracy and resilience (grader counts from grade rows, Max reward from the rewards row, failed jobs retry soon, node counter restart explained, guard steal threshold)
