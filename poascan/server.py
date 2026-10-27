@@ -9,6 +9,7 @@ from . import keysafe as KS
 from . import names as NM
 from . import opsinternal as OI
 from . import checkin as CK
+from . import wallet as WB, walletview as WV
 from . import opsdash as OD
 from . import chartpop as CP
 from . import protocol as PT
@@ -127,6 +128,13 @@ def api(path, qs):
             typ = qs.get("type", [""])[0] or None; rows, nxt = HI.txs_page(a, c, lim, typ)
         except ValueError: raise BadRequest("bad cursor")
         return dict(address=a, type=typ, txs=rows, next_cursor=nxt, types=HI.type_counts(a), coverage=HI.coverage(a), method=AG.BASE + "/about#history"), False
+    m = re.match(r"^/api/wallet(?:/([^/]{1,80}))?$", path)
+    if m:   # 1.26.187: wallet binding (wallet.py): POAScan's copies of /api/links and /api/chains plus archived txs; no upstream read
+        a = m.group(1) or ((qs.get("address") or [""])[0] or "").strip()
+        bad = set(qs) - ({"format"} if m.group(1) else {"address", "format"})
+        if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))
+        if not WB.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address (the address only, never a key)")
+        return WB.binding(a), False
     m = re.match(r"^/api/address/(poa1\w+)$", path)
     if m:
         a = m.group(1)
@@ -138,7 +146,7 @@ def api(path, qs):
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
                     balance_as_of_checkpoint=bb.get("as_of_checkpoint"), balance_segment=bb.get("segment"),
                     rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(p["rewards"]) if SG.unconfirmed_g(k)], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
-                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), wallet_binding=WB.binding(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
         a = m.group(1)
@@ -256,6 +264,7 @@ def page(path, qs):
         return V.page(r[0], r[1], "/txs")
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
+    if path == WB.ROUTE: return WV.page(qs, V.page)   # 1.26.187: Check my wallet, /wallet?address=poa1... (stable; POASwap /start links here)
     if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage, qs)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
@@ -295,7 +304,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=established", "/governance?tab=queue", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=protocol", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 

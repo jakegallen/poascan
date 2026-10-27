@@ -39,7 +39,7 @@ META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of"
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
     env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9",
-               POASCAN_MCP_BURST="50")   # one call per MCP tool plus the protocol checks fit in one burst (40 tools since pending horizon)
+               POASCAN_MCP_BURST="50")   # one call per MCP tool plus the protocol checks fit in one burst (41 tools since wallet binding)
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
     fails = []
@@ -90,7 +90,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 40 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 41 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -105,7 +105,7 @@ def main():
             check(f"{_u}: no global Emblem CLI install, no bare agent-mode wallet command, pinned CLI always with --hustle-url", b"npm install -g " + b"@emblemvault" not in _b and b"emblemai " + b"--agent" not in _b
                   and _b.count(b"agentwallet@3.3.0 emblemai") == _b.count(b"agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai"))
         for t in tools:
-            args = {"address": "poa1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} if t == "get_address" else {"hash": "0" * 64} if t == "get_transaction" else \
+            args = {"address": "poa1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} if t in ("get_address", "get_wallet_binding") else {"hash": "0" * 64} if t == "get_transaction" else \
                    {"offer_id": "x"} if t == "get_swap_offer" else {"query": "plus1"} if t == "search" else {"group_id": "0" * 64} if t == "get_kin_group" else {}
             c, b = rpc("tools/call", {"name": t, "arguments": args}); r = json.loads(b) if c == 200 else {}
             check(f"mcp tools/call {t}", c == 200 and "result" in r and r["result"]["content"][0]["type"] == "text")
@@ -449,7 +449,7 @@ def calibration(base, check):
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
-          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 40)
+          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 41)
 
 def cohorts(base, check):
     """Frozen answer cohorts: the five states sum to the frozen count at every close; Gate A per close."""
@@ -499,8 +499,8 @@ def reconcile(base, check):
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 10, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])["result"]["tools"]
-    check("MCP tools/list: 40 tools, every parameter described, every tool says when to use it",
-          len(tl) == 40 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
+    check("MCP tools/list: 41 tools, every parameter described, every tool says when to use it",
+          len(tl) == 41 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
           and all("\u2014" not in t["description"] for t in tl))
     check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
 

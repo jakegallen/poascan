@@ -1531,3 +1531,11 @@ a.pbadge:hover{border-color:currentColor}
 .mixb .m0{background:var(--ember)}.mixb .m1{background:var(--gold-lo)}.mixb .m2{background:var(--gold)}.mixb .m3{background:var(--verd)}
 /* Expiry horizon (1.26.186): the Watched cohorts (E18 to E20, LabLeak post 1582 comment 6150) carry a gold edge */
 table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
+/* Check my wallet lookup (1.26.187): one box, address only */
+.wlook{position:relative;display:flex;align-items:center;height:52px;max-width:640px;border:1px solid var(--line2);border-radius:var(--r-lg);background:var(--inset);transition:border-color var(--fast),box-shadow var(--fast)}
+.wlook:focus-within{border-color:var(--gold-focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 12%,transparent)}
+.wlook input{flex:1;min-width:0;height:100%;background:none;border:0;outline:none;color:var(--txt);font:400 var(--t14) var(--mono);padding:0 16px}
+.wlook input::placeholder{color:var(--mute)}
+.wlook button{background:none;border:0;color:var(--dim);width:52px;height:100%;display:grid;place-items:center;cursor:pointer}.wlook button svg{width:20px;height:20px}.wlook button:hover{color:var(--amber)}
+.wl-note{margin:8px 0 0}
+#wallet .kv .mono+.tag{margin-left:8px}#wallet .kv .sep{margin:0 6px}#wallet .kv .hash+.sep{margin-left:8px}

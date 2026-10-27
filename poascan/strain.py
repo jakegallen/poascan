@@ -51,6 +51,7 @@ REQUIRED = {
     "/api/params": ("dictany", ()),     # params gain and lose keys between releases: any non-notice key counts as data
     "/api/release": ("dict", ("current",)),
     "/api/chains": ("addrmap", ()),
+    "/api/links": ("list", ("addr",)),
     "/api/swaps": ("list", ("offer_id",)),
     "/api/explorer/grading": ("dict", ("rows", "stats", "epoch")),
     "/lableak/api/communities": ("list", ("slug",)),

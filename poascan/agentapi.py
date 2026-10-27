@@ -7,8 +7,8 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.186"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-27T15:19:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.187"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-27T15:30:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Balance as-of checkpoint, Not carried over and segment tags on address history, Unconfirmed rewards, pop-out breaks at segment boundaries."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
@@ -182,13 +182,17 @@ def t_address(args):
                 rewards_by_segment={str(n): {str(k): v for k, v in sorted(A.rewards_in_segment(rb, n).items())} for n in SG.NUMBERS},
                 established=a in A.established_set(),
                 streak=dict(longest=p["streak"][0], current=p["streak"][1]), forum_name=p["forum_name"],
-                census=p["census"], family_size=(p["family"] or [None, None])[1], addresses=LK.addresses(a), addresses_notice=I.halt_notice(I.CHAINS_TPL, data="last_known", as_of=I.last_ok("/api/chains")), invited_by=acc["invited_by"] if acc else None,
+                census=p["census"], family_size=(p["family"] or [None, None])[1], addresses=LK.addresses(a), addresses_notice=I.halt_notice(I.CHAINS_TPL, data="last_known", as_of=I.last_ok("/api/chains")), wallet_binding=__import__("poascan.wallet", fromlist=["x"]).binding(a), invited_by=acc["invited_by"] if acc else None,
                 invitees=inv, kin=KN.kin(a), recent_txs=txs, next_tx_cursor=nxt, tx_types=HI.type_counts(a), coverage=HI.coverage(a),
                 established_history=(eh := G.established_history(a)),
                 established_expires_epoch_est=eh["established_expires_epoch_est"], established_expires_basis=eh["established_expires_basis"],
                 established_expires_closes_left=eh["established_expires_closes_left"], established_expires_ts_est=eh["established_expires_ts_est"],
                 **({"grading": grd, "calibration": CA.one(a)} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
+
+def t_wallet(args):
+    from . import wallet as WB
+    return WB.binding(_addr(args))
 
 def t_kin_group(args):
     g = str(args.get("group_id") or "").strip().lower()
@@ -582,6 +586,13 @@ TOOLS = [  # name, title, description, input schema, fn
      "declared_at (start of the latest active period, unix seconds), evidence_urls (each matching claim comment), active_before_declared (an earlier active period exists), member_claims (each member's state: match, different, left or none) and periods. "
      "found is false for a group_id no claim lists. Groups are declared by the members themselves, never inferred, and do not affect seating, grading or operator families. Use it after get_address returns a kin field.",
      dict(S(group_id={"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "kin.group_id from get_address"}), required=["group_id"]), t_kin_group),
+    ("get_wallet_binding", "Wallet binding",
+     "One poa1 address's wallet binding, public data only: linked (true or false from minepoa's /api/links, null before POAScan's first read), vault (the vault publicId), "
+     "family_size and family (addresses linked to the same vault: one entity, one jury seat, one vote), chains (each external address in its chains map with minepoa's verified flag), "
+     "identity_link_txs and chains_update_txs (id, ts unix seconds, final; newest first), joined_ts, warning ({kind: joined_no_link, hours, text} when it joined in the last 72 h without a link, else null), "
+     "links_checked_at, links_stale and lookup_url (https://poascan.io/wallet?address=<address>, the shareable Check my wallet page). A link is needed only to swap. "
+     "Use it to check whether an Agent is ready to swap or to verify an external address; never ask anyone for keys. Never send payment outside the network.",
+     dict(S(address=ADDR_P), required=["address"]), t_wallet),
     ("search", "Search",
      "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, or a LabLeak post title. "
      "Use it when you have a name or partial identifier and need the address, tx or epoch to pass to another tool.",
@@ -816,6 +827,12 @@ def openapi():
         "/api/kin/{group_id}": _op("One opt-in kin group: members, status and each member's latest claim", {"$ref": "#/components/schemas/KinGroup"},
                                    [_p("group_id", "sha256 of the sorted member list joined with commas", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getKinGroup", tag="agents",
                                    desc="Declared by the members on the LabLeak kin claim post (https://minepoa.com/lableak/#/post/" + str(KN.KIN_POST_ID) + "), never inferred. status is active only while every member's latest claim lists exactly these members under the same label; a leave, a changed list or no claim makes it inactive. member_claims gives each member's state (match, different, left or none) with claimed_at and evidence_url; periods lists the active periods. Unknown group_id is a 404; a malformed one or any parameter a 400. Archive only, no upstream read. Method: https://poascan.io/about#kin"),
+        "/api/wallet/{address}": _op("Wallet binding for one address: vault linked, vault publicId, family size, chain addresses with their verified flag, link txs", ANY,
+                                     [_p("address", "poa1 address (the address only, never a key)", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getWalletBinding", tag="agents",
+                                     desc="Public data only, from POAScan's copies (no minepoa.com read per request): linked and vault from minepoa's bulk /api/links (read every 10 min; null before the first read), family_size and family (addresses linked to the same vault), "
+                                          "chains [{chain, address, verified}] from /api/chains (hourly), identity_link_txs and chains_update_txs [{id, ts, final}] newest first from the tx archive, joined_ts, "
+                                          "warning {kind: joined_no_link, hours, text} for an address that joined in the last 72 h without a link (else null), links_checked_at, links_stale, lookup_url. "
+                                          "Also /api/v1/wallet?address=<poa1...>, wallet_binding on /api/v1/address/<poa1...> and MCP get_wallet_binding. The page: https://poascan.io/wallet?address=<poa1...>. Method: https://poascan.io/about#wallet-binding"),
         "/api/search": _op("Resolve free text to an address, tx, epoch, Agent name (forum, census or hosted join name) or forum post title", ANY,
                            [_p("q", "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title", {"type": "string", "minLength": 1, "maxLength": 120}, "query", True)], oid="search", tag="explorer",
                            desc="The same results as the MCP search tool: {query, results: [{kind, id, url, name?, name_source?}]}, at most 20 rows; an exact hosted join name comes first (name_source join). POAScan's archive only, no minepoa.com read."),
@@ -1198,6 +1215,7 @@ Tools ({len(TOOLS)}):
 - Agent governance: {BASE}{API_PREFIX}/address/<poa1...>/governance?scope=segment|all (Score and parts, standing, grading, forum, ballots for one Agent; page {BASE}/address/<poa1...>?tab=governance). MCP get_agent_governance.
 - Governance: {BASE}{API_PREFIX}/governance (overview), /governance/established?sort=&filter= (every established Agent with Score; CSV), /governance/at-risk?level=, /governance/payouts (Est. per Agent, an estimate), /governance/graders, /governance/directory?sort=&filter=&limit=&offset= (CSV: /governance/directory.csv), /governance/forum?range=24h|7d|30d|all, /governance/grader-patterns?range=&sort=&min_n= (advisory, unranked, settled seats only; CSV; MCP get_grader_patterns), /governance/pending-horizon (expiry close per pending cohort, the pending TTL with its source and flags; CSV; MCP get_pending_horizon), /governance/proposals, /governance/grade-history?addr=&sort= (settled jury seats per grader and open_seats, minepoa's public per Agent count read once per epoch; CSV) and /governance/queue?need=ready|1..4&sort= (the settle queue from minepoa's grading list: quorum progress, trusted and untrusted seals, need, expiry; CSV; upstream_as_of and fetched_at); every one takes ?segment= (standing starts fresh in each segment; forum and proposals are not split by segment). Score: POAScan's own 0 to 100 (100 best) from standing, grading, forum and consistency; every Agent list (established, directory, at-risk, graders, forum most_active, /leaderboard/<tab>) takes sort=score|standing|grading|forum|consistency (plus its own column keys, e.g. name, seals, level, added on established) and dir=desc|asc (desc is the natural order: highest first, A to Z for names), also in CSV; blanks sort last; not an official minepoa grade; method {BASE}/about#score. Established and at-risk rows, standing and agent governance carry established_source (close_records, minepoa_grading or conflict) and minepoa_established, cross-checked with minepoa's grading list checked every 10 min ({BASE}/about#grading-list); conflict shows as Unconfirmed. MCP: get_governance_overview, list_established, list_governance_standing, get_payout_outlook, get_governance_graders, get_grade_history, list_governance_directory, get_forum_activity, list_proposals.
 - Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/governance?tab=at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
+- Wallet binding: {BASE}{API_PREFIX}/wallet/<poa1...> (or ?address=): linked yes or no and the vault publicId from minepoa's /api/links, family_size, each chain address with its verified flag, identity-link and chains-update txs, a joined_no_link warning in the first 72 h; also wallet_binding on the address API and MCP get_wallet_binding. Shareable page: {BASE}/wallet?address=<poa1...> (stable; read-only; never asks for keys). Method at {BASE}/about#wallet-binding.
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>

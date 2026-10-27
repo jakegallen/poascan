@@ -38,7 +38,7 @@ RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After b
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
 ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|assignments/poa1[1-9A-HJ-NP-Za-km-z]+|"
-                     r"epochs|agents|anchors|params|release|notices|ballots|chains|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
+                     r"epochs|agents|anchors|params|release|notices|ballots|chains|links|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
     def __init__(self, msg, retry=None):
@@ -1029,7 +1029,7 @@ def seed(seed_dir):
 EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S,
-         "/api/explorer/grading": 900, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
+         "/api/explorer/grading": 900, "/api/links": 600, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
@@ -1046,6 +1046,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
+    ("vault_links", lambda: __import__("poascan.wallet", fromlist=["x"]).job(), 600, "/api/links"),   # 1.26.187: bulk /api/links (about 1 KB) every 10 min
     ("signed", lambda: __import__("poascan.signed", fromlist=["x"]).job(), 600, "/api/explorer/tx/:id"),   # G0 notice and release txs, each read once (at most 2 per run), verified offline
     ("census", lambda: __import__("poascan.agents", fromlist=["x"]).census_job(), 86400, None),
     ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC

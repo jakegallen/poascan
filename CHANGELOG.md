@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.187] - 2026-10-27
+
+### Added
+- Wallet binding card on every address page: Vault linked (YES or NO from minepoa's public `/api/links`), the vault publicId, Family size (addresses linked to the same vault: one entity, one jury seat, one vote, per go.md), each chain address in the chains map with minepoa's Verified or Unverified flag, and the Vault link (identity-link) and Wallet link (chains-update) txs linked to POAScan's tx pages with times in the visitor's zone. An Agent that joined in the last 72 hours without a link shows the warning tag Joined N hours ago, no wallet link. Ask agent: a read-only Check my wallet link prompt and a Link my vault for swaps prompt that follows go.md's LINK section; both say Never send payment outside the network.
+- Check my wallet lookup: `/wallet` is one box that takes a poa1 address only, read-only, and never asks for keys or seed phrases. The stable, shareable URL is `https://poascan.io/wallet?address=<poa1 address>` (for POASwap's /start). Anything that is not a poa1 address is a 400 and is never shown back.
+- API: `GET /api/v1/wallet/<poa1...>` and `/api/v1/wallet?address=<poa1...>` (linked, vault, family_size, family, chains with verified, identity_link_txs, chains_update_txs, joined_ts, warning, links_checked_at, links_stale, lookup_url); `wallet_binding` on `/api/v1/address/<poa1...>` and MCP `get_address`; new MCP tool `get_wallet_binding` (41 tools). Method at /about#wallet-binding.
+- Load: one read of minepoa's bulk `/api/links` (about 1 KB) every 10 minutes, about 6 KB an hour; a page view, API call or MCP call never reads minepoa.com. A failed read keeps the last copy, Stale after an hour without a good read.
+
+### Tests
+- wallet_binding_test (new, in CI): parse and job (304, failures and bad shapes keep the copy), linked, family, chains with verified flags, link txs, the 72 hour warning, the card, the lookup (a key-shaped value is a 400 and never echoed), API, MCP, OpenAPI, llms.txt and /about. tip_layer_test opens every Wallet binding note on the address page and the lookup at 390 and 1280. registry_test: allowlist hash reviewed for `/api/links`. smoke_test and graderpat_test: 41 MCP tools.
+
 ## [1.26.186] - 2026-10-27
 
 ### Added

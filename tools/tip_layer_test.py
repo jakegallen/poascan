@@ -36,7 +36,16 @@ db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, epoch, ts, atts, k, fin
 db.write("INSERT OR IGNORE INTO grading_seals(answer, grader, ts, t, q, first_seen) VALUES(?,?,?,?,?,?)",
          [("gp%062x" % i, g, now - 90000 + 3600 * (1 + i % 30), 0, 1, now) for i in range(40) for g in gs[:2]], many=True)
 """
-PAGES = ["/", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=graders",
+# Wallet binding (1.26.187): the fixture's poa1A... address is linked (vault, family, chains), poa1B... joined an hour ago
+# without a link (the warning tag), so the card's ? tips and tags render on the address page and the /wallet lookup
+SEED += """
+db.put_blob("vault_links", {"links": {"poa1" + "A" * 40: "v0123456789abcdef0123ab"}, "fetched_at": now, "checked_at": now})
+ch = db.get_blob("chains")[0] or {}
+ch["poa1" + "A" * 40] = {"solana": {"addr": "J6kWfKRfvJGBJQu5EbZiYiURgUDWPZih2zv1Dc6RvEsg", "verified": True}, "ethereum": {"addr": "0x3a0e9c1a92ae4914426b57766f4d124a64fa3dc8", "verified": True}}
+db.put_blob("chains", ch)
+db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final) VALUES(?,?,?,?,1)", [("b" * 64, "identity-link", "poa1" + "A" * 40, now - 7200), ("c" * 64, "chains-update", "poa1" + "A" * 40, now - 7100), ("d" * 64, "join", "poa1" + "B" * 40, now - 3700)], many=True)
+"""
+PAGES = ["/", "/wallet", "/wallet?address=poa1" + "A" * 40, "/wallet?address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
          "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10"]
 
@@ -178,6 +187,25 @@ def run(base, p, w, h, mobile, kinds):
             ok_, n_ = every_note(pg, "#horizon details.qtip", "hz", mobile, judge, path, w)
             check(f"{w}: Expiry horizon: {ok_} of {n_} notes topmost and inside (Expires ?, Stale and Unconfirmed tags)", n_ >= 3 and ok_ == n_)
             if n_ and ok_ == n_: kinds.add("expiry horizon")
+        # Wallet binding (1.26.187): every ? tip and tag in the card, not only the first 3 of a kind
+        if pg.locator("#wallet details.qtip").count():
+            ids = pg.evaluate("""()=>{const o=[];document.querySelectorAll('#wallet details.qtip').forEach((d,i)=>{const s=d.querySelector(':scope>summary'),r=s&&s.getBoundingClientRect();
+              if(r&&r.width&&r.height){d.dataset.wb=i;o.push(i)}});return o}""")
+            wb_ok = 0
+            for i in ids:
+                sel = f'details.qtip[data-wb="{i}"]'
+                pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
+                s = pg.locator(sel + " > summary").first
+                try:
+                    s.scroll_into_view_if_needed(timeout=3000); (s.tap if mobile else s.click)(timeout=3000); pg.wait_for_timeout(150)
+                    res = pg.evaluate(PROBE, pg.locator(sel + " .qbox").first.element_handle())
+                except Exception as e:
+                    check(f"{w}: wallet note {i} opens ({type(e).__name__})", False); bad += 1; continue
+                if judge(f"{path} wallet note {i} '{res.get('text')}'", res): good += 1; wb_ok += 1
+                else: bad += 1
+                pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
+            check(f"{w}: {path}: wallet binding {wb_ok} of {len(ids)} notes topmost and inside", len(ids) >= 2 and wb_ok == len(ids))
+            if wb_ok and wb_ok == len(ids): kinds.add("wallet binding")
         check(f"{w}: {path}: {good} notes topmost and inside the viewport, {bad} not", bad == 0)
     b.close()
     return n_all
@@ -200,7 +228,7 @@ if sync_playwright:
             for w, h, mob in ((390, 844, True), (1280, 900, False)):
                 n = run(base, p, w, h, mob, kinds)
                 check(f"{w}: opened {n} notes", n >= 30)
-        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon"):
+        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding"):
             check(f"covered: {k} ({sorted(kinds)})" if k not in kinds else f"covered: {k}", k in kinds)
     finally:
         srv.terminate()
