@@ -558,7 +558,7 @@ def chains_linked():
     return _chains["v"]
 
 def address(a):
-    if not ADDR_RX.match(a): return page("Bad address", card("Address", na("That is not a poa1… address.")), "/")
+    if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
     d, err, at = address_read(a); nm = names(); p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None; btag = balance_tag(bb)
@@ -654,9 +654,11 @@ def established_card(a):
     h = G.established_history(a)
     if not (h["answers"] or h["changes"] or h["established"]): return ""
     n = h["basis_epoch"]
+    # 1.26.140 added basis "import" (established by the segment's genesis import, no close record change since); it had no
+    # label here, so every such Agent's page was a 500 (Tidewatch, LabLeak comment 5899). Unknown bases fall back, never raise.
     why = {"trusted": "Trusted grader", "listed": f"Added at the E{n} close", "seat": f"Grading seat at E{n}",
-           "removed": f"Removed at the E{n} close", "none": "Not in any close record",
-           "readmitted": f"Re-admitted at the E{n} close"}[h["basis"]]
+           "removed": f"Removed at the E{n} close", "none": "Not in any close record", "import": "Genesis import",
+           "readmitted": f"Re-admitted at the E{n} close"}.get(h["basis"], str(h["basis"]))
     tag = '<span class="tag ok">YES</span>' if h["established"] else '<span class="tag">NO</span>'
     if h["established"]:
         from . import grading as GR

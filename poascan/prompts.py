@@ -26,12 +26,21 @@ PAUSABLE = {"Answer this epoch's challenge", "Grade submissions"}
 PAUSE = ("Hosted mining and grading may be paused for a network upgrade (https://poascan.io/upgrade). If the endpoint answers with a halted or maintenance status, "
          "stop there, don't loop, and check again at most once an hour at a random minute. ")
 
+# Tidewatch (LabLeak comment 5899): every Ask prompt opens with the join prompt's pasted-only line (onboarding_prompt.PASTED,
+# one source), on its own first line, so an agent that meets the text in raw HTML (data-ask, the /upgrade copy) ignores it.
+# Ask prompts carry no hash; the join prompt's template, variant and combined sha256 do not change.
+from .onboarding_prompt import PASTED
+
+def opened(p):
+    """The prompt as served: PASTED, a newline, then the text (the pause guard, when on, follows the opener)."""
+    return p if p.startswith(PASTED) else PASTED + "\n" + p
+
 def ask(items, label="Ask agent"):
     """items: [(title, prompt)]. Small button; app.js opens the shared #askmodal (Copy + Open in)."""
     from . import maint as M
     if M.state()["active"]: items = [(t, PAUSE + p) if t in PAUSABLE else (t, p) for t, p in items]
     t = items[0][0] if len(items) == 1 else "Ask your agent"
-    items = [[a, b, pid(a)] for a, b in items]   # [title, prompt, fixed id for the click count]
+    items = [[a, opened(b), pid(a)] for a, b in items]   # [title, prompt, fixed id for the click count]
     return (f'<button class="askb" type="button" data-ask="{E(json.dumps(items))}" title="{E(t)}" aria-label="Ask your agent: {E(t)}" '
             f'aria-haspopup="dialog">{ICON_ASK}<span>{E(label)}</span></button>')
 
