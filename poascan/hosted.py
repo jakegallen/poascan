@@ -180,12 +180,48 @@ def write_job(now=None, get=None, force=False):
                                     **({"slow_since": old.get("slow_since") or now} if http is None else {}))
     db.put_blob(BLOB, dict(hb, routes=routes))
 
+def _swap_read():
+    """The newest clear read of /api/hosted/swap-offer: the write check (always on), or the maintenance route check when it
+    read the same path later (1.26.184). dict(state, http, checked_at, since) or {} when neither read it clearly."""
+    w = db.get_blob(WRITE_BLOB)[0] or {}
+    r = ((db.get_blob(BLOB)[0] or {}).get("routes") or {}).get("swap_offer") or {}
+    if r.get("state") in ("open", "paused", "down") and r.get("checked") and r["checked"] > (w.get("checked_at") or 0):
+        return dict(state=r["state"], http=None if r.get("slow_since") and r["state"] == "down" else r.get("code"), checked_at=r["checked"], since=r.get("since"), basis="route_check")
+    return dict(w, basis="write_check") if w.get("state") in ("open", "paused", "down") else {}
+
 def writes(now=None):
     """{swap_offer: {state, http, checked_at, since, stale}} and swaps_writable (True open, False paused or down, None
     never read or the last read over WRITE_SLOW * 2 s old). checked_at is ISO 8601 UTC."""
-    now = now or time.time(); d = db.get_blob(WRITE_BLOB)[0] or {}
+    now = now or time.time(); d = _swap_read()
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None
     st = d.get("state") if d.get("state") in ("open", "paused", "down") else "unknown"
     stale = bool(d.get("checked_at") and now - d["checked_at"] > 2 * WRITE_SLOW)
     ok = None if st == "unknown" or stale else st == "open"
     return dict(swap_offer=dict(state=st, http=d.get("http"), checked_at=iso(d.get("checked_at")), since=iso(d.get("since")), stale=stale)), ok
+
+# ---- 1.26.184: one resolver for swap order placement. hosted_routes_display.swap_offer, meta.maintenance.swap_route,
+# /api/v1/swaps/status (writes, swaps_writable, swap_route), the Swap writes feed on Health and /api/health, the header
+# status note and MCP all read swap_route(). Open needs the write check's newest clear read to be open and fresh: an
+# unknown, stale or Down read is never shown as open.
+SWAP_DISPLAY = {"open": "open", "paused": "paused", "unknown": "unknown"}   # down: slow (no answer) or unknown (5xx), never open
+SWAP_FEED = {"open": "OK", "paused": "Degraded", "down": "Down"}
+SWAP_LABEL = {"open": "Open", "paused": "Paused", "down": "Down", "unknown": "Unknown"}
+
+def swap_route(now=None):
+    """dict(state, display, writable, probe_state, http, checked_at, since, stale, feed, label, basis).
+    probe_state: the write check's newest clear read (open, paused, down, unknown when never read clearly).
+    state: probe_state, except unknown when that read is stale (older than 2 * WRITE_SLOW s).
+    display: the hosted_routes_display enum: open, paused, slow (down, no answer), unknown (down with an HTTP 5xx, stale, never read).
+    writable: True only when state is open; False paused or down; None unknown (same rule as swaps_writable).
+    feed: the Swap writes feed row (OK, Degraded, Down), Down also when the last clear read is stale; None when never read."""
+    now = now or time.time(); w, _ok = writes(now); s = w["swap_offer"]; basis = _swap_read().get("basis") or "write_check"
+    probe = s["state"]; st = "unknown" if s["stale"] else probe
+    disp = ("slow" if s["http"] is None else "unknown") if st == "down" else SWAP_DISPLAY[st]
+    feed = SWAP_FEED.get(st) or ("Down" if s["stale"] else None)
+    return dict(state=st, display=disp, writable=None if st == "unknown" else st == "open", probe_state=probe, http=s["http"],
+                checked_at=s["checked_at"], since=s["since"], stale=s["stale"], feed=feed, label=SWAP_LABEL[st], basis=basis)
+
+def swap_display(official=True, now=None):
+    """hosted_routes_display.swap_offer: swap_route()['display']; an open read before the official word reads responding."""
+    d = swap_route(now)["display"]
+    return "responding" if d == "open" and not official else d

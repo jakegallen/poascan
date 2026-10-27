@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.185] - 2026-10-27
+
+### Fixed
+- One source of truth for swap order placement. `meta.maintenance.hosted_routes_display.swap_offer` read `open` while the swap write check was Down (the raw `hosted_routes.swap_offer` was `unknown`): after the upgrade completion notice every hosted route was shown open, whatever POAScan's own probe said. Every place now derives from one resolver (`hosted.swap_route()`): hosted_routes_display.swap_offer, `writes` and `swaps_writable` in /api/v1/swaps/status, the Swap writes feed on Health and /api/v1/health, the header status note and MCP. An unknown, stale or Down read is never open.
+- A stale last clear read (over an hour old) now reads unknown (not writable) and the Swap writes feed shows Down with stale true; before, the old state stayed.
+
+### Added
+- `swap_route` (additive; no field renamed or retyped) in meta.maintenance, /api/v1/swaps/status, /api/v1/health and MCP get_swap_status: `state` (open, paused, down, unknown), `display` (the hosted_routes_display value: open, paused, slow for down with no answer, unknown for down with an HTTP 5xx, stale or never read), `writable` (same rule as swaps_writable), `probe_state` (the newest clear read even when stale), `http`, `checked_at`, `since`, `stale`, `feed` (OK, Degraded, Down), `label`, `basis` (write_check, or route_check when the maintenance route check read the same path later).
+
+### Tests
+- swap_route_test (new, in CI): never read, timeout, 5xx, halt answer, open, stale and a newer route check read, each across hosted_routes_display, meta.maintenance, swaps/status, /api/health, the feed and MCP. upgrade_complete_test: swap_offer is unknown until the write check reads open.
+
 ## [1.26.184] - 2026-10-27
 
 ### Changed

@@ -344,13 +344,15 @@ def route_display():
     of = official(); out = {}
     if complete():   # officially complete: every hosted route is open, except grading, which needs seals landing (grading_state)
         g = {"open": "open", "unconfirmed": "unconfirmed", "halted": "paused"}[grading_state()["state"]]
-        return {k: (g if k == "grading" else "open") for k in R.current()}
-    for k, v in R.current().items():
-        st = v["state"]
-        if v["slow"]: st = "slow"
-        elif k == "mining" and mining_back(): st = "open"   # officially back; an unknown or single halted read does not undo it
-        elif st == "open": st = "open" if of["routes"] else "responding"
-        out[k] = st
+        out = {k: (g if k == "grading" else "open") for k in R.current()}
+    else:
+        for k, v in R.current().items():
+            st = v["state"]
+            if v["slow"]: st = "slow"
+            elif k == "mining" and mining_back(): st = "open"   # officially back; an unknown or single halted read does not undo it
+            elif st == "open": st = "open" if of["routes"] else "responding"
+            out[k] = st
+    if "swap_offer" in out: out["swap_offer"] = R.swap_display(official=bool(complete()) or of["routes"])   # 1.26.184: the one swap resolver, never open on unknown or Down
     return out
 
 def og_desc():
@@ -550,7 +552,7 @@ def state():
                 phase="complete" if c else "recovery" if rec["moved"] else "parked", headline=head, headline_short=short,
                 completed_at=iso(c and c["at"]), completed_by=dict(notice_id=c.get("notice_id"), txid=c.get("txid")) if c else None,
                 updated_at=iso(c["at"] if c else stamp_ts()),
-                hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(),
+                hosted_routes={k: v["state"] for k, v in rt.items()}, hosted_routes_display=route_display(), swap_route=R.swap_route(),
                 official={k: v for k, v in official().items() if k != "post"}, mining_back_at=(lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else None)(back_since()), hosted_routes_checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ck)) if ck else None,
                 notice=notice(), segment_notice=sn, recovery=rec, unconfirmed=unconfirmed(), grading=_grading_public(gs), **_hs())
 
