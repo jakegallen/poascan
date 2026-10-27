@@ -1539,4 +1539,4 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .wlook button{background:none;border:0;color:var(--dim);width:52px;height:100%;display:grid;place-items:center;cursor:pointer}.wlook button svg{width:20px;height:20px}.wlook button:hover{color:var(--amber)}
 .wl-note{margin:8px 0 0}
 #wallet .kv .mono+.tag{margin-left:8px}#wallet .kv .sep{margin:0 6px}#wallet .kv .hash+.sep{margin-left:8px}
-.rtes li{grid-template-columns:minmax(0,1fr) auto minmax(64px,auto)}.rtes .rtg{display:inline-flex;align-items:center;gap:6px}.rtes .fdt time{font:inherit}
+.rtes{grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr))}.rtes li{grid-template-columns:minmax(0,1fr) auto minmax(64px,auto)}.rtes .rtg{display:inline-flex;align-items:center;gap:6px}.rtes .fdt time{font:inherit}

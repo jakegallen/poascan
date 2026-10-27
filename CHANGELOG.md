@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.190] - 2026-10-27
+
+### Fixed
+- Network, Health, Routes: two columns on wide screens so route names and since times fit (Hosted mining and Tx lookup were cut off at 1280); one column on phones as before.
+
 ## [1.26.189] - 2026-10-27
 
 ### Added
