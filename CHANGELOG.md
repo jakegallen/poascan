@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.179] - 2026-10-26
+
+### Fixed
+- Milestone hover text reads in your time zone in the standard format ("Oct 25, 7:17 PM Signup surge"), not UTC. This covers the Home sparkline labels and their hover-only ticks, chart milestone chips and legend entries, the hover on the milestone line itself (its SVG title), screen reader labels and the Live strip seal hovers ("76 Seals · 5:29:50 PM to 5:34:16 PM"). UTC stays as the no-script fallback.
+- The Home Holders row card no longer shows a sparkline milestone label over its value (1.26.175 regression). Row cards hide the label along with the sparkline.
+
+### Tests
+- marker_local_test checks every milestone and seal hover in Chromium at 390 and 1280 px, in Los Angeles and Tokyo, and that row cards show no sparkline label.
+
 ## [1.26.178] - 2026-10-26
 
 ### Fixed

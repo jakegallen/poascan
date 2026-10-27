@@ -578,10 +578,13 @@ def spark(points, n=40, marks=None):
     shown = []   # 1.26.175: labels from the newest back; one closer than 40% to a shown label keeps its tick and a hover target only
     for x, m in sorted(mk, key=lambda p: -p[0]):
         if all(abs(x - y) >= 40 for y, _ in shown): shown.append((x, m))
+    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 25, 7:17 PM Signup surge"): app.js fills the title
+    # from data-ltt ({t:ts}); the UTC text stays as the no-script fallback
     ttl = lambda m: E(utc_text(m["ts"]) + " " + m["label"])
+    ltt = lambda m: f'title="{ttl(m)}" data-ltt="{{t:{int(m["ts"])}}} {E(m["label"])}"'
     lb = "".join((f'<span class="spkl{" r" if x > 50 else ""}" style="{"right" if x > 50 else "left"}:{(100 - x if x > 50 else x):.1f}%" '
-                  f'title="{ttl(m)}">{E(m["label"])}</span>') if any(m is q for _, q in shown) else
-                 f'<span class="spkd" style="left:{x:.1f}%" title="{ttl(m)}" aria-label="{ttl(m)}"></span>' for x, m in mk)
+                  f'{ltt(m)}>{E(m["label"])}</span>') if any(m is q for _, q in shown) else
+                 f'<span class="spkd" style="left:{x:.1f}%" {ltt(m)} aria-label="{ttl(m)}"></span>' for x, m in mk)
     return (f'<div class="spkw"><svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}{tk}</svg>{lb}</div>')
 
 def spark_in(stat_html, points, marks=None):

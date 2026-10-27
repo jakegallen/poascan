@@ -19,8 +19,8 @@ function upts(root){$$("time[data-upts]",root).forEach(function(t){var ts=+t.dat
    data-f=kind> with UTC text (the no-JS fallback); here it reads in the browser's zone and hour cycle ("Oct 25, 8:48 AM"),
    the year only when it is not this year. Headers that name the zone carry .tzn ("Time (PDT)"); titles hold the full time. */
 var LTY=new Date().getFullYear(),TZN=null;
-function ltf(ts,f,full){var d=new Date(ts*1000),o={};if(f!=="t"){o.month="short";o.day="numeric";if(full||d.getFullYear()!==LTY)o.year="numeric"}
- if(f!=="d"){o.hour="numeric";o.minute="2-digit";if(f==="dts")o.second="2-digit"}if(full)o.timeZoneName="short";
+function ltf(ts,f,full){var d=new Date(ts*1000),o={};if(f!=="t"&&f!=="ts"){o.month="short";o.day="numeric";if(full||d.getFullYear()!==LTY)o.year="numeric"}
+ if(f!=="d"){o.hour="numeric";o.minute="2-digit";if(f==="dts"||f==="ts")o.second="2-digit"}if(full)o.timeZoneName="short";
  try{return new Intl.DateTimeFormat(undefined,o).format(d)}catch(e){return utc(ts)}}
 function tzn(){if(TZN!==null)return TZN;TZN="";try{var p=new Intl.DateTimeFormat(undefined,{timeZoneName:"short"}).formatToParts(new Date());for(var i=0;i<p.length;i++)if(p[i].type==="timeZoneName")TZN=p[i].value}catch(e){}return TZN}
 function ltt(s){return s.replace(/\{t:(\d+)(?::(\w+))?\}/g,function(_,ts,f){return ltf(+ts,f||"dt")}).replace(/ \(UTC\)$/,"")}
@@ -28,7 +28,10 @@ function lt(root){pheat(root);$$("time.lt",root).forEach(function(t){var ts=+t.d
  var z=tzn();if(z)$$(".tzn",root).forEach(function(s){s.textContent=z});
  $$("[data-ltt]",root).forEach(function(e){e.title=ltt(e.dataset.ltt);e.removeAttribute("data-ltt")});
  $$("[data-lts]",root).forEach(function(e){e.textContent=ltf(+e.dataset.lts,e.dataset.f||"dt");e.removeAttribute("data-lts")});
- $$("[title*=' UTC']",root).forEach(function(e){e.title=ltx(e.title)})}
+ $$("[title*=' UTC']",root).forEach(function(e){e.title=ltx(e.title)});
+ /* 1.26.179: milestone hover text everywhere reads local: aria labels and the SVG <title> on chart milestone lines too */
+ $$("[aria-label*=' UTC']",root).forEach(function(e){e.setAttribute("aria-label",ltx(e.getAttribute("aria-label")))});
+ $$("svg title",root).forEach(function(e){if(e.textContent.indexOf(" UTC")>=0)e.textContent=ltx(e.textContent)})}
 /* the Agent activity map (profile.py activity): the server draws UTC days and hours and ships the counts in 15 minute UTC slots
    (data-q "slot:n"). Here they are rebucketed by the visitor's own hours and days, so half and quarter hour zones land right, and
    the header and label name the zone. Same five steps of gold as the server. */

@@ -1076,7 +1076,7 @@ td a.mono{display:inline-block;min-width:24px}
 @media (max-width:1240px){.herogrid .kmore{grid-auto-rows:auto;gap:8px}}
 .kmore .stat{display:flex;align-items:center;gap:12px;padding:10px 16px}
 .kmore .sl{flex:0 0 150px}.kmore .sv,.hero .kmore .sv{font-size:var(--fig-m);margin-top:0}
-.kmore .stat .spk{display:none}
+.kmore .stat .spk,.kmore .stat .spkw{display:none}   /* 1.26.179: a row card hides its sparkline milestone labels too */
 .kmore .stat::after{width:min(72px,30%);bottom:50%;transform:translateY(50%)}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.kpis{gap:8px;margin-bottom:12px}.kpis .stat{padding:14px 12px 12px}.kpis .sv{font-size:var(--fig-l);margin-top:10px}

@@ -231,6 +231,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/agent_cell_test.py
+      - name: Milestone hover text in the visitor's zone (sparkline labels and ticks, chart chips, legend, SVG titles, aria labels; Los Angeles and Tokyo at 390 and 1280 px)
+        env:
+          CI: "true"
+        run: python tools/marker_local_test.py
 
   deploy:
     needs: test

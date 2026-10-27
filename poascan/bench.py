@@ -118,6 +118,12 @@ def seal_tip(c):
     if n == 1: return f"Seal · {_hms(t0)} UTC"
     return f"{n} Seals · {_hms(t0)} UTC" if t0 == t1 else f"{n} Seals · {_hms(t0)} to {_hms(t1)} UTC"
 
+def seal_ltt(c):
+    """1.26.179: the same hover as a local-time template (app.js lt fills the title from data-ltt; ts = time with seconds)."""
+    n, t0, t1 = c[1], int(c[2]), int(c[3])
+    if n == 1: return f"Seal · {{t:{t0}:ts}}"
+    return f"{n} Seals · {{t:{t0}:ts}}" if t0 == t1 else f"{n} Seals · {{t:{t0}:ts}} to {{t:{t1}:ts}}"
+
 def seal_layer(ts, b, lo, now):
     """The Seals lane's marks as HTML over the lane's SVG (round capsules and counts cannot sit in a stretched viewBox). data-s
     carries every seal as seconds after b (repeats as x*n) so app.js can recluster at the real width and keep the count."""
@@ -126,8 +132,8 @@ def seal_layer(ts, b, lo, now):
     # seals already gone and hide whole, so the capsules summed to less than the lane total)
     for c in seal_clusters([t for t in ts if t >= lo], pxs, right=now, left=lo):
         left = 100 * (c[0] - b) / WIN
-        out.append(f'<i class="sm" style="left:{left:.2f}%" title="{seal_tip(c)}">{c[1] if c[1] > 1 else ""}</i>' if c[1] > 1
-                   else f'<i class="sm s1" style="left:{left:.2f}%" title="{seal_tip(c)}"></i>')
+        out.append(f'<i class="sm" style="left:{left:.2f}%" title="{seal_tip(c)}" data-ltt="{seal_ltt(c)}">{c[1] if c[1] > 1 else ""}</i>' if c[1] > 1
+                   else f'<i class="sm s1" style="left:{left:.2f}%" title="{seal_tip(c)}" data-ltt="{seal_ltt(c)}"></i>')
     rel, runs = [t - b for t in sorted(ts)], []
     for x in rel:
         if runs and runs[-1][0] == x: runs[-1][1] += 1
