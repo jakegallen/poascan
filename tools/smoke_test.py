@@ -39,7 +39,7 @@ META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of"
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
     env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9",
-               POASCAN_MCP_BURST="50")   # one call per MCP tool plus the protocol checks fit in one burst (38 tools since governance v2)
+               POASCAN_MCP_BURST="50")   # one call per MCP tool plus the protocol checks fit in one burst (39 tools since grader patterns)
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
     fails = []
@@ -90,7 +90,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 38 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 39 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -432,9 +432,9 @@ def calibration(base, check):
     """Grader calibration: sample sizes, outcome split, low-n greying, neutral sort, no ranking words."""
     A1, A3 = "poa1" + "A" * 40, "poa1" + "C" * 40
     d = json.loads(req(base + "/api/v1/agents/calibration")[1]); by = {r["grader"]: r for r in d["rows"]}; r3 = by[A3]
-    check("calibration API: seats, aligned, outcome split, scores, low_n, name order",
+    check("calibration API: seats, aligned, outcome split, settled only scores (pending grades not counted), low_n, name order",
           d["min_n"] == 20 and d["graders_count"] == len(d["rows"]) == 5 and r3["seats"] == 25 and r3["aligned"] == 19 and r3["seats_failed"] == 8 and r3["aligned_failed"] == 6
-          and r3["low_n"] is False and by[A1]["low_n"] is True and by[A1]["scored"] == 9 and by[A1]["score_mean"] == 2.0 and by[A1]["seals_by_close"]
+          and r3["low_n"] is False and by[A1]["low_n"] is True and by[A1]["scored"] == 0 and by[A1]["score_mean"] is None and by[A1]["seals_by_close"]
           and [r["grader"] for r in d["rows"]] == sorted(by) and d["method"].endswith("/about#calibration"))
     n = json.loads(req(base + "/api/v1/agents/calibration?sort=n")[1]); c, h, b = reqh(base + "/api/v1/agents/calibration.csv")
     check("calibration: sort=n, CSV rows, 400 on a bad sort", n["rows"][0]["grader"] == A3 and c == 200 and b.decode().count("\n") == 6 and req(base + "/api/v1/agents/calibration?sort=best")[0] == 400)
@@ -449,7 +449,7 @@ def calibration(base, check):
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
-          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 38)
+          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 39)
 
 def cohorts(base, check):
     """Frozen answer cohorts: the five states sum to the frozen count at every close; Gate A per close."""
@@ -499,8 +499,8 @@ def reconcile(base, check):
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 10, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])["result"]["tools"]
-    check("MCP tools/list: 38 tools, every parameter described, every tool says when to use it",
-          len(tl) == 38 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
+    check("MCP tools/list: 39 tools, every parameter described, every tool says when to use it",
+          len(tl) == 39 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
           and all("\u2014" not in t["description"] for t in tl))
     check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
 

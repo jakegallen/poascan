@@ -1526,3 +1526,6 @@ a.pbadge:hover{border-color:currentColor}
 #livepill .sp-f{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:2px;font-size:var(--t12);color:var(--mute)}
 #livepill .sp-f a{margin:0;display:inline-flex;align-items:center;min-height:24px}
 #livepill .sp-f .upts{flex-basis:100%}
+/* Grader patterns (1.26.183): settled score mix, 0 to 3, in one small bar */
+.mixb{display:inline-flex;vertical-align:middle;height:8px;border-radius:var(--r-sm);overflow:hidden}.mixb i{display:block;height:8px}
+.mixb .m0{background:var(--ember)}.mixb .m1{background:var(--gold-lo)}.mixb .m2{background:var(--gold)}.mixb .m3{background:var(--verd)}

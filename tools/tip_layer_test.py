@@ -2,7 +2,7 @@
 Governance Established Unconfirmed note rendered behind the next row of stat cards). In Chromium at 390 px (tap) and 1280 px
 (click) on Home, Governance (overview and tabs), Network, Token, an address page, /start, Census and an epoch page, this opens
 every kind of note: the ? tips, the Stale, Unconfirmed and estimate tags, table header tips, the header status note, the chart
-? and chart hover readouts, the seal timeline tip and the Ask agent dialog. For each open note it checks with
+? and chart hover readouts, the seal timeline tip, the Ask agent dialog and every Grader patterns note. For each open note it checks with
 document.elementFromPoint at the centre and four corners (inside the rounded edge) that the note (or something inside it) is the topmost element,
 and that its whole box is inside the viewport. Fixture site; no request leaves the box. In CI (CI set) a missing Playwright is
 a failure, locally it is skipped. Usage: python3 tools/tip_layer_test.py"""
@@ -23,6 +23,16 @@ SEED = """import time
 from poascan import db
 db.put_blob("grading", {"rows": [], "open": [], "stats": {}, "epoch": 11, "fetched_at": time.time(), "as_of": time.time(),
                         "established": ["poa1" + "Z" * 40], "trusted": [], "leaderboard": []})
+# Grader patterns (1.26.183): settled seats with scores for four graders, answer txs and seal times, so the card, its four
+# charts and every header tip render
+from poascan import gradehist as GH, grading as GR, segments as SG
+GH._ensure(); GR._ensure(); now = int(time.time()); gs = ["poa1" + c * 40 for c in "ABCD"]
+db.write("INSERT OR IGNORE INTO grade_history(seg, answer, grader, close, aligned, passed, score) VALUES(?,?,?,?,?,?,?)",
+         [(SG.CURRENT, "gp%062x" % i, g, 10, 1 if (i + k) % 3 else 0, 1, (i + k) % 4) for i in range(40) for k, g in enumerate(gs)], many=True)
+db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?)",
+         [("gp%062x" % i, "challenge", gs[0], 9, now - 90000, 5, 5, 1) for i in range(40)], many=True)
+db.write("INSERT OR IGNORE INTO grading_seals(answer, grader, ts, t, q, first_seen) VALUES(?,?,?,?,?,?)",
+         [("gp%062x" % i, g, now - 90000 + 3600 * (1 + i % 30), 0, 1, now) for i in range(40) for g in gs[:2]], many=True)
 """
 PAGES = ["/", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
@@ -115,6 +125,30 @@ def run(base, p, w, h, mobile, kinds):
             if judge(f"{path} Ask agent dialog", pg.evaluate(PROBE, pg.locator("#askmodal").element_handle())): good += 1
             else: bad += 1
             pg.keyboard.press("Escape"); pg.wait_for_timeout(80)
+        # Grader patterns (1.26.183): every ? on its charts and table headers, not only the first 3 of a kind
+        if "tab=graders" in path:
+            # every one shown at this width (at 390 the dk columns, Peers, Top score, Distance and Mix, are hidden with their ?)
+            ids = pg.evaluate("""()=>{const o=[];document.querySelectorAll('#patterns details.qtip, .gpc details.qtip').forEach((d,i)=>{const s=d.querySelector(':scope>summary'),r=s&&s.getBoundingClientRect();
+              if(r&&r.width&&r.height){d.dataset.gp=i;o.push(i)}});return o}""")
+            gp_ok = 0
+            for i in ids:
+                sel = f'details.qtip[data-gp="{i}"]'
+                pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
+                s = pg.locator(sel + " > summary").first
+                try:
+                    s.scroll_into_view_if_needed(timeout=3000)
+                    pg.evaluate(f"""()=>{{const s=document.querySelector('{sel} > summary');let c=s.parentElement;
+                      while(c&&!(c.scrollWidth>c.clientWidth&&/auto|scroll/.test(getComputedStyle(c).overflowX)))c=c.parentElement;
+                      if(c){{const a=s.getBoundingClientRect(),b=c.getBoundingClientRect();c.scrollLeft+=a.right-(b.right-8)}}}}""")
+                    (s.tap if mobile else s.click)(timeout=3000); pg.wait_for_timeout(150)
+                    res = pg.evaluate(PROBE, pg.locator(sel + " .qbox").first.element_handle())
+                except Exception as e:
+                    check(f"{w}: grader patterns note {i} opens ({type(e).__name__})", False); bad += 1; continue
+                if judge(f"{path} grader patterns note {i} '{res.get('text')}'", res): good += 1; gp_ok += 1
+                else: bad += 1
+                pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
+            check(f"{w}: Grader patterns: {gp_ok} of {len(ids)} notes topmost and inside (4 chart ?, plus 6 header ? at 1280, 2 at 390)", len(ids) >= (6 if mobile else 10) and gp_ok == len(ids))
+            if gp_ok and gp_ok == len(ids): kinds.add("grader patterns")
         check(f"{w}: {path}: {good} notes topmost and inside the viewport, {bad} not", bad == 0)
     b.close()
     return n_all
@@ -137,7 +171,7 @@ if sync_playwright:
             for w, h, mob in ((390, 844, True), (1280, 900, False)):
                 n = run(base, p, w, h, mob, kinds)
                 check(f"{w}: opened {n} notes", n >= 30)
-        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog"):
+        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns"):
             check(f"covered: {k} ({sorted(kinds)})" if k not in kinds else f"covered: {k}", k in kinds)
     finally:
         srv.terminate()

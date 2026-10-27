@@ -4,7 +4,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, gradehist as GH, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
+from . import db, gradehist as GH, graderpat as GP, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
 from .ui import E, card, stat, intc, pct, short, name_link, agent, author_link, ADDR_RX, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 from . import govv2 as GV2
@@ -229,7 +229,8 @@ def graders(qs):
     sub = '<p class="cov dim small">Exact, from minepoa\'s grading list. Count: seals that count toward quorum. Jury avg: minepoa\'s mean jury score. <a href="/about#grading-list">Method</a></p>' if GR.usable() and rows else ""
     return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Jury seats per close", ch)
             + card("Seals since close", st + sub, f'<a class="more" href="/api/v1/governance/graders{q}">API →</a>', id="seals") + "</div>"
-            + GH.graders_card(qs, lambda **kw: href("graders", **kw)) + V.graders_body(qs, href("graders")))
+            + GH.graders_card(qs, lambda **kw: href("graders", **kw)) + V.graders_body(qs, href("graders"))
+            + GP.section(qs, lambda **kw: href("graders", **kw)))
 
 def payout_estimate():
     """Est. per Agent for the next close: the median of the per-Agent median reward at the last 3 paid closes of the

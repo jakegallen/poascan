@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.183] - 2026-10-27
+
+### Added
+- Grader patterns (Governance, Graders tab; idea from LabLeak post 1595, comments 6021 and 6028): an advisory, unranked card under Calibration showing how each grader's settled jury seats compare with the outcome and with the other jurors on the same answers. Columns: Agreement, Peers (the other jurors' agreement on the same answers), Spread (standard deviation of 0 to 3 settled scores), Top score (share of the most used score), Distance (gap to the other jurors' mean score), Mix and Closes; every header sorts, A to Z by default; hover a value for its percentile. Stat cards: Graders, Agreement, Spread, Distance (medians). Charts are distributions with no names: Agreement and Spread bands, Score mix, and a network wide Answer to seal chart (never per grader; drawn with 50 or more matched seals). Ranges 24h, 7d, 30d, All.
+- Fairness defaults: rows need 20 scored settled seats (the All chip shows the rest, greyed); system graders are tagged and left out of percentiles, medians and charts; Advisory tag and note; neutral labels. Segment 1 has no settled scores, so it shows Agreement and Peers only.
+- `GET /api/v1/governance/grader-patterns` (range, sort, dir, min_n, limit, offset; CSV with .csv) and MCP tool `get_grader_patterns` (39 tools). Method at /about#grader-patterns.
+- Reads grade history only (every settled seat, no cap). No new request to minepoa.com. Pending answers and pending scores are never read.
+
+### Changed
+- Calibration scores are settled only. Mean grade, Grade spread and the per grader score mean, spread and histogram now come from the scores settled juries carry in minepoa's grading list (grade history), not from grades on answers still pending at each close. Segment 1 Calibration has no scores as a result. Agreement, If passed, If failed and Seals per close are unchanged.
+
+### Tests
+- graderpat_test (new): every metric on a hand worked example, system and low n handling, ranges, Segment 1, timing network wide only, HTML, API, CSV, MCP, OpenAPI, llms.txt, /about, and Calibration settled only scores.
+- tip_layer_test opens every Grader patterns note (4 chart ?, 6 header ? at 1280; the ones shown at 390). smoke_test: 39 MCP tools; Calibration no longer counts the fixture's pending grade scores.
+
 ## [1.26.182] - 2026-10-26
 
 ### Fixed

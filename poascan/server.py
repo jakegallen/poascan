@@ -312,6 +312,7 @@ GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "di
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
            "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"},
            "/api/governance/grade-history": {"addr", "sort", "dir", "limit", "offset"},
+           "/api/governance/grader-patterns": {"range", "sort", "dir", "min_n", "limit", "offset"},
            "/api/governance/settlement": {"close", "sort", "dir", "limit", "offset"}, "/api/governance/standing-changes": {"close", "sort", "dir"},
            "/api/governance/never-established": {"sort", "dir", "limit", "offset"}}
 def governance_api(path, qs):
@@ -360,6 +361,10 @@ def governance_api(path, qs):
         if a is not None and not re.fullmatch(r"poa1[1-9A-HJ-NP-Za-km-z]{20,60}", a): raise BadRequest("addr must be a poa1 address")
         so, d = sd(GH.SORTS, "seats")
         return GH.api(a, so, d, num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
+    if path == "/api/governance/grader-patterns":
+        from . import graderpat as GP
+        so, d = sd(GP.SORTS, "name")
+        return GP.api(pick("range", [k for k, _, _ in GP.RANGES], "all"), so, d, num("min_n", GP.MIN_N, 0, 1000), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
     if path in ("/api/governance/settlement", "/api/governance/standing-changes", "/api/governance/never-established"):   # gov-v2
         from . import govv2 as GV2
         cl = num("close", None, 0, 10 ** 6)
@@ -970,7 +975,9 @@ class H(BaseHTTPRequestHandler):
                 if p == "/api/health" and fmt != "csv":   # for uptime monitors; Fly checks /healthz so stale upstream data never pulls the machine
                     return self.send(200 if data["ok"] else 503, json.dumps(data, default=str), "application/json", dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
                 if fmt == "csv":
-                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue", "/api/governance/grade-history", "/api/governance/settlement", "/api/governance/standing-changes", "/api/governance/never-established", "/api/protocol") else [data])
+                    rows = data if is_list else data.get("records") if p == "/api/notices/verified" else (data.get("txs") if isinstance(data, dict) and "txs" in data else data.get("rows") if p.endswith("/assignments") or p in ("/api/agents/calibration", "/api/cohorts", "/api/reconcile", "/api/agents/at-risk", "/api/governance/at-risk", "/api/governance/directory", "/api/governance/proposals", "/api/governance/established", "/api/governance/queue", "/api/governance/grade-history", "/api/governance/grader-patterns", "/api/governance/settlement", "/api/governance/standing-changes", "/api/governance/never-established", "/api/protocol") else [data])
+                    if p == "/api/governance/grader-patterns":
+                        from . import graderpat as _GP; rows = _GP.csv_rows(rows)
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})
