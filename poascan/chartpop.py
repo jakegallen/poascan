@@ -115,7 +115,6 @@ def _thin(pts, n=MAX_PTS):
     step = len(pts) / n
     return [pts[int(i * step)] for i in range(n)] + [pts[-1]]
 
-BREAK_AT_CUT = ("agents", "holders", "joins", "active")
 
 @A.cached("chartpop", 60)
 def payload(key, rng, w):
@@ -137,9 +136,7 @@ def payload(key, rng, w):
     if SPAN[r]: pts = window(pts, now - SPAN[r])
     pts = _thin(pts)
     out["pts"] = [[t, round(float(v), 6)] for t, v in pts]
-    if key in BREAK_AT_CUT and len(pts) > 1:   # counters that restart at a segment boundary: no line across it (as the inline charts)
-        from . import segments as SG
-        out["breaks"] = [c["ts"] for c in SG.cuts() if pts[0][0] < c["ts"] <= pts[-1][0]]
+    # 1.26.175: breaks stays [] (kept for API shape): every line runs continuously across a gap or genesis cut, marked by its milestone
     if cfg["marks"] and len(pts) > 1:
         from . import milestones as MS
         x0, x1 = pts[0][0], pts[-1][0]

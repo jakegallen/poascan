@@ -553,30 +553,32 @@ def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text
         return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
 
-def spark(points, n=40, breaks=None, marks=None):
-    """Tiny trend line (no axes): the last n points, scaled to their own range. breaks: x values the line is not drawn across
-    (a counter that restarted at a genesis cut), as line() and the pop-out. marks: milestones drawn as a dashed tick with
+def spark(points, n=40, marks=None):
+    """Tiny trend line (no axes): the last n points, scaled to their own range, one continuous line (1.26.175: a straight
+    segment between real points across a gap or genesis cut, never a break). marks: milestones drawn as a dashed tick with
     its terse label ([{ts, label}], milestones.events for a spark id), only those inside the line's span."""
     pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
     if len(pts) < 2: return ""
     if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
     t0, t1 = pts[0][0], pts[-1][0]; lo = min(v for _, v in pts); hi = max(v for _, v in pts)
     xs = lambda t: 100 * (t - t0) / ((t1 - t0) or 1); ys = lambda v: 22 - 20 * (v - lo) / ((hi - lo) or 1)
-    bk = sorted(breaks or []); runs = [[]]
-    for i, (t, v) in enumerate(pts):
-        if i and any(pts[i - 1][0] < k <= t for k in bk): runs.append([])
-        runs[-1].append((t, v))
+    runs = [pts]
     pl = "".join(f'<polyline points="{" ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in r)}" vector-effect="non-scaling-stroke"/>' for r in runs if r)
     mk = [(xs(m["ts"]), m) for m in (marks or []) if t0 <= m["ts"] <= t1]
     if not mk: return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}</svg>'
     tk = "".join(f'<line class="spkt" x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="24" vector-effect="non-scaling-stroke"/>' for x, _ in mk)
-    lb = "".join(f'<span class="spkl{" r" if x > 50 else ""}" style="{"right" if x > 50 else "left"}:{(100 - x if x > 50 else x):.1f}%" '
-                 f'title="{E(utc_text(m["ts"]) + " " + m["label"])}">{E(m["label"])}</span>' for x, m in mk)
+    shown = []   # 1.26.175: labels from the newest back; one closer than 40% to a shown label keeps its tick and a hover target only
+    for x, m in sorted(mk, key=lambda p: -p[0]):
+        if all(abs(x - y) >= 40 for y, _ in shown): shown.append((x, m))
+    ttl = lambda m: E(utc_text(m["ts"]) + " " + m["label"])
+    lb = "".join((f'<span class="spkl{" r" if x > 50 else ""}" style="{"right" if x > 50 else "left"}:{(100 - x if x > 50 else x):.1f}%" '
+                  f'title="{ttl(m)}">{E(m["label"])}</span>') if any(m is q for _, q in shown) else
+                 f'<span class="spkd" style="left:{x:.1f}%" title="{ttl(m)}" aria-label="{ttl(m)}"></span>' for x, m in mk)
     return (f'<div class="spkw"><svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}{tk}</svg>{lb}</div>')
 
-def spark_in(stat_html, points, breaks=None, marks=None):
+def spark_in(stat_html, points, marks=None):
     """Put a sparkline under a stat card's value (marks: milestone ticks, see spark)."""
-    sv = spark(points, breaks=breaks, marks=marks)
+    sv = spark(points, marks=marks)
     return stat_html[:-len("</div>")] + sv + "</div>" if sv and stat_html.endswith("</div>") else stat_html
 
 ICON_EXPAND = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -722,9 +724,9 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     if legend: lg = '<div class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
     return _plot("".join(out), ylab + "".join(xl), height, yg=yg) + lg
 
-def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, breaks=None, xk="dt"):
+def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, xk="dt"):
     """marks: [(x, label)] or [(x, label, url, title)] milestone markers. proj_from: x after which the line is drawn dashed (projection).
-    breaks: x values the line is not drawn across (a counter that restarted at a genesis cut). One series, always gold."""
+    One series, always gold, one continuous line (1.26.175: straight segments between real points, never a break)."""
     pts = [(x, y) for x, y in points if y is not None]
     if len(pts) < 2: return chart_skel(640, height)
     x0, x1 = pts[0][0], pts[-1][0]; ymin = min(y for _, y in pts) if y0 is None else y0; y1 = max(y for _, y in pts)
@@ -734,9 +736,7 @@ def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, p
         a = [p for p in pts if p[0] <= proj_from]; b = [p for p in pts if p[0] >= proj_from]
         if a and b and a[-1] != b[0]: b = [a[-1]] + b
     else: a, b = pts, []
-    bk = sorted(breaks or [])
-    gap = lambda a, b: any(a < k <= b for k in bk)
-    path = lambda ps: " ".join(f"{'M' if i == 0 or gap(ps[i - 1][0], x) else 'L'}{_f(X(x))},{_f(Y(y))}" for i, (x, y) in enumerate(ps))
+    path = lambda ps: " ".join(f"{'M' if i == 0 else 'L'}{_f(X(x))},{_f(Y(y))}" for i, (x, y) in enumerate(ps))
     g, ylab, yg = _grid(ymin, y1, fmt)
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
     # x ends and tips carry their time (data-lts, data-ts): app.js shows them in the reader's zone; xk "d" for day-scale charts

@@ -71,7 +71,7 @@ check("no upstream call in the series code", not any(w in fn for w in ("urlopen"
 p = CP.payload("active", "all", 800)
 check("pop-out: Active Agents, whole numbers from zero, all four ranges", p["title"] == "Active Agents" and p["fmt"] == "int" and p["y0"] and p["ranges"] == ["24h", "7d", "30d", "all"])
 check("pop-out: the same points as the Home sparkline", [x[0] for x in p["pts"]] == [int(t) for t, _ in ser])
-check(f"pop-out: the line breaks at the genesis cut ({p['breaks']})", p["breaks"] == [cut])
+check(f"pop-out: no break at the genesis cut, its milestone instead ({p['breaks']})", p["breaks"] == [] and any(m[1] == "Genesis cut" for m in p["marks"]))
 ev = [e["key"] for e in MS.events("active")]
 check(f"milestones: the cut and mining pauses and reopenings only ({ev})", "genesis_cut" in ev and "s2_mining_reopened" in ev and "allclear" in ev and "begins" in ev
       and not any(k in ev for k in ("s2_first_join", "grading_reopened", "ended")))

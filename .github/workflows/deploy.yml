@@ -193,8 +193,10 @@ jobs:
         run: python tools/established_engine_test.py
       - name: Protocol timeline (seeded release and baseline hashes, hourly conditional GET of both client files, HEAD plus a 6 h full GET without a validator, source_change matched to signed releases, Stale after 3 h, /api/protocol JSON and CSV, allowlist)
         run: python tools/protocol_test.py
-      - name: Active Agents chart (rolling 24 h distinct answerers per segment from the tx archive, break at each cut, mining milestones, the pop-out ? definition, Home opener)
+      - name: Active Agents chart (rolling 6 h distinct answerers per segment from the tx archive, no break at a cut, mining milestones, the pop-out ? definition, Home opener)
         run: python tools/active_series_test.py
+      - name: No chart gaps (every line runs across a genesis cut or missing data as straight segments between real points; the cut is a milestone, sparklines included; no breaks sent)
+        run: python tools/nogap_test.py
       - name: Swap write check (keyless, unsigned, empty swap-offer probe; open, paused and down; backoff; swaps status writes and health feed)
         run: python tools/swap_writes_test.py
       - name: Apt from archive.ubuntu.com with retries and a 20 s timeout (the Azure mirror stalled 1.26.159's WebKit deps past the job timeout twice)

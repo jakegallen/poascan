@@ -198,7 +198,6 @@ def charts_body(rng=""):
     mk = lambda key, pts: MS.group([e for e in MS.events(key) if e["ts"] >= t0], pts[0][0], pts[-1][0]) if len(pts) > 1 else []
     am = [(t, l) for t, l, k in g["ms"] if k == "agents" and t >= t0] + mk("agents", cut(g["agents"]))   # Agent count thresholds, then joining milestones
     em = mk("holders", cut(g["holders"]))
-    c = _SG.cut(); brk = [c["ts"]] if c else []   # agents_joined and holders restarted at the genesis cut: no line or delta across it
     n24 = A.joins_between(now - DAY, now)   # joins summed within each segment: the cut is neither a drop nor a rise
     tday = g["day"][-1]["n"] if g["day"] else None
     pe = g["per_ep"]; closes = {_SG.gkey(r["epoch"], n): r["close_ts"] for n in _SG.NUMBERS for r in _ep_rows(n)}
@@ -207,8 +206,8 @@ def charts_body(rng=""):
                   stat("Today (UTC)", intc(tday), tip="Txs indexed since 00:00 UTC"),
                   stat("Answerers", intc(pe[-2][1] if len(pe) > 1 else (pe[-1][1] if pe else None)), tip="Agents who answered in the last closed epoch")])
     H = 140
-    ac = line(cut(g["agents"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am, breaks=brk)
-    hc = line(cut(g["holders"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em, breaks=brk)
+    ac = line(cut(g["agents"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=am)
+    hc = line(cut(g["holders"]), height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, marks=em)
     up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])   # up: every event, for the Milestones table
     um = mk("supply", sp)
     sc = line(sp, height=H, color="gold", fmt=compact, xfmt=xf, y0=0, marks=um)

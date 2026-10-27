@@ -1,6 +1,6 @@
 {
- "about": "Chart milestones (milestones.py). One entry per event: key, ts (UTC seconds), label (plain, the chart marker text), url (post:<id> for a LabLeak post, tx:<txid> for an on-ledger tx, or null), source (where the time was verified), chart_labels (optional: the marker text on a given chart, when that chart shows a different side of the event), charts (where the marker is drawn: chart ids or group names below; [] lists it in the Milestones table only). spark_ids are sparklines that draw a milestone tick only when an event names them (home-agents: the Home Total Agents sparkline; never in a group). Genesis cuts come from segments.json and use cut_charts. Live events (milestones.observe) use live_charts by key, else route_charts for route:<id>, else none. Times verified 2026-10-24 against the forum mirror, /api/notices, on-ledger txs and POAScan's tx index.",
- "spark_ids": ["home-agents"],
+ "about": "Chart milestones (milestones.py). One entry per event: key, ts (UTC seconds), label (plain, the chart marker text), url (post:<id> for a LabLeak post, tx:<txid> for an on-ledger tx, or null), source (where the time was verified), chart_labels (optional: the marker text on a given chart, when that chart shows a different side of the event), charts (where the marker is drawn: chart ids or group names below; [] lists it in the Milestones table only). spark_ids are sparklines that draw a milestone tick only when an event names them (home-agents, home-active, home-holders: the Home Agents, Active Agents and Holders sparklines; never in a group; since 1.26.175 the genesis cut ticks them in place of a break). Genesis cuts come from segments.json and use cut_charts. Live events (milestones.observe) use live_charts by key, else route_charts for route:<id>, else none. Times verified 2026-10-24 against the forum mirror, /api/notices, on-ledger txs and POAScan's tx index.",
+ "spark_ids": ["home-agents", "home-active", "home-holders"],
  "chart_ids": ["mined", "supply", "circ", "agents", "joins", "active", "holders", "txs", "gov-est", "gov-paid", "gov-queue", "gov-cover"],
  "groups": {
   "chain": ["mined", "supply", "circ", "agents", "joins", "active", "holders", "txs", "gov-est", "gov-paid", "gov-queue", "gov-cover"],
@@ -8,7 +8,7 @@
   "grading": ["gov-est", "gov-paid", "gov-queue", "gov-cover"],
   "joining": ["agents", "joins"]
  },
- "cut_charts": ["chain"],
+ "cut_charts": ["chain", "home-agents", "home-active", "home-holders"],
  "route_charts": [],
  "live_charts": {"grading_reopened": ["grading"], "ended": ["mined", "supply", "circ", "txs"], "mining_reopened": ["mining", "joining"], "notice_cleared": []},
  "events": [

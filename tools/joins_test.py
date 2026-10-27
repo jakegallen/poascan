@@ -80,8 +80,8 @@ js = A.joins_series(s1 + s2b, now=now2 + 1, floor=C + 600, join_ts=jt)
 check("a cut inside an hour: that hour has no point (the line breaks there), the next whole hour starts the segment",
       not any(t == C for t, _ in js) and min(t for t, _ in js if t > C) == C + H and max(t for t, _ in js if t < C) == C - H)
 from poascan import ui as U
-sv = U.spark([(t, v) for t, v in hj], breaks=[C])
-check("sparkline breaks at the cut: two polylines", sv.count("<polyline") == 2 and U.spark([(t, v) for t, v in hj]).count("<polyline") == 1)
+sv = U.spark([(t, v) for t, v in hj])
+check("sparkline runs across the cut: one polyline (1.26.175)", sv.count("<polyline") == 1)
 
 # ---------------- DB read ----------------
 now = int(time.time())

@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.175] - 2026-10-26
+
+### Changed
+- Charts no longer break. Every line (Home sparklines, the chart pop-out in all ranges, Network and Governance charts) runs continuously across a genesis cut or a stretch with no data, drawn as a straight segment between the real points on either side; no point is made up. Agents, Holders, Agents / hr and Active Agents used to stop at the cut.
+- The genesis cut stays a milestone on the charts whose data it affects, and now ticks the Home Agents, Active Agents and Holders sparklines in place of the old break. When two sparkline milestones sit close together, the newest keeps its label and the other keeps its tick with the time and name on hover.
+- The pop-out payload still carries `breaks`, always empty.
+
+### Tests
+- tools/nogap_test.py (new, in CI): no break in any pop-out key and range, one path across a cut and a 9 h hole, one sparkline polyline through every real point, the cut milestone on the affected charts and sparklines. tools/milestones_test.py, segments_test.py, segconfig_test.py, active_series_test.py and joins_test.py follow.
+
 ## [1.26.174] - 2026-10-26
 
 ### Changed

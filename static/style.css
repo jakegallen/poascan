@@ -1064,7 +1064,7 @@ td a.mono{display:inline-block;min-width:24px}
 .kpis .sv .unit{display:none}
 .kpis .sv.fit>.usd{font-size:var(--t13)}
 .kpis .stat .spk{height:28px;margin-top:14px}
-.stat .spkw{position:relative}
+.stat .spkw{position:relative}.spkd{position:absolute;top:0;width:10px;height:24px;margin-left:-5px;cursor:default}   /* 1.26.175: an unlabelled sparkline tick keeps a hover target */
 .stat .spk .spkt{stroke:var(--gold-edge);stroke-width:1;stroke-dasharray:3 3}
 .stat .spkl{position:absolute;bottom:100%;margin-bottom:2px;font:400 var(--t12)/1 var(--mono);color:var(--bone-3);white-space:nowrap;pointer-events:auto}
 .kpis .stat::after{width:min(112px,42%);right:14px;bottom:12px;--wm-o:.1}

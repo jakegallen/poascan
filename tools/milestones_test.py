@@ -101,7 +101,14 @@ check("Signup surge only on Agents and Agents / hr (no Holders, mined, circulati
       [k for k, v in rel.items() if "s2_signup_surge" in v] == ["agents", "joins"])
 check("Signup surge is the first join of the Oct 25 burst (tx 0628afd6, 7:17:28 PM PT)",
       {e["key"]: e for e in MS.events()}["s2_signup_surge"]["url"] == "/tx/0628afd6289cc8b8f2fdbca3355e144306d784f68898f7f405ea5ca588ec7e74")
-check("Home Total Agents sparkline (spark id home-agents) carries only Signup surge", MS.SPARK_IDS == ("home-agents",) and [e["key"] for e in MS.events("home-agents")] == ["s2_signup_surge"])
+check("Home sparklines: Agents carries the genesis cut and Signup surge; Active Agents and Holders the genesis cut only (1.26.175, in place of a break)",
+      MS.SPARK_IDS == ("home-agents", "home-active", "home-holders") and [e["key"] for e in MS.events("home-agents")] == ["genesis_cut", "s2_signup_surge"]
+      and [e["key"] for e in MS.events("home-active")] == ["genesis_cut"] and [e["key"] for e in MS.events("home-holders")] == ["genesis_cut"]
+      and not any("home-" + k in MS.charts_of("genesis_cut") for k in ("mined", "circ")))
+_m2 = [dict(ts=1000 + 60 * 3600, label="Genesis cut"), dict(ts=1000 + 88 * 3600, label="Signup surge")]
+_sv = UI.spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2) if "UI" in dir() else __import__("poascan.ui", fromlist=["x"]).spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2)
+check("sparkline: two marks closer than 40% show the newest label; the older keeps its tick and a hover target", _sv.count('class="spkl') == 1 and "Signup surge</span>" in _sv
+      and _sv.count('class="spkd"') == 1 and "Genesis cut" in _sv and _sv.count('class="spkt"') == 2)
 check("spark ids are not in any chart group (no group event lands on a sparkline)", not any(x in v for v in MS.GROUPS.values() for x in MS.SPARK_IDS))
 from poascan import ui as UI
 _sp = [(1792981048 - 7200 + i * 900, 5000 + i) for i in range(16)]

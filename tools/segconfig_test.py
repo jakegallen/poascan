@@ -156,7 +156,7 @@ b2 = V.address_balance("poa1y", dict(balance="9.000000"), {CUT} + 900, None)
 db.write("INSERT INTO accounts(addr, balance, balance_s, first_seen, last_seen) VALUES(?,?,?,?,?)", ("poa1z", 7.0, "7.000000", 1, {CUT} - 100))
 b3 = V.address_balance("poa1z", None, None, None); b3["label"] = V.bal_asof(b3); b1["label"] = V.bal_asof(b1)
 with S.use(1): rs = {{r["epoch"]: r["rewards_state"] for r in A.epoch_rows()}}
-print(json.dumps(dict(co=co, html=html, b1=b1, b2=b2, b3=b3, rs=[rs.get(11), rs.get(12), rs.get(13), rs.get(14)], g12=S.unconfirmed_g(12), brk=CP.BREAK_AT_CUT)))
+print(json.dumps(dict(co=co, html=html, b1=b1, b2=b2, b3=b3, rs=[rs.get(11), rs.get(12), rs.get(13), rs.get(14)], g12=S.unconfirmed_g(12), brk=getattr(CP, "BREAK_AT_CUT", None))))
 """)
 check("tags: run", out is not None)
 if out:
@@ -167,9 +167,9 @@ if out:
     check("balance: agent row last seen before the boundary is stale, labelled with its segment", out["b3"]["stale"] is True and out["b3"]["segment"] == 1 and out["b3"]["label"] == "As of Segment 1")
     check("balance: page label As of checkpoint", out["b1"]["label"] == f"As of checkpoint {h}")
     check("rewards: S1 E12 and E14 unconfirmed, E11 and E13 recorded", out["rs"] == ["recorded", "unconfirmed", "recorded", "unconfirmed"] and out["g12"] is True)
-    check("pop-out: Agents, Holders, Agents / hr and Active Agents break at a boundary", sorted(out["brk"]) == ["active", "agents", "holders", "joins"])
+    check("pop-out: no chart breaks at a boundary (1.26.175)", out["brk"] is None)
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check("pop-out: app.js draws one subpath per run between breaks", "d.breaks" in js and "runs.push([])" in js)
+check("pop-out: app.js draws one continuous line, never reading breaks", "d.breaks" not in js and "runs.push([])" not in js and "runs=[P]" in js)
 
 print("all segment config checks passed" if not fails else f"{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

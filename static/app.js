@@ -657,9 +657,8 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
    var lb=d.bars[n-1];now.textContent=d.legend.length?"":fv(lb[2][0]);
    lg.hidden=!d.legend.length;lg.innerHTML=d.legend.map(function(l,m){return '<span><i style="background:'+cols[m%cols.length]+'"></i>'+esc2(l)+'</span>'}).join("")}
   else{var P=d.pts,t0=P[0][0],t1=P[P.length-1][0],X=function(t){return pl+(Wd-pl-pr)*(t-t0)/((t1-t0)||1)},long=t1-t0>36*3600,
-    BK=d.breaks||[],gap=function(a,b){return BK.some(function(k){return a<k&&k<=b})},runs=[[]];
-   P.forEach(function(p,j){if(j&&gap(P[j-1][0],p[0]))runs.push([]);runs[runs.length-1].push(p)});
-   /* a counter that restarted at a segment boundary: one subpath per run, never a line across the break */
+    runs=[P];
+   /* 1.26.175: one continuous line, a straight segment between real points across any gap or genesis cut (never a break) */
    var pa=runs.map(function(r){return r.map(function(p,j){return (j?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)}).join("")}).join("");
    runs.forEach(function(r){if(r.length<2)return;var rp=r.map(function(p,j){return (j?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)}).join("");
     o.push('<path d="'+rp+"L"+X(r[r.length-1][0]).toFixed(1)+","+(H-pb)+"L"+X(r[0][0]).toFixed(1)+","+(H-pb)+'Z" fill="url(#cpg)"/>')});

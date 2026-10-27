@@ -110,8 +110,8 @@ ep_row = [r for r in rows if isinstance(r, dict) and r.get("key") == "epochs"]
 check("reconcile Closes: 2 in segment 2 against epochs_closed 2", bool(ep_row) and ep_row[0]["poascan"] == 2 and ep_row[0]["node"] == 2 and ep_row[0]["state"] == "match")
 
 from poascan import ui as U
-svg = U.line([(CUT - 7200, 5300), (CUT - 3600, 5341), (CUT + 600, 4941), (CUT + 1800, 4950)], breaks=[CUT])
-check("chart line is not drawn across the cut (agents_joined restarted)", svg.count(" M") + svg.count('"M') >= 2 and U.line([(1, 1), (2, 2), (3, 3)]).count("M") == 1)
+svg = U.line([(CUT - 7200, 5300), (CUT - 3600, 5341), (CUT + 600, 4941), (CUT + 1800, 4950)])
+check("chart line runs across the cut in one path (1.26.175, no break)", svg.count(" M") + svg.count('"M') == 1 and U.line([(1, 1), (2, 2), (3, 3)]).count("M") == 1)
 pts = [(CUT - 3600 * 5, 5000), (CUT - 600, 5341), (CUT + 600, 4941), (CUT + 3000, 4960)]
 db.write("DELETE FROM snaps WHERE kind='status'")
 for t, a in pts: db.write("INSERT INTO snaps(kind, ts, json) VALUES('status', ?, ?)", (t, json.dumps({"agents_joined": a})))

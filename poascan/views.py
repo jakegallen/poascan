@@ -258,12 +258,11 @@ def home():
     h = headline(); ep = A.epoch_rows(); sp = home_sparks()
     why = hero_stale(); asof = A._ts(A.status().get("as_of")) or ""
     if why: h = dict(h, **{k: _hero_flag(h[k], why) for k in HERO_KEYS if k in h})
-    bk = A.cut_list()   # Agents and Holders restart at a genesis cut: their sparklines break there, as the charts do
     from . import milestones as MS   # Home Total Agents sparkline: only milestones that name it (milestones.json spark_ids)
-    smk = {"accounts": MS.events("home-agents")}
-    kpis = "".join(pop(spark_in(h[k], sp.get(sk), bk if sk in ("accounts", "active") else None, smk.get(sk)), ck)
+    smk = {"accounts": MS.events("home-agents"), "active": MS.events("home-active"), "holders": MS.events("home-holders")}   # 1.26.175: the genesis cut ticks the sparklines it affects, no break
+    kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("active", "active", "active")))
-    more = pop(spark_in(h["holders"], sp.get("holders"), bk), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
+    more = pop(spark_in(h["holders"], sp.get("holders"), smk["holders"]), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>{upgrade_strip()}
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
