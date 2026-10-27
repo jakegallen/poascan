@@ -193,6 +193,8 @@ jobs:
         run: python tools/grading_score_test.py
       - name: Established per minepoa's engine (genesis import plus established_after minus established_removed; no trusted, system or seat additions; L -1 drops at E6; At risk, API, Score)
         run: python tools/established_engine_test.py
+      - name: Parsed blob caches see every write (two close-record copies in one second; the established_engine_test flake)
+        run: python tools/blob_gen_test.py
       - name: Protocol timeline (seeded release and baseline hashes, hourly conditional GET of both client files, HEAD plus a 6 h full GET without a validator, source_change matched to signed releases, Stale after 3 h, /api/protocol JSON and CSV, allowlist)
         run: python tools/protocol_test.py
       - name: Active Agents chart (rolling 6 h distinct answerers per segment from the tx archive, no break at a cut, mining milestones, the pop-out ? definition, Home opener)

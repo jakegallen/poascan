@@ -69,7 +69,7 @@ def epochs_raw():
     Each is parsed only when the indexer stores a new copy."""
     kind = S.blob_kind(); c = _epochs.setdefault(kind, {"ts": None, "v": []})
     r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
-    ts = r["ts"] if r else None
+    ts = (r["ts"], db.blob_gen(kind)) if r else None   # 1.26.180: ts is whole seconds; a second write in the same second bumps gen
     if ts != c["ts"]:
         c["v"] = []; c["ts"] = None          # drop the old copy before parsing the new one
         c["v"] = db.get_blob(kind)[0] or []; c["ts"] = ts

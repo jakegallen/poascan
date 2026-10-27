@@ -167,10 +167,11 @@ def current():
     if "v" in _cur and now - _cur.get("chk", 0) < 5: return _cur["v"]   # one cheap check per 5 s, not per table row
     r = db.q1("SELECT ts FROM blobs WHERE kind=?", (BLOB,))
     if not r: return None
-    if _cur.get("ts") == r["ts"]: _cur["chk"] = now; return _cur["v"]
+    sig = (r["ts"], db.blob_gen(BLOB))   # 1.26.180: ts is whole seconds; the generation tells two writes in one second apart
+    if _cur.get("ts") == sig: _cur["chk"] = now; return _cur["v"]
     v = db.get_blob(BLOB)[0]
     if not valid(v): return None
-    _cur.clear(); _cur.update(ts=r["ts"], v=v, idx=None, chk=now, queue=None, graders=None, qix=None)
+    _cur.clear(); _cur.update(ts=sig, v=v, idx=None, chk=now, queue=None, graders=None, qix=None)
     return v
 
 def fetched_at():

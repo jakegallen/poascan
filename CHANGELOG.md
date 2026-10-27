@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.180] - 2026-10-26
+
+### Fixed
+- Close records could be served one copy late. The parsed copy was keyed on the blob's write time, which is whole seconds, so a second write in the same second (or a regroup that keeps a segment blob's time) left the old close records in place. Parsed close records and the grading list now key on the write time plus a per-write generation. This was the cause of the occasional established_engine_test failure ("estab_ttl read from params"): two seeds in one second left five closes where the test had stored four, so the open epoch read E5.
+
+### Tests
+- blob_gen_test writes two copies in one frozen second and checks both readers see the second.
+
 ## [1.26.179] - 2026-10-26
 
 ### Fixed

@@ -194,6 +194,7 @@ def _regroup_closes(c, S):
         c.execute("BEGIN IMMEDIATE")
         for q, a in ops: c.execute(q, a)
         c.commit()
+        for _q, a in ops: _bump(a[0] if len(a) == 3 else "epochs")
 
 def _clean(a):
     """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""
@@ -230,8 +231,14 @@ def q1(sql, args=()):
     r = conn().execute(sql, args).fetchone()
     return dict(r) if r else None
 
+# 1.26.180: blobs.ts is whole seconds, and _regroup_closes keeps a segment blob's old ts, so ts alone cannot tell two copies
+# apart. Every blob write in this process bumps its kind's generation; readers that cache a parsed blob key on (ts, gen).
+_blob_gen = {}
+def blob_gen(kind): return _blob_gen.get(kind, 0)
+def _bump(kind): _blob_gen[kind] = _blob_gen.get(kind, 0) + 1
+
 def put_blob(kind, obj):
-    write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, int(time.time()), json.dumps(obj)))
+    write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, int(time.time()), json.dumps(obj))); _bump(kind)
 
 def get_blob(kind):
     r = q1("SELECT ts, json FROM blobs WHERE kind=?", (kind,))
