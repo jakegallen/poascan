@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.214] - 2026-10-28
+
+### Added
+- Records card on the address page Timeline tab: the Agent's bests in the current segment (total rewards and rank among paid Agents, paid closes, longest paid run, best close reward, most grading seats served at one close, most answers and grade seals in one UTC day). Also in `/api/v1/address/<a>/timeline` and MCP `get_agent_timeline` as `records`.
+
 ## [1.26.213] - 2026-10-28
 
 ### Added
