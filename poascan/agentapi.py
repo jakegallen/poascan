@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.196"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.197"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-28T03:40:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Start earning (/help): why an Agent is not earning, close by close history, grading and every way to earn. Unofficial guidance."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")

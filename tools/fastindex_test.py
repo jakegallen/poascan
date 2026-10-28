@@ -146,7 +146,9 @@ def main():
     code, body = None, None
     j, lst = SV.api("/api/seals/" + ANS, {})
     check("/api/v1/seals/<answer> returns the count only", j["seals"] == want and set(j) >= {"answer", "seals", "complete", "counted_through_ts"} and "blob" not in json.dumps(j))
-    html = V.tx(ANS); html = html[1] if isinstance(html, tuple) else html
+    from poascan import receipts as RC
+    gr = {r["from_addr"] for j, r in enumerate(SEALS) if j % 3}
+    check(f"the Receipt's Seals counts distinct graders from the links ({RC.index()['seals'].get(ANS)} == {len(gr)})", RC.index()["seals"].get(ANS) == len(gr))
     r = AG.call_tool("get_answer_seals", {"txid": ANS}) if hasattr(AG, "call_tool") else AG.TOOL_FN["get_answer_seals"]({"txid": ANS})
     check("MCP get_answer_seals", (r.get("seals") if isinstance(r, dict) else None) == want)
     db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final, segment) VALUES(?,?,?,?,1,2)", (H("b", 7), "grade-sealed", A1, NOW - 8000))
@@ -224,7 +226,7 @@ def main():
     check("OpenAPI: anchors timeline, seals, resolve", all(p in spec["paths"] for p in ("/api/v1/anchors/timeline", "/api/v1/seals/{txid}", "/api/v1/resolve")))
     check("llms.txt names the anchor timeline, seals and the fast index", all(x in llms for x in ("anchors/timeline", "/seals/", "Fast index")))
     ab = V.about(); ab = ab[1] if isinstance(ab, tuple) else ab
-    check("/about#anchors and #fast-index", 'id="anchors"' in ab and 'id="fast-index"' in ab)
+    check("/about#anchors and #fast-index", 'id="anchors"' in ab and 'id="fast-index"' in ab and "Receipt\\'s Seals" not in ab and "Receipt's Seals" in ab)
     check("MCP tools listed", {"get_anchor_timeline", "get_answer_seals"} <= set(AG.TOOL_FN))
 
     # ---- privacy: no build host in public code or docs

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.197] - 2026-10-27
+
+### Changed
+- The seal count on an answer now lives in its Receipt: Seals adds the links read from the fast index to archived seal txs (distinct graders, at least (≥) until exact), instead of a separate Seals row on the tx card. `/api/v1/seals/<txid>` and MCP `get_answer_seals` are unchanged.
+
 ## [1.26.196] - 2026-10-27
 
 ### Added

@@ -26,6 +26,10 @@ def index():
     for r in db.q("SELECT json_extract(json, '$.body.assignment') AS a, json_extract(json, '$.from_addr') AS f FROM tx_detail "
                   "WHERE json_extract(json, '$.type') = 'grade-sealed'"):
         if r["a"] and r["f"]: seals.setdefault(r["a"], set()).add(r["f"])
+    try:   # seal links read from the fast index (fastindex.bodies): same (answer, grader) pairs, one per seal tx
+        for r in db.q("SELECT s.answer AS a, t.from_addr AS f FROM seal_links s JOIN txs t ON t.id = s.seal"):
+            if r["a"] and r["f"]: seals.setdefault(r["a"], set()).add(r["f"])
+    except Exception: pass   # table not created yet (fast index off)
     closes = [int(e.get("epoch", 0)) for e in ep]
     return dict(rec=out, credited=credited, elig=elig, chal=chal, seals={k: len(v) for k, v in seals.items()}, last=closes[-1] if closes else None)
 
