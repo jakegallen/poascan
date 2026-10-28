@@ -443,7 +443,8 @@ def established(qs):
     links = (f'<a class="more" href="/api/v1/governance/established.csv{q}" download>CSV →</a>'
              f'<a class="more" href="/api/v1/governance/established{q}">API →</a>')
     foot = f'<p class="cov dim small">Reference E{data["open_epoch"]} · <a href="{href("rules")}#earn">Rules</a></p>' if data["open_epoch"] is not None else ""
-    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div>' + tb + foot, links, cls="histc", id="established")
+    from . import carry as CY   # 1.26.209: genesis cut carry, per address, from records only
+    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div>' + tb + foot, links, cls="histc", id="established") + ("" if SG.archived() else CY.card_html(qs, href))
 
 def charts(qs):
     rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
