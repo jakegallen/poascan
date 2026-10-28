@@ -442,6 +442,7 @@ GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "di
            "/api/governance/grader-patterns": {"range", "sort", "dir", "min_n", "limit", "offset"},
            "/api/governance/pending-horizon": {"sort", "dir"},
            "/api/governance/board": set(),
+           "/api/highlights": set(),
            "/api/governance/intake": {"close", "state", "sort", "dir", "limit", "offset"},
            "/api/governance/settlement": {"close", "sort", "dir", "limit", "offset"}, "/api/governance/standing-changes": {"close", "sort", "dir"},
            "/api/governance/never-established": {"sort", "dir", "limit", "offset"}}
@@ -504,6 +505,9 @@ def governance_api(path, qs):
             return IK.api(None, "", so, d, limit=num("limit", 1000, 1, 5000), offset=num("offset", 0, 0, 10 ** 6))
         so, d = sd(IK.ASORTS, "draw")
         return IK.api(cl, st, asort=so, adir=d, limit=num("limit", 1000, 1, 5000), offset=num("offset", 0, 0, 10 ** 6))
+    if path == "/api/highlights":   # 1.26.207: records and firsts
+        from . import highlights as HL
+        return HL.api()
     if path == "/api/governance/board":   # 1.26.206: queue board, counts only
         from . import board as BD
         return BD.api()

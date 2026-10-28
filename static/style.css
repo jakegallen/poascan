@@ -1628,3 +1628,7 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .egates .ecd{grid-row:auto;flex:none;width:8px;height:8px}
 .egates .ecd.ok,.egc.ok h3 .ecd{background:var(--green)}.egates .ecd.warn,.egc.warn h3 .ecd{background:var(--gold)}.egates .ecd.bad,.egc.bad h3 .ecd{background:var(--ember)}
 .egates .ecd.na,.egc.na h3 .ecd{background:transparent;border:1px solid var(--line2)}
+/* 1.26.207 records */
+.hlt th[scope=row]{font-weight:500;white-space:normal;min-width:180px}.hlt td{vertical-align:top;min-width:150px}
+.hlt td .hv0{display:block}.hlt td .ag{max-width:100%}.hl-at{display:block}
+.hlf{list-style:none;margin:0;padding:0;display:grid;gap:10px}.hlf li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}.hlf li .lbl{flex:1 0 100%}
