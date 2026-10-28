@@ -18,6 +18,7 @@ from . import governance as GV, gradingview as GVW
 from . import offer as OF
 from . import kin as KN
 from . import segments as SG
+from . import htmlcache as HC
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -78,7 +79,7 @@ def api(path, qs):
         from . import hosted as _HO, routewatch as _RW
         return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
                     txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), started=STARTED, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
-                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state()), False
+                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state(), page_cache=HC.state()), False
     if path == "/api/routes":   # 1.26.188: route halts from POAScan's existing probes (routewatch.py)
         from . import routewatch as _RW
         return _RW.public(), False
@@ -1160,7 +1161,7 @@ class H(BaseHTTPRequestHandler):
                 b = self.prep(json.dumps(data, default=str), "application/json")
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
-            html = page(path, qs)
+            html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs), lambda: page(path, qs))   # 1.26.202: rendered page cache
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))
@@ -1218,6 +1219,11 @@ class Server(ThreadingHTTPServer):
             self.detached.discard(request); return
         super().shutdown_request(request)
 
+def _warm_render(p, qs):
+    """htmlcache's background render: the current segment, a plain (non crawler) view, no client budget."""
+    SG.reset(); V.REQ.path, V.REQ.qs = p, qs; I.CLIENT.crawler = False; I.CLIENT.ip = "warm"
+    return page(p, qs)
+
 def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
@@ -1238,6 +1244,8 @@ def main():
     if os.environ.get("POASCAN_INDEXER", "1") == "1":
         I.start(os.environ.get("POASCAN_SEED_DIR"))
         if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
+        if HC.ENABLED:   # 1.26.202: heavy pages re-rendered in the background before their cached copy expires
+            __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))
     HUB.start()
     srv = Server((host, port), H)

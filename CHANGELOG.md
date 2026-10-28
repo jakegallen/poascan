@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.202] - 2026-10-28
+
+### Changed
+- Pages are served from a short lived rendered copy: 15 s for most pages, 30 s for address and tx pages, 60 s for Network Health and Governance, 5 min for About, the API page and Census. Live parts still update over the WebSocket.
+- Network Health, Governance, Chain, Agents and Top Agents are re-rendered in the background before their copy expires, so no visitor waits on a cold render.
+- An Agent's minepoa.com read stays fresh for 5 min instead of 1, shown while it revalidates as before. This cuts address lookups upstream.
+
+### Added
+- `/api/v1/health` reports `page_cache` (entries, bytes, hits, misses).
+
 ## [1.26.201] - 2026-10-28
 
 ### Changed

@@ -39,7 +39,7 @@ T10 = "poa1" + "T" * 40; ODD = "poa1" + "Q" * 40
 # ---------------- limits unchanged ----------------
 check("on-demand read limits unchanged (addr 0.05/s burst 10, 300 s per address, global 0.25/s, client 0.2/s, 3 in flight)",
       (I.ADDR_RATE, I.ADDR_BURST, I.ADDR_MIN_S, I.GLOBAL_RATE, I.CLIENT_RATE, I.ONDEMAND_MAX) == (0.05, 10, 300, 0.25, 0.2, 3))
-check("cache windows: fresh 60 s, shown while revalidating up to 30 min", (V.ADDR_TTL, V.ADDR_STALE) == (60, 1800))
+check("cache windows: fresh 300 s, shown while revalidating up to 30 min", (V.ADDR_TTL, V.ADDR_STALE) == (300, 1800))
 
 # ---------------- fix 1: balance freshness ----------------
 now = int(time.time())

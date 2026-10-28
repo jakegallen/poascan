@@ -143,7 +143,7 @@ V._addr_cache.pop(AX, None); I._recent.clear()
 d, err, at = V.address_read(AX)
 check("real address read is cached", d and d["balance"] == "42.000000" and AX in V._addr_cache)
 read_at = V._addr_cache[AX][2]
-with V._addr_lock: V._addr_cache[AX] = (time.time() - 120, V._addr_cache[AX][1], read_at)   # older than ADDR_TTL: next view revalidates
+with V._addr_lock: V._addr_cache[AX] = (time.time() - V.ADDR_TTL - 60, V._addr_cache[AX][1], read_at)   # older than ADDR_TTL: next view revalidates
 MODE["/api/explorer/address/" + AX] = "message field, no balance"; I._recent.clear()
 d, err = V._addr_load(AX)
 check("the notice address read is refused", d is None and err)

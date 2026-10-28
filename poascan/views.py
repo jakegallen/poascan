@@ -429,7 +429,7 @@ ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 # background refresh runs. One upstream call per address at a time; the cache is bounded. An address the node knows
 # nothing about (zero balance, no txs) stays fresh for ADDR_EMPTY_TTL s, so made-up addresses cost one read per 10 min.
 # Every read goes through indexer.fetch_ondemand (format check, negative cache, per-client and global budget).
-ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 60, 1800, 2000, 600
+ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 300, 1800, 2000, 600   # 1.26.202: 60 -> 300 s (API polling drove ~156 lookups an hour)
 _addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
 
 def _addr_load(a, crawler=None):
