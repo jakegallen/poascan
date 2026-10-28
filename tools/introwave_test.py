@@ -40,7 +40,7 @@ check("card: Intro templates with id, Share one template 12, method link", 'id="
 check("card names no author and quotes no post", not any(n in h for n in NAMES) and "autonomous research" not in h and "poa1" not in h)
 api = IW.api(); js = json.dumps(api)
 check("api: no author names, no bodies, no addresses", not any(n in js for n in NAMES) and "autonomous" not in js and "poa1" not in js)
-check("api: rule, note and method", api["rule"]["similarity"] == 0.6 and "No author is named" in api["note"] and api["method"].endswith("#intro-templates"))
+check("api: rule, note and method", api["rule"]["similarity"] == 0.6 and api["rule"]["min_authors"] == 10 and "No author is named" in api["note"] and api["method"].endswith("#intro-templates"))
 t = AG.call_tool("get_intro_templates", {}) if hasattr(AG, "call_tool") else None
 names = [x[0] for x in AG.TOOLS] if hasattr(AG, "TOOLS") else []
 check("MCP get_intro_templates listed", "get_intro_templates" in names)
@@ -53,4 +53,17 @@ check("about: #intro-templates with the rule", 'id="intro-templates"' in ab and 
 src = open(IW.__file__).read() + ab[ab.find('id="intro-templates"'):ab.find('id="carry"')]
 check("no dashes in copy", "\u2014" not in src and "\u2013" not in src)
 check("no prohibited names", not re.search(r"plus\s?1", src, re.I))
+# title template: different bodies, same title ending, 11 authors -> one group; one author repeating a post 12 times -> no group
+A._cache.clear(); db.write("DELETE FROM forum_posts")
+B2 = ["Quiet operator focused on {w} and careful sourcing for every daily question here", "Ops person who likes {w}, small models and plain logs, nothing fancy at all",
+      "Long form thinker. {w} matters most to me and I keep answers short and checkable"]
+rr = [(300 + i, "introductions", f"{n} \u2014 analyst, here for the mechanics", n, ad(i + 1), "2026-10-20 0%d:00:00" % (i % 10), 0, 0, 0, 0, 0, B2[i % 3].format(w=n.lower()))
+      for i, n in enumerate(NAMES[:11])]
+rr += [(400 + i, "introductions", "checking in", "Solo", ad(77), "2026-10-21 01:00:%02d" % i, 0, 0, 0, 0, 0, TPL.format(n="Solo", a=ad(77), h=5)) for i in range(12)]
+db.write("INSERT INTO forum_posts(id, community, title, author, author_public_id, created_at, score, comment_count, deleted, pinned, fetched, body) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", rr, many=True)
+d2 = IW.data()
+check("same title ending across 11 authors: one group of 11 with 3 text variants", len(d2["groups"]) == 1 and d2["groups"][0]["posts"] == 11 and d2["groups"][0]["authors"] == 11
+      and d2["groups"][0]["variants"] == 3)
+check("one author repeating a post is not a group", all(g["authors"] >= 10 for g in d2["groups"]))
+check("title key masks the author name", IW.title_key("Zorblax \u2014 analyst, here for the mechanics", "Zorblax") == "here for the mechanics")
 print("ALL OK" if not fails else f"{len(fails)} FAILED: {fails}"); sys.exit(1 if fails else 0)

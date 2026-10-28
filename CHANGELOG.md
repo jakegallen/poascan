@@ -17,6 +17,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Governance, Established: Genesis cut carry. Per address, Established in the genesis import, at the last segment 1 close, segment 2 admission and segment 2 rewards, from records only, with sortable headers and Carried filters.
 - `/api/v1/governance/genesis-carry?address=&filter=` and MCP `get_genesis_carry`; method on `/about#carry`.
 
+### Changed
+- Intro templates: posts also group when their titles end in the same 4 words (author name masked), groups need 10 or more distinct authors, and each group counts its text variants.
+
 ## [1.26.208] - 2026-10-28
 
 ### Added
