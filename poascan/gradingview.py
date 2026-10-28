@@ -84,8 +84,8 @@ def queue_tab(qs, href, qsx):
     q1 = lambda k, dflt="": ((qs or {}).get(k) or [dflt])[0]
     from . import horizon as HZ   # 1.26.186: expiry horizon per pending cohort, from close records (every segment)
     hz = HZ.card_html(qs, href)
-    if SG.archived(): return hz + card("Settle queue", '<p class="na">The grading list is the live network\'s: shown for the current segment only.</p>')
-    if not GR.usable(): return hz + card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is checked every 10 minutes.</p>')
+    if SG.archived(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">The grading list is the live network\'s: shown for the current segment only.</p>')
+    if not GR.usable(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is checked every 10 minutes.</p>')
     by = SS.page_sort(qs, dict(QUEUE_SORTS), "need"); d = SS.page_dir(qs)
     f = q1("need"); f = f if f in dict(QUEUE_FILTERS) else ""
     rs = queue_select(f, by, d); allr = GR.queue_rows(); s = GR.summary(); qn = s["quorum"]
@@ -121,7 +121,8 @@ def queue_tab(qs, href, qsx):
             f'Sealed and Graded: first and latest seal in the {"E" + str(cl) + " " if cl is not None else ""}close record · <a href="/about#grading-list">Method</a></p>') if ct else ""
     q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
     links = (f'<a class="more" href="/api/v1/governance/queue.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/queue{q}">API →</a>')
-    return stats_row() + hz + card(f"Settle queue · {len(rs):,}", f'<div class="chips">{chips}</div>' + tb + nav + foot, links, cls="histc", id="queue")
+    from . import board as BD   # 1.26.206: queue board (coverage by birth band, at 3 of 4, expiring, neutral closes)
+    return stats_row() + BD.card_html() + hz + card(f"Settle queue · {len(rs):,}", f'<div class="chips">{chips}</div>' + tb + nav + foot, links, cls="histc", id="queue")
 
 # ---------------------------------------------------------------- Graders: exact counts from the list
 GR_COLS = [SS.Col(None, "Agent", "text"), SS.Col("seals", "Seals", "num", "r"), SS.Col("counting", "Count", "num", "r"),

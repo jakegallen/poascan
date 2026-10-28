@@ -115,6 +115,10 @@ jobs:
         run: python tools/htmlcache_test.py
       - name: Earning gates (source and read time per value, Inferred marks, birth panel versus seated graders)
         run: python tools/earngates_test.py
+      - name: Door tracker (admit rate, TTL out, Proposal L params flag)
+        run: python tools/door_test.py
+      - name: Queue board (birth panel coverage, at 3 of 4, expiring, neutral closes; counts only)
+        run: python tools/board_test.py
       - name: Polite polling (backoff with jitter and Retry-After, incremental feed, cadence, on-demand caps, upstream counter)
         run: python tools/polite_test.py
       - name: 401 backoff (a lone 401 keeps the 60 s feed; 3 in a row, 429, 5xx or a timeout slow it)
