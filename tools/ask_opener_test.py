@@ -4,6 +4,7 @@ the prompts in data-ask attributes on every page, the /upgrade copy, and /start'
 template_sha256, variant_sha256 and combined_sha256 are unchanged (data/prompt_history.json keeps every published entry).
 No request leaves the box. Usage: python3 tools/ask_opener_test.py"""
 import html, json, os, re, sys, tempfile, threading, urllib.error, urllib.request
+import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))   # pin the maintenance start: the week long claim window would otherwise run out
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

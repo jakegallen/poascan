@@ -2,6 +2,7 @@
 basis_state, established history. Temp database, no network: the node is http://127.0.0.1:9 (refused), so every
 on-demand read fails the way a busy node does. Usage: python3 tools/feedback_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))   # pin the maintenance start: the week long claim window would otherwise run out
 os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative to now and spans the real genesis cut: one segment (segments.py)
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)

@@ -4,6 +4,7 @@ llms.txt and OpenAPI say /api/v1/health is a 503 whenever ok is false; MCP get_e
 Health Endpoints and Incidents tables, Chain Transactions, Census Snapshots and the Unlock calendar sort by header.
 In-process server, temp database, no request leaves the box. Usage: python3 tools/phasea_test.py"""
 import json, os, re, sys, tempfile, threading, urllib.error, urllib.request
+import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))   # pin the maintenance start: the week long claim window would otherwise run out
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

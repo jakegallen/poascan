@@ -2,6 +2,7 @@
 sticky), exact text with no em or en dash, @Jakegallen links x.com/Jakegallen in a new tab with rel noopener noreferrer (keysafe rule), no dismiss control,
 same look as POASwap's .devbar, no Upgrading strip (1.26.181: the header status note carries it), join prompt unchanged. Usage: python3 tools/devbar_test.py"""
 import os, re, socket, subprocess, sys, tempfile, time, urllib.request
+import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))   # pin the maintenance start: the week long claim window would otherwise run out
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 fails = []
 def check(name, ok):

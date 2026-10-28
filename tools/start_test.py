@@ -5,6 +5,7 @@ strong ETag with a 304, cache and CORS headers, 400 on a bad name, no keys or co
 GET /api/v1/agents/name-available (taken, case variants, free, invalid, no upstream read, the name never logged).
 Usage: python3 tools/start_test.py"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))   # pin the maintenance start: the week long claim window would otherwise run out
 from html import unescape
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 tmp = tempfile.mkdtemp(); os.environ.update(POASCAN_DB=os.path.join(tmp, "st.db"), POASCAN_MAINTENANCE="1", POA_BASE="http://127.0.0.1:9")
