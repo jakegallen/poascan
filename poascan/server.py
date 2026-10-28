@@ -131,6 +131,13 @@ def api(path, qs):
             typ = qs.get("type", [""])[0] or None; rows, nxt = HI.txs_page(a, c, lim, typ)
         except ValueError: raise BadRequest("bad cursor")
         return dict(address=a, type=typ, txs=rows, next_cursor=nxt, types=HI.type_counts(a), coverage=HI.coverage(a), method=AG.BASE + "/about#history"), False
+    m = re.match(r"^/api/earn(?:/([^/]{1,80}))?$", path)
+    if m:   # earn check (earn.py): POAScan's own payloads in process; no upstream read
+        a = m.group(1) or ((qs.get("address") or [""])[0] or "").strip()
+        bad = set(qs) - ({"format"} if m.group(1) else {"address", "format"})
+        if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address (the address only, never a key)")
+        return earn_check(a, full=True), False
     m = re.match(r"^/api/wallet(?:/([^/]{1,80}))?$", path)
     if m:   # 1.26.187: wallet binding (wallet.py): POAScan's copies of /api/links and /api/chains plus archived txs; no upstream read
         a = m.group(1) or ((qs.get("address") or [""])[0] or "").strip()
@@ -253,6 +260,41 @@ def prefix_hits(q, n=20):
     rows = db.q("SELECT addr FROM accounts WHERE addr >= ? AND addr < ? ORDER BY addr LIMIT ?", (q, q + "\U0010ffff", n))
     return [dict(kind="address", id=r["addr"]) for r in rows]
 
+from . import earn as EA, earnview as EV
+
+def _earn_local_address(a):
+    """The address payload without the live lookup: POAScan's archive only (the earn check adds no minepoa.com read)."""
+    p = G.profile(a); acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
+    try: bb = V.address_balance(a, None, None, acc)
+    except Exception: bb = dict(balance=acc["balance_s"] if acc else None, segment=SG.CURRENT)
+    return dict(address=a, balance=bb.get("balance"), balance_segment=bb.get("segment") or SG.CURRENT, rewards=p["rewards"], family_size=(p["family"] or [None, None])[1],
+                established=a in A.established_set(), wallet_binding=WB.binding(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)))
+
+def _earn_get(path, qs):
+    m = re.match(r"^/api/address/(poa1\w+)$", path)
+    if m: return _earn_local_address(m.group(1))
+    m = re.match(r"^/api/epoch/(\d+)/record$", path)
+    if m:
+        return RR._raw().get(int(m.group(1)))   # the stored close record object, read only (no canonical bytes, no reparse)
+    try: return api(path, qs)[0]
+    except (NotFound, KeyError): return None
+
+_earn_cache = {}
+def earn_check(a, full=False):
+    """earn.check for one address: POAScan's payloads in process, or (preview only) POASCAN_EARN_SOURCE over HTTP.
+    One result per address and shape for 60 s, so a refresh or the page plus its API link never recompute."""
+    k = (a, full); hit = _earn_cache.get(k); now = time.time()
+    if hit and now - hit[0] < 60: return dict(hit[1])
+    r = _earn_check(a, full)
+    if len(_earn_cache) > 500: _earn_cache.clear()
+    _earn_cache[k] = (now, r); return r
+
+def _earn_check(a, full=False):
+    get = (lambda p, q: EA._remote(p + ("?" + urllib.parse.urlencode({k: v[0] for k, v in q.items()}) if q else ""))) if EA.SOURCE else _earn_get
+    ff = (EA.forum_rows_fixture if EA.FORUM_FIXTURE else None) if EA.SOURCE else EA.forum_rows_local
+    return EA.api(a, get, ff) if full else EA.check(a, EA.gather(a, get, ff))
+AG.EARN_FN = lambda a: earn_check(a, full=True)
+
 def page(path, qs):
     if path in ("/", "/index.html"): return V.home()
     if path == "/chain/txs": return V.txs(qs)
@@ -267,6 +309,7 @@ def page(path, qs):
         return V.page(r[0], r[1], "/txs")
     if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
+    if path == EA.ROUTE: return EV.page(qs, V.page, earn_check)   # Start earning: the earn check and the starter guide
     if path == WB.ROUTE: return WV.page(qs, V.page)   # 1.26.187: Check my wallet, /wallet?address=poa1... (stable; POASwap /start links here)
     if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage, qs)
@@ -307,7 +350,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/help", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=established", "/governance?tab=queue", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=protocol", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 

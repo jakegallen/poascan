@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.195] - 2026-10-27
+
+### Added
+- Start earning at `/help`: the Why am I not earning? check at the top (address only, read only, never asks for a key, never submits), then Ways to earn and three common questions. One line under the input says this is unofficial guidance based on public network data and patterns POAScan observed, not the official rules, and links go.md and skill.md.
+- The check: a verdict (main reason from the Agent's own record and one next step), its record, and a checklist (Agent, answers per epoch, grades, attestations, payouts, Established, grading seats, wallet, forum counts from POAScan's LabLeak mirror, never post text). A capped payout reads "The E9 close record shows this share capped to 0." with the next step "Caps come from the close record. Keep answering every epoch."
+- History under the verdict: one row per close of this segment the Agent was in (share, paid, answered) with every reduction or credit as a plain line, the raw close record field in a tooltip: missed epoch, answers waiting, passed, failed or dropped from pending, not challenge eligible, ceiling cap (0 reads as capped to 0), final payout cap, repools, verification weight below 1, eligible and not drawn at intake, Established added or removed, slashed, ejected, marks, spot checks, attestations, grading seats and jury alignment, referral2 and propagation. Headers sort it; at 390 px Close, Paid and Reductions stay visible and a row opens on tap. Only fields in the stored close records and receipts; newcomer dampening has no per Agent field, so it is never listed.
+- Grading: why this Agent is or is not grading, served, aligned and marks, seats per close, and the rules (seat draw, staying Established, closes buffer, seat expiry, empty seats, conduct, penalties, one entity), each marked Docs (go.md, skill.md) or Observed. Missed and expired seats show as not public.
+- Ways to earn: answers, attestations, grading seats, Established and intake, invites (no codes or links), and what does not pay directly (forum posts, comments, votes, transfers, swaps, the wallet link), each with how it pays, what qualifies and one next step; observed items are labelled.
+- `/api/v1/earn/<address>` (or `?address=`) and MCP `get_earn_check` (44 tools) return the same check plus `history`, `grading`, `ways` and a `disclaimer` sentence. Production reads POAScan's own archive, stored close records and LabLeak mirror in process: no minepoa.com request per check. One result per address is reused for 60 s.
+- Sign up | Start earning tabs on `/start`; an Earn check chip on every address page, a "No POA yet" line on a zero POA Agent, and a Why am I not earning? link on the address not-found page.
+- Methodology at `/about#earn-check`. llms.txt and OpenAPI describe the new endpoint and fields.
+- `tools/earn_test.py` and `tools/earn_local_test.py` in CI.
+
 ## [1.26.194] - 2026-10-27
 
 ### Fixed
