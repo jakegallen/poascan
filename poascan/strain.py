@@ -37,7 +37,9 @@ STRAIN_HEADERS = (("x-poa-strain", re.compile(r".+")), ("x-poa-notice", re.compi
                   ("x-poa-edge", re.compile(r"strain|notice|shed|fallback|instant", re.I)))
 # Endpoint template -> (container, required keys; for a list, keys each item needs). Confirmed from live reads and the archive.
 REQUIRED = {
-    "/api/status": ("dict", ("as_of", "supply", "txs", "epochs_closed", "checkpoint_height")),
+    # 1.26.217: from the E16 close (Oct 28, 2026) /api/status answers checkpoint {height, cutoff_ts} and no as_of; the
+    # checkpoint is required in either shape (STATUS_CP), as_of in neither
+    "/api/status": ("dict", ("supply", "txs", "epochs_closed")),
     "/api/networks": ("dict", ("chains",)),
     "/api/explorer/txs": ("list", ("id",)),   # the feed needs only id (live_txs skips rows without one)
     "/api/explorer/tx/:id": ("dict", ("id",)),
@@ -102,7 +104,15 @@ def _schema_gap(tpl, data):
         odd = [k for k in data if not ADDR_RX.match(str(k))]
         return "non-address keys" if odd else None
     miss = [k for k in keys if k not in data]
+    if tpl == "/api/status" and status_cp(data) is None: miss.append("checkpoint_height")
     return "missing " + ",".join(miss) if miss else None
+
+def status_cp(d):
+    """The checkpoint height of a /api/status body in either shape: checkpoint_height, or checkpoint {height} (1.26.217)."""
+    if not isinstance(d, dict): return None
+    if d.get("checkpoint_height") is not None: return d["checkpoint_height"]
+    c = d.get("checkpoint")
+    return c.get("height") if isinstance(c, dict) else None
 
 def detect(path, data, headers=None):
     """None for real data, else dict(signals=[...], text=raw notice text or ''). Pure: no state, no I/O."""

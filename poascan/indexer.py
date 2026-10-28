@@ -587,7 +587,17 @@ def job_live():
             if d is not NOT_MODIFIED: fn(d)
         except Busy as e: log.warning("%s: %s", path, e)
 
+def norm_status(st):
+    """1.26.217: /api/status in its newer shape (checkpoint {height, cutoff_ts}) gains the flat checkpoint_height and
+    checkpoint_cutoff_ts every reader uses; the older flat shape passes through unchanged."""
+    c = st.get("checkpoint") if isinstance(st, dict) else None
+    if not isinstance(c, dict): return st
+    st = dict(st); st.setdefault("checkpoint_height", c.get("height"))
+    if c.get("cutoff_ts") is not None: st.setdefault("checkpoint_cutoff_ts", c.get("cutoff_ts"))
+    return st
+
 def _live_status(st):
+    st = norm_status(st)
     # snapshots carry the segment they were read in: counters that restart at a cut (txs, final, epochs_closed,
     # checkpoint_height) are never compared across it (segments.py)
     db.add_snap("status", dict(st, segment=_SG.CURRENT)); db.put_blob("status", st)
