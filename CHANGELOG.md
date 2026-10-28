@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.212] - 2026-10-28
+
+### Changed
+- Address pages and `/api/v1/address/<a>` skip the minepoa.com address read when the stored agent list row is under 20 minutes old and no transfer, swap or close has touched the address since. The balance keeps its as-of time and source tags. Cuts repeat address lookups during API sweeps.
+- `/api/v1/health` adds `address_reads` (answered by the agent list, read path) and `/about#freshness` says when a balance comes from the agent list.
+
 ## [1.26.211] - 2026-10-28
 
 ### Fixed
