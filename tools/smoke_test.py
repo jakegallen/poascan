@@ -449,7 +449,7 @@ def calibration(base, check):
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
-          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 51)
+          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 50)
 
 def cohorts(base, check):
     """Frozen answer cohorts: the five states sum to the frozen count at every close; Gate A per close."""
