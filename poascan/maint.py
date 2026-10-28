@@ -9,7 +9,7 @@ from . import db, analytics as A
 MAINTENANCE = os.environ.get("POASCAN_MAINTENANCE", "1") != "0"  # the switch; with it on, the official completion notice (complete()) ends maintenance by itself
 POST_ID = 1357
 POST_URL = f"https://minepoa.com/lableak/#/post/{POST_ID}"
-STARTED = 1792609251          # 2026-10-21 19:00:51 UTC, when the post went up
+STARTED = int(os.environ.get("POASCAN_MAINT_STARTED") or 1792609251)   # 2026-10-21 19:00:51 UTC, when the post went up (tests pin it: MAX_S runs out a week later)
 PARKED = 24371                # checkpoint height held on purpose during the anchoring fix
 WINDOW_H = (24, 72)           # expected mining downtime, hours
 TTL_EPOCHS = 16               # fallback only (1.26.186): the live value is /api/params pending_ttl_epochs, read by netparams

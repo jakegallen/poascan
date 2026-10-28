@@ -18,6 +18,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Fixed
 - `/about#highlights` for Records: its anchor no longer shares an id with Close records.
+- Tests: the maintenance smoke checks pin the maintenance start, so they no longer fail once the week long claim window runs out (live behaviour unchanged).
 
 ## [1.26.209] - 2026-10-28
 

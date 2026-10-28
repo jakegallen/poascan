@@ -737,7 +737,7 @@ def fixture_pages(check):
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)
         _snap = json.loads(req(base + "/api/v1/summary")[1]); check("summary carries the pill state", _snap.get("pill", {}).get("state") == "lag")
         # same fixture, network upgrade switched on
-        port2 = free_port(); env2 = dict(env, PORT=str(port2), POASCAN_MAINTENANCE="1"); p2 = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env2)
+        port2 = free_port(); env2 = dict(env, PORT=str(port2), POASCAN_MAINTENANCE="1", POASCAN_MAINT_STARTED=str(int(time.time()) - 86400)); p2 = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env2)
         try:
             for _ in range(50):
                 try: req(f"http://127.0.0.1:{port2}/api/health"); break
