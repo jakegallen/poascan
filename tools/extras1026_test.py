@@ -69,6 +69,7 @@ row = lambda i, au, raw: {"id": aid(i), "author": au, "born": 1, "since": 1, "ex
                           "grades": [{"g": B, "ts": now - 60, "t": 0, "q": 0}] * raw}
 db.put_blob("grading", {"epoch": 2, "as_of": now, "fetched_at": now, "stats": {"pending": 4}, "rollups": [{"ts": t0 + 43200}], "established": [],
                         "rows": [row(3, D, 3), row(4, D, 0), row(5, X, 1), row(6, X, 0)], "open": [row(8, X, 0)]})
+from poascan import analytics as _A; _A._cache.clear()   # earlier pages read the header status (1.26.216: it reads the close records), so drop what they cached before these blobs
 from poascan import gradingview as GVW
 q = {r["id"]: r for r in GVW.queue_select("", "need", "desc")}
 check(f"Sealed: first seal; one time per distinct grader, earliest ({q[aid(3)].get('seal_times')})",
