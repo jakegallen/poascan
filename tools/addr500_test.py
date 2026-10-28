@@ -64,7 +64,8 @@ for name, a in SHAPES.items():
     for p in (f"/address/{a}", f"/api/v1/address/{a}", f"/api/address/{a}", f"/api/v1/address/{a}/established",
               f"/api/v1/address/{a}/standing", f"/api/v1/address/{a}/txs"):
         c, body = get(p)
-        check(f"{name}: {p.split(a)[0]}...{p.split(a)[1]} is 200 (got {c})", c == 200)
+        want = 404 if (a == ZERO and p == f"/address/{a}") else 200   # 1.26.194: no record at all is the not-found page; the APIs still answer
+        check(f"{name}: {p.split(a)[0]}...{p.split(a)[1]} is {want} (got {c})", c == want)
 c, body = get(f"/address/{IMPORTED}")
 check("genesis import page shows its basis", "Genesis import" in body and "Established history" in body)
 

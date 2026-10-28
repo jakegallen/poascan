@@ -35,6 +35,8 @@ jobs:
           if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE" 2>/dev/null; then python tools/keyscan.py --range "$BEFORE..$GITHUB_SHA"; fi
       - name: Smoke test (empty DB, indexer off, no upstream calls)
         run: python tools/smoke_test.py
+      - name: Unknown address is a 404 not-found state; real and archived Agents render; search rows carry balance and last activity
+        run: python tools/notfound_test.py
       - name: Joining state (open, paused, derived pause)
         run: python tools/join_state_test.py
       - name: Every main route renders with maintenance on, joining paused and swap rows present

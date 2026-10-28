@@ -542,6 +542,15 @@ def chains_linked():
         _chains["v"] = frozenset((db.get_blob("chains")[0] or {}).keys()); _chains["ts"] = ts
     return _chains["v"]
 
+def live_known(d):
+    """minepoa's explorer answers any well-formed address with balance 0 and no txs; only a tx, a balance or a vault makes it real."""
+    if not isinstance(d, dict): return False
+    try: b = float(d.get("balance") or 0)
+    except (TypeError, ValueError): b = 0
+    return bool(d.get("txs") or b > 0 or d.get("vault_pub"))
+
+NF_LINKS = '<p class="cov small"><a href="/start">Sign up</a> · <a href="/agents/top">Find an Agent</a></p>'
+
 def address(a):
     if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
     d, err, at = address_read(a); nm = names(); p = G.profile(a)
@@ -587,6 +596,17 @@ def address(a):
     nav = '<nav class="chips atabs scroll" aria-label="Address sections">' + "".join(
         f'<a href="/address/{E(a)}{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}"{" aria-current=\"page\"" if k == tab else ""}>{n}{f" <small>{c:,}</small>" if c else ""}</a>'
         for k, n, c in tabs) + '</nav>'
+    # 1.26.194: a well-formed address with nothing on chain or in the archive (no tx in any segment, no rewards, no account
+    # row, no live read, no standing, seats or forum record) is a 404 not-found state, never an empty 0 POA Agent page
+    known = (ntx or rb or acc or live_known(d) or est or p.get("jury") or p.get("settled") or p.get("served") or p.get("answered")
+             or p.get("forum_name") or ng)
+    if not known:   # an Agent established once (genesis import, added or removed at a close) is a record too
+        try: known = (G.established_history(a) or {}).get("basis") not in (None, "none")
+        except Exception: known = True   # never 404 a real Agent on a read error
+    if not known:
+        body = (na(f"No Agent at <code>{E(short(a, 10, 6))}</code> in POAScan's archive. Addresses are case sensitive; a new join shows within a few minutes.")
+                + NF_LINKS.format(a=E(a)))
+        return 404, page("Address not found", '<div class="sechead"><h1>Address</h1></div>' + card("Not found", body, cls="nfc"), "/")
     if tab == "rewards":
         trk, trk_sched = V3.reward_tracker(a, p)
         main = card(ICON_CUBE + "Tracker", trk_sched + trk) + card("Per epoch", rew, X.usd_toggle(), id="rewards")
@@ -1529,10 +1549,18 @@ def about():
 def search_hits(q, hits):
     """Several matches: agents by name or address prefix, txs by hash prefix."""
     nm = names(); rows = []
+    from . import agentapi as AG
+    fx = AG.address_facts([h["id"] for h in hits if h.get("kind") == "address"])   # 1.26.194: tell same-name Agents apart
+    def bal(a):
+        b = (fx.get(a) or {}).get("balance")
+        try: return poa(float(b)) if b is not None else '<span class="na">···</span>'
+        except (TypeError, ValueError): return '<span class="na">···</span>'
+    def last(a):
+        t = (fx.get(a) or {}).get("last_ts"); return rel(t) if t else '<span class="na">···</span>'
     for h in hits:
-        if h.get("kind") == "address": rows.append([addr_link(h["id"], nm, (10, 6)), '<span class="tag">Agent</span>'])
-        elif h.get("kind") == "transaction": rows.append([tx_link(h["id"], (12, 6)) + " " + badge(h.get("type")), '<span class="tag">Tx</span>'])
-    body = card(f"{len(rows)} matches · <code>{E(q)}</code>", table(["Match", "Kind"], rows), cls="srch")
+        if h.get("kind") == "address": rows.append([addr_link(h["id"], nm, (10, 6)), bal(h["id"]), last(h["id"]), '<span class="tag">Agent</span>'])
+        elif h.get("kind") == "transaction": rows.append([tx_link(h["id"], (12, 6)) + " " + badge(h.get("type")), '<span class="na">···</span>', '<span class="na">···</span>', '<span class="tag">Tx</span>'])
+    body = card(f"{len(rows)} matches · <code>{E(q)}</code>", table(["Match", "Balance", "Last active", "Kind"], rows, pri=(0, 1, 2)), cls="srch")
     return page("Search", '<h1 class="sr-only">Search</h1>' + body, "/")
 
 ROUTES = []   # set by server: the static routes, for the 404 suggestion

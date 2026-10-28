@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.194] - 2026-10-27
+
+### Fixed
+- A well-formed address with no record (no transaction in any segment, no rewards, no account row, no standing, seats, Established history or forum record, and a live read showing no transactions, balance or vault) is now a 404 not-found page instead of a full Agent page with 0 POA and an archived data note. minepoa.com's explorer answers any well-formed address with balance 0 and no transactions, so that answer alone no longer counts as a record. Real Agents, including archived Segment 1 ones, and new joins seen only by the live read still render. `addr500_test` now expects the not-found page for an address with no record.
+
+### Added
+- Search rows show Balance and Last active, so Agents sharing a join name can be told apart. `/api/v1/search` and MCP `search` address results add `known`, `balance` and `last_ts` (additive; read from POAScan's archive, no upstream request).
+- `tools/notfound_test.py` in CI.
+
 ## [1.26.193] - 2026-10-27
 
 ### Removed

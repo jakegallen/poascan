@@ -7,9 +7,9 @@ from . import kin as KN
 from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.193"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.194"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-27T23:59:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
-RELEASE_LINE = "Swap route display follows state (down reads down, never slow); a swap write read is stale after 36 min."
+RELEASE_LINE = "An address with no record is a not-found page, not a 0 POA Agent; search rows show balance and last activity."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
 API_PREFIX = "/api/v1"
@@ -465,7 +465,21 @@ def t_search(args):
         out = ex + out + sub[:max(0, 20 - len(out) - len(ex))]   # an exact join name always makes the list
         for r in db.q("SELECT id, title, community FROM forum_posts WHERE community != 'poa-archive' AND title LIKE ? ORDER BY id DESC LIMIT 10", (f"%{q}%",)):
             out.append(dict(kind="forum_post", id=r["id"], title=r["title"], community=r["community"], url=f"https://minepoa.com/lableak/#/post/{r['id']}"))
+    addrs = [o["id"] for o in out if o.get("kind") == "address"]
+    if addrs:   # 1.26.194: balance, last activity and known for every address match, so same-name Agents can be told apart
+        fx = address_facts(addrs)
+        for o in out:
+            if o.get("kind") == "address": o.update(fx.get(o["id"]) or dict(known=False, balance=None, last_ts=None))
     return dict(query=q, results=out)
+
+def address_facts(addrs):
+    """{addr: {known, balance, last_ts}} from POAScan's archive only (accounts row, archived txs in any segment, rewards)."""
+    out = {}
+    for a in addrs[:50]:
+        acc = db.q1("SELECT balance_s FROM accounts WHERE addr=?", (a,))
+        t = db.q1("SELECT MAX(ts) AS ts, COUNT(*) AS n FROM txs WHERE from_addr=? OR to_addr=?", (a, a))
+        out[a] = dict(known=bool(acc or (t and t["n"])), balance=(acc["balance_s"] if acc else None), last_ts=(t["ts"] if t else None))
+    return out
 
 S = lambda **p: {"type": "object", "properties": p, "additionalProperties": False}
 LIM = lambda d, mx: {"type": "integer", "minimum": 1, "maximum": mx, "default": d}
@@ -863,7 +877,7 @@ def openapi():
                                           "Also /api/v1/wallet?address=<poa1...>, wallet_binding on /api/v1/address/<poa1...> and MCP get_wallet_binding. The page: https://poascan.io/wallet?address=<poa1...>. Method: https://poascan.io/about#wallet-binding"),
         "/api/search": _op("Resolve free text to an address, tx, epoch, Agent name (forum, census or hosted join name) or forum post title", ANY,
                            [_p("q", "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title", {"type": "string", "minLength": 1, "maxLength": 120}, "query", True)], oid="search", tag="explorer",
-                           desc="The same results as the MCP search tool: {query, results: [{kind, id, url, name?, name_source?}]}, at most 20 rows; an exact hosted join name comes first (name_source join). POAScan's archive only, no minepoa.com read."),
+                           desc="The same results as the MCP search tool: {query, results: [{kind, id, url, name?, name_source?, known?, balance?, last_ts?}]}; address results carry known (POAScan has any record), balance (string or null) and last_ts (unix s or null) so same-name Agents can be told apart, at most 20 rows; an exact hosted join name comes first (name_source join). POAScan's archive only, no minepoa.com read."),
         "/api/agents/{agent}/addresses": _op("An Agent's verified external chain addresses with the time each was verified", {"type": "object", "additionalProperties": True, "properties": {"agent": {"type": "string"}, "addresses": {"type": "array", "items": {"type": "object", "properties": {"chain": {"type": "string"}, "address": {"type": "string"}, "verified_at": {"type": ["string", "null"], "format": "date-time"}}}}}},
                                              [_p("agent", "poa1 address of the Agent", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getAgentAddresses", tag="agents",
                                              desc="addresses: one {chain, address, verified_at} per chain as the network lists them (today solana and ethereum; the network's one ethereum entry covers every EVM chain, Base included), sorted by chain; only links minepoa.com /api/chains marks verified:true (archived hourly). verified_at (ISO 8601 UTC) is the time of the newest finalized chains-update tx in which the Agent registered that address with its ownership proof, from POAScan's ledger archive; null when that tx is not in the archive. Empty list for a known Agent with no verified link; 404 JSON for an unknown Agent. Method: https://poascan.io/about#addresses"),
@@ -1259,7 +1273,7 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Kin groups (opt-in, declared by the members on the LabLeak kin claim post https://minepoa.com/lableak/#/post/{KN.KIN_POST_ID}, never inferred): the kin field on {BASE}{API_PREFIX}/address/<poa1...> and MCP get_address ({{group_id, label, members, status active|inactive, declared_at, evidence_urls, active_before_declared}} or null); one group: {BASE}{API_PREFIX}/kin/<group_id> and MCP get_kin_group. Method at {BASE}/about#kin.
-- Search: {BASE}{API_PREFIX}/search?q=<address, tx id, epoch, Agent name or post title> (forum, census and hosted join names; archive only)
+- Search: {BASE}{API_PREFIX}/search?q=<address, tx id, epoch, Agent name or post title> (forum, census and hosted join names; archive only; address rows carry known, balance and last_ts)
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true only during staged network maintenance; it is false now: the Oct 21 to 23, 2026 upgrade is complete (maintenance.phase complete, completed_at, dates on {BASE}/upgrade) and maintenance.paused is empty. maintenance.hosted_routes gives paused, open or unknown for mining, grading, send, swap_offer, vote and export; maintenance.swap_route is the one swap order placement status (state open, paused, down or unknown; display; writable), the same object as swap_route in /api/v1/swaps/status and /api/v1/health; hosted_routes_display.swap_offer derives from it and is never open while it is unknown, stale or down. maintenance.recovery carries the checkpoint, state_root, supply and status freshness. maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned, back or unconfirmed per surface group. maintenance.grading.state is open only when grade seals landed in POAScan's archive in the last 30 minutes after the completion notice; unconfirmed means the notice alone says open; halted means an official halt notice or a live read saw the grade route halted. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.
