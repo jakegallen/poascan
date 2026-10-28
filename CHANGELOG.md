@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.208] - 2026-10-28
+
+### Added
+- Agents, Community, Forum: Intro templates. Intro posts that share one text template, as counts and timing only (posts, authors, span, median gap, posts per hour). No author is named and no post is quoted.
+- `/api/v1/forum/intro-templates` and MCP `get_intro_templates`; method on `/about#intro-templates`.
+
+### Fixed
+- Queue board: At 3 of 4 uses the close record when minepoa's grading list is older than the newest close, and the list's read time shows its date.
+
 ## [1.26.207] - 2026-10-28
 
 ### Added
