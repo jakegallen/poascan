@@ -19,6 +19,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Fixed
 - Queue board: At 3 of 4 uses the close record when minepoa's grading list is older than the newest close, and the list's read time shows its date.
+- `/api/v1/highlights` answered unknown endpoint since 1.26.207; it now routes, with `/api/v1/forum/intro-templates`. Smoke checks that every OpenAPI path routes.
 
 ## [1.26.207] - 2026-10-28
 

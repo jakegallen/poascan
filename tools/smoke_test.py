@@ -140,6 +140,13 @@ def main():
         c, b = req(base + "/api/v1/clusters"); cl = json.loads(b) if c == 200 else {}
         check(f"clusters -> {c}", c == 200 and {"groups", "counts", "thresholds", "note", "meta"} <= set(cl) and "/api/v1/clusters" in spec["paths"])
         check("/agents/operators cluster signals + /about method", b"Cluster signals" in req(base + "/agents/operators")[1] and b'id="signals"' in req(base + "/about")[1])
+        _unk = []   # every OpenAPI path without a path or required parameter routes (no "unknown endpoint")
+        for _pp, _ops in spec["paths"].items():
+            _g = _ops.get("get") or {}
+            if not _pp.startswith("/api/v1/") or "{" in _pp or any(x.get("required") for x in _g.get("parameters", []) if isinstance(x, dict)): continue
+            _c, _b = req(base + _pp)
+            if _c == 404 and b"unknown endpoint" in _b: _unk.append(_pp)
+        check(f"every OpenAPI path routes, unknown {_unk}", not _unk)
         c, b = req(base + "/api/v1/agents/view?limit=2"); av = json.loads(b) if c == 200 else {}
         check(f"agents/view -> {c}", c == 200 and {"rows", "next_cursor", "limit", "total", "meta"} <= set(av) and av["limit"] == 2 and "/api/v1/agents/view" in spec["paths"])
         _r = urllib.request.urlopen(base + "/api/v1/agents/view?limit=2"); _et = _r.headers.get("ETag")
