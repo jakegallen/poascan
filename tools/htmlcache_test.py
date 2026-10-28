@@ -39,6 +39,7 @@ mb = HC.MAX_BYTES; HC.MAX_BYTES = 8000
 for i in range(20): HC.put(HC.key(f"/e{i}", {}, None, False), "z" * 900, now=time.time() + i)
 check("byte cap evicts the oldest", HC.state()["bytes"] <= 8000 and HC.get(HC.key("/e19", {}, None, False), 15) and not HC.get(HC.key("/e0", {}, None, False), 15))
 HC.MAX_BYTES = mb
+check("warmed pages get a grace past their TTL, others none", HC.grace("/network", {"tab": ["health"]}) == HC.WARM_GRACE > 0 and HC.grace("/network", {"tab": ["token"]}) == 0 and HC.grace("/about", {}) == 0)
 check("address freshness window 300 s", V.ADDR_TTL == 300)
 
 # ---- through the server

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.203] - 2026-10-28
+
+### Fixed
+- A background-rendered page (Network Health, Governance, Chain, Agents, Top Agents) could expire between two warm passes, so an occasional visitor still waited on a cold render. Its copy is now served for up to 75 s past its TTL while the next one renders.
+
 ## [1.26.202] - 2026-10-28
 
 ### Changed

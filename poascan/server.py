@@ -1161,7 +1161,7 @@ class H(BaseHTTPRequestHandler):
                 b = self.prep(json.dumps(data, default=str), "application/json")
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
-            html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs), lambda: page(path, qs))   # 1.26.202: rendered page cache
+            html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs) + HC.grace(path, qs), lambda: page(path, qs))   # 1.26.202: rendered page cache
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))

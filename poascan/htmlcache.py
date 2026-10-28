@@ -20,9 +20,19 @@ TTLS = [
 ]
 WARM = ["/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
 WARM_EVERY = 20
+WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
+_warm_set = set()
 
 _c, _bytes, _inflight, _lock = {}, [0], {}, threading.Lock()
 stats = dict(hit=0, miss=0, wait=0, warm=0, evict=0)
+
+def grace(path, qs):
+    """Seconds a warmed page may be served past its TTL (0 for any other page)."""
+    if not _warm_set:
+        import urllib.parse
+        for u in WARM:
+            p, _, q = u.partition("?"); _warm_set.add((p, tuple(sorted((k, tuple(v)) for k, v in urllib.parse.parse_qs(q).items()))))
+    return WARM_GRACE if (path, tuple(sorted((k, tuple(v)) for k, v in (qs or {}).items()))) in _warm_set else 0
 
 def ttl(path, qs):
     for rx, test, t in TTLS:
@@ -83,7 +93,7 @@ def warm_loop(render_path, seg=lambda: None, stop=None):
             p, _, q = u.partition("?"); qs = urllib.parse.parse_qs(q)
             k = key(p, qs, seg(), False); t = ttl(p, qs)
             with _lock: e = _c.get(k)
-            if e and time.time() - e[0] < t - WARM_EVERY - 5: continue
+            if e and time.time() - e[0] < t - 5: continue
             try:
                 t0 = time.time(); h = render_path(p, qs)
                 if isinstance(h, str): put(k, h); stats["warm"] += 1
