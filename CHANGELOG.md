@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.209] - 2026-10-28
+
+### Added
+- Governance, Established: Genesis cut carry. Per address, Established in the genesis import, at the last segment 1 close, segment 2 admission and segment 2 rewards, from records only, with sortable headers and Carried filters.
+- `/api/v1/governance/genesis-carry?address=&filter=` and MCP `get_genesis_carry`; method on `/about#carry`.
+
 ## [1.26.208] - 2026-10-28
 
 ### Added
