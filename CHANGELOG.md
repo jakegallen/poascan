@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.213] - 2026-10-28
+
+### Added
+- Address page Timeline tab (Agent profile v2): the Agent's milestones in the current segment, oldest first, from final txs and close records (join, first answer, first grade seal, first transfer, first invitee, first paid close, best close reward, Established changes, slashes, latest tx).
+- `/api/v1/address/<a>/timeline` and MCP `get_agent_timeline`; method on `/about#timeline`.
+
 ## [1.26.212] - 2026-10-28
 
 ### Changed
