@@ -16,6 +16,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Added
 - Peers card on the address page Timeline tab: the Agents whose first join tx in this segment fell on the same UTC day, how many are Established now and paid, the median rewards of the paid ones, and this Agent's rank among them. Also in `/api/v1/address/<a>/timeline` and MCP `get_agent_timeline` as `peers`.
 
+### Fixed
+- The milestones test read the Oct 21 hardening notice from the 7 day range, which it left on Oct 28; it now reads the 30 day range. 1.26.214 (records) ships live with this release.
+
 ## [1.26.214] - 2026-10-28
 
 ### Added

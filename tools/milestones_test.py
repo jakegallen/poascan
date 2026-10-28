@@ -164,7 +164,8 @@ check("the marked chart opens at its newest end at 390px", 'class="chartbox end"
 mls = h[h.find(">Milestones<"):]
 check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
 check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)
-check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls)
+h30 = V3.charts_body("30d"); mls30 = h30[h30.find(">Milestones<"):]   # 30d: the Oct 21 notice left the 7d range on Oct 28
+check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls30)
 check("no em dash, no share button in the charts section", "\u2014" not in h and "share" not in h.lower())
 from poascan import governance as GV
 gh_ = GV.charts({})
