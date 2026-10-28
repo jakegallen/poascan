@@ -391,7 +391,7 @@ def status_body():
     p50 = _pctl([e["p50"] for e in core if e["p50"]], .5)
     st = "".join([stat("Upstream", state), stat("Success · 1h", pct(sum(s1) / len(s1)) if s1 else "···"), stat("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else "···"),
                   stat("Open incidents", f'<span class="num {"red" if ongoing else ""}">{len(ongoing)}</span>'),
-                  stat("Finality lag", intc(lagv), "blocks", tip="Blocks between the chain height and the finalized height"), cp_stat(), stat("Anchor · Solana", anc_age("sol")), stat("Anchor · Base", anc_age("base"))])
+                  stat("Finality lag", intc(lagv), "blocks", tip="Blocks between the chain height and the finalized height"), cp_stat(), stat('<a href="/network?tab=anchors">Anchor · Solana</a>', anc_age("sol")), stat('<a href="/network?tab=anchors">Anchor · Base</a>', anc_age("base"))])
     tb = table(["Endpoint", "1h", "24h", "p50", "p95", "Last error"],
                [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
                  _okpct(e["s1"]), _okpct(e["s24"]), f'{e["p50"]:,} ms' if e["p50"] else "···", f'{e["p95"]:,} ms' if e["p95"] else "···",

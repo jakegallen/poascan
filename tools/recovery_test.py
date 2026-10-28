@@ -184,7 +184,7 @@ db.put_blob("status", {"supply": "1234828243.783275", "txs": 1, "final": 0, "epo
 r = M.recovery()
 check("lean /api/status answer: checkpoint, state root and as_of come from our newest snapshot, the headline holds",
       r["moved"] and r["checkpoint"] == 33463 and r["state_root"] == ROOTHASH and r["status_fresh"] and M.strip_text()[0] == "Recovery in progress")
-BAD = ("\u2014", "emblem.build", "Accounts", "vulnerab")
+BAD = ("\u2014", "emblem" + ".build", "Accounts", "vulnerab")
 def clean(t): return [b for b in BAD if b in t]
 
 # ---- end to end: server reads the same DB, pages and snapshot follow

@@ -63,7 +63,7 @@ def api(path, qs):
         from . import hosted as _HO, routewatch as _RW
         return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
                     txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), started=STARTED, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
-                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"]), False
+                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state()), False
     if path == "/api/routes":   # 1.26.188: route halts from POAScan's existing probes (routewatch.py)
         from . import routewatch as _RW
         return _RW.public(), False
@@ -214,6 +214,26 @@ def api(path, qs):
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/pending-by-epoch": return A.pending_by_epoch(), False
     if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "dropped", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
+    if path == "/api/anchors/timeline":   # anchorsview.py: stored anchors (minepoa, cross checked with the fast index); no upstream read
+        bad = set(qs) - {"range", "sort", "dir", "limit", "format"}
+        if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))
+        rg = (qs.get("range") or ["7d"])[0]
+        if rg not in AV.RANGE_KEYS: raise BadRequest("range must be one of " + ", ".join(AV.RANGE_KEYS))
+        so, dr = SS.check((qs.get("sort") or ["height"])[0], AV.SORTS, (qs.get("dir") or ["desc"])[0], BadRequest)
+        return AV.api(rg, so, dr, qint(qs, "limit", 500, 1, 5000)), False
+    m = re.match(r"^/api/seals/([0-9a-fA-F]{64})$", path)
+    if m:   # seal count for one answer from stored seal bodies (fastindex.seals_for); a count only, never a blob or a score
+        if set(qs) - {"format"}: raise BadRequest("no parameters")
+        tid = m.group(1).lower(); row = db.q1("SELECT type FROM txs WHERE id=?", (tid,))
+        if not row: raise NotFound("transaction not found", found=False, tx=tid)
+        if row["type"] != "challenge": raise NotFound("not an answer (challenge) tx", found=True, answer=False, tx=tid)
+        return dict(FX.seals_for(tid), method=AG.BASE + "/about#fast-index"), False
+    if path == "/api/resolve":   # any identifier to a poa1 address or tx: archive first, the fast index only for an unknown external wallet
+        q = qs.get("q") or []
+        if set(qs) - {"q", "format"}: raise BadRequest("only q is accepted")
+        if len(q) != 1 or not q[0].strip(): raise BadRequest("q is required (one value)")
+        if len(q[0]) > 120: raise BadRequest("q is at most 120 characters")
+        return resolve(q[0].strip()), False
     if path == "/api/anchors": return A.anchors_latest(500, SG.selected() if SG.archived() else None), True   # current segment first; ?segment=1 keeps segment 1
     if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False
     if path == "/api/chains":   # address map; upstream_notice is added only while minepoa has /api/chains paused (keys stay addresses otherwise)
@@ -261,6 +281,21 @@ def prefix_hits(q, n=20):
     return [dict(kind="address", id=r["addr"]) for r in rows]
 
 from . import earn as EA, earnview as EV
+from . import fastindex as FX, anchorsview as AV, scoresort as SS
+
+def resolve(q):
+    """/api/v1/resolve: {query, results: [{kind, id, url, via?}]}: a poa1 address, a tx id or prefix (POAScan's archive) or an
+    external wallet (minepoa's chains map, the stored fast index links, then one budgeted fast index read)."""
+    out = []
+    if V.ADDR_RX.match(q): out.append(dict(kind="address", id=q, url=f"{AG.BASE}/address/{q}", known=LK.known(q)))
+    elif FX.is_external(q):
+        for h in FX.resolve_external(q):
+            out.append(dict(kind="address", id=h["poa"], url=f"{AG.BASE}/address/{h['poa']}", via=dict(network=h["network"], address=h["address"], verified=h["verified"], source=h["source"])))
+    elif PREFIX_HEX.match(q) or HEX64.match(q):
+        out = [dict(h, url=f"{AG.BASE}/{'tx' if h['kind'] == 'transaction' else 'address'}/{h['id']}") for h in prefix_hits(q.lower() if HEX64.match(q) else q, 20)]
+    elif PREFIX_ADDR.match(q):
+        out = [dict(h, url=f"{AG.BASE}/address/{h['id']}") for h in prefix_hits(q, 20)]
+    return dict(query=q, results=out)
 
 def _earn_local_address(a):
     """The address payload without the live lookup: POAScan's archive only (the earn check adds no minepoa.com read)."""
@@ -350,7 +385,7 @@ ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/help", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/help", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=established", "/governance?tab=queue", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=protocol", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
@@ -930,6 +965,11 @@ class H(BaseHTTPRequestHandler):
                 if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q; cnt("address")
                 elif HEX64.match(q): loc = "/tx/" + q.lower(); cnt("tx")
                 elif re.match(r"^[Ee]?\d{1,7}$", q): loc = "/epoch/" + q.lstrip("Ee"); cnt("epoch")
+                elif FX.is_external(q):   # an external wallet: its linked poa1 Agent (chains map, stored links, then the fast index)
+                    hits = [dict(kind="address", id=h["poa"]) for h in FX.resolve_external(q)]
+                    if len(hits) == 1: loc = "/address/" + hits[0]["id"]; cnt("address")
+                    elif hits: cnt("list"); return self.send(200, V.search_hits(q, hits))
+                    else: cnt("none"); return self.send(404, V.search_results(q))
                 elif PREFIX_HEX.match(q) or PREFIX_ADDR.match(q):   # partial hash or address: one match goes there, several list
                     hits = prefix_hits(q)
                     if len(hits) == 1: loc = ("/tx/" if hits[0]["kind"] == "transaction" else "/address/") + hits[0]["id"]; cnt("tx" if hits[0]["kind"] == "transaction" else "address")

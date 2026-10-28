@@ -639,6 +639,9 @@ def feeds():
     if ws["feed"]:
         out.append(dict(label="Swap writes", state=ws["feed"], last_ok=_iso_s(ws["since"]) if ws["state"] == "open" else None, http=ws["http"],
                         checked_at=ws["checked_at"], stale=ws["stale"]))
+    from . import fastindex as FX   # the indexed cache in front of minepoa.com: a row only while it is configured
+    fx = FX.feed(now)
+    if fx: out.append(dict(label=fx["label"], state=fx["state"], last_ok=fx["last_ok"], lag_s=fx["lag_s"]))
     live = [r.get("last_ok") for e, r in rows.items() if e in ("/api/status", "/api/networks") and r.get("last_ok")]
     fresh = bool(live) and now - max(live) <= LIVE_S
     moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S

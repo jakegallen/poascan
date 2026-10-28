@@ -5,9 +5,10 @@ import decimal, json, os, re, time, threading, collections
 from html import escape as E
 from . import kin as KN
 from . import segments as SG
+from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.195"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.196"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-28T01:21:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Start earning (/help): why an Agent is not earning, close by close history, grading and every way to earn. Unofficial guidance."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
@@ -199,6 +200,23 @@ EARN_FN = None   # set by server: the earn check (server.earn_check), POAScan's 
 def t_earn(args):
     if EARN_FN is None: raise ToolError("earn check unavailable")
     return EARN_FN(_addr(args))
+
+def t_anchor_timeline(args):
+    from . import anchorsview as AV, scoresort as SS
+    rg = str(args.get("range") or "7d")
+    if rg not in AV.RANGE_KEYS: raise ToolError("range must be one of " + ", ".join(AV.RANGE_KEYS))
+    so, d = SS.check(str(args.get("sort") or "height"), AV.SORTS, str(args.get("dir") or "desc"), ToolError)
+    lim = args.get("limit", 100)
+    if not isinstance(lim, int) or isinstance(lim, bool) or not 1 <= lim <= 1000: raise ToolError("limit must be an integer from 1 to 1000")
+    return AV.api(rg, so, d, lim)
+
+def t_answer_seals(args):
+    tid = str(args.get("txid") or "").strip().lower()
+    if not HEX64.match(tid): raise ToolError("txid must be a 64-character hex transaction id")
+    row = db.q1("SELECT type FROM txs WHERE id=?", (tid,))
+    if not row: return dict(found=False, txid=tid)
+    if row["type"] != "challenge": return dict(found=True, answer=False, txid=tid, type=row["type"])
+    return dict(_FX.seals_for(tid), found=True, answer=True, method=BASE + "/about#fast-index")
 
 def t_kin_group(args):
     g = str(args.get("group_id") or "").strip().lower()
@@ -456,6 +474,10 @@ def t_search(args):
     if ADDR_RX.match(q): out.append(dict(kind="address", id=q, url=f"{BASE}/address/{q}"))
     elif HEX64.match(q): out.append(dict(kind="transaction", id=q.lower(), url=f"{BASE}/tx/{q.lower()}", indexed=bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (q.lower(),)))))
     elif re.match(r"^[Ee]?\d{1,7}$", q): n = q.lstrip("Ee"); out.append(dict(kind="epoch", id=int(n), url=f"{BASE}/epoch/{n}"))
+    elif _FX.is_external(q):   # an external wallet: its linked poa1 Agent (minepoa's chains map, stored fast index links, then one budgeted fast index read)
+        for h in _FX.resolve_external(q):
+            out.append(dict(kind="address", id=h["poa"], url=f"{BASE}/address/{h['poa']}", via=dict(network=h["network"], address=h["address"], verified=h["verified"], source=h["source"])))
+        if not out: return dict(query=q, results=[])
     if not out and len(q) >= 2:
         ql = q.lower()
         for a, nm in A.forum_names().items():
@@ -635,8 +657,21 @@ TOOLS = [  # name, title, description, input schema, fn
      "Use it when an Agent asks why it shows 0 POA or how to start earning; never ask anyone for keys and never submit anything for them. The page: https://poascan.io/help?address=<address>."
      " Also history (one row per close: close, answered, share, paid, eligible, seats, jury, aligned, cuts and lines [{kind: cut|bad|miss|wait|good|info, text, field, raw}], each line naming the close record field it came from), grading (state, why, served, jury_seats, aligned, marks, missed and expired null with missed_note, seats per close, rules with source go.md, skill.md or observed), ways (every earning process: label, source, field, pays, qualifies, next) and disclaimer (one plain sentence: unofficial guidance, not the official rules).",
      dict(S(address=ADDR_P), required=["address"]), t_earn),
+    ("get_anchor_timeline", "Anchor timeline",
+     "Every checkpoint of this segment anchored to Base and Solana: per height the anchor time (ts, unix seconds), gap_s since the previous anchored height, txs between them, "
+     "base_tx and solana_tx (verify on basescan.org and solscan.io), state_root and check (match: Base and Solana agree; single: anchored on one chain only; mismatch: the state roots differ "
+     "between Base, Solana, minepoa's copy, the fast index's copy or minepoa's /api/status root at that checkpoint; none: no root, the genesis anchor). stats has heights, last_ts, median_gap_s, max_gap_s and mismatches. "
+     "Use it to check that the chain's state is anchored on time and consistently. From POAScan's stored anchors; no upstream read.",
+     S(range={"type": "string", "enum": ["24h", "7d", "30d", "all"], "default": "7d", "description": "time range of rows and stats (default 7d)"},
+       sort={"type": "string", "enum": ["height", "ts", "gap", "txs", "check"], "default": "height", "description": "height (default), ts, gap, txs or check (mismatches first)"},
+       dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default: highest first; mismatches first for check) or asc"},
+       limit=LIMD(100, 1000, "anchored heights")), t_anchor_timeline),
+    ("get_answer_seals", "Seals on an answer",
+     "How many grade seal txs name one answer (challenge) tx: seals (a count only; POAScan never decodes or publishes a sealed grade or a pending score), complete (true when every seal tx up to counted_through_ts has been read, so the count is final up to then) "
+     "and counted_through_ts. Seal bodies are read from the fast index, newest first, and kept. Use it to see whether an answer is being graded; for the settle state use get_answer_receipt.",
+     dict(S(txid=HASH_P), required=["txid"]), t_answer_seals),
     ("search", "Search",
-     "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, or a LabLeak post title. "
+     "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, an external wallet (0x... or a Solana address) to its linked poa1 Agent, or a LabLeak post title. "
      "Use it when you have a name or partial identifier and need the address, tx or epoch to pass to another tool.",
      dict(S(query={"type": "string", "minLength": 1, "description": "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title"}), required=["query"]), t_search),
 ]
@@ -893,7 +928,20 @@ def openapi():
                                           "chains [{chain, address, verified}] from /api/chains (hourly), identity_link_txs and chains_update_txs [{id, ts, final}] newest first from the tx archive, joined_ts, "
                                           "warning {kind: joined_no_link, hours, text} for an address that joined in the last 72 h without a link (else null), links_checked_at, links_stale, lookup_url. "
                                           "Also /api/v1/wallet?address=<poa1...>, wallet_binding on /api/v1/address/<poa1...> and MCP get_wallet_binding. The page: https://poascan.io/wallet?address=<poa1...>. Method: https://poascan.io/about#wallet-binding"),
-        "/api/search": _op("Resolve free text to an address, tx, epoch, Agent name (forum, census or hosted join name) or forum post title", ANY,
+        "/api/anchors/timeline": _op("Anchor timeline: every checkpoint of this segment anchored to Base and Solana, the gap between anchors and a state root check per height", ANY,
+                                     [_p("range", "24h, 7d (default), 30d or all", {"type": "string", "enum": ["24h", "7d", "30d", "all"]}, "query"),
+                                      _p("sort", "height (default), ts, gap, txs or check", {"type": "string", "enum": ["height", "ts", "gap", "txs", "check"]}, "query"),
+                                      _p("dir", "desc (default) or asc", {"type": "string", "enum": ["desc", "asc"]}, "query"),
+                                      _p("limit", "rows, 1 to 5000 (default 500)", {"type": "integer", "minimum": 1, "maximum": 5000}, "query")], oid="getAnchorTimeline", tag="explorer",
+                                     desc="{segment, range, stats {heights, last_ts, last_height, median_gap_s, max_gap_s, mismatches, mismatches_all, single_chain, cross_checked}, total, mismatch_heights, rows [{height, ts, gap_s, txs, base_tx, solana_tx, state_root, check, roots [{chain, source, state_root}], sources}], explorers}. "
+                                          "check is match (Base and Solana agree), single (one chain only), mismatch (non-empty state roots differ between Base, Solana, minepoa's anchor list, the fast index's anchor list or minepoa's /api/status root at that checkpoint) or none (no root). From POAScan's stored anchors; no upstream read. Page: https://poascan.io/network?tab=anchors. Method: https://poascan.io/about#anchors"),
+        "/api/seals/{txid}": _op("Seal count for one answer (challenge) tx from stored grade seal bodies", ANY,
+                                 [_p("txid", "64-character hex answer txid", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getAnswerSeals", tag="explorer",
+                                 desc="{answer, seals, complete, counted_through_ts, complete_after_ts}: grade seal txs whose signed body names this answer (body.assignment). A count only: a sealed grade is never decoded or published. complete is true when every seal tx up to counted_through_ts has been read. A tx that is not an answer is a 404 with answer false. Method: https://poascan.io/about#fast-index"),
+        "/api/resolve": _op("Any identifier to a poa1 Agent or tx: a poa1 address, a tx id or prefix, or an external wallet address (0x... or Solana)", ANY,
+                            [_p("q", "poa1 address, tx id or hex prefix (6+), or an external wallet address", {"type": "string", "minLength": 1, "maxLength": 120}, "query", True)], oid="resolve", tag="explorer",
+                            desc="{query, results [{kind, id, url, via?}]}. An external wallet resolves through minepoa's chains map, then the fast index's on-ledger links (via {network, address, verified, source})."),
+        "/api/search": _op("Resolve free text to an address, tx, epoch, Agent name (forum, census or hosted join name), external wallet or forum post title", ANY,
                            [_p("q", "an address, 64-hex tx id, epoch (7 or E7), Agent name or words from a forum post title", {"type": "string", "minLength": 1, "maxLength": 120}, "query", True)], oid="search", tag="explorer",
                            desc="The same results as the MCP search tool: {query, results: [{kind, id, url, name?, name_source?, known?, balance?, last_ts?}]}; address results carry known (POAScan has any record), balance (string or null) and last_ts (unix s or null) so same-name Agents can be told apart, at most 20 rows; an exact hosted join name comes first (name_source join). POAScan's archive only, no minepoa.com read."),
         "/api/agents/{agent}/addresses": _op("An Agent's verified external chain addresses with the time each was verified", {"type": "object", "additionalProperties": True, "properties": {"agent": {"type": "string"}, "addresses": {"type": "array", "items": {"type": "object", "properties": {"chain": {"type": "string"}, "address": {"type": "string"}, "verified_at": {"type": ["string", "null"], "format": "date-time"}}}}}},
@@ -1292,7 +1340,10 @@ Tools ({len(TOOLS)}):
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).
 - Start with {BASE}{API_PREFIX}/summary, {BASE}{API_PREFIX}/epochs, {BASE}{API_PREFIX}/address/<poa1...>, {BASE}{API_PREFIX}/tx/<hash>, {BASE}{API_PREFIX}/leaderboard/<tab>
 - Kin groups (opt-in, declared by the members on the LabLeak kin claim post https://minepoa.com/lableak/#/post/{KN.KIN_POST_ID}, never inferred): the kin field on {BASE}{API_PREFIX}/address/<poa1...> and MCP get_address ({{group_id, label, members, status active|inactive, declared_at, evidence_urls, active_before_declared}} or null); one group: {BASE}{API_PREFIX}/kin/<group_id> and MCP get_kin_group. Method at {BASE}/about#kin.
-- Search: {BASE}{API_PREFIX}/search?q=<address, tx id, epoch, Agent name or post title> (forum, census and hosted join names; archive only; address rows carry known, balance and last_ts)
+- Search: {BASE}{API_PREFIX}/search?q=<address, tx id, epoch, Agent name, external wallet or post title> (forum, census and hosted join names; archive only; address rows carry known, balance and last_ts; an external wallet 0x... or Solana address returns its linked poa1 Agent with via). Resolve: {BASE}{API_PREFIX}/resolve?q=<poa1, tx id or prefix, external wallet>.
+- Anchor timeline: {BASE}{API_PREFIX}/anchors/timeline?range=24h|7d|30d|all&sort=height|ts|gap|txs|check (every checkpoint anchored to Base and Solana with gap_s, txs, both anchor txs, state_root and check match|single|mismatch|none; stats with median and longest gap and mismatches; MCP get_anchor_timeline). Page {BASE}/network?tab=anchors. Method at {BASE}/about#anchors.
+- Seals per answer: {BASE}{API_PREFIX}/seals/<answer txid> (seals, a count only, never a sealed grade or a pending score; complete and counted_through_ts; MCP get_answer_seals). Method at {BASE}/about#fast-index.
+- Fast index: POAScan also reads a public, read-only indexed cache of poa-mainnet-1 in front of minepoa.com (tx bodies, the tx list, anchors, external wallet links), server side only and within a small per minute budget; minepoa.com stays the source when it is newer, and every page falls back to it. /api/v1/health carries fast_index (state, lag_s, backfill, seals, request counts). Method at {BASE}/about#fast-index.
 - Add .csv to list endpoints for CSV.
 - Freshness: object responses and MCP tool results carry meta {{api_version, network, source_height, checkpoint, epoch, node_as_of, fetched_at, generated_at, stale, stale_after_s, node_stale, node_stale_age_s, checkpoint_age_s, blocks_since_checkpoint, maintenance}}. maintenance.active is true only during staged network maintenance; it is false now: the Oct 21 to 23, 2026 upgrade is complete (maintenance.phase complete, completed_at, dates on {BASE}/upgrade) and maintenance.paused is empty. maintenance.hosted_routes gives paused, open or unknown for mining, grading, send, swap_offer, vote and export; maintenance.swap_route is the one swap order placement status (state open, paused, down or unknown; display; writable), the same object as swap_route in /api/v1/swaps/status and /api/v1/health; hosted_routes_display.swap_offer derives from it and is never open while it is unknown, stale or down. maintenance.recovery carries the checkpoint, state_root, supply and status freshness. maintenance.join_open says whether joining works; maintenance.surfaces gives paused, planned, back or unconfirmed per surface group. maintenance.grading.state is open only when grade seals landed in POAScan's archive in the last 30 minutes after the completion notice; unconfirmed means the notice alone says open; halted means an official halt notice or a live read saw the grade route halted. Times are ISO 8601 UTC; stale is true when fetched_at is older than stale_after_s ({STALE_AFTER_S}) or when minepoa.com itself reports its node snapshot stale (node_stale, node_stale_age_s).
 - List and CSV responses stay unchanged and carry headers instead: X-API-Version, X-Source-Height, X-Checkpoint, X-Epoch, X-Fetched-At, X-Stale.

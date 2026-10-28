@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.196] - 2026-10-27
+
+### Added
+- Fast index: POAScan's server now also reads a public, read-only indexed cache of poa-mainnet-1. Every 5 minutes it pulls the cursor paged tx list into the archive (backfill a few pages a run), and its anchor list and on-ledger wallet links every 30 minutes. At most 30 reads a minute, no key, token or cookie, backoff and Retry-After holds. minepoa.com stays the source for live numbers and the fallback for everything.
+- Tx pages ask the fast index first: a final tx there is stored for good with no minepoa.com read; pending, missing or failing reads go to minepoa.com as before.
+- Seals on an answer: a Seals row on challenge tx pages, `/api/v1/seals/<txid>` and MCP `get_answer_seals` count grade seals per answer from stored links (each seal body read once, only the link kept, never the sealed blob). Partial until every seal up to the index's newest tx is read. A count is not a grade.
+- Anchor timeline at `/network?tab=anchors`: every anchored checkpoint with Base and Solana txs (basescan, solscan), gap since the previous height, txs, state root and a Match, Base only, Solana only or Mismatch check across Base, Solana, both anchor lists and minepoa.com's status root. Gap chart, 24h, 7d, 30d and All ranges, sortable headers. `/api/v1/anchors/timeline` and MCP `get_anchor_timeline` (46 tools).
+- Search resolves an external wallet (0x or Solana) to its Agent, from minepoa.com's chains map, then the fast index's links. `/api/v1/resolve?q=` returns the same results; `/api/v1/search` and MCP `search` rows add `via`.
+- Fast index row in the status note and Health feeds (OK, Degraded past 30 minutes behind, Down after 30 minutes without a good read; Partial when not OK). `/api/v1/health` adds `fast_index` (state, lag, backfill, seal coverage, request counts).
+- An address page whose minepoa.com read fails with nothing stored shows the fast index balance, tagged.
+- Methodology at `/about#anchors` and `/about#fast-index`. OpenAPI and llms.txt describe the new endpoints.
+- `tools/fastindex_test.py` in CI.
+
 ## [1.26.195] - 2026-10-27
 
 ### Added

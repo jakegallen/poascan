@@ -1,6 +1,6 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
 import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
-from . import db, strain as _ST, segments as _SG
+from . import db, strain as _ST, segments as _SG, fastindex as _FX
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
 UA = "POAScan-indexer/1.0 (+https://poascan.io; read-only)"
@@ -928,16 +928,23 @@ def get_tx_detail(tid, allow_fetch=True, bg=None):
     if not mine:                        # another request is fetching this tx: wait briefly, then use what is stored
         ev.wait(ONDEMAND_TIMEOUT + 2)
         return get_tx_detail(tid, allow_fetch=False)
+    fx = None
     try:
-        d = _bg_fetch_tx(tid, bg) if bg else fetch_ondemand(f"/api/explorer/tx/{tid}", TX_EP, tid)
+        # fast index first (fastindex.py): a final row there is the same signed tx, so minepoa.com is not asked at all.
+        # Off, over its budget, failing or not indexed yet: None, and the minepoa.com read below runs as before.
+        fx = _FX.tx_detail(tid, visitor=not bg)
+        if fx and fx.get("final"): d = fx
+        else: d = _bg_fetch_tx(tid, bg) if bg else fetch_ondemand(f"/api/explorer/tx/{tid}", TX_EP, tid)
     except Busy:
         if r: return json.loads(r["json"])
+        if fx: return fx   # minepoa.com failed: the index's pending copy says what happened (not stored)
         raise
     finally:
         with _tx_lock: _tx_inflight.pop(tid, None)
         ev.set()
     db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
-    upsert_txs([d], "explorer/tx")
+    upsert_txs([d], "explorer/tx" if d is not fx else _FX.SOURCE)
+    if d.get("type") == "grade-sealed": _FX.link_seal(d)
     return d
 
 def job_sample(n=20):
@@ -1140,4 +1147,5 @@ def start(seed_dir=None):
     from . import swapflag as _SF; _SF.start()   # the shared swap flag, read only, its own thread (never on the minepoa budget)
     threading.Thread(target=run_forever, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
     th = threading.Thread(target=run_forever, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
+    _FX.start()   # the fast index sync, its own thread and budget (no-op without FAST_INDEX_URL)
     return th

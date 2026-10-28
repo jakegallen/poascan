@@ -521,6 +521,11 @@ def status_pill(f):
     ur = _upgrade_reason()   # while maintenance is on, its line is in the note whatever state outranks it (Stale, Lagging)
     if ur: reasons.insert(0, ur) if state == "up" else reasons.append(ur)
     if not reasons: reasons.append("All systems normal." if state == "live" else (why.rstrip(".") + "." if why else label + "."))
+    try:
+        from . import fastindex as _FX
+        fl = _FX.pill_line()   # how current the indexed cache is; Partial comes from its feed row, never from this line
+    except Exception: fl = None
+    if fl and state != "up": reasons.append(fl[0])
     links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
