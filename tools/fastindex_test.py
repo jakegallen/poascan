@@ -167,6 +167,15 @@ def main():
     hits = len(STATE["hits"]); FX.tx_detail(H("6", 1)); FX.sync(sleep=lambda s: None)
     check("429 with Retry-After holds every read", ok and len(STATE["hits"]) == hits and FX._hold[0] > time.time() + 60)
     STATE["mode"] = "ok"; FX._hold[0] = 0; FX._fails[0] = 0
+    FX._win.clear(); FX._vwin.clear(); t0 = time.time()
+    for _ in range(FX.PER_MIN - FX.RESERVE): FX._win.append(t0)
+    check("lookups and seal bodies stop at PER_MIN minus the reserve; the sync still reads", not FX._take("tx", True) and not FX._take("seal_body", False) and FX._take("overview", False))
+    FX._win.clear(); FX._vwin.clear()
+    for _ in range(3): FX._fail("TimeoutError")
+    check("failures back off lookups but not the 5 minute sync", FX._fhold[0] > time.time() and not FX._take("tx", True) and FX._take("txs", False))
+    FX._fhold[0] = 0; FX._fails[0] = 0; FX._win.clear()
+    rr = FX.requests_report()
+    check("health counts reads not sent, by reason, and the last error kind only", rr["not_sent"].get("minute_cap") and rr["last_error"]["kind"] == "TimeoutError" and "127.0.0.1" not in json.dumps(rr))
 
     # ---- search and resolve
     out = AG.t_search({"query": "0xabcdef0000000000000000000000000000000001"})["results"]

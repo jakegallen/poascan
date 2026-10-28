@@ -71,17 +71,22 @@ _lock = threading.Lock()
 _sent = collections.deque(maxlen=20000)      # (ts, kind) of every request sent
 _win = collections.deque(maxlen=200)         # send times within the last minute, all kinds
 _vwin = collections.deque(maxlen=200)        # visitor lookups within the last minute
-_hold = [0.0]; _fails = [0]; _last = dict(ok=None, err=None, err_kind=None, ms=None)
+_hold = [0.0]; _fhold = [0.0]; _fails = [0]; _last = dict(ok=None, err=None, err_kind=None, ms=None)
+_refused = collections.Counter()             # reads not sent, by reason
+SYNC_KINDS = ("overview", "txs", "anchors", "ext")   # the sync's own reads: a few every 5 minutes
+RESERVE = 6                                  # of PER_MIN, kept for the sync so lookups and seal bodies never starve it
 _neg = collections.OrderedDict()
 
 def _take(kind, visitor, now=None):
     now = now or time.time()
     with _lock:
-        if _hold[0] > now: return False
+        sync = kind in SYNC_KINDS
+        if _hold[0] > now: _refused["retry_after"] += 1; return False   # the index asked us to wait: every read waits
+        if _fhold[0] > now and not sync: _refused["backoff"] += 1; return False   # failures back off lookups; the sync keeps its slow clock
         while _win and now - _win[0] >= 60: _win.popleft()
         while _vwin and now - _vwin[0] >= 60: _vwin.popleft()
-        if len(_win) >= PER_MIN: return False
-        if visitor and len(_vwin) >= VISITOR_PER_MIN: return False
+        if len(_win) >= (PER_MIN if sync else PER_MIN - RESERVE): _refused["minute_cap"] += 1; return False
+        if visitor and len(_vwin) >= VISITOR_PER_MIN: _refused["visitor_cap"] += 1; return False
         _win.append(now); _sent.append((now, kind))
         if visitor: _vwin.append(now)
     return True
@@ -90,8 +95,8 @@ def _fail(kind, retry=None):
     with _lock:
         _fails[0] += 1; _last["err"] = int(time.time()); _last["err_kind"] = kind
         wait = min(BACKOFF_MAX_S, 30 * (2 ** min(_fails[0] - 1, 6)))
-        if retry: wait = max(wait, min(6 * 3600, retry))
-        _hold[0] = max(_hold[0], time.time() + wait) if (_fails[0] >= 3 or retry) else _hold[0]
+        if retry: _hold[0] = max(_hold[0], time.time() + max(wait, min(6 * 3600, retry)))
+        elif _fails[0] >= 3: _fhold[0] = max(_fhold[0], time.time() + wait)
 
 def _ok(ms):
     with _lock: _fails[0] = 0; _last["ok"] = int(time.time()); _last["ms"] = ms
@@ -103,7 +108,7 @@ def _get(path, kind, visitor=False, timeout=None):
     req = urllib.request.Request(URL + "/api/" + path, headers={"User-Agent": UA, "Accept": "application/json", "Accept-Encoding": "gzip"})
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as r:
+        with urllib.request.urlopen(req, timeout=timeout or (TIMEOUT * 2 if kind in SYNC_KINDS else TIMEOUT)) as r:
             raw = r.read(MAX_BODY + 1)
             if len(raw) > MAX_BODY: raise ValueError("too large")
             if (r.headers.get("Content-Encoding") or "").lower() == "gzip": raw = gzip.decompress(raw)
@@ -127,7 +132,8 @@ def requests_report(now=None):
     for mins in (15, 60):
         c = collections.Counter(k for t, k in rows if now - t < mins * 60)
         out[f"last_{mins}m"] = dict(total=sum(c.values()), per_min=round(sum(c.values()) / mins, 2), by_kind=dict(sorted(c.items())))
-    out["caps_per_min"] = dict(all=PER_MIN, visitor=VISITOR_PER_MIN, seal_bodies=BODIES_PER_MIN)
+    out["caps_per_min"] = dict(all=PER_MIN, lookups_and_bodies=PER_MIN - RESERVE, visitor=VISITOR_PER_MIN, seal_bodies=BODIES_PER_MIN)
+    with _lock: out["not_sent"] = dict(_refused); out["last_error"] = dict(kind=_last["err_kind"], at=_last["err"]) if _last["err"] else None
     return out
 
 def _neg_hit(k):

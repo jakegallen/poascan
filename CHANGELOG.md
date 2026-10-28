@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.198] - 2026-10-27
+
+### Fixed
+- The fast index sync could be starved by tx lookups and seal body reads, or held by their failures, leaving the cache behind. Lookups and seal bodies now stop 6 reads short of the per minute cap, failure backoff applies to lookups only (a Retry-After still holds every read), and sync reads get a longer timeout. `/api/v1/health` `fast_index.requests` adds `not_sent` by reason and `last_error` (kind and time).
+
 ## [1.26.197] - 2026-10-27
 
 ### Changed
