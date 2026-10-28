@@ -71,10 +71,10 @@ def tab_html(a):
                  f'{" · " + E(x.get("type") or "") if x["kind"] == "latest" else ""}'
                  f'<span class="tlw">{lt(x["ts"], "dt") if x["ts"] else ""} {_where(x)}</span></div></li>' for x in ev)
     foot = f'<p class="cov dim small">From final txs and close records in this segment · <a href="{METHOD}">Method</a></p>'
-    return records_html(a) + card(f"Timeline · {len(ev)}", f'<ol class="tl">{li}</ol>' + foot, f'<a class="more" href="/api/v1/address/{E(a)}/timeline">API →</a>', id="timeline")
+    return records_html(a) + peers_html(a) + card(f"Timeline · {len(ev)}", f'<ol class="tl">{li}</ol>' + foot, f'<a class="more" href="/api/v1/address/{E(a)}/timeline">API →</a>', id="timeline")
 
 def api(a):
-    return dict(address=a, segment=SG.CURRENT, events=events(a), records=records(a), kinds=KINDS, method="https://poascan.io" + METHOD,
+    return dict(address=a, segment=SG.CURRENT, events=events(a), records=records(a), peers=peers(a), kinds=KINDS, method="https://poascan.io" + METHOD,
                 url=f"https://poascan.io/address/{a}?tab=timeline")
 # ---- 1.26.214: personal records (current segment) ----
 @A.cached("seg_reward_totals", 300)
@@ -123,3 +123,28 @@ def records_html(a):
     kv = "".join(f'<div class="kv"><span>{E(k)}</span><div>{v}</div></div>' for k, v in rows)
     return card("Records", kv + f'<p class="cov dim small">This segment, from close records and final txs · <a href="{METHOD}">Method</a></p>', id="agent-records")
 
+# ---- 1.26.215: peers (the Agent's join day cohort, current segment) ----
+@A.cached("join_days", 300)
+def join_days():
+    """addr -> UTC day (ts // 86400) of its first join tx in the current segment."""
+    return {r["a"]: int(r["d"]) for r in db.q("SELECT from_addr AS a, MIN(ts) / 86400 AS d FROM txs WHERE type='join' AND segment=? GROUP BY from_addr", (SG.CURRENT,))}
+
+def peers(a):
+    jd = join_days(); d = jd.get(a)
+    if d is None: return None
+    co = [x for x, y in jd.items() if y == d]; tot = seg_totals(); est = A.established_set()
+    vals = sorted((tot.get(x, 0.0) for x in co), reverse=True); mine = tot.get(a, 0.0)
+    paid = [v for v in vals if v > 0]
+    med = (paid[len(paid) // 2] if len(paid) % 2 else (paid[len(paid) // 2 - 1] + paid[len(paid) // 2]) / 2) if paid else 0.0
+    return dict(join_day_ts=d * 86400, cohort=len(co), established=sum(1 for x in co if x in est), paid=len(paid), median_paid_rewards=round(med, 6),
+                rank=1 + sum(1 for v in vals if v > mine) if mine > 0 else None, rewards=round(mine, 6))
+
+def peers_html(a):
+    p = peers(a)
+    if not p or p["cohort"] < 2: return ""
+    day = time.strftime("%b %-d", time.gmtime(p["join_day_ts"]))
+    rows = [("Joined the same UTC day", f'{p["cohort"]:,} Agents ({day})'), ("Established now", f'{p["established"]:,} of {p["cohort"]:,}'),
+            ("Paid this segment", f'{p["paid"]:,} of {p["cohort"]:,}'), ("Median rewards of paid peers", f'{intc(round(p["median_paid_rewards"]))} POA'),
+            ("This Agent", (f'#{p["rank"]:,} of {p["cohort"]:,} by rewards' if p["rank"] else "No rewards yet"))]
+    kv = "".join(f'<div class="kv"><span>{E(k)}</span><div>{v}</div></div>' for k, v in rows)
+    return card("Peers", kv + f'<p class="cov dim small">Agents whose first join tx in this segment fell on the same UTC day · <a href="{METHOD}">Method</a></p>', id="peers")

@@ -51,4 +51,12 @@ check("records: most answers in a day 1, most seals in a day 1", R["most_answers
 h2 = TL.tab_html(a)
 check("records card above the timeline, UTC day labelled", h2.index('id="agent-records"') < h2.index('id="timeline"') and "(UTC day)" in h2 and "Longest paid run" in h2)
 check("API carries records", S.api("/api/address/" + a + "/timeline", {})[0]["records"]["paid_closes"] == 3)
+d0 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=?", (a,))["t"] // D * D
+db.write("INSERT INTO txs(id, type, from_addr, to_addr, amount, epoch, ts, final, segment) VALUES(?,?,?,?,?,?,?,?,?)", ("p4" * 32, "join", ad(4), None, None, None, d0, 1, seg))
+A._cache.clear(); TL._memo.clear(); P = TL.peers(a)
+check("peers: same UTC join day cohort of 2, 1 paid, median 55.5, rank 1; the later joiner is not in it", P["cohort"] == 2 and P["paid"] == 1 and P["median_paid_rewards"] == 55.5 and P["rank"] == 1
+      and TL.peers(ad(3))["cohort"] == 1)
+h3 = TL.tab_html(a)
+check("peers card between records and timeline", h3.index('id="agent-records"') < h3.index('id="peers"') < h3.index('id="timeline"') and "Joined the same UTC day" in h3)
+check("API carries peers", S.api("/api/address/" + a + "/timeline", {})[0]["peers"]["cohort"] == 2)
 print("ALL OK" if not fails else f"{len(fails)} FAILED: {fails}"); sys.exit(1 if fails else 0)
