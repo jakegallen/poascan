@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.205] - 2026-10-28
+
+### Added
+- Governance, Intake: door tracker columns per close: admit rate, TTL out (removed by the inactivity TTL, not slashed), other out and net change.
+- A Proposal L params stat that flags when `estab_intake_floor`, `estab_intake_rate` or `estab_intake_from_epoch` first appear in the network params, read with the hourly params poll (no new upstream reads).
+- `/api/v1/governance/intake` and MCP `get_intake` carry the same fields and `proposal_l`; method on `/about#intake`.
+
 ## [1.26.204] - 2026-10-28
 
 ### Added
