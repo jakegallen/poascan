@@ -318,7 +318,7 @@ def t_intro_templates(args):   # 1.26.208
     from . import introwave as IW
     return IW.api()
 
-def t_genesis_carry(args):   # 1.26.209
+def t_genesis_carry(args):   # 1.26.209, 1.26.210
     from . import carry as CY
     f = args.get("filter") or ""
     if f not in ("", "carried", "not_carried"): raise ToolError("filter must be carried or not_carried")
@@ -784,8 +784,8 @@ TOOLS += [
      "median_gap_s, per_hour, authors_with_join and authors_with_answer. Aggregate counts and timing only; no author is named and no post is quoted. Use it to see how many intros came from one template and when.",
      S(), t_intro_templates),
     ("get_genesis_carry", "Genesis cut carry per address",
-     "How Established standing crossed the genesis cut, per address, from public records only: carried (flagged in the segment 2 genesis import), s1_established_last (engine fold of segment 1 close records), "
-     "s1_last_eligible, s1_change, s2_admitted, s2_established_now, s2_rewards and s2_paid_closes, plus counts. Addresses only, no ranking. Use it to check one address (address=) or the carried set (filter=carried).",
+     "How Established standing crossed the genesis cut, per address, from public records only: carried (flagged in the segment 2 genesis import), s1_established and s1_eligible (at the segment 1 close the cut carried, "
+     "engine fold of the close records), s2_admitted, s2_established_now, s2_rewards and s2_paid_closes, plus counts. Addresses only, no ranking. Use it to check one address (address=) or the carried set (filter=carried).",
      S(address={"type": "string", "description": "one poa1 address"}, filter={"type": "string", "enum": ["carried", "not_carried"], "description": "keep carried or not carried rows"}), t_genesis_carry),
     ("get_highlights", "Records and firsts",
      "Notable records for the last 24 hours, the last 7 days and the current segment, from POAScan's archive and the close records: largest reward to one Agent at a close, "
@@ -1072,7 +1072,7 @@ def openapi():
         "/api/governance/genesis-carry": _op("Genesis cut carry per address, from records only", ANY,
                                [_p("address", "one poa1 address", {"type": "string"}, "query", False), _p("filter", "carried or not_carried", {"type": "string", "enum": ["carried", "not_carried"]}, "query", False)], True,
                                oid="genesisCarry", tag="governance",
-                               desc="rows: address, carried, s1_established_last, s1_last_eligible, s1_change, s1_change_close, s2_admitted, s2_established_now, s2_rewards, s2_paid_closes; counts; genesis_import (url, sha256). Addresses only, no ranking."),
+                               desc="rows: address, carried, s1_established, s1_eligible, s2_admitted, s2_established_now, s2_rewards, s2_paid_closes; counts; genesis_import (url, sha256). Addresses only, no ranking."),
         "/api/highlights": _op("Records and firsts: 24 h, 7 days and the segment", ANY, [SEGQ], True, oid="highlights", tag="explorer",
                                desc="periods.day, week and ever: records (reward, paid, settled, served, transfer, busy_hour, answer_hour, seal_hour, seals_by_one, join_day), each value, who, close or tx, ts; firsts: key, label, who, ts, tx, epoch. From the archive and close records only."),
         "/api/governance/board": _op("Grading queue board: coverage by birth band, at 3 of 4, expiring, neutral closes (counts only)", ANY, [SEGQ], True,

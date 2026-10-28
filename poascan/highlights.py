@@ -5,7 +5,7 @@ import time
 from . import db, analytics as A, segments as SG
 from .ui import E, card, agent, lt, intc
 
-METHOD = "/about#records"
+METHOD = "/about#highlights"
 PERIODS = [("day", "24 h", 86400), ("week", "7 days", 7 * 86400), ("ever", "Segment", None)]
 
 def _poa(v):
