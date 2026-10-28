@@ -294,7 +294,7 @@ def upgrade_done():
     title = "Upgrade complete" if gst == "open" else "Upgrade complete per notice"
     if rh:   # never 'Upgrade complete' while the probes show routes halted
         title = "Routes halted"
-        sub = f"POAScan's probes show {_RWn(rh)} {'halted' if all(r['state'] == 'halted' for r in rh) else 'halted or down'}. The upgrade notice said all paths open."
+        sub = f"POAScan's probes show {_RWn(rh)} {M.halt_word(rh)}."
         wait = (f'<div class="grp wait" data-grp="halted"><h2><i></i>Halted</h2><ul>'
                 + "".join(_chip(r["label"] + (" down" if r["state"] == "down" else " halted") + (" since " if r["since_ts"] else ""), "wait", lt(r["since_ts"]) if r["since_ts"] else "") for r in rh)
                 + '</ul></div>')

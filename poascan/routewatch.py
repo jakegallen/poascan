@@ -5,6 +5,8 @@ Sources, per route (each a read another job already makes):
   route      the hosted route check (hosted.py, every 15 min, only while maintenance is on)
   writes     the swap write check (hosted.write_job, about every 10 min; hosted.swap_route() is its resolver)
   fetch_log  POAScan's own reads of lookup endpoints (tx, address, keyless assignments), with their consecutive failures
+  seals      grade seals landing in POAScan's archive (maint.grading_state, 1.26.200): a good read for Grading at the newest
+             seal's time while grading is confirmed open; never a bad read, so a gap in seals only ages the row to Stale
 A read is ok, halt (HTTP 503 with the halt text) or fail (5xx, timeout, no answer, a notice in place of data). 401, 404,
 429 and sheds are not route reads. Hysteresis: a route turns Halted (or Down, with no halt text) after BAD_N bad reads in
 a row, and back to Open after GOOD_N good reads in a row, so one failed or one good probe never flips it. 'since' is the
@@ -22,7 +24,7 @@ KEEP_ENDED = 10               # ended halts kept for the API (newest first)
 ROUTES = [
     ("hosted_mining", "Hosted mining", dict(pulse="hosted_mining", route="mining")),
     ("assignments", "Assignments", dict(pulse="assignments", fetch=("/api/assignments/:addr",))),
-    ("grading", "Grading", dict(pulse="grading", route="grading")),
+    ("grading", "Grading", dict(pulse="grading", route="grading", seals=True)),
     ("path_actions", "Path actions", dict(pulse="path_actions")),
     ("swap_writes", "Swap writes", dict(writes=True)),
     ("tx_lookup", "Tx lookup", dict(fetch=("/api/explorer/tx/:id", "/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id (swaps)"))),
@@ -87,6 +89,17 @@ def _writes_obs(seen):
     if w.get("checked_at") != t: return []   # an unclear try (404, 429, edge page): not a read
     return [(t, {"open": "ok", "paused": "halt", "down": "fail"}.get(w.get("state")), "writes")] if w.get("state") in ("open", "paused", "down") else []
 
+def _seal_obs(seen):
+    """A good Grading read at the newest seal's time, once per new seal, while maint.grading_state() is open (seals landed
+    in the last 30 min after the completion notice and no halt was observed). Local only: the archive POAScan already keeps."""
+    from . import maint as M
+    try: g = M.grading_state()
+    except Exception: return []
+    t = int(g.get("last_seal_at") or 0) if str(g.get("last_seal_at") or "").isdigit() else 0
+    if g.get("state") != "open" or not t or t <= seen.get("seals", 0): return []
+    seen["seals"] = t
+    return [(t, "ok", "seals")]
+
 def step(r, ts, kind, src):
     """One read into a route's record (hysteresis). r: dict(state, since, bad, good, first_bad, halt_seen, as_of, last_ok_at, last_bad_at)."""
     if ts < (r.get("as_of") or 0) - 3600: return r   # far older than what we have: ignore
@@ -122,6 +135,7 @@ def job(now=None):
         if src.get("route"): obs += _route_obs(src["route"], seen)
         if src.get("writes"): obs += _writes_obs(seen)
         if src.get("fetch"): obs += _fetch_obs(src["fetch"], seen)
+        if src.get("seals"): obs += _seal_obs(seen)
         r = recs.get(rid) or dict(state="unknown")
         for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s)
         recs[rid] = r

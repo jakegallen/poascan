@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.200] - 2026-10-28
+
+### Changed
+- The Grading route row takes good reads from grade seals landing in the archive while grading is confirmed open, so it no longer sits on a days old read. A gap in seals only ages it to Stale; it is never a bad read.
+- Halt headlines on `/upgrade` and Health say halted, down, or halted or down, as the probes read, and drop the old upgrade notice clause.
+- The header status note adds "Tx pages load from it." to the fast index line while Tx lookup is not OK and the index is current.
+- Epoch Payouts sorts by header (#, Agent, Reward).
+
+### Added
+- Each `/api/v1/epochs` row carries `record_sha256` and `record_bytes`: the hash and size of its close record at `/api/v1/epoch/<n>/record`, so a close can be checked against its source without the full file.
+
+### Fixed
+- An anchor target (`/about#official`, `#payouts` after a sort) landed under the sticky header.
+
 ## [1.26.199] - 2026-10-28
 
 ### Changed

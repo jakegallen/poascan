@@ -178,6 +178,9 @@ def api(path, qs):
         if (qs.get("from") or [""])[0] or (qs.get("limit") or [""])[0]:
             fr = qint(qs, "from", 0, 0, 10 ** 9); lim = qint(qs, "limit", 1000, 1, 1000)
             rows = [r for r in rows if r["epoch"] >= fr][:lim]
+        # 1.26.200: each row names its source close record by hash (record_sha256, record_bytes: /api/v1/epoch/<n>/record)
+        hx = {x["epoch"]: x for x in RR.index()}
+        rows = [dict(r, record_sha256=(hx.get(r["epoch"]) or {}).get("sha256"), record_bytes=(hx.get(r["epoch"]) or {}).get("bytes")) for r in rows]
         return rows, True
     m = re.match(r"^/api/epoch/(\d{1,9})/rewards$", path)
     if m:   # 1.26.199: one close's per Agent rewards as rows (rank, addr, reward), highest first; ?limit=&offset=; CSV

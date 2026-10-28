@@ -535,7 +535,9 @@ def status_pill(f):
         from . import fastindex as _FX
         fl = _FX.pill_line()   # how current the indexed cache is; Partial comes from its feed row, never from this line
     except Exception: fl = None
-    if fl and state != "up": reasons.append(fl[0])
+    if fl and state != "up":   # 1.26.200: while Tx lookup is not OK and the index is current, tx pages still load from it
+        txl = any(t.startswith(("Feed not OK", "Feeds not OK", "Tx lookup ")) and "Tx lookup" in t for t in reasons)
+        reasons.append(fl[0] + (" Tx pages load from it." if txl and "Reading" not in fl[0] and "unavailable" not in fl[0] else ""))
     links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read

@@ -598,8 +598,12 @@ def probe_halts():
 def halt_line(rh):
     """(headline, short) while probes show routes halted."""
     from . import routewatch as RW
-    word = "halted" if all(r["state"] == "halted" for r in rh) else "halted or down"
-    return (f"Probes show {RW.names(rh)} {word}. The upgrade notice said all paths open.", "Routes halted.")
+    return (f"Probes show {RW.names(rh)} {halt_word(rh)}.", "Routes halted.")
+
+def halt_word(rh):
+    """halted, down, or halted or down when the routes differ (1.26.200: a route that is only down never reads halted)."""
+    st = {r["state"] for r in rh}
+    return "halted" if st == {"halted"} else "down" if st == {"down"} else "halted or down"
 
 def _route_halts_meta():
     try:

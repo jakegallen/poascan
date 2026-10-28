@@ -4,6 +4,9 @@ tabbed page is its own canonical URL (hyphenated tabs too) and /help, /wallet an
 descriptions; /api/v1/epochs pages with from and limit; /api/v1/epoch/<n>/rewards lists one close's rewards (CSV,
 limit, offset, 404 for an unknown close); llms.txt has the new Agent loop, the read table, the small epochs line and
 never tells anyone to put a credential in a URL; /about names the official links and no other account.
+1.26.200: the Grading route row takes good reads from grade seals in the archive (never a bad read); halt headlines say
+halted, down, or halted or down, without the old notice clause; the status note says tx pages load from the fast index; epoch Payouts sorts by header; /api/v1/epochs rows carry record_sha256 and record_bytes;
+anchor targets clear the sticky header.
 In-process server, temp database, no request leaves the box. Usage: python3 tools/audit1028_test.py"""
 import json, os, sys, tempfile, threading, urllib.error, urllib.request
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -93,6 +96,12 @@ st, body, _ = get("/api/v1/epochs"); allr = json.loads(body)
 check(f"/epochs unchanged without from or limit ({len(allr)} rows)", st == 200 and len(allr) == 12)
 st, body, _ = get("/api/v1/epochs?from=5&limit=3"); pg = json.loads(body)
 check(f"/epochs?from=5&limit=3 ({[r['epoch'] for r in pg]})", st == 200 and [r["epoch"] for r in pg] == [5, 6, 7])
+from poascan import records as RR
+_h = {x["epoch"]: x["sha256"] for x in RR.index()}
+check(f"/epochs rows carry record_sha256 matching /epoch/<n>/record ({pg[0].get('record_sha256', '')[:12]})",
+      all(r.get("record_sha256") == _h.get(r["epoch"]) and r.get("record_sha256") and r.get("record_bytes") for r in pg))
+_st, _b, _hd = get(f"/api/v1/epoch/{pg[0]['epoch']}/record")
+check("record_sha256 is the record's own hash", _st == 200 and __import__("hashlib").sha256(_b.encode("utf-8")).hexdigest() == pg[0]["record_sha256"])
 st, body, _ = get("/api/v1/epochs?from=x")
 check(f"/epochs?from=x is a 400 ({st})", st == 400)
 st, body, _ = get("/api/v1/epoch/3/rewards"); rw = json.loads(body)
@@ -109,6 +118,11 @@ check(f"OpenAPI lists the rewards route and epochs from and limit ({ek})", any(k
       and ek and '"from"' in json.dumps(spec["paths"][ek]) and '"limit"' in json.dumps(spec["paths"][ek]))
 st, body, _ = get("/epoch/3")
 check("epoch page Payouts card links the rewards CSV", "/api/v1/epoch/3/rewards.csv" in body)
+pay = body[body.index('id="payouts"'):] if 'id="payouts"' in body else ""
+check("Payouts headers sort (aria-sort, links to ?sort=)", 'aria-sort="ascending"' in pay[:6000] and 'href="/epoch/3?sort=reward#payouts"' in pay and 'href="/epoch/3?sort=agent#payouts"' in pay)
+st, body, _ = get("/epoch/3?sort=reward&dir=asc"); pay = body[body.index('id="payouts"'):]
+i1, i3 = pay.find(fixture.A1), pay.find(fixture.A3)
+check(f"Payouts ?sort=reward&dir=asc puts the smallest first ({i3} < {i1})", st == 200 and 0 < i3 < i1)
 
 # ---- llms.txt
 st, llms, _ = get("/llms.txt")
@@ -125,5 +139,44 @@ st, about, _ = get("/about")
 seg = about[about.index('id="official"'):about.index("<h3>Disclosure</h3>")] if 'id="official"' in about else ""
 check("about: official links", "poascan.io" in seg and "github.com/jakegallen/poascan" in seg and "POAScan account on LabLeak" in seg)
 check("about: the official links line names no other account", "kinmeng" not in seg.lower() and "/u/" not in seg)
+
+# ---- 1.26.200: Grading row fed by seals, precise halt words, the tx line in the status note
+import time as _t
+from poascan import routewatch as RW, maint as M, ui as UI
+_gs = M.grading_state
+now = int(_t.time())
+M.grading_state = lambda now=None: dict(state="open", last_seal_at=now_seal[0])
+now_seal = [now - 120]
+RW.job(); RW.job()
+g = next(r for r in RW.state()["routes"] if r["id"] == "grading")
+check(f"Grading row: open from seals, fresh ({g['state']}, {g['sources']}, stale {g['stale']})", g["state"] == "open" and "seals" in g["sources"] and not g["stale"] and g["as_of_ts"] == now - 120)
+now_seal[0] = now - 60; RW.job()
+g = next(r for r in RW.state()["routes"] if r["id"] == "grading")
+check("Grading row: a newer seal moves as_of", g["as_of_ts"] == now - 60)
+M.grading_state = lambda now=None: dict(state="unconfirmed", last_seal_at=now - 7200)
+RW.job()
+g = next(r for r in RW.state()["routes"] if r["id"] == "grading")
+check(f"Grading row: no seals is never a bad read ({g['state']}, bad {g['bad_reads']})", g["state"] == "open" and g["bad_reads"] == 0)
+M.grading_state = _gs
+check("halt word: down only", M.halt_word([dict(state="down")]) == "down")
+check("halt word: halted only", M.halt_word([dict(state="halted")]) == "halted")
+check("halt word: mixed", M.halt_word([dict(state="down"), dict(state="halted")]) == "halted or down")
+hl = M.halt_line([dict(state="down", label="Swap writes")])[0]
+check(f"headline names the route and its state only ({hl!r})", hl == "Probes show Swap writes down." and "upgrade notice" not in hl)
+_pl = FX.pill_line
+FX.pill_line = lambda now=None: ("Fast index 2 min behind.", "Fast index 2 min behind.")
+p = UI.status_pill(dict(state="partial", label="Partial", why="Chain live. Not OK: Networks, Tx lookup", fetched_at=now))
+check(f"status note: tx pages load from the fast index while Tx lookup is not OK ({p['reasons']})", "Fast index 2 min behind. Tx pages load from it." in p["reasons"])
+p = UI.status_pill(dict(state="partial", label="Partial", why="Chain live. Not OK: Networks", fetched_at=now))
+check("status note: no tx line when Tx lookup is fine", "Fast index 2 min behind." in p["reasons"])
+FX.pill_line = lambda now=None: ("Fast index 40 min behind. Reading minepoa.com where newer.",) * 2
+p = UI.status_pill(dict(state="partial", label="Partial", why="Chain live. Not OK: Tx lookup", fetched_at=now))
+check("status note: no tx line while the index is behind", not any("Tx pages load" in r for r in p["reasons"]))
+FX.pill_line = _pl
+check("no em or en dashes in the new copy", all("\u2014" not in x and "\u2013" not in x for x in (hl, open(os.path.join(ROOT, "poascan", "routewatch.py")).read())))
+
+css = open(os.path.join(ROOT, "static", "style.css")).read()
+check("anchors land below the sticky header (zero-specificity scroll margin, larger on phones)",
+      ":where([id]){scroll-margin-top:90px}" in css and "@media (max-width:1100px){:where([id]){scroll-margin-top:170px}}" in css)
 
 print("\n%d failed" % len(fails) if fails else "\nall passed"); sys.exit(1 if fails else 0)
