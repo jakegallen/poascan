@@ -121,6 +121,8 @@ jobs:
         run: python tools/board_test.py
       - name: Records and firsts (24 h, 7 days, segment; archive and close records only)
         run: python tools/highlights_test.py
+      - name: Intro templates test
+        run: python tools/introwave_test.py
       - name: Polite polling (backoff with jitter and Retry-After, incremental feed, cadence, on-demand caps, upstream counter)
         run: python tools/polite_test.py
       - name: 401 backoff (a lone 401 keeps the 60 s feed; 3 in a row, 429, 5xx or a timeout slow it)

@@ -89,7 +89,8 @@ NTIP = ("POAScan's replay of a proposed rule, until a close record carries neutr
 def card_html():
     d = data()
     if d["last_close"] is None: return ""
-    gl = d["grading_list"]; cov = d["birth_panel"] / d["pending"] if d["pending"] else None
+    gl = d["grading_list"]; cov = d["birth_panel"]
+    if gl and (gl.get("as_of") or 0) < (d.get("last_close_ts") or 0): gl = None   # the grading list predates the newest close: use the record / d["pending"] if d["pending"] else None
     s = "".join([stat("Pending", intc(d["pending"]), tip=f'In basis.pending at the E{d["last_close"]} close'),
                  stat("Birth panel", _pct(cov), tip="Pending answers with a panel in the close record"),
                  stat("At 3 of 4", intc(gl["at_three"]) if gl else intc(d["at_three_record"]),
@@ -105,7 +106,7 @@ def card_html():
     ctab = (f'<div class="tw"><table class="hist cal gov"><thead><tr><th>Close</th><th class="r">Answers</th><th class="r dk">Longest gap</th><th class="r">Seals</th>'
             f'<th class="r dk">Baseline</th><th class="r">neutral_answer {qtip(NTIP, METHOD, "About neutral closes", "hv")}</th><th class="r">neutral_grading</th></tr></thead><tbody>{ct}</tbody></table></div>') if cs else ""
     foot = (f'<p class="cov dim small">Close record E{d["last_close"]} ({lt(d["last_close_ts"], "dt")}) and POAScan\'s tx archive'
-            + (f' · grading list as of {lt(gl["as_of"], "t")}' if gl and gl.get("as_of") else "") + f' · Counts only · <a href="{METHOD}">Method</a></p>')
+            + (f' · grading list as of {lt(gl["as_of"], "dt")}' if gl and gl.get("as_of") else "") + f' · Counts only · <a href="{METHOD}">Method</a></p>')
     links = '<a class="more" href="/api/v1/governance/board">API →</a>'
     return (card("Queue board", f'<div class="stats four">{s}</div><h3 class="rech">Birth panel by closes waited</h3>' + btab
             + ('<h3 class="rech">Neutral closes</h3>' + ctab if ctab else "") + foot, links, cls="histc", id="board"))

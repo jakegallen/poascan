@@ -50,5 +50,13 @@ tools = {t[0] for t in AG.TOOLS}
 check("MCP get_grading_board listed", "get_grading_board" in tools)
 h = GV.page({"tab": ["queue"]}); h = h if isinstance(h, str) else h[1]
 check("Queue tab shows the board", 'id="board"' in h and "Birth panel by closes waited" in h and "neutral_grading" in h and str(SCORE) not in h)
+_d = dict(BD.data()); _real = BD.data
+BD.data = lambda: dict(_d, at_three_record=304, grading_list=dict(at_three=5, at_quorum=8, pending=9, as_of=(_d.get("last_close_ts") or 0) - 600))
+_h = BD.card_html()
+check("At 3 of 4 uses the close record when the grading list predates the newest close", ">304<" in _h and "grading list as of" not in _h)
+BD.data = lambda: dict(_d, at_three_record=304, grading_list=dict(at_three=5, at_quorum=8, pending=9, as_of=(_d.get("last_close_ts") or 0) + 600))
+_h = BD.card_html()
+check("At 3 of 4 uses a grading list newer than the close", ">5<" in _h and "grading list as of" in _h)
+BD.data = _real
 print("FAILS:", fails) if fails else print("ALL OK")
 sys.exit(1 if fails else 0)
