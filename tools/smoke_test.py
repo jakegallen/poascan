@@ -39,7 +39,7 @@ META_KEYS = {"api_version", "source_height", "checkpoint", "epoch", "node_as_of"
 def main():
     port = free_port(); base = f"http://127.0.0.1:{port}"; tmp = tempfile.mkdtemp()
     env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_DB=os.path.join(tmp, "t.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9",
-               POASCAN_MCP_BURST="54")   # one call per MCP tool plus the protocol checks fit in one burst (46 tools since the anchor timeline)
+               POASCAN_MCP_BURST="64")   # one call per MCP tool plus the protocol checks fit in one burst (51 tools since 1.26.208)
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     p = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=root, env=env)
     fails = []
