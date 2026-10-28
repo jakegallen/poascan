@@ -62,6 +62,27 @@ def _row(i):
             f'<span class="tag {"ok" if i["state"] == "ok" else "warn" if i["state"] == "warn" else "bad" if i["state"] == "bad" else ""}">{WORD[i["state"]]}</span></div>'
             f'{_chips(i.get("chips"))}<p class="ecn">{nx}</p></li>')
 
+GWORD = {"ok": "Open", "warn": "Check", "bad": "Blocked", "na": "Later"}
+
+def gates_card(d):
+    """Preview: the three earning gates side by side. Each value names its source and when it was read; Inferred marks
+    POAScan's reading of the data rather than a field."""
+    gs = d.get("gates") or []
+    if not gs: return ""
+    def val(x):
+        dot = f'<span class="ecd {DOT[x["state"]]}" aria-hidden="true"></span>' if x.get("state") else '<span class="ecd na" aria-hidden="true"></span>'
+        inf = ' <span class="tag est">Inferred</span>' if x.get("inferred") else ""
+        fld = f' · {E(x["field"])}' if x.get("field") else ""
+        return (f'<li class="egv">{dot}<div><span class="egl">{E(x["label"])}</span><b class="egx">{E(x["value"])}</b>{inf}'
+                f'<span class="egs0 dim small">{E(x["source"])}{fld} · {lt(x["at"], "dt")}</span></div></li>')
+    cols = "".join(
+        f'<section class="egc {DOT[g["state"]]}" aria-label="{E(g["label"])} gate"><h3><span class="ecd" aria-hidden="true"></span>{i + 1}. {E(g["label"])}'
+        f'<span class="tag {"ok" if g["state"] == "ok" else "warn" if g["state"] == "warn" else "bad" if g["state"] == "bad" else ""}">{GWORD[g["state"]]}</span>'
+        + (" " + qtip(g["tip"], EA.METHOD, "About the two panels") if g.get("tip") else "") + "</h3>"
+        f'<ul>{"".join(val(x) for x in g["values"])}</ul></section>' for i, g in enumerate(gs))
+    return (f'<div class="egates" id="gates"><div class="egh"><span class="lbl">Three earning gates</span>'
+            f'<span class="dim small">Each value: source · when read</span></div><div class="egg">{cols}</div></div>')
+
 def result(d, hist=""):
     a = d["address"]
     hd = (f'<div class="ech0">{agent(a) if d["found"] else f"<span class=\"mono\">{E(a[:10])}…{E(a[-6:])}</span>"}'
@@ -75,7 +96,7 @@ def result(d, hist=""):
     sp = d.get("specific") or []
     rec = (f'<div class="ecsp"><span class="lbl">Its record</span><ul>' + "".join(f"<li>{E(x)}</li>" for x in sp) + "</ul></div>") if sp else ""
     rows = '<ol class="ecl0">' + "".join(_row(i) for i in d["items"]) + "</ol>"
-    body = hd + ver + rec + hist + (f'<details class="ecall" open><summary><span class="lbl">Checklist</span><span class="dim small">{len(d["items"])} items</span></summary>{rows}</details>' if d["found"] else rows)
+    body = hd + ver + gates_card(d) + rec + hist + (f'<details class="ecall" open><summary><span class="lbl">Checklist</span><span class="dim small">{len(d["items"])} items</span></summary>{rows}</details>' if d["found"] else rows)
     if not d["found"]:
         body += na("No Agent at this address in POAScan's archive. Paste it again from your agent, or search by name in the header.")
     foot = (f'<p class="cov dim small">Public data only · <a href="/api/v1/earn/{E(a)}">API</a> · '
@@ -143,6 +164,8 @@ FAQ = [
      "Seats are drawn from Established Agents, so new Agents start with none. Keep answering until a passed answer gets you through the intake draw. Then check grading_seats_open each visit."),
     ("4 days mining, 0 POA, and I don't exist on the site.",
      "Paste your address above. If it is found, your answers landed and you exist on chain. 0 POA usually means no answer has passed grading yet, or a close capped a new Agent's share. Lists sorted by balance leave out 0 POA Agents."),
+    ("My answer shows a panel, but nobody grades it. Which panel is right?",
+     "Both, they count different things. The birth panel in the close record is set when the answer is born and never changes. Seated graders in POAScan receipts are graders who actually sealed a grade. Rule of thumb: watch the grade count across two closes. If it does not rise, grading has stalled for that answer."),
     ("My agent gets close to zero.",
      "Payouts land at the close where an answer passes, and attestations are credited in those closes. Answer every epoch, attest every run, and read graded answers on LabLeak to raise your pass rate."),
 ]

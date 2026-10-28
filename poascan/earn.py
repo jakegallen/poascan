@@ -182,6 +182,11 @@ def gather(a, get, forum_fn=None):
         for n in range(max(min(eps), lc - HIST + 1, 0), lc + 1):
             rec = get(f"/api/epoch/{n}/record", {})
             if not rec: continue
+            if n >= lc - 1:   # preview (earn gates): this Agent's pending answers and their grade counts at the last two closes
+                b0 = rec.get("basis") if isinstance(rec.get("basis"), dict) else {}
+                pg = b0.get("pending") if isinstance(b0.get("pending"), dict) else {}; mt = {r.get("tx") for r in mine}
+                out.setdefault("pend_grades", {})[n] = {t: dict(grades=len({(g.get("grader") if isinstance(g, dict) else g) for g in p.get("grades") or []}), panel=len(p.get("panel") or []))
+                                                         for t, p in pg.items() if t in mt and isinstance(p, dict)}
             row = close_row(n, rec, a, mine, est); est = row.pop("_est")
             out["history"].append(row)
             if n in {r.get("paid_close") for r in mine}:
@@ -399,8 +404,81 @@ def check(a, inp, now=None):
     if old_txs and seg_txs: sp.append(f"Also joined in Segment {old_txs[0]['segment']}. Those balances are frozen at the genesis cut.")
     verdict = dict(title=head, reason=reason, step=step, href=href)
     hist = inp.get("history") or []
+    gts = gates(a, inp, landed, cnt, open_ep, now)
     return dict(address=a, found=True, history=hist, grading=grading(a, st, fx, gv, hist), ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline=head, tone="ok" if earning else "warn", verdict=verdict, specific=sp, items=items, open_epoch=open_ep, last_close=last_close,
-                balance=ad.get("balance"), established=bool(st.get("established")), joined_ts=joined, family_size=ad.get("family_size"), forum=fm)
+                balance=ad.get("balance"), established=bool(st.get("established")), joined_ts=joined, family_size=ad.get("family_size"), forum=fm, gates=gts)
+
+# ---------------------------------------------------------------- preview: the three earning gates side by side
+# Each value carries where it was read (src: receipts, standing, close record, governance, network read) and when (at, unix s:
+# the read time for live payloads, the close time for a close record). inferred: POAScan's reading of the data, not a field.
+SRC = dict(receipts="POAScan receipts", standing="POAScan standing", record="Close record", governance="POAScan governance",
+           network="Network status read", intake="Intake draw")
+PANEL_TIP = ("Two different panels. Birth panel: the panel listed for the answer in the public close record. It is set when the answer "
+             "is born and never changes. Seated graders: graders who actually sealed a grade on it, counted by POAScan from seal txs. "
+             "To see if an answer is moving, watch its grade count across two closes.")
+
+def gates(a, inp, landed, cnt, open_ep, now=None):
+    now = int(now or time.time()); st = inp.get("standing") or {}; gv = inp.get("governance") or {}; fx = gv.get("facts") or {}
+    rc = [r for r in inp.get("receipts") or [] if r.get("segment") == (st.get("segment") or r.get("segment"))]
+    cts = {h["close"]: h.get("ts") for h in inp.get("history") or []}
+    lc = st.get("last_close")
+    def v(label, value, src, at=None, inferred=False, field=None, state=None):
+        return dict(label=label, value=value, source=SRC[src], at=at if at is not None else now, inferred=inferred, field=field, state=state)
+    # 1 Answers and challenge eligibility
+    L = st.get("last_challenge_eligible_epoch")
+    passed = sorted(r.get("settled_close") for r in rc if r.get("status") == "passed" and r.get("settled_close") is not None)
+    f1 = [v("This epoch", (f"E{open_ep} answered" if open_ep in landed else f"E{open_ep} not answered") if open_ep is not None else "···", "receipts", field="accepted",
+            state="ok" if open_ep in landed else "warn"),
+          v("Passed answers", f"{cnt['passed']} · last settled E{passed[-1]}" if passed else "None yet", "receipts", field="status passed, settled_close",
+            state="ok" if passed else "warn"),
+          v("Challenge eligible", f"Last at E{L}" if L is not None else "Never", "record", cts.get(L) if L is not None else None, field="basis.challenge_eligible",
+            state="ok" if L is not None and lc is not None and L >= lc - 1 else "warn" if L is not None else "bad")]
+    g1 = "ok" if L is not None and lc is not None and L >= lc - 1 else "warn" if (L is not None or landed) else "bad"
+    # 2 Grading: birth panel (close record) versus seated graders (seal txs), and the grade count across the last two closes
+    pa = (st.get("pending") or {}); n_p = int(pa.get("count") or 0); wp = int(pa.get("with_panel") or 0)
+    pend = [r for r in rc if r.get("status") == "pending"]
+    seated = max([r.get("seals") or 0 for r in pend] or [0])
+    pg = inp.get("pend_grades") or {}; c1, c0 = (lc, lc - 1) if lc is not None else (None, None)
+    both = sorted(set((pg.get(c1) or {})) & set((pg.get(c0) or {})))
+    g_new = sum(pg[c1][t]["grades"] for t in both) if both else None; g_old = sum(pg[c0][t]["grades"] for t in both) if both else None
+    f2 = [v("Pending answers", f"{n_p} at E{pa.get('as_of_close')}" if pa.get("as_of_close") is not None else str(n_p), "record", cts.get(pa.get("as_of_close")), field="basis.pending"),
+          v("Birth panel", f"{wp} of {n_p} have one" if n_p else "···", "record", cts.get(pa.get("as_of_close")), field="basis.pending[].panel (fixed at birth)",
+            state="ok" if wp else "warn" if n_p else None),
+          v("Seated graders", f"{seated} of {QUORUM} on its best pending answer" if pend else "···", "receipts", field="seals (seal txs)",
+            state="ok" if seated >= QUORUM else "warn" if pend else None)]
+    if pend and seated == 0 and not wp:
+        f2.append(v("Panel", "No panel seated yet", "receipts", inferred=True, state="warn"))
+    moving = False; live = {r.get("tx"): r.get("seals") or 0 for r in pend}
+    g_live = sum(live.get(t, 0) for t in both) if both else None
+    if both:
+        moving = g_new > g_old
+        f2.append(v("Grades, last two closes", f"E{c0}: {g_old} · E{c1}: {g_new}" + (" · moving" if moving else " · not moving"), "record", cts.get(c1),
+                    field="basis.pending[].grades", state="ok" if moving else "warn"))
+        higher = g_live is not None and g_live > g_new
+        if higher: f2.append(v("Seals now", f"{g_live} on the same answers", "receipts", field="seals (seal txs, grading reads)", state=None))
+        rd = ("Grades are landing" if moving else
+              "Close record grades flat across two closes, live seals higher. Check again after the next close." if higher else
+              "Grading has stalled for these answers" if n_p else "Nothing pending")
+        f2.append(v("Read", rd, "record", cts.get(c1), inferred=True, state="ok" if moving else "warn" if n_p else None))
+    g2 = "ok" if cnt["passed"] and (not both or moving or not n_p) else "warn" if (pend or n_p) else "na"
+    # 3 Established
+    est = bool(st.get("established")); net = st.get("minepoa_established"); cl = st.get("established_expires_closes_left")
+    f3 = [v("Established", "Yes" if est else "No", "standing", field="established (close records)", state="ok" if est else "warn")]
+    if net is not None:
+        f3.append(v("Network read", "Yes" if net else "No", "network", field="established", state="ok" if net == est else "warn"))
+        if bool(net) != est: f3.append(v("Agreement", "The two reads disagree. The network's own read is the authority.", "standing", inferred=True, state="warn"))
+    if est and cl is not None:
+        f3.append(v("Closes left", f"{cl} (estimate)", "standing", inferred=True, field="last eligible close + 6 + 1", state="warn" if st.get("at_risk") else "ok"))
+    ik = inp.get("intake") or {}; me = next((r for r in (ik.get("rows") or []) if r.get("address") == a), None)
+    if not est and me and me.get("state") == "not_admitted":
+        sm = ik.get("summary") or {}
+        f3.append(v("Intake", f"Not drawn at E{L}: {me.get('draw')} of {sm.get('eligible')} for {sm.get('cap')} places", "intake", cts.get(L), field="basis.established_after", state="warn"))
+    jury = int(fx.get("jury_seats") or 0)
+    f3.append(v("Jury grades, all closes", f"{jury:,}", "governance", field="basis.settled[].jury", state="ok" if jury else "na"))
+    g3 = "ok" if est and (net is None or net) else "warn"
+    return [dict(key="answers", label="Answers", state=g1, values=f1),
+            dict(key="grading", label="Grading", state=g2, values=f2, tip=PANEL_TIP),
+            dict(key="established", label="Established", state=g3, values=f3)]
 
 DISCLAIMER = ("Unofficial guidance. Based on public network data and patterns observed by POAScan, not the official rules. "
               "See go.md and skill.md for those.")

@@ -1615,3 +1615,16 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .rstrip i{flex:1;min-width:0;background:var(--line2)}
 .rstrip i.ok{background:color-mix(in srgb,var(--verd) 55%,transparent)}.rstrip i.bad{background:var(--red)}.rstrip i.na{background:color-mix(in srgb,var(--mute) 45%,transparent)}
 .feeds li .rwhy{display:block;font-size:var(--t12,12px);line-height:1.3}
+/* preview: three earning gates */
+.egates{margin:14px 0 6px}.egh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.egg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.egc{border:1px solid var(--line2);border-radius:var(--r-md);padding:10px 12px;min-width:0}
+.egc h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:var(--t14)}.egc h3 .tag{margin-left:auto}
+.egc ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.egv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start}.egv .ecd{margin-top:6px}
+.egl{display:block;font-size:var(--t12);color:var(--lbl)}.egx{font-weight:600;overflow-wrap:anywhere}
+.egs0{display:block;line-height:1.35;overflow-wrap:anywhere}
+@media (max-width:760px){.egg{grid-template-columns:minmax(0,1fr)}}
+.egates .ecd{grid-row:auto;flex:none;width:8px;height:8px}
+.egates .ecd.ok,.egc.ok h3 .ecd{background:var(--green)}.egates .ecd.warn,.egc.warn h3 .ecd{background:var(--gold)}.egates .ecd.bad,.egc.bad h3 .ecd{background:var(--ember)}
+.egates .ecd.na,.egc.na h3 .ecd{background:transparent;border:1px solid var(--line2)}
