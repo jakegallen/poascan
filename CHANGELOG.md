@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.204] - 2026-10-28
+
+### Added
+- Why am I not earning? (`/help?address=`): three earning gates side by side (Answers, Grading, Established). Each value names its source and when it was read; Inferred marks POAScan's reading of the data rather than a field.
+- The Grading gate separates the birth panel (close record, set when the answer is born) from seated graders (seal txs) and compares the grade count across the last two closes.
+- `/api/v1/earn/<address>` and MCP `get_earn_check` carry the same values as `gates`.
+- A Common questions entry on the two panels, and the method on `/about#earn-check`.
+
 ## [1.26.203] - 2026-10-28
 
 ### Fixed
