@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.206] - 2026-10-28
+
+### Added
+- Governance, Queue: Queue board. Birth panel coverage by closes waited, answers at 3 of 4 seals, answers that expire within 2 closes, and the answer and grading neutral flags for the last 12 closes. Counts only; no pending seal or score is read or shown.
+- `/api/v1/governance/board` and MCP `get_grading_board`; method on `/about#board`.
+
 ## [1.26.205] - 2026-10-28
 
 ### Added
