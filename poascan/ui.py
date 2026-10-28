@@ -497,7 +497,7 @@ def _route_lines():
     except Exception: return []
     out = []
     for r in rs:
-        w = "halted" if r["state"] == "halted" else "down"
+        w = "degraded" if r.get("covered_by") else "halted" if r["state"] == "halted" else "down"   # 1.26.201: covered by the fast index
         t = r["since_ts"]
         out.append((f'{r["label"]} {w} since {time.strftime("%H:%MZ", time.gmtime(t))}.' if t else f'{r["label"]} {w}.',
                     f'{E(r["label"])} {w} since {_ztime(t)}.' if t else f'{E(r["label"])} {w}.'))

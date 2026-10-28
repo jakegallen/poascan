@@ -185,6 +185,57 @@ def write_job(now=None, get=None, force=False):
                                     **({"slow_since": old.get("slow_since") or now} if http is None else {}))
     db.put_blob(BLOB, dict(hb, routes=routes))
 
+# ---- 1.26.201: grade route read, always on (the upgrade-time route check above stopped at its completion) ----
+# One keyless GET of /api/hosted/grade about every GRADE_EVERY s (plus or minus GRADE_JITTER), WRITE_SLOW after
+# WRITE_SAME identical answers. No key, no query string, no body, no auth header: it can never grade anything. The halt
+# answer (503 with the halt text) is paused, the app's own JSON 4xx (auth or method) is open, any other 5xx or no answer
+# marks the route slow (a failing read for routewatch). 404, 429 and edge pages are unknown and keep the last state.
+# The read lands in the hosted_routes grading entry, so maint's observed halt and routewatch's route source see it.
+GRADE_PATH, GRADE_EVERY, GRADE_JITTER = "/api/hosted/grade", 900, 60
+GRADE_BLOB = "grade_check"
+
+def grade_request():
+    """The probe request, built in one place so a test can check it: GET, no query, no body, no key or auth headers."""
+    return urllib.request.Request(BASE + GRADE_PATH, headers={"User-Agent": UA, "Accept": "application/json"}, method="GET")
+
+def _grade_get():
+    req = grade_request()
+    from . import indexer as _I
+    try:
+        with _OPENER.open(req, timeout=TIMEOUT) as r: _I.count(GRADE_PATH + " (grade check)", r.status); return r.status, r.read(2048)
+    except urllib.error.HTTPError as e:
+        _I.count(GRADE_PATH + " (grade check)", e.code)
+        try: body = e.read(2048)
+        except Exception: body = b""
+        return e.code, body
+    except Exception: _I.count(GRADE_PATH + " (grade check)", "err"); raise
+
+def grade_job(now=None, get=None, force=False):
+    """Indexer job (ticks every minute; the stored next_at decides)."""
+    if not ON: return
+    get = get or _grade_get; now = int(now or time.time())
+    prev = db.get_blob(GRADE_BLOB)[0] or {}
+    if not force and (prev.get("next_at") or 0) > now: return
+    t0 = time.monotonic(); http = None
+    try: http, body = get(); st = classify(http, body)
+    except Exception as e:
+        st = None; body = b""
+        log.warning("hosted: grade check no answer (%s)", type(e).__name__)
+    fail = st is None and (http is None or (isinstance(http, int) and http >= 500))
+    record(now, GRADE_PATH, str(int(http)) if http is not None else "timeout", t0, st is not None)
+    same = st is not None and prev.get("state") == st and prev.get("http") == http
+    streak = (prev.get("streak") or 1) + 1 if same else 1
+    wait = (WRITE_SLOW if streak >= WRITE_SAME and not fail else GRADE_EVERY) + random.randint(-GRADE_JITTER, GRADE_JITTER)
+    db.put_blob(GRADE_BLOB, dict(state=st or prev.get("state"), http=http if st else prev.get("http"), tried=now, tried_http=http, streak=streak if st else prev.get("streak"),
+                                 checked_at=now if st else prev.get("checked_at"), next_at=now + wait))
+    hb = db.get_blob(BLOB)[0] or {}; routes = dict(hb.get("routes") or {}); old = routes.get("grading") or {}
+    if st:
+        sm = old.get("state") == st
+        routes["grading"] = dict(state=st, since=old.get("since") if sm else now, checked=now, code=http, tried=now, streak=(old.get("streak") or 1) + 1 if sm else 1)
+    elif fail: routes["grading"] = dict(old, tried=now, slow_since=old.get("slow_since") or now)
+    else: routes["grading"] = dict({k: v for k, v in old.items() if k != "slow_since"}, tried=now)
+    db.put_blob(BLOB, dict(hb, routes=routes))
+
 def _swap_read():
     """The newest clear read of /api/hosted/swap-offer: the write check (always on), or the maintenance route check when it
     read the same path later (1.26.185). dict(state, http, checked_at, since) or {} when neither read it clearly."""

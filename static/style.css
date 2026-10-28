@@ -1610,3 +1610,8 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
  .ewd div{grid-template-columns:1fr;gap:2px}
  .ehl{min-width:0}.ehist td:has(.ehl){min-width:0}
 }
+/* 1.26.201: Routes, a 24 h strip per route (one cell per 15 min) and the reason under a Down row */
+.feeds li .rstrip{grid-column:1/-1;display:flex;gap:1px;height:6px;margin-top:2px}
+.rstrip i{flex:1;min-width:0;background:var(--line2)}
+.rstrip i.ok{background:color-mix(in srgb,var(--verd) 55%,transparent)}.rstrip i.bad{background:var(--red)}.rstrip i.na{background:color-mix(in srgb,var(--mute) 45%,transparent)}
+.feeds li .rwhy{display:block;font-size:var(--t12,12px);line-height:1.3}

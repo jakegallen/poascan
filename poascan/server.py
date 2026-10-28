@@ -54,6 +54,21 @@ def qint(qs, k, default, lo, hi):
 
 TXS_MAX, OFFSET_MAX = 1000, 10_000_000
 
+SWAP_STATUSES = ("open", "filled", "cancelled", "expired", "delisted", "refunded")
+def swap_filter(rows, qs):
+    """/api/v1/swaps?status=a,b (live is an alias of open) and include_expired=1 (adds expired offers to a status
+    filter). Without status the default list already holds every offer, expired ones included, so include_expired
+    alone changes nothing. An unknown status is a 400."""
+    want = {x.strip().lower() for v in qs.get("status", []) for x in v.split(",") if x.strip()}
+    want = {"open" if x == "live" else x for x in want}
+    bad = sorted(want - set(SWAP_STATUSES))
+    if bad: raise BadRequest("status must be one or more of live, " + ", ".join(SWAP_STATUSES) + f" (got {', '.join(bad)})")
+    ie = (qs.get("include_expired") or [""])[0]
+    if ie not in ("", "0", "1", "true", "false"): raise BadRequest("include_expired must be 1 or 0")
+    if not want: return rows
+    if ie in ("1", "true"): want.add("expired")
+    return [r for r in rows if r.get("status") in want]
+
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
     if path == "/api/health":
@@ -188,17 +203,15 @@ def api(path, qs):
         if not hit:
             last = max((x["epoch"] for x in A.epoch_rows()), default=-1)
             raise NotFound("epoch not closed yet" if n > last and not SG.archived() else "unknown epoch", epoch=n, last_closed=last if last >= 0 else None, segment=SG.selected())
-        rw = A.epoch_detail(n).get("rewards") or {}
-        def amt(v):
-            try: return float(v)
-            except (TypeError, ValueError): return 0.0
-        rows = [dict(rank=i, epoch=n, segment=hit[0].get("segment"), addr=a, reward=v) for i, (a, v) in enumerate(sorted(rw.items(), key=lambda kv: (-amt(kv[1]), kv[0])), 1)]
+        rows = AG.epoch_reward_rows(n) or []
         lim = qint(qs, "limit", 10000, 1, 10000); off = qint(qs, "offset", 0, 0, 10 ** 6)
         return rows[off:off + lim], True
     if path == "/api/notices/verified":   # signed.feed: G0 signature results from POAScan's own store; no upstream read here
         if qs: raise BadRequest("no parameters")
         from . import signed as _SIG
         return dict(_SIG.feed(), upstream_notice=notices_notice()), False
+    if path == "/api/swaps" and (qs.get("status") or qs.get("include_expired")):   # 1.26.201: opt-in filters; the default stays every offer
+        rows, lst = SW.api(path, qs); return swap_filter(rows, qs), lst
     if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
@@ -401,8 +414,9 @@ CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in
 PAGE_LIMIT = AG.Limiter(float(os.environ.get("POASCAN_PAGE_RATE", "0.5")), int(os.environ.get("POASCAN_PAGE_BURST", "60")))
 PAGE_LIMITED = re.compile(r"^/(address|tx|swap|offer)/[^/]+$")
 _fci_seen = [False]
-ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
-          + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\n\nSitemap: https://poascan.io/sitemap.xml\n")
+# 1.26.201: Crawl-delay 5 s in every group, and sorted copies of a table (?sort=, ?esort=) are not crawled (bots were 76k page views a day; Bing, Yandex and several AI crawlers honour it)
+ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
+          + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
@@ -521,14 +535,39 @@ def moved(path, qs):
     return MOVED.get(path)
 V.ROUTES = STATIC_ROUTES
 _SITEMAP = [0, ""]
+SITEMAP_ADDRS = 200   # 1.26.201: was the top 500 holders, which brought crawlers to 16k address views a day
+
+def sitemap_addrs(cap=None):
+    """1.26.201: the addresses worth a crawl, ranked: the top 100 holders, then the Agents paid in the newest close by
+    reward (active now), deduplicated, at most SITEMAP_ADDRS. Each listed address page is served from the archive to a
+    crawler, so the list only steers which pages get indexed."""
+    cap = cap or SITEMAP_ADDRS; out, seen = [], set()
+    def add(a):
+        if a and a not in seen and len(out) < cap: seen.add(a); out.append(a)
+    try:
+        for r in A.holders()["rows"][:100]: add(r["addr"])
+    except Exception: pass
+    try:
+        ep = A.epoch_rows()
+        if ep:
+            rw = A.epoch_detail(ep[-1]["epoch"]).get("rewards") or {}
+            def amt(v):
+                try: return float(v)
+                except (TypeError, ValueError): return 0.0
+            for a, _ in sorted(rw.items(), key=lambda kv: (-amt(kv[1]), kv[0])): add(a)
+    except Exception: pass
+    try:
+        for r in A.holders()["rows"][100:]: add(r["addr"])
+    except Exception: pass
+    return out
+
 def sitemap():
-    """Static routes, every epoch close and the top 500 holders. Rebuilt at most every 10 min."""
+    """Static routes, every epoch close and at most SITEMAP_ADDRS addresses (sitemap_addrs). Rebuilt at most every 10 min."""
     if time.time() - _SITEMAP[0] < 600 and _SITEMAP[1]: return _SITEMAP[1]
     base = "https://poascan.io"; ep = A.epoch_rows(); day = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t or time.time()))
     last = day(max([r["close_ts"] or 0 for r in ep] or [0]) or None)
     urls = [(base + p, last) for p in STATIC_ROUTES] + [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
-    try: urls += [(f"{base}/address/{r['addr']}", last) for r in A.holders()["rows"][:500]]
-    except Exception: pass
+    urls += [(f"{base}/address/{a}", last) for a in sitemap_addrs()]
     body = "".join(f"<url><loc>{E(u)}</loc><lastmod>{d}</lastmod></url>" for u, d in urls)
     _SITEMAP[:] = [time.time(), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>\n"]
     return _SITEMAP[1]

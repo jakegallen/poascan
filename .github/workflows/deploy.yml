@@ -105,6 +105,12 @@ jobs:
         run: python tools/fastindex_test.py
       - name: Audit fixes (crawler page views read the archive only; nofollow on minepoa.com API links; per tab canonical and descriptions; epochs from and limit; per close rewards rows and CSV; llms.txt loop and read table, no credential in a URL; official links on /about)
         run: python tools/audit1028_test.py
+      - name: Phase A (neutral disclosure; ranked sitemap, crawl delay; changelog link; health 503 doc; MCP get_epoch_rewards; sortable Health, Transactions, Census and Unlock tables)
+        run: python tools/phasea_test.py
+      - name: Grading halt rule (seal gap Stale and Down, keyless grade route read, Tx lookup Degraded under the fast index, 24 h route strip)
+        run: python tools/sealgap_test.py
+      - name: Swap API for POASwap (expired_at, cancelled_at, cancelled_after_expiry; status and include_expired filters)
+        run: python tools/swapfields_test.py
       - name: Polite polling (backoff with jitter and Retry-After, incremental feed, cadence, on-demand caps, upstream counter)
         run: python tools/polite_test.py
       - name: 401 backoff (a lone 401 keeps the 60 s feed; 3 in a row, 429, 5xx or a timeout slow it)

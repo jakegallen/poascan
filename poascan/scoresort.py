@@ -12,11 +12,12 @@ SUBS = KEYS[1:]
 
 def q(qs, k, d=""): return ((qs or {}).get(k) or [d])[0]
 
-def page_sort(qs, allowed, default):
-    v = q(qs, "sort", default); return v if v in allowed else default
+def page_sort(qs, allowed, default, p=""):
+    """p: a parameter prefix, so two tables on one page sort apart (?esort=&edir=, 1.26.201)."""
+    v = q(qs, p + "sort", default); return v if v in allowed else default
 
-def page_dir(qs):
-    v = q(qs, "dir", "desc"); return v if v in ("desc", "asc") else "desc"
+def page_dir(qs, p=""):
+    v = q(qs, p + "dir", "desc"); return v if v in ("desc", "asc") else "desc"
 
 def check(sort, allowed, d, err):
     """API and MCP: (sort, dir) or err(message) for a bad value."""
@@ -85,7 +86,7 @@ def heads(cols, cur, d, link):
             nd = first_dir(c.kind); aria, arrow = "none", "↕"
         nxt = _WORDS[c.kind][0 if ascending(c.kind, nd) == ascending(c.kind, first_dir(c.kind)) else 1]
         lab = E(_plain(c.label))
-        out.append(f'<th{ca} aria-sort="{aria}"><a class="hsb" href="{link(c.key, nd)}" role="button" title="Sort by {lab}, {nxt}"'
+        out.append(f'<th{ca} aria-sort="{aria}"><a class="hsb" href="{link(c.key, nd)}" rel="nofollow" role="button" title="Sort by {lab}, {nxt}"'
                    f' aria-label="Sort by {lab}, {nxt}">{c.label}<i class="ha" aria-hidden="true">{arrow}</i></a>{c.tip}</th>')
     return "".join(out)
 
@@ -106,12 +107,21 @@ def select(cols, cur, d, link, label="Sort"):
             opts.append(f'<option value="{link(c.key, dd)}"{sel}>{E(_plain(c.label))} {"↑" if up else "↓"} {w}</option>')
     return (f'<label class="sortsel"><span>{E(label)}</span><select data-nav="1" aria-label="{E(label)}">{"".join(opts)}</select></label>')
 
-def link_fn(base, default, frag="", **keep):
+def link_fn(base, default, frag="", p="", **keep):
     """link(key, dir) for a page: base path plus kept query values; sort and dir dropped at their defaults (sort=default,
     dir=desc); &amp; joined; optional #fragment."""
     def link(k, dd):
-        kv = [(a, b) for a, b in keep.items() if b] + [("sort", k if k != default else ""), ("dir", "asc" if dd == "asc" else "")]
+        kv = [(a, b) for a, b in keep.items() if b] + [(p + "sort", k if k != default else ""), (p + "dir", "asc" if dd == "asc" else "")]
         kv = [(a, b) for a, b in kv if b]
         q = "&amp;".join(f"{a}={E(str(b))}" for a, b in kv)
         return base + (("&amp;" if "?" in base else "?") + q if q else "") + frag
     return link
+
+def table_sort(qs, cols, items, vals, default, base, frag="", p="", keep=None, tie=None):
+    """1.26.201: one call for a page table. items in their natural order; vals {key: fn(item) -> sort value or None}.
+    Returns (items sorted, sort spec for ui.table(sort=...)). keep: other query values the links carry (filters, pages,
+    another table's sort)."""
+    k = page_sort(qs, tuple(vals), default, p); d = page_dir(qs, p)
+    idx = {id(x): i for i, x in enumerate(items)}
+    out = sort_rows(list(items), vals[k], kind_of(cols, k), d, tie=tie or (lambda x: idx[id(x)]))
+    return out, (cols, k, d, link_fn(base, default, frag, p, **(keep or {})))

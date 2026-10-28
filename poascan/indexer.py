@@ -1063,6 +1063,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("pulse", lambda: __import__("poascan.pulse", fromlist=["x"]).job(), 300, None),   # private live prober, off the node; no-op without POASCAN_PULSE_SRC
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
     ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),
+    ("grade_check", lambda: __import__("poascan.hosted", fromlist=["x"]).grade_job(), 60, None),   # 1.26.201: one keyless grade route GET about every 15 min (30 min when unchanged)
     ("swap_writes", lambda: __import__("poascan.hosted", fromlist=["x"]).write_job(), 60, None),   # 1.26.127: one keyless swap-offer GET about every 10 min (30 min when unchanged); the stored next_at decides
     ("grading", lambda: __import__("poascan.grading", fromlist=["x"]).job(), 60, None),   # 1.26.134: /api/explorer/grading every 10 min (5 near a close), backoff to 30 min; the stored next_at decides
     ("gradehist", lambda: __import__("poascan.gradehist", fromlist=["x"]).sync(), 900, None),   # 1.26.158: grade_history from close records and the grading list; no upstream call (1.26.160: every 15 min, incremental)

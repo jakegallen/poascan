@@ -231,7 +231,7 @@ def _prompt_release():
 def _release():
     """/upgrade Details: this POAScan release, its time in the reader's zone plus UTC (ui.stamp; app.js adds local)."""
     from . import agentapi as AG
-    return f'{E(AG.VERSION)}, {stamp(_iso_ts(AG.RELEASED_TS), "released")}. {E(AG.RELEASE_LINE)}'
+    return f'{E(AG.VERSION)}, {stamp(_iso_ts(AG.RELEASED_TS), "released")}. <a href="{E(AG.CHANGELOG_URL)}" target="_blank" rel="noopener noreferrer">{E(AG.RELEASE_LINE)} ↗</a>'
 
 def _iso_ts(s):
     return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
@@ -358,16 +358,30 @@ def feeds_html(fd=None):
 
 ROUTE_TAG2 = {"open": "ok", "halted": "bad", "down": "bad", "unknown": ""}
 
+_STRIP_CLS = {"open": "ok", "halted": "bad", "down": "bad", "unknown": "na"}
+def _route_strip(rid, label, now):
+    """1.26.201: the route's last 24 h, one cell per 15 min (worst state in the slot), oldest left. Hover gives slot and state."""
+    from . import routewatch as RW
+    try: h = RW.history(rid, now)
+    except Exception: return ""
+    if not any(v for _, v in h): return ""
+    cells = "".join(f'<i class="{_STRIP_CLS.get(v, "nd")}" title="{E(time.strftime("%H:%MZ", time.gmtime(t)))} {E(RW.WORD.get(v, "No data") if v else "No data")}"></i>' for t, v in h)
+    return f'<span class="rstrip" role="img" aria-label="{E(label)}, last 24 hours">{cells}</span>'
+
 def routes_html(d=None):
     """1.26.188: Health, Routes: each watched route Open, Halted or Down (since when) or No read, from POAScan's existing probes
     (routewatch.py: two bad reads in a row turn it, two good reads clear it). As of the newest read; a route read over 2 h ago is Stale."""
     from . import routewatch as RW
     d = d or RW.state(); now = time.time()
     def row(r):
-        st = r["state"]; tag = f'<span class="tag {ROUTE_TAG2[st]}">{r["word"]}</span>'
-        sf = flag("Stale", f'Last read {_ago(now - r["as_of_ts"])} ago') if r["stale"] else ""
+        st = r["state"]; cov = bool(r.get("covered_by"))
+        tag = f'<span class="tag {"warn" if cov else ROUTE_TAG2[st]}"' + (f' title="{E("minepoa.com " + ("halted" if st == "halted" else "down") + "; tx pages load from the fast index")}"' if cov else "") + f'>{r["word"]}</span>'
+        why = r.get("stale_reason") or (f'Last read {_ago(now - r["as_of_ts"])} ago' if r.get("as_of_ts") else "")
+        sf = flag("Stale", why) if r["stale"] else ""
         since = f'since {lt(r["since_ts"])}' if st in ("halted", "down") and r["since_ts"] else '<span class="na">···</span>'
-        return f'<li data-route="{E(r["id"])}" data-st="{st}"><b>{E(r["label"])}</b><span class="rtg">{tag}{sf}</span><span class="fdt">{since}</span></li>'
+        dr = f'<span class="dim small rwhy">{E(r["down_reason"])}</span>' if r.get("down_reason") else ""
+        return (f'<li data-route="{E(r["id"])}" data-st="{st}"><b>{E(r["label"])}</b><span class="rtg">{tag}{sf}</span><span class="fdt">{since}{dr}</span>'
+                f'{_route_strip(r["id"], r["label"], now)}</li>')
     n = len([r for r in d["routes"] if r["state"] in ("halted", "down")])
     head = (f'<div class="fdh"><span class="lbl">Halted</span><span class="tag {"bad" if n else "ok"}" data-halted="{n}">{n}</span>'
             + (f'<span class="lbl">As of</span>{lt(d["as_of_ts"])}' if d.get("as_of_ts") else "") + '</div>')
@@ -392,18 +406,27 @@ def status_body():
     st = "".join([stat("Upstream", state), stat("Success · 1h", pct(sum(s1) / len(s1)) if s1 else "···"), stat("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else "···"),
                   stat("Open incidents", f'<span class="num {"red" if ongoing else ""}">{len(ongoing)}</span>'),
                   stat("Finality lag", intc(lagv), "blocks", tip="Blocks between the chain height and the finalized height"), cp_stat(), stat('<a href="/network?tab=anchors">Anchor · Solana</a>', anc_age("sol")), stat('<a href="/network?tab=anchors">Anchor · Base</a>', anc_age("base"))])
-    tb = table(["Endpoint", "1h", "24h", "p50", "p95", "Last error"],
-               [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
+    # 1.26.201: Endpoints and Incidents sort by header, each with its own parameters (?esort=&edir=, ?isort=&idir=)
+    from . import scoresort as SS, views as _V
+    hq = getattr(_V.REQ, "qs", None) or {}; hb = "/network?tab=health"
+    kp = lambda p: {k: SS.q(hq, k) for k in (p + "sort", p + "dir")}
+    ecols = [SS.Col("ep", "Endpoint", "text"), SS.Col("s1", "1h"), SS.Col("s24", "24h"), SS.Col("p50", "p50"), SS.Col("p95", "p95"), SS.Col("err", "Last error")]
+    ev = {"ep": lambda e: SS.text_key(e["ep"].replace("probe ", "")), "s1": lambda e: e["s1"], "s24": lambda e: e["s24"], "p50": lambda e: e["p50"] or None,
+          "p95": lambda e: e["p95"] or None, "err": lambda e: _iso_t(e["last_err"])}
+    eps, esp = SS.table_sort(hq, ecols, d["eps"], ev, "ep", hb, "#endpoints", "e", keep=kp("i"))
+    tb = table([], [[f'<code>{E(e["ep"].replace("probe ", ""))}</code>' + (' <span class="tag">probe</span>' if e["ep"].startswith("probe") else ""),
                  _okpct(e["s1"]), _okpct(e["s24"]), f'{e["p50"]:,} ms' if e["p50"] else "···", f'{e["p95"]:,} ms' if e["p95"] else "···",
-                 (rel(e["last_err"]) + f' <span class="dim">{E(e["last_code"] or "")}</span>') if e["last_err"] else "···"] for e in d["eps"]], cls="wrapt")
-    it = table([f"Start ({TZ})", "End", "Duration", "What", "Fails"],
-               [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else utc(b, "%m-%d %H:%M")), dur(((b or now) - a)),
-                 E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in d["inc"][:40]])
+                 (rel(e["last_err"]) + f' <span class="dim">{E(e["last_code"] or "")}</span>') if e["last_err"] else "···"] for e in eps], cls="wrapt", sort=esp)
+    icols = [SS.Col("start", f"Start ({TZ})"), SS.Col("end", "End"), SS.Col("dur", "Duration"), SS.Col("what", "What", "text"), SS.Col("fails", "Fails")]
+    iv = {"start": lambda x: x[0], "end": lambda x: x[1] if x[1] is not None else now, "dur": lambda x: (x[1] or now) - x[0], "what": lambda x: SS.text_key(x[2].replace("probe ", "")), "fails": lambda x: x[3]}
+    incs, isp = SS.table_sort(hq, icols, d["inc"][:40], iv, "start", hb, "#incidents", "i", keep=kp("e"))
+    it = table([], [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else utc(b, "%m-%d %H:%M")), dur(((b or now) - a)),
+                 E(w.replace("probe ", "")), f if f is not None else "···"] for a, b, w, f in incs], sort=isp)
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="gold", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
     body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}{routes_html()}<div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]))}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it)}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]), id="endpoints")}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it, id="incidents")}'''
     return body
 
 def _okpct(v):
@@ -441,3 +464,11 @@ def community_html():
 from . import join as _J
 def _apps(cls=""):   # the "Open in" app set on /start
     return _J.apps(cls)
+
+
+def _iso_t(v):
+    """A sort value for an ISO or epoch timestamp (None stays None, so blanks sort last)."""
+    if v is None or v == "": return None
+    if isinstance(v, (int, float)): return float(v)
+    try: return dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError: return None

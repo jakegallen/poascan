@@ -11,6 +11,25 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.201] - 2026-10-28
+
+### Changed
+- The `/about` Disclosure names only POAScan's builder and states that the operators don't run it; no other project is linked.
+- The sitemap lists at most 200 addresses, ranked: top holders, then the newest close's paid Agents, then further holders. robots.txt sets `Crawl-delay: 5` and keeps sorted copies (`sort=`) out.
+- Grading reads Stale after 15 min with no grade seals while answers keep landing, and Down after 30 min, since the newest seal. The route row shows why.
+- Tx lookup reads Degraded, not Down, while the fast index is current and serves Tx pages.
+- The `/upgrade` Release row links the changelog.
+
+### Added
+- A keyless grade route read (about 4 an hour) keeps the Grading entry in `/api/v1/routes` current, so a halt shows as paused there.
+- Health Routes: a 24h strip per route (15 min cells) and the reason for a Stale or Down read.
+- MCP tool `get_epoch_rewards`: one close's rewards, paged. 47 tools.
+- `/api/v1/swaps`: `expired_at`, `cancelled_at` and `cancelled_after_expiry` per offer; `status` filter (comma values, `live` = open) and `include_expired=1`. The default list is unchanged.
+- Sortable headers on Health Endpoints and Incidents, Chain Transactions (the page shown), Census Snapshots and the Unlock calendar.
+
+### Fixed
+- llms.txt and OpenAPI say `/api/v1/health` answers 503 whenever ok is false, Partial included.
+
 ## [1.26.200] - 2026-10-28
 
 ### Changed

@@ -602,8 +602,9 @@ def halt_line(rh):
 
 def halt_word(rh):
     """halted, down, or halted or down when the routes differ (1.26.200: a route that is only down never reads halted)."""
-    st = {r["state"] for r in rh}
-    return "halted" if st == {"halted"} else "down" if st == {"down"} else "halted or down"
+    st = {"degraded" if r.get("covered_by") else r["state"] for r in rh}   # 1.26.201: a Tx lookup the fast index covers reads degraded
+    if len(st) == 1: return next(iter(st))
+    return " or ".join(w for w in ("halted", "down", "degraded") if w in st)
 
 def _route_halts_meta():
     try:

@@ -82,14 +82,20 @@ def unlock_chart():
                 marks=marks, proj_from=now, y0=0)
 
 def unlock_calendar(nrows=12):
+    # 1.26.201: sorts by header (soonest close first by default)
+    from . import scoresort as SS, views as _V
     u = unlock_data(); tot = u["total"] or 1
-    rows = [[f'E{j}', utc(t, "%m-%d %H:%M"), poa(d), poa(c), pct(c / tot)] for j, t, c, d in u["fut"][:nrows]]
-    return table(["At close", f"Time ({TZ})", "Unlocks", "Circulating", "%"], rows, pri=(0, 2, 3), usd=(2, 3))
+    cols = [SS.Col("close", "At close", "low"), SS.Col(None, f"Time ({TZ})"), SS.Col("unlocks", "Unlocks"), SS.Col("circ", "Circulating"), SS.Col(None, "%")]
+    vals = {"close": lambda x: x[0], "unlocks": lambda x: x[3], "circ": lambda x: x[2]}
+    base = "/unlocks" if getattr(_V.REQ, "path", "") == "/unlocks" else "/network?tab=token"   # /unlocks and the Token tab share it
+    items, spec = SS.table_sort(getattr(_V.REQ, "qs", None) or {}, cols, list(u["fut"][:nrows]), vals, "close", base, "#calendar")
+    rows = [[f'E{j}', utc(t, "%m-%d %H:%M"), poa(d), poa(c), pct(c / tot)] for j, t, c, d in items]
+    return table([], rows, pri=(0, 2, 3), usd=(2, 3), sort=spec)
 
 def unlock_section():
     return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), PR.ask([PR.UNLOCK, PR.SPENDABLE]), cls="")}'
             f'<div class="stats eight">{unlock_stats()}</div>'
-            f'{card("Unlock calendar", unlock_calendar(), _X.usd_toggle() + "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>")}')
+            f'{card("Unlock calendar", unlock_calendar(), _X.usd_toggle() + "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>", id="calendar")}')
 
 def unlocks_api():
     u = unlock_data()

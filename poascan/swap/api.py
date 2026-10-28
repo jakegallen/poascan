@@ -44,7 +44,20 @@ def enrich(rows):
                 if mk[0] is not None: r["fill_atts"] = int(mk[0])
                 if mk[1] is not None: r["fill_final"] = bool(mk[1])
         r.update(settle(r, r["offer_id"] in rs, r["offer_id"] in fs))
+        _expiry_fields(r)
     return rows
+
+def _expiry_fields(r, now=None):
+    """1.26.201, additive and only where they apply: expired_at (ISO UTC) when the offer reached expires_ts with no
+    earlier final fill or cancel; cancelled_at on a cancelled offer (its final swap-cancel tx time); cancelled_after_expiry
+    on a cancelled offer, true when that cancel landed after expires_ts (the maker reclaimed an offer that had already
+    expired: status reads cancelled, the expiry is in expired_at)."""
+    now = now or time.time(); exp = r.get("expires_ts"); st = r.get("status")
+    end = r.get("cancel_ts") if st == "cancelled" else r.get("fill_ts") if st == "filled" else None
+    if exp and exp <= now and st != "delisted" and (end is None or end > exp): r["expired_at"] = _iso(exp)
+    if st == "cancelled" and r.get("cancel_ts"):
+        r["cancelled_at"] = _iso(r["cancel_ts"])
+        if exp: r["cancelled_after_expiry"] = r["cancel_ts"] > exp
 
 def _iso(ts):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts))) if ts else None
