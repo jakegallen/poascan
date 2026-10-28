@@ -71,8 +71,55 @@ def tab_html(a):
                  f'{" · " + E(x.get("type") or "") if x["kind"] == "latest" else ""}'
                  f'<span class="tlw">{lt(x["ts"], "dt") if x["ts"] else ""} {_where(x)}</span></div></li>' for x in ev)
     foot = f'<p class="cov dim small">From final txs and close records in this segment · <a href="{METHOD}">Method</a></p>'
-    return card(f"Timeline · {len(ev)}", f'<ol class="tl">{li}</ol>' + foot, f'<a class="more" href="/api/v1/address/{E(a)}/timeline">API →</a>', id="timeline")
+    return records_html(a) + card(f"Timeline · {len(ev)}", f'<ol class="tl">{li}</ol>' + foot, f'<a class="more" href="/api/v1/address/{E(a)}/timeline">API →</a>', id="timeline")
 
 def api(a):
-    return dict(address=a, segment=SG.CURRENT, events=events(a), kinds=KINDS, method="https://poascan.io" + METHOD,
+    return dict(address=a, segment=SG.CURRENT, events=events(a), records=records(a), kinds=KINDS, method="https://poascan.io" + METHOD,
                 url=f"https://poascan.io/address/{a}?tab=timeline")
+# ---- 1.26.214: personal records (current segment) ----
+@A.cached("seg_reward_totals", 300)
+def seg_totals():
+    """addr -> total reward in the current segment's close records."""
+    t = {}
+    for e in A.segment_closes(SG.CURRENT):
+        for x, v in (e.get("rewards") or {}).items():
+            if _f(v) > 0: t[x] = t.get(x, 0.0) + _f(v)
+    return t
+
+def _day_max(a, typ):
+    r = db.q1("SELECT ts / 86400 AS d, COUNT(*) AS n FROM txs WHERE from_addr=? AND type=? AND segment=? GROUP BY 1 ORDER BY n DESC, d LIMIT 1", (a, typ, SG.CURRENT))
+    return (int(r["n"]), int(r["d"]) * 86400) if r and r["n"] else (0, None)
+
+def records(a):
+    closes = sorted(A.segment_closes(SG.CURRENT), key=lambda e: int(e.get("epoch", 0)))
+    paid, run, best_run, best, seats = 0, 0, 0, None, None
+    for e in closes:
+        n = int(e.get("epoch", 0)); v = _f((e.get("rewards") or {}).get(a))
+        if v > 0:
+            paid += 1; run += 1; best_run = max(best_run, run)
+            if best is None or v > best[0]: best = (v, n, int(e.get("ts") or 0) or None)
+        else: run = 0
+        s = int(((e.get("basis") or {}).get("graders_served") or {}).get(a) or 0)
+        if s and (seats is None or s > seats[0]): seats = (s, n)
+    tot = seg_totals(); mine = tot.get(a, 0.0)
+    rank = (1 + sum(1 for v in tot.values() if v > mine)) if mine > 0 else None
+    an, ad_ = _day_max(a, "challenge"); sn, sd = _day_max(a, "grade-sealed")
+    return dict(closes=len(closes), paid_closes=paid, longest_paid_run=best_run, total_rewards=round(mine, 6), rewards_rank=rank, paid_agents=len(tot),
+                best_close=dict(value=round(best[0], 6), close=best[1], ts=best[2]) if best else None,
+                most_seats_served=dict(value=seats[0], close=seats[1]) if seats else None,
+                most_answers_day=dict(value=an, day_ts=ad_) if an else None, most_seals_day=dict(value=sn, day_ts=sd) if sn else None)
+
+def records_html(a):
+    r = records(a)
+    if not (r["paid_closes"] or r["most_answers_day"] or r["most_seals_day"] or r["most_seats_served"]): return ""
+    cl = lambda n: (lambda g: f'<a href="{SG.ep_href(g)}">{SG.ep_label(g)}</a>')(SG.gkey(n, SG.CURRENT))
+    day = lambda t: time.strftime("%b %-d", time.gmtime(t)) + " (UTC day)"
+    rows = [("Total rewards", f'{intc(round(r["total_rewards"]))} POA' + (f' · #{r["rewards_rank"]:,} of {r["paid_agents"]:,} paid Agents' if r["rewards_rank"] else "")),
+            ("Paid closes", f'{r["paid_closes"]:,} of {r["closes"]:,}'), ("Longest paid run", f'{r["longest_paid_run"]:,} closes in a row'),
+            ("Best close reward", f'{intc(round(r["best_close"]["value"]))} POA · {cl(r["best_close"]["close"])}' if r["best_close"] else "···"),
+            ("Most seats served at a close", f'{r["most_seats_served"]["value"]:,} · {cl(r["most_seats_served"]["close"])}' if r["most_seats_served"] else "···"),
+            ("Most answers in a day", f'{r["most_answers_day"]["value"]:,} · {day(r["most_answers_day"]["day_ts"])}' if r["most_answers_day"] else "···"),
+            ("Most grade seals in a day", f'{r["most_seals_day"]["value"]:,} · {day(r["most_seals_day"]["day_ts"])}' if r["most_seals_day"] else "···")]
+    kv = "".join(f'<div class="kv"><span>{E(k)}</span><div>{v}</div></div>' for k, v in rows)
+    return card("Records", kv + f'<p class="cov dim small">This segment, from close records and final txs · <a href="{METHOD}">Method</a></p>', id="agent-records")
+

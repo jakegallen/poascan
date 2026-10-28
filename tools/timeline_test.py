@@ -44,4 +44,11 @@ ab = V.about(); sec = ab[ab.find('id="timeline"'):ab.find('id="board"')]
 check("about: #timeline", 'id="timeline"' in ab and "established_after" in sec)
 src = open(TL.__file__).read() + sec + h
 check("no dashes, no prohibited names", "\u2014" not in src and "\u2013" not in src and not re.search(r"plus\s?1", src, re.I))
+R = TL.records(a)
+check("records: 3 of 4 closes paid, run 3, best E2 40, total 55.5, rank 1", R["paid_closes"] == 3 and R["closes"] == 4 and R["longest_paid_run"] == 3 and R["best_close"]["close"] == 2
+      and R["total_rewards"] == 55.5 and R["rewards_rank"] == 1)
+check("records: most answers in a day 1, most seals in a day 1", R["most_answers_day"]["value"] == 1 and R["most_seals_day"]["value"] == 1)
+h2 = TL.tab_html(a)
+check("records card above the timeline, UTC day labelled", h2.index('id="agent-records"') < h2.index('id="timeline"') and "(UTC day)" in h2 and "Longest paid run" in h2)
+check("API carries records", S.api("/api/address/" + a + "/timeline", {})[0]["records"]["paid_closes"] == 3)
 print("ALL OK" if not fails else f"{len(fails)} FAILED: {fails}"); sys.exit(1 if fails else 0)
