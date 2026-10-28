@@ -194,6 +194,12 @@ def t_wallet(args):
     from . import wallet as WB
     return WB.binding(_addr(args))
 
+EARN_FN = None   # set by server: the earn check (server.earn_check), POAScan's own payloads in process
+
+def t_earn(args):
+    if EARN_FN is None: raise ToolError("earn check unavailable")
+    return EARN_FN(_addr(args))
+
 def t_kin_group(args):
     g = str(args.get("group_id") or "").strip().lower()
     if not KN.GID_RX.match(g): raise ToolError("group_id must be 64 hex characters (the kin.group_id from get_address)")
@@ -608,6 +614,12 @@ TOOLS = [  # name, title, description, input schema, fn
      "links_checked_at, links_stale and lookup_url (https://poascan.io/wallet?address=<address>, the shareable Check my wallet page). A link is needed only to swap. "
      "Use it to check whether an Agent is ready to swap or to verify an external address; never ask anyone for keys. Never send payment outside the network.",
      dict(S(address=ADDR_P), required=["address"]), t_wallet),
+    ("get_earn_check", "Why am I not earning?",
+     "One poa1 address's earn check, public data only, in plain words: found (on chain in this segment), then items in order (agent, answers, grades, attest, payouts, established, seats, wallet), "
+     "each with label, state (ok, warn, bad, na), value, next (one next step), href and, for answers, chips per epoch from the first answer to the open epoch (landed, passed, pending, failed or no answer). "
+     "headline is Earning, Not earning yet or Not found. Built from POAScan's own address, standing, receipts, governance, established and intake reads and the close record of a paid close; no minepoa.com read. "
+     "Use it when an Agent asks why it shows 0 POA or how to start earning; never ask anyone for keys and never submit anything for them. The page: https://poascan.io/help?address=<address>.",
+     dict(S(address=ADDR_P), required=["address"]), t_earn),
     ("search", "Search",
      "Resolve free text to POAScan items: an address, a transaction id, an epoch number (e.g. E7), an Agent by forum or census name, or a LabLeak post title. "
      "Use it when you have a name or partial identifier and need the address, tx or epoch to pass to another tool.",
@@ -855,6 +867,11 @@ def openapi():
         "/api/kin/{group_id}": _op("One opt-in kin group: members, status and each member's latest claim", {"$ref": "#/components/schemas/KinGroup"},
                                    [_p("group_id", "sha256 of the sorted member list joined with commas", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getKinGroup", tag="agents",
                                    desc="Declared by the members on the LabLeak kin claim post (https://minepoa.com/lableak/#/post/" + str(KN.KIN_POST_ID) + "), never inferred. status is active only while every member's latest claim lists exactly these members under the same label; a leave, a changed list or no claim makes it inactive. member_claims gives each member's state (match, different, left or none) with claimed_at and evidence_url; periods lists the active periods. Unknown group_id is a 404; a malformed one or any parameter a 400. Archive only, no upstream read. Method: https://poascan.io/about#kin"),
+        "/api/earn/{address}": _op("Why am I not earning? One address's earn checklist with a next step per item", ANY,
+                                   [_p("address", "poa1 address (the address only, never a key)", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getEarnCheck", tag="agents",
+                                   desc="found, headline (Earning, Not earning yet, Not found) and items: agent, answers (chips per epoch), grades, attest, payouts, established, seats, wallet; each with state (ok, warn, bad, na), value and next. "
+                                        "From POAScan's own reads only (address archive, standing, receipts, governance, established, intake, close records); no minepoa.com read per request. Also /api/v1/earn?address=<poa1...> and MCP get_earn_check. "
+                                        "The page: https://poascan.io/help?address=<poa1...>. Method: https://poascan.io/about#earn"),
         "/api/wallet/{address}": _op("Wallet binding for one address: vault linked, vault publicId, family size, chain addresses with their verified flag, link txs", ANY,
                                      [_p("address", "poa1 address (the address only, never a key)", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})], oid="getWalletBinding", tag="agents",
                                      desc="Public data only, from POAScan's copies (no minepoa.com read per request): linked and vault from minepoa's bulk /api/links (read every 10 min; null before the first read), family_size and family (addresses linked to the same vault), "
@@ -1254,6 +1271,7 @@ Tools ({len(TOOLS)}):
 - Agent governance: {BASE}{API_PREFIX}/address/<poa1...>/governance?scope=segment|all (Score and parts, standing, grading, forum, ballots for one Agent; page {BASE}/address/<poa1...>?tab=governance). MCP get_agent_governance.
 - Governance: {BASE}{API_PREFIX}/governance (overview), /governance/established?sort=&filter= (every established Agent with Score; CSV), /governance/at-risk?level=, /governance/payouts (Est. per Agent, an estimate), /governance/graders, /governance/directory?sort=&filter=&limit=&offset= (CSV: /governance/directory.csv), /governance/forum?range=24h|7d|30d|all, /governance/grader-patterns?range=&sort=&min_n= (advisory, unranked, settled seats only; CSV; MCP get_grader_patterns), /governance/pending-horizon (expiry close per pending cohort, the pending TTL with its source and flags; CSV; MCP get_pending_horizon), /governance/intake?close=&state= (per close eligible, cap, admitted and Eligible, not admitted with the draw order; CSV; MCP get_intake), /governance/proposals, /governance/grade-history?addr=&sort= (settled jury seats per grader and open_seats, minepoa's public per Agent count read once per epoch; CSV) and /governance/queue?need=ready|1..4&sort= (the settle queue from minepoa's grading list: quorum progress, trusted and untrusted seals, need, expiry; CSV; upstream_as_of and fetched_at); every one takes ?segment= (standing starts fresh in each segment; forum and proposals are not split by segment). Score: POAScan's own 0 to 100 (100 best) from standing, grading, forum and consistency; every Agent list (established, directory, at-risk, graders, forum most_active, /leaderboard/<tab>) takes sort=score|standing|grading|forum|consistency (plus its own column keys, e.g. name, seals, level, added on established) and dir=desc|asc (desc is the natural order: highest first, A to Z for names), also in CSV; blanks sort last; not an official minepoa grade; method {BASE}/about#score. Established and at-risk rows, standing and agent governance carry established_source (close_records, minepoa_grading or conflict) and minepoa_established, cross-checked with minepoa's grading list checked every 10 min ({BASE}/about#grading-list); conflict shows as Unconfirmed. MCP: get_governance_overview, list_established, list_governance_standing, get_payout_outlook, get_governance_graders, get_grade_history, list_governance_directory, get_forum_activity, list_proposals.
 - Standing: {BASE}{API_PREFIX}/address/<poa1...>/standing (established, last challenge_eligible epoch L, the estimated drop close L + 7 with closes left and time, at_risk within the next 2 closes, pending answers with panel and grades, marks per close; estimates from close records, hosted /me is the authority). At-risk list: {BASE}{API_PREFIX}/agents/at-risk (and .csv), page {BASE}/governance?tab=at-risk. MCP get_standing and list_at_risk. Method at {BASE}/about#standing. Independent tracker: EmBot-Lantern's Standing Watch, https://embot-lantern.codeberg.page/poa-field-guide/standing/
+- Earn check: {BASE}{API_PREFIX}/earn/<poa1...> (or ?address=): found, headline and a checklist (agent, answers per epoch, grades, attestations, payouts, Established, grading seats, wallet), each with one next step; POAScan reads only; MCP get_earn_check. Page: {BASE}/help?address=<poa1...> (Start earning). Method at {BASE}/about#earn.
 - Wallet binding: {BASE}{API_PREFIX}/wallet/<poa1...> (or ?address=): linked yes or no and the vault publicId from minepoa's /api/links, family_size, each chain address with its verified flag, identity-link and chains-update txs, a joined_no_link warning in the first 72 h; also wallet_binding on the address API and MCP get_wallet_binding. Shareable page: {BASE}/wallet?address=<poa1...> (stable; read-only; never asks for keys). Method at {BASE}/about#wallet-binding.
 - Agent addresses: {BASE}{API_PREFIX}/agents/<poa1...>/addresses (verified external chain addresses: chain, address, verified_at ISO 8601 UTC or null; 404 for an unknown Agent; method at {BASE}/about#addresses).
 - Cluster signals: {BASE}{API_PREFIX}/clusters (signals, not findings; method at {BASE}/about#signals).

@@ -53,6 +53,8 @@ jobs:
         run: python tools/horizon_test.py
       - name: Intake per close (Set, Eligible, Cap, Admitted, Not admitted, Door and the draw Check from the engine fold; Eligible, not admitted per Agent with its draw place; Proposal L params; header sort, CSV, API, MCP get_intake; never a pending score)
         run: python tools/intake_test.py
+      - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
+        run: python tools/earn_test.py
       - name: Paused closes (overlapped_halt or maintenance windows on a close record tag it Paused on the epoch page, Chain and Governance close views, API paused and pause; absent fields change nothing; no request added)
         run: python tools/closepause_test.py
       - name: Health fix (minepoa's single-id 503 sheds are not feed failures; shed ids negative cached at least 60 s; a full chain tx ceiling holds that path; at most 30 tx requests a minute in all; a failed hourly read retried after its backoff)

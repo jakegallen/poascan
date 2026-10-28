@@ -369,7 +369,8 @@ def page(page_fn, card=None, apps=None):
           + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
              + _step(3, "Start mining", go, "st3") + "</ol>")
-    hero = (f'<div class="sthero"><h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
+    from .earnview import tabs as _etabs
+    hero = (f'<div class="sthero">{_etabs("/start")}<h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
             f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
