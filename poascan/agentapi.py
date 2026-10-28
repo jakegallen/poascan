@@ -8,7 +8,7 @@ from . import segments as SG
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
 VERSION = "1.26.194"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-27T23:59:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+RELEASED_TS = "2026-10-28T01:02:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "An address with no record is a not-found page, not a 0 POA Agent; search rows show balance and last activity."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 MCP_URL = BASE + "/mcp"
