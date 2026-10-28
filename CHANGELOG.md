@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.217] - 2026-10-28
+
+### Fixed
+- Since the E16 close, minepoa.com's status read answers `checkpoint` as `{height, cutoff_ts}` and no longer sends `as_of`. POAScan took that for a notice in place of data, kept its last status read and so never learned that E16 had closed, which left E16 rewards out of every address page. Both shapes are now read as data (`checkpoint_height` and `checkpoint_cutoff_ts` from the nested one), and the E16 close record is read on the next cycle.
+
 ## [1.26.216] - 2026-10-28
 
 ### Fixed
