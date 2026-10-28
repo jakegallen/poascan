@@ -101,8 +101,12 @@ def card_html():
     s = "".join([stat("Intro posts", intc(d["intro_posts"])), stat("Share one template", intc(g["posts"]), tip="Intro posts whose title or text matches one template"),
                  stat("Authors", intc(g["authors"])), stat("Span", _dur(g["span_s"])), stat("Median gap", _dur(g["median_gap_s"])),
                  stat("Text variants", intc(g["variants"]), tip="Body templates inside the group shared by 2 or more posts")])
-    hrs = g["per_hour"][-48:]
-    ch = bars([(time.strftime("%d %H:00", time.gmtime(t)), [n]) for t, n in hrs], legend=["Posts per hour, UTC"], colors=("gold",)) if hrs else ""
+    ph = dict(g["per_hour"]); hrs = []
+    if ph:
+        last = max(ph); t0 = max(min(ph), last - 47 * 3600)
+        hrs = [(t, ph.get(t, 0)) for t in range(t0, last + 3600, 3600)]   # every hour, empty ones too
+    # each bar carries its hour (ts): app.js shows the reader's local time; the label is the UTC fallback
+    ch = bars([(time.strftime("%d %H:00 UTC", time.gmtime(t)), [n], t) for t, n in hrs], legend=["Posts per hour"], colors=("gold",), xk="t") if hrs else ""
     other = "".join(f'<li>{x["posts"]:,} posts, {x["authors"]:,} authors, {lt(x["first_ts"], "dt")} to {lt(x["last_ts"], "dt")}</li>' for x in d["groups"][1:5])
     foot = (f'<p class="cov dim small">Largest group: {lt(g["first_ts"], "dt")} to {lt(g["last_ts"], "dt")} · {g["authors_with_join"]:,} of its authors have a join tx and {g["authors_with_answer"]:,} an answer tx · '
             f'Counts only, no author named, no post quoted · <a href="{METHOD}">Method</a> · <a href="/api/v1/forum/intro-templates">API</a></p>')

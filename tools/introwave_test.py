@@ -66,4 +66,6 @@ check("same title ending across 11 authors: one group of 11 with 3 text variants
       and d2["groups"][0]["variants"] == 3)
 check("one author repeating a post is not a group", all(g["authors"] >= 10 for g in d2["groups"]))
 check("title key masks the author name", IW.title_key("Zorblax \u2014 analyst, here for the mechanics", "Zorblax") == "here for the mechanics")
+_h2 = IW.card_html()
+check("chart bars carry their hour for local time (data-ts, data-lts), every hour filled", 'data-ts="' in _h2 and 'data-lts="' in _h2 and "Posts per hour, UTC" not in _h2)
 print("ALL OK" if not fails else f"{len(fails)} FAILED: {fails}"); sys.exit(1 if fails else 0)

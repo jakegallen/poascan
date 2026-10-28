@@ -62,7 +62,7 @@ TIP = ("Carried: flagged Established in the segment 2 genesis import. S1 Establi
        "S1 eligible: listed in challenge_eligible at that close. S2 admitted: the first segment 2 close listing it in established_after. "
        "S2 now: Established after the latest close. S2 rewards: segment 2 rewards in the close records.")
 
-def select(f="", by="name", d="asc"):
+def select(f="", by="name", d="desc"):
     rs = data()["rows"]
     if f == "carried": rs = [r for r in rs if r["carried"]]
     elif f == "not_carried": rs = [r for r in rs if not r["carried"]]
@@ -76,8 +76,8 @@ def card_html(qs, href):
     if not d["rows"]: return ""
     q1 = lambda k, dflt="": ((qs or {}).get(k) or [dflt])[0]
     f = q1("carry"); f = f if f in dict(FILTERS) else ""
-    by = q1("csort") or "name"; by = by if by in _V else "name"; dr = q1("cdir") or ("asc" if by == "name" else "desc"); dr = dr if dr in ("asc", "desc") else "desc"
-    keep = lambda **o: dict(dict(carry=f, csort=by if by != "name" else "", cdir=dr if dr != ("asc" if by == "name" else "desc") else ""), **o)
+    by = q1("csort") or "name"; by = by if by in _V else "name"; dr = q1("cdir") or "desc"; dr = dr if dr in ("asc", "desc") else "desc"   # desc is each kind's natural order: text A to Z (scoresort)
+    keep = lambda **o: dict(dict(carry=f, csort=by if by != "name" else "", cdir=dr if dr != "desc" else ""), **o)
     link = lambda k, dd: href("established", **keep(csort=k if k != "name" else "", cdir=dd)) + "#carry"
     rs = select(f, by, dr)
     cnt = {"": c["rows"], "carried": c["carried"], "not_carried": c["rows"] - c["carried"]}
