@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.207] - 2026-10-28
+
+### Added
+- Network, Records: records for the last 24 h, 7 days and the segment (largest transfer, busiest hours, most joins in a day, largest reward, most paid, settled and served at a close) and firsts, all from final txs and close records.
+- `/api/v1/highlights` and MCP `get_highlights`; method on `/about#records`.
+
 ## [1.26.206] - 2026-10-28
 
 ### Added
