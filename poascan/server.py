@@ -108,6 +108,13 @@ def api(path, qs):
         sc = (qs.get("scope") or ["segment"])[0]
         if sc not in ("segment", "all"): raise BadRequest("scope must be segment or all")
         return GV.api_agent(a, sc), False
+    m = re.match(r"^/api/address/(poa1\w+)/timeline$", path)
+    if m:   # 1.26.213: Agent profile v2 timeline, archive and close records only
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        if set(qs) - {"format"}: raise BadRequest("unknown parameter: " + ", ".join(sorted(set(qs) - {"format"})))
+        from . import timeline as TL
+        return TL.api(a), False
     m = re.match(r"^/api/address/(poa1\w+)/standing$", path)
     if m:
         a = m.group(1)

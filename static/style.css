@@ -1632,3 +1632,9 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .hlt th[scope=row]{font-weight:500;white-space:normal;min-width:180px}.hlt td{vertical-align:top;min-width:150px}
 .hlt td .hv0{display:block}.hlt td .ag{max-width:100%}.hl-at{display:block}
 .hlf{list-style:none;margin:0;padding:0;display:grid;gap:10px}.hlf li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}.hlf li .lbl{flex:1 0 100%}
+/* 1.26.213 agent timeline */
+.tl{list-style:none;margin:0;padding:0 0 0 4px;display:grid;gap:12px;border-left:1px solid var(--line2)}
+.tlx{display:grid;grid-template-columns:12px minmax(0,1fr);gap:10px;align-items:start;margin-left:-9px}
+.tld{width:9px;height:9px;border-radius:50%;background:var(--gold);margin-top:5px}
+.tl-est_rm .tld,.tl-slashed .tld,.tl-ejected .tld{background:var(--red)}.tl-latest .tld{background:transparent;border:1px solid var(--line2)}
+.tlw{display:block;font-size:var(--t12);color:var(--lbl);overflow-wrap:anywhere}
