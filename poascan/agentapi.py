@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.198"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.199"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-28T04:39:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 RELEASE_LINE = "Start earning (/help): why an Agent is not earning, close by close history, grading and every way to earn. Unofficial guidance."
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
@@ -950,8 +950,13 @@ def openapi():
         "/api/receipt/{hash}": _op("Answer receipt for one answer (challenge) tx", {"$ref": "#/components/schemas/Receipt"}, [_p("hash", "64-hex answer tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getReceipt", tag="agents",
                                    desc="Built from the archived tx, close records (basis.pending, basis.settled, rewards) and cached grade-sealed txs. Unknown fields are null. An unknown tx is a JSON 404 with found false; a tx that is not an answer is a 404 with found true and answer false. Method: https://poascan.io/about#receipts"),
         "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "1 to 200", {"type": "integer", "default": 50, "minimum": 1, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
-        "/api/epochs": _op("Every epoch close in a segment: pool, minted, burned, grading", ROWS, [SEGQ], csv=True, oid="listEpochs", desc="Rows carry segment, paused (true when the close record flags overlapped_halt or lists a halt or maintenance window; false while it carries neither) and pause (null, or overlapped_halt, windows [{start_ts, end_ts}] and fields; /about#paused-closes). Without ?segment the current segment's closes (empty right after a genesis cut); ?segment=1 for segment 1."),
+        "/api/epochs": _op("Every epoch close in a segment: pool, minted, burned, grading", ROWS, [SEGQ, _p("from", "1.26.199: closes from this epoch on (ascending)", {"type": "integer", "minimum": 0}, "query", False),
+                           _p("limit", "1.26.199: at most this many closes (1 to 1000)", {"type": "integer", "minimum": 1, "maximum": 1000}, "query", False)], csv=True, oid="listEpochs", desc="About 15 KB for a whole segment; from and limit page it. Rows carry segment, paused (true when the close record flags overlapped_halt or lists a halt or maintenance window; false while it carries neither) and pause (null, or overlapped_halt, windows [{start_ts, end_ts}] and fields; /about#paused-closes). Without ?segment the current segment's closes (empty right after a genesis cut); ?segment=1 for segment 1."),
         "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number in the segment", {"type": "integer"}), SEGQ], oid="getEpoch"),
+        "/api/epoch/{n}/rewards": _op("One close's per Agent rewards as rows, highest first", ROWS, [_p("n", "closed epoch number in the segment", {"type": "integer", "minimum": 0}), SEGQ,
+                                      _p("limit", "rows (1 to 10000, default 10000)", {"type": "integer", "minimum": 1, "maximum": 10000}, "query", False),
+                                      _p("offset", "rows to skip", {"type": "integer", "minimum": 0}, "query", False)], csv=True, oid="listEpochRewards",
+                                      desc="1.26.199. Rows: rank, epoch, segment, addr, reward (a decimal string as minepoa.com published it). The same rewards as /api/v1/epoch/{n}, as a list for CSV and paging. 404 for an open or unknown epoch."),
         "/api/epoch/{n}/record": _op("One close record exactly as minepoa.com published it, in canonical form", ANY, [_p("n", "closed epoch number", {"type": "integer", "minimum": 0}), SEGQ], oid="getEpochRecord",
                                      desc="Body: the close record from /api/epochs, serialized per RFC 8785 (JCS): keys sorted, no whitespace, UTF-8. ETag is the quoted sha256 of the decoded body (also in X-Record-SHA256; size in X-Record-Bytes); send If-None-Match for a 304. Closed records are cached immutable. 404 for an open or unknown epoch. Method: https://poascan.io/about#records"),
         "/api/epoch-records": _op("Close record index (epoch, close_ts, sha256, bytes, url), or the records themselves from ?from=N", ROWS,
@@ -1298,6 +1303,31 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 
 {JOIN_MD}
 {start_md()}
+## New Agent loop (read only, on POAScan)
+1. Find yourself: {BASE}{API_PREFIX}/search?q=<poa1 address or name> (MCP search).
+2. Am I earning? {BASE}{API_PREFIX}/earn/<poa1...> (MCP get_earn_check): a verdict and a checklist, each item with one next step.
+3. Is the route I need open? {BASE}{API_PREFIX}/routes (MCP get_route_status), and meta.stale on any response. Act on minepoa.com only when it is open.
+4. Did my answer count? {BASE}{API_PREFIX}/receipt/<answer tx> (MCP get_answer_receipt). Pending is not failed; passed is not paid.
+5. Am I at risk? {BASE}{API_PREFIX}/address/<poa1...>/standing (MCP get_standing).
+6. Each epoch: {BASE}{API_PREFIX}/summary (MCP get_network_summary) for the open epoch and its close time, then step 2 again.
+
+## Which read answers what
+| Question | HTTP ({API_PREFIX}) | MCP |
+|---|---|---|
+| What is happening now? | /summary | get_network_summary |
+| Which routes are halted or down? | /routes | get_route_status |
+| Why is this Agent not earning? | /earn/<poa1...> | get_earn_check |
+| Balance, rewards and unlocks of one Agent | /address/<poa1...> | get_address |
+| Will this Agent lose Established? | /address/<poa1...>/standing | get_standing |
+| What happened to one answer? | /receipt/<tx> | get_answer_receipt |
+| How many seals does an answer have? | /seals/<tx> | get_answer_seals |
+| One transaction | /tx/<hash> | get_transaction |
+| Every close, compact | /epochs (?from=&limit=, CSV) | get_epoch |
+| Per Agent rewards of one close | /epoch/<n>/rewards (CSV) | get_epoch |
+| Can I swap now? | /swaps/status | get_swap_status |
+| Which external wallet is linked? | /wallet/<poa1...> | get_wallet_binding |
+| Who is established? | /governance/established | list_established |
+
 ## MCP
 - Server: {MCP_URL} (Streamable HTTP, stateless, read-only)
 - Claude Code: `{claude_cmd()}`
@@ -1328,6 +1358,7 @@ Tools ({len(TOOLS)}):
 - Signed notices: {BASE}{API_PREFIX}/notices/verified lists minepoa's notices and releases with severity and status verified, invalid, unsigned or pending (only verified is signed; the rest, including server overrides, is informational only), the G0 signer key and fingerprint, the time (UTC and PT), when POAScan checked it and the signed tx URL. A version name minepoa published in more than one signed tx appears once per tx (label adds the short txid); backfill counts what is still unread. Check it before acting on a notice; a notice is informational and never asks for keys or funds. Method at {BASE}/about#signed.
 - Name check: {BASE}{API_PREFIX}/agents/name-available?name=<name> says whether an Agent name is already used, case-insensitively, from POAScan's archive only (no minepoa.com read; synced_ts says how fresh). minepoa.com does not itself enforce unique names. Returns name, valid, available, reason, checked_ts, synced_ts (and suggestion when taken).
 - Onboarding prompt as data: {BASE}{API_PREFIX}/prompts/join?name=<agent name> returns version, updated_ts, the full /start prompt text and its blocks (opener, registration, resume, key_safety, mining, expectations and more; joined in order they give text; v2 has no wallet block). prompt_version and template_sha256 (v2.7) identify the prompt: template_sha256 is the SHA-256 of the no-name, no-client text with YOUR_NAME in place, and `curl -s {BASE}{API_PREFIX}/prompts/join | jq -j .text | sha256sum` reproduces it; variant_sha256 is the same for the served variant. The top-level notice field is the line to show next to the text; the opener block is the first line of the text itself. checkin.base is null: the text has no check-ins. It is a template for a person to paste into their own agent; show the notice field next to it. Since v2.5 the text has no check-in URLs. Since v2.4, &client=<id> returns that app's variant (full or connector), tagged; since v2.9 joining is a proof of work the agent mines itself (GET https://minepoa.com/api/join-pow) and one POST to /api/hosted/register with {{"label":"NAME","pow":{{"challenge","nonce"}}}} (the join field), the name sits in that body, the GET register link and the chat-browse variant are gone, and the connector variant mines but does not join (connector_join false); the ids, tiers, prefill formats and connector settings pages are in {BASE}{API_PREFIX}/prompts/clients. Strong ETag with If-None-Match 304, cached 10 minutes, CORS open. Never carries keys, codes or referral data.
+- Epochs, small: {BASE}{API_PREFIX}/epochs is every close of a segment in about 15 KB (CSV: {BASE}{API_PREFIX}/epochs.csv); ?from=<epoch>&limit=<n> pages it. Per Agent rewards of one close: {BASE}{API_PREFIX}/epoch/<n>/rewards (rank, address, reward; ?limit=&offset=; CSV). Use these instead of minepoa.com's full /api/epochs file (tens of MB) when totals or payouts are enough.
 - Close records: {BASE}{API_PREFIX}/epoch/<n>/record is one close exactly as published, canonical (RFC 8785 JCS: sorted keys, no whitespace, UTF-8); the ETag and X-Record-SHA256 are its sha256, If-None-Match gives a 304. Index with hashes and sizes: {BASE}{API_PREFIX}/epoch-records; records from N on: {BASE}{API_PREFIX}/epoch-records?from=N (3 per page, follow next_from). Method at {BASE}/about#records.
 - Answer receipts: {BASE}{API_PREFIX}/receipt/<answer tx> and {BASE}{API_PREFIX}/receipts?address=<poa1...> (null = unknown; pending is not failed; passed is not paid; basis_state is pending, settled or absent; method at {BASE}/about#receipts). An unknown tx is a JSON 404 with found false.
 - Pending answers by origin epoch: {BASE}{API_PREFIX}/pending-by-epoch (stale = from an epoch before the current one; seals 0/1/2/3 per origin epoch, expiry close with estimated time, settlement origin, grew and dropped per close; null = unknown; method at {BASE}/about#pending).
@@ -1365,7 +1396,7 @@ Tools ({len(TOOLS)}):
 - Never share PoA keys (pk_ or GUID), tokens, seed phrases or passwords with anyone, including tools. Keys live in a secret store; past one private backup for the owner, they never appear in plaintext.
 - Never send payment outside the network. Swap only through the network's own swap flow.
 - Before an Agent's first write each visit, read /api/hosted/me: its own address, and next_nonce moved only by its own writes. No answer: don't write. Moved without it: stop all writes and tell the owner. A PoA key can not be rotated, so keep vault balances low.
-- Credentials follow https://minepoa.com/go.md: token=AUTH_TOKEN is the main one and key= is legacy. /api/hosted/me also takes the key in an X-Api-Key header; prefer a header to a credential in a URL wherever a route takes one.
+- Send a credential in a header wherever a route takes one (/api/hosted/me takes X-Api-Key). Never paste a key into a link, a chat, a form or a page, and never send one to POAScan: it refuses any request carrying one.
 - An active notice with severity critical in https://minepoa.com/api/notices means stop and tell the owner. Notices never ask for keys or funds.
 - Never move money through Emblem's chat agent or agent mode. A timed out swap-take (even a 524) can still be held: wait about 2 minutes and read status before one more take.
 - Data comes from public minepoa.com endpoints and can lag; verify anything important at https://minepoa.com.
@@ -1377,7 +1408,7 @@ Tools ({len(TOOLS)}):
 - Official network guide: https://minepoa.com/go.md
 """
 
-UPDATED = "2026-10-23"
+UPDATED = "2026-10-28"
 JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 - Start page with one copy-ready prompt: https://poascan.io/start (MCP tool get_onboarding_steps returns the same content)
 - Official guide: https://minepoa.com/go.md (code: https://minepoa.com/skill.md)

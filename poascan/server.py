@@ -173,7 +173,25 @@ def api(path, qs):
         a = qs.get("address", [""])[0]
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return RC.for_address(a, qint(qs, "limit", 50, 1, 200)), True
-    if path == "/api/epochs": return A.epoch_rows(), True
+    if path == "/api/epochs":   # 1.26.199: ?from=<epoch>&limit=<n> pages the closes (ascending); without them, every close as before
+        rows = A.epoch_rows()
+        if (qs.get("from") or [""])[0] or (qs.get("limit") or [""])[0]:
+            fr = qint(qs, "from", 0, 0, 10 ** 9); lim = qint(qs, "limit", 1000, 1, 1000)
+            rows = [r for r in rows if r["epoch"] >= fr][:lim]
+        return rows, True
+    m = re.match(r"^/api/epoch/(\d{1,9})/rewards$", path)
+    if m:   # 1.26.199: one close's per Agent rewards as rows (rank, addr, reward), highest first; ?limit=&offset=; CSV
+        n = int(m.group(1)); hit = [x for x in A.epoch_rows() if x["epoch"] == n]
+        if not hit:
+            last = max((x["epoch"] for x in A.epoch_rows()), default=-1)
+            raise NotFound("epoch not closed yet" if n > last and not SG.archived() else "unknown epoch", epoch=n, last_closed=last if last >= 0 else None, segment=SG.selected())
+        rw = A.epoch_detail(n).get("rewards") or {}
+        def amt(v):
+            try: return float(v)
+            except (TypeError, ValueError): return 0.0
+        rows = [dict(rank=i, epoch=n, segment=hit[0].get("segment"), addr=a, reward=v) for i, (a, v) in enumerate(sorted(rw.items(), key=lambda kv: (-amt(kv[1]), kv[0])), 1)]
+        lim = qint(qs, "limit", 10000, 1, 10000); off = qint(qs, "offset", 0, 0, 10 ** 6)
+        return rows[off:off + lim], True
     if path == "/api/notices/verified":   # signed.feed: G0 signature results from POAScan's own store; no upstream read here
         if qs: raise BadRequest("no parameters")
         from . import signed as _SIG
@@ -869,6 +887,7 @@ class H(BaseHTTPRequestHandler):
         finally: SG.reset()   # the segment a request reads (?segment=) never leaks into the next one on this thread
     def _get(self):
         I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)
+        I.CLIENT.crawler = False
         if self.key_guard(): return
         if self.www(): return
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
@@ -885,6 +904,8 @@ class H(BaseHTTPRequestHandler):
                 if path.startswith("/api/") or path == "/api": return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
                 SG.reset()
         V.REQ.path, V.REQ.qs = path, qs
+        # 1.26.199: a crawler's page view is served from the archive; it never spends the on-demand minepoa.com or fast index budget
+        I.CLIENT.crawler = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, self.headers.get("User-Agent") or "") == "bot"
         if PAGE_LIMITED.match(path) and self.page_limited(): return
         if path == "/ops/visits": return self.ops_visits(path, qs)
         if path == "/ops/network": return self.ops_network(path, qs)

@@ -11,6 +11,22 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.199] - 2026-10-28
+
+### Changed
+- A search crawler's page view is served from the archive: it never triggers an on-demand minepoa.com read or a fast index lookup (address and tx pages). API and MCP calls keep their reads. Counted as `visitor_cap:crawler` in the upstream budget and `crawler` in `fast_index.requests.not_sent`.
+- Source JSON links to minepoa.com's API carry `rel="nofollow"`.
+- llms.txt: a new Agent loop and a table of which read answers what. The credential line now says to send a credential in a header, never in a URL.
+
+### Added
+- `/api/v1/epochs?from=<epoch>&limit=<n>` pages the closes (about 15 KB for a whole segment without them).
+- `/api/v1/epoch/<n>/rewards`: one close's per Agent rewards as rows (rank, epoch, segment, addr, reward), highest first, with `limit`, `offset` and CSV. Each epoch's Payouts card links the CSV.
+- Official links on `/about`.
+- `tools/audit1028_test.py` in CI.
+
+### Fixed
+- Hyphenated tabs such as `/governance?tab=at-risk` named the bare page as canonical. `/help`, `/wallet` and each Network tab have their own descriptions.
+
 ## [1.26.198] - 2026-10-27
 
 ### Fixed

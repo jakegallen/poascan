@@ -355,7 +355,7 @@ def template(ep): return ep.split(" (")[0]
 # reason. Counts only, in memory, flushed with the request counter to upstream_denials (kept DENY_KEEP_DAYS).
 # pause_429: the host-wide pause after a 429. backoff: the endpoint key is backing off (scheduled reads count once per
 # backoff window, a visitor read every time). visitor_cap:<cap>: a visitor-triggered read refused by the polite caps.
-DENY_REASONS = ("pause_429", "backoff", "visitor_cap:recent", "visitor_cap:client", "visitor_cap:endpoint", "visitor_cap:global", "visitor_cap:inflight")
+DENY_REASONS = ("pause_429", "backoff", "visitor_cap:recent", "visitor_cap:client", "visitor_cap:endpoint", "visitor_cap:global", "visitor_cap:inflight", "visitor_cap:crawler")
 DENY_KEEP_DAYS = 400
 _deny = collections.Counter(); _deny_seen = {}
 def _utc_day(t): return time.strftime("%Y-%m-%d", time.gmtime(t))
@@ -798,7 +798,10 @@ TX_ID = re.compile(r"^[0-9a-f]{64}$")
 ADDR_ID = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 _ondemand = threading.BoundedSemaphore(ONDEMAND_MAX)
 _tx_lock = threading.Lock(); _tx_inflight = {}
-CLIENT = threading.local()   # server.py sets CLIENT.ip (Fly-Client-IP, else the peer) per request; jobs have none
+CLIENT = threading.local()   # server.py sets CLIENT.ip (Fly-Client-IP, else the peer) and CLIENT.crawler per request; jobs have none
+def crawler():
+    """True while serving a crawler's page view (1.26.199): it gets the archive, never an on-demand upstream or fast index read."""
+    return bool(getattr(CLIENT, "crawler", False))
 
 class Bucket:
     """Token bucket; keyed buckets idle for 10 min are dropped (memory stays bounded)."""
@@ -878,6 +881,7 @@ def fetch_ondemand(path, endpoint, key):
     if not (TX_ID.match(key) if endpoint == TX_EP else ADDR_ID.match(key)): raise Missing("not a valid id")
     k = neg_get(endpoint + key)
     if k: raise k("not found (cached)" if k is Missing else "upstream failed recently (cached)")
+    if crawler(): deny(endpoint, "visitor_cap:crawler"); raise Limited("crawler page view: served from the archive", 300)
     if not can_fetch(endpoint): deny(endpoint, "backoff"); raise Busy("upstream backing off")
     if endpoint == ADDR_EP:
         w = _recent_hit(endpoint + key, ADDR_MIN_S)

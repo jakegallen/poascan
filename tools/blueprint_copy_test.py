@@ -45,15 +45,15 @@ check("/swap open steps: held not paid, 524 rule, never loop, stop states, lag, 
 ll = AG.llms_txt(); safety = ll.split("## Safety", 1)[1].split("## Source", 1)[0]
 check("llms.txt Safety: leak watch, critical notice, Emblem chat agent, 524", all(s in safety for s in (
       "next_nonce", "No answer: don't write.", "severity critical", "Emblem's chat agent or agent mode", "524")) and nodash(safety))
-check("llms.txt Updated 2026-10-23", "Updated 2026-10-23." in ll)
+check("llms.txt Updated 2026-10-28", "Updated 2026-10-28." in ll)
 tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]
 check("OpenAPI swaps status: pending_receipt is held, not paid", len(_sp) == 1 and "pending_receipt is held, not paid" in str(_sp[0]))
 check("SAFE: X-Api-Key header preferred on /me, key= only as fallback, token= per go.md", "X-Api-Key header (/api/hosted/me does), send SAVED_KEY there instead of in the link; use key= only if that fails." in PR.SAFE
       and "go.md now calls key= legacy" in PR.SAFE and "token=" in PR.SAFE)
-check("llms.txt Safety: key shapes, token=AUTH_TOKEN main, key= legacy, header preferred", "PoA keys (pk_ or GUID)" in safety and "token=AUTH_TOKEN is the main one and key= is legacy" in safety
-      and "X-Api-Key header" in safety and "pk_/psk_" not in ll)
+check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
+      and "X-Api-Key" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
 check("join prompt v2.9, f577df50", S.template_sha256() == "f577df5001123c45113345b71da0d73cfda91e1aae852933a1e39551da8d9a2a")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())

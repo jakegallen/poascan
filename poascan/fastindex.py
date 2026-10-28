@@ -77,6 +77,10 @@ SYNC_KINDS = ("overview", "txs", "anchors", "ext")   # the sync's own reads: a f
 RESERVE = 6                                  # of PER_MIN, kept for the sync so lookups and seal bodies never starve it
 _neg = collections.OrderedDict()
 
+def _crawler():
+    from . import indexer as _I
+    return _I.crawler()
+
 def _take(kind, visitor, now=None):
     now = now or time.time()
     with _lock:
@@ -87,6 +91,7 @@ def _take(kind, visitor, now=None):
         while _vwin and now - _vwin[0] >= 60: _vwin.popleft()
         if len(_win) >= (PER_MIN if sync else PER_MIN - RESERVE): _refused["minute_cap"] += 1; return False
         if visitor and len(_vwin) >= VISITOR_PER_MIN: _refused["visitor_cap"] += 1; return False
+        if visitor and _crawler(): _refused["crawler"] += 1; return False   # 1.26.199: a crawler's page view reads the archive only
         _win.append(now); _sent.append((now, kind))
         if visitor: _vwin.append(now)
     return True

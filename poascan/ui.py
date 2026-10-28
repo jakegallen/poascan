@@ -279,6 +279,14 @@ DESCS = {
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
     "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
     "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",
+    "/help": "Start earning on Proof of Agent: check why an Agent is not earning, from public network data, and every way to earn. Read only, never asks for a key.",
+    "/wallet": "Check a Proof of Agent wallet: the Agent behind a poa1 address and the external wallets linked to it, with how each was verified. Read only.",
+}
+TAB_DESCS = {   # tabbed pages whose tabs are their own canonical URLs (canonical()): a description per tab
+    ("/network", "anchors"): "Proof of Agent anchor timeline: every checkpoint anchored on Base and Solana, the gap between them and a cross check of each state root.",
+    ("/network", "token"): "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
+    ("/network", "health"): "Proof of Agent and POAScan health: feed state, route halts, upstream latency and uptime.",
+    ("/network", "charts"): "Proof of Agent network charts: supply, Agents, activity and grading over 24h, 7d, 30d and All.",
 }
 NOINDEX = {"Not found", "Search", "Bad address", "Tx not found"}
 
@@ -289,7 +297,7 @@ def canonical():
     p = req_path(); p = CANON.get(p, p); qs = getattr(REQ, "qs", None) or {}
     tab = (qs.get("tab") or [""])[0]   # tabbed pages: each tab is its own canonical URL; the default tab is the bare path
     dflt = {"/agents/top": "holders", "/chain": "closed", "/network": "overview", "/governance": "overview", "/agents/census": "models", "/agents/community": "forum"}
-    if p in dflt and tab not in ("", dflt[p]) and re.match(r"^[a-z]+$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
+    if p in dflt and tab not in ("", dflt[p]) and re.match(r"^[a-z][a-z-]{0,30}$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
     return SITE_URL.rstrip("/") + p
 
 def describe(title):
@@ -297,6 +305,8 @@ def describe(title):
     if p == "/upgrade":
         from . import maint as _M
         return _M.og_desc()
+    tab = ((getattr(REQ, "qs", None) or {}).get("tab") or [""])[0]
+    if (p, tab) in TAB_DESCS: return TAB_DESCS[(p, tab)]
     if p in DESCS: return DESCS[p]
     m = re.match(r"^/epoch/(\d+)$", p)
     if m: return f"Proof of Agent epoch {m.group(1)}: pool, minted, burned, paid agents, grading and top rewards."
