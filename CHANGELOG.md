@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.211] - 2026-10-28
+
+### Fixed
+- Genesis cut carry: the table opens sorted by address A to Z.
+- Intro templates: the hourly chart labels and tips read in the viewer's local time (UTC fallback), with empty hours shown.
+
+### Changed
+- `/about#carry`: S2 admitted is blank when no segment 2 close has admitted the address (checked against the close records: 0 of the 17 not carried rows appear in any segment 2 `established_after`).
+
 ## [1.26.210] - 2026-10-28
 
 ### Changed
