@@ -631,6 +631,9 @@ def job_hourly_meta():
         try:
             d = fetch(path, cond=True)
             if d is not NOT_MODIFIED: db.put_blob(kind, d)
+            if kind == "params" and d is not NOT_MODIFIED:   # 1.26.205: door tracker notes Proposal L params once seen
+                try: __import__("poascan.intake", fromlist=["x"]).note_params(d)
+                except Exception as e: log.warning("propl note: %s", type(e).__name__)
         except Busy as e: log.warning("%s: %s", path, e)
         time.sleep(1)
     try: __import__("poascan.protocol", fromlist=["x"]).check()   # 1.26.141: hash both client files (conditional GET), log protocol events
@@ -646,7 +649,11 @@ def job_hourly_retry(now=None):
         if not r or not r["fails"] or (r["last_ok"] or 0) >= (r["last_err"] or 0) or (r["next_at"] or 0) > now: continue
         try:
             d = fetch(path, cond=True); n += 1
-            if d is not NOT_MODIFIED: db.put_blob(kind, d)
+            if d is not NOT_MODIFIED:
+                db.put_blob(kind, d)
+                if kind == "params":
+                    try: __import__("poascan.intake", fromlist=["x"]).note_params(d)
+                    except Exception as e: log.warning("propl note: %s", type(e).__name__)
         except Busy as e: log.warning("%s retry: %s", path, e); n += 1
         time.sleep(1)
     return n

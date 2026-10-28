@@ -48,6 +48,34 @@ def _cap(n, size, order, adm, rule):
     if m(dflt): return dflt, DEFAULT_BASIS, True
     return pc, PARAM_BASIS, False
 
+# 1.26.205: the door tracker. Proposal L's params, when /api/params first carries any of them (POAScan's hourly conditional
+# read of /api/params, no extra request), are noted once with the time first seen; estab_ttl changes are noted the same way.
+PROPL_KEYS = ("estab_intake_floor", "estab_intake_rate", "estab_intake_from_epoch")
+PROPL_BLOB = "propl_seen"
+
+def note_params(p, now=None):
+    """Called after each stored /api/params copy. Keeps {keys: {k: {value, first_seen}}, estab_ttl: [{value, seen}]}."""
+    import time as _t
+    from . import db
+    if not isinstance(p, dict): return
+    now = int(now or _t.time()); d = db.get_blob(PROPL_BLOB)[0] or {}; ks = dict(d.get("keys") or {}); ch = False
+    for k in PROPL_KEYS:
+        if k in p and (k not in ks or ks[k].get("value") != p[k]):
+            ks[k] = dict(value=p[k], first_seen=ks.get(k, {}).get("first_seen") or now, changed=now); ch = True
+    tl = list(d.get("estab_ttl") or []); v = p.get("estab_ttl")
+    if v is not None and (not tl or tl[-1].get("value") != v): tl.append(dict(value=v, seen=now)); ch = True
+    if ch or not d: db.put_blob(PROPL_BLOB, dict(keys=ks, estab_ttl=tl[-20:], checked=now))
+
+def propl_state():
+    """{present, keys, first_seen, estab_ttl, checked} for the flag. present: any Proposal L key in the newest params copy."""
+    from . import db
+    d = db.get_blob(PROPL_BLOB)[0] or {}; p = A.params() if not SG.archived() else {}
+    cur = {k: p[k] for k in PROPL_KEYS if k in p}
+    seen = [v.get("first_seen") for k, v in (d.get("keys") or {}).items() if k in cur and v.get("first_seen")]
+    tl = d.get("estab_ttl") or []
+    return dict(present=bool(cur), keys=cur, first_seen=min(seen) if seen else None, estab_ttl=p.get("estab_ttl"),
+                estab_ttl_changes=tl[1:] if len(tl) > 1 else [], watched=list(PROPL_KEYS), params_read_every_s=3600)
+
 @A.cached("intake", 300)
 def closes():
     """One dict per close of the selected segment, oldest first; each carries its Agent rows (rows)."""
@@ -64,24 +92,32 @@ def closes():
         rows = [dict(address=a, state="admitted" if a in adm else "not_admitted", draw=rank[a]) for a in order]
         rows += [dict(address=a, state="admitted_unlisted", draw=None) for a in adm_l if a not in rank]
         na = sum(1 for r in rows if r["state"] == "not_admitted")
+        rem = [a for a in dict.fromkeys(b.get("established_removed") or []) if isinstance(a, str) and not EF._pardoned(pardons, n, a, sl)]
+        audit = sl | set(b.get("ejected") or []) | set((b.get("audit") or {}).get("slashed") or [])
+        r_ttl = sum(1 for a in rem if a not in audit)
         out.append(dict(close=n, close_ts=int(e.get("ts") or 0), established_before=size, eligible=len(elig), cap=cap, cap_basis=basis,
                         admitted=len(adm), not_admitted=na, door="binding" if len(elig) > cap else "open",
+                        admit_rate=round(len(adm) / len(elig), 4) if elig else None, removed=len(rem), removed_ttl=r_ttl, removed_other=len(rem) - r_ttl,
+                        net=len(adm) - len(rem),
                         check=("n/a" if not elig and not adm else "match" if ok else "differs"), **CPZ.fields_for(e), rows=rows))
         est.update(b.get("established_after") or [])
         est.difference_update(a for a in b.get("established_removed") or [] if not EF._pardoned(pardons, n, a, sl))
     return out
 
 COLS = [SS.Col("close", "Close", "num"), SS.Col("set", "Set", "num", "r dk"), SS.Col("eligible", "Eligible", "num", "r"), SS.Col("cap", "Cap", "num", "r"),
-        SS.Col("admitted", "Admitted", "num", "r"), SS.Col("not_admitted", "Not admitted", "num", "r"), SS.Col("door", "Door", "cat", "r dk"), SS.Col("check", "Check", "cat", "r dk")]
+        SS.Col("admitted", "Admitted", "num", "r"), SS.Col("not_admitted", "Not admitted", "num", "r"), SS.Col("rate", "Rate", "num", "r dk"),
+        SS.Col("removed_ttl", "TTL out", "num", "r"), SS.Col("removed_other", "Other out", "num", "r dk"), SS.Col("net", "Net", "num", "r"),
+        SS.Col("door", "Door", "cat", "r dk"), SS.Col("check", "Check", "cat", "r dk")]
 SORTS = [(c.key, c.label) for c in COLS]
 _DOOR = {"binding": 0, "open": 1}; _CHK = {"differs": 0, "match": 1, "n/a": 2}
 _V = {"close": lambda r: r["close"], "set": lambda r: r["established_before"], "eligible": lambda r: r["eligible"], "cap": lambda r: r["cap"],
-      "admitted": lambda r: r["admitted"], "not_admitted": lambda r: r["not_admitted"], "door": lambda r: _DOOR[r["door"]], "check": lambda r: _CHK[r["check"]]}
+      "admitted": lambda r: r["admitted"], "not_admitted": lambda r: r["not_admitted"], "rate": lambda r: r["admit_rate"] if r["admit_rate"] is not None else -1,
+      "removed_ttl": lambda r: r["removed_ttl"], "removed_other": lambda r: r["removed_other"], "net": lambda r: r["net"], "door": lambda r: _DOOR[r["door"]], "check": lambda r: _CHK[r["check"]]}
 ACOLS = [SS.Col("name", "Agent", "text"), SS.Col("draw", "Draw", "low", "r"), SS.Col("state", "State", "cat")]
 ASORTS = [(c.key, c.label) for c in ACOLS]
 _SO = {k: i for i, (k, _) in enumerate(STATES)}
 TIP = ("Set: established before the close. Eligible: challenge_eligible, not yet established. Cap: max(5, ceil(10% of Set)). "
-       "Admitted: new in established_after. Door: Binding when Eligible exceeds Cap. Check: the first Cap Agents in the draw order are exactly the Admitted.")
+       "Admitted: new in established_after. Rate: Admitted over Eligible. TTL out: in established_removed and not slashed or ejected at that close (the TTL lapse). Other out: removed with a slash or ejection. Net: Admitted minus removed. Door: Binding when Eligible exceeds Cap. Check: the first Cap Agents in the draw order are exactly the Admitted.")
 DRAW_TIP = "Place in sha256('intake:' + address + ':' + close) order among the eligible. The first Cap places are admitted."
 
 def select(by="close", d="desc"):
@@ -101,6 +137,18 @@ def _q(qs, k, d=""): return ((qs or {}).get(k) or [d])[0]
 def _state(s):
     return {"admitted": '<span class="tag ok">Admitted</span>', "not_admitted": '<span class="tag warn">Eligible, not admitted</span>',
             "admitted_unlisted": '<span class="tag" title="In established_after without a challenge_eligible entry at this close">Admitted, not eligible</span>'}[s]
+def _pct(v): return f'{v * 100:.0f}%' if v is not None else '<span class="dim">···</span>'
+def _net(v): return f'<span class="num">{"+" if v > 0 else ""}{v:,}</span>'
+def _propl_flag():
+    """Proposal L flag: Not in params, or the keys and when POAScan first saw them."""
+    st = propl_state()
+    if not st["present"]:
+        return stat("Proposal L params", "Not set", tip="None of estab_intake_floor, estab_intake_rate, estab_intake_from_epoch in /api/params (read hourly). The door uses the engine default.")
+    from .ui import lt
+    kv = ", ".join(f"{k} {v}" for k, v in st["keys"].items())
+    return stat("Proposal L params", "Set", tip=f"In /api/params: {kv}. First seen by POAScan's hourly read" + (f" at {__import__('time').strftime('%Y-%m-%d %H:%M UTC', __import__('time').gmtime(st['first_seen']))}" if st["first_seen"] else ""),
+                flag_html=f'<span class="tag ok">Set</span>')
+
 def _chk(c): return {"match": '<span class="tag ok">Match</span>', "differs": '<span class="tag bad">Differs</span>', "n/a": '<span class="dim">···</span>'}[c]
 
 def tab(qs, href, qsx):
@@ -117,12 +165,15 @@ def tab(qs, href, qsx):
     s = "".join([stat("Eligible", intc(last["eligible"]), tip=f'challenge_eligible at the E{last["close"]} close, not yet established'),
                  stat("Cap", intc(last["cap"]), tip=f'Door at E{last["close"]}: max(5, ceil(10% of {last["established_before"]:,} established))'),
                  stat("Admitted", intc(last["admitted"]), tip=f'New in established_after at E{last["close"]}'),
-                 stat("Not admitted", intc(last["not_admitted"]), tip=f'Eligible at E{last["close"]} but not admitted')])
+                 stat("Not admitted", intc(last["not_admitted"]), tip=f'Eligible at E{last["close"]} but not admitted'),
+                 stat("TTL out", intc(last["removed_ttl"]), tip=f'Removed from Established at E{last["close"]} with no slash or ejection'),
+                 _propl_flag()])
     T = lambda: qtip(TIP, METHOD, "About Intake", "hv")
     cols = [c._replace(tip=T()) if c.key == "cap" else c for c in COLS]
     trs = "".join(f'<tr{" class=on" if r["close"] == one["close"] else ""}><td><a href="{href("intake", **keep(close=str(r["close"]), state=""))}#intake-list">E{r["close"]}</a>{CPZ.tag(r.get("pause"))}</td>'
                   f'<td class="r dk">{_n(r["established_before"])}</td><td class="r">{_n(r["eligible"])}</td><td class="r">{_n(r["cap"])}</td><td class="r">{_n(r["admitted"])}</td>'
-                  f'<td class="r">{_n(r["not_admitted"])}</td><td class="r dk">{"Binding" if r["door"] == "binding" else "<span class=dim>Open</span>"}</td><td class="r dk">{_chk(r["check"])}</td></tr>' for r in rs)
+                  f'<td class="r">{_n(r["not_admitted"])}</td><td class="r dk">{_pct(r["admit_rate"])}</td><td class="r">{_n(r["removed_ttl"])}</td><td class="r dk">{_n(r["removed_other"])}</td>'
+                  f'<td class="r">{_net(r["net"])}</td><td class="r dk">{"Binding" if r["door"] == "binding" else "<span class=dim>Open</span>"}</td><td class="r dk">{_chk(r["check"])}</td></tr>' for r in rs)
     tb = SS.select(cols, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(cols, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
     q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "")
     links = f'<a class="more" href="/api/v1/governance/intake.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/intake{q}">API →</a>'
@@ -153,7 +204,7 @@ def tab(qs, href, qsx):
     ccl = "".join(f'<a href="{href("intake", **ak(close=str(c["close"]), state=""))}#intake-list" class="chip {"on" if c["close"] == one["close"] else ""}">E{c["close"]}</a>' for c in reversed(withe))
     det = card(f'E{one["close"]} intake · {one["admitted"]:,} of {one["eligible"]:,}, cap {one["cap"]:,}',
                (f'<div class="chips scroll">{ccl}</div>' if ccl else "") + f'<div class="chips">{chips}</div>' + atb, alinks, cls="histc", id="intake-list")
-    return f'<div class="stats four">{s}</div>' + card(f"Intake per close · {len(rs):,}", tb + cov, links, cls="histc", id="intake") + det
+    return f'<div class="stats six">{s}</div>' + card(f"Intake per close · {len(rs):,}", tb + cov, links, cls="histc", id="intake") + det
 
 BASE = "https://poascan.io"
 def api(close=None, state="", sort="close", d="desc", asort="draw", adir="desc", limit=1000, offset=0):
@@ -165,7 +216,7 @@ def api(close=None, state="", sort="close", d="desc", asort="draw", adir="desc",
                   method=BASE + METHOD, url=BASE + "/governance?tab=intake")
     if close is None:
         rs = select(sort, d)
-        return dict(common, close=None, sort=sort, dir=d, total=len(rs), offset=offset, limit=limit, rows=rs[offset:offset + limit])
+        return dict(common, close=None, sort=sort, dir=d, proposal_l=propl_state(), total=len(rs), offset=offset, limit=limit, rows=rs[offset:offset + limit])
     c = next((x for x in closes() if x["close"] == close), None)
     if c is None: return dict(common, close=close, found=False, total=0, rows=[])
     ar = agents(close, state, asort, adir)
