@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.216] - 2026-10-28
+
+### Fixed
+- Address page: Balance and Total rewards, Spendable and Locked could disagree without a word (reported on LabLeak post 1960). Balance comes from the agent list, which already held the E16 payout; the reward figures come from the close records POAScan holds, which stood at E15. When the balance and the reward sum disagree while a newer close is listed upstream or past due, those three now carry a Stale tag naming the close they stand at, the header status note says why, and the split is never re-estimated.
+- `/api/v1/address/<a>` adds `rewards_total`, `spendable_est`, `locked_est`, `rewards_as_of`, `rewards_behind`, `rewards_behind_reason` and `balance_ahead_by`; MCP `get_address` adds the same basis fields. Method on `/about#reward-basis`.
+
 ## [1.26.215] - 2026-10-28
 
 ### Added
