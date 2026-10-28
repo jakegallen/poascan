@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.210] - 2026-10-28
+
+### Changed
+- Genesis cut carry: segment 1 columns read the close the cut carried (from the segment config), as S1 Established and S1 eligible at that close; later segment 1 closes are not folded in.
+
+### Fixed
+- `/about#highlights` for Records: its anchor no longer shares an id with Close records.
+
 ## [1.26.209] - 2026-10-28
 
 ### Added
