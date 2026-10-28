@@ -520,6 +520,13 @@ def status_pill(f):
     if nr:
         reasons.append(nr)
         if state == "live": state, label = "partial", "Partial"
+    try:
+        from . import rewardbasis as _RB
+        rr = _RB.pill_reason()   # 1.26.216: the balance is ahead of the held close records (lagging figures carry Stale tags)
+    except Exception: rr = ""
+    if rr:
+        reasons.append(rr)
+        if state == "live": state, label = "partial", "Partial"
     rl = _route_lines(); rhtml = {}
     for t, h in rl:
         reasons.append(t); rhtml[t] = h

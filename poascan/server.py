@@ -176,7 +176,12 @@ def api(path, qs):
         bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
         from . import strain as _ST   # a notice in place of the address read: the balance shown is the last real copy
         stale = bool(bb.get("stale") or _ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
+        from . import rewardbasis as RB
+        rb = p["rewards"]; rsum = sum(rb.values()); sp, lk = A.vest_split(rb, A.open_gkey())
+        rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum, bb["as_of"])
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
+                    rewards_total=round(rsum, 6), spendable_est=round(sp, 6), locked_est=round(lk, 6), rewards_as_of=rbs["as_of"],
+                    rewards_behind=rbs["behind"], rewards_behind_reason=rbs["reason"], balance_ahead_by=rbs["balance_ahead_by"],
                     balance_as_of_checkpoint=bb.get("as_of_checkpoint"), balance_segment=bb.get("segment"),
                     rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(p["rewards"]) if SG.unconfirmed_g(k)], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), wallet_binding=WB.binding(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
