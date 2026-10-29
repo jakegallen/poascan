@@ -15,7 +15,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed
 - Health follows the core routes. `/api/v1/health`, Network → Health and the header status now share one rule over six routes (mining, grading, assignments, tx lookup, swaps, anchors). Mining and grading are core: either one not OK is Partial (HTTP 503). Any other route or feed not OK is listed in `degraded` and on its own line in the status note, and Health stays OK (HTTP 200). Before, one halted tx lookup or a busy swap read turned the whole site Partial and the health check 503.
-- `/api/v1/health` adds `routes` (id, label, state, core, detail, as_of, served_by), `core`, `core_basis`, `core_not_ok` and `degraded`. Network → Health lists the six routes with Core tags. The grading line in the status note shows only while the core Grading route is not OK, so the dot and the note agree. Method on `/about#health-core`.
+- `/api/v1/health` adds `routes` (id, label, state, core, detail, as_of, served_by), `core`, `core_basis`, `core_not_ok` and `degraded`. Network → Health lists the six routes with Core tags. The grading line in the status note shows only while the core Grading route is not OK, so the dot and the note agree. POAScan's own tx list feed counts as core too, since every page is built from it. A route or feed POAScan has never read counts neither way. Method on `/about#health-core`.
 
 ## [1.26.219] - 2026-10-29
 
