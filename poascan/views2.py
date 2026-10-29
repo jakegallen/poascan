@@ -358,8 +358,8 @@ def feeds_html(fd=None):
     RT = {"ok": ("ok", "OK"), "degraded": ("warn", "Degraded"), "down": ("bad", "Down"), "unknown": ("", "No read")}
     rli = "".join(f'<li data-rh="{E(r["id"])}"><b>{E(r["label"])}</b><span class="rtg"><span class="tag {RT[r["state"]][0]}" title="{E(r["detail"])}">{RT[r["state"]][1]}</span>'
                   + ('<span class="tag" title="Decides OK vs Partial (/about#health-core)">Core</span>' if r["core"] else "") + '</span>'
-                  + f'<span class="fdt">{E(r["detail"])}</span></li>' for r in fd.get("routes") or [])
-    rh = (f'<ul class="feeds" aria-label="Route health">{rli}</ul><p class="cov dim small">OK needs the core routes OK; others are listed on their own · <a href="/about#health-core">Method</a></p>') if rli else ""
+                  + f'<span class="fdt" title="{E(r["detail"])}">{E(r["detail"])}</span></li>' for r in fd.get("routes") or [])
+    rh = (f'<ul class="feeds rhl" aria-label="Route health">{rli}</ul><p class="cov dim small">OK needs the core routes OK; others are listed on their own · <a href="/about#health-core">Method</a></p>') if rli else ""
     return card("Feeds", head + rh + f'<ul class="feeds" aria-label="Feeds">{li}</ul>' )
 
 ROUTE_TAG2 = {"open": "ok", "halted": "bad", "down": "bad", "unknown": ""}

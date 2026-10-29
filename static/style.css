@@ -1638,3 +1638,8 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .tld{width:9px;height:9px;border-radius:50%;background:var(--gold);margin-top:5px}
 .tl-est_rm .tld,.tl-slashed .tld,.tl-ejected .tld{background:var(--red)}.tl-latest .tld{background:transparent;border:1px solid var(--line2)}
 .tlw{display:block;font-size:var(--t12);color:var(--lbl);overflow-wrap:anywhere}
+/* 1.26.222: Route health rows: label column fixed so it is never squeezed out; long detail wraps */
+.rhl{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+.rhl li{grid-template-columns:7.5em auto minmax(0,1fr)}
+.rhl .rtg{display:inline-flex;align-items:center;gap:6px}
+.rhl .fdt{white-space:normal;line-height:1.3;min-width:0;overflow-wrap:anywhere}
