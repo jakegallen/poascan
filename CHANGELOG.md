@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.221] - 2026-10-29
+
+### Added
+- `/api/v1/epochs?latest=n` returns the newest n closed epochs (oldest first). Each row now links its page (`url`), the full close record (`record_url`) and the reward table (`rewards_url`). `latest` with `from` is a 400.
+
+### Changed
+- The epochs mirror reads the full upstream close list at most once per 20 minutes and only after a new close, so a slow or retried read never repeats the large download. OpenAPI and llms.txt document the small paged reads.
+
 ## [1.26.220] - 2026-10-29
 
 ### Changed
