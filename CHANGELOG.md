@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.218] - 2026-10-28
+
+### Fixed
+- For a few minutes after POAScan read the E16 close record, the reward figures still had the earlier copy while the close basis already said E16, so the figures disagreed with no tag. While the newest close record pays the address and its reward is not in the figures yet, Total rewards, Spendable and Locked now stay tagged Stale as of the close before it, in the page, the address API and MCP `get_address`.
+
 ## [1.26.217] - 2026-10-28
 
 ### Fixed
