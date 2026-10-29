@@ -354,7 +354,13 @@ def feeds_html(fd=None):
                  f'<span class="fdt">{rel(f["last_ok"]) if f["last_ok"] else "never"}</span></li>' for f in fd["feeds"])
     head = (f'<div class="fdh"><span class="lbl">Health</span><span class="tag {FEED_TAG[fd["state"]]}" data-health="{fd["state"]}">{fd["state"]}</span>'
             f'<span class="lbl">Chain</span><span class="tag {FEED_TAG[fd["chain"]]}">{fd["chain"]}</span></div>')
-    return card("Feeds", head + f'<ul class="feeds" aria-label="Feeds">{li}</ul>' )
+    # 1.26.220: the six routes the headline is built from; Core ones (mining, grading) decide OK vs Partial
+    RT = {"ok": ("ok", "OK"), "degraded": ("warn", "Degraded"), "down": ("bad", "Down"), "unknown": ("", "No read")}
+    rli = "".join(f'<li data-rh="{E(r["id"])}"><b>{E(r["label"])}</b><span class="rtg"><span class="tag {RT[r["state"]][0]}" title="{E(r["detail"])}">{RT[r["state"]][1]}</span>'
+                  + ('<span class="tag" title="Decides OK vs Partial (/about#health-core)">Core</span>' if r["core"] else "") + '</span>'
+                  + f'<span class="fdt">{E(r["detail"])}</span></li>' for r in fd.get("routes") or [])
+    rh = (f'<ul class="feeds" aria-label="Route health">{rli}</ul><p class="cov dim small">OK needs the core routes OK; others are listed on their own · <a href="/about#health-core">Method</a></p>') if rli else ""
+    return card("Feeds", head + rh + f'<ul class="feeds" aria-label="Feeds">{li}</ul>' )
 
 ROUTE_TAG2 = {"open": "ok", "halted": "bad", "down": "bad", "unknown": ""}
 

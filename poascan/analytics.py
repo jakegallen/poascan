@@ -575,7 +575,7 @@ def freshness():
     elif node_lag: state, why = "lag", f"minepoa node data {node_age // 60}m old"
     elif up: state, why = "up", ("Network upgrade: " + M.state()["headline"]) if M.recovery()["moved"] else "Network upgrade: hosted mining paused, finalized height parked on purpose"
     elif cp_lag: state, why = "lag", f"Finalized height unchanged {cp_age // 3600}h"
-    elif (fd := feeds())["state"] != "OK": state, why = "partial", "Chain live. Not OK: " + ", ".join(fd["not_ok"])
+    elif (fd := feeds())["state"] == "Partial": state, why = "partial", "Chain live. Not OK: " + ", ".join(fd["core_not_ok"])
     else: state, why = "live", "Live"
     return dict(state=state, label={"live": "Live", "partial": "Partial", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
                 href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
@@ -647,8 +647,10 @@ def feeds():
     moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S
     chain = "Live" if fresh and not stalled else "Stalled" if fresh else "Stale"
     bad = [f["label"] for f in out if f["state"] != "OK"]
-    head = "Degraded" if chain != "Live" else "Partial" if bad else "OK"
-    return dict(state=head, chain=chain, feeds=out, not_ok=bad, ok=head == "OK")
+    from . import routehealth as RH   # 1.26.220: the headline follows the core routes (mining, grading); the rest are listed
+    rts = RH.routes(out, now); head, ok, core_bad, deg = RH.headline(chain, rts, out)
+    return dict(state=head, chain=chain, feeds=out, not_ok=bad, ok=ok, routes=rts, core=list(RH.CORE), core_basis=RH.CORE_BASIS,
+                core_not_ok=core_bad, degraded=deg)
 
 def anchors_latest(n=20, segment=None):
     """Newest anchors first, current segment first (heights restart at a genesis cut); segment= keeps one segment."""

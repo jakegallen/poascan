@@ -509,32 +509,43 @@ def status_pill(f):
     """The header pill from analytics.freshness(): state, label, why, href, reasons and the note's HTML (pop)."""
     state, label, why = f["state"], f["label"], f.get("why") or ""
     reasons = []
+    # 1.26.220: Partial only for a core route (mining, grading: routehealth.py), the same rule as /api/health. Every other
+    # route or feed that is not ok gets its own line and leaves the dot as it is.
     if state == "partial" and why.startswith("Chain live. Not OK: "):
-        bad = why[len("Chain live. Not OK: "):]; reasons.append(("Feeds" if "," in bad else "Feed") + f" not OK: {bad}.")
+        bad = why[len("Chain live. Not OK: "):]; reasons.append(f"Core route not OK: {bad}.")
     elif state not in ("live", "up") and why: reasons.append(why.rstrip(".") + ".")
+    try:
+        from . import analytics as _A
+        fdx = _A.feeds(); rlx = [t for t, _ in _route_lines()]
+        for r in fdx["routes"]:   # a route already on a probe line (Halted or Down since) is not repeated
+            if not r["core"] and r["state"] in ("degraded", "down") and not any(t.startswith(r["label"] + " ") for t in rlx):
+                reasons.append(f'{r["label"]} {r["state"]}: {r["detail"]}.')
+        rl0 = {r["label"] for r in fdx["routes"]}
+        for lab in fdx["degraded"]:
+            if lab not in rl0: reasons.append(f"{lab} feed not OK.")
+    except Exception: fdx = None
     g = _grading_reason()
-    if g:
+    try: g_core = next(r for r in fdx["routes"] if r["id"] == "grading")["state"] in ("degraded", "down") if fdx else True
+    except StopIteration: g_core = True
+    if g and g_core:   # the grading line shows only while the core Grading route is not ok, so the dot and the note agree
         reasons.append(g)
         if state == "live": state, label = "partial", "Partial"
     nr = _notice_reason()
     if nr:
         reasons.append(nr)
-        if state == "live": state, label = "partial", "Partial"
     try:
         from . import rewardbasis as _RB
         rr = _RB.pill_reason()   # 1.26.216: the balance is ahead of the held close records (lagging figures carry Stale tags)
     except Exception: rr = ""
     if rr:
         reasons.append(rr)
-        if state == "live": state, label = "partial", "Partial"
     rl = _route_lines(); rhtml = {}
     for t, h in rl:
         reasons.append(t); rhtml[t] = h
-    if rl and state == "live": state, label = "partial", "Partial"
+    if any(t.startswith(("Hosted mining ", "Grading ")) for t, _ in rl) and state == "live": state, label = "partial", "Partial"   # core routes only
     hr = _halt_reason() if not any(t.startswith("Tx lookup ") for t, _ in rl) else ""   # the route line already says tx lookups are halted
     if hr:
         reasons.append(hr)
-        if state == "live": state, label = "partial", "Partial"
     ur = _upgrade_reason()   # while maintenance is on, its line is in the note whatever state outranks it (Stale, Lagging)
     if ur: reasons.insert(0, ur) if state == "up" else reasons.append(ur)
     if not reasons: reasons.append("All systems normal." if state == "live" else (why.rstrip(".") + "." if why else label + "."))

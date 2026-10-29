@@ -77,7 +77,8 @@ def api(path, qs):
         from . import indexer as _IX
         load = _IX.bytes_1h()   # upstream response bytes (compressed) in the last 60 minutes, per endpoint key
         from . import hosted as _HO, routewatch as _RW
-        return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
+        return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], core=fd["core"], core_basis=fd["core_basis"], core_not_ok=fd["core_not_ok"], degraded=fd["degraded"],
+                    routes=fd["routes"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
                     txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), address_reads=dict(agent_list=V._roster_skips[0], read_path=V._roster_skips[1], agent_list_fresh_s=V.ROSTER_FRESH_S), started=STARTED, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
                     txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state(), page_cache=HC.state()), False
     if path == "/api/routes":   # 1.26.188: route halts from POAScan's existing probes (routewatch.py)
