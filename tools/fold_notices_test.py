@@ -36,7 +36,7 @@ check(f"home: no strip; while the header shows Upgrading its note carries the li
 check("no halt: no reason", ui._halt_reason() == "")
 ST.record_halt("/api/explorer/tx/" + "a" * 64, {"text": "endpoint temporarily halted", "signals": []})
 p = ui.status_pill({"state": "live", "label": "Live", "why": "", "fetched_at": int(time.time())})
-check(f"tx lookup paused: Partial with the reason ({p['reasons']})", p["state"] == "partial" and "minepoa.com paused tx lookups. Showing indexed data." in p["reasons"])
+check(f"tx lookup paused: one line with the reason, Live stays Live (1.26.220: tx lookup is not core) ({p['reasons']})", p["state"] == "live" and "minepoa.com paused tx lookups. Showing indexed data." in p["reasons"])
 ST.record_halt("/api/chains", {"text": "endpoint temporarily halted", "signals": []})
 check("two paused lookups read as one line", ui._halt_reason() == "minepoa.com paused tx and wallet link lookups. Showing indexed data.")
 ST.reset()

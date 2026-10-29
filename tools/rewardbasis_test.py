@@ -40,7 +40,7 @@ check("API: spendable_est + locked_est = rewards_total (no invented split)", abs
 m = AG.t_address({"address": a, "tx_limit": 0})
 check("MCP get_address carries rewards_as_of and rewards_behind", m["rewards_behind"] is True and m["rewards_as_of"]["epoch"] == 15)
 pill = UI.status_pill(dict(state="live", label="Live", why="Live", fetched_at=NOW))
-check("status note says why, and Live turns Partial", pill["state"] == "partial" and any("as of the E15 close" in x for x in pill["reasons"]))
+check("status note says why on its own line; Live stays Live (1.26.220: not a core route)", pill["state"] == "live" and any("as of the E15 close" in x for x in pill["reasons"]))
 
 db.put_blob("status", {"epochs_closed": 17, "supply": "1", "txs": 1}); A._cache.clear()
 lg = RB.lag(t15 + 600)

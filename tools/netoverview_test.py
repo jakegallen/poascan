@@ -54,6 +54,7 @@ check("a lag at or over LAG_BLOCKS is flagged Behind", A.LAG_BLOCKS == 2000 and 
 # freshness: a failing tx feed with fresh status/networks reads is Live, not Stale
 db.write("INSERT INTO fetch_log(endpoint,last_ok,last_err,fails,next_at,err) VALUES('/api/explorer/txs',?,?,5,?,'HTTP 404')", (now - 1800, now - 30, now + 600))
 db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at) VALUES('/api/status',?,0,0)", (now - 20,))
+A._cache.clear()   # 1.26.220: feeds() decides the headline from the core set; drop the copy cached before these rows
 f = A.freshness.__wrapped__() if hasattr(A.freshness, "__wrapped__") else A.freshness()
 check(f"tx feed down, status fresh: Partial, not Stale ({f['state']}, {f['why']})", f["state"] == "partial" and f["label"] == "Partial" and f["tx_feed_down"] and "Tx list" in f["why"])
 A._cache.clear() if hasattr(A, "_cache") else None

@@ -512,7 +512,9 @@ def status_pill(f):
     # 1.26.220: Partial only for a core route (mining, grading: routehealth.py), the same rule as /api/health. Every other
     # route or feed that is not ok gets its own line and leaves the dot as it is.
     if state == "partial" and why.startswith("Chain live. Not OK: "):
-        bad = why[len("Chain live. Not OK: "):]; reasons.append(f"Core route not OK: {bad}.")
+        bad = why[len("Chain live. Not OK: "):]
+        core = {"Mining", "Grading"}; parts = [x.strip() for x in bad.split(",")]
+        reasons.append((f"Core route not OK: {bad}." if all(x in core for x in parts) else ("Feeds" if "," in bad else "Feed") + f" not OK: {bad}."))
     elif state not in ("live", "up") and why: reasons.append(why.rstrip(".") + ".")
     try:
         from . import analytics as _A
@@ -520,9 +522,8 @@ def status_pill(f):
         for r in fdx["routes"]:   # a route already on a probe line (Halted or Down since) is not repeated
             if not r["core"] and r["state"] in ("degraded", "down") and not any(t.startswith(r["label"] + " ") for t in rlx):
                 reasons.append(f'{r["label"]} {r["state"]}: {r["detail"]}.')
-        rl0 = {r["label"] for r in fdx["routes"]}
-        for lab in fdx["degraded"]:
-            if lab not in rl0: reasons.append(f"{lab} feed not OK.")
+        rl0 = {r["label"] for r in fdx["routes"]}; fl = [lab for lab in fdx["degraded"] if lab not in rl0 and lab not in why]
+        if fl: reasons.append(("Feeds" if len(fl) > 1 else "Feed") + f" not OK: {', '.join(fl)}.")
     except Exception: fdx = None
     g = _grading_reason()
     try: g_core = next(r for r in fdx["routes"] if r["id"] == "grading")["state"] in ("degraded", "down") if fdx else True

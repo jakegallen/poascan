@@ -5,13 +5,15 @@ already holds (routewatch.py probes, the feed rows, the swap write check): no ne
 
 Core routes are mining and grading. Proof of Agent exists to pay Agents for answers that are graded: an Agent can earn
 only while answers can be submitted (mining) and settled (grading). When either is not ok, the network is not doing its
-job and health says Partial (HTTP 503). The other four only change how POAScan reads or how an Agent acts: tx lookup and
+job and health says Partial (HTTP 503). POAScan's own tx list feed (CORE_FEEDS) counts the same way: without it every page
+is behind. The other four only change how POAScan reads or how an Agent acts: tx lookup and
 anchors have indexed copies, assignments and swaps are optional to earning. One of them not ok is listed in degraded on
 its own line and never flips the headline."""
 import time
 
 CORE = ("mining", "grading")
-CORE_BASIS = ("Mining and grading: an Agent earns only while answers can be submitted and settled. "
+CORE_FEEDS = ("Tx list",)   # POAScan's own read of new txs: every page and figure is built from it
+CORE_BASIS = ("Mining and grading: an Agent earns only while answers can be submitted and settled. POAScan's own tx list feed counts too, since every page is built from it. "
               "Tx lookup, assignments, swaps and anchors are listed on their own lines and do not change the headline.")
 LABELS = {"mining": "Mining", "grading": "Grading", "assignments": "Assignments", "tx_lookup": "Tx lookup", "swaps": "Swaps", "anchors": "Anchors"}
 RW_MAP = {"mining": "hosted_mining", "grading": "grading", "assignments": "assignments", "tx_lookup": "tx_lookup"}
@@ -23,7 +25,7 @@ def _row(rid, state, detail, as_of=None, served_by=None):
 def routes(feed_rows, now=None):
     """[route dict] in LABELS order. feed_rows: analytics.feeds() rows (label, state)."""
     now = now or time.time(); out = []
-    fr = {f["label"]: f for f in feed_rows or []}
+    fr = {f["label"]: f for f in feed_rows or [] if f.get("last_ok") or f["state"] == "OK"}   # a feed never read counts neither way
     try:
         from . import routewatch as RW
         rw = {r["id"]: r for r in RW.state(now)["routes"]}
@@ -41,16 +43,26 @@ def routes(feed_rows, now=None):
             cov = r.get("covered_by")
             w = "halted" if st == "halted" else "down"
             out.append(_row(rid, "degraded" if cov else "down", f"minepoa.com route {w}" + (f"; reads served from the {cov}" if cov else ""), ao, cov))
+        elif rid == "grading" and (gs := _grading_state()):   # no probe read: the seal-based grading state (maint.grading_state)
+            out.append(_row(rid, {"open": "ok", "unconfirmed": "degraded", "halted": "down"}.get(gs, "unknown"), f"Grading {gs} (from grade seals)", ao))
         else: out.append(_row(rid, "unknown", "No read yet", ao))   # no probe read at all (a fresh database): never counted either way
-    sw = FEED_WORD.get((fr.get("Swaps") or {}).get("state"), "down") if "Swaps" in fr else "degraded"
+    sw = FEED_WORD.get((fr.get("Swaps") or {}).get("state"), "down") if "Swaps" in fr else "unknown"
     ww = FEED_WORD.get((fr.get("Swap writes") or {}).get("state")) if "Swap writes" in fr else None
-    if sw == "ok" and ww in (None, "ok"): out.append(_row("swaps", "ok", "Reads and writes OK"))
+    if sw == "unknown": out.append(_row("swaps", "unknown", "Swap reads not read yet"))
+    elif sw == "ok" and ww in (None, "ok"): out.append(_row("swaps", "ok", "Reads and writes OK"))
     elif sw == "ok": out.append(_row("swaps", "degraded", f"Swap reads OK, swap writes {ww}"))
     else: out.append(_row("swaps", sw, f"Swap reads {sw}" + (f", swap writes {ww}" if ww else "")))
     an = fr.get("Anchors")
-    out.append(_row("anchors", FEED_WORD.get(an["state"], "down") if an else "degraded", "Anchor list " + (an["state"].lower() if an else "not read yet"),
+    out.append(_row("anchors", FEED_WORD.get(an["state"], "down") if an else "unknown", "Anchor list " + (an["state"].lower() if an else "not read yet"),
                     _iso(an.get("last_ok")) if an else None))
     return out
+
+def _grading_state():
+    try:
+        from . import maint as M
+        if not M.complete() or M.state()["active"]: return None
+        return M.grading_state()["state"]
+    except Exception: return None
 
 def _iso(ts):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts))) if ts else None
@@ -59,8 +71,9 @@ def headline(chain, rts, feed_rows):
     """(state, ok, core_not_ok [labels], degraded [labels]). Degraded when the chain is not live; Partial when a core
     route is not ok; OK otherwise. degraded lists every other route and feed that is not ok, each on its own."""
     core_bad = [r["label"] for r in rts if r["core"] and r["state"] in ("degraded", "down")]
+    core_bad += [f["label"] for f in feed_rows if f["label"] in CORE_FEEDS and f["state"] != "OK"]   # POAScan's own live view of the chain
     deg = [r["label"] for r in rts if not r["core"] and r["state"] in ("degraded", "down")]
     covered = {"Tx lookup", "Swaps", "Swap writes", "Anchors"}
-    deg += [f["label"] for f in feed_rows if f["state"] != "OK" and f["label"] not in covered and f["label"] not in deg]
+    deg += [f["label"] for f in feed_rows if f["state"] != "OK" and f.get("last_ok") and f["label"] not in covered and f["label"] not in deg]
     state = "Degraded" if chain != "Live" else "Partial" if core_bad else "OK"
     return state, state == "OK", core_bad, deg

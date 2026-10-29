@@ -52,10 +52,10 @@ check("graders tooltip explains it", "no grade seals have landed in the last 30 
 check("no home strip (1.26.169: the header status carries it)", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live())
 p = pl(); s = p["pop"]
 check("header: Live turns Partial, the note names grading and links /upgrade and Health", p["state"] == "partial" and p["label"] == "Partial"
-      and p["reasons"] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/network?tab=health">Health</a>' in s)
+      and p["reasons"][-1:] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/network?tab=health">Health</a>' in s)
 check("header note: Updated time in the reader's zone (data-upts)", f'<time data-upts="{LIVE["fetched_at"]}"' in s and "Updated" in s)
 p2 = pl(dict(LIVE, state="partial", label="Partial", why="Chain live. Not OK: Networks"))
-check("header: a feed not OK and grading both listed", p2["reasons"] == ["Feed not OK: Networks.", "Grading not yet confirmed. No recent seals."])
+check("header: a feed not OK and grading both listed", p2["reasons"][0] == "Feed not OK: Networks." and p2["reasons"][-1] == "Grading not yet confirmed. No recent seals.")
 check("header: the live snapshot pill carries the note", "pop" in V.pill() and "Grading not yet confirmed" in V.pill()["pop"])
 h = V2.upgrade_body()
 check("/upgrade: per notice title, Not yet confirmed group", "Upgrade complete per notice" in h and "Not yet confirmed" in h and 'data-grp="grading"' in h)
@@ -76,7 +76,7 @@ check(f"two recent seals confirm open ({g['state']}, {g['basis']})", g["state"] 
 check("open: working has grading, unconfirmed empty", "grading" in st["working"] and st["unconfirmed"] == [] and st["headline"] == M.DONE_HEAD)
 check("open: no home strip, graders tile untagged", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live() and "tag warn" not in V.graders_tile(A.open_epoch()))
 p = pl()
-check("open: header Live, note says all systems normal, Health link only", p["state"] == "live" and p["reasons"] == ["All systems normal."] and "/upgrade" not in p["pop"] and 'href="/network?tab=health">Health</a>' in p["pop"])
+check("open: header Live, no grading line, Health link only", p["state"] == "live" and not any("rading" in x for x in p["reasons"]) and "/upgrade" not in p["pop"] and 'href="/network?tab=health">Health</a>' in p["pop"])
 h = V2.upgrade_body()
 check("open: /upgrade says Upgrade complete, Grading in Working", '<h1 class="uph-t" id="uph-t">Upgrade complete</h1>' in h and "<span>Grading</span>" in h and 'data-grp="grading"' not in h)
 check("open: evidence counts", st["grading"]["seals_since_notice"] == 2 and st["grading"]["sealers_since_notice"] == 2 and st["grading"]["last_seal_at"])

@@ -118,8 +118,8 @@ check("job_live while backing off sends no status read and stores nothing", st2 
 html = ui.layout("Home", "<p>x</p>")
 check("no notice strip on any page, ever (1.26.176): the development banner stays", 'id="ntbar"' not in html and 'class="ntbar' not in html and 'id="devbar"' in html and not hasattr(ST, "banner") and not hasattr(ui, "_strain_bar"))
 pill = html[html.index('id="livepill"'):html.index("</details>", html.index('id="livepill"'))]
-check("the reason is one line in the header status note, terse, and turns Live into Partial", f'<span class="sp-r">{ui.NOTICE_REASON}</span>' in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
-      and (lambda p: p["state"] == "partial" and p["label"] == "Partial" and ui.NOTICE_REASON in p["reasons"])(ui.status_pill({"state": "live", "label": "Live", "why": ""})))
+check("the reason is one line in the header status note, terse; Live stays Live (1.26.220: not a core route)", f'<span class="sp-r">{ui.NOTICE_REASON}</span>' in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
+      and (lambda p: p["state"] == "live" and p["label"] == "Live" and ui.NOTICE_REASON in p["reasons"])(ui.status_pill({"state": "live", "label": "Live", "why": ""})))
 check("status note copy: no em or en dash", all(ch not in ui.NOTICE_REASON for ch in "\u2013\u2014"))
 from poascan import views as _V
 check("the live snapshot's note (app.js swaps it in) carries the same reason", ui.NOTICE_REASON in _V.pill()["pop"])

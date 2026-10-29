@@ -21,7 +21,7 @@ def routes(**st):
     recs = {rid: dict(state=st.get(rid, "open"), as_of=NOW - 30, since=NOW - 3600) for rid in ("hosted_mining", "assignments", "grading", "path_actions", "swap_writes", "tx_lookup", "address_lookup")}
     db.put_blob(RW.BLOB, dict(ts=NOW, routes=recs)); A._cache.clear()
 live(); db.put_blob("status", {"epochs_closed": 0, "supply": "1", "txs": 1, "checkpoint_height": 1}); db.put_blob("networks", {"chains": []})
-for ep in ("/api/swaps", "/api/anchors"): feed(ep)
+for ep in ("/api/swaps", "/api/anchors", "/api/explorer/txs"): feed(ep)
 routes()
 fd = A.feeds()
 check("all routes open: OK, ok true, six routes, core mining and grading", fd["state"] == "OK" and fd["ok"] and [r["id"] for r in fd["routes"]] == ["mining", "grading", "assignments", "tx_lookup", "swaps", "anchors"] and fd["core"] == ["mining", "grading"])
@@ -45,5 +45,8 @@ check("Network > Health lists the six routes with Core tags", hh.count('data-rh=
 ab = V.about(); ab = ab if isinstance(ab, str) else str(ab)
 check("/about#health-core explains the core set", 'id="health-core"' in ab and "Mining and Grading are core" in ab)
 check("no em or en dash in routehealth copy", not any(c in RH.CORE_BASIS + RH.__doc__ for c in "\u2014\u2013"))
+feed("/api/explorer/txs", ok=False); db.write("DELETE FROM fetch_log WHERE endpoint='/api/txs'"); A._cache.clear()
+h = S.api("/api/health", {})[0]
+check("POAScan's own tx list feed down: Partial too (core feed)", h["state"] == "Partial" and "Tx list" in h["core_not_ok"])
 print("ALL OK" if not fails else f"FAIL: {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)
