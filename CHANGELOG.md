@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.219] - 2026-10-29
+
+### Changed
+- Tx lookup serves indexed copies first: POAScan's stored detail of an earlier read, then the fast index. minepoa.com is asked only on a miss, and not at all while POAScan's probes have its tx route Halted or Down and the archive already has the tx.
+- Every tx answer names its copy and when it was read: the tx page shows a Source line, and `/api/v1/tx/<hash>` and MCP `get_transaction` carry `source` (cache, index, node or archive), `source_label` and `as_of`. Before, a stored copy was labelled `node`. Method on `/about#tx-source`.
+
 ## [1.26.218] - 2026-10-28
 
 ### Fixed
