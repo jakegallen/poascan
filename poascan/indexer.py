@@ -668,6 +668,8 @@ def job_hourly_retry(now=None):
         time.sleep(1)
     return n
 
+EPOCHS_GAP_S = 1200
+
 def job_epochs(force=False):
     """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
     cut), so a new segment with no close yet reads nothing; the ~21 MB list is fetched only when a close is missing."""
@@ -677,6 +679,10 @@ def job_epochs(force=False):
     need = (st or {}).get("epochs_closed", 0) or 0
     seeded = bool(have) or bool(db.q1("SELECT 1 AS x FROM blobs WHERE kind LIKE 'epochs:s%'"))
     if not force and seeded and have >= need: return False
+    # 1.26.221: minepoa.com's list is now about 51 MB (14 MB compressed) and ignores ?limit, so it is read at most once per
+    # EPOCHS_GAP_S whatever happens after (a read that stores nothing new, a failure, a count that never matches)
+    r = db.q1("SELECT MAX(COALESCE(last_ok, 0), COALESCE(last_err, 0)) AS t FROM fetch_log WHERE endpoint='/api/epochs'")
+    if not force and seeded and r and r["t"] and time.time() - r["t"] < EPOCHS_GAP_S: return False
     d = fetch("/api/epochs", timeout=180, cond=True)
     if isinstance(d, list) and d: return store_epochs(d)
     return False
