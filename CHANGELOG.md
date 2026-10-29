@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.222] - 2026-10-29
+
+### Fixed
+- Network → Health, Route health: the label column is fixed and a long detail wraps, so a degraded route keeps its name on screen at 390 and 1280 and nothing runs off the card.
+
 ## [1.26.221] - 2026-10-29
 
 ### Added
