@@ -293,7 +293,7 @@ h3{font-size:var(--t14);font-weight:600;letter-spacing:var(--track-label);text-t
 .cskel span{position:relative;color:var(--mute);font:500 var(--t13) var(--ui)}
 .lzs>*{content-visibility:auto;contain-intrinsic-size:auto 640px}
 .xh{position:absolute;top:0;height:0;width:1px;background:color-mix(in srgb,var(--gold) 55%,transparent);pointer-events:none;opacity:0;transition:opacity var(--fast)}
-.xt{position:absolute;top:0;pointer-events:none;opacity:0;transform:translateX(-50%);background:var(--ink-1);border:1px solid var(--gold-edge);border-radius:var(--r-md);padding:4px 8px;font:500 var(--t12) var(--mono);color:var(--hi);white-space:nowrap;transition:opacity var(--fast);z-index:2}
+.xt{position:absolute;top:0;pointer-events:none;opacity:0;transform:translateX(-50%);background:var(--ink-1);border:1px solid var(--gold-edge);border-radius:var(--r-md);padding:4px 8px;font:500 var(--t12) var(--mono);color:var(--hi);transition:opacity var(--fast);z-index:2;width:max-content;max-width:calc(100% - 8px)}
 .chartbox.hov .xh,.chartbox.hov .xt{opacity:1}
 .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:var(--t12);color:var(--lbl);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:var(--r-sm);margin-right:6px;vertical-align:-1px}
 .hbars .hb{display:grid;grid-template-columns:220px minmax(0,1fr) 120px;gap:10px;align-items:center;padding:4px 0;font-size:var(--t12)}

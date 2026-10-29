@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.224"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-29T18:42:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.225"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-29T19:12:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -826,7 +826,7 @@ TOOLS += [
        dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default: the column's natural order) or asc (reversed); blanks last"},
        limit=LIMD(1000, 5000, "rows"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_intake),
     ("get_settlement_by_origin", "Settlement by origin epoch",
-     "Per close of a segment, settled answers bucketed by the epoch each answer was born (origin): settled, sealed (at least one jury seat), passed, expired_no_jury (expired with no jury; not failed), paid (passed and the author got a challenge payout at that close), "
+     "Per close of a segment, settled answers bucketed by the epoch each answer was born (origin): settled, sealed (at least one jury seat), passed, expired_no_jury (expired with no jury; not failed), failed (jury failures only), paid (passed and the author got a challenge payout at that close), not_paid (juried, not paid; expiries excluded), "
      "beside the rows still open at that close and how many had a panel. From the public close records. Pending scores are never read. close= keeps one close. CSV at /api/v1/governance/settlement.csv. Use it to see how answers from each origin epoch settled, sealed and got paid.",
      S(close={"type": "integer", "minimum": 0, "description": "one close (epoch number); omit for every close"}, sort={"type": "string", "enum": ["close", "origin", "settled", "sealed", "expired_no_jury", "paid", "open", "open_panel"], "default": "close", "description": "sort key"},
        dir={"type": "string", "enum": ["desc", "asc"], "default": "desc", "description": "desc (default) or asc; blanks last"}, limit=LIMD(200, 5000, "rows"), offset={"type": "integer", "minimum": 0, "default": 0, "description": "rows to skip"}, segment=SEG_P), t_settlement),

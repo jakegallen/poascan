@@ -87,9 +87,14 @@ def settlement():
             if not isinstance(v, dict): continue
             x = g[A.since_of(aid, v)]; x["open"] += 1; x["open_panel"] += 1 if v.get("panel") else 0
         for o in sorted(g):
-            out.append(dict(close=n, close_ts=ts, origin=None if o == -1 else o, **g[o]))
+            out.append(_split(dict(close=n, close_ts=ts, origin=None if o == -1 else o, **g[o])))
         prev = pend if isinstance(pend, dict) else {}
     return out
+
+def _split(x):
+    """1.26.225: failed is jury failures only; not_paid is juried and not paid (the red chart segment). Expiries sit apart."""
+    x["failed"] = x["settled"] - x["passed"] - x["expired_no_jury"]; x["not_paid"] = x["settled"] - x["paid"] - x["expired_no_jury"]
+    return x
 
 def _pos(v):
     try: return float(v) > 0
@@ -102,14 +107,14 @@ def settlement_closes(rows=None):
         x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, expired_no_jury=0, paid=0, open=0, open_panel=0,
                                           paused=r["close"] in pz, pause=pz.get(r["close"])))
         for k in ("settled", "sealed", "passed", "expired_no_jury", "paid", "open", "open_panel"): x[k] += r[k]
-    return list(t.values())
+    return [_split(x) for x in t.values()]
 
 SET_COLS = [SS.Col("close", "Close", "num"), SS.Col("origin", "Origin", "num", "r"), SS.Col("settled", "Settled", "num", "r"),
             SS.Col("sealed", "Sealed", "num", "r dk"), SS.Col("expired_no_jury", "Expired", "num", "r dk", " " + qtip("Expired, no jury: settled with no jurors. Not a failure.", "/about#expired", "About Expired", "hv")), SS.Col("paid", "Paid", "num", "r"), SS.Col("open", "Open", "num", "r"),
             SS.Col("open_panel", "Panel", "num", "r dk")]
 SET_SORTS = [(c.key, c.label) for c in SET_COLS]
 SET_TIP = ("Settled: rows the close settled, by the epoch the answer was born. Sealed: settled with at least one jury seat. "
-           "Paid: passed, and the author got a challenge payout at that close. Open: still pending at that close. Panel: open rows with a panel.")
+           "Expired: settled with no jury, never failed. Paid: passed, and the author got a challenge payout at that close. Not paid: juried, not paid. Open: still pending at that close. Panel: open rows with a panel.")
 
 def settlement_select(close=None, by="close", d="desc"):
     rows = [r for r in settlement() if close is None or r["close"] == close]
@@ -261,7 +266,8 @@ def settlement_tab(qs, href, qsx):
     last = closes[-1]
     s = "".join([stat("Settled", intc(last["settled"]), tip=f'At the E{last["close"]} close'), stat("Paid", intc(last["paid"]), tip="Passed, and the author got a challenge payout at that close"),
                  stat("Open", intc(last["open"]), tip=f'Still pending at the E{last["close"]} close'), stat("Panel", intc(last["open_panel"]), tip="Open rows with a panel at that close")])
-    ch = bars([(f'E{c["close"]}', [c["paid"], c["settled"] - c["paid"]]) for c in closes], height=150, colors=("verd", "ember"), fmt=lambda z: f"{z:,.0f}", legend=["Paid", "Settled, not paid"])
+    ch = bars([(f'E{c["close"]}', [c["paid"], c["not_paid"], c["expired_no_jury"]]) for c in closes], height=150, colors=("verd", "ember", "mute"), fmt=lambda z: f"{z:,.0f}",
+              legend=["Paid", "Settled, not paid", "Expired, no jury"])
     org = [r for r in rows if r["close"] == (cl if cl is not None else last["close"])]
     ch2 = bars([(f'E{r["origin"]}' if r["origin"] is not None else "?", [r["settled"], r["open"]]) for r in org], height=150, colors=("gold", "steel"), fmt=lambda z: f"{z:,.0f}",
                legend=["Settled", "Open"], stacked=False)

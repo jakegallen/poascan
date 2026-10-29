@@ -1,7 +1,7 @@
 """Expired, no jury (1.26.224): a basis.settled row with expired true and an empty jury is its own outcome, never a failure.
 Covers the classifier (expired with no jury vs jury fail vs pass), the E19 split (2,000 settled: 1,954 expired, 42 passed,
 4 failed), receipts, the earn check (grades, chips, history lines), epoch rows, the epoch page, cohorts, governance facts and
-the Score's pass rate over juried answers. No network. Usage: python3 tools/expired_no_jury_test.py"""
+the Score's pass rate over juried answers, and (1.26.225) the settlement Paid per close split. No network. Usage: python3 tools/expired_no_jury_test.py"""
 import os, sys, tempfile
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -92,6 +92,21 @@ lb = G.leaderboard()
 rows = lb["by_family"]
 check("leaderboard rows carry failed and expired_no_jury; pass rate over juried",
       all("expired_no_jury" in x and "failed" in x and (x["pass_rate"] is None or abs(x["pass_rate"] - x["passed"] / (x["passed"] + x["failed"])) < 1e-9) for x in rows))
+
+# ---------------- settlement: Paid per close (1.26.225) ----------------
+from poascan import govv2 as GV2
+sc = next(x for x in GV2.settlement_closes() if x["close"] == n)
+check(f"settlement close: paid + not paid + expired = settled, no gap ({sc['paid']}+{sc['not_paid']}+{sc['expired_no_jury']}={sc['settled']})",
+      sc["expired_no_jury"] >= 1 and sc["paid"] + sc["not_paid"] + sc["expired_no_jury"] == sc["settled"])
+check("settlement close: failed is jury failures only", sc["failed"] == sc["settled"] - sc["passed"] - sc["expired_no_jury"] and sc["failed"] >= 1)
+check("settlement rows carry failed and not_paid", all("failed" in x and "not_paid" in x and x["paid"] + x["not_paid"] + x["expired_no_jury"] == x["settled"] for x in GV2.settlement()))
+st = GV2.settlement_tab({}, lambda tab, **k: "/governance?tab=" + tab, lambda **k: "")
+st = st[1] if isinstance(st, tuple) else st
+tipn = f'E{n} · Paid {sc["paid"]:,} · Settled, not paid {sc["not_paid"]:,} · Expired, no jury {sc["expired_no_jury"]:,}'
+check("Paid per close: an Expired, no jury segment, neutral, in legend and tooltip", tipn in st and "s-mute" in st and st.count("Expired, no jury") >= 2)
+api = GV2.api_settlement()
+check("settlement API: closes carry failed and not_paid", all("failed" in x and "not_paid" in x for x in api["closes"]))
+check("settlement: no em or en dashes", nodash(st) and nodash(api["definitions"]))
 
 # ---------------- pages ----------------
 ep = V.epoch(n); ep = ep[1] if isinstance(ep, tuple) else ep

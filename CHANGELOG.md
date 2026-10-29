@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.225] - 2026-10-29
+
+### Changed
+- Governance, Settlement: the Paid per close chart gives answers that expired with no jury their own neutral segment, Expired, no jury, in the legend and tooltip. The red Settled, not paid segment now counts juried answers that were not paid, in practice jury failures (E19: 42 paid, 4 not paid, 1,954 expired).
+- Chart tooltips wrap to the chart's width when a line would run past it, so they stay fully visible at 390px.
+
+### Added
+- API and MCP: settlement rows and `closes[]` carry `failed` (jury failures only) and `not_paid` (juried, not paid; expiries excluded). `/about#expired` notes it.
+
 ## [1.26.224] - 2026-10-29
 
 ### Fixed

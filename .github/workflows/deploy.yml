@@ -57,7 +57,7 @@ jobs:
         run: python tools/intake_test.py
       - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
         run: python tools/earn_test.py
-      - name: Expired, no jury (a settled row with expired true and an empty jury is never failed; E19 split; receipts, earn check, epoch rows, cohorts, Score over juried answers)
+      - name: Expired, no jury (a settled row with expired true and an empty jury is never failed; E19 split; receipts, earn check, epoch rows, cohorts, Score over juried answers, settlement Paid per close split)
         run: python tools/expired_no_jury_test.py
       - name: Earn check in production mode (POAScan's archive and LabLeak mirror, no minepoa.com request; history, grading, ways, disclaimer)
         run: python tools/earn_local_test.py
