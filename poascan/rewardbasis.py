@@ -39,12 +39,27 @@ def lag(at=None):
         return dict(kind="due", missing=None, due_ts=due, reason=f"the E{h['epoch'] + 1} close was due and POAScan has not read its record yet")
     return None
 
-def basis(bal, rsum, bal_at=None):
+def _unfolded(a, rb, h):
+    """1.26.218: the newest held close pays a, but the reward figures (rb, cached apart from the close records) do not
+    have it yet: the minute or so after POAScan reads a close record."""
+    if not a or rb is None or not h: return False
+    e = max(A.segment_closes(SG.CURRENT), key=lambda r: int(r.get("epoch", 0)))
+    try: v = float((e.get("rewards") or {}).get(a) or 0)
+    except (TypeError, ValueError): v = 0
+    return v > 0 and h["gkey"] not in rb
+
+def basis(bal, rsum, bal_at=None, a=None, rb=None):
     """The reward figures' basis for one address: dict(as_of (segment, epoch, close_ts), behind, reason, balance_ahead_by).
-    behind only when the balance and the reward sum disagree while a newer close is due or listed upstream."""
+    behind when the balance and the reward sum disagree while a newer close is due or listed upstream, or (1.26.218, with
+    a and rb) while the newest held close pays a but its reward is not in rb yet; as_of is then the close before it."""
     h = held(); lg = lag(bal_at)
     diff = None if bal is None else round(float(bal) - float(rsum or 0), 6)
-    behind = bool(lg and diff is not None and abs(diff) > 0.01)
+    if _unfolded(a, rb, h):
+        lg = dict(kind="unfolded", reason=f"POAScan read the E{h['epoch']} close record a moment ago and is adding it")
+        prev = [r for r in A.segment_closes(SG.CURRENT) if int(r.get("epoch", 0)) == h["epoch"] - 1]
+        h = dict(h, epoch=h["epoch"] - 1, close_ts=int(prev[0].get("ts") or 0) or None if prev else None)
+        behind = True
+    else: behind = bool(lg and diff is not None and abs(diff) > 0.01)
     return dict(as_of=dict(segment=h["segment"], epoch=h["epoch"], close_ts=h["close_ts"]) if h else None,
                 behind=behind, reason=lg["reason"] if behind else None, balance_ahead_by=diff if behind else None)
 

@@ -47,6 +47,12 @@ lg = RB.lag(t15 + 600)
 check("upstream lists a close POAScan has not read: behind even before the due time", lg and lg["kind"] == "missing" and lg["missing"] == 1)
 
 closes.append(dict(epoch=16, ts=NOW - 1500, rewards={a: "393966.242113"}, basis={})); db.put_blob(SG.blob_kind(seg), closes); A._cache.clear()
+old = {a: {SG.gkey(6, seg): 511996.651201}}
+bf = RB.basis(905962.893314, 511996.651201, NOW - 60, a, old[a])
+check("1.26.218: the E16 record read but not yet in the reward figures: behind, as of E15, reason says it is being added",
+      bf["behind"] and bf["as_of"]["epoch"] == 15 and "E16 close record" in bf["reason"])
+check("1.26.218: an Agent the new close did not pay is not tagged", not RB.basis(511996.651201, 511996.651201, NOW - 60, b, {SG.gkey(6, seg): 511996.651201})["behind"])
+A._cache.clear()
 r = S.api("/api/address/" + a, {})[0]
 check("once E16 is read: figures agree, no tag, as of E16", r["rewards_behind"] is False and r["rewards_as_of"]["epoch"] == 16 and abs(r["rewards_total"] - 905962.893314) < 1e-6)
 html = V.address(a); html = html if isinstance(html, str) else str(html)

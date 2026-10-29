@@ -202,7 +202,7 @@ def t_address(args):
                 balance_as_of_checkpoint=None, balance_segment=SG.of_ts(acc["last_seen"]) if acc and acc["last_seen"] else None,
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk, spendable_basis=SG.carry_basis(),
                 **(lambda b: dict(rewards_as_of=b["as_of"], rewards_behind=b["behind"], rewards_behind_reason=b["reason"], balance_ahead_by=b["balance_ahead_by"]))(
-                    __import__("poascan.rewardbasis", fromlist=["x"]).basis(acc["balance"] if acc else None, sum(rb.values()), acc["last_seen"] if acc else None)),
+                    __import__("poascan.rewardbasis", fromlist=["x"]).basis(acc["balance"] if acc else None, sum(rb.values()), acc["last_seen"] if acc else None, a, rb)),
                 rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(rb) if SG.unconfirmed_g(k)],
                 rewards_by_epoch={str(k): v for k, v in sorted(rb.items())},   # lifetime close numbers: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15
                 rewards_by_segment={str(n): {str(k): v for k, v in sorted(A.rewards_in_segment(rb, n).items())} for n in SG.NUMBERS},

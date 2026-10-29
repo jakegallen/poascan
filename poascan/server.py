@@ -178,7 +178,7 @@ def api(path, qs):
         stale = bool(bb.get("stale") or _ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
         from . import rewardbasis as RB
         rb = p["rewards"]; rsum = sum(rb.values()); sp, lk = A.vest_split(rb, A.open_gkey())
-        rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum, bb["as_of"])
+        rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum, bb["as_of"], a, rb)
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
                     rewards_total=round(rsum, 6), spendable_est=round(sp, 6), locked_est=round(lk, 6), rewards_as_of=rbs["as_of"],
                     rewards_behind=rbs["behind"], rewards_behind_reason=rbs["reason"], balance_ahead_by=rbs["balance_ahead_by"],
