@@ -935,14 +935,25 @@ def _bg_fetch_tx(tid, endpoint):
     except Shed as e: neg_put(endpoint + tid, False, max(NEG_SHED_TTL, int(e.retry or 0)), cls=Shed); raise
     return d
 
-def get_tx_detail(tid, allow_fetch=True, bg=None):
+# 1.26.219: every detail get_tx_detail returns says where it came from: served_from cache (POAScan's stored copy, with
+# served_origin minepoa.com or fast index), index (the fast index just now) or node (minepoa.com just now), and
+# served_as_of (unix s: when that copy was read). Added after storing, so stored copies never carry them.
+def _served(d, src, at, origin=None):
+    if not isinstance(d, dict): return d
+    return dict(d, served_from=src, served_as_of=int(at), served_origin=origin or ("fast index" if d.get("detail_source") == "indexed cache" else "minepoa.com"))
+
+def _stored(r):
+    return _served(json.loads(r["json"]), "cache", r["fetched"])
+
+def get_tx_detail(tid, allow_fetch=True, bg=None, node=True):
     """Stored detail when final (or read in the last 120 s), else one read. bg=None is a visitor read (fetch_ondemand);
-    bg=<endpoint key> is a scheduled job's read (BG_TX_EP or SWAP_TX_EP). Raises Missing, Limited or Busy when nothing is stored."""
+    bg=<endpoint key> is a scheduled job's read (BG_TX_EP or SWAP_TX_EP). Raises Missing, Limited or Busy when nothing is stored.
+    node=False (1.26.219): the fast index may be asked, minepoa.com is not (Busy when neither copy has it)."""
     r = db.q1("SELECT json, fetched, final FROM tx_detail WHERE id=?", (tid,))
     if r and (r["final"] or time.time() - r["fetched"] < TX_REFRESH_S):
-        return json.loads(r["json"])
+        return _stored(r)
     if not allow_fetch:
-        return json.loads(r["json"]) if r else None
+        return _stored(r) if r else None
     with _tx_lock:
         ev = _tx_inflight.get(tid); mine = ev is None
         if mine: ev = _tx_inflight[tid] = threading.Event()
@@ -955,10 +966,11 @@ def get_tx_detail(tid, allow_fetch=True, bg=None):
         # Off, over its budget, failing or not indexed yet: None, and the minepoa.com read below runs as before.
         fx = _FX.tx_detail(tid, visitor=not bg)
         if fx and fx.get("final"): d = fx
+        elif not node: raise Busy("tx lookup skipped: minepoa.com route not open")
         else: d = _bg_fetch_tx(tid, bg) if bg else fetch_ondemand(f"/api/explorer/tx/{tid}", TX_EP, tid)
     except Busy:
-        if r: return json.loads(r["json"])
-        if fx: return fx   # minepoa.com failed: the index's pending copy says what happened (not stored)
+        if r: return _stored(r)
+        if fx: return _served(fx, "index", time.time())   # minepoa.com failed: the index's pending copy says what happened (not stored)
         raise
     finally:
         with _tx_lock: _tx_inflight.pop(tid, None)
@@ -966,7 +978,23 @@ def get_tx_detail(tid, allow_fetch=True, bg=None):
     db.write("INSERT OR REPLACE INTO tx_detail VALUES(?,?,?,?)", (tid, json.dumps(d), int(time.time()), 1 if d.get("final") else 0))
     upsert_txs([d], "explorer/tx" if d is not fx else _FX.SOURCE)
     if d.get("type") == "grade-sealed": _FX.link_seal(d)
-    return d
+    return _served(d, "index" if d is fx else "node", time.time())
+
+TX_SOURCE_LABEL = {"cache": "POAScan cache of a {origin} read", "index": "fast index", "node": "minepoa.com", "archive": "POAScan archive"}
+
+def tx_source(d):
+    """source (cache, index, node or archive), source_label and as_of (ISO UTC) of one tx answer (1.26.219)."""
+    src = d.get("served_from") or d.get("source") or "node"; at = d.get("served_as_of")
+    lab = TX_SOURCE_LABEL.get(src, src).format(origin=d.get("served_origin") or "minepoa.com")
+    return dict(source=src, source_label=lab, as_of=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(at))) if at else None)
+
+def route_open(rid="tx_lookup"):
+    """1.26.219: False while POAScan's own probes have the route Halted or Down (routewatch.py); True otherwise."""
+    try:
+        from . import routewatch as _RW
+        r = next((x for x in _RW.state()["routes"] if x["id"] == rid), None)
+        return not r or r["state"] not in ("halted", "down")
+    except Exception: return True
 
 def job_sample(n=20):
     rows = db.q("""SELECT id, from_addr, ts, epoch FROM txs WHERE type='challenge' AND id NOT IN (SELECT id FROM answers)

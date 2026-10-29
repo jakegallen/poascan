@@ -668,6 +668,8 @@ def upstream(fn, missing):
 
 TX_HINT = "Not in POAScan's archive. A tx from the last few minutes may not be indexed yet; for your own answer, read /challenge answered_txid."
 
+tx_source = I.tx_source
+
 def archived_tx(tid):
     """A tx from POAScan's own archive (the txs row plus the sampled answer text), for when the node can't serve it.
     Older answers (E5 to E10 before the restart) often get a 307 or 503 from the node's tx route. None when not archived."""
@@ -676,7 +678,8 @@ def archived_tx(tid):
     a = db.q1("SELECT text FROM answers WHERE id=?", (tid,))
     body = {"epoch": row["epoch"]}
     if a and a["text"]: body["answer"] = a["text"]
-    return dict(row, body=body, found=True, source="archive",
+    at = row["last_seen"] or row["first_seen"]
+    return dict(row, body=body, found=True, source="archive", source_label="POAScan archive", as_of=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(at))) if at else None,
                 note="From POAScan's archive. Parents, nonce and signature are not archived; Source JSON on minepoa.com has them when the node serves this tx.")
 
 def chains_notice():
@@ -693,9 +696,12 @@ def tx_api(tid):
     available false and node paused (not a 404 or a 5xx: whether it exists is unknown until the lookup is back)."""
     tid = tid.lower(); node = "unavailable"
     un = lambda: I.halt_notice(I.TX_TPL, data="indexed")
+    # 1.26.219: indexed copies first (stored detail, then the fast index); minepoa.com only on a miss, and not at all while
+    # its tx route is Halted or Down and the archive already has the tx. source names the copy, as_of when it was read.
+    skip = not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))
     try:
-        d = I.get_tx_detail(tid)
-        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, source="node", upstream_notice=None if d.get("final") else un())
+        d = I.get_tx_detail(tid, node=not skip)
+        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, **tx_source(d), upstream_notice=None if d.get("final") else un())
         node = "not_found"
     except I.Missing: node = "not_found"
     except I.Limited as e:
