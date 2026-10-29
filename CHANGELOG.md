@@ -14,7 +14,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ## [1.26.223] - 2026-10-29
 
 ### Fixed
-- `/about#route-halts` matches the core rule: only Hosted mining or Grading Halted or Down turns the header status Partial; any other route gets its own line in the status note. `/about#paused-lookups` (Paused lookups) no longer says a paused lookup turns the status Partial. `/upgrade` still waits for every route.
+- `/about#route-halts` matches the core rule: only Hosted mining or Grading Halted or Down turns the header status Partial; any other route gets its own line in the status note. `/about#halts` (Paused lookups) no longer says a paused lookup turns the status Partial. `/upgrade` still waits for every route.
 
 ## [1.26.222] - 2026-10-29
 
