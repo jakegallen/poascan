@@ -701,7 +701,7 @@ def fixture_pages(check):
         ep7 = req(base + "/epoch/7")[1].decode()
         check("epoch: header line (closed at a visitor-local time, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
               '<h1 class="ephd">Epoch 7 · ' in ep7 and 'closed <time class="t lt" datetime="' in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
-              and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided / passed<" in ep7
+              and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided<" in ep7 and ">Passed / failed / expired<" in ep7
               and re.search(r'<th class="pc hs"[^>]*><a class="hsb"[^>]*>Reward<', ep7) and 'title="&lt;' not in ep7)
         tx_ = req(base + "/chain/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",

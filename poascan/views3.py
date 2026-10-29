@@ -106,9 +106,10 @@ def unlocks_api():
 def reward_tracker(a, p):
     # one key space: lifetime close numbers (segments.gkey), so segment 1 rewards keep vesting across the genesis cut
     vest = _vest(); o = A.open_epoch(); off = _SG.offset(_SG.CURRENT); n = off + o["epoch"]; rb = p["rewards"]
-    sett = collections.defaultdict(lambda: [0, 0])
-    for e, _, ok in p["settled"]:
-        sett[off + e][1] += 1; sett[off + e][0] += 1 if ok else 0
+    sett = collections.defaultdict(lambda: [0, 0, 0])   # passed, juried, expired with no jury (not a failure)
+    for e, _, ok, oc in p["settled"]:
+        if oc == "expired_no_jury": sett[off + e][2] += 1
+        else: sett[off + e][1] += 1; sett[off + e][0] += 1 if ok else 0
     answered = {off + k for k in p["answered"]}
     eps = sorted(answered | set(rb) | set(sett))
     if not eps: return '<p class="na">No answers yet.</p>', ""
@@ -116,7 +117,8 @@ def reward_tracker(a, p):
     for k in reversed(eps):
         sub = k in answered
         if k >= n: gr, gs = ("open", "cur")
-        elif sett.get(k): gr, gs = (f'{sett[k][0]}/{sett[k][1]} pass', "ok" if sett[k][0] else "bad")
+        elif sett.get(k) and sett[k][1]: gr, gs = (f'{sett[k][0]}/{sett[k][1]} pass', "ok" if sett[k][0] else "bad")
+        elif sett.get(k): gr, gs = ('<span title="Expired, no jury">expired</span>', "dimx")
         elif sub: gr, gs = ("unsettled", "dimx")
         else: gr, gs = ("···", "off")
         r = rb.get(k)

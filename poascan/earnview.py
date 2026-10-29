@@ -45,7 +45,7 @@ def disclaimer():
 
 def _chips(cs):
     if not cs: return ""
-    t = {"ok": "ok", "bad": "bad", "wait": "wait", "none": "none"}
+    t = {"ok": "ok", "bad": "bad", "wait": "wait", "none": "none", "exp": "exp"}
     return '<ol class="ecx" aria-label="Answers per epoch">' + "".join(
         f'<li class="{t[c["state"]]}" title="E{c["epoch"]}: {E(c["label"])}">'
         + (f'<a href="/tx/{E(c["tx"])}" aria-label="E{c["epoch"]}: {E(c["label"])}">E{c["epoch"]}</a>' if c.get("tx") else f'<span aria-label="E{c["epoch"]}: {E(c["label"])}">E{c["epoch"]}</span>')
@@ -103,7 +103,7 @@ def result(d, hist=""):
             + (f'<a href="/address/{E(a)}">Address page</a> · ' if d["found"] else "") + f'<a href="{EA.METHOD}">Method</a></p>')
     return body + foot
 
-KIND = {"cut": "warn", "bad": "bad", "miss": "bad", "wait": "wait", "good": "ok", "info": "na"}
+KIND = {"cut": "warn", "bad": "bad", "miss": "bad", "wait": "wait", "exp": "na", "good": "ok", "info": "na"}
 HCOLS = [SS.Col("close", "Close", "num"), SS.Col("answered", "Answer", "cat"), SS.Col("share", "Share", "num"), SS.Col("paid", "Paid", "num"),
          SS.Col("cuts", "Reductions", "num"), SS.Col(None, "Credited")]
 
@@ -129,7 +129,7 @@ def history(d, qs, a):
            '<span class="tag ok">Yes</span>' if r["answered"] else '<span class="tag bad">No</span>',
            EA._poa(r["share"]) if r["share"] is not None else '<span class="na">···</span>',
            EA._poa(r["paid"]) if r["paid"] is not None else '<span class="na">···</span>',
-           _lines(r["lines"], ("cut", "bad", "miss", "wait")), _lines(r["lines"], ("good", "info"))] for r in rows]
+           _lines(r["lines"], ("cut", "bad", "miss", "wait", "exp")), _lines(r["lines"], ("good", "info"))] for r in rows]
     t = table([], tr, cls="ehist", pri=(0, 3, 4), sort=(HCOLS, by, dr, link))
     return (f'<details class="ecall ehw" id="history" open><summary><span class="lbl">History</span><span class="dim small">{len(h)} closes</span></summary>'
             f'{t}</details>')

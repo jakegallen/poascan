@@ -2,7 +2,7 @@
 the tx itself, close records (basis.pending / basis.settled / rewards) and cached grade-sealed details.
 Fields that the public records cannot show are None (unknown), never a guess."""
 import json, time
-from . import db, analytics as A, indexer as I, segments as S
+from . import db, analytics as A, indexer as I, segments as S, outcome as O
 
 QUORUM_DEFAULT = 4
 
@@ -21,7 +21,7 @@ def index():
                      graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)   # grades: the live seal list, from the merge on
         for s in b.get("settled") or []:
             t = s.get("answer")
-            if t: out.setdefault(t, {})["settled"] = dict(close=n, passed=bool(s.get("passed")), seals=len(s.get("jury") or []), author=s.get("from"))
+            if t: out.setdefault(t, {})["settled"] = dict(close=n, passed=bool(s.get("passed")), outcome=O.of(s), seals=len(s.get("jury") or []), author=s.get("from"))
     seals = {}
     for r in db.q("SELECT json_extract(json, '$.body.assignment') AS a, json_extract(json, '$.from_addr') AS f FROM tx_detail "
                   "WHERE json_extract(json, '$.type') = 'grade-sealed'"):
@@ -33,10 +33,11 @@ def index():
     closes = [int(e.get("epoch", 0)) for e in ep]
     return dict(rec=out, credited=credited, elig=elig, chal=chal, seals={k: len(v) for k, v in seals.items()}, last=closes[-1] if closes else None)
 
+# expired_no_jury (1.26.224): settled with expired true and no jury; never a failure (outcome.py).
 # basis_state (LabLeak 1375 c3176): where the answer sits in the close records. settled: in a close's basis.settled;
 # pending: in the latest close's basis.pending; absent: its epoch has closed and it is in neither (vanished from pending,
 # or never recorded); None: its epoch has not closed yet.
-BASIS = {"passed": "settled", "failed": "settled", "pending": "pending", "vanished": "absent", "unrecorded": "absent"}
+BASIS = {"passed": "settled", "failed": "settled", "expired_no_jury": "settled", "pending": "pending", "vanished": "absent", "unrecorded": "absent"}
 
 def _num(v):
     try: return float(v)
@@ -72,7 +73,7 @@ def _receipt(tid, fetch, row):
     if ep is None: ep = d.get("epoch") if d.get("epoch") is not None else body.get("epoch")
     author = (row or {}).get("from_addr") or d.get("from_addr") or (r.get("settled") or {}).get("author")
     last = ix["last"]; st = r.get("settled"); q = int(A.params().get("grade_quorum") or QUORUM_DEFAULT)
-    if st: status = "passed" if st["passed"] else "failed"
+    if st: status = st.get("outcome") or ("passed" if st["passed"] else "failed")
     elif r.get("last") is not None and last is not None and r["last"] < last: status = "vanished"
     elif r.get("last") is not None: status = "pending"
     elif ep is not None and last is not None and int(ep) <= last: status = "unrecorded"
@@ -104,7 +105,7 @@ def _receipt(tid, fetch, row):
                 closes_waited=(last - int(since)) if (last is not None and since is not None and status in ("pending", "vanished")) else None,
                 status=status, kind=r.get("kind"), panel=r.get("panel") if status in ("pending", "vanished") else None,
                 seals=seals, seals_exact=seals_exact, seals_as_of_close=seals_close, quorum=q, seals_counting=counting, seals_need=need, seals_source=src, seals_as_of=seals_as_of,
-                settled_close=st["close"] if st else None, passed=st["passed"] if st else None,
+                settled_close=st["close"] if st else None, passed=st["passed"] if st else None, expired_no_jury=(status == O.EXPIRED) if st else None,
                 paid_close=paid_close, address_credited=paid, reward_attributable=None,
                 paid_state=("unconfirmed" if S.unconfirmed(paid_close, (row or {}).get("segment") or S.selected()) else "recorded") if paid_close is not None else None,
                 vanished=status == "vanished", last_pending_close=r.get("last"),
@@ -121,7 +122,7 @@ from .ui import dur, short, table
 
 UNK = '<span class="na">Unknown</span>'
 TAG = {"passed": "ok", "failed": "bad", "vanished": "warn", "refused": "bad"}
-LABEL = {"passed": "Passed", "failed": "Failed", "pending": "Pending", "awaiting_close": "Awaiting close",
+LABEL = {"passed": "Passed", "failed": "Failed", "expired_no_jury": O.LABEL[O.EXPIRED], "pending": "Pending", "awaiting_close": "Awaiting close",
          "vanished": "Dropped at close", "unrecorded": "No record", "refused": "Refused"}
 
 def _e(r, n):
@@ -129,10 +130,11 @@ def _e(r, n):
     sg = r.get("segment") or S.CURRENT
     return f"E{n}" if sg == S.CURRENT else f"S{sg} E{n}"
 
-def status_tag(r):
-    s = r["status"]; c = r.get("settled_close") if s in ("passed", "failed") else r.get("last_pending_close") if s == "vanished" else None
+def status_tag(r, short=False):
+    s = r["status"]; c = r.get("settled_close") if s in ("passed", "failed", O.EXPIRED) else r.get("last_pending_close") if s == "vanished" else None
     at = f' · {_e(r, c)}' if c is not None else ""
-    return f'<span class="tag {TAG.get(s, "")}">{LABEL[s]}{at}</span>'   # pending and awaiting close stay neutral
+    if s == O.EXPIRED and short: return f'<span class="tag" title="{LABEL[s]}">{O.SHORT[s]}{at}</span>'   # narrow lists: Expired, full label on hover
+    return f'<span class="tag {TAG.get(s, "")}">{LABEL[s]}{at}</span>'   # pending, awaiting close and expired stay neutral
 
 def seals_txt(r):
     q = r["quorum"]
@@ -167,4 +169,4 @@ def list_html(rs):
     def pd(r): return paid_txt(r) if r["passed"] is not None or r.get("paid_via_challenge_eligible") else '<span class="dim">·</span>'
     return table(["Answer", "Status", f"Seals / {q}" if q else "Seals", "Paid"],
                  [[f'<span class="ep dim">{_e(r, r["epoch"])}</span> <a class="mono hash" href="/tx/{E(r["tx"])}" title="{E(r["tx"])}">{E(short(r["tx"], 4, 4))}</a>',
-                   status_tag(r), sl(r), pd(r)] for r in rs], cls="rcpt")
+                   status_tag(r, True), sl(r), pd(r)] for r in rs], cls="rcpt")

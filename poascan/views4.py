@@ -97,7 +97,7 @@ def _rows(tab):
         served = collections.Counter(); seats = collections.Counter(); al = collections.Counter()
         for e in A.epochs_raw():
             for a, n in (e.get("basis", {}).get("graders_served") or {}).items(): served[a] += n
-        for _, _, _, _, jury in G.settled_records():
+        for _, _, _, _, jury, _ in G.settled_records():
             for j in jury: seats[j["grader"]] += 1; al[j["grader"]] += 1 if j.get("aligned") else 0
         for a in set(served) | set(seats):
             out.append(dict(addr=a, name=nm.get(a, ""), grades_served=served.get(a, 0), jury_seats=seats.get(a, 0),

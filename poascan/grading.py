@@ -386,7 +386,8 @@ def agent_view(a, limit=50):
     sv = [dict(answer=s[0], ts=s[1], counting=s[2], trusted=s[3], need=s[4], author=s[5], author_name=nm.get(s[5]), tx=ids.get(s[1])) for s in seals[:limit]]
     seats = [dict(answer=s.get("id"), author=s.get("author"), author_name=nm.get(s.get("author")), close=s.get("close"), passed=s.get("passed"),
                   aligned=j.get("aligned"), score=j.get("s"), reason=j.get("r"), trusted=j.get("t")) for s, j in ix["seats"].get(a, [])]
-    settled = [dict(answer=s.get("id"), close=s.get("close"), passed=s.get("passed"), expired=s.get("expired"),
+    from . import outcome as OC
+    settled = [dict(answer=s.get("id"), close=s.get("close"), passed=s.get("passed"), expired=s.get("expired"), outcome=OC.of(s),
                     jury=[dict(grader=j.get("g"), name=nm.get(j.get("g")), aligned=j.get("aligned"), score=j.get("s"), reason=j.get("r"), trusted=j.get("t")) for j in s.get("jury") or []])
                for s in ix["settled_by"].get(a, [])]
     return dict(pending=mine[:limit], pending_count=len(mine), seals=sv, seals_count=x["seals"], seals_counting=x["qual"],

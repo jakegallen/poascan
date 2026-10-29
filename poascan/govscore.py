@@ -12,7 +12,7 @@ v2 (1.26.138): Grading counts qualifying seals (seals that count toward quorum, 
 list) and the qualifying rate, and Standing's level is at most unconfirmed_level while minepoa's list does not confirm an
 Agent POAScan counts as established (Unconfirmed). Without the store it falls back to archived grade-sealed txs."""
 import json, math, os, time, datetime as dt, collections
-from . import db, analytics as A, segments as SG, standing as SD
+from . import db, analytics as A, segments as SG, standing as SD, outcome as OC
 
 GRADING_KEYS = {1: ("seats", "seals", "aligned"), 2: ("seats", "seals", "qual_rate", "aligned")}
 CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "govscore.json")
@@ -48,7 +48,7 @@ def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6, seeds=No
     seeds = seeds or {}
     eps = sorted(closes, key=lambda e: int(e.get("epoch", 0)))
     F = collections.defaultdict(lambda: dict(closes_established=0, added=0, removed=0, eligible=0, seat_closes=0, grades_served=0, jury_seats=0, jury_aligned=0,
-                                             settled=0, passed=0, marks=0, slashed=0, rewards=0.0, paid_closes=0, attestations_received=0,
+                                             settled=0, passed=0, expired_no_jury=0, marks=0, slashed=0, rewards=0.0, paid_closes=0, attestations_received=0,
                                              first_close=None, last_close=None, active_closes=[], added_epochs=[], removed_epochs=[]))
     est = set(seeds.get(None) or ())
     for e in eps:
@@ -66,7 +66,7 @@ def close_facts(closes, trusted=frozenset(), resets=frozenset(), ttl=6, seeds=No
             except (TypeError, ValueError): pass
         for x in b.get("settled") or []:
             fr = x.get("from")
-            if fr: F[fr]["settled"] += 1; F[fr]["passed"] += 1 if x.get("passed") else 0; touched.add(fr)
+            if fr: F[fr]["settled"] += 1; F[fr]["passed"] += 1 if x.get("passed") else 0; F[fr]["expired_no_jury"] += 1 if OC.no_jury(x) else 0; touched.add(fr)
             for j in x.get("jury") or []:
                 g = j.get("grader")
                 if g: F[g]["jury_seats"] += 1; F[g]["jury_aligned"] += 1 if j.get("aligned") else 0; touched.add(g)
@@ -137,7 +137,7 @@ def score(f, level, last_close, n_closes, cfg=None):
     pen = min(s["penalty_cap"], s["removal_penalty"] * f["removed"] + s["slash_penalty"] * f["slashed"])
     lvv = s["level_values"].get(level, 0.0)
     if f.get("unconfirmed") and "unconfirmed_level" in s: lvv = min(lvv, s["unconfirmed_level"])   # v2: at most 0.5 while Unconfirmed
-    st = 100 * (s["held"] * _clamp(held) + s["level"] * lvv + s["passed"] * _shrunk(f["passed"], f["settled"], s["prior_pass"], s["prior_n"]) * (1 if f["settled"] or f["eligible"] else 0)) - pen
+    st = 100 * (s["held"] * _clamp(held) + s["level"] * lvv + s["passed"] * _shrunk(f["passed"], (jd := f["settled"] - f.get("expired_no_jury", 0)), s["prior_pass"], s["prior_n"]) * (1 if jd or f["eligible"] else 0)) - pen   # 1.26.224: over juried answers
     graded = f["seat_closes"] or f["seals"] or f["jury_seats"]
     qs = f.get("seals_qual", f["seals"]) if "qual_rate" in g else f["seals"]
     qr = (_shrunk(f.get("seals_listed_qual", 0), f.get("seals_listed", 0), g["prior_qual"], g["prior_qual_n"]) if graded else 0) if "qual_rate" in g else 0
@@ -184,5 +184,5 @@ def build(closes, where, args, t0, t1, levels, ballot_posts, operators, trusted,
     return out, last, n
 
 def _blank():
-    return dict(closes_established=0, added=0, removed=0, eligible=0, seat_closes=0, grades_served=0, jury_seats=0, jury_aligned=0, settled=0, passed=0, marks=0,
+    return dict(closes_established=0, added=0, removed=0, eligible=0, seat_closes=0, grades_served=0, jury_seats=0, jury_aligned=0, settled=0, passed=0, expired_no_jury=0, marks=0,
                 slashed=0, rewards=0.0, paid_closes=0, attestations_received=0, first_close=None, last_close=None, active_closes=[], added_epochs=[], removed_epochs=[])

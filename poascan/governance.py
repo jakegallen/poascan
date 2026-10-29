@@ -789,7 +789,7 @@ def agent_tab(a, qs):
     span = (d["last_close"] - f["first_close"] + 1) if f.get("first_close") is not None and d["last_close"] is not None else 0
     std_rows = [("Established", level), ("Added", eps(f["added_epochs"])), ("Removed", eps(f["removed_epochs"])),
                 ("Closes held", f'{f["closes_established"]:,} of {span:,}' if span else "···"), ("Eligible closes", intc(f["eligible"])),
-                ("Answers", intc(f["challenges"])), ("Passed", f'{f["passed"]:,} of {f["settled"]:,}' if f["settled"] else "···"),
+                ("Answers", intc(f["challenges"])), ("Passed", _passed_txt(f)),
                 ("Paid closes", intc(f["paid_closes"])), ("Rewards", compact(f["rewards"]) if f["rewards"] else "0"), ("Slashes", intc(f["slashed"]))]
     gr_rows = [("Seat closes", intc(f["seat_closes"])), ("Grades served", intc(f["grades_served"])), ("Seals", intc(f["seals"])),
                ("Jury aligned", f'{f["jury_aligned"]:,} of {f["jury_seats"]:,}' if f["jury_seats"] else "···"), ("Marks", intc(f["marks"])),
@@ -805,9 +805,16 @@ def agent_tab(a, qs):
     return (chips + head + '<div class="grid2">' + card("Standing", kv(std_rows), api, id="gov-standing") + card("Grading", kv(gr_rows))
             + "</div>" + gh + live + card("Forum", kv(fo_rows), f'<a class="more" href="{href("forum")}">Forum →</a>', id="gov-forum"))
 
+def _passed_txt(f):
+    """Passed of juried answers; expired with no jury listed beside them, never as failed (outcome.py)."""
+    x = f.get("expired_no_jury") or 0; jd = f["settled"] - x
+    t = f'{f["passed"]:,} of {jd:,}' if jd else ""
+    if x: t += (f' <span class="dim">· {x:,} expired, no jury</span>' if t else f'<span class="dim">{x:,} expired, no jury</span>')
+    return t or "···"
+
 def api_agent(a, scope="segment"):
     d = agent_data(a, scope); f = d["f"]; st = d["std"]
-    keep = ("closes_established", "added", "removed", "eligible", "challenges", "settled", "passed", "paid_closes", "slashed", "seat_closes", "grades_served", "seals",
+    keep = ("closes_established", "added", "removed", "eligible", "challenges", "settled", "passed", "expired_no_jury", "paid_closes", "slashed", "seat_closes", "grades_served", "seals",
             "jury_seats", "jury_aligned", "marks", "attest_txs", "attestations_received", "posts", "comments", "proposals", "ballot_comments", "replies_received",
             "posts_replied", "posts_operator_replied", "first_close", "last_close")
     out = {k: f.get(k) for k in keep}

@@ -1,7 +1,7 @@
 """Full address history from the archive (keyset paging) and grading assignments per grader from the close records."""
 import base64, collections, json, threading, time
 from . import db, analytics as A
-from . import segments as S
+from . import segments as S, outcome as O
 
 LIMIT_MAX = 200
 
@@ -103,7 +103,7 @@ def grading_index():
             t = s.get("answer")
             if not t: continue
             jy = frozenset(j.get("grader") for j in s.get("jury") or [])
-            rec.setdefault(t, {})["s"] = (n, bool(s.get("passed")), jy)
+            rec.setdefault(t, {})["s"] = (n, bool(s.get("passed")), jy, O.of(s))
             for g in jy: by.setdefault(g, set()).add(t)
     v = dict(rec=rec, by=by, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
              merge=A.params().get("pending_merge_from_epoch"))
@@ -113,7 +113,7 @@ def grading_index():
 def _one(g, t, r, ix, seal_ts, seal_as):
     p, s = r.get("p"), r.get("s"); last = ix["last"]
     close = s[0] if s else p[0] if p else None
-    status = ("passed" if s[1] else "failed") if s else ("vanished" if p and p[0] < last else "pending") if p else "unrecorded"
+    status = s[3] if s else ("vanished" if p and p[0] < last else "pending") if p else "unrecorded"
     on = (g in p[3]) if p else None
     sealed, ev, ts = None, None, None
     if s and g in s[2]: sealed, ev = True, "jury"

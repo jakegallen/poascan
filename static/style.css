@@ -1563,6 +1563,7 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .ecx li.wait{color:var(--amber);border-color:color-mix(in srgb,var(--gold) 40%,transparent)}
 .ecx li.bad{color:var(--red);border-color:color-mix(in srgb,var(--ember) 40%,transparent)}
 .ecx li.none{border-style:dashed;color:var(--mute)}
+.ecx li.exp{color:var(--bone-2);border-color:var(--line2);background:color-mix(in srgb,var(--mute) 12%,transparent)}
 .egd{margin:0;padding:0;list-style:none;counter-reset:g}
 .egd li{counter-increment:g;display:grid;grid-template-columns:28px 180px minmax(0,1fr);gap:4px 12px;padding:12px 0;border-bottom:1px solid var(--row);align-items:baseline}
 .egd li:last-child{border-bottom:0}

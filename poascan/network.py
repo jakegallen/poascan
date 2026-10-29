@@ -42,6 +42,8 @@ METRICS = {
     "epochs.challengers": "challengers listed in those close records",
     "epochs.settled": "answers settled by those closes",
     "epochs.accepted": "settled answers that passed grading",
+    "epochs.failed": "settled answers a jury failed",
+    "epochs.expired_no_jury": "settled answers that expired with no jury (not failed)",
     "epochs.grades": "grades served in those closes",
     "epochs.slashed": "Agents slashed in those closes",
     "epochs.established": "Agents that became established in those closes",
@@ -160,10 +162,10 @@ def _epochs(d0, d1):
         d = e["close_ts"] // 86400
         if d < d0 or d > d1: continue
         x = out.setdefault(d, dict(closed=0, numbers=[], minted=0.0, pool=0.0, burned=0.0, paid_agents=0, challengers=0, settled=0,
-                                   accepted=0, grades=0, slashed=0, established=0))
+                                   accepted=0, failed=0, expired_no_jury=0, grades=0, slashed=0, established=0))
         x["closed"] += 1; x["numbers"].append(e["epoch"])
         for k, s in (("minted", "minted"), ("pool", "pool"), ("burned", "burned")): x[k] += float(e.get(s) or 0)
-        for k, s in (("paid_agents", "paid"), ("challengers", "challengers"), ("settled", "settled"), ("accepted", "settled_passed"),
+        for k, s in (("paid_agents", "paid"), ("challengers", "challengers"), ("settled", "settled"), ("accepted", "settled_passed"), ("failed", "settled_failed"), ("expired_no_jury", "settled_expired_no_jury"),
                      ("grades", "grades"), ("slashed", "slashed"), ("established", "established")): x[k] += int(e.get(s) or 0)
     for x in out.values():
         for k in ("minted", "pool", "burned"): x[k] = _r(x[k])
@@ -274,7 +276,7 @@ def _compute(frm, to):
     def J(r, k):
         try: return json.loads(r[k]) if r and r[k] else None
         except Exception: return None
-    zero_ep = dict(closed=0, numbers=[], minted=0.0, pool=0.0, burned=0.0, paid_agents=0, challengers=0, settled=0, accepted=0, grades=0, slashed=0, established=0)
+    zero_ep = dict(closed=0, numbers=[], minted=0.0, pool=0.0, burned=0.0, paid_agents=0, challengers=0, settled=0, accepted=0, failed=0, expired_no_jury=0, grades=0, slashed=0, established=0)
     zero_sw = dict(created=0, filled=0, cancelled=0, expired=0, fill_rate=None, median_fill_s=None, volume_poa=0.0, volume_usd=None, makers=0, takers=0, by_asset={})
     start = max(d0, hist) if hist is not None else d1 + 1
     days = []

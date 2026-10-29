@@ -267,7 +267,7 @@ def api(path, qs):
     if path == "/api/forum":
         f = dict(A.forum()); f["top_threads"] = [{k: t[k] for k in ("id", "title", "community", "comment_count", "score")} for t in f["top_threads"]]; return f, False
     if path == "/api/pending-by-epoch": return A.pending_by_epoch(), False
-    if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "dropped", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
+    if path == "/api/grading": return [{k: r[k] for k in ("epoch", "pending", "pending_short", "pending_appeal", "pending_empty_panel", "settled", "settled_passed", "settled_failed", "settled_expired_no_jury", "dropped", "graders", "grades", "slashed")} for r in A.epoch_rows()], True
     if path == "/api/anchors/timeline":   # anchorsview.py: stored anchors (minepoa, cross checked with the fast index); no upstream read
         bad = set(qs) - {"range", "sort", "dir", "limit", "format"}
         if bad: raise BadRequest("unknown parameter: " + ", ".join(sorted(bad)))

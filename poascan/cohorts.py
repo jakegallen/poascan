@@ -1,8 +1,8 @@
 """Frozen answer cohorts: every answer born in an epoch, tracked at each later close. Counts always sum to the denominator."""
-from . import analytics as A
+from . import analytics as A, outcome as O
 from .analytics import cached
 
-STATES = ("unsealed", "sealed", "passed", "failed", "vanished")
+STATES = ("unsealed", "sealed", "passed", "failed", "expired_no_jury", "vanished")   # expired_no_jury: settled with no jury (1.26.224)
 
 def _sealed(row, merged):
     """Seal state of a pending row: True, False, or 'lb' when an empty pre-merge panel may have missed seals."""
@@ -20,7 +20,7 @@ def cohorts():
         n = int(e["epoch"]); b = e.get("basis", {}) or {}; p = b.get("pending") or {}
         if not isinstance(p, dict): p = {}
         for s in b.get("settled", []) or []:
-            if s.get("answer"): settled[s["answer"]] = (n, bool(s.get("passed")))
+            if s.get("answer"): settled[s["answer"]] = (n, O.of(s))
         new = [k for k, v in p.items() if k not in born and A.since_of(k, v or {}) == n]   # 1.26.89: since filled when minepoa omits it (E14 on)
         late |= {k for k, v in p.items() if k not in born and A.since_of(k, v or {}) != n}   # first seen after its birth close: no frozen cohort
         for k in new: born[k] = n
@@ -39,7 +39,7 @@ def cohorts():
                     s = _sealed(p[k] or {}, n >= merge)
                     if s == "lb": lb = True; ct["unsealed"] += 1
                     else: ct["sealed" if s else "unsealed"] += 1
-                elif k in st: ct["passed" if st[k][1] else "failed"] += 1
+                elif k in st: ct[st[k][1]] += 1
                 else: ct["vanished"] += 1
             assert sum(ct.values()) == len(ids)
             track.append(dict(close=n, age=n - c, **ct, sealed_is_lower_bound=lb))

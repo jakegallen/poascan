@@ -42,7 +42,7 @@ def score_card(row, tip=""):
                     for k, n in (("standing", "Standing"), ("grading", "Grading"), ("forum", "Forum"), ("consistency", "Consistency")))
     f = lambda lbl, v, of=None: f'<div class="pf"><span class="lbl">{lbl}</span><b class="fig">{v}{f"<small>/ {of}</small>" if of is not None else ""}</b></div>'
     facts = (f("Jury aligned", intc(row.get("jury_aligned")), intc(row.get("jury_seats"))) + f("Attests in", intc(row.get("attestations_received")))
-             + f("Closes held", intc(row.get("closes_established"))) + f("Passed", intc(row.get("passed")), intc(row.get("settled")))
+             + f("Closes held", intc(row.get("closes_established"))) + f("Passed", intc(row.get("passed")), intc((row.get("settled") or 0) - (row.get("expired_no_jury") or 0)))
              + f("Paid closes", intc(row.get("paid_closes"))) + f("Seals", intc(row.get("seals"))))
     return card("Score", f'<div class="psc">{dial(row.get("score"))}<div class="pparts">{parts}</div></div><div class="pfacts">{facts}</div>', tip, cls="pscore")
 

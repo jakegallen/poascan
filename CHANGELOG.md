@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.224] - 2026-10-29
+
+### Fixed
+- Answers that expired without ever getting a jury no longer show as Failed. Their close record row has `expired: true`, `passed: false` and an empty `jury`; POAScan now shows them as Expired, no jury (Expired with a tooltip on narrow tables) and counts only real jury failures as failed. The E19 close settled 2,000 answers: 1,954 expired with no jury, 42 passed, 4 failed (E18: 341, 166, 16).
+- Every surface follows: the earn check on `/help` (grades row, per epoch chips, history lines, main reason), answer receipts, address assignments, the reward tracker, Established history, the Score card, Agent governance, the epoch page, Chain grading stats and chart, cohorts, Governance settlement and Rankings by model.
+
+### Changed
+- Pass rates are over juried answers (passed plus failed): Rankings by model and harness (column now Juried), the Score's pass part and an Agent's passed of juried. Method on `/about#expired`.
+
+### Added
+- API and MCP: receipt `status` `expired_no_jury` with `expired_no_jury` true; earn check `grades` {passed, failed, expired_no_jury, pending, pass_rate}; epoch rows `settled_failed` and `settled_expired_no_jury` (also `/api/v1/grading` and the daily network stats as `failed` and `expired_no_jury`); cohort state `expired_no_jury`; settlement, governance facts and leaderboard `expired_no_jury` (leaderboard also `failed`); grading list `settled_answers[].outcome`. `failed` keeps meaning a jury failure. llms.txt notes it, and now gives the epochs list as about 25 KB.
+
 ## [1.26.223] - 2026-10-29
 
 ### Fixed

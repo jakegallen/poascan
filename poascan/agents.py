@@ -39,11 +39,13 @@ def answerers():
 
 @cached("settled_by_author", 120)
 def settled_records():
-    """List of (epoch, answer, author, passed, jury[]) from every close record."""
+    """List of (epoch, answer, author, passed, jury[], outcome) from every close record. outcome: passed, failed or
+    expired_no_jury (outcome.py: settled with no jury, never counted as failed)."""
+    from . import outcome as O
     out = []
     for e in A.epochs_raw():
         for s in e.get("basis", {}).get("settled", []) or []:
-            out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", [])))
+            out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", []), O.of(s)))
     return out
 
 def accounts_all():
@@ -135,19 +137,20 @@ def census_series():
 def leaderboard():
     cen = census_now(); rb = A.rewards_by_addr(); ans = answerers()
     answered = set().union(*ans.values()) if ans else set()
-    sett = collections.defaultdict(lambda: [0, 0])
-    for _, _, au, passed, _ in settled_records():
-        sett[au][0] += 1; sett[au][1] += int(passed)
+    sett = collections.defaultdict(lambda: [0, 0, 0])   # settled, passed, expired with no jury
+    for _, _, au, passed, _, oc in settled_records():
+        sett[au][0] += 1; sett[au][1] += int(passed); sett[au][2] += oc == "expired_no_jury"
     def agg(keyfn):
-        g = collections.defaultdict(lambda: dict(accounts=0, answered=0, settled=0, passed=0, earned=0.0, paid=0))
+        g = collections.defaultdict(lambda: dict(accounts=0, answered=0, settled=0, passed=0, failed=0, expired_no_jury=0, earned=0.0, paid=0))
         for a, r in cen.items():
             for k in keyfn(r):
                 x = g[k]; x["accounts"] += 1; x["answered"] += a in answered
-                x["settled"] += sett[a][0]; x["passed"] += sett[a][1]
+                x["settled"] += sett[a][0]; x["passed"] += sett[a][1]; x["expired_no_jury"] += sett[a][2]
                 e = sum(rb.get(a, {}).values()); x["earned"] += e; x["paid"] += e > 0
         out = []
         for k, x in g.items():
-            x["key"] = k; x["pass_rate"] = x["passed"] / x["settled"] if x["settled"] else None
+            x["failed"] = x["settled"] - x["passed"] - x["expired_no_jury"]
+            x["key"] = k; x["pass_rate"] = x["passed"] / (x["passed"] + x["failed"]) if x["passed"] + x["failed"] else None   # over juried answers
             x["earned_per_account"] = x["earned"] / x["accounts"] if x["accounts"] else None
             x["paid_rate"] = x["paid"] / x["accounts"] if x["accounts"] else None
             out.append(x)
@@ -159,7 +162,7 @@ def leaderboard():
 def funnel():
     acc = accounts_all(); ans = answerers(); rb = A.rewards_by_addr()
     answered = set().union(*ans.values()) if ans else set()
-    passed = {au for _, _, au, p, _ in settled_records() if p}
+    passed = {au for _, _, au, p, _, _ in settled_records() if p}
     paid = {a for a, r in rb.items() if sum(r.values()) > 0}
     est = A.established_set()
     joins = {r["addr"]: r["ts"] for r in db.q("SELECT addr, ts FROM labels WHERE source='join memo' AND ts>0")}
@@ -368,7 +371,7 @@ def custody():
 @cached("graders", 300)
 def graders():
     per = collections.defaultdict(lambda: [0, 0]); tot = al = 0
-    for _, _, _, _, jury in settled_records():
+    for _, _, _, _, jury, _ in settled_records():
         for j in jury:
             per[j["grader"]][0] += 1; per[j["grader"]][1] += int(bool(j.get("aligned"))); tot += 1; al += int(bool(j.get("aligned")))
     served = collections.Counter()
@@ -466,8 +469,8 @@ def network_health():
 # ---------------- profile ----------------
 def profile(addr):
     cen = census_now().get(addr); rb = A.rewards_by_addr().get(addr, {})
-    sett = [(e, ans, p) for e, ans, au, p, _ in settled_records() if au == addr]
-    jur = [(e, j.get("aligned")) for e, _, _, _, jury in settled_records() for j in jury if j["grader"] == addr]
+    sett = [(e, ans, p, oc) for e, ans, au, p, _, oc in settled_records() if au == addr]   # oc: passed, failed or expired_no_jury
+    jur = [(e, j.get("aligned")) for e, _, _, _, jury, _ in settled_records() for j in jury if j["grader"] == addr]
     served = sum(e.get("basis", {}).get("graders_served", {}).get(addr, 0) for e in A.epochs_raw())
     st = streaks().get(addr, (0, 0))
     ans = answerers(); answered = sorted(k for k, s in ans.items() if addr in s)
@@ -490,9 +493,9 @@ def established_history(addr):
     ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
     pp = A.params(); ttl = int(pp.get("estab_ttl") or 6)
     ans = answerers(); rb = A.rewards_by_addr().get(addr, {})
-    passed, settled, seated = collections.Counter(), collections.Counter(), set()   # seated: closes where it held a grading seat
-    for n, _, au, ok, jury in settled_records():
-        if au == addr: settled[n] += 1; passed[n] += 1 if ok else 0
+    passed, settled, expired, seated = collections.Counter(), collections.Counter(), collections.Counter(), set()   # seated: closes where it held a grading seat
+    for n, _, au, ok, jury, oc in settled_records():
+        if au == addr: settled[n] += 1; passed[n] += 1 if ok else 0; expired[n] += oc == "expired_no_jury"
         if any(j.get("grader") == addr for j in jury): seated.add(n)
     changes, listed = [], None
     for e in ep:
@@ -530,7 +533,7 @@ def established_history(addr):
     return dict(established=est, basis=basis, basis_epoch=(listed or {}).get("epoch") if basis in ("listed", "removed", "readmitted") else (seat_eps[-1] if basis == "seat" else None),
                 readmitted=basis == "readmitted", readmitted_epoch=readm[-1]["epoch"] if readm else None, readmissions=readm[::-1],
                 first_seen_ts=f, answers=n_ans, epochs_answered=len(answered), first_answer_epoch=answered[0] if answered else None,
-                last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()),
+                last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()), expired_no_jury=sum(expired.values()),
                 epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,
                 window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
                 changes=changes[::-1], **A.established_expiry_est(addr),

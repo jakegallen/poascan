@@ -133,7 +133,9 @@ def grader_badge(r): return ' <span class="tag est">trusted</span>' if r.get("tr
 # ---------------------------------------------------------------- per-Agent
 READY = '<span class="tag ok">Ready</span>'
 QUEUED = '<span class="tag warn" title="At quorum, but outside the oldest rows the next close evaluates (params.settle_cap_per_close). It carries over.">Queued</span>'
-def _res(passed): return '<span class="tag ok">Passed</span>' if passed else '<span class="tag bad">Failed</span>'
+def _res(passed, expired=False):
+    if not passed and expired: return '<span class="tag">Expired, no jury</span>'   # settled with no jurors: not a failure (outcome.py)
+    return '<span class="tag ok">Passed</span>' if passed else '<span class="tag bad">Failed</span>'
 def _yesno(v, yes="Counts", no="Does not count"):
     """The server's q flag as published, never recomputed."""
     return (f'<span class="tag ok" title="Counts at the next close (minepoa\'s q flag)">{yes}</span>' if v
@@ -178,7 +180,7 @@ def agent_cards(a):
             js = "".join(f'<li><span class="num">{j["score"] if j["score"] is not None else "···"}</span> {agent_cell(j["grader"], j["name"])}'
                          f'{_na_al(j["aligned"])}: {E(j["reason"] or "")}</li>' for j in s["jury"])
             own += (f'<div class="kv"><span>{ans_link(s["answer"])} <small class="dim">E{s["close"]}</small></span><div>'
-                    f'{_res(s["passed"])}<ul class="jury">{js}</ul></div></div>')
+                    f'{_res(s["passed"], s.get("expired") is True and not s["jury"])}<ul class="jury">{js}</ul></div></div>')
         body = (("<h3 class=\"sub\">As juror</h3>" + seats) if seats else "") + (("<h3 class=\"sub\">Own answers</h3>" + own) if own else "")
         out.append(card("Jury reasons", body + '<p class="cov dim small">Scores 0 to 3 and reasons from settled juries in minepoa\'s grading list.</p>', id="gov-jury"))
     return "".join(out)

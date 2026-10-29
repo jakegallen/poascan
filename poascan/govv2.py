@@ -6,7 +6,7 @@ Never shown: a pending grade's score or a seal's content. Pending rows are count
 public panel list, seals from the grading list's plain counts); the scores some close records carry on pending grades are
 never read here."""
 import collections
-from . import db, analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ
+from . import db, analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ, outcome as OC
 from .ui import E, card, stat, intc, agent, bars, lt, qtip
 
 METHOD = "/about#gov-v2"
@@ -77,10 +77,10 @@ def settlement():
     for e in eps:
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}; ts = int(e.get("ts") or 0)
         paid_to = {a for a, v in (e.get("challenges") or {}).items() if _pos(v)}
-        g = collections.defaultdict(lambda: dict(settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0))
+        g = collections.defaultdict(lambda: dict(settled=0, sealed=0, passed=0, expired_no_jury=0, paid=0, open=0, open_panel=0))
         for s in b.get("settled") or []:
             o = _origin(s.get("answer"), prev, tx_ep); o = -1 if o is None else o; x = g[o]
-            x["settled"] += 1; x["sealed"] += 1 if s.get("jury") else 0
+            x["settled"] += 1; x["sealed"] += 1 if s.get("jury") else 0; x["expired_no_jury"] += 1 if OC.no_jury(s) else 0
             if s.get("passed"): x["passed"] += 1; x["paid"] += 1 if s.get("from") in paid_to else 0
         pend = b.get("pending") or {}
         for aid, v in pend.items():
@@ -99,13 +99,13 @@ def settlement_closes(rows=None):
     """Per close totals (the chart and the close chips)."""
     t = collections.OrderedDict(); pz = CPZ.by_epoch()   # 1.26.192: paused when the close record flags a halt (closepause.py)
     for r in rows if rows is not None else settlement():
-        x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, paid=0, open=0, open_panel=0,
+        x = t.setdefault(r["close"], dict(close=r["close"], close_ts=r["close_ts"], settled=0, sealed=0, passed=0, expired_no_jury=0, paid=0, open=0, open_panel=0,
                                           paused=r["close"] in pz, pause=pz.get(r["close"])))
-        for k in ("settled", "sealed", "passed", "paid", "open", "open_panel"): x[k] += r[k]
+        for k in ("settled", "sealed", "passed", "expired_no_jury", "paid", "open", "open_panel"): x[k] += r[k]
     return list(t.values())
 
 SET_COLS = [SS.Col("close", "Close", "num"), SS.Col("origin", "Origin", "num", "r"), SS.Col("settled", "Settled", "num", "r"),
-            SS.Col("sealed", "Sealed", "num", "r dk"), SS.Col("paid", "Paid", "num", "r"), SS.Col("open", "Open", "num", "r"),
+            SS.Col("sealed", "Sealed", "num", "r dk"), SS.Col("expired_no_jury", "Expired", "num", "r dk", " " + qtip("Expired, no jury: settled with no jurors. Not a failure.", "/about#expired", "About Expired", "hv")), SS.Col("paid", "Paid", "num", "r"), SS.Col("open", "Open", "num", "r"),
             SS.Col("open_panel", "Panel", "num", "r dk")]
 SET_SORTS = [(c.key, c.label) for c in SET_COLS]
 SET_TIP = ("Settled: rows the close settled, by the epoch the answer was born. Sealed: settled with at least one jury seat. "
@@ -266,7 +266,7 @@ def settlement_tab(qs, href, qsx):
     ch2 = bars([(f'E{r["origin"]}' if r["origin"] is not None else "?", [r["settled"], r["open"]]) for r in org], height=150, colors=("gold", "steel"), fmt=lambda z: f"{z:,.0f}",
                legend=["Settled", "Open"], stacked=False)
     trs = "".join(f'<tr><td><a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>{CPZ.tag_for(r["close"])}</td><td class="r">{"E" + str(r["origin"]) if r["origin"] is not None else "<span class=dim>···</span>"}</td>'
-                  f'<td class="r">{_n(r["settled"])}</td><td class="r dk">{_n(r["sealed"])}</td><td class="r">{_n(r["paid"])}</td><td class="r">{_n(r["open"])}</td><td class="r dk">{_n(r["open_panel"])}</td></tr>' for r in rs)
+                  f'<td class="r">{_n(r["settled"])}</td><td class="r dk">{_n(r["sealed"])}</td><td class="r dk">{_n(r["expired_no_jury"])}</td><td class="r">{_n(r["paid"])}</td><td class="r">{_n(r["open"])}</td><td class="r dk">{_n(r["open_panel"])}</td></tr>' for r in rs)
     tb = (SS.select(SET_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(SET_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>')
     q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "", close=str(cl) if cl is not None else "")
     links = f'<a class="more" href="/api/v1/governance/settlement.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/settlement{q}">API →</a>'

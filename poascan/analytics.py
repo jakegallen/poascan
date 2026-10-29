@@ -153,7 +153,7 @@ def grade_counts(e, prev_ts=None):
 
 @cached("epoch_rows", 60)
 def epoch_rows():
-    from . import closepause as _CP
+    from . import closepause as _CP, outcome as _OC
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
     for e in epochs_raw():
@@ -181,7 +181,7 @@ def epoch_rows():
             pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
             pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")),
             pending_by_origin=dict(sorted(by_origin.items())),
-            settled=len(st), settled_passed=sum(1 for s in st if s.get("passed")), dropped=dropped,
+            settled=len(st), settled_passed=(oc := _OC.counts(st))["passed"], settled_failed=oc["failed"], settled_expired_no_jury=oc["expired_no_jury"], dropped=dropped,
             graders=len(gc := grade_counts(e, prev)), grades=sum(gc.values()),
             graders_official=len(b.get("graders_served", {}) or {}), grades_official=sum((b.get("graders_served", {}) or {}).values()),
             slashed=len(b.get("slashed", [])), established=len(b.get("established_after", [])),

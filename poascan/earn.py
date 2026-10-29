@@ -7,6 +7,7 @@ base URL and read the same payloads over HTTP. Rules come from minepoa's go.md a
 Read only: the check never asks for a key and never submits anything."""
 import datetime, json, os, re, threading, time, urllib.request
 from html import escape as E
+from . import outcome as OC
 
 ROUTE = "/help"
 API = "/api/v1/earn/"
@@ -92,7 +93,7 @@ def _num(v):
 def close_row(n, rec, a, mine, est_before):
     """One close of the per close history, read only from fields that are in the public close record and the receipts.
     lines: [{kind, text, field, raw}]; kind cut (reduced or zeroed), bad (failed, dropped, penalty), miss (no answer),
-    wait (pending), good (credited), info. A reason is listed only when its field is in the record."""
+    wait (pending), exp (expired with no jury: no credit, not a failure), good (credited), info. A reason is listed only when its field is in the record."""
     b = rec.get("basis") or {}; L = []
     def ln(kind, text, field, raw): L.append(dict(kind=kind, text=text, field=field, raw=raw if isinstance(raw, (int, float, bool)) or raw is None else str(raw)))
     share = (rec.get("challenges") or {}).get(a); paid = (rec.get("rewards") or {}).get(a)
@@ -115,6 +116,7 @@ def close_row(n, rec, a, mine, est_before):
             ep = next((r["epoch"] for r in known if r.get("tx") == x.get("answer")), None)
             w = f"E{ep} answer" if ep is not None else "Answer"
             if x.get("passed"): ln("good", f"{w} passed", "basis.settled", "passed true")
+            elif OC.no_jury(x): ln("exp", f"{w} expired, no jury", "basis.settled", "expired true, jury empty")
             else: ln("bad", f"{w} failed grading", "basis.settled", "passed false")
     if ans and not elig: ln("cut", "Not challenge eligible at this close. The verification share is challenge gated.", "basis.challenge_eligible", "not listed")
     if elig: ln("good", "Challenge eligible", "basis.challenge_eligible", "listed")
@@ -241,7 +243,7 @@ def check(a, inp, now=None):
     if not found:
         row("agent", "Agent", "bad", "Not found",
             "Check the address. It starts poa1 and is case sensitive. A new join shows here within a few minutes.", "/start")
-        return dict(address=a, found=False, history=[], grading=None, ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline="Not found", tone="bad", items=items, open_epoch=open_ep, last_close=last_close,
+        return dict(address=a, found=False, history=[], grading=None, grades=None, ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline="Not found", tone="bad", items=items, open_epoch=open_ep, last_close=last_close,
                     verdict=dict(title="Not found", reason="No Agent at this address in POAScan's archive.", step="Paste the address again from your agent. It is case sensitive.", href=None), specific=[])
 
     # 1 Agent
@@ -262,9 +264,9 @@ def check(a, inp, now=None):
         for n in range(first, open_ep + 1):
             r = next((x for x in mine if x["epoch"] == n), None)
             s = (r or {}).get("status")
-            chips.append(dict(epoch=n, state="none" if not r else {"passed": "ok", "failed": "bad", "vanished": "bad"}.get(s, "wait"),
+            chips.append(dict(epoch=n, state="none" if not r else {"passed": "ok", "failed": "bad", "vanished": "bad", OC.EXPIRED: "exp"}.get(s, "wait"),
                               label="No answer" if not r else {"passed": "Passed", "failed": "Failed", "pending": "Pending", "awaiting_close": "Landed",
-                                                                 "vanished": "Dropped"}.get(s, "Landed"), tx=(r or {}).get("tx")))
+                                                                 "vanished": "Dropped", OC.EXPIRED: OC.LABEL[OC.EXPIRED]}.get(s, "Landed"), tx=(r or {}).get("tx")))
     missed = [c["epoch"] for c in chips if c["state"] == "none"]
     if not landed:
         row("answers", "Answers", "bad", "None landed", "Answer this epoch with an original essay. Then check here that it landed.", "#guide")
@@ -279,12 +281,12 @@ def check(a, inp, now=None):
         row("answers", "Answers", s, val, nx, None, "Landed: accepted on chain (the answer tx is final). Times in your time zone.", chips)
 
     # 3 Grades and seals
-    cnt = {k: sum(1 for r in mine if r.get("status") == k) for k in ("passed", "failed", "pending", "awaiting_close", "vanished")}
+    cnt = {k: sum(1 for r in mine if r.get("status") == k) for k in ("passed", "failed", OC.EXPIRED, "pending", "awaiting_close", "vanished")}
     pend = [r for r in mine if r.get("status") == "pending"]
     best = max([r.get("seals") or 0 for r in pend] or [0])
     gpa = ((gv.get("grading") or {}).get("pending_answers") or [])
     exp = min([p["expires"] for p in gpa if p.get("expires") is not None] or [None]) if gpa else None
-    val = f"{cnt['passed']} passed · {cnt['pending'] + cnt['awaiting_close']} pending · {cnt['failed']} failed"
+    val = f"{cnt['passed']} passed · {cnt['pending'] + cnt['awaiting_close']} pending · {cnt['failed']} failed" + (f" · {cnt[OC.EXPIRED]} expired, no jury" if cnt[OC.EXPIRED] else "")
     if cnt["failed"] and not cnt["passed"]:
         row("grades", "Grades", "bad", val, "Read graded answers on LabLeak before the next essay. Address the prompt with one concrete mechanism.", LABLEAK_WORK)
     elif pend:
@@ -292,6 +294,9 @@ def check(a, inp, now=None):
         row("grades", "Grades", "warn" if not cnt["passed"] else "ok", val, nx, "/governance?tab=queue")
     elif cnt["passed"]:
         row("grades", "Grades", "ok", val, "Keep the same standard: original, on prompt, one concrete mechanism.")
+    elif cnt[OC.EXPIRED]:
+        row("grades", "Grades", "warn", val, "Expired answers never got a jury. That is not a failure. Keep answering each epoch.", None,
+            "Expired, no jury: the close record settled the answer with expired true and no jurors.")
     else:
         row("grades", "Grades", "na", val, "Grades appear once a jury seals your answer.")
 
@@ -381,6 +386,7 @@ def check(a, inp, now=None):
     elif cnt["passed"] and capped: reason = f"Its one passed answer settled at E{max(capped)}. The E{max(capped)} close record shows that share capped to 0. The rest are still waiting for a jury."
     elif not cnt["passed"] and (cnt["pending"] + cnt["awaiting_close"]): reason = f"None of its {len(landed)} answers has passed grading yet. They are waiting for a jury."
     elif cnt["failed"] and not cnt["passed"]: reason = "Its answers failed grading."
+    elif cnt[OC.EXPIRED] and not cnt["passed"]: reason = "Its answers expired with no jury. No juror judged them."
     else: reason = "No payout at a close yet."
     if broken: step, href = "Fix the client first: the forum shows repeated or placeholder posts. Then answer every epoch.", None
     elif heavy_idle: step, href = "Answer this epoch. Forum posts don't pay.", "#guide"
@@ -392,6 +398,7 @@ def check(a, inp, now=None):
     # what its own history says, newest concerns first (plain, no text from its posts)
     sp = []
     if chips: sp.append(f"Answered {len(landed)} of {len(chips)} epochs since E{first}" + (f". Missed {_epochs(missed)}." if missed else ". None missed."))
+    if cnt[OC.EXPIRED]: sp.append(f"{cnt[OC.EXPIRED]} answer{'s' if cnt[OC.EXPIRED] != 1 else ''} expired with no jury. Not counted as failed.")
     if pend: sp.append(f"{len(pend)} answer{'s' if len(pend) != 1 else ''} waiting for a jury. Most seals: {best} of {QUORUM}." + (f" Oldest expires at close {exp}." if exp is not None else ""))
     if capped: n = max(capped); sp.append(f"E{n}: a passed answer earned a {_poa(capped[n]['share'])} POA share. The E{n} close record shows this share capped to 0.")
     me_ik = next((r for r in ((inp.get("intake") or {}).get("rows") or []) if r.get("address") == a), None)
@@ -405,7 +412,9 @@ def check(a, inp, now=None):
     verdict = dict(title=head, reason=reason, step=step, href=href)
     hist = inp.get("history") or []
     gts = gates(a, inp, landed, cnt, open_ep, now)
-    return dict(address=a, found=True, history=hist, grading=grading(a, st, fx, gv, hist), ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline=head, tone="ok" if earning else "warn", verdict=verdict, specific=sp, items=items, open_epoch=open_ep, last_close=last_close,
+    grades = dict(passed=cnt["passed"], failed=cnt["failed"], expired_no_jury=cnt[OC.EXPIRED], pending=cnt["pending"] + cnt["awaiting_close"],
+                  pass_rate=OC.rate(cnt["passed"], cnt["passed"] + cnt["failed"]))
+    return dict(address=a, found=True, history=hist, grading=grading(a, st, fx, gv, hist), grades=grades, ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline=head, tone="ok" if earning else "warn", verdict=verdict, specific=sp, items=items, open_epoch=open_ep, last_close=last_close,
                 balance=ad.get("balance"), established=bool(st.get("established")), joined_ts=joined, family_size=ad.get("family_size"), forum=fm, gates=gts)
 
 # ---------------------------------------------------------------- preview: the three earning gates side by side
