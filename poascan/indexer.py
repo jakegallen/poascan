@@ -77,6 +77,13 @@ MISSING_CODES = (404, 301, 302, 303, 307, 308)   # minepoa answers an unknown tx
 
 GATE_WIRE_BYTES = 48_000   # 1.26.184: measured wire cost of a gated read (TLS, headers, body bytes already in flight when we close)
 
+def _parse(path, raw):
+    """json.loads, except the close record list (1.26.227: ~63 MB of JSON, growing ~6 MB a close), which is parsed one
+    close at a time with unchanged pending rows shared (analytics.parse_closes): same values, about a third of the memory."""
+    if path != "/api/epochs": return json.loads(raw)
+    from . import analytics as _A
+    return _A.parse_closes(raw.decode(json.detect_encoding(raw), "surrogatepass"))
+
 def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
     Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
@@ -110,7 +117,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
         if raw[:1] not in (b"{", b"["):
             _probe(ep, True, t0, "200"); count(ep, 200)
             raise Busy("non-JSON response (load page?)")
-        data = json.loads(raw)
+        data = _parse(path, raw); nraw = len(raw); raw = wire = None
         hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
         if hit:
             _ST.record(path, hit, retry=NOTICE_RETRY_S); _probe(ep, False, t0, "notice"); count(ep, "notice")
@@ -123,7 +130,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
             else: _lastmod.pop(path, None)
         db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,bytes,err) VALUES(?,?,0,0,?,NULL) "
                  "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, bytes=excluded.bytes, run401=0",
-                 (ep, now, len(raw)))
+                 (ep, now, nraw))
         return data
     except urllib.error.HTTPError as e:
         count(ep, e.code)

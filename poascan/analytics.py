@@ -72,8 +72,44 @@ def epochs_raw():
     ts = (r["ts"], db.blob_gen(kind)) if r else None   # 1.26.180: ts is whole seconds; a second write in the same second bumps gen
     if ts != c["ts"]:
         c["v"] = []; c["ts"] = None          # drop the old copy before parsing the new one
-        c["v"] = db.get_blob(kind)[0] or []; c["ts"] = ts
+        r = db.q1("SELECT json FROM blobs WHERE kind=?", (kind,))
+        c["v"] = parse_closes(r["json"]) if r else []; c["ts"] = ts
     return c["v"]
+
+def parse_closes(text):
+    """A close record list from its JSON text, the same values json.loads gives (1.26.227). Every close repeats the whole
+    pending list, so a pending row that has not changed since the previous close is kept once: the later close holds
+    the same (equal) dict and the same answer id string. Segment 2's 21 closes (68 MB of JSON) took 176 MB parsed;
+    shared, about 50 MB, and the parse peak drops with it (one close at a time). Records are read only, never changed
+    in place, so sharing a row changes nothing a reader sees."""
+    if not text: return []
+    sh = _Sharer(); return parse_records(text, sh.add)
+
+_ws = __import__("re").compile(r"[ \t\n\r]*")
+def parse_records(text, each=None):
+    """json.loads for a JSON array, one element at a time (each(v) may swap in an equal value as it goes)."""
+    dec = json.JSONDecoder(); ws = _ws.match; i = ws(text, 0).end()
+    if text[i:i + 1] != "[": return json.loads(text) or []
+    out = []; i = ws(text, i + 1).end()
+    if text[i:i + 1] == "]": return out
+    while True:
+        v, i = dec.raw_decode(text, i); out.append(each(v) if each else v); i = ws(text, i).end()
+        ch = text[i:i + 1]; i = ws(text, i + 1).end()
+        if ch == "]": return out
+        if ch != ",": raise ValueError("close records: expected , or ]")
+
+class _Sharer:
+    """Points a close's unchanged pending rows (and answer ids) at the previous close's copy, in list order."""
+    def __init__(self): self.prev, self.ids = {}, {}
+    def add(self, e):
+        b = e.get("basis") if isinstance(e, dict) else None; p = b.get("pending") if isinstance(b, dict) else None
+        if not isinstance(p, dict): return e
+        q, prev, ids = {}, self.prev, self.ids
+        for k, v in p.items():
+            k = ids.setdefault(k, k); o = prev.get(k)
+            q[k] = o if o is not None and o == v else v
+        b["pending"] = q; self.prev = q
+        return e
 
 def epochs_ts():
     """When the selected segment's close records were stored (blobs.ts), or None."""

@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.227] - 2026-10-29
+
+### Fixed
+- Out of memory on the 1 GB machine (Oct 29, 8:27 PM PT: the kernel killed the server at 801 MB; pages timed out or returned 500 for minutes before). Two causes, both fixed with no change to any page or API response:
+  - Every request runs on its own thread, and the SQLite connection that thread opened was left behind when it ended, held in a reference cycle with its statement cache until a full garbage collection, which a large heap makes rare. Under load about 90 of them (each with up to 2 MB of page cache) piled up and resident memory climbed about 6 MB a second until the guard or the kernel stepped in. Request threads (and background address reads) now close their connection when they end.
+  - The close records are held parsed in memory, and each close repeats the whole pending list (segment 2: 21 closes, 68 MB of JSON, growing about 6 MB a close). They took 176 MB parsed and a re-read of `/api/epochs` held two or three copies at once. Pending rows that did not change since the previous close are now kept once, and the list is parsed one close at a time, the stored copy and the `/api/epochs` read alike: about 53 MB, the parse peak about 72 MB instead of 241 MB. Same values as before; records are never changed in place.
+- Measured on a copy of the archive under a steady page and API mix: about 270 MB resident under load (was 800 to 970 MB and climbing), 190 MB idle after start (was 310 MB). Response times unchanged.
+
+### Added
+- `tools/memory_test.py`: request threads close their connection, finished threads leave none behind without a GC, and close records parse to exactly what `json.loads` gives with unchanged pending rows shared.
+
 ## [1.26.226] - 2026-10-29
 
 ### Changed

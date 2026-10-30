@@ -436,6 +436,11 @@ ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 300, 1800, 2000, 600   # 1.26.202: 60 -> 300 s (API polling drove ~156 lookups an hour)
 _addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
 
+def _addr_load_bg(a, crawler=None):
+    """_addr_load on its own thread; the thread's SQLite connection is closed when it ends (1.26.227, see db.release)."""
+    try: _addr_load(a, crawler)
+    finally: db.release()
+
 def _addr_load(a, crawler=None):
     if crawler is not None: I.CLIENT.crawler = crawler   # a background refresh keeps the request's crawler flag
     try:
@@ -491,7 +496,7 @@ def address_read(a):
         mine = ev is None
         if mine: ev = _addr_inflight[a] = threading.Event()
     if hit and age < ADDR_STALE:                      # stale-while-revalidate
-        if mine: threading.Thread(target=_addr_load, args=(a, I.crawler()), daemon=True).start()
+        if mine: threading.Thread(target=_addr_load_bg, args=(a, I.crawler()), daemon=True).start()
         return hit[1], None, hit[2]
     if not mine:                                      # someone else is fetching this address: wait for it
         ev.wait(I.ONDEMAND_TIMEOUT + 2)

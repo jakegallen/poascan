@@ -88,6 +88,16 @@ def conn():
         _local.c = c
     return c
 
+def release():
+    """Close this thread's connection (1.26.227). The server gives every request its own thread, and a connection left
+    on a finished thread sits in a reference cycle with its statement cache until a full GC: under load about 90 of them
+    (each with up to 2 MB of page cache) piled up and RSS grew about 6 MB/s. Request threads call this when they end."""
+    c = getattr(_local, "c", None)
+    if c is not None:
+        _local.c = None
+        try: c.close()
+        except Exception: pass
+
 def init():
     with _wlock:
         conn().executescript(SCHEMA)

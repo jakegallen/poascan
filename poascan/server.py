@@ -1256,7 +1256,9 @@ class Server(ThreadingHTTPServer):
         except Exception: GD.slots.release(); raise
     def process_request_thread(self, request, client_address):
         try: super().process_request_thread(request, client_address)
-        finally: GD.slots.release()
+        finally:
+            db.release()   # 1.26.227: this thread's SQLite connection goes now, not at the next full GC
+            GD.slots.release()
     def shutdown_request(self, request):
         if request in self.detached:      # upgraded to WebSocket: the hub owns it now
             self.detached.discard(request); return
