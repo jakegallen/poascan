@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.228] - 2026-10-29
+
+### Fixed
+- `/api/health` sometimes took 4 to 9 s (Oct 29: 9.2 s while `/` took 0.45 s and `/healthz` 0.09 s). Every 15 s one request refreshes the cheap feed state and the parsed close record list, and that refresh waited for one of the two heavy compute slots while cold page computes held both on a busy CPU. Those three cheap reads (feeds, close records, checkpoint moved) no longer wait for a heavy slot, so `/api/health` answers from stored state in tens of milliseconds whatever else is computing. Same responses.
+
+### Added
+- `tools/health_slot_test.py`: with every heavy slot held, the feed state, close records and checkpoint reads still refresh within 2 s, and a heavy compute still waits for its slot.
+
 ## [1.26.227] - 2026-10-29
 
 ### Fixed

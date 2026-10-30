@@ -9,9 +9,12 @@ CACHE_MAX = 256
 _heavy = threading.BoundedSemaphore(int(os.environ.get("POASCAN_HEAVY_MAX", "2")))   # cold computes running at once
 _depth = threading.local()
 
-def cached(key, ttl=30):
+def cached(key, ttl=30, light=False):
     """TTL cache with single-flight: one thread recomputes an expired entry while the others get the stale
-    value (or wait for the first compute). Concurrent requests never run the same heavy function at once."""
+    value (or wait for the first compute). Concurrent requests never run the same heavy function at once.
+    light=True (1.26.228): a cheap compute that never waits for one of the _heavy slots. Every 15 s one request
+    refreshes feeds and epochs_raw; with both slots held by cold page computes on a throttled VM that request
+    (often /api/health) used to wait 4 to 9 s for a slot to refresh a few millisecond read."""
     def deco(fn):
         def wrap(*a):
             k = (key, S.selected()) + a; own = True   # every cached value is per segment (segments.py)
@@ -31,7 +34,8 @@ def cached(key, ttl=30):
                     hit = _cache.get(k)
                 if hit: return hit[1]
             outer = not getattr(_depth, "n", 0)
-            if outer: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
+            slot = outer and not light
+            if slot: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
             _depth.n = getattr(_depth, "n", 0) + 1
             try:
                 v = fn(*a)
@@ -41,7 +45,7 @@ def cached(key, ttl=30):
                 return v
             finally:
                 _depth.n -= 1
-                if outer: _heavy.release()
+                if slot: _heavy.release()
                 if own:
                     with _lock: _inflight.pop(k, None)
                     ev.set()
@@ -63,7 +67,7 @@ def networks():
     return {}
 
 _epochs = {}   # segment -> {"ts", "v"}
-@cached("epochs_raw", 15)
+@cached("epochs_raw", 15, light=True)   # never waits for a heavy slot: a parsed copy unless a close just landed (one parse, single flight)
 def epochs_raw():
     """The selected segment's close records (segments.py: one blob per segment; segment 1's is ~21 MB of JSON).
     Each is parsed only when the indexer stores a new copy."""
@@ -583,7 +587,7 @@ def _ts(iso):
     try: return int(dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp())
     except Exception: return None
 
-@cached("cp_moved", 60)
+@cached("cp_moved", 60, light=True)   # cheap: never waits for a heavy slot
 def cp_moved():
     """When the checkpoint height last changed, from our own status snapshots (3-day window)."""
     cur = status().get("checkpoint_height")
@@ -645,7 +649,7 @@ def _iso_s(v):
     try: return int(dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()) if v else None
     except ValueError: return None
 
-@cached("feeds", 15)
+@cached("feeds", 15, light=True)   # cheap: never waits for a heavy slot
 def feeds():
     """Chain state, one row per upstream feed (label, state, last_ok) and the headline: OK only when every feed is OK,
     Partial when the chain is live and any feed is not, Degraded when the chain is not live."""
