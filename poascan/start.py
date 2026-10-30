@@ -289,9 +289,11 @@ def _opt(value, shown, attrs, checked=False, rn="client"):
 
 def _chat(c, checked=False, rn="client"):
     co = c.get("connector") or {}
-    con = (f' data-cset="{E(co.get("settings_url") or "")}" data-ccopy="{E(co.get("cli") or MCP)}"' + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
+    con = (f' data-cset="{E(co.get("settings_url") or "")}" data-ccopy="{E(co.get("cli") or MCP)}" data-cwhere="{E(co.get("where") or "")}"'
+           + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
+    con += f' data-cnote="{E(CON_NOTE[c["id"]])}"' if c["id"] in CON_NOTE else ""
     return _opt(c["name"], c["name"], f' data-kind="{c["kind"]}" data-tier="{c["tier"]}" data-base="{E(c["open"])}" data-pre="{E(c["pre"])}" '
-                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}', checked, rn)
+                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}' + (' data-tested="1"' if c["id"] in TESTED else ""), checked, rn)
 
 def nopath_panel():
     """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
@@ -338,10 +340,37 @@ def go_label(c):
     return f"Copy prompt for {n}", f"Copy for {n}", "c"
 
 def con_label(c):
-    """The small connector link under the button, or "" when the app has no PoA connector."""
+    """The settings link in the connector step, or "" when the app has no settings page (a command, or no connector)."""
     co = c.get("connector") or {}
-    if not co: return ""
-    return f"Or add the PoA connector to {c['name']}" if co.get("settings_url") else f"Or copy the {c['name']} connector command"
+    return f"Open {c['name']} settings" if co.get("settings_url") else ""
+
+# 1.26.238 (Join with Anything, stage 1): apps whose launch was checked live (the agent matrix, Oct 22 and 28). Any other
+# app keeps the default prompt with a short Not tested yet note. Per-app notes for the connector step.
+TESTED = frozenset(("claude", "chatgpt", "grok", "muse", "perplexity", "le-chat", "gemini", "huggingchat", "copilot", "kimi", "qwen"))
+CON_NOTE = {"chatgpt": "ChatGPT needs a paid plan with developer mode on."}
+FALLBACK_Q, FALLBACK_B = "Can't add connectors?", "Copy the prompt to paste instead"
+
+def con_first(c0):
+    """Connector-tier apps add the PoA connector before the prompt: 1 copy the URL (or run the app's command), 2 where to
+    add it, 3 turn it on for the chat, the app's note, its settings link, then the fallback for anyone who can't add
+    connectors (copies the default prompt to paste). app.js setup() fills it for the picked app; hidden for other tiers."""
+    from .join import ARROW
+    co = c0.get("connector") or {}; on = c0.get("tier") == "connector" and co; cli = bool(co.get("cli"))
+    v = co.get("cli") or MCP; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
+    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh">Add the connector first</p><ol class="cfs">'
+            f'<li><span data-cfl1>{"Run this once" if cli else "Copy the connector URL"}</span>'
+            f'<div class="cfu"><code data-cfval>{E(v)}</code><button class="cp" type="button" data-copy="{E(v)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
+            f'<li><span data-cfin>{"" if cli else E("Add it in " + c0["name"] + ": ")}</span><span data-cfwhere>{E(co.get("where") or "")}</span></li>'
+            f'<li data-cfon{" hidden" if cli else ""}>Turn it on for the chat.</li></ol>'
+            f'<p class="cfn" data-cfnote{"" if nt else " hidden"}>{E(nt)}</p>'
+            f'<p class="gocl" data-conrow{"" if cl else " hidden"}><a href="{E(co.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
+            f'<span data-conlbl>{E(cl)}</span>{ARROW}</a></p>'
+            f'<p class="cffb">{E(FALLBACK_Q)} <button type="button" data-cffb>{E(FALLBACK_B)}</button></p></div>')
+
+def untested_html(c0):
+    """The Not tested yet note over the button, for an app with a prompt whose launch was not checked live."""
+    off = c0["id"] in TESTED or c0["kind"] == "none"
+    return f'<p class="stnt" data-untested{" hidden" if off else ""}><span class="tag">Not tested yet</span><span>Uses the default prompt.</span></p>'
 
 def go_block(c0):
     """Step 3: the one button, the connector link, the no-path panel and the copy fallback; on /start."""
@@ -349,12 +378,12 @@ def go_block(c0):
     co0 = c0.get("connector") or {}; ll, ls, ic = go_label(c0); cl = con_label(c0)
     ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
            f'<span class="gi gi-k" data-gi="k" hidden>{CHECKI}</span>')
-    return (f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
+    return (con_first(c0) + untested_html(c0) + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
             f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>'
-            f'<p class="gocl" data-conrow{"" if cl else " hidden"}><a href="{E(co0.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
-            f'<span data-conlbl>{E(cl)}</span>{ARROW}</a></p>'
             + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
             '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
+
+PAUSED = "New PoA signups are paused while minepoa hardens its API. Check back later. Existing balances and pending grades are safe."
 
 def join_halt_html():
     """1.26.232: a terse paused state while minepoa's /api/join-pow answers 503 halted (maint.join_halt(), from the
@@ -364,7 +393,7 @@ def join_halt_html():
     h = M.join_halt()
     if not h: return ""
     tip = "minepoa.com answers 503 halted on /api/join-pow" + (f" since {_t.strftime('%H:%M', _t.gmtime(h['since_ts']))}Z" if h.get("since_ts") else "") + ". POAScan reads it every 5 min at most (hourly while halted, as minepoa asks)."
-    return f'<p class="sthalt" role="status" data-joinhalt title="{E(tip)}"><span class="tag warn">Joins paused</span><span>Check back later.</span></p>'
+    return f'<p class="sthalt" role="status" data-joinhalt title="{E(tip)}"><span class="tag warn">Joins paused</span><span>{E(PAUSED)}</span></p>'
 
 def _step(n, title, body, cls=""):
     return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'

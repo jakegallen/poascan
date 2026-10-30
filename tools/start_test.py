@@ -361,15 +361,15 @@ try:
           and re.search(r'value="Claude" data-kind="auto" data-tier="connector"[^>]* checked>', m) and m.count(" checked>") == 1)
     check("/start: everything else behind the single More (other chats, 8 connectors, 7 commands)", m.count("data-more") == 1 and ">More<" in m
           and len(allr) == len(CR.CLIENTS) + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
-    check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); the connector is one small text link under it, no card, no numbers",
-          len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-gorow") < m.index("data-conrow") and "gocrow" not in m and 'class="gon"' not in m
+    check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); the connector step (1.26.236) sits before it, no numbers",
+          len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-cfirst") < m.index("data-conrow") < m.index("data-gorow") and "gocrow" not in m and 'class="gon"' not in m
           and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em><span class="gi gi-a" data-gi="a">' in m
-          and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=PoA&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Or add the PoA connector to Claude</span><svg' in m)
+          and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=PoA&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Open Claude settings</span><svg' in m)
     _lb = {c["id"]: (S.go_label(c)[:2], S.con_label(c)) for c in top + rest if c["kind"] != "none"}
     check(f"labels: auto copies and opens, the rest copy for the app; connector link only where the app has a connector",
-          _lb["claude"] == (("Copy prompt and open Claude", "Copy and open Claude"), "Or add the PoA connector to Claude")
-          and _lb["cursor"] == (("Copy prompt for Cursor", "Copy for Cursor"), "") and _lb["le-chat"] == (("Copy prompt for Le Chat", "Copy for Le Chat"), "Or add the PoA connector to Le Chat")
-          and _lb["codex"] == (("Copy prompt for Codex", "Copy for Codex"), "Or copy the Codex connector command") and _lb["grok-bot"] == (("Copy prompt for Grok Bot", "Copy for Grok Bot"), "")
+          _lb["claude"] == (("Copy prompt and open Claude", "Copy and open Claude"), "Open Claude settings")
+          and _lb["cursor"] == (("Copy prompt for Cursor", "Copy for Cursor"), "") and _lb["le-chat"] == (("Copy prompt for Le Chat", "Copy for Le Chat"), "Open Le Chat settings")
+          and _lb["codex"] == (("Copy prompt for Codex", "Copy for Codex"), "") and _lb["grok-bot"] == (("Copy prompt for Grok Bot", "Copy for Grok Bot"), "")
           and not any(ch in json.dumps(_lb) for ch in "\u2014\u2013"))
     npn = m[m.index("data-nopath"):]; npn = npn[:npn.index("</div></div>")]
     check("/start: the no-path panel is one terse line and the working alternatives (each picks that client), hidden until a no-path app is picked; no prompt, no warning",
@@ -410,9 +410,9 @@ try:
           and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
           and [x for x, _, _ in S.STEPS] == ["Proof of work", "Register", "Store the key", "Read how grading works", "Answer the challenge", "Mine", "Check in"]
           and st.count('id="self-custody"') == 1 and st.count("poa.mjs join --node https://minepoa.com/") == 2 and "alongside the signed join in your POST /api/submit body" in unescape(st) and "--invited-by" not in st)
-    go3 = m[m.index('data-go '):m.index('<details class="stview" data-stview>')]
-    check("/start: Add a wallet on POASwap, low key, under the button and the connector link, new tab to https://poaswap.io/start",
-          go3.index("data-conrow") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
+    go3 = m[m.index('data-cfirst'):m.index('<details class="stview" data-stview>')]
+    check("/start: Add a wallet on POASwap, low key, under the connector step and the button, new tab to https://poaswap.io/start",
+          go3.index("data-conrow") < go3.index("data-go ") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
           and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
     check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
           and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))

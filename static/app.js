@@ -404,13 +404,13 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 /* /start step 3 (one button): step 2 picks the client; step 3 is one button that always copies the prompt
    first, inside the click. Auto apps (the link carries the prompt): one click copies and opens, in the same gesture, so a
    popup blocker never fires. Paste apps: the first click copies and the button turns into "Copied. Open X"; the second opens.
-   No open URL (Grok Bot, Codex): one click copies, "Copied. Paste it into X". A connector app adds one small text link.
+   No open URL (Grok Bot, Codex): one click copies, "Copied. Paste it into X". A connector app gets the Add the connector first step above the button.
    Beacons: <pid>.app / .appreg for copy plus open, <pid>.copy / .copyreg for a copy alone, <pid>.add for the connector link,
    mcp-poa.add for the connector options under More. The second click of a paste app copies again but sends no beacon. */
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
  /* v2.4: one prompt variant per client tier (full, connector; v2.9 retired chat-browse) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
- var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),C0="",CT;
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cl1=$("[data-cfl1]",card),cin=$("[data-cfin]",card),con1=$("[data-cfon]",card),cnt=$("[data-cfnote]",card),cfb=$("[data-cffb]",card),ut=$("[data-untested]",card),C0="",CT,FT;
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}
  function render(r){var t=TPL[r.dataset.tier],v=nameV();if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
@@ -452,8 +452,14 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
  function icon(i){$$("[data-gi]",go).forEach(function(s){s.hidden=s.dataset.gi!==i})}
  function rest(){var r=sel();clearTimeout(T);ARM=false;go.classList.remove("ok");lab(L0);icon(I0);if(ap)ap.hidden=!(r&&r.dataset.kind=="auto")}
  function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",n=r.dataset.app,k=r.dataset.kind;render(r);
-  var cl=r.dataset.cset?"Or add the PoA connector to "+n:r.dataset.ccopy?"Or copy the "+n+" connector command":"";
-  hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,none||!cl||k=="mcp");if(fl)fl.hidden=true;say("");if(none)return;
+  var cl=r.dataset.cset?"Open "+n+" settings":"",cf=tier=="connector"&&!!r.dataset.ccopy&&k!="mcp";
+  /* 1.26.236: connector apps add the PoA connector first: the URL (or command) with copy, the app's where text, its settings link */
+  hide(cfs,!cf);if(cf){var cli=!/^https:/.test(r.dataset.ccopy);if(cfv)cfv.textContent=r.dataset.ccopy;if(cfc)cfc.dataset.copy=r.dataset.ccopy;if(cfw)cfw.textContent=r.dataset.cwhere||"";
+   if(cl1)cl1.textContent=cli?"Run this once":"Copy the connector URL";if(cin)cin.textContent=cli?"":"Add it in "+n+": ";hide(con1,cli);if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}
+   if(cfb){clearTimeout(FT);cfb.classList.remove("ok");cfb.textContent=cfb.dataset.l||cfb.textContent}}
+  /* 1.26.238: an app whose launch was not checked live keeps the default prompt with a short Not tested yet note */
+  hide(ut,none||k=="mcp"||r.dataset.tested=="1");
+  hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,none||!cl||!cf);if(fl)fl.hidden=true;say("");if(none)return;
   clearTimeout(CT);C0=cl;if(clb)clb.textContent=cl;if(con){con.classList.remove("ok");con.href=r.dataset.cset||"#"}
   var P=txt(),u=url(r,P);go.dataset.kind=k;go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";
   L0=k=="mcp"?["Add to "+n,"Add to "+n]:k=="auto"?["Copy prompt and open "+n,"Copy and open "+n]:["Copy prompt for "+n,"Copy for "+n];I0=k=="mcp"||k=="auto"?"a":"c";rest()}
@@ -471,6 +477,10 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
   copyNow(P).then(function(ok){if(!ok){fail(P);return}
    if(u){clearTimeout(T);ARM=true;go.classList.add("ok");lab(["Copied. Open "+n,"Copied. Open "+n]);icon("k");say("Prompt copied. Open "+n+" and paste with "+KEY+".",1)}
    else{flash("Copied. Paste it into "+n);say("Prompt copied. Paste it into "+n+" with "+KEY+".",1)}})});
+ /* 1.26.238: the fallback for anyone who can't add connectors: copy the default prompt (no connector tools) to paste */
+ if(cfb)cfb.addEventListener("click",function(){var r=sel();if(!r||!check())return;var n=r.dataset.app,t=TPL.full||"",v=nameV(),P=W.poaTag(card,(/^[A-Za-z0-9_-]{1,32}$/.test(v)?t.split("{NAME}").join(v):t).trim());ev(PID+".paste");
+  cfb.dataset.l=cfb.dataset.l||cfb.textContent;copyNow(P).then(function(ok){if(!ok){fail(P);return}clearTimeout(FT);cfb.classList.add("ok");cfb.textContent="Copied. Paste it into "+n;say("Prompt copied. Paste it into "+n+" with "+KEY+".",1);
+   FT=setTimeout(function(){cfb.classList.remove("ok");cfb.textContent=cfb.dataset.l},2600)})});
  if(con)con.addEventListener("click",function(e){e.preventDefault();var r=sel();if(!r||!check())return;var n=r.dataset.app,u=r.dataset.cset,v=r.dataset.ccopy||"";ev(PID+".add");
   var c=copyNow(v);if(u)W.open(u,"_blank","noopener,noreferrer");
   c.then(function(ok){if(!ok){fail(v);return}clearTimeout(CT);con.classList.add("ok");if(clb)clb.textContent=u?"Connector URL copied. Opening "+n:"Connector command copied";

@@ -92,7 +92,7 @@ def ask_modal():
     return f'''<dialog class="jm am" id="askmodal" aria-labelledby="am-t"><div class="jm-in" data-pcard>
 <div class="jm-hd"><h2 id="am-t">Ask your agent</h2><button class="jm-x" type="button" data-amclose aria-label="Close">{CLOSE}</button></div>
 <div class="chips am-c" hidden></div>
-{_S.notice()}{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
+{_S.join_halt_html()}{_S.notice()}{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
 <p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a>. Your agent fills in SAVED_KEY from its own secret store; you never paste a key.</p>
 </div></dialog>'''

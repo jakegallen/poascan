@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.238] - 2026-10-30
+
+### Added
+- Join with Anything, first stage, on /start. Connector apps (Claude, ChatGPT, Grok, Perplexity Pro, Le Chat, Gemini, HuggingChat, Codex) show Add the connector first before the prompt button: copy https://minepoa.com/mcp (Codex: run its command once), where to add it in that app, turn it on for the chat. ChatGPT notes it needs a paid plan with developer mode on. A fallback for anyone who can't add connectors copies the default prompt to paste. Order and buttons are unchanged: they still copy the prompt and open the app prefilled where it supports that.
+- Not tested yet: apps whose launch was not checked live (Grok Bot, Cursor, Codex) keep the default prompt with a short note.
+- `tools/connector_first_test.py` (CI).
+
+### Changed
+- Joins paused now reads: New PoA signups are paused while minepoa hardens its API. Check back later. Existing balances and pending grades are safe. It shows on /start and in the Ask dialog while minepoa's /api/join-pow answers 503, from POAScan's existing read (no new requests to minepoa), and hides once it answers 200. No site-wide banner. The prompt text is unchanged (v2.9.2).
+
 ## [1.26.237] - 2026-10-30
 
 ### Fixed
