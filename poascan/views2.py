@@ -193,7 +193,7 @@ def upgrade_view():
     if r["supply_intact"]: ok += ["Balances intact"] + (["Supply carried"] if r.get("previous_segment") else ["Supply unchanged"])
     if r["checkpoint"]: ok.append(f'Checkpoint {r["checkpoint"]:,}')
     if A.freshness()["state"] != "stale": ok.append("Explorer live")
-    if M.join_state() == "open": ok.append("Joining open")
+    if M.join_state() == "open" and not M.join_halt(): ok.append("Joining open")   # 1.26.233: not while join-pow answers 503 halted
     ok.append("Self-custody mining")
     if M.attestation_earnings() == "live": ok.append("Attestation earnings")
     if M.pool_payouts() == "live": ok.append("Challenge-pool payouts")

@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.233] - 2026-10-30
+
+### Changed
+- `join_state` (the `maintenance` block of `/api/v1/status`) reads `halted` while minepoa's `/api/join-pow` answers 503 halted, from the same cached read as `/start` (every 5 min at most, hourly while halted). Same field name; the value set adds `halted` to `open` and `paused`. POASwap reported it still read `open` during the halt. `join_open` and the site copy are unchanged.
+- Network > Health no longer lists "Joining open" under Working while that route is halted.
+- `/api/v1/prompts/join` `join.state` (new in 1.26.232) reads `halted` rather than `paused`, to match.
+
 ## [1.26.232] - 2026-10-30
 
 ### Changed

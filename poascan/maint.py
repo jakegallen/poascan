@@ -56,6 +56,11 @@ def join_state():
     """open or paused. Paused comes from the tracker, the manual switch, or join_quiet()."""
     return "paused" if not join_open() or join_quiet() else "open"
 
+def join_state_api():
+    """1.26.233: the join_state API field (maintenance block of /api/v1/status, /summary): halted while minepoa's
+    /api/join-pow answers 503 halted (the same cached read as /start), else join_state(). Copy keeps join_state()."""
+    return "halted" if join_halt() else join_state()
+
 def join_route():
     """routewatch's "joining" route record (state, since_ts, as_of_ts), or None before the first read."""
     try:
@@ -571,7 +576,7 @@ def state():
     if c and rh: head, short = halt_line(rh)   # 1.26.188: never 'Upgrade complete' while probes show routes halted
     sn = segment_notice()
     if sn and sn["active"]: head, short = f'{sn["label"]}: {sn["note"]} {head}', f'{sn["label"]}. {short}'   # the active boundary notice first, tersely
-    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state(),
+    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state_api(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
                 expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=_ttl(),

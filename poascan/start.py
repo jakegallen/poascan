@@ -145,7 +145,7 @@ def join_state():
     from . import maint as M
     r = M.join_route() or {}
     h = r.get("state") == "halted"
-    return dict(state="paused" if h else "open", since_ts=r.get("since_ts") if h else None, checked_ts=r.get("as_of_ts"),
+    return dict(state="halted" if h else "open", since_ts=r.get("since_ts") if h else None, checked_ts=r.get("as_of_ts"),
                 source="POAScan read of " + __import__("poascan.onboarding_prompt", fromlist=["x"]).JOIN_POW)
 
 def join_shape(name="YOUR_NAME"):
