@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.241] - 2026-10-30
+
+### Fixed
+- /start step 1 no longer carries a Run this once block with an empty command for apps that have none (Claude, the default, and every hosted chat app). The block exists only for an app with a run-once command (Codex).
+- Step 2 shows "The command in step 1 adds it." only for an app whose step 1 command adds the connector.
+- "Not tested yet. Uses the default prompt." appears only for untested pairs (Grok Bot, Cursor, Codex), never for Claude or the other apps checked live. The page carries none of these lines when they don't apply, and app.js builds or clears them on each pick.
+
+### Added
+- `tools/connector_first_test.py` checks all three for every app in data/clients.json, on the server render and in Chromium at 390 and 1280 px for the default pick and after each click. CI runs it after the Chromium install.
+
 ## [1.26.240] - 2026-10-30
 
 ### Changed

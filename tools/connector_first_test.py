@@ -3,7 +3,10 @@ Hosted chat apps (tier connector without a command: Claude, ChatGPT, Grok and th
 1 Create your agent on minepoa.com (its page solves the signup puzzle; POAScan only links, keyless), 2 Let {App} mine
 (optional, the connector), 3 Paste the prompt. Apps that run code (Grok Bot, Cursor, Codex): 1 the prompt (Codex: its
 run-once command too), 2 the connector (optional). Not tested yet notes; the joins paused notice under step 1 and in the
-Ask dialog while /api/join-pow answers 503. The prompt text is unchanged. Usage: python3 tools/connector_first_test.py"""
+Ask dialog while /api/join-pow answers 503. The prompt text is unchanged.
+1.26.241 regressions, for every app in data/clients.json, server render and client-side after each pick (Chromium at 390 and
+1280): no Run this once block or empty code span unless the app has a run-once command; "The command in step 1 adds it." only
+for such an app; Not tested yet only for untested pairs (Claude, verified live, never). Usage: python3 tools/connector_first_test.py"""
 import os, re, sys, tempfile
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "c.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -59,4 +62,52 @@ check("no key in any link or prefill", not re.search(r"(key|api_key|token)=", h 
 hf = S.hash_fields()
 check("the prompt is unchanged: v2.9.2 template 7a2a6016, combined 2cce09a9", hf["template_sha256"].startswith("7a2a6016") and hf["combined_sha256"].startswith("2cce09a9"))
 check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + js[js.index("1.26.240"):js.index("1.26.240") + 3000]))
+
+# 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
+M.join_halt = lambda: None
+EMPTY = re.compile(r"<code[^>]*>\s*</code>")
+for c in top + rest:
+    g = unescape(S.go_block(c)); cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED and c["kind"] != "none"
+    check(f"server {c['id']}: run-once block {'with its command' if cli else 'absent'}, step 2 command line {'shown' if cli else 'absent'}, Not tested yet {'shown' if un else 'absent'}, no empty code span",
+          ("Run this once" in g) == cli and (S.CLI_ADDS in g) == cli and ("Not tested yet" in g) == un and not EMPTY.search(g))
+check("server: Claude is the default and shows none of the three", top[0]["id"] == "claude" and not any(x in unescape(S.go_block(top[0])) for x in ("Run this once", S.CLI_ADDS, "Not tested yet")))
+
+# client side: the default pick and after each click, at 390 and 1280
+import socket, subprocess, time, urllib.request
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+    check("playwright installed for the client-side check (CI installs it before this step)", os.environ.get("CI") != "true")
+if sync_playwright:
+    sk = socket.socket(); sk.bind(("127.0.0.1", 0)); port = sk.getsockname()[1]; sk.close(); base = f"http://127.0.0.1:{port}"
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1")
+    srv = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(150):
+            try: urllib.request.urlopen(base + "/healthz", timeout=2); break
+            except Exception: time.sleep(0.2)
+        apps = [c for c in top + rest if c["kind"] != "none"]
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            for w in (390, 1280):
+                pg = b.new_page(viewport={"width": w, "height": 844 if w < 400 else 900}); pg.goto(base + "/start", wait_until="networkidle")
+                def state():
+                    return pg.evaluate("""()=>{const st=document.querySelector('li.st3'),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),t=st.innerText.toLowerCase();
+                      return {run:t.includes('run this once'),adds:t.includes('the command in step 1 adds it.'),un:t.includes('not tested yet'),
+                              empty:[...st.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,
+                              s1c:(document.querySelector('[data-s1cli]')||{}).textContent||'',s2c:(document.querySelector('[data-s2cli]')||{}).textContent||'',
+                              ut:(document.querySelector('[data-untested]')||{}).textContent||''}}""")
+                def ok(c, d):
+                    cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED
+                    return (d["run"] == cli and d["adds"] == cli and d["un"] == un and d["empty"] == 0 and bool(d["s1c"]) == cli and bool(d["s2c"]) == cli and bool(d["ut"]) == un)
+                d = state(); check(f"{w}px default (Claude): no run-once block, no step 2 command line, no Not tested yet, no empty code span {d}", ok(top[0], d))
+                pg.locator("[data-more]").first.click()
+                for c in apps + [top[0]]:
+                    pg.locator(f"label.cl:has(input[data-tag='{c['id']}'])").first.click()
+                    d = state(); check(f"{w}px after picking {c['id']}: lanes match the app {d}", ok(c, d))
+                pg.close()
+            b.close()
+    finally:
+        srv.terminate(); srv.wait(10)
 print(f"\n{len(fails)} FAILED" if fails else "\nall ok"); sys.exit(1 if fails else 0)

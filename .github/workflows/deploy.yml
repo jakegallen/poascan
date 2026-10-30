@@ -109,8 +109,6 @@ jobs:
         run: python tools/bootpeak_test.py
       - name: Large writes leave no bound copy behind
         run: python tools/bigwrite_test.py
-      - name: Join with Anything, connector steps, fallback, not tested note, joins paused notice
-        run: python tools/connector_first_test.py
       - name: Large lists are stored in pieces with the same bytes
         run: python tools/bloblist_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
@@ -303,6 +301,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/header_row_test.py
+      - name: Join with Anything on /start (lanes, connector for mining only, Not tested yet, joins paused; every app server side and after each pick at 390 and 1280 px)
+        env:
+          CI: "true"
+        run: python tools/connector_first_test.py
       - name: Header status note (no strip under the header; tap at 390 px inside the viewport, hover, keyboard focus and Escape at 1280 px)
         env:
           CI: "true"

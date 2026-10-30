@@ -362,6 +362,13 @@ def s2_body(n, h):
             else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
 CLI_ADDS = "The command in step 1 adds it."
 
+UNTESTED_HTML = '<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>'
+
+def cli_html(cli, where):
+    """Codex's run-once command under step 1. Rendered only for an app with a command (1.26.241: no empty block for the rest)."""
+    return (f'<div class="jwcli" data-s1cli><span>Run this once</span><div class="cfu"><code>{E(cli)}</code>'
+            f'<button class="cp" type="button" data-copy="{E(cli)}" aria-label="Copy"><i></i></button></div><p class="jwb">{E(where)}</p></div>')
+
 def step1(c0):
     """Step 1 (Create your agent): hosted apps get the minepoa.com join link; code apps the prompt line and Codex's
     run-once command; the button slot for code apps; the joins paused notice under it."""
@@ -369,9 +376,7 @@ def step1(c0):
     return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>'
             f'<p class="jwb" data-s1b{" hidden" if none else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
             f'<p class="jwj" data-s1join{"" if h else " hidden"}><a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a></p>'
-            f'<div class="jwcli" data-s1cli{"" if cli else " hidden"}><span>Run this once</span><div class="cfu"><code data-clival>{E(cli)}</code>'
-            f'<button class="cp" type="button" data-copy="{E(cli)}" data-clicopy aria-label="Copy"><i></i></button></div>'
-            f'<p class="jwb" data-cliwhere>{E(co.get("where") or "") if cli else ""}</p></div>'
+            + (cli_html(cli, co.get("where") or "") if cli else '<div class="jwcli" data-s1cli hidden></div>') +
             f'<div class="jwslot" data-slot1></div>' + join_halt_html())
 
 def con_first(c0):
@@ -381,7 +386,7 @@ def con_first(c0):
     co = c0.get("connector") or {}; cli = bool(co.get("cli")); n = c0["name"]; h = hosted(c0)
     on = bool(co) and c0["kind"] != "none"; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
     return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh" data-s2h>{E(s2_head(n))}</p>'
-            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="jwb" data-s2cli{"" if cli else " hidden"}>{CLI_ADDS}</p>'
+            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="jwb" data-s2cli{"" if cli else " hidden"}>{CLI_ADDS if cli else ""}</p>'
             f'<ol class="cfs" data-cflines{" hidden" if cli else ""}><li><span>Copy the connector URL</span>'
             f'<div class="cfu"><code data-cfval>{E(MCP)}</code><button class="cp" type="button" data-copy="{E(MCP)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
             f'<li><span data-cfin>{E("Add it in " + n + ": ")}</span><span data-cfwhere>{E(co.get("where") or "")}</span></li>'
@@ -393,7 +398,7 @@ def con_first(c0):
 def untested_html(c0):
     """The Not tested yet note over the button, for an app with a prompt whose launch was not checked live."""
     off = c0["id"] in TESTED or c0["kind"] == "none"
-    return f'<p class="stnt" data-untested{" hidden" if off else ""}><span class="tag">Not tested yet</span><span>Uses the default prompt.</span></p>'
+    return f'<p class="stnt" data-untested{" hidden" if off else ""}>{"" if off else UNTESTED_HTML}</p>'
 
 def go_block(c0):
     """Step 3 of /start: the three join steps (step1, con_first, Paste the prompt) with the one button in the slot for the

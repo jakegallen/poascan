@@ -410,7 +410,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
  /* v2.4: one prompt variant per client tier (full, connector; v2.9 retired chat-browse) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
- var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s1c=$("[data-s1cli]",card),clv=$("[data-clival]",card),clc=$("[data-clicopy]",card),clw=$("[data-cliwhere]",card),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),s2c=$("[data-s2cli]",card),cfl=$("[data-cflines]",card),C0="",CT,
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s1c=$("[data-s1cli]",card),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),s2c=$("[data-s2cli]",card),cfl=$("[data-cflines]",card),C0="",CT,
   S1H="Open minepoa.com and complete the signup there. Your browser solves the signup puzzle, and minepoa creates your agent. POAScan never sees your key.";
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}
@@ -459,13 +459,17 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
   var mc=k=="mcp",cli=!!r.dataset.ccopy&&!/^https:/.test(r.dataset.ccopy),h=tier=="connector"&&!cli&&!mc,cf=!!r.dataset.ccopy&&!mc&&!none,
    cl=r.dataset.cset&&!cli?"Open "+n+" settings":"";
   hide(s1h,none||mc);hide(s1b,none||mc);if(s1b)s1b.textContent=h?S1H:"Copy the prompt and paste it into "+n+". This is the step that creates your PoA agent.";
-  hide(s1j,!h);hide(s1c,!cli||mc);if(cli){if(clv)clv.textContent=r.dataset.ccopy;if(clc)clc.dataset.copy=r.dataset.ccopy;if(clw)clw.textContent=r.dataset.cwhere||""}
+  hide(s1j,!h);
+  /* 1.26.241: the run-once block, the step 2 command line and the Not tested yet note exist only for an app they apply to (no empty code span, no stray line) */
+  if(s1c){s1c.textContent="";if(cli&&!mc){var sp=D.createElement("span"),cu=D.createElement("div"),cd=D.createElement("code"),cb=D.createElement("button"),cw=D.createElement("p");
+   sp.textContent="Run this once";cu.className="cfu";cd.textContent=r.dataset.ccopy;cb.className="cp";cb.type="button";cb.dataset.copy=r.dataset.ccopy;cb.setAttribute("aria-label","Copy");cb.appendChild(D.createElement("i"));
+   cw.className="jwb";cw.textContent=r.dataset.cwhere||"";cu.appendChild(cd);cu.appendChild(cb);s1c.appendChild(sp);s1c.appendChild(cu);s1c.appendChild(cw)}hide(s1c,!(cli&&!mc))}
   var slot=h?sl3:sl1;if(slot){if(ut)slot.appendChild(ut);if(grow)slot.appendChild(grow)}hide(s3h,!h);
   hide(cfs,!cf);if(cf){if(s2h)s2h.textContent="2. Let "+n+" mine (optional)";
    if(s2b)s2b.textContent=h?"Add the PoA connector so "+n+" can answer challenges and check in for the agent you created. For mining after you join, not for joining.":"Add the PoA connector so "+n+" can answer challenges and check in for the agent you just created. The connector does not create a new agent.";
-   hide(s2c,!cli);hide(cfl,cli);if(cfw)cfw.textContent=r.dataset.cwhere||"";if(cin)cin.textContent="Add it in "+n+": ";if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}}
+   if(s2c)s2c.textContent=cli?"The command in step 1 adds it.":"";hide(s2c,!cli);hide(cfl,cli);if(cfw)cfw.textContent=r.dataset.cwhere||"";if(cin)cin.textContent="Add it in "+n+": ";if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}}
   /* 1.26.238: an app whose launch was not checked live keeps the default prompt with a short Not tested yet note */
-  hide(ut,none||mc||r.dataset.tested=="1");
+  var un=!(none||mc||r.dataset.tested=="1");if(ut){ut.innerHTML=un?'<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>':"";hide(ut,!un)}
   hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,none||!cl||!cf);if(fl)fl.hidden=true;say("");if(none)return;
   clearTimeout(CT);C0=cl;if(clb)clb.textContent=cl;if(con){con.classList.remove("ok");con.href=r.dataset.cset||"#"}
   var P=txt(),u=url(r,P);go.dataset.kind=k;go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";
