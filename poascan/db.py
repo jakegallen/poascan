@@ -314,7 +314,40 @@ def blob_gen(kind): return _blob_gen.get(kind, 0)
 def _bump(kind): _blob_gen[kind] = _blob_gen.get(kind, 0) + 1
 
 def put_blob(kind, obj):
+    if isinstance(obj, list) and len(obj) > 1 and _put_list(kind, obj): _bump(kind); return
     write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, int(time.time()), json.dumps(obj))); _bump(kind)
+
+def _list_parts(obj):
+    """json.dumps(obj) of a list, one redacted element at a time (same text: default separators, ASCII only)."""
+    yield "["
+    for i, e in enumerate(obj): yield (", " if i else "") + _KS.redact(json.dumps(e))
+    yield "]"
+
+def _put_list(kind, obj):
+    """A list whose text is over BIG_ARG is written in 1 MB pieces into a value of its exact size (1.26.238). Building the
+    whole text cost about 3 times its size at once (the string, the sqlite3 module's bound copy, SQLite's own copy):
+    about +280 MB at each close for the 94 MB close record list. The stored bytes are the same text json.dumps gives
+    (stored as a BLOB; every reader parses it with json.loads or reads it by blobopen). False when it is small."""
+    n = sum(len(t) for t in _list_parts(obj))
+    if n <= BIG_ARG: return False
+    with _wlock:
+        GEN[0] += 1; c = _big_conn()
+        try:
+            rid = c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,zeroblob(?))", (kind, int(time.time()), n)).lastrowid
+            with c.blobopen("blobs", "json", rid) as b:
+                buf, k, at = [], 0, 0
+                for t in _list_parts(obj):
+                    buf.append(t); k += len(t)
+                    if k >= BIG_ARG:
+                        w = "".join(buf).encode("ascii"); b.write(w); at += len(w); buf, k = [], 0
+                w = "".join(buf).encode("ascii"); b.write(w); at += len(w)
+            if at != n: raise ValueError("close list text changed while it was written")
+            c.commit()
+        except Exception:
+            c.rollback(); raise
+        finally:
+            c.close()
+    return True
 
 def touch_blob(kind):
     """Move a blob's stored time without rewriting it (1.26.229: a close list re-read that brought nothing new)."""

@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.239] - 2026-10-30
+
+### Changed
+- Storing the close record list no longer builds its whole text at once. A list whose text is over 1 MB is written in 1 MB pieces into a value of its exact size, with the same bytes as before (stored as a BLOB; every reader parses it the same way). Storing today's 94 MB list: +283 MB to +9 MB; the whole close path peak over idle: +384 MB to +136 MB (box bench).
+
+### Added
+- `tools/bloblist_test.py` (CI): the stored bytes equal json.dumps of the list after key redaction, read back by get_blob and the chunked reader, small lists stored as text as before, a list that cannot be encoded keeps the stored copy, a 38 MB list peaks at 4 MB.
+
 ## [1.26.238] - 2026-10-30
 
 ### Added
