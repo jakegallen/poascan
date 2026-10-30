@@ -39,7 +39,7 @@
      "changed": "A 503 halt on the join challenge stops the agent with: Joins are paused. Check back later. No mining or retry.",
      "why": "minepoa halted /api/join-pow (503, API hardening) on Oct 30.",
      "template_sha256": "7a2a6016cf249a35f7b837d0df26c83c6e051cb9c8213be357efb8d167129846", "hash": "published"},
-    {"version": "v2.9.3", "released": "2026-10-30T23:24:00Z", "release": "1.26.243", "commit": "",
+    {"version": "v2.9.3", "released": "2026-10-30T23:24:00Z", "release": "1.26.243", "commit": "4be31da",
      "changed": "The key goes only in an X-Api-Key header, never in a link, and is never shown in the chat. The backup is a file. The grading guide link is gone.",
      "why": "Join with Anything v1.0 key rules: no key in a URL, never echo the key.",
      "template_sha256": "cce915f1e6d8ee7897ce20df83a9164f2f1c521c5d3a39c5e942b948f39a23af", "hash": "published"}
