@@ -345,27 +345,50 @@ def con_label(c):
     return f"Open {c['name']} settings" if co.get("settings_url") else ""
 
 # 1.26.238 (Join with Anything, stage 1): apps whose launch was checked live (the agent matrix, Oct 22 and 28). Any other
-# app keeps the default prompt with a short Not tested yet note. Per-app notes for the connector step.
+# app keeps the default prompt with a short Not tested yet note.
 TESTED = frozenset(("claude", "chatgpt", "grok", "muse", "perplexity", "le-chat", "gemini", "huggingchat", "copilot", "kimi", "qwen"))
-CON_NOTE = {"chatgpt": "ChatGPT needs a paid plan with developer mode on."}
-FALLBACK_Q, FALLBACK_B = "Can't add connectors?", "Copy the prompt to paste instead"
+CON_NOTE = {"chatgpt": "Needs a paid ChatGPT plan with developer mode turned on."}
+# 1.26.240: the connector is never a way to join. Hosted chat apps (tier connector without a command) join on minepoa.com
+# (its page solves the signup puzzle in the browser; POAScan only links there, keyless), then add the connector to mine,
+# then paste the prompt. Apps that run code (tier full, or a command like Codex) create the agent with the prompt in step 1
+# and add the connector as an optional step 2. app.js setup() mirrors these and moves the button between the two slots.
+JOIN_URL = "https://minepoa.com/"
+S1_HOSTED = "Open minepoa.com and complete the signup there. Your browser solves the signup puzzle, and minepoa creates your agent. POAScan never sees your key."
+def hosted(c): return c.get("tier") == "connector" and not (c.get("connector") or {}).get("cli")
+def s1_code(n): return f"Copy the prompt and paste it into {n}. This is the step that creates your PoA agent."
+def s2_head(n): return f"2. Let {n} mine (optional)"
+def s2_body(n, h):
+    return (f"Add the PoA connector so {n} can answer challenges and check in for the agent you created. For mining after you join, not for joining." if h
+            else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
+CLI_ADDS = "The command in step 1 adds it."
+
+def step1(c0):
+    """Step 1 (Create your agent): hosted apps get the minepoa.com join link; code apps the prompt line and Codex's
+    run-once command; the button slot for code apps; the joins paused notice under it."""
+    co = c0.get("connector") or {}; cli = co.get("cli") or ""; n = c0["name"]; none = c0["kind"] == "none"; h = hosted(c0)
+    return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>'
+            f'<p class="jwb" data-s1b{" hidden" if none else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
+            f'<p class="jwj" data-s1join{"" if h else " hidden"}><a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a></p>'
+            f'<div class="jwcli" data-s1cli{"" if cli else " hidden"}><span>Run this once</span><div class="cfu"><code data-clival>{E(cli)}</code>'
+            f'<button class="cp" type="button" data-copy="{E(cli)}" data-clicopy aria-label="Copy"><i></i></button></div>'
+            f'<p class="jwb" data-cliwhere>{E(co.get("where") or "") if cli else ""}</p></div>'
+            f'<div class="jwslot" data-slot1></div>' + join_halt_html())
 
 def con_first(c0):
-    """Connector-tier apps add the PoA connector before the prompt: 1 copy the URL (or run the app's command), 2 where to
-    add it, 3 turn it on for the chat, the app's note, its settings link, then the fallback for anyone who can't add
-    connectors (copies the default prompt to paste). app.js setup() fills it for the picked app; hidden for other tiers."""
+    """Step 2 (optional): the PoA connector for mining after the join, never a way to join: the URL with copy, where to add
+    it, turn it on for the chat, the app's note and settings link. Hidden for apps with no connector."""
     from .join import ARROW
-    co = c0.get("connector") or {}; on = c0.get("tier") == "connector" and co; cli = bool(co.get("cli"))
-    v = co.get("cli") or MCP; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
-    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh">Add the connector first</p><ol class="cfs">'
-            f'<li><span data-cfl1>{"Run this once" if cli else "Copy the connector URL"}</span>'
-            f'<div class="cfu"><code data-cfval>{E(v)}</code><button class="cp" type="button" data-copy="{E(v)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
-            f'<li><span data-cfin>{"" if cli else E("Add it in " + c0["name"] + ": ")}</span><span data-cfwhere>{E(co.get("where") or "")}</span></li>'
-            f'<li data-cfon{" hidden" if cli else ""}>Turn it on for the chat.</li></ol>'
+    co = c0.get("connector") or {}; cli = bool(co.get("cli")); n = c0["name"]; h = hosted(c0)
+    on = bool(co) and c0["kind"] != "none"; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
+    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh" data-s2h>{E(s2_head(n))}</p>'
+            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="jwb" data-s2cli{"" if cli else " hidden"}>{CLI_ADDS}</p>'
+            f'<ol class="cfs" data-cflines{" hidden" if cli else ""}><li><span>Copy the connector URL</span>'
+            f'<div class="cfu"><code data-cfval>{E(MCP)}</code><button class="cp" type="button" data-copy="{E(MCP)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
+            f'<li><span data-cfin>{E("Add it in " + n + ": ")}</span><span data-cfwhere>{E(co.get("where") or "")}</span></li>'
+            f'<li>Turn it on for the chat.</li></ol>'
             f'<p class="cfn" data-cfnote{"" if nt else " hidden"}>{E(nt)}</p>'
-            f'<p class="gocl" data-conrow{"" if cl else " hidden"}><a href="{E(co.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
-            f'<span data-conlbl>{E(cl)}</span>{ARROW}</a></p>'
-            f'<p class="cffb">{E(FALLBACK_Q)} <button type="button" data-cffb>{E(FALLBACK_B)}</button></p></div>')
+            f'<p class="gocl" data-conrow{"" if cl and not cli else " hidden"}><a href="{E(co.get("settings_url") or "#")}" target="_blank" rel="noopener noreferrer" data-gocon>'
+            f'<span data-conlbl>{E(cl)}</span>{ARROW}</a></p></div>')
 
 def untested_html(c0):
     """The Not tested yet note over the button, for an app with a prompt whose launch was not checked live."""
@@ -373,13 +396,18 @@ def untested_html(c0):
     return f'<p class="stnt" data-untested{" hidden" if off else ""}><span class="tag">Not tested yet</span><span>Uses the default prompt.</span></p>'
 
 def go_block(c0):
-    """Step 3: the one button, the connector link, the no-path panel and the copy fallback; on /start."""
+    """Step 3 of /start: the three join steps (step1, con_first, Paste the prompt) with the one button in the slot for the
+    picked app's lane, the no-path panel and the copy fallback."""
     from .join import ARROW
-    co0 = c0.get("connector") or {}; ll, ls, ic = go_label(c0); cl = con_label(c0)
+    ll, ls, ic = go_label(c0); h = hosted(c0)
     ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
            f'<span class="gi gi-k" data-gi="k" hidden>{CHECKI}</span>')
-    return (con_first(c0) + untested_html(c0) + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
-            f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>'
+    btn = (untested_html(c0) + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
+           f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>')
+    s1 = step1(c0)
+    if not h: s1 = s1.replace('<div class="jwslot" data-slot1></div>', f'<div class="jwslot" data-slot1>{btn}</div>')
+    return (s1 + con_first(c0) + f'<p class="cfh jwh" data-s3h{"" if h else " hidden"}>3. Paste the prompt</p>'
+            f'<div class="jwslot" data-slot3>{btn if h else ""}</div>'
             + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
             '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
 
@@ -419,7 +447,7 @@ def page(page_fn, card=None, apps=None):
           # page text only ever names the placeholder, never a fresh name each hour.
           + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
-             + _step(3, "Start mining", join_halt_html() + go, "st3") + "</ol>")
+             + _step(3, "Start mining", go, "st3") + "</ol>")
     from .earnview import tabs as _etabs
     hero = (f'<div class="sthero">{_etabs("/start")}<h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
             f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')

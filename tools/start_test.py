@@ -361,7 +361,7 @@ try:
           and re.search(r'value="Claude" data-kind="auto" data-tier="connector"[^>]* checked>', m) and m.count(" checked>") == 1)
     check("/start: everything else behind the single More (other chats, 8 connectors, 7 commands)", m.count("data-more") == 1 and ">More<" in m
           and len(allr) == len(CR.CLIENTS) + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
-    check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); the connector step (1.26.236) sits before it, no numbers",
+    check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); Claude (hosted, 1.26.240): step 2 the connector, then step 3 the button",
           len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-cfirst") < m.index("data-conrow") < m.index("data-gorow") and "gocrow" not in m and 'class="gon"' not in m
           and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em><span class="gi gi-a" data-gi="a">' in m
           and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=PoA&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Open Claude settings</span><svg' in m)

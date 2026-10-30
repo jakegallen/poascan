@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.240] - 2026-10-30
+
+### Changed
+- /start never presents the connector as a way to join. Hosted chat apps (Claude, ChatGPT, Grok, Perplexity Pro, Le Chat, Gemini, HuggingChat): 1 Create your agent on minepoa.com (its page solves the signup puzzle in your browser; POAScan only links there and never sees a key), 2 Let the app mine (optional), the connector for mining after you join, 3 Paste the prompt. Apps that run code (Codex, Cursor, Grok Bot): 1 Create your agent with the prompt (Codex keeps its run-once command there), 2 the connector (optional).
+- ChatGPT's note reads: Needs a paid ChatGPT plan with developer mode turned on.
+- The joins paused notice sits under step 1. Copy prompt stays enabled.
+
+### Removed
+- The "Can't add connectors? Copy the prompt to paste instead" fallback.
+
 ## [1.26.239] - 2026-10-30
 
 ### Changed
