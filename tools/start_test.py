@@ -22,7 +22,7 @@ check("template: one {NAME} slot inside the register POST body (v2.9), identical
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.9" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.9.1" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
       and "read /api/hosted/me with the key in an X-Api-Key header." in OP.TEMPLATE and "Elsewhere use key= as below, or go.md's token=AUTH_TOKEN." in OP.TEMPLATE
       and "Authorization" not in OP.TEMPLATE and "retry that call once with key= as shown" in OP.TEMPLATE
       and "skill.md" not in OP.TEMPLATE and "go.md twice" not in OP.TEMPLATE and not hasattr(OP, "REG_STEP")
@@ -256,7 +256,7 @@ check("v2.9: api_join carries the join shape (GET join-pow, POST register body w
       and _js9["register"]["body"] == '{"label":"test-agent-7","pow":{"challenge":"CHALLENGE","nonce":"NONCE"}}' and _js9["rejected"]["status"] == 403 and _js9["connector_join"] is False
       and ac["join"]["register"]["body"].startswith('{"label":"test-agent-7"') and S.data()["join"]["register"]["body"].startswith('{"label":"YOUR_NAME"'))
 check("joinpow 1026: join.pow matches minepoa's live /api/join-pow (single_use, required; nonce a string of at most 64 chars; UTF-8; bits read per challenge, never a fixed number)",
-      _js9["pow"]["returns"] == ["challenge", "bits", "expires_ts", "single_use", "required", "algo"] and "at most 64 characters" in _js9["pow"]["rule"] and "UTF-8" in _js9["pow"]["rule"]
+      _js9["pow"]["returns"] == ["challenge", "kind", "bits", "expires_ts", "single_use", "required", "algo"] and "pow" in _js9["pow"]["kind_rule"] and "at most 64 characters" in _js9["pow"]["rule"] and "UTF-8" in _js9["pow"]["rule"]
       and "bits" in _js9["pow"]["bits_source"] and not any(ch.isdigit() for ch in _js9["pow"]["bits_source"].split("(")[0]) and not any(c in str(_js9) for c in "\u2013\u2014"))
 check("api_join(client=): tagged variant text, tier, connector with the MCP URL, prefill and link length; no-path gives the panel and no text",
       ac["text"] == S.client_prompt("test-agent-7", "claude") and ac["variant"] == "connector" and ac["tier"] == "connector" and ac["connector"]["url"] == "https://minepoa.com/mcp"
@@ -454,13 +454,13 @@ try:
     full_t = unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, nm0)
     check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.9" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
+          and api_y["version"] == api_n["version"] == "v2.9.1" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
     check("byte-identical: /start View prompt (Claude, connector variant) tagged for claude == API ?client=claude for the same name",
           pre == S.prompt("YOUR_NAME", "connector") and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
           and api_c["sha256"] == sha(api_c["text"]) and api_c["notice"] == NOTICE)
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.9</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.9.1</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.5: the API, MCP and llms.txt serve text with no check-in URL at all",
@@ -562,9 +562,9 @@ try:
     j0 = json.loads(raw0); txt0 = j0["text"]
     check(f"v2.7 hash: stable, the rule's SHA-256 of the no-name no-client text (UTF-8, LF only, no BOM, no trailing newline) {TS[:16]}",
           re.fullmatch(r"[0-9a-f]{64}", TS) and TS == S.template_sha256() == S.variant_sha256("full") == hashlib.sha256(S.PROMPT.encode("utf-8")).hexdigest()
-          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.9")
+          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.9.1")
     check("v2.7 hash: recomputing from the served API text matches (bytes of .text, as jq -j prints them)",
-          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.9"
+          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.9.1"
           and j0["hash_rule"] == S.HASH_RULE and j0["verify"] == S.VERIFY)
     jq = subprocess.run("jq -j .text | sha256sum", shell=True, input=raw0, capture_output=True)
     check(f"v2.7 hash: the published one-line check reproduces it (jq -j .text | sha256sum on the API body) {jq.stdout[:16]!r}", jq.returncode == 0 and jq.stdout.decode().split()[0] == TS
@@ -573,7 +573,7 @@ try:
     for cid in ("claude", "kimi", "cursor", "muse"):
         vs[cid] = json.loads(json.dumps(S.api_join(None, cid)))   # in process: the HTTP burst limit is spent by now
     check("v2.7 hash: every client response carries the same template_sha256 and its own variant_sha256, which recomputes from its text; no-path is null",
-          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.9" for v in vs.values())
+          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.9.1" for v in vs.values())
           and vs["claude"]["variant_sha256"] == hashlib.sha256(vs["claude"]["text"].encode()).hexdigest() == S.variant_sha256("connector") != TS
           and vs["kimi"]["variant_sha256"] is None and vs["kimi"]["text"] is None
           and vs["cursor"]["variant_sha256"] == TS and vs["muse"]["variant_sha256"] is None)
@@ -583,11 +583,11 @@ try:
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
     from poascan import combined as _CB; _c = _CB.SHA256   # 1.26.74: the combined prompt button sits between the template button and Verify
     _cb = (f'<button type="button" data-phash="{_c}" title="Combined prompt sha256 {_c}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{_c[:12]}</code></span></button>') if _c else ""
-    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
+    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9.1</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
     sm = sp[sp.index("<main"):sp.index("</main>")]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, /about",
-          ms["prompt_version"] == "v2.9" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
-          and all(("Prompt version: v2.9\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
+          ms["prompt_version"] == "v2.9.1" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
+          and all(("Prompt version: v2.9.1\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
           and sm.count(pl) == 1 and sm.index("data-pnote") < sm.index('class="phash"') < sm.index("data-stview")
           and 'id="prompt-hash"' in ab and TS in ab and "jq -j .text | sha256sum" in ab and not any(c in pl + ab for c in "\u2014\u2013"))
     oa = json.loads(req("/openapi.json")[2])["components"]["schemas"]["JoinPrompt"]["properties"]

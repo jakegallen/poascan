@@ -661,6 +661,9 @@ def job_hourly_retry(now=None):
             d = fetch(path, cond=True); n += 1
             if d is not NOT_MODIFIED:
                 db.put_blob(kind, d)
+                if kind == "release":   # 1.26.226: a retried release read reaches the Protocol timeline now, not an hour later
+                    try: __import__("poascan.protocol", fromlist=["x"]).sync_releases()
+                    except Exception as e: log.warning("protocol sync: %s", type(e).__name__)
                 if kind == "params":
                     try: __import__("poascan.intake", fromlist=["x"]).note_params(d)
                     except Exception as e: log.warning("propl note: %s", type(e).__name__)
@@ -1104,7 +1107,8 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("epochs", job_epochs, 300, "/api/epochs"),
     ("agents", job_agents, 900, "/api/agents"),
     ("hourly", job_hourly_meta, 3600, None),
-    ("hourly_retry", job_hourly_retry, 300, None),   # health-fix 1026: a failed hourly read retried after its backoff
+    ("hourly_retry", job_hourly_retry, 300, None),
+    ("release_nudge", lambda: __import__("poascan.protocol", fromlist=["x"]).release_nudge(), 300, None),   # 1.26.226: an indexed G0 release tx not yet in /api/release triggers one early read   # health-fix 1026: a failed hourly read retried after its backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each

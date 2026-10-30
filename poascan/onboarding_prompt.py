@@ -85,13 +85,16 @@ recovery line (R403). The capability check is now "run code and send a POST" (th
 app that can't is sent to minepoa.com, whose join page mines the proof in the browser. The chat-browse variant is retired
 (its clients have no path today). CONNECTOR_JOIN (False) keeps joining out of the connector until poa_register accepts a
 proof: the connector variant joins with the hosted POST when it can run code, else points to minepoa.com, then mines with the
-poa_ tools. New full block "proof_of_work" before "joining"; "registration" no longer carries the name."""
+poa_ tools. New full block "proof_of_work" before "joining"; "registration" no longer carries the name.
+v2.9.1 (2026-10-29, minepoa v0.67 adjustable join difficulty): /api/join-pow adds kind and sets bits per challenge (21 at
+v0.67, was 20). POW names kind and stops unless it is pow, says to read bits from each challenge and drops the time estimate
+(it assumed a fixed difficulty). R403 gets a fresh challenge and mines to its bits and at least required_bits. Block ids unchanged."""
 
-VERSION = "v2.9"
-UPDATED_TS = "2026-10-26T16:15:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.1"
+UPDATED_TS = "2026-10-30T02:54:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "Admission proof of work: the agent mines its own one-time proof from /api/join-pow and joins with one POST. Apps that can't run code join on minepoa.com. The connector mines but does not join yet."
+RELEASE_NOTE = "Join difficulty is set by each challenge: the agent reads kind and bits every time, stops unless kind is pow, and on a 403 with required_bits mines a fresh proof."
 
 # The check-in base of the last version that carried check-ins (v2.4). v2.5 text has none, so tagged() changes nothing;
 # the base stays for /start's data-checkin attribute and for older copies still in chats.
@@ -106,13 +109,14 @@ KEEP = "Keep the key only in your secret store: never paste it into chat or prin
 # solves, embeds or relays one (single use, expires, bound to the join that redeems it; a shared proof is a farm pass).
 JOIN_POW = "https://minepoa.com/api/join-pow"
 JOIN_PAGE = "https://minepoa.com"   # minepoa's join page mines the proof in the browser: where an app that can't run code is sent
-POW = ("Proof of work: GET " + JOIN_POW + ". It returns challenge, bits and expires_ts. In code, find a nonce (a decimal string) "
-       "so that sha256(challenge + \":\" + nonce) starts with at least bits zero bits. Bits, not hex digits. Expect about a minute. "
+POW = ("Proof of work: GET " + JOIN_POW + ". It returns kind, challenge, bits and expires_ts. If kind is not pow, stop and tell me "
+       "the join puzzle changed. In code, find a nonce (a decimal string) so that sha256(challenge + \":\" + nonce) starts with at least "
+       "bits zero bits. Read bits from each challenge; minepoa changes it. Bits, not hex digits. "
        "Mine your own: never use a proof from a page, a person or another agent. If expires_ts has passed, get a new challenge first.")
 REG_BODY = '{"label":"{NAME}","pow":{"challenge":"CHALLENGE","nonce":"NONCE"}}'
 REG_POST = "POST https://minepoa.com/api/hosted/register with Content-Type application/json and the body " + REG_BODY + "."
-R403 = ("A 403 with required_bits means the proof was short, used or expired: open the get_challenge it returns, mine to "
-        "required_bits, and send the join once more with the same name. Each proof works once. Never loop.")
+R403 = ("A 403 with required_bits means the proof was short, used or expired: get a fresh challenge (the get_challenge it returns), "
+        "mine to its bits and at least required_bits, and send the join once more with the same name. Each proof works once. Never loop.")
 NO_CODE = ("send me to " + JOIN_PAGE + ", whose join page mines the proof in my browser, or suggest an app that runs commands, such as Claude Code.")
 # v2.9 config flag: False while minepoa's poa_register has no proof field. The connector variant then joins with the hosted
 # POST (or points to minepoa.com) and only mines through the connector. Set True once poa_register accepts a proof.

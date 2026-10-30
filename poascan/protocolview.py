@@ -60,13 +60,18 @@ def unverifiable_tag(): return flag("Unverifiable", PT.UNVERIFIABLE_TIP)
 def _rel_cell(r):
     if r["kind"] == "release":
         v = E(r["release_version"] or ""); tag = " " + unverifiable_tag() if r.get("server_only") else ""
-        return (f'<a class="mono" href="/tx/{E(r["release_txid"])}">{v}</a>' if r.get("release_txid") else f'<span class="mono">{v}</span>') + tag
+        tt = f' title="{E(r["note"])}"' if r.get("note") else ""
+        return (f'<a class="mono" href="/tx/{E(r["release_txid"])}"{tt}>{v}</a>' if r.get("release_txid") else f'<span class="mono">{v}</span>') + tag
     if r["kind"] in ("source_change", "baseline"):
         return f'<span class="mono">{E(r["matches_release"])}</span>' if r.get("matches_release") else '<span class="tag warn">Unreleased</span>'
     return '<span class="dim">···</span>'
 
 def _note(r):
-    if r["kind"] == "release": return E((r.get("changelog_ref") or "")[:120])
+    if r["kind"] == "release":
+        if r.get("note"):
+            tip = r["note"] + (" · " + r["changelog_ref"] if r.get("changelog_ref") else "")
+            return f'<span title="{E(tip)}">{E(PT.SHORT.get(r["release_version"], r["note"]))}</span>'
+        return E((r.get("changelog_ref") or "")[:120])
     if r["kind"] == "params_change":
         ks = r.get("changed_keys") or []; bd = r.get("boundaries") or {}
         txt = E(", ".join(ks[:6]) + (f" and {len(ks) - 6} more" if len(ks) > 6 else ""))

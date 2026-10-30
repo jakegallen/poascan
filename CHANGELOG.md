@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.226] - 2026-10-29
+
+### Changed
+- Join prompt v2.9.1 (template sha256 410e5ee6, was f577df50 at v2.9). minepoa v0.67 made join difficulty adjustable: `/api/join-pow` now returns `kind` (pow) and sets `bits` per challenge (21, was 20). The prompt reads `kind` and stops unless it is pow, reads `bits` from each challenge, and drops the "about a minute" estimate, which assumed a fixed difficulty. A 403 with `required_bits` gets a fresh challenge and a new proof. Same wording on `/start`, the connector variant, the combined prompt slot, llms.txt, the API and MCP. Block ids unchanged. History entry in `/api/v1/prompts/join/history`.
+- `/start` step 1 and the join shape: `kind` in `pow.returns`, a new `pow.kind_rule`, and the 403 rule fetches a fresh challenge.
+
+### Fixed
+- Protocol timeline: a new signed release waited for the hourly `/api/release` read (v0.68-surge, signed 6:44 PM PT, appeared 7:12 PM PT). A G0 release tx in POAScan's tx index that the stored copy lacks now triggers one early read, at most every 10 minutes and only then. A retried hourly read now reaches the timeline too.
+- `tools/milestones_test.py` no longer fails as the calendar moves: the Oct 22 reopening left the 7 day chart range on Oct 29, so the test seeds 14 days and reads the 30d range.
+
+### Added
+- Protocol timeline notes for v0.67-joindiff (adjustable join difficulty, `kind`, `bits` per challenge, `required_bits` on a 403) and v0.68-surge (joins briefly halted under load). API rows carry `note`; `changelog_ref` shows on hover.
+
 ## [1.26.225] - 2026-10-29
 
 ### Changed

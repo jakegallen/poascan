@@ -119,7 +119,7 @@ STEPS = [
     # v2.9: joining is a proof of work the agent mines itself, then one POST; the name goes in the POST body (YOUR_NAME here),
     # so no link on the page registers anything. 1.26.86: key links carry no key slot; the note says the agent adds its own
     # saved key, so nothing reads as asking the visitor for one.
-    ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof, about a minute. Never one from a page or a person."),
+    ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof at the bits each challenge sets. Kind must be pow. Never one from a page or a person."),
     ("Register", f"{B}/api/hosted/register", 'One POST, JSON body {"label":"YOUR_NAME","pow":{"challenge":"...","nonce":"..."}}. Unique name. No invite code. Once.'),
     ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
     ("Read how grading works", f"{B}/lableak/#/a/work", ""),
@@ -142,12 +142,13 @@ SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any se
 def join_shape(name="YOUR_NAME"):
     """v2.9: how a join is made, for other sites (POASwap) and agents. POAScan never solves, embeds or relays a proof."""
     from . import onboarding_prompt as OP
-    return dict(pow=dict(method="GET", url=OP.JOIN_POW, returns=["challenge", "bits", "expires_ts", "single_use", "required", "algo"],
+    return dict(pow=dict(method="GET", url=OP.JOIN_POW, returns=["challenge", "kind", "bits", "expires_ts", "single_use", "required", "algo"],
                          rule='nonce: a string of at most 64 characters (a decimal counter works); sha256 of the UTF-8 bytes of challenge + ":" + nonce has at least bits leading zero bits',
-                         bits_source="read bits from each challenge: minepoa tunes it and quotes no fixed number (LabLeak comment 5600)"),
+                         bits_source="read bits from each challenge: minepoa sets it per challenge (v0.67) and quotes no fixed number",
+                         kind_rule="kind must be pow; any other kind: stop, do not mine or join"),
                 register=dict(method="POST", url="https://minepoa.com/api/hosted/register", content_type="application/json",
                               body=OP.REG_BODY.replace(OP.SLOT, name)),
-                rejected=dict(status=403, fields=["required_bits", "get_challenge"], rule="mine a fresh proof to required_bits and send the join once more; each proof works once"),
+                rejected=dict(status=403, fields=["required_bits", "get_challenge"], rule="get a fresh challenge, mine to its bits and at least required_bits, and send the join once more; each proof works once"),
                 connector_join=OP.CONNECTOR_JOIN, join_page=OP.JOIN_PAGE, get_register="retired in v2.9: the GET register link carries no proof",
                 note="POAScan never solves, embeds or relays a proof: each is single use, expires and is bound to the join that redeems it.")
 

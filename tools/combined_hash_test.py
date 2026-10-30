@@ -11,7 +11,7 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-TS = "f577df5001123c45113345b71da0d73cfda91e1aae852933a1e39551da8d9a2a"
+TS = "410e5ee62626a008f66bc4b0fae9f783d06453c25b9777aff8312a651dd63be8"
 tmp = tempfile.mkdtemp()
 def wr(name, data):
     p = os.path.join(tmp, name); open(p, "wb").write(data); return p
@@ -19,16 +19,16 @@ def wr(name, data):
 # ---- the slot and its rule, no server
 # 1.26.84: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical (1.26.76 text plus the line 14 offers cancel line).
 # v2.9 (release/prompt-v29): its join core is the v2.9 full template with the name slot filled as NAME (/api/v1/prompts/join?name=NAME),
-# sha256 0e9f1cc2, 6,030 characters; the head adds the pow to the join-connected line and a fresh proof to the name retry. POASwap must ship the same bytes.
-SHIPPED, SHIPPED_LEN = "249cf89ff110a9f0e3e84dc2cf54dadd80a9e76f52fb19a6fc3bbab50b486db9", 10145
-CORE = "0e9f1cc2d70d43e1dcb0fab804c9301ba5bfc66a22d5f7b9feb2379d25c3511a"
+# sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. POASwap must ship the same bytes.
+SHIPPED, SHIPPED_LEN = "f5d2b88f64e0f592128779ae1f269bf6f8db9fb0c937822783ac8044dbf98fd0", 10282
+CORE = "94776c87614b07a3d41c5831362f948ddc7504c1a2f7506ef1d028cd0bec1119"
 if os.path.exists(CB.SLOT):   # once POASwap's text lands, the shipped file must follow the rule
     t, h, err = CB.load(CB.SLOT); raw = open(CB.SLOT, "rb").read()
     check("shipped combined_prompt.txt follows the rule (UTF-8, LF only, no BOM, at most one trailing LF, not empty)", err is None and h is not None)
-    check("shipped slot is the v2.9 combined text byte for byte: 10,145 characters, no trailing newline, sha256 249cf89f", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
+    check("shipped slot is the v2.9.1 combined text byte for byte: 10,282 characters, no trailing newline, sha256 f5d2b88f", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
     core = S.prompt("NAME", "full")
-    check("shipped text ends with the v2.9 join core (full template, name slot NAME, 6,030 characters, sha256 0e9f1cc2), once; pow on the connected join",
-          t.endswith(core) and t.count(core) == 1 and len(core) == 6030 and hashlib.sha256(core.encode()).hexdigest() == CORE
+    check("shipped text ends with the v2.9.1 join core (full template, name slot NAME, 6,167 characters, sha256 94776c87), once; pow on the connected join",
+          t.endswith(core) and t.count(core) == 1 and len(core) == 6167 and hashlib.sha256(core.encode()).hexdigest() == CORE
           and 'POST /api/join-connected, its JSON body with a "pow" you mined as in the join part' in t and "register?label=" not in t)
     check("shipped text: no em or en dash", not any(c in t for c in "\u2014\u2013"))
 else:
@@ -41,7 +41,7 @@ check("one trailing LF is dropped; the hash is of the text without it", CB.load(
 for nm, data, why in (("crlf", TXT.replace("\n", "\r\n").encode(), "CR newline"), ("bom", ("\ufeff" + TXT).encode(), "BOM"), ("empty", b"\n", "empty"),
                       ("blank", b"  \n\n", "empty"), ("two", (TXT + "\n\n").encode(), "more than one trailing newline"), ("latin1", "caf\xe9".encode("latin-1"), "not UTF-8")):
     check(f"bad file ({nm}) publishes nothing: {why}", CB.load(wr(nm + ".txt", data)) == (None, None, why))
-check("join prompt template_sha256 unchanged (f577df50, v2.9)", S.template_sha256() == TS)
+check("join prompt template_sha256 unchanged (410e5ee6, v2.9.1)", S.template_sha256() == TS)
 check("Dockerfile ships the slot with poascan/ (COPY poascan/ poascan/)", "COPY poascan/ poascan/" in open(os.path.join(ROOT, "Dockerfile")).read())
 check("CI runs this test", "python tools/combined_hash_test.py" in open(os.path.join(ROOT, ".github", "workflows", "deploy.yml")).read())
 check("no em or en dash in the module or this test", not any(c in open(os.path.join(ROOT, f), encoding="utf-8").read() for f in ("poascan/combined.py", "tools/combined_hash_test.py") for c in "\u2014\u2013"))
@@ -80,7 +80,7 @@ def common(tag, d):
     check(f"{tag}: OpenAPI documents combined_sha256 on JoinPrompt and /api/v1/prompts/combined", "combined_sha256" in oa["components"]["schemas"]["JoinPrompt"]["properties"]
           and "/api/v1/prompts/combined" in oa["paths"] and "CombinedPrompt" in oa["components"]["schemas"])
     check(f"{tag}: /api/v1/prompts/combined 200, /api alias identical, any parameter 400", d["comb"][0] == 200 and d["alias"] == d["comb"] and d["bad"] == 400)
-    check(f"{tag}: join prompt unchanged on the API (f577df50)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
+    check(f"{tag}: join prompt unchanged on the API (410e5ee6)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
 
 p, base = serve({"POASCAN_COMBINED_PROMPT": os.path.join(tmp, "none.txt")})   # absent, even once the shipped slot exists
 try:
@@ -119,7 +119,7 @@ if os.path.exists(CB.SLOT):
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
-              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("e20eb29b"))
+              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("2ed4f9e0"))
     finally:
         p.terminate(); p.wait(10)
 sys.exit(1 if fails else 0)

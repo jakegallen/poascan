@@ -107,6 +107,46 @@ def release_for(sha, field, rel=None):
         if r.get(field) == sha or (field == "client_sha256" and not r.get(field) and r.get("engine_sha256") == sha): return r
     return None
 
+# ---------------------------------------------------------------- release notes (1.26.226)
+# POAScan's one-line read of a signed release, beside its changelog_ref. Only what the live endpoints confirm.
+# SHORT fits the timeline's Note cell; the full note is on hover and in the API.
+SHORT = {"v0.67-joindiff": "Adjustable join difficulty (bits 21, was 20).", "v0.68-surge": "Joins briefly halted under load."}
+NOTES = {
+    "v0.67-joindiff": "Join difficulty is adjustable. /api/join-pow adds kind (pow) and sets bits per challenge (21, was 20). "
+                      "A short proof gets a 403 with required_bits.",
+    "v0.68-surge": "Joins briefly halted under load, then served again.",
+}
+
+# ---------------------------------------------------------------- release nudge (1.26.226)
+# v0.68-surge (6:44 PM PT Oct 29) reached the timeline only at the next hourly /api/release read (7:12 PM PT). The signed
+# release tx is on the ledger and in POAScan's tx index within minutes, so a G0 release tx whose txid the stored
+# /api/release copy does not list triggers one early conditional read. No new polling: nothing is read unless such a
+# tx is indexed, and at most once per NUDGE_GAP_S.
+NUDGE_GAP_S = 600
+NUDGE_LOOKBACK_S = 2 * 86400
+
+def unknown_release_txs(rel=None, now=None):
+    """Indexed G0 release txids (last NUDGE_LOOKBACK_S) that the stored /api/release copy does not list."""
+    from . import signed as SGN
+    now = int(now or time.time())
+    rel = rel if rel is not None else (db.get_blob("release")[0] or {})
+    known = {r.get("txid") for r in [rel.get("current") or {}] + list(rel.get("history") or []) if isinstance(r, dict)}
+    rows = db.q("SELECT id FROM txs WHERE type='release' AND from_addr=? AND ts>=?", (SGN.TRUSTED_G0, now - NUDGE_LOOKBACK_S))
+    return [r["id"] for r in rows if r["id"] not in known]
+
+def release_nudge(now=None, fetch=None):
+    """One early /api/release read when an indexed G0 release tx is missing from the stored copy. Returns True on a read."""
+    from . import indexer as I
+    now = int(now or time.time()); path = "/api/release"
+    if not unknown_release_txs(None, now): return False
+    r = db.q1("SELECT MAX(COALESCE(last_ok, 0), COALESCE(last_err, 0)) AS t FROM fetch_log WHERE endpoint=?", (path,))
+    if r and r["t"] and now - r["t"] < NUDGE_GAP_S: return False
+    if fetch is None and not I.can_fetch(path): I.skip_backoff(path); return False
+    d = (fetch or (lambda: I.fetch(path, cond=True)))()
+    if d is not I.NOT_MODIFIED and isinstance(d, dict): db.put_blob("release", d)
+    _ensure(); sync_releases(None, now)
+    return True
+
 # ---------------------------------------------------------------- reads (bytes are hashed, never run or kept)
 class CheckError(Exception):
     def __init__(self, msg, retry=None):
@@ -294,7 +334,7 @@ def events(kind=None, limit=500):
         out.append(dict(id=r["id"], ts=r["ts"], first_seen=r["first_seen"], kind=r["kind"], file=FILE_NAMES.get(r["file"]) if r["file"] else None,
                         sha256_old=r["sha_old"], sha256_new=r["sha_new"], release_version=r["version"], release_txid=r["txid"],
                         matches_release=r["matches_release"], changed_keys=d.get("changed_keys"), boundaries=d.get("boundaries"),
-                        changelog_ref=d.get("changelog_ref"), changes=d.get("changes"), detail=d))
+                        changelog_ref=d.get("changelog_ref"), note=NOTES.get(r["version"]) if r["kind"] == "release" else None, changes=d.get("changes"), detail=d))
     return out
 
 # ---------------------------------------------------------------- server-only releases
@@ -331,7 +371,8 @@ def api(kind=None, limit=500):
                 files=[dict(file=FILE_NAMES[f], url=BASE + p, sha256=(m.get("files") or {}).get(f, {}).get("sha"), bytes=(m.get("files") or {}).get(f, {}).get("bytes"),
                             first_seen=(m.get("files") or {}).get(f, {}).get("first_seen"), last_ok=(m.get("files") or {}).get(f, {}).get("last_ok")) for f, p, _ in FILES],
                 current=state(), kind=kind, total=len(rows), rows=rows,
-                note="Hourly: conditional GET of both client files (HEAD plus a full GET every 6 h when the host sends no validator); bytes are hashed, never run. "
+                note="Releases: /api/release hourly, and early when a G0 release tx is indexed that the stored copy lacks. note: POAScan's one-line read of a release. "
+                     "Hourly: conditional GET of both client files (HEAD plus a full GET every 6 h when the host sends no validator); bytes are hashed, never run. "
                      "matches_release names the G0 signed release whose client_sha256 or web_client_sha256 equals the hash. "
                      "server_only (release rows): its client_sha256 and web_client_sha256 equal the previous signed release's, so only server, worker or params hashes moved; "
                      "none of those names a public file, so verifiable is false.",

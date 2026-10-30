@@ -39,7 +39,7 @@ try:
         check(f"{p}: banner first in body, above the header, exact text and link, no dismiss", ok)
     home = get("/"); check("home: no Upgrading strip; the header status shows Upgrading", 'class="upstrip' not in home and '<summary class="pill up" aria-label="Status: Upgrading">' in home)
     import json
-    j = json.loads(get("/api/v1/prompts/join")); check("join prompt unchanged (f577df50, v2.9)", j.get("template_sha256", "").startswith("f577df50"))
+    j = json.loads(get("/api/v1/prompts/join")); check("join prompt unchanged (410e5ee6, v2.9.1)", j.get("template_sha256", "").startswith("410e5ee6"))
 finally:
     srv.terminate(); srv.wait(10)
 sys.exit(1 if fails else 0)

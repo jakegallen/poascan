@@ -147,12 +147,12 @@ for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 
 
 # ---------------- Supply chart and Milestones table ----------------
 s = 1.0e9
-for t in range(now - 8 * 86400, now, 900):
+for t in range(now - 14 * 86400, now, 900):   # 1.26.226: 14 days and the 30d range, so the Oct 22 reopening stays in range as the calendar moves
     s += 0 if 1792609251 <= t < 1792708521 else 9000
     db.add_snap("status", {"agents_joined": 3000, "holders": 900, "supply": s, "txs": 5}, t)
 db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply') IS NULL OR json_extract(json,'$.supply') < 1e8)")
 from poascan import views3 as V3
-h = V3.charts_body("7d")
+h = V3.charts_body("30d")
 sup = h[h.find(">Supply<"):h.find(">Txs")]
 check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
 check("Supply has no table-only markers (route reads, checkpoint)", ">Checkpoint 33,463<" not in sup and "responding<" not in sup)
