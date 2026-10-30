@@ -107,6 +107,8 @@ jobs:
         run: python tools/closestore_test.py
       - name: Boot passes read the close records in chunks (key scrub, regroup check)
         run: python tools/bootpeak_test.py
+      - name: Large writes leave no bound copy behind
+        run: python tools/bigwrite_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
         run: python tools/pagecost_test.py
       - name: Audit fixes (input clamps, on-demand budgets and negative cache, swap finality and expiry, gzip and ETag, privacy copy)

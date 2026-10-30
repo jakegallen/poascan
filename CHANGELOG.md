@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.237] - 2026-10-30
+
+### Fixed
+- Memory stepped up after every close and stayed up. SQLite keeps a statement's bound values until that statement runs again, and the sqlite3 module caches statements per connection, so the thread that stored the close record list (80 MB) kept a copy of it bound in its INSERT for good. A write with a value over 1 MB now goes through a connection closed right after. Box sim of four closes: +86 MB after the first and +8 MB after each next, now +6 MB and then under 1 MB.
+
+### Added
+- `tools/bigwrite_test.py` (CI): 60 MB and 50 MB writes leave 1 to 2 MB behind (the old code left 59 and 32), rows and transactions stored and rolled back as before.
+
 ## [1.26.236] - 2026-10-30
 
 ### Changed

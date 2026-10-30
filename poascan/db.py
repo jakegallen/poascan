@@ -251,26 +251,49 @@ def _clean(a):
 
 GEN = [0]   # bumped on every write; short read memos (maint.grading_state) key on it so a write is seen at once
 
+BIG_ARG = 1 << 20
+
+def _has_big(args, many):
+    rows = args if many else (args,)
+    return any(isinstance(v, (str, bytes)) and len(v) > BIG_ARG for r in rows for v in (r if isinstance(r, (list, tuple)) else ()))
+
+def _big_conn():
+    """A connection for one write with a large value, closed right after (1.26.237). SQLite keeps a statement's bound
+    values until that statement runs again, and the sqlite3 module caches statements per connection: a thread that
+    once stored the close record list (80 MB) kept a copy of it bound in its INSERT for good, about 80 MB of RSS per
+    writer thread after every close."""
+    c = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    c.execute("PRAGMA synchronous=NORMAL")
+    return c
+
 def write(sql, args=(), many=False):
     args = [_clean(r) for r in args] if many else _clean(args)
+    big = _has_big(args, many)
     with _wlock:
-        GEN[0] += 1; c = conn()
-        if many: c.executemany(sql, args)
-        else: c.execute(sql, args)
-        c.commit()
+        GEN[0] += 1; c = _big_conn() if big else conn()
+        try:
+            if many: c.executemany(sql, args)
+            else: c.execute(sql, args)
+            c.commit()
+        finally:
+            if big: c.close()
 
 def write_tx(stmts):
     """Several statements in one transaction under the write lock: [(sql, args, many), ...]."""
+    stmts = [(sql, [_clean(r) for r in args] if many else _clean(args), many) for sql, args, many in stmts]
+    big = any(_has_big(args, many) for _, args, many in stmts)
     with _wlock:
-        GEN[0] += 1; c = conn()
+        GEN[0] += 1; c = _big_conn() if big else conn()
         try:
             for sql, args, many in stmts:
                 if many:
-                    if args: c.executemany(sql, [_clean(r) for r in args])
-                else: c.execute(sql, _clean(args))
+                    if args: c.executemany(sql, args)
+                else: c.execute(sql, args)
             c.commit()
         except Exception:
             c.rollback(); raise
+        finally:
+            if big: c.close()
 
 def q(sql, args=()):
     return [dict(r) for r in conn().execute(sql, args).fetchall()]
