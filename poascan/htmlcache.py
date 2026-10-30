@@ -5,7 +5,7 @@ heaviest pages are re-rendered in the background before they expire, so no visit
 by MAX_BYTES. Key: path, query, chain segment and whether the viewer is a crawler (a crawler's render never waits on an
 upstream read, so it is kept apart). Off when the indexer is off (tests seed data and read pages in the same second),
 unless POASCAN_HTML_CACHE=1."""
-import os, re, threading, time, logging
+import os, re, sys, threading, time, logging
 
 log = logging.getLogger("poascan.htmlcache")
 ENABLED = os.environ.get("POASCAN_HTML_CACHE", "0" if os.environ.get("POASCAN_INDEXER") == "0" else "1") == "1"
@@ -49,16 +49,22 @@ def get(k, t, now=None):
         if e and now - e[0] < t: stats["hit"] += 1; return e[1]
     return None
 
+def size(html):
+    """Memory a page holds (1.26.234): sys.getsizeof, not len. A page with one character past U+00FF (an arrow, a
+    middle dot past Latin-1, an emoji) stores every character in 2 or 4 bytes, so len() counted half or a quarter of
+    it and the 24 MB cap held about 48 MB (pages here run 2 bytes a character)."""
+    return sys.getsizeof(html)
+
 def put(k, html, now=None):
     if not isinstance(html, str): return
-    n = len(html)
+    n = size(html)
     if n > MAX_BYTES // 8: return
     with _lock:
         old = _c.pop(k, None)
-        if old: _bytes[0] -= len(old[1])
-        _c[k] = (now or time.time(), html); _bytes[0] += n
+        if old: _bytes[0] -= old[2]
+        _c[k] = (now or time.time(), html, n); _bytes[0] += n   # insertion order is age order: a put moves its key to the end
         while _bytes[0] > MAX_BYTES and _c:
-            k0 = min(_c, key=lambda x: _c[x][0]); _bytes[0] -= len(_c.pop(k0)[1]); stats["evict"] += 1
+            k0 = next(iter(_c)); _bytes[0] -= _c.pop(k0)[2]; stats["evict"] += 1   # the oldest copy (was an O(n) min scan per eviction)
 
 def render(k, t, fn):
     """The cached page for k, or fn() rendered once (concurrent callers for the same key wait for that render)."""

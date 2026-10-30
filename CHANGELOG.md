@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.234] - 2026-10-30
+
+### Fixed
+- Memory growth after each start (prod reached 675 MB by 5 AM and the VM throttled). Not a leak: caches that fill with traffic held more than their caps said, and the glibc heap fragmented.
+  - The page cache counted characters, but every page keeps 2 bytes a character (one arrow is enough), so its 24 MB cap held about 48 MB. It now counts the memory a page holds (`sys.getsizeof`) and evicts the oldest copy without scanning every entry.
+  - The fast index address cache kept 500 copies of up to 100 history rows each (about 60 MB) long after the 60 s they can be served. Expired copies now go on the next insert, at most 200.
+  - The minepoa.com address cache kept up to 2000 copies older than 30 min, which it never serves. They are swept once a minute; at most 1000.
+  - Share cards: at most 120 cached (was 300, about 50 KB each).
+  - `MALLOC_MMAP_THRESHOLD_` and `MALLOC_TRIM_THRESHOLD_` fixed at 128 KB on Fly and in the image. glibc raised the mmap threshold after each large free, so page text and JSON reads up to 32 MB landed in the heap and left holes. Same request mix on a local copy: 30 to 50 MB lower, free space held in the heap 8 to 24 MB instead of 41 to 75 MB.
+
+### Added
+- `/ops/memory` (private, ops token in the Authorization header): RSS, glibc heap (arena, in use, free, mmap), Python block count, gc counters and cache sizes. Cheap reads only.
+- `tools/memcaps_test.py`.
+
 ## [1.26.233] - 2026-10-30
 
 ### Changed

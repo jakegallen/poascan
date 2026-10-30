@@ -11,6 +11,8 @@ kill_timeout = 10
   PORT = "8080"
   POASCAN_DB = "/data/poascan.db"
   MALLOC_ARENA_MAX = "2"   # fewer glibc arenas: request threads stop fragmenting memory into per-thread pools
+  MALLOC_MMAP_THRESHOLD_ = "131072"   # 1.26.234: a fixed threshold; glibc raised it after each big free, so 128 KB to 32 MB blocks (page text, JSON reads) landed in the heap and fragmented it
+  MALLOC_TRIM_THRESHOLD_ = "131072"   # 1.26.234: hand free heap tops back sooner (the guard also trims every 60 s)
 
 [[mounts]]
   source = "poascan_data"

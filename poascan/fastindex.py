@@ -359,18 +359,23 @@ def tx_detail(tid, visitor=True):
     return d
 
 _addr_cache = collections.OrderedDict()
+ADDR_CACHE_S, ADDR_CACHE_MAX = 60, 200   # 1.26.234: max 500 -> 200, and copies past ADDR_CACHE_S are dropped (never served again)
 def address(a, visitor=True):
     """The index's address view (balance, external links, the last 100 txs), cached 60 s; None when unavailable."""
     if not enabled() or not ADDR.match(a or ""): return None
     hit = _addr_cache.get(a)
-    if hit and time.time() - hit[0] < 60: return hit[1]
+    if hit and time.time() - hit[0] < ADDR_CACHE_S: return hit[1]
     try: d = _get("address?q=" + a, "address", visitor=visitor)
     except Unavailable: return None
     row = (d.get("rows") or [None])[0]
     out = dict(balance=(row or {}).get("balance"), tx_count=_int((row or {}).get("tx_count")), history=[h for h in d.get("history") or [] if isinstance(h, dict)],
                as_of=_state().get("newest_tx_ts")) if row else None
-    _addr_cache[a] = (time.time(), out)
-    while len(_addr_cache) > 500: _addr_cache.popitem(last=False)
+    now = time.time(); _addr_cache.pop(a, None); _addr_cache[a] = (now, out)   # re-inserted at the end: the dict stays oldest first
+    # 1.26.234: each copy holds up to 100 history rows. They used to stay until 500 had piled up (about 17 min of prod's
+    # distinct lookups), long after the 60 s they can be served; now the expired head goes on every insert.
+    try:
+        while _addr_cache and (len(_addr_cache) > ADDR_CACHE_MAX or now - next(iter(_addr_cache.values()))[0] >= ADDR_CACHE_S): _addr_cache.popitem(last=False)
+    except (RuntimeError, KeyError): pass   # another request changed it at the same moment: the next insert sweeps
     if out and out["history"]:
         st = _state(); seg = st.get("segment") or segment_for(st.get("chain"))
         if seg: _store_rows(out["history"], seg)

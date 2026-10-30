@@ -14,7 +14,7 @@ FONTS = os.path.join(os.path.dirname(HERE), "..", "static", "fonts")
 W, H = 1200, 630
 # style.css tokens: --ink-1, --bone-hi, --bone-2, --bone-3, --gold, --verd, --rule, --rule-2
 BG, HI, DIM, MUTE, AMBER, GREEN, RULE, RULE2 = (16, 14, 10), (246, 240, 226), (185, 175, 153), (140, 131, 111), (255, 176, 0), (79, 197, 154), (39, 34, 25), (58, 51, 37)
-_LOCK = threading.Lock(); _RENDER = threading.Lock(); _CACHE = collections.OrderedDict(); _MAX = 300
+_LOCK = threading.Lock(); _RENDER = threading.Lock(); _CACHE = collections.OrderedDict(); _MAX = 120   # 1.26.234: 300 -> 120 (a card is about 50 KB; crawlers ask for a new tx card every few seconds)
 _F = {}
 # Crawlers can ask for thousands of distinct previews at once. Renders draw from a small token bucket (a burst of 6, then one every
 # 5 s); a miss with no token gets the generic card for 5 minutes, uncached here, so CPU on the shared machine stays flat.

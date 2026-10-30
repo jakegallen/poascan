@@ -433,8 +433,16 @@ ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 # background refresh runs. One upstream call per address at a time; the cache is bounded. An address the node knows
 # nothing about (zero balance, no txs) stays fresh for ADDR_EMPTY_TTL s, so made-up addresses cost one read per 10 min.
 # Every read goes through indexer.fetch_ondemand (format check, negative cache, per-client and global budget).
-ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 300, 1800, 2000, 600   # 1.26.202: 60 -> 300 s (API polling drove ~156 lookups an hour)
+ADDR_TTL, ADDR_STALE, ADDR_MAX, ADDR_EMPTY_TTL = 300, 1800, 1000, 600   # 1.26.202: 60 -> 300 s (API polling drove ~156 lookups an hour); 1.26.234: max 2000 -> 1000
 _addr_cache, _addr_inflight, _addr_lock = {}, {}, threading.Lock()
+_addr_swept = [0.0]
+def _addr_sweep(now):
+    """1.26.234: drop copies read ADDR_STALE s ago or more (address_read never returns them), at most once a minute. They
+    used to stay until the cache passed ADDR_MAX, so a day of distinct lookups (prod: ~30 new addresses a minute) kept
+    2000 dead copies. Caller holds _addr_lock."""
+    if now - _addr_swept[0] < 60: return
+    _addr_swept[0] = now
+    for k in [k for k, v in _addr_cache.items() if now - v[2] >= ADDR_STALE]: _addr_cache.pop(k, None)
 
 def _addr_load_bg(a, crawler=None):
     """_addr_load on its own thread; the thread's SQLite connection is closed when it ends (1.26.227, see db.release)."""
@@ -448,6 +456,7 @@ def _addr_load(a, crawler=None):
         empty = isinstance(d, dict) and not d.get("txs") and float(d.get("balance") or 0) == 0
         with _addr_lock:
             now = time.time(); _addr_cache[a] = (now + (ADDR_EMPTY_TTL - ADDR_TTL if empty else 0), d, now)   # (freshness stamp, copy, read at)
+            _addr_sweep(now)
             if len(_addr_cache) > ADDR_MAX:
                 for k, _ in sorted(_addr_cache.items(), key=lambda kv: kv[1][0])[:len(_addr_cache) - ADDR_MAX]: _addr_cache.pop(k, None)
         if isinstance(d, dict): I.upsert_txs(d.get("txs", []), "explorer/address")

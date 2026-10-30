@@ -919,6 +919,17 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             log.error("ops internal: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
         return self.send(200, out, "application/json", hd)
+    def ops_memory(self, path, qs):
+        """Private process memory (poascan/memstats.py; gate: ops_gate): RSS, glibc heap, Python blocks, cache sizes. No query
+        parameters; cheap reads only, nothing walked or written, no upstream call."""
+        g = self.ops_gate(path, {}, lambda q: (None, None))
+        if not g: return
+        hd = g[0]
+        if qs: return self.send(400, json.dumps({"error": "no query parameters; send the token in the Authorization header"}), "application/json", hd)
+        try: out = json.dumps(__import__("poascan.memstats", fromlist=["x"]).report())
+        except Exception as e:
+            log.error("ops memory: %s", type(e).__name__); return self.send(500, json.dumps({"error": "internal"}), "application/json", hd)
+        return self.send(200, out, "application/json", hd)
     def ops_funnel(self, path, qs):
         """Private signup funnel by prompt version and client (poascan/checkin.py; gate: ops_gate). At most 31 days, default 7.
         Only from and to are accepted. From POAScan's own database: no upstream call."""
@@ -998,6 +1009,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/ops/internal": return self.ops_internal(path, qs)
         if path == "/ops/funnel": return self.ops_funnel(path, qs)
         if path == "/ops/dashboard": return self.ops_dashboard(path, u.query)
+        if path == "/ops/memory": return self.ops_memory(path, qs)
         try:
             if path == "/ws":
                 return HUB.accept(self)
