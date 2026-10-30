@@ -16,7 +16,7 @@ db.init()
 a = "poa1" + "x" * 40
 writes = [PR.answer_epoch(), PR.answer_epoch(3), PR.GRADE, PR.addr_send(a)]
 check("WATCH: /me before the first write, address and next_nonce, fail closed, stop on a moved nonce, critical notice stop",
-      all(s in PR.WATCH for s in ("Before your first write this visit", "/api/hosted/me?key=SAVED_KEY", "next_nonce", "No answer: don't write.",
+      all(s in PR.WATCH for s in ("Before your first write this visit", "https://minepoa.com/api/hosted/me:", "next_nonce", "No answer: don't write.",
                                   "stop all writes and tell me", "https://minepoa.com/api/notices", "critical notice")))
 check("WATCH on every write prompt, before the key rules", all(PR.WATCH + PR.SAFE in p for _, p in writes))
 reads = [PR.TXS, PR.NETWORK, PR.GROWTH, PR.BURN, PR.SPENDABLE, PR.FIND, PR.API, PR.MCP, PR.explain_epoch(1), PR.explain_tx("0" * 64), PR.swap_status("0" * 64)]
@@ -50,11 +50,12 @@ tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]
 check("OpenAPI swaps status: pending_receipt is held, not paid", len(_sp) == 1 and "pending_receipt is held, not paid" in str(_sp[0]))
-check("SAFE: X-Api-Key header preferred on /me, key= only as fallback, token= per go.md", "X-Api-Key header (/api/hosted/me does), send SAVED_KEY there instead of in the link; use key= only if that fails." in PR.SAFE
-      and "go.md now calls key= legacy" in PR.SAFE and "token=" in PR.SAFE)
+check("SAFE (1.26.244): X-Api-Key header only, never a key or token in a URL, 401 or 403 means tell me it needs a fix, never shown in the chat",
+      "Send SAVED_KEY only in an X-Api-Key header on every minepoa.com call above." in PR.SAFE and "401 or 403" in PR.SAFE and "show it in this chat" in PR.SAFE
+      and "key=" not in PR.SAFE and "token=" not in PR.SAFE and "key=" not in PR.WATCH)
 check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
       and "X-Api-Key" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.9.3, cce915f1", S.template_sha256() == "cce915f1e6d8ee7897ce20df83a9164f2f1c521c5d3a39c5e942b948f39a23af")
+check("join prompt v2.9.4, 438bec61", S.template_sha256() == "438bec611dfbe6487f01c2e80bb86afa6c451c3db3d2b4731d5688bbf4ed9521")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)

@@ -76,6 +76,26 @@ check("no link whose path holds a leak term, in the prompts and the /start steps
 check("the prompt never lets the agent show the key: header only, stop on a URL credential", all("X-Api-Key" in t or "poa_" in t for t in texts.values())
       and "Never put a key or token in a URL" in texts["full"] and "never show it in this chat" in texts["full"] and "direct reply" not in texts["full"] + texts["connector"])
 
+# 1.26.244: every served prompt, Ask prompt and llms text, sitewide: no key or token in any URL or query, no grading guide link
+from poascan import prompts as PR, agentapi as AG
+from poascan.swap import prompts as SP
+CRED = re.compile(r"[?&#](?:[a-z_]*key|token|guid|secret|pk)=", re.I)
+_a = "poa1" + "x" * 40
+asks = {t: PR.opened(b) for t, b in [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
+        + [PR.answer_epoch(), PR.answer_epoch(1), PR.explain_epoch(1), PR.addr_rewards(_a), PR.addr_send(_a), PR.addr_invites(_a), PR.explain_tx("0" * 64), PR.swap_status("0" * 64)]}
+served = dict(asks, **{"llms.txt": AG.llms_txt(), "llms-full.txt": AG.llms_full_txt(), "JOIN_MD": AG.JOIN_MD, "ask dialog": unescape(J.ask_modal()), "wallet": SP.WALLET_PROMPT,
+              "combined": ct, "full": texts["full"], "connector": texts["connector"]})
+served.update({f"swap {k}": v for k, v in (SP.templates().items() if isinstance(SP.templates(), dict) else enumerate(SP.templates())) if isinstance(v, str)})
+badq = {k: CRED.findall(v) for k, v in served.items() if CRED.search(v)}
+check(f"no key, token or guid in any URL or query in {len(served)} served texts (every Ask prompt, llms.txt, llms-full.txt, join, combined, wallet, swap) {badq}", not badq and len(asks) >= 20)
+badw = [k for k, v in served.items() if "lableak/#/a/work" in v or re.search(r"[?&](key|token)=(SAVED_KEY|YOUR_KEY|MY_)", v)]
+check(f"no grading guide link and no key placeholder in a link in any served text {badw}", not badw)
+keyed = [t for t, v in asks.items() if "SAVED_KEY" in v]
+check("every Ask prompt that uses the key says header only and stops on a 401 or 403 or a URL credential",
+      keyed and all("only in an X-Api-Key header" in asks[t] and "401 or 403" in asks[t] and "show it in this chat" in asks[t] for t in keyed))
+check("v2.9.4: the key error line once in both join variants", all(t.count(__import__("poascan.onboarding_prompt", fromlist=["x"]).AUTH_FIX) == 1 for t in texts.values())
+      and "401 or 403 saying the key is missing or invalid" in ct)
+
 P = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
 check("open (200): no paused notice, no button off, on /start or in the Ask dialog", S.join_halt_html() == "" and "data-joinhalt" not in h and "data-pzoff" not in h + cx and "data-joinhalt" not in J.ask_modal())
 M.join_halt = lambda: dict(since_ts=1793000000, as_of_ts=1793000300)
@@ -92,7 +112,7 @@ pm = unescape(S.go_block(by["muse"]))
 check("halted: the no-path Join on minepoa.com link is off too", ('<a class="npb npj' + OFF) in pm)
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
 hf = S.hash_fields()
-check("the prompt is v2.9.3: template cce915f1, combined fc816d15", hf["template_sha256"].startswith("cce915f1") and hf["combined_sha256"].startswith("fc816d15"))
+check("the prompt is v2.9.4: template 438bec61, combined a7210d16", hf["template_sha256"].startswith("438bec61") and hf["combined_sha256"].startswith("a7210d16"))
 check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.240"):js.index("1.26.240") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
@@ -119,6 +139,16 @@ if sync_playwright:
         for _ in range(150):
             try: urllib.request.urlopen(base + "/healthz", timeout=2); break
             except Exception: time.sleep(0.2)
+        urls = ["/", "/start", "/help", "/about", "/upgrade", "/earn", "/network", "/swap", "/wallet", "/llms.txt", "/llms-full.txt", "/api/v1/prompts/join", "/api/v1/prompts/combined"]
+        try: urls += [u.replace("https://poascan.io", "") for u in re.findall(r"<loc>([^<]+)</loc>", urllib.request.urlopen(base + "/sitemap.xml", timeout=20).read().decode())]
+        except Exception: pass
+        hits = {}
+        for u in dict.fromkeys(urls):
+            try: body = unescape(urllib.request.urlopen(base + u, timeout=30).read().decode("utf-8", "replace"))
+            except Exception: continue
+            f = [m for m in CRED.findall(body)] + (["a/work"] if "lableak/#/a/work" in body else [])
+            if f: hits[u] = f
+        check(f"served pages ({len(set(urls))}, sitemap included): no key, token or guid in any URL or query, no grading guide link {hits}", not hits and len(set(urls)) >= 13)
         apps = [c for c in top + rest if c["kind"] != "none"]
         with sync_playwright() as p:
             b = p.chromium.launch()

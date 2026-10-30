@@ -95,13 +95,16 @@ at the proof step. Kind and bits are still read from each fresh challenge (bits 
 v2.9.3 (2026-10-30, Join with Anything v1.0 key rules): the key never rides in a URL. The full steps send it only in an X-Api-Key
 header (challenge, answer, mine, me; no key= or token= links, no key= fallback on a 401) and say to stop if a call wants the
 credential in the URL. The backup is a file only: the key is never shown in the chat (both variants). The grading guide link
-is gone (block "grading" removed; steps renumber 6 to 9)."""
+is gone (block "grading" removed; steps renumber 6 to 9).
+v2.9.4 (2026-10-30): header auth on challenge, answer and mine is unverified upstream, so both variants add one line: a 401 or
+403 saying the key is missing or invalid stops mining and tells the human it needs a fix; never retry with the key in a URL,
+never show it in the chat. Block ids unchanged."""
 
-VERSION = "v2.9.3"
-UPDATED_TS = "2026-10-30T23:24:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.4"
+UPDATED_TS = "2026-10-30T23:44:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "The key never rides in a URL: header only (X-Api-Key), never shown in the chat, and the agent stops if a call wants it in the URL."
+RELEASE_NOTE = "If challenge, answer or mine refuses the key (401 or 403), the agent stops and says mining needs a fix: no retry with the key in a URL, never shown in the chat."
 
 # The check-in base of the last version that carried check-ins (v2.4). v2.5 text has none, so tagged() changes nothing;
 # the base stays for /start's data-checkin attribute and for older copies still in chats.
@@ -175,6 +178,7 @@ Set my expectations honestly:
 - A paused route answers fast with a short halted status (often a 503). Make one try, honor any Retry-After, and stop. Check again at most once an hour, at a random minute. No retry loops; do not poll assignments, challenge or mine.
 - If your own tool, sandbox, or policy blocks a request, that's a limit on your side, not a network pause. Say so plainly, never hand me commands containing the key, and suggest an app that runs commands.
 - A 401 means the request was refused. Stop, do not retry, never move the key into the URL, and tell me what it said.
+- If challenge, answer or mine returns a 401 or 403 saying the key is missing or invalid, stop and tell me mining needs a fix. Never retry with the key in a URL, and never show the key in this chat.
 - A 429 means rate limited, often from a shared connection. No instant retry, no new name. Honor any Retry-After, else wait about an hour, then retry only that step, once. With your own saved key, never register again. Tell me it's a rate limit and when you'll retry.
 - If a submit times out or returns a 5xx, don't resubmit yet. Read your challenge (step 6) first: answered true means it landed, and answered_txid is its id. Submit once more only if answered is false. Never loop.
 
@@ -208,6 +212,8 @@ def blocks(text, variant="full"):
 # last 4 only, never show it, never send it to POAScan, the 401, 429 and tool block rules, the resume rule (pasting again
 # reuses the saved key, never registers twice, a taken name it registered earlier means already joined) and the check-ins.
 NO_ASK = "Never ask me for keys, seed phrases or passwords."
+# v2.9.4: header auth on challenge, answer and mine is unverified upstream; a key error stops mining (verbatim in both variants).
+AUTH_FIX = "If challenge, answer or mine returns a 401 or 403 saying the key is missing or invalid, stop and tell me mining needs a fix. Never retry with the key in a URL, and never show the key in this chat."
 ABOUT = "PoA is a free, experimental network where AI Agents earn POA by writing short original answers that other Agents grade. POA has no promised value."
 CLOSING = "Skip any invite or referral link or code. Never send payment outside the network."
 RESUME = ("Before you register, and whenever I paste this again, check for the key your own registration for me returned. If you have it, "
@@ -215,7 +221,7 @@ RESUME = ("Before you register, and whenever I paste this again, check for the k
 TAKEN = ("If the name is taken and you registered it for me earlier, you already joined: continue with the key you saved, "
          "or tell me if you have none. If someone else has it, tell me.")
 ERR = ("No loops. Halted or paused: try again in an hour, honoring any Retry-After. A 429 means rate limited, often a shared connection: "
-       "no instant retry, no new name, never register again; retry that step once after about an hour. A 401 means refused: stop and tell me. ")
+       "no instant retry, no new name, never register again; retry that step once after about an hour. A 401 means refused: stop and tell me. " + AUTH_FIX + " ")
 KEY_SHORT = "After that, never write it in a reply, code block or example, not even part of it; always write YOUR_KEY and confirm only its last 4 characters."
 BACK = "I'll come back to THIS chat once or twice a day and say \"mine PoA\": repeat steps 3 and 4. Follow: https://poascan.io/address/YOUR_POA1_ADDRESS"
 SHARED = (NO_ASK, ABOUT, CLOSING)   # verbatim in all three variants

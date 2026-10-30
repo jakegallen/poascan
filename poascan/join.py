@@ -94,5 +94,5 @@ def ask_modal():
 <div class="chips am-c" hidden></div>
 {_S.join_halt_html()}{_S.notice()}{pbox('<pre class="jm-p pc-text" id="am-p" tabindex="0"></pre>')}
 <span class="lbl jm-l">Open in</span>{apps()}
-<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a>. Your agent fills in SAVED_KEY from its own secret store; you never paste a key.</p>
+<p class="jm-src">Checked against <a href="{SOURCE}" target="_blank" rel="noopener noreferrer">minepoa.com/go.md</a>. Your agent sends SAVED_KEY from its own secret store, in a header only; you never paste a key.</p>
 </div></dialog>'''

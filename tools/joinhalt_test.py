@@ -50,7 +50,7 @@ db.write("UPDATE fetch_log SET last_ok=?, fails=0 WHERE endpoint=?", (now + 600,
 check("two good reads: open again, banner gone, API join_state back", M.join_halt() is None and S.join_halt_html() == "" and M.state()["join_state"] in ("open", "paused"))
 I.fetch = real
 p = OP.POW
-check("prompt v2.9.3", OP.VERSION == "v2.9.3")
+check("prompt v2.9.4", OP.VERSION == "v2.9.4")
 check("POW: a 503 stops with the exact line, no mining or retry", 'On a 503, stop without mining or retrying and tell me: Joins are paused. Check back later.' in p)
 check("POW still reads kind and bits from each challenge", "If kind is not pow" in p and "bits" in p)
 full = S.prompt("NAME", "full")

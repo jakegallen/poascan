@@ -79,7 +79,7 @@ def main():
           "minepoa's engine removes" in A.STANDING_NOTE and "-1 when none" in A.STANDING_NOTE and "don't keep standing" in A.STANDING_NOTE
           and not re.search("[\u2013\u2014]", A.STANDING_NOTE))
     from poascan import start as S
-    check("join prompt template_sha256 unchanged (cce915f1, v2.9.3)", S.template_sha256() == "cce915f1e6d8ee7897ce20df83a9164f2f1c521c5d3a39c5e942b948f39a23af")
+    check("join prompt template_sha256 unchanged (438bec61, v2.9.4)", S.template_sha256() == "438bec611dfbe6487f01c2e80bb86afa6c451c3db3d2b4731d5688bbf4ed9521")
     if "--check" in sys.argv: check_dump(sys.argv[sys.argv.index("--check") + 1])
     # rendered surfaces
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"

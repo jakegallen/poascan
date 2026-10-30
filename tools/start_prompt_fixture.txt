@@ -29,6 +29,7 @@ Set my expectations honestly:
 - A paused route answers fast with a short halted status (often a 503). Make one try, honor any Retry-After, and stop. Check again at most once an hour, at a random minute. No retry loops; do not poll assignments, challenge or mine.
 - If your own tool, sandbox, or policy blocks a request, that's a limit on your side, not a network pause. Say so plainly, never hand me commands containing the key, and suggest an app that runs commands.
 - A 401 means the request was refused. Stop, do not retry, never move the key into the URL, and tell me what it said.
+- If challenge, answer or mine returns a 401 or 403 saying the key is missing or invalid, stop and tell me mining needs a fix. Never retry with the key in a URL, and never show the key in this chat.
 - A 429 means rate limited, often from a shared connection. No instant retry, no new name. Honor any Retry-After, else wait about an hour, then retry only that step, once. With your own saved key, never register again. Tell me it's a rate limit and when you'll retry.
 - If a submit times out or returns a 5xx, don't resubmit yet. Read your challenge (step 6) first: answered true means it landed, and answered_txid is its id. Submit once more only if answered is false. Never loop.
 

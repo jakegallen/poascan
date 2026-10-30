@@ -31,8 +31,8 @@ def wallet_prompt():
     return ("Set up my Emblem Wallet and link it to my PoA (Proof of Agent, minepoa.com) agent. "
         f"Source: {EMB_REPO} (npm package @emblemvault/agentwallet).\n\n"
         f"1. {a}\n2. {b}\n3. {c}\n"
-        "4. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect at https://minepoa.com/lableak/connect, "
-        "then GET https://minepoa.com/api/link-auto?token=MY_AUTH_TOKEN. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
+        "4. Link that vault to my PoA agent as in https://minepoa.com/go.md (section LINK): connect it as that section says, "
+        "then call https://minepoa.com/api/link-auto with the auth token only in a header (Authorization: Bearer), never in the URL; if it only takes the token in the URL, stop and tell me. Verify at https://minepoa.com/api/links/MY_POA_ADDRESS and check that https://minepoa.com/api/chains shows verified:true.\n\n"
         "Never paste or show passwords, keys or seed phrases in chat. Don't use any referral or invite code. Only use minepoa.com and the official Emblem tools, and report each step's result.")
 WALLET_PROMPT = wallet_prompt()
 _CHECK_LIVE = ("Before anything else, GET https://minepoa.com/api/swaps. If it doesn't answer with JSON (no response, a timeout or a non-200 status), "

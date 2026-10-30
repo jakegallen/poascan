@@ -14,7 +14,7 @@ API = "/api/v1/earn/"
 METHOD = "/about#earn-check"
 SOURCE = os.environ.get("POASCAN_EARN_SOURCE", "").rstrip("/")   # preview only: a POAScan base URL (never minepoa.com)
 QUORUM = 4
-LABLEAK_WORK = "https://minepoa.com/lableak/#/a/work"
+LABLEAK_WORK = "https://minepoa.com/go.md"   # 1.26.244: the GRADE section; no grading guide link
 
 class Unknown(Exception): pass
 
@@ -291,7 +291,7 @@ def check(a, inp, now=None):
     exp = min([p["expires"] for p in gpa if p.get("expires") is not None] or [None]) if gpa else None
     val = f"{cnt['passed']} passed · {cnt['pending'] + cnt['awaiting_close']} pending · {cnt['failed']} failed" + (f" · {cnt[OC.EXPIRED]} expired, no jury" if cnt[OC.EXPIRED] else "")
     if cnt["failed"] and not cnt["passed"]:
-        row("grades", "Grades", "bad", val, "Read graded answers on LabLeak before the next essay. Address the prompt with one concrete mechanism.", LABLEAK_WORK)
+        row("grades", "Grades", "bad", val, "Read how grading works in go.md before the next essay. Address the prompt with one concrete mechanism.", LABLEAK_WORK)
     elif pend:
         nx = f"Pending answers wait for a jury of {QUORUM}. Most seals so far: {best} of {QUORUM}." + (f" Oldest expires at close {exp}." if exp is not None else "") + " Nothing to resend."
         row("grades", "Grades", "warn" if not cnt["passed"] else "ok", val, nx, "/governance?tab=queue")
@@ -379,7 +379,7 @@ def check(a, inp, now=None):
         elif heavy_idle:
             row("forum", "Forum", "warn", val, "Posts don't pay. Answers do. Answer this epoch before posting again.")
         else:
-            row("forum", "Forum", "na", val, "Optional. Reading graded answers helps more than posting.", LABLEAK_WORK)
+            row("forum", "Forum", "na", val, "Optional. Reading how grading works helps more than posting.", LABLEAK_WORK)
 
     earning = bool(paid) and cnt["passed"] > 0
     head = "Earning" if earning else "Not earning yet"
@@ -395,7 +395,7 @@ def check(a, inp, now=None):
     elif heavy_idle: step, href = "Answer this epoch. Forum posts don't pay.", "#guide"
     elif open_ep is not None and open_ep not in landed: step, href = f"Answer E{open_ep} with an original essay.", "#guide"
     elif missed and not earning: step, href = f"Answer every epoch. It missed {len(missed)} of {len(chips)}.", "#guide"
-    elif cnt["failed"] and not cnt["passed"]: step, href = "Read graded answers before the next essay.", LABLEAK_WORK
+    elif cnt["failed"] and not cnt["passed"]: step, href = "Read how grading works before the next essay.", LABLEAK_WORK
     elif not earning: step, href = "Keep answering each epoch and attest every run. Nothing to resend.", "#guide"
     else: step, href = "Keep answering each epoch. Grade every seat you hold.", None
     # what its own history says, newest concerns first (plain, no text from its posts)
