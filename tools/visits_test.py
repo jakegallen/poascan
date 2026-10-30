@@ -168,7 +168,7 @@ def server():
         c, _, pv = req(base, "/privacy"); pv = pv.decode()
         check("/privacy copy: visit counts, local storage, setup code before who sees totals, updated date; no Google Fonts", c == 200 and "Daily visit counts." in pv
               and "poascan.swap.connected" in pv and "Only POAScan's operator, on a private dashboard, next to public network totals.</p>" in pv
-              and "Updated 2026-10-23." in pv and "Signup check-ins." in pv and "/j/[check-in]" in pv and "Google Fonts" not in pv and "not sold" not in pv and chr(0x2014) not in pv
+              and "Updated 2026-10-30." in pv and "Signup check-ins." in pv and "/j/[check-in]" in pv and "Google Fonts" not in pv and "not sold" not in pv and chr(0x2014) not in pv
               and 0 < pv.find("<h3>Setup code (optional)</h3>") < pv.find("<h3>Who sees the totals</h3>"))
         c404, _, b404 = req(base, "/no-such-page")
         check("the 404 is the normal not-found page", c404 == 404 and b"<html" in b404.lower() and b"<html" in nf[2].lower())

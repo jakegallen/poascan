@@ -120,7 +120,7 @@ def live():
         check("no page carries the retired Join dialog (1.26.86)", all("joinmodal" not in pages[r][2] and "/fragment/join" not in pages[r][2] for r in ("/", "/privacy")))
         check("llms.txt prompt has no registry step", all("registry/register" not in pages[r][2] and "SETUP_CODE" not in pages[r][2] for r in ("/llms-full.txt", "/llms.txt")))
         sec = re.search(r"<h3>Setup code \(optional\)</h3><p>(.*?)</p>\s*<h3>Who sees the totals</h3>", pv, re.S)
-        check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-23", bool(sec) and "Updated 2026-10-23." in pv
+        check("/privacy: Setup code section before Who sees the totals, Updated 2026-10-30", bool(sec) and "Updated 2026-10-30." in pv
               and "/swaps" not in sec.group(1) and "POAScan's pages no longer include a wallet setup prompt or setup code. Swaps and wallet setup are on <a href=\"https://poaswap.io/start\" rel=\"noopener noreferrer\">POASwap</a>." in sec.group(1) and "POAScan's server sends no visitor data to POASwap; it only reads POASwap's public swap status." in sec.group(1))
         check("no em dashes in the pages", not any("\u2014" in h for r, (_, _, h) in pages.items() if r in ("/start", "/privacy")))
         time.sleep(1)

@@ -111,6 +111,8 @@ jobs:
         run: python tools/bigwrite_test.py
       - name: Large lists are stored in pieces with the same bytes
         run: python tools/bloblist_test.py
+      - name: Cloudflare ready (client IP from CF-Connecting-IP only from a Cloudflare edge, no-store default, live pings, privacy copy)
+        run: python tools/cloudflare_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
         run: python tools/pagecost_test.py
       - name: Audit fixes (input clamps, on-demand budgets and negative cache, swap finality and expiry, gzip and ETag, privacy copy)

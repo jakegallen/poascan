@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.242] - 2026-10-30
+
+### Changed
+- Ready for Cloudflare in front, and the same as before without it. The visitor's IP comes from CF-Connecting-IP only when Fly-Client-IP is a Cloudflare edge (Cloudflare's published ranges, bundled in `poascan/clientip.py`, never fetched at run time); otherwise from Fly-Client-IP as before. Rate limits, the per IP live socket cap, the daily unique estimate, the country count and the upstream read budget all use it, so visitors behind one Cloudflare edge are not counted or limited as one, and a client talking to Fly directly cannot choose its address with the header.
+- A response that names no cache policy is now sent with `Cache-Control: no-store` (errors, 429s, WebSocket refusals, CSV exports), so neither a browser nor a CDN edge keeps one. Routes that already send a policy keep it.
+- /privacy: the IP line names CF-Connecting-IP, and a new Hosting and delivery line says requests may pass through Cloudflare, which caches public files and pages briefly; responses that are not public are marked not to be cached.
+
+### Added
+- `tools/cloudflare_test.py` (CI): edge and non edge addresses, v4 and v6, a spoofed header ignored, page limits per visitor behind one edge, live pings under 100 s, no-store on errors, 429s, /ws, /mcp, /ops, /healthz, live and CSV routes, the privacy copy. `--print` compares the bundled ranges with Cloudflare's lists.
+
 ## [1.26.241] - 2026-10-30
 
 ### Fixed

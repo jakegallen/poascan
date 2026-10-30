@@ -3,6 +3,7 @@ import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, signal, t
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
+from . import clientip as CIP
 from . import visits as VS
 from . import network as NW
 from . import keysafe as KS
@@ -756,6 +757,9 @@ class H(BaseHTTPRequestHandler):
                 self.send_response(304); self.send_header("ETag", tag); self.send_header("Cache-Control", PAGE_CACHE); self.send_header("Vary", "Accept-Encoding")
                 self.send_header("Strict-Transport-Security", HSTS)
                 self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.end_headers(); return
+        # 1.26.241: a response that names no cache policy is never cached, by a browser or a CDN edge (errors, 429s,
+        # the WebSocket refusals, CSV exports): only routes that send Cache-Control themselves are cacheable
+        if "Cache-Control" not in hdr: hdr["Cache-Control"] = "no-store"
         if gz:
             if pre is not None and len(pre) > 2 and pre[2] is not None: b = pre[2]
             else:
@@ -806,7 +810,7 @@ class H(BaseHTTPRequestHandler):
     def _seg_explicit(self):
         return "segment" in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
     def client_ip(self):
-        return (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or self.client_address[0])
+        return CIP.of(self.headers, self.client_address[0])   # 1.26.241: CF-Connecting-IP only from a Cloudflare edge
     def ops_event(self):
         """POST /ops/e {"e": "<id>"}: one prompt button click, by a fixed id from prompts.ids(). No cookie is read or set,
         nothing about the sender is kept; unknown ids, other origins, big bodies and bursts are refused. 204 when counted."""
@@ -968,9 +972,10 @@ class H(BaseHTTPRequestHandler):
             except Exception as e: log.warning("check-in: %s", type(e).__name__)   # never fails the agent
         return self.send(200, CK.OK_TEXT, TXT, hd)
     def page_limited(self):
-        """True after sending a 429 for an /address or /tx page over the per-client budget. Keyed on Fly-Client-IP only:
-        without it (local runs) nothing is limited, since every request would share the proxy address. The IP is never logged."""
-        ip = (self.headers.get("Fly-Client-IP") or "").strip()
+        """True after sending a 429 for an /address or /tx page over the per-client budget. Keyed on Fly-Client-IP (or
+        CF-Connecting-IP from a Cloudflare edge, poascan/clientip.py) only: without it (local runs) nothing is limited, since
+        every request would share the proxy address. The IP is never logged."""
+        ip = CIP.proxied(self.headers)
         if not _fci_seen[0]:
             _fci_seen[0] = True; log.info("page limit: Fly-Client-IP header present=%s", bool(ip))   # presence only, once per process
         if not ip: return False

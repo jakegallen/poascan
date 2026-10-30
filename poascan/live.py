@@ -4,11 +4,12 @@ One pump thread builds a snapshot from the local SQLite archive (never from upst
 broadcasts it only when it changed, so N clients cost one DB read + N socket writes. Sockets are detached from
 the HTTP handler thread after the handshake, so idle clients hold no thread."""
 import base64, hashlib, json, logging, queue, selectors, struct, threading, time
+from . import clientip as CIP
 
 log = logging.getLogger("live")
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_CLIENTS = 2000
-PER_IP = 8          # sockets one client (Fly-Client-IP) may hold at once (SC-016); the count lives in memory only
+PER_IP = 8          # sockets one client (poascan/clientip.py) may hold at once (SC-016); the count lives in memory only
 PUMP_EVERY = 3.0
 PING_EVERY = 25.0
 
@@ -55,7 +56,7 @@ class Hub:
             handler.send(426, "upgrade required", "text/plain"); return
         if len(self.clients) >= MAX_CLIENTS:
             handler.send(503, "busy", "text/plain"); return
-        ip = (h.get("Fly-Client-IP") or "").strip() or None   # without the header (local runs) only MAX_CLIENTS applies
+        ip = CIP.proxied(h)   # Fly-Client-IP, or CF-Connecting-IP from a Cloudflare edge; without it (local runs) only MAX_CLIENTS applies
         if ip:
             with self.lock: n = self.per_ip.get(ip, 0)
             if n >= PER_IP:
