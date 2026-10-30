@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.230] - 2026-10-29
+
+### Fixed
+- Every start parsed every stored close record list in full (segment 2: 68 MB of JSON) only to check that no record belonged to another segment, which it almost never did: the start peaked at about 280 MB before serving a page. The check now reads each record's epoch and close time one at a time and keeps nothing else; the full regroup runs only when a record has to move. Start peak on a copy of the archive: about 155 MB. Same stored records.
+
+### Added
+- `tools/memory_test.py`: the start check agrees with the full regroup on whether anything moves (in place, a record in two blobs, no current blob, not a list, an object, non-records, null, unsorted).
+
 ## [1.26.229] - 2026-10-29
 
 ### Fixed

@@ -58,4 +58,27 @@ for s in ("[]", " [ ]\n", "null", "{}", '[1, 2 ,3]', '[{"basis": null}, {"basis"
 db.put_blob(S.blob_kind(), recs); A._cache.clear(); A._epochs.clear()
 check("epochs_raw reads the stored copy through parse_closes", A.epochs_raw() == ref)
 check("indexer parses /api/epochs the same way", I._parse("/api/epochs", text.encode()) == ref and I._parse("/api/status", b'{"a": 1}') == {"a": 1})
+# 3) boot regroup (1.26.230): the (epoch, ts) check agrees with the full regroup on whether anything moves
+import copy
+c = db.conn()
+def blobs(): return {k: j for k, j in c.execute("SELECT kind, json FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'")}
+def scenario(name, setup):
+    c.execute("DELETE FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'"); c.commit()
+    for k, v in setup.items(): c.execute("INSERT INTO blobs(kind, ts, json) VALUES(?, 1, ?)", (k, v if isinstance(v, str) else json.dumps(v)))
+    c.commit(); need = db._closes_need_regroup(c, S); b0 = blobs()
+    real = db._closes_need_regroup; db._closes_need_regroup = lambda c, S: True
+    try: db._regroup_closes(c, S)
+    finally: db._closes_need_regroup = real
+    moved = blobs() != b0
+    check(f"regroup check: {name} (needs {need}, full regroup wrote {moved})", need == moved)
+    check(f"regroup check: {name}, settled after one regroup", db._closes_need_regroup(c, S) is False)
+r3 = [{"epoch": i, "ts": 1700000000 + i, "basis": {}} for i in range(3)]
+scenario("in place", {S.blob_kind(): r3})
+scenario("duplicate record across blobs", {S.blob_kind(): r3, "epochs:s9": r3[:1]})
+scenario("no current blob", {"epochs:s9": []})
+scenario("not a list", {S.blob_kind(): "{}"})
+scenario("unsorted", {S.blob_kind(): r3[::-1]})
+scenario("an object, not a list", {S.blob_kind(): r3, "epochs:s9": '{"a": 1}'})
+scenario("a list of non-records", {S.blob_kind(): r3, "epochs:s9": "[1, 2]"})
+scenario("null", {S.blob_kind(): "null"})
 print(f"\n{len(fails)} FAILED" if fails else "\nall ok"); sys.exit(1 if fails else 0)

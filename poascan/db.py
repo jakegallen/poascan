@@ -179,7 +179,36 @@ def _segments():
     _regroup_closes(c, S)
     c.commit()
 
+def _closes_need_regroup(c, S):
+    """True when _regroup_closes would write anything: the same grouping it computes, from (epoch, ts, segment) only."""
+    from .analytics import parse_records
+    kinds = [r[0] for r in c.execute("SELECT kind FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()]
+    if not kinds: return False
+    sig_of = lambda e: (e.get("epoch"), e.get("ts"), S.of_record(e)) if isinstance(e, dict) else None
+    have = {}
+    for k in kinds:
+        r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
+        v = parse_records(r[0] or "null", sig_of) if r else []
+        if not isinstance(v, list) or None in v:
+            if v: return True   # not a plain list of records: the full path below handles it exactly as before
+            v = []
+        have[k] = v
+    by, seen = {}, set()
+    for k in sorted(have, key=lambda k: (k != "epochs", k)):
+        for ep, ts, n in have[k]:
+            if (ep, ts) in seen: continue
+            seen.add((ep, ts)); by.setdefault(n, []).append((ep, ts))
+    want = {S.blob_kind(n): rows for n, rows in by.items()}
+    for k, rows in want.items():
+        if k not in have or sorted((ep, ts) for ep, ts, _ in have[k]) != sorted(rows): return True
+    if any(k not in want and have[k] for k in have): return True
+    return "epochs" not in want and "epochs" not in have
+
 def _regroup_closes(c, S):
+    # 1.26.230: every boot used to json.loads every close record blob (segment 2 alone 176 MB parsed) only to find, almost
+    # always, that nothing moved. The check now reads each record's (epoch, ts) one at a time and keeps nothing else; the
+    # full parse below runs only when a record has to move.
+    if not _closes_need_regroup(c, S): return
     kinds = {k: (ts, json.loads(j) or []) for k, ts, j in c.execute("SELECT kind, ts, json FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()}
     if not kinds: return
     by, seen = {}, set()
