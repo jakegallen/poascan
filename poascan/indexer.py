@@ -57,7 +57,7 @@ class Notice(Busy):
 NOTICE_RETRY_S = _ei("POASCAN_NOTICE_RETRY_S", 300, 60)   # back-off floor after a notice response (polite to a strained endpoint)
 
 NOT_MODIFIED = object()            # fetch(..., cond=True) result when the node answered 304 to our If-None-Match
-MAX_BODY = 96 * 1024 * 1024        # decoded size cap (the epochs list is about 11 MB)
+MAX_BODY = 96 * 1024 * 1024        # decoded size cap (the close list, read as it arrives, has its own: EPOCHS_MAX_BODY)
 _etags = {}                        # path -> ETag of the last 200, in memory only (a restart sends one plain GET)
 _lastmod = {}                      # path -> Last-Modified of the last 200 (sent as If-Modified-Since), in memory only
 
@@ -76,6 +76,70 @@ _NOREDIR = urllib.request.build_opener(_NoRedirect)
 MISSING_CODES = (404, 301, 302, 303, 307, 308)   # minepoa answers an unknown tx id with a 307 to its HTML app
 
 GATE_WIRE_BYTES = 48_000   # 1.26.184: measured wire cost of a gated read (TLS, headers, body bytes already in flight when we close)
+
+_WHOLE = object()
+STREAM_CHUNK = 256 * 1024
+EPOCHS_MAX_BODY = 512 * 1024 * 1024   # 1.26.229: the close list read as it arrives is never held whole, so MAX_BODY (96 MB) no
+                                      # longer bounds memory for it; 63 MB on Oct 29 and ~6 MB more a close would hit 96 MB near E26
+def _read_closes(r, enc):
+    """/api/epochs read as it arrives (1.26.229): inflate, decode and parse one close at a time, sharing unchanged pending
+    rows (analytics._Sharer), so the 18 MB gzip body, its 63 MB inflated bytes and their 63 MB text are never all held at
+    once. Returns (records, wire bytes, inflated bytes), or (_WHOLE, wire, inflated) when the body is not a UTF-8 JSON
+    array (an error object, a notice, a load page): fetch then treats it exactly as before."""
+    import codecs
+    from . import analytics as _A
+    enc = (enc or "").strip().lower()
+    if enc not in ("", "identity", "gzip"): raise Busy("unexpected content-encoding " + enc[:20])
+    z = zlib.decompressobj(16 + zlib.MAX_WBITS) if enc == "gzip" else None
+    wires, raws, nwire, nraw = [], [], 0, 0
+    def more():
+        nonlocal nwire, nraw
+        while True:
+            w = r.read(STREAM_CHUNK)
+            if not w:
+                b = z.flush() if z else b""
+                if b: nraw += len(b)
+                return b, True
+            nwire += len(w); wires.append(w) if mode[0] == "head" else None
+            b = z.decompress(w, EPOCHS_MAX_BODY + 1 - nraw) if z else w
+            if z and z.unconsumed_tail: raise Busy("response too large")
+            nraw += len(b)
+            if nraw > EPOCHS_MAX_BODY: raise Busy("response too large")
+            if b: return b, False
+    mode = ["head"]; head = b""; eof = False
+    while len(head) < 4 and not eof:
+        b, eof = more(); head += b
+    if not head.startswith(b"[") or b"\x00" in head[:4]:   # not a plain UTF-8 array: read the rest and go the old way
+        rest = []
+        while not eof:
+            b, eof = more(); rest.append(b)
+        wire = b"".join(wires); return _WHOLE, wire, _decode(wire, enc) if z else wire
+    mode[0] = "body"; wires.clear()
+    ud = codecs.getincrementaldecoder("utf-8")("surrogatepass"); buf = ud.decode(head); pos = 1
+    dec = json.JSONDecoder(); ws = _A._ws.match; sh = _A._Sharer(); out = []; need = 0; state = "first"
+    while True:
+        while True:   # consume what the buffer holds
+            pos = ws(buf, pos).end()
+            if pos >= len(buf): break
+            ch = buf[pos]
+            if state in ("first", "elem") and not (state == "first" and ch == "]"):
+                if len(buf) - pos < need and not eof: break
+                try: v, end = dec.raw_decode(buf, pos)
+                except json.JSONDecodeError:
+                    if eof: raise
+                    need = 2 * (len(buf) - pos) + STREAM_CHUNK; break
+                if not eof and ws(buf, end).end() >= len(buf): need = 0; break   # its end must be followed by a visible , or ]
+                out.append(sh.add(v)); pos = end; need = 0; state = "sep"
+            elif ch == "," and state == "sep": pos += 1; state = "elem"
+            elif ch == "]" and state in ("sep", "first"):
+                pos = ws(buf, pos + 1).end()
+                while pos >= len(buf) and not eof:
+                    b, eof = more(); buf = buf[pos:] + ud.decode(b, final=eof); pos = 0; pos = ws(buf, 0).end()
+                if pos < len(buf): raise json.JSONDecodeError("Extra data", buf, pos)
+                return out, nwire, nraw
+            else: raise json.JSONDecodeError("Expecting ',' delimiter" if state == "sep" else "Expecting value", buf, pos)
+        if eof: raise json.JSONDecodeError("Expecting value", buf, pos)
+        b, eof = more(); buf = buf[pos:] + ud.decode(b, final=eof); pos = 0
 
 def _parse(path, raw):
     """json.loads, except the close record list (1.26.227: ~63 MB of JSON, growing ~6 MB a close), which is parsed one
@@ -112,12 +176,18 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
                 db.write("INSERT INTO fetch_log(endpoint,last_ok,fails,next_at,err) VALUES(?,?,0,0,NULL) "
                          "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, run401=0", (ep, now))
                 return NOT_MODIFIED   # leaving the with block closes the connection before the body is read
-            wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding")); et = r.headers.get("ETag"); lm = r.headers.get("Last-Modified")
-        count_bytes(ep, len(wire))
-        if raw[:1] not in (b"{", b"["):
-            _probe(ep, True, t0, "200"); count(ep, 200)
-            raise Busy("non-JSON response (load page?)")
-        data = _parse(path, raw); nraw = len(raw); raw = wire = None
+            et = r.headers.get("ETag"); lm = r.headers.get("Last-Modified")
+            streamed = _read_closes(r, r.headers.get("Content-Encoding")) if path == "/api/epochs" else None
+            if streamed is None: wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding"))
+            elif streamed[0] is _WHOLE: wire, raw = streamed[1], streamed[2]
+        if streamed is not None and streamed[0] is not _WHOLE:
+            data, nwire, nraw = streamed; count_bytes(ep, nwire)
+        else:
+            count_bytes(ep, len(wire))
+            if raw[:1] not in (b"{", b"["):
+                _probe(ep, True, t0, "200"); count(ep, 200)
+                raise Busy("non-JSON response (load page?)")
+            data = _parse(path, raw); nraw = len(raw); raw = wire = None
         hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
         if hit:
             _ST.record(path, hit, retry=NOTICE_RETRY_S); _probe(ep, False, t0, "notice"); count(ep, "notice")
@@ -709,6 +779,8 @@ def store_epochs(d):
         if n != _SG.CURRENT:
             old = db.get_blob(kind)[0] or []
             if len(rows) <= len(old): continue
+        from . import analytics as _A
+        if _A.epochs_same(kind, rows): db.touch_blob(kind); _A.epochs_retag(kind); continue   # 1.26.229: unchanged, not rewritten
         db.put_blob(kind, rows); wrote = True
     if _SG.CURRENT not in by and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
     return wrote

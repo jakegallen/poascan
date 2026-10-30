@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.229] - 2026-10-29
+
+### Fixed
+- The close record list from minepoa (`/api/epochs`, 18 MB gzip, 63 MB of JSON, about 6 MB more a close) is read as it arrives: inflated, decoded and parsed one close at a time, so the compressed body, the inflated bytes and their text are never all held at once. Same records.
+- A re-read that brings nothing new (the count from `/api/status` is ahead of the list) no longer rewrites the stored list or makes every reader parse it again; only its stored time moves, as before. Measured on a copy of the archive: the unchanged re-read peak is about 195 MB over the running process (was about 265 MB) and it leaves about 7 MB behind (was about 99 MB). A re-read with a new close costs about the same as before.
+- The close list read had the 96 MB cap for any upstream body; at about 6 MB a close it would have reached it near close 26 and the close records would have stopped updating. The streamed close list now has its own cap (512 MB); everything else keeps 96 MB.
+
+### Added
+- `tools/epochs_stream_test.py`: the streamed read equals `json.loads` for gzip and plain bodies at chunk sizes from 1 byte to 256 KB, raises where it raises, error objects and load pages go the old way, `fetch` logs the same byte counts, and an unchanged re-read is not rewritten while its stored time still moves.
+
 ## [1.26.228] - 2026-10-29
 
 ### Fixed

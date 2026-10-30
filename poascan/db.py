@@ -250,6 +250,10 @@ def _bump(kind): _blob_gen[kind] = _blob_gen.get(kind, 0) + 1
 def put_blob(kind, obj):
     write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, int(time.time()), json.dumps(obj))); _bump(kind)
 
+def touch_blob(kind):
+    """Move a blob's stored time without rewriting it (1.26.229: a close list re-read that brought nothing new)."""
+    write("UPDATE blobs SET ts=? WHERE kind=?", (int(time.time()), kind))
+
 def get_blob(kind):
     r = q1("SELECT ts, json FROM blobs WHERE kind=?", (kind,))
     return (json.loads(r["json"]), r["ts"]) if r else (None, None)

@@ -115,6 +115,21 @@ class _Sharer:
         b["pending"] = q; self.prev = q
         return e
 
+def epochs_same(kind, rows):
+    """True when rows would store exactly the text the parsed copy of blob kind came from (1.26.229). Compares one close at
+    a time against the copy already in memory, so an unchanged 63 MB re-read costs no rewrite, no second parse and no
+    whole-list text. False (write as before) when that copy is not loaded or not current."""
+    c = _epochs.get(kind); r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
+    if not c or not r or c.get("ts") != (r["ts"], db.blob_gen(kind)): return False
+    old = c["v"]
+    if not isinstance(rows, list) or len(rows) != len(old) or rows != old: return False
+    return all(json.dumps(a) == json.dumps(b) for a, b in zip(rows, old))   # the stored text is "[" + ", ".join of these
+
+def epochs_retag(kind):
+    """After db.touch_blob: keep the parsed copy, under the blob's new stored time."""
+    c = _epochs.get(kind); r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
+    if c and c.get("ts") and r: c["ts"] = (r["ts"], db.blob_gen(kind))
+
 def epochs_ts():
     """When the selected segment's close records were stored (blobs.ts), or None."""
     try: r = db.q1("SELECT ts FROM blobs WHERE kind=?", (S.blob_kind(),))
