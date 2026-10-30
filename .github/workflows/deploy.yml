@@ -109,7 +109,7 @@ jobs:
         run: python tools/bootpeak_test.py
       - name: Large writes leave no bound copy behind
         run: python tools/bigwrite_test.py
-      - name: Join with Anything: connector steps, fallback, not tested note, joins paused notice
+      - name: Join with Anything, connector steps, fallback, not tested note, joins paused notice
         run: python tools/connector_first_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
         run: python tools/pagecost_test.py
