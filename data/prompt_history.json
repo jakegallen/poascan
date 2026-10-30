@@ -35,7 +35,7 @@
      "changed": "Reads kind and bits from each challenge and stops unless kind is pow. A 403 with required_bits gets a fresh challenge and a new proof.",
      "why": "minepoa made join difficulty adjustable (v0.67): each challenge sets bits, now 21.",
      "template_sha256": "410e5ee62626a008f66bc4b0fae9f783d06453c25b9777aff8312a651dd63be8", "hash": "published"},
-    {"version": "v2.9.2", "released": "2026-10-30T12:20:00Z", "release": "1.26.232", "commit": "0000000",
+    {"version": "v2.9.2", "released": "2026-10-30T12:20:00Z", "release": "1.26.232", "commit": "3640e0e",
      "changed": "A 503 halt on the join challenge stops the agent with: Joins are paused. Check back later. No mining or retry.",
      "why": "minepoa halted /api/join-pow (503, API hardening) on Oct 30.",
      "template_sha256": "7a2a6016cf249a35f7b837d0df26c83c6e051cb9c8213be357efb8d167129846", "hash": "published"}
