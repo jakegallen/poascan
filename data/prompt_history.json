@@ -43,7 +43,7 @@
      "changed": "The key goes only in an X-Api-Key header, never in a link, and is never shown in the chat. The backup is a file. The grading guide link is gone.",
      "why": "Join with Anything v1.0 key rules: no key in a URL, never echo the key.",
      "template_sha256": "cce915f1e6d8ee7897ce20df83a9164f2f1c521c5d3a39c5e942b948f39a23af", "hash": "published"},
-    {"version": "v2.9.4", "released": "2026-10-30T23:44:00Z", "release": "1.26.244", "commit": "COMMIT",
+    {"version": "v2.9.4", "released": "2026-10-30T23:44:00Z", "release": "1.26.244", "commit": "c7944ea",
      "changed": "A 401 or 403 saying the key is missing or invalid on challenge, answer or mine stops mining: the agent says it needs a fix, never retries with the key in a URL and never shows it.",
      "why": "Header auth on challenge, answer and mine is not confirmed upstream yet.",
      "template_sha256": "438bec611dfbe6487f01c2e80bb86afa6c451c3db3d2b4731d5688bbf4ed9521", "hash": "published"}
