@@ -6,22 +6,75 @@ from . import db, analytics as A, indexer as I, segments as S, outcome as O
 
 QUORUM_DEFAULT = 4
 
-@A.cached("receipt_index", 60)
-def index():
-    """Per answer txid: first/last close it sat in pending, its record there, and the close that settled it."""
+@A.close_memo("receipt_closes")
+def _close_index():
+    """The close record part of index() (1.26.235: once per close, each close's pending list read from disk)."""
     ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
     out, credited, elig, chal = {}, {}, {}, {}
     for e in ep:
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}
         credited[n] = set((e.get("rewards") or {}).keys())
         elig[n] = set(b.get("challenge_eligible") or []); chal[n] = dict(e.get("challenges") or {})
-        for t, p in (b.get("pending") or {}).items():
+        for t, p in (A.pending_of(e) or {}).items():
             r = out.setdefault(t, {}); r.setdefault("first", n); r["last"] = n
             r.update(since=A.since_of(t, p), panel=len(p.get("panel") or []), kind=p.get("kind"),
                      graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)   # grades: the live seal list, from the merge on
         for s in b.get("settled") or []:
             t = s.get("answer")
             if t: out.setdefault(t, {})["settled"] = dict(close=n, passed=bool(s.get("passed")), outcome=O.of(s), seals=len(s.get("jury") or []), author=s.get("from"))
+    return out, credited, elig, chal, [int(e.get("epoch", 0)) for e in ep]
+
+@A.close_memo("receipt_light")
+def _light():
+    """What one receipt reads from the close records besides its own pending rows (1.26.235): the last close, each close by
+    epoch (rewards, challenge_eligible, challenges) and each settled answer. Small; built once per close."""
+    ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
+    by, st = {}, {}
+    for e in ep:
+        n = int(e.get("epoch", 0)); by[n] = e
+        for x in (e.get("basis") or {}).get("settled") or []:
+            t = x.get("answer")
+            if t: st[t] = dict(close=n, passed=bool(x.get("passed")), outcome=O.of(x), seals=len(x.get("jury") or []), author=x.get("from"))
+    raw = A.epochs_raw(); ok = all(A._loc(e) is not None and A._loc(e)[1] == i for i, e in enumerate(raw)) and [int(e.get("epoch", 0)) for e in raw] == [int(e.get("epoch", 0)) for e in ep]
+    return dict(by=by, settled=st, last=int(ep[-1].get("epoch", 0)) if ep else None, rows_ok=ok, kind=S.blob_kind())
+
+SEAL_DETAIL = ("SELECT json_extract(json, '$.from_addr') AS f FROM tx_detail WHERE json_extract(json, '$.type') = 'grade-sealed' "
+               "AND json_extract(json, '$.body.assignment') = ?")   # uses tx_detail_assign (db.init)
+
+def one(tid):
+    """(rec, ix) for one answer: index()["rec"][tid] and the parts of index() a receipt reads, from pend_ix, the slim
+    records and two indexed seal queries; nothing over every answer (1.26.235). Falls back to index() when the rows are
+    not in epoch order."""
+    L = _light()
+    if not L["rows_ok"]:
+        ix = index(); return ix["rec"].get(tid, {}), ix
+    raw = A.epochs_raw(); r = {}
+    runs = db.q("SELECT pos0, pos1, v FROM pend_ix WHERE kind=? AND tx=?", (L["kind"], tid))
+    if runs:
+        n_of = lambda pos: int(raw[pos].get("epoch", 0))
+        lr = max(runs, key=lambda x: x["pos1"]); p = json.loads(lr["v"])
+        r = dict(first=min(n_of(x["pos0"]) for x in runs), last=n_of(lr["pos1"]), since=A.since_of(tid, p), panel=len(p.get("panel") or []), kind=p.get("kind"),
+                 graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)
+    if tid in L["settled"]: r["settled"] = L["settled"][tid]
+    s = {x["f"] for x in db.q(SEAL_DETAIL, (tid,)) if x["f"]}
+    try: s |= {x["f"] for x in db.q("SELECT t.from_addr AS f FROM seal_links s JOIN txs t ON t.id = s.seal WHERE s.answer = ?", (tid,)) if x["f"]}
+    except Exception: pass   # table not created yet (fast index off)
+    by = L["by"]
+    class _Per(dict):   # credited / elig / chal for the closes a receipt asks about, built on first read
+        def __init__(self, f): super().__init__(); self.f = f
+        def __missing__(self, k):
+            if k not in by: raise KeyError(k)
+            v = self[k] = self.f(by[k]); return v
+        def __contains__(self, k): return k in by
+        def get(self, k, d=None): return self[k] if k in by else d
+    ix = dict(credited=_Per(lambda e: set((e.get("rewards") or {}).keys())), elig=_Per(lambda e: set((e.get("basis") or {}).get("challenge_eligible") or [])),
+              chal=_Per(lambda e: dict(e.get("challenges") or {})), seals={tid: len(s)} if s else {}, last=L["last"])
+    return r, ix
+
+@A.cached("receipt_index", 60)
+def index():
+    """Per answer txid: first/last close it sat in pending, its record there, and the close that settled it."""
+    out, credited, elig, chal, closes = _close_index()
     seals = {}
     for r in db.q("SELECT json_extract(json, '$.body.assignment') AS a, json_extract(json, '$.from_addr') AS f FROM tx_detail "
                   "WHERE json_extract(json, '$.type') = 'grade-sealed'"):
@@ -30,7 +83,6 @@ def index():
         for r in db.q("SELECT s.answer AS a, t.from_addr AS f FROM seal_links s JOIN txs t ON t.id = s.seal"):
             if r["a"] and r["f"]: seals.setdefault(r["a"], set()).add(r["f"])
     except Exception: pass   # table not created yet (fast index off)
-    closes = [int(e.get("epoch", 0)) for e in ep]
     return dict(rec=out, credited=credited, elig=elig, chal=chal, seals={k: len(v) for k, v in seals.items()}, last=closes[-1] if closes else None)
 
 # expired_no_jury (1.26.224): settled with expired true and no jury; never a failure (outcome.py).
@@ -67,7 +119,7 @@ def _receipt(tid, fetch, row):
         bad = db.q1("SELECT error FROM invalid_txs WHERE txid=?", (tid,))
         if bad: return dict(tx=tid, accepted=False, status="refused", note=bad["error"])
         return None
-    ix = index(); r = ix["rec"].get(tid, {}); body = d.get("body") or {}
+    r, ix = one(tid); body = d.get("body") or {}
     ts = int((row or {}).get("ts") or d.get("ts") or 0) or None
     ep = (row or {}).get("epoch")
     if ep is None: ep = d.get("epoch") if d.get("epoch") is not None else body.get("epoch")

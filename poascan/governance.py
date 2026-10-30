@@ -160,12 +160,14 @@ def at_risk(qs):
     top = "" if SG.has_cut() else V.at_risk_body(qs, href("at-risk"))
     return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows, sort=by, d=d, link=link) + foot, links, cls="histc", id="standing")
 
+@A.close_memo("jury_series")
 def jury_series():
-    """Per close of the selected segment: jury seats aligned and not aligned (settled[].jury[]), queue and empty panels."""
+    """Per close of the selected segment: jury seats aligned and not aligned (settled[].jury[]), queue and empty panels.
+    1.26.235: computed once per close (each close's pending list is read from disk)."""
     out = []
     for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))):
         b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]
-        pend = b.get("pending") or {}; pend = pend if isinstance(pend, dict) else {}
+        pend = A.pending_of(e) or {}; pend = pend if isinstance(pend, dict) else {}
         out.append(dict(epoch=int(e.get("epoch", 0)), aligned=sum(1 for j in js if j.get("aligned")), other=sum(1 for j in js if not j.get("aligned")),
                         queue=len(pend), empty=sum(1 for v in pend.values() if not (v or {}).get("panel"))))
     return out

@@ -53,7 +53,7 @@ def data():
     ttl = NP.pending_ttl(seg)["value"]
     bands = [dict(band=l, lo=lo, hi=hi, pending=0, birth_panel=0, any_seal=0) for lo, hi, l in BANDS]
     near = {1: 0, 2: 0, 3: 0}; total = 0; three_rec = 0
-    for tid, v in (((last or {}).get("basis") or {}).get("pending") or {}).items():
+    for tid, v in ((A.pending_of(last) if last else None) or {}).items():
         if not isinstance(v, dict): continue
         total += 1; age = lc - A.since_of(tid, v)
         b = next(x for x in bands if x["lo"] <= age <= x["hi"])

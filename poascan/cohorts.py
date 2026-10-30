@@ -11,29 +11,37 @@ def _sealed(row, merged):
     return True if row.get("panel") else "lb"
 
 @cached("cohorts", 300)
-def cohorts():
+def cohorts(): return _cohorts()
+
+@A.close_memo("cohorts")
+def _cohorts():
+    """1.26.235: two passes over the closes, one pending list at a time (it used to keep every close's pending list and a
+    copy of the settled map per close, both growing with closes times answers). Same counts, same order."""
     E = sorted(A.epochs_raw(), key=lambda e: int(e["epoch"]))
     merge = int(A.params().get("pending_merge_from_epoch") or 0)
-    born, settled, out, gate, late = {}, {}, [], [], set()
-    snaps = []
+    born, out, gate, late = {}, [], [], set()
+    def pend(e):
+        p = A.pending_of(e) or {}
+        return p if isinstance(p, dict) else {}
     for e in E:
-        n = int(e["epoch"]); b = e.get("basis", {}) or {}; p = b.get("pending") or {}
-        if not isinstance(p, dict): p = {}
-        for s in b.get("settled", []) or []:
-            if s.get("answer"): settled[s["answer"]] = (n, O.of(s))
+        n = int(e["epoch"]); b = e.get("basis", {}) or {}; p = pend(e)
         new = [k for k, v in p.items() if k not in born and A.since_of(k, v or {}) == n]   # 1.26.89: since filled when minepoa omits it (E14 on)
         late |= {k for k, v in p.items() if k not in born and A.since_of(k, v or {}) != n}   # first seen after its birth close: no frozen cohort
         for k in new: born[k] = n
-        snaps.append((n, p, dict(settled)))
         el = len(b.get("challenge_eligible") or [])
         gate.append(dict(close=n, eligible=el, answers=len(new), rate=round(el / len(new), 4) if new else None))
     members = {}
     for k, c in born.items(): members.setdefault(c, []).append(k)
-    for c in sorted(members):
-        ids = members[c]; track = []
-        for n, p, st in snaps:
-            if n < c: continue
-            ct = dict.fromkeys(STATES, 0); lb = False
+    tracks = {c: [] for c in members}; settled = {}
+    for e in E:
+        n = int(e["epoch"]); b = e.get("basis", {}) or {}
+        for s in b.get("settled", []) or []:
+            if s.get("answer"): settled[s["answer"]] = (n, O.of(s))
+        cs = [c for c in sorted(members) if n >= c]
+        if not cs: continue
+        p = pend(e); st = settled
+        for c in cs:
+            ids = members[c]; ct = dict.fromkeys(STATES, 0); lb = False
             for k in ids:
                 if k in p:
                     s = _sealed(p[k] or {}, n >= merge)
@@ -42,9 +50,10 @@ def cohorts():
                 elif k in st: ct[st[k][1]] += 1
                 else: ct["vanished"] += 1
             assert sum(ct.values()) == len(ids)
-            track.append(dict(close=n, age=n - c, **ct, sealed_is_lower_bound=lb))
+            tracks[c].append(dict(close=n, age=n - c, **ct, sealed_is_lower_bound=lb))
+    for c in sorted(members):
         g = next(x for x in gate if x["close"] == c)
-        out.append(dict(birth=c, answers=len(ids), gate_a=dict(eligible=g["eligible"], rate=g["rate"]), closes=track))
+        out.append(dict(birth=c, answers=len(members[c]), gate_a=dict(eligible=g["eligible"], rate=g["rate"]), closes=tracks[c]))
     return dict(as_of_close=int(E[-1]["epoch"]) if E else None, merge_from=merge, k=A.params().get("K"), cohorts=out, gate_a=gate, first_seen_late=len(late - set(born)))
 
 def rows():

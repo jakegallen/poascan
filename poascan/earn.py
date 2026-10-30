@@ -102,7 +102,8 @@ def close_row(n, rec, a, mine, est_before):
     known = [r for r in mine if r.get("epoch") is not None and r["epoch"] <= n]
     raw = {}
     if not ans: ln("miss", f"No answer in E{n}. No answer, no rewards that epoch.", "receipts", f"none for E{n}")
-    pend = b.get("pending") or {}
+    from . import analytics as _A
+    pend = (b.get("pending") or {}) if "pending" in b else _A.pending_get(rec, [r.get("tx") for r in known])   # 1.26.235: a local slim record
     pw = [(r, pend[r.get("tx")]) for r in known if isinstance(pend.get(r.get("tx") or ""), dict)]
     if pw:
         eps_w = sorted(r["epoch"] for r, _ in pw)
@@ -186,7 +187,9 @@ def gather(a, get, forum_fn=None):
             if not rec: continue
             if n >= lc - 1:   # preview (earn gates): this Agent's pending answers and their grade counts at the last two closes
                 b0 = rec.get("basis") if isinstance(rec.get("basis"), dict) else {}
-                pg = b0.get("pending") if isinstance(b0.get("pending"), dict) else {}; mt = {r.get("tx") for r in mine}
+                from . import analytics as _A
+                pg = b0.get("pending") if "pending" in b0 else _A.pending_of(rec)   # 1.26.235: a local slim record reads its row
+                pg = pg if isinstance(pg, dict) else {}; mt = {r.get("tx") for r in mine}
                 out.setdefault("pend_grades", {})[n] = {t: dict(grades=len({(g.get("grader") if isinstance(g, dict) else g) for g in p.get("grades") or []}), panel=len(p.get("panel") or []))
                                                          for t, p in pg.items() if t in mt and isinstance(p, dict)}
             row = close_row(n, rec, a, mine, est); est = row.pop("_est")

@@ -81,34 +81,73 @@ def coverage(a):
                      "Nonces restart at a genesis cut: highest_nonce, nonce_gap and complete are for the current segment (segment), and by_segment lists each segment's own.")
 
 # ---------------- grading assignments ----------------
-_lock = threading.Lock(); _gx = {"key": None, "v": None}
+# 1.26.235: the per answer index (latest pending row and settlement) and the per grader answer sets live in SQLite
+# (gx_rec, gx_by), built once per close set by reading the closes newest first, one pending list at a time; an address
+# page reads only its grader's rows. In memory it was about 42 MB at E23 and grew with every close.
+_lock = threading.Lock(); _blk = threading.Lock(); _gx = {"key": None, "v": None, "keys": {}}
+GX_SCHEMA = """
+CREATE TABLE IF NOT EXISTS gx_rec(seg TEXT NOT NULL, answer TEXT NOT NULL, p TEXT, s TEXT, PRIMARY KEY(seg, answer)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS gx_by(seg TEXT NOT NULL, grader TEXT NOT NULL, answer TEXT NOT NULL, PRIMARY KEY(seg, grader, answer)) WITHOUT ROWID;
+"""
 
 def grading_index():
-    """Per answer: latest pending record (close, kind, since, panel, grades or None) and settlement (close, passed, jury).
-    Per grader: the answers they sit on (panel), sealed (grades) or judged (jury)."""
-    raw = A.epochs_raw()
-    # keyed on the parsed blob's identity and its stored ts; compared with == (an `is` on two int ids is never true,
-    # which made every address page rebuild this index from the whole epochs blob)
-    key = (S.selected(), id(raw), A.epochs_ts())
+    """{last, last_ts, merge, seg} of the selected segment's grading index, built into gx_rec and gx_by when the closes change.
+    Read rows with gx_by_grader(ix, g) and gx_recs(ix, answers)."""
+    raw = A.epochs_raw(); seg = S.selected()
+    # keyed on the parsed copy's identity and its stored ts; compared with == (an `is` on two int ids is never true)
+    key = (seg, id(raw), A.epochs_ts())
     with _lock:
-        if _gx["key"] == key and _gx["v"]: return _gx["v"]
-    rec, by = {}, {}
-    for e in sorted(raw, key=lambda e: int(e.get("epoch", 0))):
-        n = int(e.get("epoch", 0)); b = e.get("basis") or {}
-        for t, p in (b.get("pending") or {}).items():
-            gr = {x.get("grader"): x.get("ts") for x in p.get("grades") or []} if "grades" in p else None
-            r = rec.setdefault(t, {}); r["p"] = (n, p.get("kind"), A.since_of(t, p), frozenset(p.get("panel") or []), gr)
-            for g in list(p.get("panel") or []) + list(gr or {}): by.setdefault(g, set()).add(t)
-        for s in b.get("settled") or []:
-            t = s.get("answer")
-            if not t: continue
-            jy = frozenset(j.get("grader") for j in s.get("jury") or [])
-            rec.setdefault(t, {})["s"] = (n, bool(s.get("passed")), jy, O.of(s))
-            for g in jy: by.setdefault(g, set()).add(t)
-    v = dict(rec=rec, by=by, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
-             merge=A.params().get("pending_merge_from_epoch"))
-    with _lock: _gx.update(key=key, v=v)
+        v = _gx["keys"].get(seg)
+        if v and v["key"] == key: _gx.update(key=key, v=v); return v
+    with _blk:
+        with _lock:
+            v = _gx["keys"].get(seg)
+            if v and v["key"] == key: _gx.update(key=key, v=v); return v
+        v = _build(raw, seg, key)
+        with _lock: _gx["keys"][seg] = v; _gx.update(key=key, v=v)
     return v
+
+def _build(raw, seg, key):
+    c = db.conn(); c.executescript(GX_SCHEMA); sg = str(seg)
+    seen_p, seen_s, by, recs = set(), set(), set(), {}
+    for e in sorted(raw, key=lambda e: int(e.get("epoch", 0)), reverse=True):   # newest first: the first row seen is the latest
+        n = int(e.get("epoch", 0)); b = e.get("basis") or {}
+        for t, p in (A.pending_of(e) or {}).items():
+            gr = {x.get("grader"): x.get("ts") for x in p.get("grades") or []} if "grades" in p else None
+            for g in list(p.get("panel") or []) + list(gr or {}): by.add((g, t))
+            if t in seen_p: continue
+            seen_p.add(t); recs.setdefault(t, [None, None])[0] = json.dumps([n, p.get("kind"), A.since_of(t, p), list(dict.fromkeys(p.get("panel") or [])), gr])
+        for x in b.get("settled") or []:
+            t = x.get("answer")
+            if not t: continue
+            jy = list(dict.fromkeys(j.get("grader") for j in x.get("jury") or []))
+            for g in jy: by.add((g, t))
+            if t in seen_s: continue
+            seen_s.add(t); recs.setdefault(t, [None, None])[1] = json.dumps([n, bool(x.get("passed")), jy, O.of(x)])
+    rows = [(sg, t, v[0], v[1]) for t, v in recs.items()]; recs = None
+    bys = [(sg, g, t) for g, t in by if g is not None]; by = None
+    db.write_tx([("DELETE FROM gx_rec WHERE seg=?", (sg,), False), ("DELETE FROM gx_by WHERE seg=?", (sg,), False),
+                 ("INSERT INTO gx_rec(seg, answer, p, s) VALUES(?,?,?,?)", rows, True), ("INSERT OR IGNORE INTO gx_by(seg, grader, answer) VALUES(?,?,?)", bys, True)])
+    return dict(key=key, seg=sg, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
+                merge=A.params().get("pending_merge_from_epoch"))
+
+def gx_by_grader(ix, g):
+    """The answers grader g sits on (panel), sealed (grades) or judged (jury), in the close records of ix's segment."""
+    return {r["answer"] for r in db.q("SELECT answer FROM gx_by WHERE seg=? AND grader=?", (ix["seg"], g))}
+
+def gx_recs(ix, answers):
+    """{answer: {"p": (close, kind, since, panel frozenset, {grader: ts} or None), "s": (close, passed, jury frozenset, outcome)}}."""
+    out = {}; answers = list(answers)
+    for i in range(0, len(answers), 500):
+        ch = answers[i:i + 500]
+        for r in db.q(f"SELECT answer, p, s FROM gx_rec WHERE seg=? AND answer IN ({','.join('?' * len(ch))})", (ix["seg"], *ch)):
+            d = {}
+            if r["p"]:
+                n, k, sn, pn, gr = json.loads(r["p"]); d["p"] = (n, k, sn, frozenset(pn), gr)
+            if r["s"]:
+                n, ok, jy, oc = json.loads(r["s"]); d["s"] = (n, ok, frozenset(jy), oc)
+            out[r["answer"]] = d
+    return out
 
 def _one(g, t, r, ix, seal_ts, seal_as):
     p, s = r.get("p"), r.get("s"); last = ix["last"]
@@ -157,8 +196,9 @@ def _assign_all(g):
         if x["a"]: seal_as[x["a"]] = (x["id"], x["ts"])
     ts_used = set()
     out = []
-    for t in (ix["by"].get(g) or set()) | set(seal_as):
-        o = _one(g, t, ix["rec"].get(t, {}), ix, seal_ts, seal_as)
+    ts_all = gx_by_grader(ix, g) | set(seal_as); recs = gx_recs(ix, ts_all)
+    for t in ts_all:
+        o = _one(g, t, recs.get(t, {}), ix, seal_ts, seal_as)
         if o["since"] is None and o["status"] == "unrecorded":
             e = db.q1("SELECT epoch FROM txs WHERE id = ?", (t,)); o["since"] = e["epoch"] if e else None
             if o["since"] is not None and ix["last"] is not None and o["since"] > ix["last"]: o["status"] = "awaiting_close"; o["in_record"] = None

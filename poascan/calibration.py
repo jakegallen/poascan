@@ -18,13 +18,11 @@ def settled_scores(seg=None):
     for r in db.q("SELECT grader, score FROM grade_history WHERE seg=? AND score IS NOT NULL", (seg or SG.selected(),)): out[r["grader"]].append(int(r["score"]))
     return out
 
-@cached("calibration", 300)
-def calibration():
+@A.close_memo("calibration_closes")
+def _close_part():
+    """The close record part of calibration (1.26.235: read once per close; the archive part stays live)."""
     E = sorted(A.epochs_raw(), key=lambda e: int(e["epoch"]))
-    if not E: return dict(as_of_close=None, min_n=MIN_N, graders=[])
     p = A.params(); merge = int(p.get("pending_merge_from_epoch") or 0)
-    closes = [int(e["epoch"]) for e in E]; cts = [int(e["ts"]) for e in E]; last_ts = cts[-1]
-    trusted = set(p.get("trusted_graders", [])) | set(p.get("system_grader_accounts", []))
     seat = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))   # g -> close -> [seats, aligned]
     split = collections.defaultdict(lambda: [0, 0, 0, 0])                              # g -> [seats on passed, aligned, seats on failed, aligned]
     seal_ts = {}                                                                        # (answer, grader) -> seal ts (pending grades: ts only)
@@ -38,10 +36,20 @@ def calibration():
                 c = seat[g][n]; c[0] += 1; c[1] += al
                 x = split[g]; i = 0 if ok else 2; x[i] += 1; x[i + 1] += al
         if n >= merge:   # seal times only: a pending grade's score is never read
-            pend = b.get("pending") or {}
+            pend = A.pending_of(e) or {}
             for ans, row in (pend.items() if isinstance(pend, dict) else ()):
                 for gr in (row or {}).get("grades") or []:
                     if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts[(ans, gr["grader"])] = int(gr["ts"])
+    return seat, split, seal_ts
+
+@cached("calibration", 300)
+def calibration():
+    E = sorted(A.epochs_raw(), key=lambda e: int(e["epoch"]))
+    if not E: return dict(as_of_close=None, min_n=MIN_N, graders=[])
+    p = A.params(); merge = int(p.get("pending_merge_from_epoch") or 0)
+    closes = [int(e["epoch"]) for e in E]; cts = [int(e["ts"]) for e in E]; last_ts = cts[-1]
+    trusted = set(p.get("trusted_graders", [])) | set(p.get("system_grader_accounts", []))
+    seat, split, seal_ts = _close_part()
     # Seals: record grades plus archived grade-sealed txs, one per (grader, ts); a grade's ts equals its seal tx ts.
     seals = {(g, t) for (_, g), t in seal_ts.items()}
     for r in db.q("SELECT from_addr AS g, ts FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL"): seals.add((r["g"], int(r["ts"])))

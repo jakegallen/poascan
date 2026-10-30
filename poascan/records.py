@@ -58,9 +58,13 @@ def index():
     with _lock:
         ix = _ixs.get(sg)
         if ix and ix["ts"] == ts and ix["rows"]: return ix["rows"]
-    rows = []
-    for n, e in sorted(_raw().items()):
-        b = canonical(e); rows.append(dict(epoch=n, close_ts=e.get("ts"), sha256=sha256(b), bytes=len(b), segment=sg))
+    rows = []; raw = A.epochs_raw(); kind = S.blob_kind(); cn = {p: (h, nb) for p, h, nb in A.CS.canon(kind)}
+    pos = {}
+    for i, e in enumerate(raw): pos[int(e.get("epoch", 0))] = i   # the same record _raw() keeps for an epoch (the last one)
+    for n in sorted(pos):
+        e = raw[pos[n]]; x = A._loc(e); h = cn.get(x[1]) if x else None   # 1.26.235: hash and size stored with the row at ingest
+        if h is None: b = canonical(A.full_close(e)); h = (sha256(b), len(b))
+        rows.append(dict(epoch=n, close_ts=e.get("ts"), sha256=h[0], bytes=h[1], segment=sg))
     with _lock:
         _ixs[sg] = dict(ts=ts, rows=rows)
         for k in [k for k in _lru if k[0] == sg]: _lru.pop(k, None)
@@ -76,7 +80,7 @@ def record(n):
         if hit and hit[1] == row["sha256"]: _lru.move_to_end(k); return hit
     e = _raw().get(n)
     if e is None: return None
-    b = canonical(e); h = sha256(b)
+    b = canonical(A.full_close(e)); h = sha256(b)
     with _lock:
         _lru[k] = (b, h)
         while len(_lru) > LRU_MAX: _lru.popitem(last=False)
@@ -86,7 +90,7 @@ def summary(n):
     """Hash and headline counts for one close record (no blob): for agents that pin or diff closes."""
     row = next((r for r in index() if r["epoch"] == n), None)
     if not row: return None
-    e = _raw()[n]; b = e.get("basis") or {}
+    e = A.full_close(_raw()[n]); b = e.get("basis") or {}
     return dict(row, keys=sorted(e), basis_keys=sorted(b), pending=len(b.get("pending") or {}), settled=len(b.get("settled") or []),
                 rewards=len(e.get("rewards") or {}), graders_served=len(b.get("graders_served") or {}))
 

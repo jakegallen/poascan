@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.235] - 2026-10-30
+
+### Changed
+- Close records live on disk, one row per close (`close_rows`), instead of one parsed copy of the whole list in memory. Every close repeats the whole pending list, so that copy grew about 2.5 MB a close (57 MB at E23). Memory now keeps each close without `basis.pending` (a few hundred KB in all); a close's pending list is read from its row when a page needs it (at most 2 lists held), and `pend_ix` answers "this answer at this close" with no parse. Every page and API response is the same (168 URLs compared before and after).
+  - The rows are built from the stored list at the first start, read in chunks one close at a time, so the 75 MB list is never held whole. Running it again changes nothing. The old list is still written with every read, so an earlier build reads the same database, and a list it writes is picked up again later.
+  - Each row keeps the record's canonical sha256 and size, so `/api/v1/epoch-records` and the record index no longer hash every close.
+  - Pages that read every close's pending list (epoch rows, backlog, cohorts, calibration, jury and settlement charts) compute that part once per close instead of once a minute.
+- The grading assignments index (about 42 MB at E23, one more close each epoch) is in SQLite (`gx_rec`, `gx_by`), built once per close; an address page reads only its grader's rows.
+- A receipt reads its own answer's rows and seal txs (a new index on `tx_detail`) instead of an index over every answer and a scan of every tx detail once a minute (about 21 MB and the scan).
+- Address pages: a new index on `txs(from_addr, type)` so an Agent's seals and answer count no longer scan every tx of that type (the top grader's grading tab query 68 ms to 18 ms, the answer count 20 ms to under 1 ms). This was the largest CPU cost in the profile.
+
+### Added
+- `tools/closestore_test.py`: streamed, idempotent migration, same records back, older build still reads the database. `tools/memcaps_test.py`: 3x the closes keeps resident memory flat.
+
 ## [1.26.234] - 2026-10-30
 
 ### Fixed

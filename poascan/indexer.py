@@ -790,7 +790,10 @@ def store_epochs(d):
             if len(rows) <= len(old): continue
         from . import analytics as _A
         if _A.epochs_same(kind, rows): db.touch_blob(kind); _A.epochs_retag(kind); continue   # 1.26.229: unchanged, not rewritten
-        db.put_blob(kind, rows); wrote = True
+        from . import closestore as _CS
+        with _CS._lock:   # 1.26.235: the blob (read by older builds) and its per close rows, written together
+            db.put_blob(kind, rows); _CS.write(kind, rows)
+        wrote = True
     if _SG.CURRENT not in by and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
     return wrote
 

@@ -38,7 +38,7 @@ check(f"E19 split: 1954 expired, 42 passed, 4 failed ({c})", c == {"passed": 42,
 
 # ---------------- close records: an expired answer by A1 at the latest close ----------------
 A1, A2 = fixture.A1, fixture.A2
-eps = A.epochs_raw(); n = int(eps[-1]["epoch"]); TXE = "4f6168ad" + "0" * 56
+eps = [A.full_close(e) for e in A.epochs_raw()]; n = int(eps[-1]["epoch"]); TXE = "4f6168ad" + "0" * 56
 db.write("INSERT OR REPLACE INTO txs(id, type, from_addr, epoch, ts, atts, k, final) VALUES(?,?,?,?,?,?,?,?)", (TXE, "challenge", A1, 3, int(eps[3]["ts"]) - 600, 5, 5, 1))
 eps[3]["basis"]["pending"][TXE] = {"kind": "short", "panel": [], "since": 3}
 eps[-1]["basis"]["settled"] += [dict(EXP, answer=TXE, **{"from": A1}), dict(FAIL, answer="fa" * 32, **{"from": A2}), dict(PASS, answer="pa" * 32, **{"from": A2})]

@@ -1,6 +1,6 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
 import json, time, threading, statistics, collections, csv, os, re, datetime as dt
-from . import db, segments as S
+from . import db, segments as S, closestore as CS
 
 _cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
 _inflight = {}                        # key -> Event while one thread recomputes it
@@ -66,19 +66,64 @@ def networks():
         if c.get("chain_id") == "poa-mainnet-1": return c
     return {}
 
-_epochs = {}   # segment -> {"ts", "v"}
-@cached("epochs_raw", 15, light=True)   # never waits for a heavy slot: a parsed copy unless a close just landed (one parse, single flight)
+_epochs = {}   # blob kind -> {"ts", "v": slim close records (closestore.Close)}
+@cached("epochs_raw", 15, light=True)   # never waits for a heavy slot: the slim copy unless a close just landed
 def epochs_raw():
-    """The selected segment's close records (segments.py: one blob per segment; segment 1's is ~21 MB of JSON).
-    Each is parsed only when the indexer stores a new copy."""
+    """The selected segment's close records (1.26.235: closestore.py, one row per close), each without basis.pending:
+    read a record's pending list with pending_of(e) and the whole record with full_close(e). Reloaded only when the
+    indexer stores a new copy."""
     kind = S.blob_kind(); c = _epochs.setdefault(kind, {"ts": None, "v": []})
     r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
     ts = (r["ts"], db.blob_gen(kind)) if r else None   # 1.26.180: ts is whole seconds; a second write in the same second bumps gen
     if ts != c["ts"]:
-        c["v"] = []; c["ts"] = None          # drop the old copy before parsing the new one
-        r = db.q1("SELECT json FROM blobs WHERE kind=?", (kind,))
-        c["v"] = parse_closes(r["json"]) if r else []; c["ts"] = ts
+        c["v"] = []; c["ts"] = None
+        v = []
+        if r: CS.ensure(kind); v = CS.slim(kind)
+        c["v"] = v; c["ts"] = ts
     return c["v"]
+
+def _loc(e): return getattr(e, "loc", None)
+
+def pending_of(e):
+    """basis.pending of a close record: its own (a full record) or read from the close's row (a slim record from epochs_raw)."""
+    b = e.get("basis") if isinstance(e, dict) else None
+    if isinstance(b, dict) and "pending" in b: return b["pending"]
+    x = _loc(e)
+    return CS.pending(x[0], x[1]) if x and x[2] is not None else None
+
+def pending_get(e, txs):
+    """{tx: pending row} of the given answer ids at one close (from pend_ix for a slim record: nothing parsed)."""
+    b = e.get("basis") if isinstance(e, dict) else None
+    if isinstance(b, dict) and "pending" in b:
+        p = b["pending"] if isinstance(b["pending"], dict) else {}
+        return {t: p[t] for t in txs if t in p}
+    x = _loc(e)
+    return CS.pending_get(x[0], x[1], txs) if x and x[2] is not None else {}
+
+def full_close(e):
+    """The whole close record (with basis.pending in its stored place) for a slim record; any other record unchanged."""
+    x = _loc(e)
+    if not x or x[2] is None: return e
+    return CS.join(e, CS.pending(x[0], x[1]), x[2])
+
+_cm = {}; _cm_lock = threading.Lock()
+def close_memo(name):
+    """Memo of a function of the selected segment's close records: recomputed only when they change (a new close, a new
+    stored copy) or the params blob changes, so a pending list is read from disk once per close, not once per TTL."""
+    def deco(fn):
+        def wrap(*a):
+            epochs_raw(); kind = S.blob_kind(); k = (name, kind) + a
+            pr = db.q1("SELECT ts FROM blobs WHERE kind='params'")
+            sig = (_epochs.get(kind, {}).get("ts"), CS.ver(kind), pr["ts"] if pr else None, db.blob_gen("params"))
+            with _cm_lock:
+                hit = _cm.get(k)
+                if hit and hit[0] == sig: return hit[1]
+            v = fn(*a)
+            with _cm_lock: _cm[k] = (sig, v)
+            return v
+        wrap.__wrapped__ = fn
+        return wrap
+    return deco
 
 def parse_closes(text):
     """A close record list from its JSON text, the same values json.loads gives (1.26.227). Every close repeats the whole
@@ -116,17 +161,16 @@ class _Sharer:
         return e
 
 def epochs_same(kind, rows):
-    """True when rows would store exactly the text the parsed copy of blob kind came from (1.26.229). Compares one close at
-    a time against the copy already in memory, so an unchanged 63 MB re-read costs no rewrite, no second parse and no
-    whole-list text. False (write as before) when that copy is not loaded or not current."""
-    c = _epochs.get(kind); r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
-    if not c or not r or c.get("ts") != (r["ts"], db.blob_gen(kind)): return False
-    old = c["v"]
-    if not isinstance(rows, list) or len(rows) != len(old) or rows != old: return False
-    return all(json.dumps(a) == json.dumps(b) for a, b in zip(rows, old))   # the stored text is "[" + ", ".join of these
+    """True when rows would store exactly the text blob kind holds (1.26.229). 1.26.235: compared one close at a time with
+    the sha1 of each stored record (close_rows.sig), so an unchanged 63 MB re-read costs no rewrite and no parse of the old
+    copy. False (write as before) when the rows are not current with the blob."""
+    if not isinstance(rows, list) or not CS.current(kind): return False
+    have = [r["sig"] for r in db.q("SELECT sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))]
+    return len(have) == len(rows) and all(h == CS.sig_of(e) for h, e in zip(have, rows))   # the stored text is "[" + ", ".join of these
 
 def epochs_retag(kind):
-    """After db.touch_blob: keep the parsed copy, under the blob's new stored time."""
+    """After db.touch_blob: keep the rows and the slim copy, under the blob's new stored time."""
+    CS.retag(kind)
     c = _epochs.get(kind); r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
     if c and c.get("ts") and r: c["ts"] = (r["ts"], db.blob_gen(kind))
 
@@ -172,7 +216,7 @@ def since_fill():
     first = {}
     for e in epochs_raw():
         n = int(e.get("epoch", 0))
-        for t, v in ((e.get("basis") or {}).get("pending") or {}).items():
+        for t, v in (pending_of(e) or {}).items():
             if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n
     out, ids = {}, list(first)
     for i in range(0, len(ids), 500):
@@ -200,30 +244,43 @@ def grade_counts(e, prev_ts=None):
     for s in b.get("settled") or []:
         for j in s.get("jury") or []:
             if j.get("grader"): c[j["grader"]] += 1
-    for v in (b.get("pending") or {}).values():
+    for v in (pending_of(e) or {}).values():
         for g in (v.get("grades") or []) if isinstance(v, dict) else []:
             ts = g.get("ts") if isinstance(g, dict) else None
             if isinstance(g, dict) and g.get("grader") and isinstance(ts, (int, float)) and (prev_ts is None or ts > prev_ts) and (not t1 or ts <= t1): c[g["grader"]] += 1
     return c
+
+@close_memo("epoch_rows_pend")
+def _epoch_pend():
+    """Per close (epochs_raw order): the epoch_rows fields read from basis.pending, one pending list at a time (1.26.235)."""
+    out = []; pprev = None; prev = None
+    for e in epochs_raw():
+        pend = pending_of(e) or {}; t = int(e["ts"])
+        kinds = collections.Counter(v.get("kind") for v in pend.values())
+        by_origin = collections.Counter(since_of(x, v) for x, v in pend.items())
+        sids = {s.get("answer") for s in (e.get("basis", {}).get("settled", []) or []) if s.get("answer")}
+        dropped = None if pprev is None else sum(1 for x in pprev if x not in pend and x not in sids)
+        gc = grade_counts(e, prev)
+        out.append(dict(pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
+                        pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")), pending_by_origin=dict(sorted(by_origin.items())),
+                        dropped=dropped, graders=len(gc), grades=sum(gc.values())))
+        pprev = set(pend); prev = t
+    return out
 
 @cached("epoch_rows", 60)
 def epoch_rows():
     from . import closepause as _CP, outcome as _OC
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
-    for e in epochs_raw():
+    pp = _epoch_pend()
+    for i, e in enumerate(epochs_raw()):
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         unc = S.unconfirmed(int(e["epoch"]), seg)
         pool = float(e.get("pool") or 0); m = sum(r); cum += m; cumc += 0.0 if unc else m; t = int(e["ts"])
-        pend = b.get("pending", {}) or {}
-        kinds = collections.Counter(v.get("kind") for v in pend.values())
-        by_origin = collections.Counter(since_of(t, v) for t, v in pend.items())
+        q = pp[i]
         st = b.get("settled", []) or []
         # Dropped at close: in the previous close's pending, in neither this close's pending nor its settled list. Not
-        # settled, graded or rejected; null for the first close (nothing to compare).
-        sids = {s.get("answer") for s in st if s.get("answer")}
-        dropped = None if pprev is None else sum(1 for t in pprev if t not in pend and t not in sids)
-        pprev = pend
+        # settled, graded or rejected; null for the first close (nothing to compare). (_epoch_pend)
         rs = sorted(r, reverse=True)
         out.append(dict(
             epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=pool - m,
@@ -233,11 +290,11 @@ def epoch_rows():
             attesters=len(b.get("attestations", {})), attestations=sum(b.get("attestations", {}).values()),
             median=statistics.median(r) if r else None, max=rs[0] if rs else None,
             top10_share=(sum(rs[:10]) / m) if m else None, gini=gini(r), distinct_amounts=len(set(r)),
-            pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
-            pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")),
-            pending_by_origin=dict(sorted(by_origin.items())),
-            settled=len(st), settled_passed=(oc := _OC.counts(st))["passed"], settled_failed=oc["failed"], settled_expired_no_jury=oc["expired_no_jury"], dropped=dropped,
-            graders=len(gc := grade_counts(e, prev)), grades=sum(gc.values()),
+            pending=q["pending"], pending_short=q["pending_short"], pending_appeal=q["pending_appeal"],
+            pending_empty_panel=q["pending_empty_panel"],
+            pending_by_origin=dict(q["pending_by_origin"]),
+            settled=len(st), settled_passed=(oc := _OC.counts(st))["passed"], settled_failed=oc["failed"], settled_expired_no_jury=oc["expired_no_jury"], dropped=q["dropped"],
+            graders=q["graders"], grades=q["grades"],
             graders_official=len(b.get("graders_served", {}) or {}), grades_official=sum((b.get("graders_served", {}) or {}).values()),
             slashed=len(b.get("slashed", [])), established=len(b.get("established_after", [])),
             established_removed=len(b.get("established_removed", [])),
@@ -742,7 +799,7 @@ def pending_by_epoch():
     Carried-forward: basis.pending of the latest close record (ungraded or unresolved answers, keyed by answer txid, with `since` = origin epoch).
     Current: answers (challenge txs) archived since the last close; none is graded until the next close."""
     raw = epochs_raw(); o = open_epoch(); cur = o["epoch"]; now = time.time()
-    last = raw[-1] if raw else {}; pend = (last.get("basis") or {}).get("pending", {}) or {}
+    last = raw[-1] if raw else {}; pend = (pending_of(last) or {}) if raw else {}
     starts = {}
     for i, e in enumerate(raw): starts[int(e["epoch"]) + 1] = int(e["ts"])      # epoch k opens when k-1 closes
     groups = collections.defaultdict(lambda: dict(n=0, short=0, appeal=0, ids=[]))
@@ -801,22 +858,18 @@ def _seals(v, close, merge):
     if merge is not None and close < merge and v.get("kind") == "short": return len(v.get("panel") or []), False
     return None, False
 
-@cached("backlog", 60)
-def backlog():
-    """Per close: settlement origin, rows that grew without settling, silent drops; plus the seal histogram of the latest close."""
+@close_memo("backlog_pend")
+def _backlog_pend():
+    """backlog's reads of basis.pending (1.26.235: once per close, not per 60 s TTL): per close after the first, everything
+    but the archive lookup for settled answers missing from the previous close's list; plus the last close's histogram."""
     raw = epochs_raw(); mf = params().get("pending_merge_from_epoch"); mf = int(mf) if mf is not None else None
     closes = []; prev = None
     for e in raw:
-        n = int(e["epoch"]); b = e.get("basis") or {}; pend = b.get("pending") or {}
+        n = int(e["epoch"]); b = e.get("basis") or {}; pend = pending_of(e) or {}
         st = [x.get("answer") for x in b.get("settled") or [] if x.get("answer")]
         if prev is not None:
-            pn, pp = prev; sset = set(st); org = collections.Counter(); grew = collections.Counter(); drop = collections.Counter(); unk = 0
-            miss = [t for t in st if t not in pp]
-            tep = {}
-            for i in range(0, len(miss), 500):
-                ch = miss[i:i + 500]
-                for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)): tep[r["id"]] = r["epoch"]
-            for t in st: org[since_of(t, pp[t]) if t in pp else tep.get(t, "unknown")] += 1
+            pn, pp = prev; sset = set(st); grew = collections.Counter(); drop = collections.Counter(); unk = 0
+            org = [("k", since_of(t, pp[t])) if t in pp else ("m", t) for t in st]
             for t, v in pend.items():
                 if t not in pp: continue
                 a, _ = _seals(pp[t], pn, mf); c, _ = _seals(v, n, mf)
@@ -824,19 +877,35 @@ def backlog():
                 elif c > a: grew[since_of(t, v)] += 1
             for t, v in pp.items():
                 if t not in pend and t not in sset: drop[since_of(t, v)] += 1
-            closes.append(dict(close=n, settled=len(st), settled_by_origin=[dict(epoch=k, count=org[k]) for k in sorted(org, key=lambda k: (isinstance(k, str), k))],
-                               carried=sum(1 for t in pend if t in pp), grew=sum(grew.values()), grew_unknown=unk, dropped=sum(drop.values()),
-                               grew_by_epoch=dict(grew), dropped_by_epoch=dict(drop)))
+            closes.append(dict(close=n, settled=len(st), org=org, carried=sum(1 for t in pend if t in pp), grew=sum(grew.values()), grew_unknown=unk,
+                               dropped=sum(drop.values()), grew_by_epoch=dict(grew), dropped_by_epoch=dict(drop)))
         prev = (n, pend)
     hist = {}; exact = None; basis = None
     if raw:
         n = int(raw[-1]["epoch"]); ex = []
-        for t, v in ((raw[-1].get("basis") or {}).get("pending") or {}).items():
+        for t, v in (pending_of(raw[-1]) or {}).items():
             c, x = _seals(v, n, mf); ep = since_of(t, v); h = hist.setdefault(ep, {k: 0 for k in SEAL_KEYS})
             h["unknown" if c is None else "4+" if c >= 4 else str(c)] += 1
             if c is not None: ex.append(x)
         exact = all(ex) if ex else None; basis = "grades" if mf is not None and n >= mf else "panel"
     return dict(closes=closes, hist=hist, exact=exact, basis=basis, merge_from=mf)
+
+@cached("backlog", 60)
+def backlog():
+    """Per close: settlement origin, rows that grew without settling, silent drops; plus the seal histogram of the latest close."""
+    bp = _backlog_pend(); closes = []
+    for x in bp["closes"]:
+        miss = [t for k, t in x["org"] if k == "m"]
+        tep = {}
+        for i in range(0, len(miss), 500):
+            ch = miss[i:i + 500]
+            for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)): tep[r["id"]] = r["epoch"]
+        org = collections.Counter()
+        for k, t in x["org"]: org[t if k == "k" else tep.get(t, "unknown")] += 1
+        closes.append(dict(close=x["close"], settled=x["settled"], settled_by_origin=[dict(epoch=k, count=org[k]) for k in sorted(org, key=lambda k: (isinstance(k, str), k))],
+                           carried=x["carried"], grew=x["grew"], grew_unknown=x["grew_unknown"], dropped=x["dropped"],
+                           grew_by_epoch=dict(x["grew_by_epoch"]), dropped_by_epoch=dict(x["dropped_by_epoch"])))
+    return dict(closes=closes, hist={k: dict(v) for k, v in bp["hist"].items()}, exact=bp["exact"], basis=bp["basis"], merge_from=bp["merge_from"])
 
 # ---- Agents / hr: joins per hour from our own /api/status snapshots (agents_joined), no upstream call ----
 JOIN_RATE_WINDOW_S = 86400     # default window: trailing 24 h

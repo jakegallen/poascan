@@ -19,7 +19,7 @@ def panels():
     with SG.use(SG.CURRENT): eps = A.epochs_raw()
     if not eps: return {}, None
     last = max(eps, key=lambda e: int(e.get("epoch", 0)))
-    pend = (last.get("basis") or {}).get("pending") or {}
+    pend = A.pending_of(last) or {}
     return {k: len(v.get("panel") or []) for k, v in pend.items() if isinstance(v, dict)}, int(last.get("epoch", 0))
 
 @A.cached("govv2_seal_times", 120)
@@ -30,7 +30,7 @@ def seal_times():
     if not eps: return {}
     last = max(eps, key=lambda e: int(e.get("epoch", 0)))
     out = {}
-    for k, v in ((last.get("basis") or {}).get("pending") or {}).items():
+    for k, v in (A.pending_of(last) or {}).items():
         if not isinstance(v, dict) or not isinstance(v.get("grades"), list): continue
         first = {}
         for g in v["grades"]:
@@ -73,21 +73,34 @@ def settlement():
         ch = ids[i:i + 500]
         for r in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)):
             if r["epoch"] is not None: tx_ep[r["id"]] = int(r["epoch"])
-    out, prev = [], {}
-    for e in eps:
-        n = int(e.get("epoch", 0)); b = e.get("basis") or {}; ts = int(e.get("ts") or 0)
+    out = []; sp = _settle_pend()
+    for i, e in enumerate(eps):
+        n = int(e.get("epoch", 0)); b = e.get("basis") or {}; ts = int(e.get("ts") or 0); pin, opens = sp[i]
         paid_to = {a for a, v in (e.get("challenges") or {}).items() if _pos(v)}
         g = collections.defaultdict(lambda: dict(settled=0, sealed=0, passed=0, expired_no_jury=0, paid=0, open=0, open_panel=0))
         for s in b.get("settled") or []:
-            o = _origin(s.get("answer"), prev, tx_ep); o = -1 if o is None else o; x = g[o]
+            o = pin[s.get("answer")] if s.get("answer") in pin else tx_ep.get(s.get("answer")); o = -1 if o is None else o; x = g[o]
             x["settled"] += 1; x["sealed"] += 1 if s.get("jury") else 0; x["expired_no_jury"] += 1 if OC.no_jury(s) else 0
             if s.get("passed"): x["passed"] += 1; x["paid"] += 1 if s.get("from") in paid_to else 0
-        pend = b.get("pending") or {}
-        for aid, v in pend.items():
-            if not isinstance(v, dict): continue
-            x = g[A.since_of(aid, v)]; x["open"] += 1; x["open_panel"] += 1 if v.get("panel") else 0
+        for o, (k, kp) in opens.items(): x = g[o]; x["open"] += k; x["open_panel"] += kp
         for o in sorted(g):
             out.append(_split(dict(close=n, close_ts=ts, origin=None if o == -1 else o, **g[o])))
+    return out
+
+@A.close_memo("govv2_settle_pend")
+def _settle_pend():
+    """settlement's reads of basis.pending, per close (1.26.235: once per close): the origin of each settled answer found in
+    the previous close's pending list, and {origin: [open, open with a panel]}."""
+    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
+    out, prev = [], {}
+    for e in eps:
+        b = e.get("basis") or {}
+        pin = {s.get("answer"): A.since_of(s.get("answer"), prev[s.get("answer")]) for s in b.get("settled") or [] if s.get("answer") in prev}
+        pend = A.pending_of(e) or {}; opens = {}
+        for aid, v in pend.items():
+            if not isinstance(v, dict): continue
+            x = opens.setdefault(A.since_of(aid, v), [0, 0]); x[0] += 1; x[1] += 1 if v.get("panel") else 0
+        out.append((pin, opens))
         prev = pend if isinstance(pend, dict) else {}
     return out
 

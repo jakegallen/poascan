@@ -40,7 +40,7 @@ def pending(a, limit=50):
     e = _latest(); q = int(A.params().get("grade_quorum") or 4)
     out = dict(as_of_close=int(e["epoch"]) if e else None, count=0, with_panel=0, without_panel=0, grades=0, quorum=q, answers=[], awaiting_close=0)
     if not e: return out
-    pend = (e.get("basis") or {}).get("pending") or {}; last = int(e["epoch"])
+    pend = A.pending_of(e) or {}; last = int(e["epoch"])
     w, wa = _SG.sql()   # a segment 1 answer tagged E14 is not awaiting a segment 2 close
     rows = db.q("SELECT id, epoch, ts FROM txs WHERE from_addr=? AND type='challenge'" + w + " ORDER BY ts DESC LIMIT 500", (a,) + wa)
     for r in rows:

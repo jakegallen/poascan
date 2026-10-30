@@ -30,7 +30,9 @@ HI.sorted = counting_sorted   # grading_index's full scan starts with sorted(raw
 v1 = HI.grading_index(); v2 = HI.grading_index()
 check("grading_index: second call returns the cached object", v1 is v2)
 check("grading_index: the blob is scanned once for two calls", calls["sorted"] == 1)
-check("grading_index: content", v1["rec"]["t1"]["s"][1] is True and "t1" in v1["by"]["g1"] and "t1" in v1["by"]["g2"] and v1["last"] == 2)
+rc = HI.gx_recs(v1, ["t1"])   # 1.26.235: the index rows live in SQLite (gx_rec, gx_by)
+check("grading_index: content", rc["t1"]["s"][1] is True and rc["t1"]["p"][3] == frozenset({"g1"}) and "t1" in HI.gx_by_grader(v1, "g1")
+      and "t1" in HI.gx_by_grader(v1, "g2") and v1["last"] == 2)
 cur["v"] = [dict(e) for e in blob]; cur["ts"] = 2
 v3 = HI.grading_index()
 check("grading_index: a new blob rebuilds", v3 is not v1 and calls["sorted"] == 2)

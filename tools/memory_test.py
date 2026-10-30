@@ -56,7 +56,10 @@ check(f"parsed size is under half of json.loads ({size // 1024} KB vs {psize // 
 for s in ("[]", " [ ]\n", "null", "{}", '[1, 2 ,3]', '[{"basis": null}, {"basis": {"pending": null}}]'):
     check(f"edge case {s!r}", A.parse_closes(s) == (json.loads(s) or []))
 db.put_blob(S.blob_kind(), recs); A._cache.clear(); A._epochs.clear()
-check("epochs_raw reads the stored copy through parse_closes", A.epochs_raw() == ref)
+er = A.epochs_raw()   # 1.26.235: slim records (closestore.py); the whole record is full_close(e)
+check("epochs_raw reads the stored copy (rows of closestore): full_close gives every record back", [A.full_close(e) for e in er] == ref
+      and json.dumps([A.full_close(e) for e in er]) == text)
+check("epochs_raw keeps no pending list in memory", all("pending" not in e["basis"] for e in er) and A.pending_of(er[3]) == ref[3]["basis"]["pending"])
 check("indexer parses /api/epochs the same way", I._parse("/api/epochs", text.encode()) == ref and I._parse("/api/status", b'{"a": 1}') == {"a": 1})
 # 3) boot regroup (1.26.230): the (epoch, ts) check agrees with the full regroup on whether anything moves
 import copy

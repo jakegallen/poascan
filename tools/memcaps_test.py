@@ -51,6 +51,27 @@ check("/ops/memory sits behind ops_gate", 'if path == "/ops/memory": return self
 ft = open(os.path.join(ROOT, "fly.toml"), encoding="utf-8").read(); dk = open(os.path.join(ROOT, "Dockerfile"), encoding="utf-8").read()
 check("fixed glibc mmap and trim thresholds on Fly and in the image", 'MALLOC_MMAP_THRESHOLD_ = "131072"' in ft and 'MALLOC_TRIM_THRESHOLD_ = "131072"' in ft
       and "MALLOC_MMAP_THRESHOLD_=131072" in dk and "MALLOC_TRIM_THRESHOLD_=131072" in dk and 'MALLOC_ARENA_MAX = "2"' in ft)
+# 1.26.235: close records grow every close; what stays in memory must not (closestore.py, history gx tables)
+import json, tracemalloc
+from poascan import analytics as A, closestore as CS, segments as S, history as HI, receipts as RC, cohorts as CO
+def closes(n, k=3000):
+    ids = [f"{i:064x}" for i in range(k + 50 * n)]; T = int(time.time()) - 21600 * (n + 1); out = []
+    for c in range(n):
+        p = {t: {"kind": "short", "panel": ["poa1p" + str(i % 7)], "since": max(0, c - i % 16), "grades": [{"grader": "poa1g" + str(i % 11), "score": 2, "ts": T + i}]}
+             for i, t in enumerate(ids[50 * c: 50 * c + k])}
+        out.append({"epoch": c, "ts": T + 21600 * c, "basis": {"pending": p, "settled": [{"answer": ids[50 * c - 1] if c else ids[0], "passed": True, "jury": []}]}, "rewards": {"poa1a": "1"}})
+    return out
+res = {}
+for n in (8, 24):
+    db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (S.blob_kind(), int(time.time()) - n, json.dumps(closes(n)))); db._bump(S.blob_kind())
+    A._cache.clear(); A._epochs.clear(); A._cm.clear(); CS._lru.clear(); HI._gx["keys"].clear()
+    A.epochs_raw()   # rows rebuilt (streamed) before measuring
+    tracemalloc.start(); A._cache.clear(); A._epochs.clear(); CS._lru.clear()
+    er = A.epochs_raw(); HI.grading_index(); A.epoch_rows(); A.backlog(); CO.cohorts(); RC.index()
+    res[n] = tracemalloc.get_traced_memory()[0]; tracemalloc.stop()
+    check(f"{n} closes: pending lists in memory at most LRU_MAX ({len(CS._lru)})", len(CS._lru) <= CS.LRU_MAX)
+grow = res[24] - res[8]
+check(f"3x the closes: resident memory grows {grow // 1024} KB ({res[8] // 1024} KB at 8, {res[24] // 1024} KB at 24), not 3x", res[24] < 2 * res[8])
 ms = open(os.path.join(ROOT, "poascan", "memstats.py"), encoding="utf-8").read()
 check("no em or en dash", not re.search("[\u2013\u2014]", ms + open(__file__, encoding="utf-8").read()))
 print(f"\n{len(fails)} FAILED" if fails else "\nall ok"); sys.exit(1 if fails else 0)

@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS txs_from ON txs(from_addr, ts DESC);
 CREATE INDEX IF NOT EXISTS txs_to ON txs(to_addr, ts DESC);
 CREATE INDEX IF NOT EXISTS txs_type ON txs(type, ts DESC);
 CREATE INDEX IF NOT EXISTS txs_from_k ON txs(from_addr, ts DESC, id DESC);
+CREATE INDEX IF NOT EXISTS txs_from_type ON txs(from_addr, type, ts DESC);   -- 1.26.235: one Agent's txs of one type (grading tab, answer counts) without scanning every tx of that type
 CREATE INDEX IF NOT EXISTS txs_to_k ON txs(to_addr, ts DESC, id DESC);
 CREATE TABLE IF NOT EXISTS invalid_txs(txid TEXT PRIMARY KEY, error TEXT, first_seen INTEGER);
 CREATE TABLE IF NOT EXISTS tx_detail(id TEXT PRIMARY KEY, json TEXT, fetched INTEGER, final INTEGER);
@@ -112,6 +113,12 @@ def init():
             if "edited_at" not in {r[1] for r in conn().execute(f"PRAGMA table_info({t})")}:
                 conn().execute(f"ALTER TABLE {t} ADD COLUMN edited_at TEXT")
         conn().commit()
+    try:   # 1.26.235: one receipt's seal txs by answer, without a scan of every tx detail
+        conn().execute("CREATE INDEX IF NOT EXISTS tx_detail_assign ON tx_detail(json_extract(json, '$.body.assignment')) WHERE json_extract(json, '$.type') = 'grade-sealed'")
+        conn().commit()
+    except Exception: pass
+    from . import closestore as _CS   # 1.26.235: close records one row per close, rebuilt from the blobs when behind them (streamed)
+    _CS.migrate()
 
 def _visit_counts_pjoin():
     """1.26.44: SQLite cannot change a CHECK in place, so a visit_counts table from before 'pjoin' is copied into a new one

@@ -128,7 +128,7 @@ def reconcile():
     rs_txt = (f"the node's counters restart at a recovery checkpoint: it counts the archive's txs since "
               f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(reset))}, and its final count stays at the checkpoint") if reset else None
     anc = db.q1("SELECT MAX(height) AS h FROM anchors WHERE segment = ?", (S.CURRENT,)) or {}
-    pend_rec = len(((E[-1].get("basis") or {}).get("pending") or {})) if E else None
+    pend_rec = len(A.pending_of(E[-1]) or {}) if E else None
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None
     rows = [
         _row("mined", "Mined", mint, sup, "sum of rewards in close records", ep_t, "/api/status supply", node_at, "poa",

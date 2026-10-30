@@ -17,7 +17,7 @@ WATCH = dict(segment=2, closes=(18, 19, 20), post=1582, comment=6150, url="https
 def _cohorts(last):
     """{since: [pending, no_seal]} from one close record's basis.pending."""
     out = {}
-    for tid, v in (((last or {}).get("basis") or {}).get("pending") or {}).items():
+    for tid, v in ((A.pending_of(last) if last else None) or {}).items():
         if not isinstance(v, dict): continue
         x = out.setdefault(A.since_of(tid, v), [0, 0]); x[0] += 1
         if not v.get("grades"): x[1] += 1
