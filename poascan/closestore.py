@@ -79,8 +79,9 @@ def current(kind, src=None):
     if ok and _gen.setdefault(kind, g) != g: ok = False
     return ok
 
-def iter_blob(kind):
-    """Each element of a blobs row's JSON array, decoded one at a time from chunks of the stored text."""
+def iter_blob(kind, strict=False):
+    """Each element of a blobs row's JSON array, decoded one at a time from chunks of the stored text. strict: a stored
+    value that is neither an array nor null raises ValueError instead of being iterated."""
     c = db.conn(); r = c.execute("SELECT rowid FROM blobs WHERE kind=?", (kind,)).fetchone()
     if not r: return
     dec = json.JSONDecoder(); ud = codecs.getincrementaldecoder("utf-8")("surrogatepass")
@@ -99,6 +100,7 @@ def iter_blob(kind):
         more(); skip_ws()
         if buf[i:i + 1] != "[":
             v = json.loads(buf[i:] + (b.read() or b"").decode("utf-8", "surrogatepass") or "null")
+            if strict and v and not isinstance(v, list): raise ValueError("close records: not a list")
             yield from (v or []); return
         i += 1; skip_ws()
         if buf[i:i + 1] == "]": return
@@ -154,7 +156,7 @@ def _index(kind):
     """pend_ix: for each answer, the runs of consecutive closes where its pending row is unchanged (rows grow with distinct
     rows, not with closes times answers). Rebuilt from the rows, one close's pending at a time."""
     c = db.conn(); out, run = [], {}
-    for r in c.execute("SELECT pos, pending FROM close_rows WHERE kind=? ORDER BY pos", (kind,)).fetchall():
+    for r in c.execute("SELECT pos, pending FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):   # 1.26.236: one row at a time (fetchall held every close's pending text at once)
         p = json.loads(r[1]) if r[1] else {}; p = p if isinstance(p, dict) else {}; pos = r[0]; nxt = {}
         for t, v in p.items():
             vt = json.dumps(v); o = run.get(t)

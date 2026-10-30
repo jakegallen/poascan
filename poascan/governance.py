@@ -356,8 +356,12 @@ def _unconf(lv):
     """Established Agents (Safe, Watch, At risk, No record) that minepoa's grading list does not confirm (Unconfirmed)."""
     return GR.unconfirmed_set([a for a, v in lv.items() if v not in ("none", "system")])
 
-@A.cached("gov_scores", 300)
 def scores(scope="segment"):
+    """See _scores. scores() and scores("segment") share one cache entry (1.26.236: they were two copies of the same table)."""
+    return _scores(scope)
+
+@A.cached("gov_scores", 300)
+def _scores(scope):
     """{address: governance facts plus Score parts} for the selected segment, or every segment (scope "all": closes on the
     lifetime close number, standing fresh at each segment's first close, all txs and the whole forum mirror).
     Levels are the selected segment's (the current segment's for all)."""

@@ -92,17 +92,45 @@ def install_log_filter():
 TEXT_COLS = [("forum_posts", "body"), ("forum_posts", "title"), ("forum_comments", "body"), ("tx_detail", "json"),
              ("txs", "memo"), ("blobs", "json"), ("snaps", "json"), ("swap_events", "json"), ("swaps", "memo")]
 
+BIG = 4 << 20   # 1.26.236: a value over this is scanned in chunks first and read whole only when it holds a match
+
+GUID_PRE_B = re.compile(rb"-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-")
+
+def _big_hit(db, t, c, rid):
+    """True when one large stored value holds a key-shaped token, read in 1 MB chunks (overlapping, so a token across
+    a chunk edge is still seen) instead of all at once: the close record list is 75 MB on prod and grows every epoch."""
+    tail = b""
+    with db.conn().blobopen(t, c, rid, readonly=True) as b:
+        while True:
+            ch = b.read(1 << 20); w = tail + ch
+            if b"k_" in w and KEY_RXB.search(w): return True
+            if GUID_PRE_B.search(w) and _guid_ctx(w.decode("utf-8", "replace")): return True
+            if not ch: return False
+            tail = w[-512:]
+
 def purge_db(db):
     """One pass over the text columns that hold other people's words; rewrite any row with a key-shaped token.
-    Returns the number of rows changed (never the values)."""
+    Returns the number of rows changed (never the values). Matching rows are read one at a time (1.26.236: the query
+    used to return every matching value at once, the whole close record list among them)."""
     n = 0
     for t, c in TEXT_COLS:
         try:
-            rows = db.q(f"SELECT rowid AS rid, {c} AS v FROM {t} WHERE {c} LIKE '%k\\_%' ESCAPE '\\' OR {c} LIKE '%-____-____-____-%'")
+            # a large value is never handed to LIKE (SQLite would hold all of it at once): it is scanned in chunks instead
+            nb = f"octet_length({c})"   # SQLite 3.43+: read from the row header, the value itself is not loaded
+            try: big = [r["rid"] for r in db.q(f"SELECT rowid AS rid FROM {t} WHERE {nb} > {BIG}")]
+            except Exception: nb = "0"; big = []   # older SQLite: every row goes through LIKE, as before
+            rows = db.q(f"SELECT rowid AS rid FROM {t} WHERE {nb} <= {BIG} AND ({c} LIKE '%k\\_%' ESCAPE '\\' OR {c} LIKE '%-____-____-____-%')")
         except Exception:
             continue
-        for r in rows:
-            v = r["v"]
+        hits = []
+        for rid in big:
+            try:
+                if _big_hit(db, t, c, rid): hits.append(rid)
+            except Exception: hits.append(rid)   # no blob handle: read it whole as before
+        for rid in [r["rid"] for r in rows] + hits:
+            r = {"rid": rid}
+            x = db.q1(f"SELECT {c} AS v FROM {t} WHERE rowid=?", (r["rid"],)); v = x["v"] if x else None
             if isinstance(v, str) and (KEY_RX.search(v) or _guid_ctx(v)):
                 db.write(f"UPDATE {t} SET {c}=? WHERE rowid=?", (redact(v), r["rid"])); n += 1
+            v = x = None
     return n

@@ -206,6 +206,22 @@ def job(now=None, get=None, force=False):
 def meta(): return db.get_blob(META)[0] or {}
 
 # ---------------------------------------------------------------- reads (no upstream call)
+def _share_strings(o, memo=None):
+    """One str object per distinct value (grader addresses, kinds) in the parsed copy: about 85k strings, 26k distinct;
+    saves about a fifth of the copy's memory (1.26.236). Values and order are unchanged."""
+    memo = {} if memo is None else memo
+    st = [o]
+    while st:
+        x = st.pop()
+        if isinstance(x, dict):
+            for k, y in x.items():
+                if isinstance(y, str): x[k] = memo.setdefault(y, y)
+                elif isinstance(y, (dict, list)): st.append(y)
+        elif isinstance(x, list):
+            for i, y in enumerate(x):
+                if isinstance(y, str): x[i] = memo.setdefault(y, y)
+                elif isinstance(y, (dict, list)): st.append(y)
+
 _cur = {}
 def current():
     """The stored current copy, parsed once per new read (memory), or None when POAScan has none yet."""
@@ -217,6 +233,7 @@ def current():
     if _cur.get("ts") == sig: _cur["chk"] = now; return _cur["v"]
     v = db.get_blob(BLOB)[0]
     if not valid(v): return None
+    _share_strings(v)
     _cur.clear(); _cur.update(ts=sig, v=v, idx=None, chk=now, queue=None, graders=None, qix=None)
     return v
 

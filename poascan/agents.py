@@ -48,6 +48,7 @@ def settled_records():
             out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", []), O.of(s)))
     return out
 
+@cached("accounts_all", 10, light=True)   # 1.26.236: read by the invite tree and Agent tables on most pages; one table read per 10 s, not per page (every caller only reads it)
 def accounts_all():
     return {r["addr"]: r for r in db.q("SELECT addr, invited_by, balance, first_seen FROM accounts")}
 

@@ -188,15 +188,17 @@ def _segments():
 
 def _closes_need_regroup(c, S):
     """True when _regroup_closes would write anything: the same grouping it computes, from (epoch, ts, segment) only."""
-    from .analytics import parse_records
     kinds = [r[0] for r in c.execute("SELECT kind FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()]
     if not kinds: return False
     sig_of = lambda e: (e.get("epoch"), e.get("ts"), S.of_record(e)) if isinstance(e, dict) else None
     have = {}
+    from . import closestore as CS
     for k in kinds:
-        r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
-        v = parse_records(r[0] or "null", sig_of) if r else []
-        if not isinstance(v, list) or None in v:
+        # 1.26.236: streamed from the stored text in chunks (closestore.iter_blob), one record at a time; reading the
+        # whole text first held it all at once (75 MB on prod at E23, 340 MB in the 5x growth bench) on every boot
+        try: v = [sig_of(e) for e in CS.iter_blob(k, strict=True)]
+        except ValueError: return True   # not a plain list of records: the full path below handles it exactly as before
+        if None in v:
             if v: return True   # not a plain list of records: the full path below handles it exactly as before
             v = []
         have[k] = v
@@ -272,6 +274,11 @@ def write_tx(stmts):
 
 def q(sql, args=()):
     return [dict(r) for r in conn().execute(sql, args).fetchall()]
+
+def qi(sql, args=()):
+    """Rows one at a time (sqlite3.Row: r["col"] or r[0]) for a scan whose result is folded as it goes: q() holds every
+    row twice (fetchall plus the dicts) before the caller sees the first (1.26.236)."""
+    yield from conn().execute(sql, args)
 
 def q1(sql, args=()):
     r = conn().execute(sql, args).fetchone()

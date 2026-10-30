@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.236] - 2026-10-30
+
+### Changed
+- Boot no longer reads the whole close record list at once. The segment regroup check reads it in chunks, one record at a time, and the key scrub never hands a value over 4 MB to its text search: it scans such a value in 1 MB chunks and reads it whole only when it holds a key. Boot peak with 5x today's closes and Agents: 727 MB to 105 MB (box bench).
+- Calibration folds the archived seal txs as it reads them instead of loading every one first (5x bench: the page's peak drops by the size of that list), and keeps only (grader, seal time) pairs from the close records.
+- The grading copy keeps one string per distinct value (about a fifth less memory for it). `scores()` and `scores("segment")` share one cache entry (they were two copies of the same table). The accounts table is read at most every 10 s instead of once per page.
+
+### Added
+- `tools/bootpeak_test.py` (CI): the key scrub finds a key across a chunk edge and stays far below the size of the value it scans; the regroup check gives the old answers. `tools/growth_bench.py`: memory and time with closes and Agents at 1x, 2x and 5x.
+
 ## [1.26.235] - 2026-10-30
 
 ### Changed

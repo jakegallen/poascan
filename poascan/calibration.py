@@ -40,7 +40,7 @@ def _close_part():
             for ans, row in (pend.items() if isinstance(pend, dict) else ()):
                 for gr in (row or {}).get("grades") or []:
                     if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts[(ans, gr["grader"])] = int(gr["ts"])
-    return seat, split, seal_ts
+    return seat, split, frozenset((g, t) for (_, g), t in seal_ts.items())   # only the (grader, ts) pairs are read
 
 @cached("calibration", 300)
 def calibration():
@@ -49,10 +49,10 @@ def calibration():
     p = A.params(); merge = int(p.get("pending_merge_from_epoch") or 0)
     closes = [int(e["epoch"]) for e in E]; cts = [int(e["ts"]) for e in E]; last_ts = cts[-1]
     trusted = set(p.get("trusted_graders", [])) | set(p.get("system_grader_accounts", []))
-    seat, split, seal_ts = _close_part()
+    seat, split, rec_seals = _close_part()
     # Seals: record grades plus archived grade-sealed txs, one per (grader, ts); a grade's ts equals its seal tx ts.
-    seals = {(g, t) for (_, g), t in seal_ts.items()}
-    for r in db.q("SELECT from_addr AS g, ts FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL"): seals.add((r["g"], int(r["ts"])))
+    seals = set(rec_seals)
+    for g, t in db.qi("SELECT DISTINCT from_addr, ts FROM txs WHERE type='grade-sealed' AND from_addr IS NOT NULL"): seals.add((g, int(t)))
     per = collections.defaultdict(collections.Counter); since = collections.Counter()
     for g, t in seals:
         if t > last_ts: since[g] += 1; continue
