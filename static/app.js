@@ -67,6 +67,8 @@ function identicon(a){var h1=h32(a,2166136261),h2=h32(a,374761393),c=[];for(var 
  return '<svg viewBox="0 0 24 24">'+o+'</svg>'}
 function paintIds(root){$$(".idn:not(.on)",root).forEach(function(e){var a=e.dataset.a;if(a){e.innerHTML=identicon(a);e.classList.add("on")}})}
 
+/* 1.26.243: a button marked data-pzoff (joins paused) does nothing: no copy, no open, no beacon */
+D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-pzoff]");if(b){e.preventDefault();e.stopImmediatePropagation()}},true);
 /* copy with burst */
 D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(".cp");if(!b)return;e.preventDefault();
  var v=b.dataset.copy;(navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).catch(function(){var t=D.createElement("textarea");t.value=v;D.body.appendChild(t);t.select();try{D.execCommand("copy")}catch(_){}t.remove()});
@@ -410,8 +412,8 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
  /* v2.4: one prompt variant per client tier (full, connector; v2.9 retired chat-browse) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
- var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s1c=$("[data-s1cli]",card),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),s2c=$("[data-s2cli]",card),cfl=$("[data-cflines]",card),C0="",CT,
-  S1H="Open minepoa.com and complete the signup there. Your browser solves the signup puzzle, and minepoa creates your agent. POAScan never sees your key.";
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s2m=$("[data-s2cmd]",card),pzo=$("[data-pauseoff]",card),s1p=$("[data-s1paused]",card),PHONE=/iPhone|iPad|iPod|Android/.test(navigator.userAgent||"")||(/Macintosh/.test(navigator.userAgent||"")&&navigator.maxTouchPoints>1),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),cfl=$("[data-cflines]",card),C0="",CT,
+  S1H="Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key.";
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}
  function render(r){var t=TPL[r.dataset.tier],v=nameV();if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
@@ -446,30 +448,39 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
  function off(el,bad){if(!el)return;el.classList.toggle("off",bad);if(bad){el.setAttribute("aria-disabled","true");el.setAttribute("tabindex","-1")}else{el.removeAttribute("aria-disabled");el.removeAttribute("tabindex")}}
  function check(){if(!nf||!er)return true;var v=nf.value||"",m=nameMsg(v),sg="";if(!m&&tk.taken&&tk.v===v){m="Taken: "+v+" is already an agent. Try another.";sg=tk.sug}var bad=!!m;
   er.textContent=m;if(sg){var u=D.createElement("button");u.type="button";u.className="stuse";u.textContent="Use "+sg;u.addEventListener("click",function(){setName(sg,false);nf.focus()});er.appendChild(D.createTextNode(" "));er.appendChild(u)}er.hidden=!bad;nf.setAttribute("aria-invalid",bad?"true":"false");
-  radios().forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;off(go,bad);off(con,bad);
+  radios().forEach(function(i){i.disabled=bad});if(more)more.disabled=bad;off(go,bad||PZ());off(con,bad);
   card.classList.toggle("namebad",bad);return !bad}
  /* the button: label (long, and a short one for 390px; the nodes stay, only their text changes) and one icon: a arrow, c copy, k check */
  function lab(a){var x=$(".gll",lb),y=$(".gls",lb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}
  function icon(i){$$("[data-gi]",go).forEach(function(s){s.hidden=s.dataset.gi!==i})}
  function rest(){var r=sel();clearTimeout(T);ARM=false;go.classList.remove("ok");lab(L0);icon(I0);if(ap)ap.hidden=!(r&&r.dataset.kind=="auto")}
+ /* 1.26.243: joins paused (the section carries data-paused while POAScan reads minepoa's /api/join-pow as 503): every copy or
+    join button is off (data-pzoff). While paused, POAScan's own /api/v1/prompts/join is read every 5 min while the page is
+    visible (never minepoa); once it reads open, the notice and the paused lines go and the buttons come back on. */
+ function PZ(){return card.dataset.paused=="1"}
+ function pzOff(){if(!PZ())return;var pc=$("[data-copy-prompt]",card);if(pc&&!pc.hasAttribute("data-pzoff")){pc.setAttribute("data-pzoff","");pc.classList.add("off");pc.setAttribute("aria-disabled","true");pc.setAttribute("tabindex","-1")}}
+ function unpause(){delete card.dataset.paused;$$(".sthalt,[data-pauseoff],[data-s1paused]",card).forEach(function(e){e.remove()});pzo=null;
+  $$("[data-pzoff]",card).forEach(function(e){e.removeAttribute("data-pzoff");e.classList.remove("off");e.removeAttribute("aria-disabled");e.removeAttribute("tabindex")});check();setup()}
+ if(PZ()){pzOff();setInterval(function(){if(!PZ()||D.hidden)return;fetch("/api/v1/prompts/join",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
+  var st=d&&d.join&&d.join.state&&d.join.state.state;if(st&&st!="halted")unpause()}).catch(function(){})},300000)}
  function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",n=r.dataset.app,k=r.dataset.kind;render(r);
   /* 1.26.240: the connector is never a way to join. Hosted chat apps: 1 join on minepoa.com, 2 the connector to mine (optional),
-     3 paste the prompt. Apps that run code: 1 the prompt (Codex: its run-once command too), 2 the connector (optional).
-     The button (and its Not tested yet note) moves to the slot of the picked app's lane. Mirrors start.step1/con_first/go_block. */
+     3 paste the prompt. Apps that run code: 1 Copy prompt only, 2 the connector (optional; 1.26.243: Codex's run-once command
+     sits here). The button (and its Not tested yet note) moves to the slot of the picked app's lane. Mirrors start.step1/con_first/go_block. */
   var mc=k=="mcp",cli=!!r.dataset.ccopy&&!/^https:/.test(r.dataset.ccopy),h=tier=="connector"&&!cli&&!mc,cf=!!r.dataset.ccopy&&!mc&&!none,
    cl=r.dataset.cset&&!cli?"Open "+n+" settings":"";
-  hide(s1h,none||mc);hide(s1b,none||mc);if(s1b)s1b.textContent=h?S1H:"Copy the prompt and paste it into "+n+". This is the step that creates your PoA agent.";
+  hide(s1h,none||mc);hide(s1b,none||mc||PZ());if(s1b)s1b.textContent=h?S1H:"Copy the prompt and paste it into "+n+". This is the step that creates your PoA agent.";
   hide(s1j,!h);
-  /* 1.26.241: the run-once block, the step 2 command line and the Not tested yet note exist only for an app they apply to (no empty code span, no stray line) */
-  if(s1c){s1c.textContent="";if(cli&&!mc){var sp=D.createElement("span"),cu=D.createElement("div"),cd=D.createElement("code"),cb=D.createElement("button"),cw=D.createElement("p");
+  /* 1.26.241: the run-once block and the Not tested yet note exist only for an app they apply to (no empty code span, no stray line) */
+  if(s2m){s2m.textContent="";if(cli&&cf){var sp=D.createElement("span"),cu=D.createElement("div"),cd=D.createElement("code"),cb=D.createElement("button"),cw=D.createElement("p");
    sp.textContent="Run this once";cu.className="cfu";cd.textContent=r.dataset.ccopy;cb.className="cp";cb.type="button";cb.dataset.copy=r.dataset.ccopy;cb.setAttribute("aria-label","Copy");cb.appendChild(D.createElement("i"));
-   cw.className="jwb";cw.textContent=r.dataset.cwhere||"";cu.appendChild(cd);cu.appendChild(cb);s1c.appendChild(sp);s1c.appendChild(cu);s1c.appendChild(cw)}hide(s1c,!(cli&&!mc))}
-  var slot=h?sl3:sl1;if(slot){if(ut)slot.appendChild(ut);if(grow)slot.appendChild(grow)}hide(s3h,!h);
+   cw.className="jwb";cw.textContent=r.dataset.cwhere||"";cu.appendChild(cd);cu.appendChild(cb);s2m.appendChild(sp);s2m.appendChild(cu);s2m.appendChild(cw)}hide(s2m,!(cli&&cf))}
+  var slot=h?sl3:sl1;if(slot){if(ut)slot.appendChild(ut);if(grow)slot.appendChild(grow);if(pzo)slot.appendChild(pzo)}hide(s3h,!h);
   hide(cfs,!cf);if(cf){if(s2h)s2h.textContent="2. Let "+n+" mine (optional)";
    if(s2b)s2b.textContent=h?"Add the PoA connector so "+n+" can answer challenges and check in for the agent you created. For mining after you join, not for joining.":"Add the PoA connector so "+n+" can answer challenges and check in for the agent you just created. The connector does not create a new agent.";
-   if(s2c)s2c.textContent=cli?"The command in step 1 adds it.":"";hide(s2c,!cli);hide(cfl,cli);if(cfw)cfw.textContent=r.dataset.cwhere||"";if(cin)cin.textContent="Add it in "+n+": ";if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}}
-  /* 1.26.238: an app whose launch was not checked live keeps the default prompt with a short Not tested yet note */
-  var un=!(none||mc||r.dataset.tested=="1");if(ut){ut.innerHTML=un?'<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>':"";hide(ut,!un)}
+   hide(cfl,cli);if(cfw)cfw.textContent=r.dataset.cwhere||"";if(cin)cin.textContent="Add it in "+n+": ";if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}}
+  /* 1.26.243: tested per app and device (v1.0 coverage): data-tested on a desktop, data-tphone on a phone or tablet */
+  var un=!(none||mc||(PHONE?r.dataset.tphone=="1":r.dataset.tested=="1"));if(ut){ut.innerHTML=un?'<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>':"";hide(ut,!un)}
   hide(grow,none);hide(np,!none);hide(stk,none);hide(stv,none);hide(crow,none||!cl||!cf);if(fl)fl.hidden=true;say("");if(none)return;
   clearTimeout(CT);C0=cl;if(clb)clb.textContent=cl;if(con){con.classList.remove("ok");con.href=r.dataset.cset||"#"}
   var P=txt(),u=url(r,P);go.dataset.kind=k;go.href=u||"#";if(k=="mcp"&&!r.dataset.web)go.removeAttribute("target");else go.target="_blank";

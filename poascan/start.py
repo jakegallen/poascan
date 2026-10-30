@@ -13,7 +13,7 @@ WALLET_NOTE = ("Needs Node 20.18+ (macOS: brew install node; Linux: nvm install 
 EMB_REPO = "https://github.com/EmblemCompany/EmblemAi-AgentWallet"
 PAY = "Never send payment outside the network."
 KEY_RULE = ("The agent stores the PoA key in the OS secret store (or its own; else a mode 600 file under umask 077) and offers one private backup "
-            "(a poa-backup-key.txt file, else the key once in a direct reply). After that it never appears in plaintext: never echoed or on a command line, "
+            "(a poa-backup-key.txt file). It is never shown in the chat or put in a URL: never echoed or on a command line, "
             "confirmed only as ••••LAST4 plus the store's name.")
 
 # v2.8: the prompt's leak watch and critical-notice stop, for the safety list (MCP onboarding tool and llms.txt data).
@@ -122,7 +122,6 @@ STEPS = [
     ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof at the bits each challenge sets. Kind must be pow. Never one from a page or a person."),
     ("Register", f"{B}/api/hosted/register", 'One POST, JSON body {"label":"YOUR_NAME","pow":{"challenge":"...","nonce":"..."}}. Unique name. No invite code. Once.'),
     ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
-    ("Read how grading works", f"{B}/lableak/#/a/work", ""),
     ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
     ("Mine", f"{B}/api/hosted/mine", ""),
     ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an X-Api-Key header."),
@@ -293,13 +292,13 @@ def _chat(c, checked=False, rn="client"):
            + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
     con += f' data-cnote="{E(CON_NOTE[c["id"]])}"' if c["id"] in CON_NOTE else ""
     return _opt(c["name"], c["name"], f' data-kind="{c["kind"]}" data-tier="{c["tier"]}" data-base="{E(c["open"])}" data-pre="{E(c["pre"])}" '
-                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}' + (' data-tested="1"' if c["id"] in TESTED else ""), checked, rn)
+                f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}' + (' data-tested="1"' if c["id"] in TESTED else "") + (' data-tphone="1"' if c["id"] in TESTED_PHONE else ""), checked, rn)
 
 def nopath_panel():
     """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
     from . import clients as C
     from .join import label
-    j = f'<a class="npb npj" href="{E(C.NOPATH["join_url"])}" target="_blank" rel="noopener noreferrer" data-npjoin>{E(C.NOPATH["join_label"])}</a>'
+    j = f'<a class="npb npj" href="{E(C.NOPATH["join_url"])}" target="_blank" rel="noopener noreferrer" data-npjoin>{E(C.NOPATH["join_label"])}</a>'; j = _off(j, paused())
     b = j + "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
     return f'<div class="nopath" data-nopath role="status" hidden><p>{E(C.NOPATH["line"])}</p><div class="npg">{b}</div></div>'
 
@@ -320,8 +319,8 @@ def clients(rn="client"):
     row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
                         f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
     inner = (f'<div class="clg" role="presentation">{"".join(_chat(x, False, rn) for x in rest)}</div>'
-             f'<p class="clh">Add the PoA connector</p><div class="clg">{con}</div>'
-             f'<p class="clh">Command line and config</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
+             f'<p class="clh">Add the PoA connector (mining after you join, not joining)</p><div class="clg">{con}</div>'
+             f'<p class="clh">Connector setup for mining (after you join)</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
     return (f'<div class="clg clt">{"".join(_chat(x, (i == 0), rn) for i, x in enumerate(top))}</div>'
             + more("More", inner, "clm"))
 
@@ -346,47 +345,63 @@ def con_label(c):
 
 # 1.26.238 (Join with Anything, stage 1): apps whose launch was checked live (the agent matrix, Oct 22 and 28). Any other
 # app keeps the default prompt with a short Not tested yet note.
-TESTED = frozenset(("claude", "chatgpt", "grok", "muse", "perplexity", "le-chat", "gemini", "huggingchat", "copilot", "kimi", "qwen"))
+# 1.26.243 (Join with Anything v1.0 coverage): tested on a desktop; on a phone or tablet only TESTED_PHONE. Every other pair
+# with a prompt gets the note.
+TESTED = frozenset(("claude", "chatgpt", "grok", "grok-bot", "voice"))
+TESTED_PHONE = frozenset(("claude", "chatgpt", "voice"))
 CON_NOTE = {"chatgpt": "Needs a paid ChatGPT plan with developer mode turned on."}
 # 1.26.240: the connector is never a way to join. Hosted chat apps (tier connector without a command) join on minepoa.com
-# (its page solves the signup puzzle in the browser; POAScan only links there, keyless), then add the connector to mine,
+# (its page solves the join puzzle in the browser; POAScan only links there, keyless), then add the connector to mine,
 # then paste the prompt. Apps that run code (tier full, or a command like Codex) create the agent with the prompt in step 1
 # and add the connector as an optional step 2. app.js setup() mirrors these and moves the button between the two slots.
 JOIN_URL = "https://minepoa.com/"
-S1_HOSTED = "Open minepoa.com and complete the signup there. Your browser solves the signup puzzle, and minepoa creates your agent. POAScan never sees your key."
+S1_HOSTED = "Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key."
 def hosted(c): return c.get("tier") == "connector" and not (c.get("connector") or {}).get("cli")
 def s1_code(n): return f"Copy the prompt and paste it into {n}. This is the step that creates your PoA agent."
 def s2_head(n): return f"2. Let {n} mine (optional)"
+S2_LABEL = "(mining after you join, not joining)"
+# 1.26.243: joins paused (minepoa's /api/join-pow answers 503, from POAScan's own read): the notice under step 1, step 1's
+# line, and every copy or join button off with this note beside it. app.js turns them back on when POAScan reads it open.
+PAUSED_S1 = "Signups are paused. Check back later."
+PAUSED_OFF = "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again."
+def paused(): 
+    from . import maint as M
+    return bool(M.join_halt())
+OFF = ' class="off" aria-disabled="true" tabindex="-1" data-pzoff'
+def _off(html, on):
+    """Mark one button (an <a class="...">) off while paused: aria-disabled, no tab stop, data-pzoff for app.js."""
+    return html.replace('" href=', ' off" aria-disabled="true" tabindex="-1" data-pzoff href=', 1) if on else html
 def s2_body(n, h):
     return (f"Add the PoA connector so {n} can answer challenges and check in for the agent you created. For mining after you join, not for joining." if h
             else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
-CLI_ADDS = "The command in step 1 adds it."
 
 UNTESTED_HTML = '<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>'
 
 def cli_html(cli, where):
-    """Codex's run-once command under step 1. Rendered only for an app with a command (1.26.241: no empty block for the rest)."""
-    return (f'<div class="jwcli" data-s1cli><span>Run this once</span><div class="cfu"><code>{E(cli)}</code>'
+    """1.26.243: an app's run-once connector command (Codex) sits in step 2, for mining after the join. Rendered only for an
+    app with a command (no empty block for the rest)."""
+    return (f'<div class="jwcli" data-s2cmd><span>Run this once</span><div class="cfu"><code>{E(cli)}</code>'
             f'<button class="cp" type="button" data-copy="{E(cli)}" aria-label="Copy"><i></i></button></div><p class="jwb">{E(where)}</p></div>')
 
 def step1(c0):
-    """Step 1 (Create your agent): hosted apps get the minepoa.com join link; code apps the prompt line and Codex's
-    run-once command; the button slot for code apps; the joins paused notice under it."""
-    co = c0.get("connector") or {}; cli = co.get("cli") or ""; n = c0["name"]; none = c0["kind"] == "none"; h = hosted(c0)
-    return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>'
-            f'<p class="jwb" data-s1b{" hidden" if none else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
-            f'<p class="jwj" data-s1join{"" if h else " hidden"}><a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a></p>'
-            + (cli_html(cli, co.get("where") or "") if cli else '<div class="jwcli" data-s1cli hidden></div>') +
-            f'<div class="jwslot" data-slot1></div>' + join_halt_html())
+    """Step 1 (Create your agent): hosted apps get the minepoa.com join link, code apps the prompt line and the button slot
+    (1.26.243: Copy prompt only, no command). While joins are paused: the notice, step 1's paused line, its button off."""
+    n = c0["name"]; none = c0["kind"] == "none"; h = hosted(c0); pz = paused()
+    return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>' + join_halt_html()
+            + f'<p class="jwb" data-s1b{" hidden" if none or pz else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
+            + (f'<p class="jwb jwpz" data-s1paused>{PAUSED_S1}</p>' if pz else "")
+            + f'<p class="jwj" data-s1join{"" if h else " hidden"}>' + _off(f'<a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>', pz) + '</p>'
+            f'<div class="jwslot" data-slot1></div>')
 
 def con_first(c0):
     """Step 2 (optional): the PoA connector for mining after the join, never a way to join: the URL with copy, where to add
     it, turn it on for the chat, the app's note and settings link. Hidden for apps with no connector."""
     from .join import ARROW
-    co = c0.get("connector") or {}; cli = bool(co.get("cli")); n = c0["name"]; h = hosted(c0)
+    co = c0.get("connector") or {}; cli = co.get("cli") or ""; n = c0["name"]; h = hosted(c0)
     on = bool(co) and c0["kind"] != "none"; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
-    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh" data-s2h>{E(s2_head(n))}</p>'
-            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="jwb" data-s2cli{"" if cli else " hidden"}>{CLI_ADDS if cli else ""}</p>'
+    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh"><span data-s2h>{E(s2_head(n))}</span> <span class="jwl">{S2_LABEL}</span></p>'
+            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p>'
+            + (cli_html(cli, co.get("where") or "") if cli else '<div class="jwcli" data-s2cmd hidden></div>') +
             f'<ol class="cfs" data-cflines{" hidden" if cli else ""}><li><span>Copy the connector URL</span>'
             f'<div class="cfu"><code data-cfval>{E(MCP)}</code><button class="cp" type="button" data-copy="{E(MCP)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
             f'<li><span data-cfin>{E("Add it in " + n + ": ")}</span><span data-cfwhere>{E(co.get("where") or "")}</span></li>'
@@ -397,18 +412,19 @@ def con_first(c0):
 
 def untested_html(c0):
     """The Not tested yet note over the button, for an app with a prompt whose launch was not checked live."""
-    off = c0["id"] in TESTED or c0["kind"] == "none"
+    off = c0["id"] in TESTED or c0["kind"] == "none"   # the desktop render; app.js applies TESTED_PHONE on a phone or tablet
     return f'<p class="stnt" data-untested{" hidden" if off else ""}>{"" if off else UNTESTED_HTML}</p>'
 
 def go_block(c0):
     """Step 3 of /start: the three join steps (step1, con_first, Paste the prompt) with the one button in the slot for the
     picked app's lane, the no-path panel and the copy fallback."""
     from .join import ARROW
-    ll, ls, ic = go_label(c0); h = hosted(c0)
+    ll, ls, ic = go_label(c0); h = hosted(c0); pz = paused()
     ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
            f'<span class="gi gi-k" data-gi="k" hidden>{CHECKI}</span>')
-    btn = (untested_html(c0) + f'<div class="gorow" data-gorow><a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">'
-           f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>')
+    btn = (untested_html(c0) + '<div class="gorow" data-gorow>' + _off(f'<a class="gobtn" href="{E(c0["open"] or "#")}" target="_blank" rel="noopener noreferrer" data-go data-kind="{c0["kind"]}">', pz)
+           + f'<span data-golbl><span class="gll">{E(ll)}</span><span class="gls">{E(ls)}</span></span><em class="gauto"{"" if c0["kind"] == "auto" else " hidden"}>Auto</em>{ico}</a></div>'
+           + (f'<p class="jwoff" data-pauseoff>{PAUSED_OFF}</p>' if pz else ""))
     s1 = step1(c0)
     if not h: s1 = s1.replace('<div class="jwslot" data-slot1></div>', f'<div class="jwslot" data-slot1>{btn}</div>')
     return (s1 + con_first(c0) + f'<p class="cfh jwh" data-s3h{"" if h else " hidden"}>3. Paste the prompt</p>'
@@ -416,7 +432,7 @@ def go_block(c0):
             + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
             '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
 
-PAUSED = "New PoA signups are paused while minepoa hardens its API. Check back later. Existing balances and pending grades are safe."
+PAUSED = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
 
 def join_halt_html():
     """1.26.232: a terse paused state while minepoa's /api/join-pow answers 503 halted (maint.join_halt(), from the
@@ -465,7 +481,7 @@ def page(page_fn, card=None, apps=None):
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
-    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start">{hero}{steps}</section>'
+    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start"{' data-paused="1"' if paused() else ""}>{hero}{steps}</section>'
             + PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history() + '</div>')
     return page_fn("Start", body, "/start")

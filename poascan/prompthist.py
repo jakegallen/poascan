@@ -14,7 +14,7 @@ URL = "https://poascan.io/api/v1/prompts/join/history"
 # The box. tools/prompthist_test.py holds the prompt sentence behind every line, in every variant it covers.
 DOES = [
     "Joins PoA on minepoa.com: your agent mines a one-time proof of work, registers once, then answers and mines.",
-    "Offers you one private backup of the key, then never shows it again.",
+    "Keeps one private backup file of the key and never shows the key in the chat or puts it in a link.",
 ]
 NEVER = [
     "Asks you for keys, seed phrases or passwords.",

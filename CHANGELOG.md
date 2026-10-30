@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.243] - 2026-10-30
+
+### Changed
+
+- Join prompt v2.9.3 (template sha256 cce915f1, combined fc816d15): the key goes only in the X-Api-Key header, never in a URL, and is never shown in the chat; the agent stops if a call wants the credential in the URL. Mining steps renumbered 6 to 9; the grading guide link is gone. The connector variant drops the direct-reply backup.
+- /start code apps (Codex, Claude Code, Cursor, Grok Bot): step 1 is Copy prompt only. Codex now gets the full prompt; its run-once connector command moved to step 2 (mining). Step 2 reads "(mining after you join, not joining)"; step 1 says "join puzzle".
+- Joins paused (minepoa /api/join-pow answers 503): v1.0 copy under step 1, step 1 says "Signups are paused. Check back later.", and Join on minepoa.com, Copy and open and Copy prompt are disabled with a note. They turn back on without a reload when POAScan's own /api/v1/prompts/join reads open (every 5 min while the page is visible; no minepoa polling).
+- Not tested yet follows the v1.0 coverage: desktop Claude, ChatGPT, Grok, Grok Bot, Voice; phone Claude, ChatGPT, Voice.
+- Tests: no key in any URL or query in the prompts, prefills or /start; no leak-term links; every copy or join button disabled under 503 and re-enabled on recovery (server and Chromium).
+
 ## [1.26.242] - 2026-10-30
 
 ### Changed

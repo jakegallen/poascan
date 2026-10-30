@@ -45,9 +45,9 @@ for v in V:
 # ---- the box: each line backed by the prompt, in the variants it covers
 F, C = OP.TEMPLATE, OP.CONNECTOR; BOTH = (F, C)
 ev = {
-  PH.DOES[0]: [(F, "Joining takes a one-time proof of work you compute yourself"), (F, "never register again"), (F, "7. Get your challenge"), (F, "9. Mine"),
+  PH.DOES[0]: [(F, "Joining takes a one-time proof of work you compute yourself"), (F, "never register again"), (F, "6. Get your challenge"), (F, "8. Mine"),
                (C, "do the proof of work"), (C, "never register again"), (C, "poa_answer"), (C, "poa_mine")],
-  PH.DOES[1]: [(F, "Ask how I want one private backup"), (F, "Then never show it again"), (C, "one private backup"), (C, "After that, never write it in a reply")],
+  PH.DOES[1]: [(F, "Make one private backup"), (F, "Never show the key: not in this chat"), (F, "Never put a key or token in a URL"), (C, "one private backup"), (C, "Never show the key in this chat"), (C, "Never in a link")],
   PH.NEVER[0]: [(t, "Never ask me for keys, seed phrases or passwords.") for t in BOTH],
   PH.NEVER[1]: [(F, "Send it only to minepoa.com"), (F, "never send it to POAScan"), (C, "Pass it only inside poa_ tool calls; never send it to POAScan or anywhere else."), (C, "(https://minepoa.com/mcp)")],
   PH.NEVER[2]: [(t, "Skip any invite or referral link or code.") for t in BOTH],

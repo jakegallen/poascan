@@ -1,12 +1,9 @@
-"""Join with Anything on /start (1.26.238, lanes 1.26.240). The connector is never a way to join.
-Hosted chat apps (tier connector without a command: Claude, ChatGPT, Grok and the others in data/clients.json):
-1 Create your agent on minepoa.com (its page solves the signup puzzle; POAScan only links, keyless), 2 Let {App} mine
-(optional, the connector), 3 Paste the prompt. Apps that run code (Grok Bot, Cursor, Codex): 1 the prompt (Codex: its
-run-once command too), 2 the connector (optional). Not tested yet notes; the joins paused notice under step 1 and in the
-Ask dialog while /api/join-pow answers 503. The prompt text is unchanged.
-1.26.241 regressions, for every app in data/clients.json, server render and client-side after each pick (Chromium at 390 and
-1280): no Run this once block or empty code span unless the app has a run-once command; "The command in step 1 adds it." only
-for such an app; Not tested yet only for untested pairs (Claude, verified live, never). Usage: python3 tools/connector_first_test.py"""
+"""Join with Anything on /start (1.26.238, lanes 1.26.240, v1.0 handoff 1.26.243). The connector is never a way to join.
+Hosted chat apps: 1 Create your agent on minepoa.com (its page solves the join puzzle; POAScan only links, keyless), 2 Let {App}
+mine (optional, mining after you join), 3 Paste the prompt. Code apps (Grok Bot, Cursor, Codex): 1 Copy prompt only, 2 the
+connector (Codex: its run-once command lives here). Not tested yet per the v1.0 coverage (desktop and phone). While
+/api/join-pow answers 503: the notice under step 1, every copy or join button off (server and client), back on when POAScan's
+own read turns open. No key in any URL or query in the prompts, prefills or /start; no leak-term links. Usage: python3 tools/connector_first_test.py"""
 import os, re, sys, tempfile
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "c.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -24,53 +21,88 @@ gpt = by["chatgpt"]; h = unescape(S.go_block(gpt)); hr = S.go_block(gpt)
 pos = lambda x, t=h: t.index(x)
 check("ChatGPT (hosted): steps 1, 2, 3 in order, the button in step 3", pos("1. Create your agent") < pos("2. Let ChatGPT mine (optional)") < pos("3. Paste the prompt") < pos("data-slot3") < pos("data-go ")
       and '<div class="jwslot" data-slot1></div>' in h)
-check("step 1: the exact line and Join on minepoa.com, new tab, no query", S.S1_HOSTED in h and S.S1_HOSTED == "Open minepoa.com and complete the signup there. Your browser solves the signup puzzle, and minepoa creates your agent. POAScan never sees your key."
-      and '<a class="jwbtn" href="https://minepoa.com/" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>' in h)
-check("step 2: for mining after you join, not for joining; the URL with copy; where; turn on; the ChatGPT note",
+check("step 1: the exact line (join puzzle) and Join on minepoa.com, new tab, no query", S.S1_HOSTED in h and S.S1_HOSTED == "Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key."
+      and '<a class="jwbtn" href="https://minepoa.com/" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>' in h and "signup puzzle" not in h)
+check("step 2 heading: (mining after you join, not joining)", '<span data-s2h>2. Let ChatGPT mine (optional)</span> <span class="jwl">(mining after you join, not joining)</span>' in h and S.S2_LABEL == "(mining after you join, not joining)")
+check("step 2: for mining after you join, not for joining; the URL with copy; where; turn on; exactly one ChatGPT paid-plan note",
       "Add the PoA connector so ChatGPT can answer challenges and check in for the agent you created. For mining after you join, not for joining." in h
       and '<code data-cfval>https://minepoa.com/mcp</code><button class="cp" type="button" data-copy="https://minepoa.com/mcp" data-cfcopy' in h
       and f'Add it in ChatGPT: </span><span data-cfwhere>{gpt["connector"]["where"]}</span>' in h and "<li>Turn it on for the chat.</li>" in h
-      and '<p class="cfn" data-cfnote>Needs a paid ChatGPT plan with developer mode turned on.</p>' in h and "Open ChatGPT settings" in h)
+      and h.count("Needs a paid ChatGPT plan") == 1 and '<p class="cfn" data-cfnote>Needs a paid ChatGPT plan with developer mode turned on.</p>' in h and "Open ChatGPT settings" in h)
 check("the connector is never a way to join: no fallback paste line, no Add the connector first", "Can't add connectors" not in h and "Add the connector first" not in h and "data-cffb" not in hr)
 cx = unescape(S.go_block(by["codex"]))
-check("Codex (code app): step 1 the prompt line, its run-once command, then the button; no step 3",
-      S.s1_code("Codex") in cx and S.s1_code("Codex") == "Copy the prompt and paste it into Codex. This is the step that creates your PoA agent."
-      and pos("1. Create your agent", cx) < pos("codex mcp add poa --url https://minepoa.com/mcp", cx) < pos("data-slot1>", cx) < pos("data-go ", cx) < pos("data-cfirst", cx)
+check("Codex (code app, full prompt): step 1 the prompt line and Copy prompt only, no command, no package, no wallet step; no step 3",
+      by["codex"]["tier"] == "full" and S.s1_code("Codex") in cx and S.s1_code("Codex") == "Copy the prompt and paste it into Codex. This is the step that creates your PoA agent."
+      and pos("1. Create your agent", cx) < pos("data-slot1>", cx) < pos("data-go ", cx) < pos("data-cfirst", cx) < pos("codex mcp add poa --url https://minepoa.com/mcp", cx)
+      and not any(x in cx[:pos("data-cfirst", cx)] for x in ("npx", "npm ", "mcp add", "Run this once", "emblem", "Emblem", "wallet", "Wallet"))
       and " data-s1join hidden" in cx and " data-s3h hidden" in cx and '<div class="jwslot" data-slot3></div>' in cx)
-check("Codex step 2: optional, the connector does not create a new agent, added by the step 1 command",
+check("Codex step 2 (mining): optional, the run-once command lives here, the connector does not create a new agent",
       "2. Let Codex mine (optional)" in cx and "Add the PoA connector so Codex can answer challenges and check in for the agent you just created. The connector does not create a new agent." in cx
-      and "The command in step 1 adds it." in cx and " data-cflines hidden" in cx and " data-conrow hidden" in cx)
-for k in ("cursor", "grok-bot"):
-    g = S.go_block(by[k])
-    check(f"{k}: step 1 with the button and Not tested yet, no connector step", S.s1_code(by[k]["name"]) in g and " data-cfirst hidden" in g
-          and '<p class="stnt" data-untested><span class="tag">Not tested yet</span><span>Uses the default prompt.</span></p>' in g and pos("data-slot1>", g) < pos("data-go ", g))
+      and pos("data-s2h", cx) < pos("Run this once", cx) < pos("codex mcp add poa", cx) and "The command in step 1 adds it." not in cx and " data-cflines hidden" in cx and " data-conrow hidden" in cx)
+check("code apps: no run-once command in step 1 for any app", all("mcp add" not in (lambda g: g[:g.index("data-cfirst")])(unescape(S.go_block(c))) for c in top + rest))
+check("tested per v1.0 coverage: desktop Claude, ChatGPT, Grok, Grok Bot, Voice; phone Claude, ChatGPT, Voice",
+      S.TESTED == {"claude", "chatgpt", "grok", "grok-bot", "voice"} and S.TESTED_PHONE == {"claude", "chatgpt", "voice"})
+g = S.go_block(by["cursor"])
+check("cursor: step 1 with the button and Not tested yet, no connector step", S.s1_code("Cursor") in g and " data-cfirst hidden" in g
+      and '<p class="stnt" data-untested><span class="tag">Not tested yet</span><span>Uses the default prompt.</span></p>' in g and pos("data-slot1>", g) < pos("data-go ", g))
+g = S.go_block(by["grok-bot"])
+check("grok-bot: step 1 with the button, tested (no note), no connector step", S.s1_code("Grok Bot") in g and " data-cfirst hidden" in g and " data-untested hidden" in g)
 check("tested apps: no Not tested yet note", " data-untested hidden" in hr and " data-untested hidden" in S.go_block(by["claude"]))
 check("Muse (no prompt): no steps, no note", " data-untested hidden" in S.go_block(by["muse"]) and " data-s1h hidden" in S.go_block(by["muse"]))
-check("radios carry tested and the note for app.js", ' data-tested="1"' in S._chat(gpt) and ' data-tested' not in S._chat(by["cursor"]) and 'data-cnote="Needs a paid ChatGPT plan' in S._chat(gpt))
+check("radios carry tested (desktop), tphone (phone) and the note for app.js", ' data-tested="1"' in S._chat(gpt) and ' data-tphone="1"' in S._chat(gpt)
+      and ' data-tested="1"' in S._chat(by["grok-bot"]) and ' data-tphone' not in S._chat(by["grok-bot"]) and ' data-tested' not in S._chat(by["cursor"]) and 'data-cnote="Needs a paid ChatGPT plan' in S._chat(gpt))
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check("app.js mirrors the lanes: the same lines, the button moves to its slot", S.S1_HOSTED in js and "This is the step that creates your PoA agent." in js
-      and "For mining after you join, not for joining." in js and "The connector does not create a new agent." in js and "var slot=h?sl3:sl1" in js and "cffb" not in js)
-P = "New PoA signups are paused while minepoa hardens its API. Check back later. Existing balances and pending grades are safe."
-check("open (200): no paused notice on /start or in the Ask dialog", S.join_halt_html() == "" and "data-joinhalt" not in h and "data-joinhalt" not in J.ask_modal())
+check("app.js mirrors the lanes: the same lines, the button moves to its slot, the command builds in step 2", S.S1_HOSTED in js and "This is the step that creates your PoA agent." in js
+      and "For mining after you join, not for joining." in js and "The connector does not create a new agent." in js and "var slot=h?sl3:sl1" in js and "cffb" not in js and "data-s1cli" not in js)
+check("app.js: no minepoa polling; while paused it reads only POAScan's own /api/v1/prompts/join, every 5 min, when visible",
+      "minepoa.com/api" not in js[js.index("function PZ"):js.index("function PZ") + 1500] and '"/api/v1/prompts/join"' in js and "},300000)" in js and "D.hidden" in js)
+
+# no key in any URL or query: every prompt variant for every app, every prefill and open link, the rendered /start
+URLQ = re.compile(r"https?://[^\s\"'<>)]+")
+KQ = re.compile(r"[?&#](?:[a-z_]*key|token|api_key|secret|pk)=", re.I)
+texts = {v: S.prompt("test-agent-7", v) for v in ("full", "connector")}
+bad = {v: [u for u in URLQ.findall(t) if KQ.search(u) or "YOUR_KEY" in u or "SAVED_KEY" in u] for v, t in texts.items()}
+check(f"no key in any URL or query in either prompt variant {bad}", not any(bad.values()) and all(not KQ.search(t) for t in texts.values()))
+leak = [c["id"] for c in top + rest for u in (c.get("open") or "", c.get("prefill") or "", (c.get("connector") or {}).get("open") or "") if KQ.search(u) or "KEY" in u]
+check(f"no key in any app's open or prefill link {leak}", not leak)
+from poascan import combined as CB
+ct = open(os.path.join(ROOT, "poascan", "combined_prompt.txt"), encoding="utf-8").read()
+check("no key in any URL in the combined prompt", not any(KQ.search(u) or "KEY" in u for u in URLQ.findall(ct)))
+pagehtml = unescape(S.go_block(gpt) + "".join(S.go_block(c) for c in top + rest))
+check("no key in any link or prefill on /start", not KQ.search(pagehtml) and not re.search(r"(href|data-copy|data-prefill)=\"[^\"]*(key|token)=", pagehtml))
+LEAK = ("lableak", "grading-guide", "grading guide")
+check("no link whose path holds a leak term, in the prompts and the /start steps", not any(x in (t + pagehtml).lower() for t in texts.values() for x in LEAK)
+      and not any(v and any(x in v.lower() for x in LEAK) for _, v, _n in S.STEPS))
+check("the prompt never lets the agent show the key: header only, stop on a URL credential", all("X-Api-Key" in t or "poa_" in t for t in texts.values())
+      and "Never put a key or token in a URL" in texts["full"] and "never show it in this chat" in texts["full"] and "direct reply" not in texts["full"] + texts["connector"])
+
+P = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
+check("open (200): no paused notice, no button off, on /start or in the Ask dialog", S.join_halt_html() == "" and "data-joinhalt" not in h and "data-pzoff" not in h + cx and "data-joinhalt" not in J.ask_modal())
 M.join_halt = lambda: dict(since_ts=1793000000, as_of_ts=1793000300)
 ph = unescape(S.go_block(gpt))
-check("halted (503): the exact notice under step 1 (under Join on minepoa.com), the button still there", P in ph and pos("data-mpjoin", ph) < pos(P, ph) < pos("data-cfirst", ph) and "data-go " in ph)
+check("halted (503): the exact notice right under the step 1 heading, step 1 says Signups are paused", S.PAUSED == P and P in ph and pos("data-s1h", ph) < pos(P, ph) < pos("data-mpjoin", ph)
+      and " data-s1b hidden" in ph and '<p class="jwb jwpz" data-s1paused>Signups are paused. Check back later.</p>' in ph and "while minepoa hardens" not in ph)
+OFF = ' off" aria-disabled="true" tabindex="-1" data-pzoff href='
+check("halted (503): Join on minepoa.com and Copy and open are disabled, with the note beside them", ('<a class="jwbtn' + OFF) in ph and ('<a class="gobtn' + OFF) in ph
+      and f'<p class="jwoff" data-pauseoff>{S.PAUSED_OFF}</p>' in ph and S.PAUSED_OFF == "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again.")
 pc = unescape(S.go_block(by["codex"]))
-check("halted: under step 1 for code apps too, after the button", pos("data-go ", pc) < pos(P, pc) < pos("data-cfirst", pc))
+check("halted: code apps, Copy prompt disabled, notice under step 1, mining command untouched", ('<a class="gobtn' + OFF) in pc and pos("data-s1h", pc) < pos(P, pc) < pos("data-go ", pc) < pos("data-cfirst", pc)
+      and "data-pzoff" not in pc[pc.index("data-s2cmd"):pc.index("data-cflines")])
+pm = unescape(S.go_block(by["muse"]))
+check("halted: the no-path Join on minepoa.com link is off too", ('<a class="npb npj' + OFF) in pm)
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
-check("no key in any link or prefill", not re.search(r"(key|api_key|token)=", h + cx))
 hf = S.hash_fields()
-check("the prompt is unchanged: v2.9.2 template 7a2a6016, combined 2cce09a9", hf["template_sha256"].startswith("7a2a6016") and hf["combined_sha256"].startswith("2cce09a9"))
-check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + js[js.index("1.26.240"):js.index("1.26.240") + 3000]))
+check("the prompt is v2.9.3: template cce915f1, combined fc816d15", hf["template_sha256"].startswith("cce915f1") and hf["combined_sha256"].startswith("fc816d15"))
+check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.240"):js.index("1.26.240") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
 M.join_halt = lambda: None
 EMPTY = re.compile(r"<code[^>]*>\s*</code>")
 for c in top + rest:
     g = unescape(S.go_block(c)); cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED and c["kind"] != "none"
-    check(f"server {c['id']}: run-once block {'with its command' if cli else 'absent'}, step 2 command line {'shown' if cli else 'absent'}, Not tested yet {'shown' if un else 'absent'}, no empty code span",
-          ("Run this once" in g) == cli and (S.CLI_ADDS in g) == cli and ("Not tested yet" in g) == un and not EMPTY.search(g))
-check("server: Claude is the default and shows none of the three", top[0]["id"] == "claude" and not any(x in unescape(S.go_block(top[0])) for x in ("Run this once", S.CLI_ADDS, "Not tested yet")))
+    check(f"server {c['id']}: run-once block {'in step 2' if cli else 'absent'}, Not tested yet {'shown' if un else 'absent'}, no empty code span",
+          ("Run this once" in g) == cli and (not cli or g.index("Run this once") > g.index("data-cfirst")) and ("Not tested yet" in g) == un and not EMPTY.search(g))
+check("server: Claude is the default and shows neither", top[0]["id"] == "claude" and not any(x in unescape(S.go_block(top[0])) for x in ("Run this once", "Not tested yet")))
 
 # client side: the default pick and after each click, at 390 and 1280
 import socket, subprocess, time, urllib.request
@@ -93,20 +125,45 @@ if sync_playwright:
             for w in (390, 1280):
                 pg = b.new_page(viewport={"width": w, "height": 844 if w < 400 else 900}); pg.goto(base + "/start", wait_until="networkidle")
                 def state():
-                    return pg.evaluate("""()=>{const st=document.querySelector('li.st3'),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),t=st.innerText.toLowerCase();
-                      return {run:t.includes('run this once'),adds:t.includes('the command in step 1 adds it.'),un:t.includes('not tested yet'),
+                    return pg.evaluate("""()=>{const st=document.querySelector('li.st3'),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),t=st.innerText.toLowerCase(),
+                              s2=document.querySelector('[data-s2cmd]'),cf=document.querySelector('[data-cfirst]'),s1=t.split('2. let')[0];
+                      return {run:t.includes('run this once'),s1run:s1.includes('run this once')||s1.includes('mcp add'),un:t.includes('not tested yet'),
                               empty:[...st.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,
-                              s1c:(document.querySelector('[data-s1cli]')||{}).textContent||'',s2c:(document.querySelector('[data-s2cli]')||{}).textContent||'',
-                              ut:(document.querySelector('[data-untested]')||{}).textContent||''}}""")
+                              s2c:v(s2)&&cf.contains(s2)?s2.textContent:'',ut:(document.querySelector('[data-untested]')||{}).textContent||''}}""")
                 def ok(c, d):
                     cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED
-                    return (d["run"] == cli and d["adds"] == cli and d["un"] == un and d["empty"] == 0 and bool(d["s1c"]) == cli and bool(d["s2c"]) == cli and bool(d["ut"]) == un)
-                d = state(); check(f"{w}px default (Claude): no run-once block, no step 2 command line, no Not tested yet, no empty code span {d}", ok(top[0], d))
+                    return (d["run"] == cli and not d["s1run"] and d["un"] == un and d["empty"] == 0 and bool(d["s2c"]) == cli and bool(d["ut"]) == un)
+                d = state(); check(f"{w}px default (Claude): no run-once block, no Not tested yet, no empty code span {d}", ok(top[0], d))
                 pg.locator("[data-more]").first.click()
                 for c in apps + [top[0]]:
                     pg.locator(f"label.cl:has(input[data-tag='{c['id']}'])").first.click()
                     d = state(); check(f"{w}px after picking {c['id']}: lanes match the app {d}", ok(c, d))
                 pg.close()
+            # paused (503): every copy or join button does nothing; POAScan's own read turning open re-enables them, no reload
+            db2 = os.path.join(tempfile.mkdtemp(), "p.db"); e2 = dict(env, POASCAN_DB=db2)
+            subprocess.run([sys.executable, "-c", "import time;from poascan import db,routewatch as RW;db.init();n=int(time.time());"
+                            "db.write('INSERT OR REPLACE INTO fetch_log(endpoint, last_ok, last_err, err, fails) VALUES(?,?,?,?,?)',('/api/join-pow',n-600,n-60,'HTTP 503 halted',1));RW.job(n)"], cwd=ROOT, env=e2, check=True)
+            sk = socket.socket(); sk.bind(("127.0.0.1", 0)); p2 = sk.getsockname()[1]; sk.close(); base2 = f"http://127.0.0.1:{p2}"
+            srv2 = subprocess.Popen([sys.executable, "-m", "poascan.server"], cwd=ROOT, env=dict(e2, PORT=str(p2)), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(150):
+                try: urllib.request.urlopen(base2 + "/healthz", timeout=2); break
+                except Exception: time.sleep(0.2)
+            pg = b.new_page(viewport={"width": 390, "height": 844}); pg.clock.install()
+            pg.add_init_script("window.__opened=0;window.open=function(){window.__opened++;return null};window.__copied=0;try{navigator.clipboard.writeText=function(){window.__copied++;return Promise.resolve()}}catch(e){}")
+            pg.goto(base2 + "/start", wait_until="networkidle")
+            q = lambda sel: pg.evaluate(f"()=>[...document.querySelectorAll('{sel}')].filter(e=>e.offsetParent).map(e=>[e.getAttribute('aria-disabled'),e.hasAttribute('data-pzoff')])")
+            check(f"client paused: Copy and open and Join on minepoa.com render disabled {q('[data-go],[data-mpjoin]')}", q("[data-go],[data-mpjoin]") and all(x == ["true", True] for x in q("[data-go],[data-mpjoin]")))
+            for sel in ("[data-go]", "[data-mpjoin]"):
+                pg.locator(sel).first.dispatch_event("click")
+            pg.locator("[data-more]").first.click(); pg.locator("label.cl:has(input[data-tag='codex'])").first.click()
+            pg.locator("[data-go]").first.dispatch_event("click")
+            st = pg.evaluate("()=>({o:window.__opened,c:window.__copied,u:location.href,go:document.querySelector('[data-go]').getAttribute('aria-disabled'),n:!!document.querySelector('[data-pauseoff]')})")
+            check(f"client paused: clicks open nothing and copy nothing, still off after a pick, the note stays {st}", st["o"] == 0 and st["c"] == 0 and st["u"].endswith("/start") and st["go"] == "true" and st["n"])
+            pg.route("**/api/v1/prompts/join*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"join":{"state":{"state":"open"}}}'))
+            pg.clock.run_for(301000); pg.wait_for_timeout(300)
+            st = pg.evaluate("()=>({off:document.querySelectorAll('[data-pzoff],.jwbtn.off,.gobtn.off').length,halt:document.querySelectorAll('li.st3 .sthalt,li.st3 [data-pauseoff],li.st3 [data-s1paused]').length,go:document.querySelector('[data-go]').getAttribute('aria-disabled')})")
+            check(f"client: when POAScan reads joins open again, every button turns back on and the paused lines go {st}", st["off"] == 0 and not st["halt"] and st["go"] is None)
+            pg.close(); srv2.terminate(); srv2.wait(10)
             b.close()
     finally:
         srv.terminate(); srv.wait(10)

@@ -1662,3 +1662,6 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .jwbtn:hover{background:color-mix(in srgb,var(--amber) 10%,transparent)}.jwbtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .jwcli{margin:0 0 12px;font:400 var(--t13)/1.45 var(--ui);color:var(--bone-1)}.jwcli .cfu{margin:6px 0 8px}.jwslot:empty{display:none}
 .cfs[hidden]{display:none}.jwslot+.sthalt{margin-top:12px}
+.jwbtn.off,.pcopy.off{opacity:.4;pointer-events:none;filter:grayscale(.5)}
+.jwl{font-weight:400;color:var(--dim)}.jwpz{color:var(--bone-1)}
+.jwoff{margin:8px 0 0;font:400 var(--t13)/1.45 var(--ui);color:var(--dim);text-align:center}

@@ -97,7 +97,7 @@ def main():
         c, b = rpc("tools/call", {"name": "get_swap_status", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
         check("get_swap_status fields", {"available", "state", "last_good_read", "open_offers"} <= set(sc))
         c, b = rpc("tools/call", {"name": "get_onboarding_steps", "arguments": {}}); sc = json.loads(b)["result"]["structuredContent"]
-        check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "never show it again" in sc.get("prompt", "") and "npm install" not in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
+        check("get_onboarding_steps matches /start", sc.get("url") == "https://poascan.io/start" and "never show it in this chat" in sc.get("prompt", "") and "npm install" not in sc.get("prompt", "") and len(sc.get("steps", [])) >= 5)
         _w = json.dumps(sc.get("wallet") or {})
         check("get_onboarding_steps wallet: pinned npx with --hustle-url, no global install, safety note", "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai" in _w and "npm install -g " + "@emblemvault" not in _w and "--profile" in _w)
         for _u in ("/about", "/llms.txt", "/llms-full.txt", "/start", "/api/v1/prompts/join"):

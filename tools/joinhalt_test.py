@@ -28,7 +28,7 @@ h = M.join_halt()
 check("join_halt gives since and as_of", h and h["since_ts"] == now - 60 and h["as_of_ts"] == now - 60)
 html = S.join_halt_html()
 check("/start notice: the public text (1.26.238)", "Joins paused" in html and "data-joinhalt" in html and " ".join(re.sub("<[^>]+>", " ", html).split()) == "Joins paused " + S.PAUSED
-      and S.PAUSED == "New PoA signups are paused while minepoa hardens its API. Check back later. Existing balances and pending grades are safe.")
+      and S.PAUSED == "New PoA signups are paused. Check back later. Existing balances and pending grades are safe.")
 check("banner tooltip names the source", "/api/join-pow" in html and "every 5 min at most" in html)
 check("/start page carries it in step 3", "data-joinhalt" in S.page(lambda title, body, *a, **k: body))
 js = S.join_shape()
@@ -50,7 +50,7 @@ db.write("UPDATE fetch_log SET last_ok=?, fails=0 WHERE endpoint=?", (now + 600,
 check("two good reads: open again, banner gone, API join_state back", M.join_halt() is None and S.join_halt_html() == "" and M.state()["join_state"] in ("open", "paused"))
 I.fetch = real
 p = OP.POW
-check("prompt v2.9.2", OP.VERSION == "v2.9.2")
+check("prompt v2.9.3", OP.VERSION == "v2.9.3")
 check("POW: a 503 stops with the exact line, no mining or retry", 'On a 503, stop without mining or retrying and tell me: Joins are paused. Check back later.' in p)
 check("POW still reads kind and bits from each challenge", "If kind is not pow" in p and "bits" in p)
 full = S.prompt("NAME", "full")

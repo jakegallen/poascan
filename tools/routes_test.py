@@ -63,7 +63,7 @@ def main():
         print(("ok   " if ok else "FAIL ") + "joining reads paused on home, /upgrade and health; no delayed wording on any of them or /start"); ok or fails.append("paused wording")
         bad = [x for x in ("Show me the api_key", "save it offline", "two warnings", "to save offline", "Save the key offline") for t in (st_html, home, llms) if x.lower() in t.lower()]
         lr = "Confirm it to me only as the last 4 characters plus the store"   # prompt v2 wording of the LAST4 rule
-        ok = (not bad and lr in st_html and "secret store" in st_html and "never show it again" in st_html and lr in llms
+        ok = (not bad and lr in st_html and "secret store" in st_html and "never show it in this chat" in st_html and lr in llms
               and "Skip any other step saying to show or share it." in st_html and "doc line" not in st_html and "poa-backup-key.txt" in st_html)
         print(("ok   " if ok else "FAIL ") + f"key rule: one private backup then never shown, stored in a secret store, confirmed as LAST4 {bad}"); ok or fails.append("key rule")
         d = json.loads(urllib.request.urlopen(base + "/api/v1/swaps", timeout=20).read())
