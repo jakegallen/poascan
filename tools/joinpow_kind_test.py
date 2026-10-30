@@ -42,7 +42,7 @@ for v, t in variants.items():
     check(f"{v}: a 403 with required_bits gets a fresh challenge and a new proof, once", OP.R403 in t and "get a fresh challenge" in OP.R403 and "at least required_bits" in OP.R403 and "Never loop." in OP.R403)
 check("join shape: rejected 403 rule fetches a fresh challenge", js["rejected"]["status"] == 403 and "required_bits" in js["rejected"]["fields"] and "fresh challenge" in js["rejected"]["rule"])
 check("combined prompt carries the new join core", not CB.TEXT or (OP.R403 in CB.TEXT and "If kind is not pow" in CB.TEXT))
-check("prompt version v2.9.1, history entry with today's hash", OP.VERSION == "v2.9.1" and __import__("poascan.prompthist", fromlist=["x"]).VERSIONS[-1]["template_sha256"] == S.template_sha256())
+check("prompt version v2.9.2, history entry with today's hash", OP.VERSION == "v2.9.2" and __import__("poascan.prompthist", fromlist=["x"]).VERSIONS[-1]["template_sha256"] == S.template_sha256())
 
 # ---------------- Protocol timeline ----------------
 REL = lambda v, ts, tx: dict(version=v, ts=ts, txid=tx, engine_sha256="e" * 64, client_sha256="c" * 64, web_client_sha256="w" * 64, changelog_ref="ref " + v)

@@ -139,6 +139,15 @@ SELF_CUSTODY = [
 ]
 SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any secret."
 
+def join_state():
+    """1.26.232: open or paused, from POAScan's last /api/join-pow read (every 5 min at most; a 503 halt waits out its
+    Retry-After). Never a read per request."""
+    from . import maint as M
+    r = M.join_route() or {}
+    h = r.get("state") == "halted"
+    return dict(state="paused" if h else "open", since_ts=r.get("since_ts") if h else None, checked_ts=r.get("as_of_ts"),
+                source="POAScan read of " + __import__("poascan.onboarding_prompt", fromlist=["x"]).JOIN_POW)
+
 def join_shape(name="YOUR_NAME"):
     """v2.9: how a join is made, for other sites (POASwap) and agents. POAScan never solves, embeds or relays a proof."""
     from . import onboarding_prompt as OP
@@ -149,6 +158,8 @@ def join_shape(name="YOUR_NAME"):
                 register=dict(method="POST", url="https://minepoa.com/api/hosted/register", content_type="application/json",
                               body=OP.REG_BODY.replace(OP.SLOT, name)),
                 rejected=dict(status=403, fields=["required_bits", "get_challenge"], rule="get a fresh challenge, mine to its bits and at least required_bits, and send the join once more; each proof works once"),
+                halted=dict(status=503, rule="v2.9.2: a 503 (halted or paused) on the challenge: stop, do not mine or retry, and report the line in say", say="Joins are paused. Check back later."),
+                state=join_state(),
                 connector_join=OP.CONNECTOR_JOIN, join_page=OP.JOIN_PAGE, get_register="retired in v2.9: the GET register link carries no proof",
                 note="POAScan never solves, embeds or relays a proof: each is single use, expires and is bound to the join that redeems it.")
 
@@ -345,6 +356,16 @@ def go_block(c0):
             + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
             '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
 
+def join_halt_html():
+    """1.26.232: a terse paused state while minepoa's /api/join-pow answers 503 halted (maint.join_halt(), from the
+    indexer's read every 5 min at most; nothing is read per page view)."""
+    from . import maint as M
+    import time as _t
+    h = M.join_halt()
+    if not h: return ""
+    tip = "minepoa.com answers 503 halted on /api/join-pow" + (f" since {_t.strftime('%H:%M', _t.gmtime(h['since_ts']))}Z" if h.get("since_ts") else "") + ". POAScan reads it every 5 min at most (hourly while halted, as minepoa asks)."
+    return f'<p class="sthalt" role="status" data-joinhalt title="{E(tip)}"><span class="tag warn">Joins paused</span><span>Check back later.</span></p>'
+
 def _step(n, title, body, cls=""):
     return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'
             f'<h2 class="stt" id="st{n}">{title}</h2>{body}</div></li>')
@@ -369,7 +390,7 @@ def page(page_fn, card=None, apps=None):
           # page text only ever names the placeholder, never a fresh name each hour.
           + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
     steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
-             + _step(3, "Start mining", go, "st3") + "</ol>")
+             + _step(3, "Start mining", join_halt_html() + go, "st3") + "</ol>")
     from .earnview import tabs as _etabs
     hero = (f'<div class="sthero">{_etabs("/start")}<h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
             f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')

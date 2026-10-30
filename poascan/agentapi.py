@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.231"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-10-30T12:08:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.232"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-10-30T12:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1271,7 +1271,7 @@ def openapi():
                                 "client": {"type": "string", "description": "v2.4, with ?client= only"}, "client_name": {"type": "string"}, "tier": {"type": "string", "enum": ["full", "connector", "none"]},
                                 "variant": {"type": ["string", "null"]}, "prefill": {"type": ["string", "null"]}, "prefill_ok": {"type": "boolean"}, "link_chars": {"type": ["integer", "null"]}, "chars": {"type": "integer"},
                                 "open": {"type": ["string", "null"]}, "connector": {"type": ["object", "null"]}, "panel": {"type": "object"}, "clients_url": {"type": "string"},
-                                "join": {"type": "object", "description": "v2.9.1: how a join is made. pow (GET https://minepoa.com/api/join-pow: challenge, kind, bits, expires_ts, algo; kind_rule: stop unless kind is pow; bits is set by each challenge, never fixed; a decimal nonce so sha256(challenge + \":\" + nonce) has bits leading zero bits), register (POST https://minepoa.com/api/hosted/register, application/json, body with the name and pow), rejected (403 with required_bits and get_challenge: get a fresh challenge and mine again), connector_join (false: poa_register takes no proof yet), join_page. POAScan never solves, embeds or relays a proof."},
+                                "join": {"type": "object", "description": "v2.9.2: how a join is made. halted: a 503 on the challenge means joins are paused, stop and do not mine (state: open or paused, from POAScan's last read). pow (GET https://minepoa.com/api/join-pow: challenge, kind, bits, expires_ts, algo; kind_rule: stop unless kind is pow; bits is set by each challenge, never fixed; a decimal nonce so sha256(challenge + \":\" + nonce) has bits leading zero bits), register (POST https://minepoa.com/api/hosted/register, application/json, body with the name and pow), rejected (403 with required_bits and get_challenge: get a fresh challenge and mine again), connector_join (false: poa_register takes no proof yet), join_page. POAScan never solves, embeds or relays a proof."},
                                 "sha256": {"type": "string", "description": "sha256 of text (UTF-8)"}, "source": {"type": "string"}, "notes": {"type": "string"},
                                 "blocks": {"type": "array", "description": "Named slices of text, in order; joined they give text. Since 1.26.44 the first block id is opener (the pasted-only line); it was notice in 1.26.43", "items": {"type": "object", "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}},
                                 "checkin": {"type": "object", "description": "Since v2.5 the text has no check-ins: base is null, in_text false, and legacy_base is the v2.4 base, only for older copies still in chats",

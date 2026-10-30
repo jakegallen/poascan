@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.232] - 2026-10-30
+
+### Changed
+- Join prompt v2.9.2 (template sha256 `7a2a6016`): if `GET https://minepoa.com/api/join-pow` answers 503 (halted or paused), the agent stops and reports "Joins are paused. Check back later." with no mining and no retry, instead of failing at the proof step. Kind and bits are still read from each fresh challenge. minepoa halted the route on Oct 30 ("endpoint temporarily halted, API hardening in progress", Retry-After 3600).
+- POASwap's combined prompt slot (`poascan/combined_prompt.txt`) carries the v2.9.2 join core: 10,373 characters, sha256 `2cce09a9`. POASwap must ship the same bytes.
+
+### Added
+- `/start` step 3 shows "Joins paused. Check back later." while minepoa's join route is halted. The indexer reads `/api/join-pow` at most every 5 min (a halt waits out its Retry-After) and keeps only kind and bits, never the challenge; nothing is read per page view.
+- Network > Health and `/api/health` `route_halts`: a Joining route, Halted on one halt read.
+- `join` on `/api/v1/prompts/join`: `halted` (the 503 rule and the line to say) and `state` (open or paused, with since and checked times).
+- `tools/joinhalt_test.py`.
+
 ## [1.26.231] - 2026-10-30
 
 ### Added

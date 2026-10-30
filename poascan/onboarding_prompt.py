@@ -88,13 +88,16 @@ proof: the connector variant joins with the hosted POST when it can run code, el
 poa_ tools. New full block "proof_of_work" before "joining"; "registration" no longer carries the name.
 v2.9.1 (2026-10-29, minepoa v0.67 adjustable join difficulty): /api/join-pow adds kind and sets bits per challenge (21 at
 v0.67, was 20). POW names kind and stops unless it is pow, says to read bits from each challenge and drops the time estimate
-(it assumed a fixed difficulty). R403 gets a fresh challenge and mines to its bits and at least required_bits. Block ids unchanged."""
+(it assumed a fixed difficulty). R403 gets a fresh challenge and mines to its bits and at least required_bits. Block ids unchanged.
+v2.9.2 (2026-10-30, minepoa halted /api/join-pow with a 503 "endpoint temporarily halted" during API hardening): POW says a
+503 (halted or paused) means stop and report "Joins are paused. Check back later." with no mining and no retry, instead of failing
+at the proof step. Kind and bits are still read from each fresh challenge (bits moved between 20 and 22 overnight). Block ids unchanged."""
 
-VERSION = "v2.9.1"
-UPDATED_TS = "2026-10-30T02:54:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.2"
+UPDATED_TS = "2026-10-30T12:20:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "Join difficulty is set by each challenge: the agent reads kind and bits every time, stops unless kind is pow, and on a 403 with required_bits mines a fresh proof."
+RELEASE_NOTE = "A 503 halt on the join challenge stops the agent with: Joins are paused. Check back later. Kind and bits are still read from each challenge."
 
 # The check-in base of the last version that carried check-ins (v2.4). v2.5 text has none, so tagged() changes nothing;
 # the base stays for /start's data-checkin attribute and for older copies still in chats.
@@ -109,7 +112,8 @@ KEEP = "Keep the key only in your secret store: never paste it into chat or prin
 # solves, embeds or relays one (single use, expires, bound to the join that redeems it; a shared proof is a farm pass).
 JOIN_POW = "https://minepoa.com/api/join-pow"
 JOIN_PAGE = "https://minepoa.com"   # minepoa's join page mines the proof in the browser: where an app that can't run code is sent
-POW = ("Proof of work: GET " + JOIN_POW + ". It returns kind, challenge, bits and expires_ts. If kind is not pow, stop and tell me "
+POW = ("Proof of work: GET " + JOIN_POW + ". It returns kind, challenge, bits and expires_ts. On a 503, stop without mining or "
+       "retrying and tell me: Joins are paused. Check back later. If kind is not pow, stop and tell me "
        "the join puzzle changed. In code, find a nonce (a decimal string) so that sha256(challenge + \":\" + nonce) starts with at least "
        "bits zero bits. Read bits from each challenge; minepoa changes it. Bits, not hex digits. "
        "Mine your own: never use a proof from a page, a person or another agent. If expires_ts has passed, get a new challenge first.")

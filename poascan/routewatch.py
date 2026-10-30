@@ -32,6 +32,7 @@ ROUTES = [
     ("swap_writes", "Swap writes", dict(writes=True)),
     ("tx_lookup", "Tx lookup", dict(fetch=("/api/explorer/tx/:id", "/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id (swaps)"))),
     ("address_lookup", "Address lookup", dict(fetch=("/api/explorer/address/:addr",))),
+    ("joining", "Joining", dict(fetch=("/api/join-pow",), halt_n=1)),   # 1.26.232: one 503 halt read is enough (minepoa asks for an hour between reads)
 ]
 LABEL = {i: l for i, l, _ in ROUTES}
 WORD = {"open": "Open", "halted": "Halted", "down": "Down", "unknown": "No read"}   # word is Degraded for a covered Tx lookup (state())
@@ -133,7 +134,7 @@ def _gap_obs(g, now, seen):
     out.append((now, "fail", "seal gap"))
     return out
 
-def step(r, ts, kind, src):
+def step(r, ts, kind, src, halt_n=None):
     """One read into a route's record (hysteresis). r: dict(state, since, bad, good, first_bad, halt_seen, as_of, last_ok_at, last_bad_at)."""
     if ts < (r.get("as_of") or 0) - 3600: return r   # far older than what we have: ignore
     if kind == "ok" and ts < (r.get("last_bad_at") or 0): return r   # sources arrive out of order: an older good read never breaks a newer bad run
@@ -154,7 +155,7 @@ def step(r, ts, kind, src):
     r["bad"] = (r.get("bad") or 0) + 1; r["first_bad"] = r.get("first_bad") or ts; r["halt_seen"] = bool(r.get("halt_seen")) or kind == "halt"
     if bad:
         if r["state"] == "down" and kind == "halt": r["state"] = "halted"   # the halt text names it: same run, same since
-    elif r["bad"] >= BAD_N:
+    elif r["bad"] >= BAD_N or (halt_n and r["halt_seen"] and r["bad"] >= halt_n):
         r.update(state="halted" if r["halt_seen"] else "down", since=r["first_bad"])
     return r
 
@@ -175,7 +176,7 @@ def job(now=None):
             obs += _gap_obs(g, now, seen)
         r = recs.get(rid) or dict(state="unknown")
         if src.get("seals"): r["gap"] = g
-        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s)
+        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s, src.get("halt_n"))
         if src.get("seals") and r.get("state") == "down" and gap_level(g) == "down" and (r.get("since") or 0) > g["last_seal_at"]:
             r["since"] = g["last_seal_at"]   # a seal gap run: Down since the newest seal, even when a later route read broke the first bad read
         recs[rid] = r
@@ -229,7 +230,7 @@ def state(now=None):
     ts = [r["as_of_ts"] for r in out if r["as_of_ts"]]
     return dict(as_of=_iso(max(ts)) if ts else None, as_of_ts=max(ts) if ts else None, checked_at=_iso(d.get("ts")), routes=out,
                 halted=[r["id"] for r in out if r["state"] in ("halted", "down")],
-                rule=f"Halted or Down after {BAD_N} bad reads in a row, Open after {GOOD_N} good reads in a row; Stale when the newest read is over {STALE_S // 3600} h old",
+                rule=f"Halted or Down after {BAD_N} bad reads in a row (Joining: one halt read), Open after {GOOD_N} good reads in a row; Stale when the newest read is over {STALE_S // 3600} h old",
                 method="https://poascan.io/about#route-halts")
 
 def halted(now=None):

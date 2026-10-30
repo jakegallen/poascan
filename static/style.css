@@ -1402,6 +1402,7 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .tabnote>a{margin-left:10px;font-size:.85em}
 .tabnote .dasof{margin-left:10px;font-size:.85em;color:var(--mute);white-space:nowrap}
 @media (max-width:640px){.tabnote .dasof{display:block;margin:6px 0 0}}
+.sthalt{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:.9em;color:var(--mute)}
 /* long hashes and commands wrap inside their paragraph (1.26.62) */
 code.brk{overflow-wrap:anywhere}
 .oftrack{display:inline-block;margin-left:6px;padding:6px 0;white-space:nowrap}

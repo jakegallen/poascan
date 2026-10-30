@@ -38,7 +38,7 @@ RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After b
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
 ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|assignments/poa1[1-9A-HJ-NP-Za-km-z]+|"
-                     r"epochs|agents|anchors|params|release|notices|ballots|chains|links|swaps)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
+                     r"epochs|agents|anchors|params|release|notices|ballots|chains|links|swaps|join-pow)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
     def __init__(self, msg, retry=None):
@@ -750,6 +750,15 @@ def job_hourly_retry(now=None):
 
 EPOCHS_GAP_S = 1200
 
+JOIN_POW_S = 300   # 1.26.232: one keyless GET /api/join-pow at most every 5 min; a 503 halt backs off to its Retry-After (an hour now)
+def job_join_pow():
+    """Whether joining is open, for /start and /api/health (routewatch route "joining"). fetch() logs a 503 halt as
+    "HTTP 503 halted" in fetch_log; a good read keeps only kind and bits (never the challenge, which is single use)."""
+    try: d = fetch("/api/join-pow", timeout=20)
+    except Exception: return
+    if isinstance(d, dict):
+        db.put_blob("join_pow", dict(kind=d.get("kind"), bits=d.get("bits"), ts=int(time.time())))
+
 def job_epochs(force=False):
     """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
     cut), so a new segment with no close yet reads nothing; the ~21 MB list is fetched only when a close is missing."""
@@ -1173,7 +1182,7 @@ def seed(seed_dir):
 EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks": NETWORKS_S, "/api/swaps": SWAPS_S, "/api/txs": TXLIST_S,
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S,
-         "/api/explorer/grading": 900, "/api/links": 600, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
+         "/api/explorer/grading": 900, "/api/links": 600, "/api/join-pow": JOIN_POW_S, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
@@ -1184,6 +1193,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("window", job_window, 600, "/api/txs"),
     ("meta", job_meta, META_S, None),
     ("epochs", job_epochs, 300, "/api/epochs"),
+    ("join_pow", job_join_pow, JOIN_POW_S, "/api/join-pow"),   # 1.26.232: joins open or halted (routewatch "joining")
     ("agents", job_agents, 900, "/api/agents"),
     ("hourly", job_hourly_meta, 3600, None),
     ("hourly_retry", job_hourly_retry, 300, None),

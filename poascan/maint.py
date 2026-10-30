@@ -56,6 +56,20 @@ def join_state():
     """open or paused. Paused comes from the tracker, the manual switch, or join_quiet()."""
     return "paused" if not join_open() or join_quiet() else "open"
 
+def join_route():
+    """routewatch's "joining" route record (state, since_ts, as_of_ts), or None before the first read."""
+    try:
+        from . import routewatch as RW
+        r = ((db.get_blob(RW.BLOB)[0] or {}).get("routes") or {}).get("joining")
+    except Exception: return None
+    return dict(state=r.get("state") or "unknown", since_ts=r.get("since"), as_of_ts=r.get("as_of")) if r else None
+
+def join_halt():
+    """1.26.232: minepoa's own join route answers 503 halted (routewatch "joining", from the 5 min /api/join-pow read).
+    dict(since_ts, as_of_ts) while halted, else None. Kept apart from join_state(), which follows the upgrade tracker."""
+    r = join_route()
+    return dict(since_ts=r["since_ts"], as_of_ts=r["as_of_ts"]) if r and r["state"] == "halted" else None
+
 def join_source(): return "manual" if JOIN_ENV is not None else ("tracker" if "Joining" in _surfaces() else "default")   # the probe never covers joining
 
 def hosted_state():
