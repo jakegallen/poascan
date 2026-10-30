@@ -431,9 +431,18 @@ def status_body():
     lagc = line([(t, v) for t, v in d["lag"] if t > now - 86400], color="gold", fmt=lambda v: f"{v:,.0f}", y0=0)
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
-    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}</p>{up}{feeds_html(fd)}{routes_html()}<div class="stats eight">{st}</div>
+    body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}{data_asof()}</p>{up}{feeds_html(fd)}{routes_html()}<div class="stats eight">{st}</div>
 {card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]), id="endpoints")}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it, id="incidents")}'''
     return body
+
+def data_asof():
+    """1.26.231: when this page's network data was read (our last good /api/status read), so a saved or cached copy shows its
+    age. Forum post 2219 quoted a copy from the E8 close era (Oct 26 to 27) as live; the page carried no data time."""
+    r = db.q1("SELECT ts FROM blobs WHERE kind='status'")
+    if not r or not r["ts"]: return ""
+    na = A.status().get("as_of")
+    tip = "Our last good read of minepoa.com /api/status" + (f" (node as of {E(str(na)[11:16])}Z)" if na else "") + ". An older copy of this page is stale."
+    return f'<span class="dasof" title="{tip}">Data as of {rel(r["ts"])}</span>'
 
 def _okpct(v):
     if v is None: return '<span class="na">···</span>'

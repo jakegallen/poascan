@@ -97,6 +97,8 @@ jobs:
         run: python tools/health_slot_test.py
       - name: Close list read as it arrives (same records as json.loads, byte counts, unchanged re-read not rewritten)
         run: python tools/epochs_stream_test.py
+      - name: Network Health says how old its data is (Data as of)
+        run: python tools/dataasof_test.py
       - name: Address and tx page cost (cached assignments and chains) and the per-client page rate limit
         run: python tools/pagecost_test.py
       - name: Audit fixes (input clamps, on-demand budgets and negative cache, swap finality and expiry, gzip and ETag, privacy copy)

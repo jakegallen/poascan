@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.231] - 2026-10-30
+
+### Added
+- Network > Health (`/status`) says how old its data is: "Data as of <age>" beside the status board link, from our last good `/api/status` read (the node's own as of time on hover). LabLeak post 2219 quoted "Checkpoint moved 22h 18m ago, Stalled" and a mint table ending at E8 as live at 06:30 UTC Oct 30; the archive at that time gives finality moved 1 h 4 min earlier (checkpoint 129073 since 05:25 UTC) and the table ran to E22. Those numbers match a copy from the E8 close era (Oct 26 to 27), and the page had no data time to tell a copy apart.
+- `tools/dataasof_test.py`.
+
 ## [1.26.230] - 2026-10-29
 
 ### Fixed
