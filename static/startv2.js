@@ -52,10 +52,10 @@ function codePanel(a,copied){var f=D.createDocumentFragment(),st=el("div","sv-do
  st.innerHTML='<span class="sv-ring">'+CHECK+'</span><div><b>'+(copied?"Prompt copied":PZ()?"Signups are paused":"Copy the prompt")+'</b><span>'+(PZ()?"Check back later.":"Paste it into "+esc(a.name)+(a.open||TOUCH?"":" with "+KEY)+".")+'</span></div>';f.appendChild(st);
  var row=el("div","sv-row");
  var cb=bigBtn(copied?"Copy again":"Copy prompt",null,"");cb.insertAdjacentHTML("afterbegin",CP);
- cb.addEventListener("click",function(){if(cb.dataset.pz)return;if(copy(text(a))){flash(cb,"Copied");st.classList.add("on");$("b",st).textContent="Prompt copied"}});row.appendChild(cb);
- if(a.open){var ob=bigBtn("Open "+a.name,openUrl(a),"sec");ob.insertAdjacentHTML("beforeend",ARR);ob.addEventListener("click",function(e){if(ob.dataset.pz){e.preventDefault();return}copy(text(a))});row.appendChild(ob)}
+ cb.addEventListener("click",function(){if(cb.dataset.pz)return;if(copy(text(a))){flash(cb,"Copied");st.classList.add("on");$("b",st).textContent="Prompt copied";vf("copied",true)}});row.appendChild(cb);
+ if(a.open){var ob=bigBtn("Open "+a.name,openUrl(a),"sec");ob.insertAdjacentHTML("beforeend",ARR);ob.addEventListener("click",function(e){if(ob.dataset.pz){e.preventDefault();return}if(copy(text(a)))vf("copied",true)});row.appendChild(ob)}
  f.appendChild(row);
- f.appendChild(nameChip(function(){st.classList.remove("on");$("b",st).textContent="Name changed";$("div span",st).textContent="Copy the prompt again.";pre.textContent=text(a)}));
+ f.appendChild(nameChip(function(){st.classList.remove("on");$("b",st).textContent="Name changed";$("div span",st).textContent="Copy the prompt again.";pre.textContent=text(a);vfRebaseline()}));
  if(a.note){f.appendChild(el("p","sv-note",esc(a.note)))}
  return f}
 function chatPanel(a){var f=D.createDocumentFragment(),ol=el("ol","sv-tml");
@@ -72,7 +72,7 @@ function chatPanel(a){var f=D.createDocumentFragment(),ol=el("ol","sv-tml");
  c1.push(el("p","sv-warn",esc(J.warn)));
  var s1=step(1,"Add the PoA connector",c1);s1.classList.add("now");
  var pb=bigBtn(a.pre?"Copy and open "+a.name:"Copy prompt",a.pre?openUrl(a):null,"sv-sm");pb.insertAdjacentHTML("afterbegin",CP);
- pb.addEventListener("click",function(e){if(pb.dataset.pz){e.preventDefault();return}if(copy(text(a))){if(!a.pre)flash(pb,TOUCH?"Copied":"Copied. Paste with "+KEY);mark(s2)}});
+ pb.addEventListener("click",function(e){if(pb.dataset.pz){e.preventDefault();return}if(copy(text(a))){if(!a.pre)flash(pb,TOUCH?"Copied":"Copied. Paste with "+KEY);mark(s2);copied()}});
  var s2=step(2,"Paste the prompt",[pb]);
  f.appendChild(ol);
  var fb=el("p","sv-fb"),jl='<a class="sv-fblink" href="'+esc(J.join)+'" target="_blank" rel="noopener noreferrer">Join on minepoa.com</a>';
@@ -111,4 +111,33 @@ var h0=location.hash.slice(1);render(BY[h0]||h0=="apps"?h0:"name");
 /* paused: POAScan's own join state every 5 min while visible (never minepoa); once it reads open the notice goes and the card renders again, buttons on */
 if(PZ())setInterval(function(){if(D.hidden)return;fetch("/api/v1/prompts/join",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
  var s=d&&d.join&&d.join.state&&d.join.state.state;if(s&&s!="halted"&&PZ()){delete root.dataset.paused;$$(".sthalt",root).forEach(function(e){e.remove()});render(ST)}}).catch(function(){})},300000);
+/* the verification strip: three honest badges, POAScan's own /api/v1 reads only (never minepoa, never a key). 1 Prompt
+   copied is pure client state. 2 Network open mirrors POAScan's route health for hosted mining. 3 Answer verified lights
+   when the public ledger shows a challenge (answer) tx for a poa1 the person pastes. Synchronous; .then() chains only. */
+var VF={copied:false,network:false,answer:false},VFB=$$("[data-sv-vf-b]");
+function vfPaint(){VFB.forEach(function(b){var k=b.getAttribute("data-sv-vf-b");b.classList.toggle("on",!!VF[k])})}
+function vf(k,v){v=!!v;if(VF[k]===v)return;VF[k]=v;vfPaint();if(k=="copied"&&v)vfKick()}
+function copied(){vf("copied",true)}
+vfPaint();
+/* badge 2: hosted mining accepts work. hosted_mining open and not stale lights it; halted or down unlights; unknown leaves it. Once on load, then every 5 min while visible. */
+function vfNet(){if(D.hidden)return;fetch("/api/v1/routes",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
+ if(!d||!d.routes)return;var row=null;d.routes.forEach(function(x){if(x&&x.id=="hosted_mining")row=x});if(!row)return;
+ if(row.state=="open"&&!row.stale)vf("network",true);else if(row.state=="halted"||row.state=="down")vf("network",false)}).catch(function(){})}
+vfNet();setInterval(vfNet,300000);
+/* badge 3: an optional poa1 the person pastes, validated against the server's own shape; key-shaped input never matches. The ledger can lag, so poll every 15s for about 20 min, capped. Starts only after a copy. */
+var vfA=$("[data-sv-vf-addr]"),vfM=$("[data-sv-vf-msg]"),VRX=/^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$/,vfT=null,vfN=0,vfMax=80;
+function vfMsg(m){if(vfM)vfM.textContent=m||""}
+function vfStop(){if(vfT){clearTimeout(vfT);vfT=null}}
+function vfRebaseline(){vfStop();vfN=0;vf("copied",false);vf("answer",false);vfMsg("")}
+function vfLater(a){vfT=setTimeout(function(){vfPoll(a)},15000)}
+function vfPoll(a){if(VF.answer)return;if(D.hidden){vfLater(a);return}
+ fetch("/api/v1/address/"+encodeURIComponent(a)+"/txs?type=challenge&limit=1",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
+  if(d&&d.types&&(d.types.challenge||0)>=1){vf("answer",true);vfMsg("Your answer is on the ledger.");vfStop();return}
+  vfN++;if(vfN>=vfMax){vfMsg("No answer yet; the ledger can lag, so check back later.");vfStop();return}
+  vfMsg("Waiting for your answer to land; the ledger can lag.");vfLater(a)}).catch(function(){vfN++;if(vfN>=vfMax){vfStop();return}vfLater(a)})}
+function vfKick(){if(!vfA||VF.answer)return;var a=vfA.value.trim();if(!a)return;if(!VRX.test(a)){vfMsg("Enter your poa1 address, never a key.");return}
+ vfStop();vfN=0;vfMsg("Checking the ledger for your answer.");vfPoll(a)}
+if(vfA){vfA.addEventListener("input",function(){vfStop();vf("answer",false);vfN=0;var a=vfA.value.trim();
+  if(a&&!VRX.test(a)){vfMsg("That is not a poa1 address.");return}vfMsg("");if(VRX.test(a)&&VF.copied)vfKick()});
+ vfA.addEventListener("keydown",function(e){if(e.key=="Enter"){e.preventDefault();if(VF.copied)vfKick();else vfMsg("Copy the prompt first, then check.")}})}
 })();
