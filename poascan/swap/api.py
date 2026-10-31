@@ -127,7 +127,11 @@ def _cached(path):
         with _rc_lock:
             hit = _rc.get(path)
             if hit and hit[1] == ver and time.time() - hit[0] < CACHE_TTL: return hit[2]
-        data, is_list = _build(path)
+        try:
+            data, is_list = _build(path)
+        except Exception:
+            with _rc_lock: _rc_build.pop(path, None)   # 1.26.249: an unknown id must not leave its build lock behind forever
+            raise
         tag = 'W/"' + hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:20] + '"'
         with _rc_lock:
             if len(_rc) > 512: _rc.clear(); _rc_build.clear()
