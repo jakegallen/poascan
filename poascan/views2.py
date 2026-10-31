@@ -193,7 +193,7 @@ def upgrade_view():
     if r["supply_intact"]: ok += ["Balances intact"] + (["Supply carried"] if r.get("previous_segment") else ["Supply unchanged"])
     if r["checkpoint"]: ok.append(f'Checkpoint {r["checkpoint"]:,}')
     if A.freshness()["state"] != "stale": ok.append("Explorer live")
-    if M.join_state() == "open" and not M.join_halt(): ok.append("Joining open")   # 1.26.233: not while join-pow answers 503 halted
+    if M.join_state() == "open": ok.append("Joining open")   # 1.26.247: MCP joins are open even while the direct HTTP /api/join-pow route is halted; keyed off the operator signal, not that route
     ok.append("Self-custody mining")
     if M.attestation_earnings() == "live": ok.append("Attestation earnings")
     if M.pool_payouts() == "live": ok.append("Challenge-pool payouts")

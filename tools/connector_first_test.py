@@ -15,7 +15,8 @@ def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 db.init()
 from poascan import maint as M, join as J
-M.join_halt = lambda: None
+# 1.26.247: the /start paused banner keys off the operator signal (join_open), not the direct HTTP /api/join-pow halt.
+M.join_halt = lambda: None; M.join_open = lambda: True
 top, rest = S.chats(); by = {c["id"]: c for c in top + rest}
 gpt = by["chatgpt"]; h = unescape(S.go_block(gpt)); hr = S.go_block(gpt)
 pos = lambda x, t=h: t.index(x)
@@ -107,8 +108,8 @@ check("v2.9.4: the key error line once in both join variants", all(t.count(__imp
       and "401 or 403 saying the key is missing or invalid" in ct)
 
 P = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
-check("open (200): no paused notice, no button off, on /start or in the Ask dialog", S.join_halt_html() == "" and "data-joinhalt" not in h and "data-pzoff" not in h + cx and "data-joinhalt" not in J.ask_modal())
-M.join_halt = lambda: dict(since_ts=1793000000, as_of_ts=1793000300)
+check("open (join_open true): no paused notice, no button off, on /start or in the Ask dialog", S.join_halt_html() == "" and "data-joinhalt" not in h and "data-pzoff" not in h + cx and "data-joinhalt" not in J.ask_modal())
+M.join_open = lambda: False   # operator/tracker pause: the honest proxy for MCP joins actually failing
 ph = unescape(S.go_block(gpt))
 check("halted (503): the exact notice right under the step 1 heading, step 1 says Signups are paused", S.PAUSED == P and P in ph and pos("data-s1h", ph) < pos(P, ph) < pos("data-mpjoin", ph)
       and " data-s1b hidden" in ph and '<p class="jwb jwpz" data-s1paused>Signups are paused. Check back later.</p>' in ph and "while minepoa hardens" not in ph)
@@ -126,7 +127,7 @@ check("the prompt is v2.9.4: template 438bec61, combined a7210d16", hf["template
 check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.240"):js.index("1.26.240") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
-M.join_halt = lambda: None
+M.join_open = lambda: True
 EMPTY = re.compile(r"<code[^>]*>\s*</code>")
 for c in top + rest:
     g = unescape(S.go_block(c)); cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED and c["kind"] != "none"
@@ -210,8 +211,9 @@ if sync_playwright:
                 pg.goto(base + "/start", wait_until="networkidle"); pg.fill("[data-sv-n0]", "bad name"); pg.click("[data-sv-next]"); pg.wait_for_timeout(200)
                 check(f"{w}px: a bad name stays on step 1 with one line", vis("[data-sv-name0]") and pg.inner_text("[data-sv-err0]") == "Letters, numbers, _ or - only.")
                 ctx.close()
-            # paused (503): nothing copies or opens; POAScan's own read turning open re-enables the card, no reload
-            db2 = os.path.join(tempfile.mkdtemp(), "p.db"); e2 = dict(env, POASCAN_DB=db2)
+            # paused (operator/tracker halt, 1.26.247): nothing copies or opens; POAScan reading joins open re-enables the card, no reload.
+            # POASCAN_JOIN_OPEN=0 is the operator pause switch (the honest proxy for MCP joins failing), not the direct HTTP /api/join-pow 503.
+            db2 = os.path.join(tempfile.mkdtemp(), "p.db"); e2 = dict(env, POASCAN_DB=db2, POASCAN_JOIN_OPEN="0")
             subprocess.run([sys.executable, "-c", "import time;from poascan import db,routewatch as RW;db.init();n=int(time.time());"
                             "db.write('INSERT OR REPLACE INTO fetch_log(endpoint, last_ok, last_err, err, fails) VALUES(?,?,?,?,?)',('/api/join-pow',n-600,n-60,'HTTP 503 halted',1));RW.job(n)"], cwd=ROOT, env=e2, check=True)
             sk = socket.socket(); sk.bind(("127.0.0.1", 0)); p2 = sk.getsockname()[1]; sk.close(); base2 = f"http://127.0.0.1:{p2}"

@@ -57,9 +57,23 @@ def join_state():
     return "paused" if not join_open() or join_quiet() else "open"
 
 def join_state_api():
-    """1.26.233: the join_state API field (maintenance block of /api/v1/status, /summary): halted while minepoa's
-    /api/join-pow answers 503 halted (the same cached read as /start), else join_state(). Copy keeps join_state()."""
-    return "halted" if join_halt() else join_state()
+    """The join_state API field (maintenance block of /api/v1/status, /summary, /swaps/status).
+    1.26.247 (minepoa v0.71-mcpjoin): MCP joins are real (poa_join_pow, mine, poa_register on the connector at
+    https://minepoa.com/mcp). The direct HTTP GET /api/join-pow route answering 503 halted (join_halt()) is now
+    only that one route, not a blanket pause, so it no longer drives join_state to halted. join_state follows the
+    operator and tracker signal only (open or paused via join_open()/join_quiet()); the direct-route halt is a
+    separate, non-blocking signal reported in join_pow_route(). Copy keeps join_state()."""
+    return join_state()
+
+def join_pow_route():
+    """1.26.247: the direct HTTP GET /api/join-pow route status on its own (minepoa halted it for API hardening).
+    halted is true while that one route answers 503; MCP joins (poa_join_pow, poa_register) are unaffected, so this
+    never reads as a blanket join pause. since_ts and as_of_ts come from join_halt() (routewatch, read every 5 min
+    at most, hourly while halted)."""
+    h = join_halt()
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if isinstance(t, (int, float)) else None
+    return dict(halted=bool(h), since=iso(h["since_ts"]) if h else None, as_of=iso(h["as_of_ts"]) if h else None,
+                note="direct HTTP GET /api/join-pow only; MCP joins (poa_join_pow then poa_register) are open on https://minepoa.com/mcp")
 
 def join_route():
     """routewatch's "joining" route record (state, since_ts, as_of_ts), or None before the first read."""
@@ -576,7 +590,7 @@ def state():
     if c and rh: head, short = halt_line(rh)   # 1.26.188: never 'Upgrade complete' while probes show routes halted
     sn = segment_notice()
     if sn and sn["active"]: head, short = f'{sn["label"]}: {sn["note"]} {head}', f'{sn["label"]}. {short}'   # the active boundary notice first, tersely
-    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state_api(),
+    return dict(active=active, cleared_by=cleared, post_id=POST_ID, post_url=POST_URL, join_open=join_open(), join_state=join_state_api(), join_pow_route=join_pow_route(),
                 last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(lj)) if lj else None, join_source=join_source(), hosted_mining=hosted_state(),
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(STARTED)),
                 expected_window_h=list(WINDOW_H), paused=paused(), working=working(), self_custody="POST /api/submit plus /api/receipt keep working", pending_ttl_epochs=_ttl(),
