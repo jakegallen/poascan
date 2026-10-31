@@ -485,6 +485,13 @@ def page(page_fn, card=None, apps=None):
     from .earnview import tabs as _etabs
     hero = (f'<div class="sthero">{_etabs("/start")}<h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
             f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
+    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start"{' data-paused="1"' if paused() else ""}>{hero}{steps}</section>'
+            + below() + '</div>')
+    return page_fn("Start", body, "/start")
+
+def below():
+    """Under the /start card (both layouts): what the prompt does, All steps (with self-custody and sources), prompt history."""
+    from . import prompthist as PH
     cp = lambda v: f'<button class="cp" type="button" data-copy="{E(v)}" aria-label="Copy"><i></i></button>'
     li = "".join(f'<li><div class="sth"><b>{E(t)}</b>{f"<span>{E(n)}</span>" if n else ""}</div>'
                  + (f'<div class="stc"><code>{E(v)}</code>{cp(v)}</div>' if v else "") + "</li>" for t, v, n in STEPS)
@@ -494,7 +501,5 @@ def page(page_fn, card=None, apps=None):
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
            f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
-    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start"{' data-paused="1"' if paused() else ""}>{hero}{steps}</section>'
-            + PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
-            f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history() + '</div>')
-    return page_fn("Start", body, "/start")
+    return (PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
+            f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history())

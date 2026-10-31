@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.246] - 2026-10-30
+
+### Changed
+
+- /start is now name first, then the app. Step 1 shows a generated name, already checked against POAScan's archive, so Next is one tap. Edit it or keep it.
+- Step 2 asks what you are using, with Claude preselected and one Continue button. Tiles stay grouped: Runs code, Chat with connector, and Something else for apps that can't run an Agent.
+- Tapping a Runs code app opens its card and copies nothing. Copy prompt is its own button. Cursor keeps Open Cursor, Codex keeps its network note, and the name can be edited inline.
+- Chat with connector apps keep the three steps: join on minepoa.com, add minepoa's connector (Add to Claude for Claude, the URL with a copy button, the key warning), then paste the prompt.
+- Apps that can't run an Agent show one line and three that can. Back, Escape and #app links work at every step.
+- While joins are paused every button stays off. When POAScan reads joins open again, the card turns back on without a reload.
+- The prompt text is unchanged (v2.9.4).
+
 ## [1.26.245] - 2026-10-30
 
 ### Changed

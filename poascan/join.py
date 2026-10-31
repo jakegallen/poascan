@@ -85,7 +85,8 @@ def apps(cls=""):
 def shell(start=False):
     """Page tail on every page: the toast. /start's card reads the three variant templates from the page, so /start carries them.
     1.26.86: the Join dialog is gone (the header Start goes to /start); /fragment/join and /#join land on /start."""
-    return (_S.variant_templates() if start else "") + '<div class="toast" id="toast" role="status" aria-live="polite"></div>'
+    from . import startv2 as _SV2   # 1.26.246: the new /start embeds its own templates (data-sv-tpl)
+    return (_S.variant_templates() if start and not _SV2.on() else "") + '<div class="toast" id="toast" role="status" aria-live="polite"></div>'
 
 def ask_modal():
     """Shared 'Ask your agent' dialog; app.js fills title/prompt from the clicked [data-ask] button."""

@@ -6,6 +6,9 @@
 .sv-hero{position:relative;padding-right:48px;margin-bottom:18px}
 .sv-hero h1{margin:10px 0 0;font:400 clamp(28px,4.4vw,40px)/1.1 var(--fig);letter-spacing:-.01em;color:var(--gold)}
 .sv-hero .jm-x{position:absolute;top:0;right:0}
+.sv-qh{display:flex;align-items:center;gap:10px;margin:0 0 14px}.sv-qh .sv-q{margin:0}
+.sv-go{width:100%;margin-top:14px}
+.sv-t.sel{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 8%,var(--ink-1));box-shadow:0 0 0 1px var(--gold-edge)}
 .sv-q{margin:0 0 14px;font:500 var(--t20)/1.2 var(--ui);color:var(--hi)}
 .sv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .sv-t{position:relative;display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border:1px solid var(--line2);border-radius:var(--r-md);
@@ -88,7 +91,7 @@
 .sv-foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);display:grid;gap:10px;justify-items:center;text-align:center}
 .sv-foot .pnote{margin:0;font-size:var(--t12);color:var(--mute)}.sv-view summary{cursor:pointer;color:var(--dim);font-size:var(--t13)}
 .sv-pre{max-height:280px;overflow:auto;text-align:left;white-space:pre-wrap;font:400 var(--t12)/1.5 var(--mono);color:var(--bone-1);padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--ink-0)}
-.sv-wal{margin:0;font-size:var(--t13)}
+.sv-foot .stwal{margin:0;font-size:var(--t13)}
 [data-sv] [hidden]{display:none!important}
 @keyframes svin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes svpulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--verd) 55%,transparent)}70%,100%{box-shadow:0 0 0 6px transparent}}

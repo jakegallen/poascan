@@ -1,6 +1,6 @@
 """Join dialog retired (1.26.86; lazy since 1.26.54) and swap state names. The header Start goes to /start, so pages carry no
 Join dialog: no shell, no /fragment/join fetch, no [data-join] trigger. An old cached page that asks for /fragment/join gets a 301
-to /start, and an old /#join link lands on /start. /start carries the variant templates (two since v2.9) once, outside main. llms.txt,
+to /start, and an old /#join link lands on /start. /start carries the two templates once each, in the card (1.26.246). llms.txt,
 llms-full.txt and the MCP tool descriptions write the swap state value coming_soon, never "coming soon", where they name it.
 Usage: python3 tools/lazyjoin_test.py"""
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -42,9 +42,9 @@ try:
               and 'id="jm-prompt"' not in t and 'data-rname="jclient"' not in t and re.search(r'/static/app\.js\?v=[0-9a-f]{12}"', t) is not None and 'id="askmodal"' in t and 'id="toast"' in t
               and '<a class="joinbtn hdrjoin" href="/start">' in t)
     st = pages["/start"][2]; m = st[st.index("<main"):st.index("</main>")]
-    check("/start: the variant templates (two since v2.9) once, outside main, the full one is the canonical template",
-          re.findall(r'<pre hidden data-variant="([^"]+)">', st) == ["full", "connector"] and "data-variant" not in m
-          and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', st, re.S).group(1)) == OP.TEMPLATE)
+    check("/start (1.26.246): the two templates once each in the card, the full one is the canonical template, no legacy data-variant copies",
+          re.findall(r'<pre hidden data-sv-tpl="([^"]+)">', st) == ["full", "connector"] and "data-variant" not in st
+          and unescape(re.search(r'<pre hidden data-sv-tpl="full">(.*?)</pre>', st, re.S).group(1)) == OP.TEMPLATE)
     check("other pages carry no variant templates", all("data-variant" not in t for r, (c, h, t) in pages.items() if r != "/start"))
     nr = urllib.request.build_opener(urllib.request.ProxyHandler({}), type("NR", (urllib.request.HTTPRedirectHandler,), {"redirect_request": lambda *a, **k: None})())
     try: nr.open(base + "/fragment/join", timeout=30); c, loc = 200, ""

@@ -134,7 +134,8 @@ for c in top + rest:
           ("Run this once" in g) == cli and (not cli or g.index("Run this once") > g.index("data-cfirst")) and ("Not tested yet" in g) == un and not EMPTY.search(g))
 check("server: Claude is the default and shows neither", S.default_client()["id"] == "claude" and not any(x in unescape(S.go_block(S.default_client())) for x in ("Run this once", "Not tested yet")))
 
-# client side: the default pick and after each click, at 390 and 1280
+# client side (1.26.246 flow): name, Next, the picker, each card, at 390 and 1280
+def location_hash(pg): return pg.evaluate("location.hash")
 import socket, subprocess, time, urllib.request
 try:
     from playwright.sync_api import sync_playwright
@@ -159,27 +160,57 @@ if sync_playwright:
             f = [m for m in CRED.findall(body)] + (["a/work"] if "lableak/#/a/work" in body else [])
             if f: hits[u] = f
         check(f"served pages ({len(set(urls))}, sitemap included): no key, token or guid in any URL or query, no grading guide link {hits}", not hits and len(set(urls)) >= 13)
+        # 1.26.246: the client side of the new /start: name, Next, the picker (Claude preselected), each app's card
         apps = [c for c in top + rest if c["kind"] != "none"]
+        HOOK = ("window.__opened=0;window.open=function(){window.__opened++;return null};window.__c='';"
+                "document.addEventListener('copy',function(){var a=document.activeElement;window.__c=(a&&a.value)?a.value.substring(a.selectionStart,a.selectionEnd):String(document.getSelection())},true)")
         with sync_playwright() as p:
             b = p.chromium.launch()
             for w in (390, 1280):
-                pg = b.new_page(viewport={"width": w, "height": 844 if w < 400 else 900}); pg.goto(base + "/start", wait_until="networkidle")
-                def state():
-                    return pg.evaluate("""()=>{const st=document.querySelector('li.st3'),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),t=st.innerText.toLowerCase(),
-                              s2=document.querySelector('[data-s2cmd]'),cf=document.querySelector('[data-cfirst]'),s1=t.split('2. let')[0];
-                      return {run:t.includes('run this once'),s1run:s1.includes('run this once')||s1.includes('mcp add'),un:t.includes('not tested yet'),
-                              empty:[...st.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,
-                              s2c:v(s2)&&cf.contains(s2)?s2.textContent:'',ut:(document.querySelector('[data-untested]')||{}).textContent||''}}""")
-                def ok(c, d):
-                    cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED
-                    return (d["run"] == cli and not d["s1run"] and d["un"] == un and d["empty"] == 0 and bool(d["s2c"]) == cli and bool(d["ut"]) == un)
-                d = state(); check(f"{w}px default (Claude): no run-once block, no Not tested yet, no empty code span {d}", ok(top[0], d))
-                pg.locator("[data-more]").first.click()
-                for c in apps + [top[0]]:
-                    pg.locator(f"label.cl:has(input[data-tag='{c['id']}'])").first.click()
-                    d = state(); check(f"{w}px after picking {c['id']}: lanes match the app {d}", ok(c, d))
-                pg.close()
-            # paused (503): every copy or join button does nothing; POAScan's own read turning open re-enables them, no reload
+                ctx = b.new_context(viewport={"width": w, "height": 844 if w < 400 else 900})
+                ctx.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort()); ctx.add_init_script(HOOK)
+                pg = ctx.new_page(); pg.goto(base + "/start", wait_until="networkidle")
+                vis = lambda sel: pg.evaluate(f"()=>{{const e=document.querySelector('{sel}');return !!e&&!!(e.offsetWidth||e.offsetHeight)}}")
+                nm = pg.input_value("[data-sv-n0]")
+                check(f"{w}px: the name step shows first, prefilled {nm}; the picker is hidden", vis("[data-sv-name0]") and not vis("[data-sv-pick]") and re.fullmatch(r"[a-z]+-[a-z]+-\d{3}", nm))
+                pg.click("[data-sv-next]"); pg.wait_for_timeout(300)
+                check(f"{w}px: one tap on Next shows the picker, Claude preselected, Continue with Claude", vis("[data-sv-pick]") and not vis("[data-sv-name0]")
+                      and pg.evaluate("()=>[...document.querySelectorAll('.sv-t.sel')].map(e=>e.dataset.app)") == ["claude"] and vis(".sv-go") and location_hash(pg) == "#apps")
+                for c in apps:
+                    pg.click(f'.sv-grid [data-app="{c["id"]}"]'); pg.wait_for_timeout(250)
+                    d = pg.evaluate("""()=>{const b=document.querySelector('[data-sv-body]'),t=b.innerText.toLowerCase(),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight);
+                        return {copied:window.__c.length,btns:[...b.querySelectorAll('.sv-btn')].filter(v).map(e=>e.innerText.trim()),warn:v(b.querySelector('.sv-warn'))?b.querySelector('.sv-warn').innerText:'',
+                                url:(b.querySelector('.sv-url code')||{}).textContent||'',note:[...b.querySelectorAll('.sv-note')].map(e=>e.innerText).join('|'),mcp:t.includes('mcp add')||t.includes('run this once'),
+                                empty:[...b.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,head:document.querySelector('[data-sv-app]').textContent,hash:location.hash}}""")
+                    if c["tier"] == "full":
+                        good = (d["copied"] == 0 and d["btns"] == ["Copy prompt"] + (["Open " + c["name"]] if c["open"] else []) and not d["warn"] and not d["mcp"]
+                                and d["note"] == (c.get("note") or "") and d["head"] == c["name"] and d["hash"] == "#" + c["id"])
+                    else:
+                        co = c.get("connector") or {}
+                        good = (d["copied"] == 0 and d["btns"][0] == "Join on minepoa.com" and (("Add to " + c["name"]) in d["btns"]) == bool(co.get("prefills_url"))
+                                and d["btns"][-1] in ("Copy prompt", "Copy and open " + c["name"]) and d["warn"] == S.KEY_WARN and d["url"] == "https://minepoa.com/mcp"
+                                and not d["mcp"] and d["empty"] == 0 and ("Needs a paid ChatGPT plan" in d["note"]) == (c["id"] == "chatgpt"))
+                    check(f"{w}px {c['id']}: the tap opens its card and copies nothing; {'Copy prompt' + (' and Open' if c['open'] else '') if c['tier'] == 'full' else 'join, connector with the warning, paste'} {d}", good)
+                    if c["tier"] == "full":
+                        pg.click('[data-sv-body] .sv-btn >> nth=0'); pg.wait_for_timeout(150)
+                        cp = pg.evaluate("window.__c"); pg.evaluate("window.__c=''")
+                        check(f"{w}px {c['id']}: Copy prompt copies the full prompt with the name", cp == S.prompt(nm) and "{NAME}" not in cp and "YOUR_NAME" not in cp)
+                    pg.click("[data-sv-panel] [data-sv-back]"); pg.wait_for_timeout(250)
+                    if not vis("[data-sv-pick]"): check(f"{w}px {c['id']}: Back returns to the picker", False)
+                pg.click(".sv-other summary"); pg.click('.sv-o[data-app="muse"]'); pg.wait_for_timeout(250)
+                ns = pg.evaluate("()=>({t:document.querySelector('.sv-no').innerText,a:[...document.querySelectorAll('.sv-alts [data-app]')].map(e=>e.dataset.app),f:!!document.querySelector('[data-sv-foot]').offsetParent})")
+                check(f"{w}px not supported: one line and the three apps that can, no prompt footer {ns}", ns["t"] == "Muse can't run an Agent yet. Use one of these:" and ns["a"] == ["claude-code", "cursor", "grok-bot"] and not ns["f"])
+                pg.click('.sv-alts [data-app="cursor"]'); pg.wait_for_timeout(250)
+                check(f"{w}px not supported: a redirect tile opens that app's card", pg.inner_text("[data-sv-app]") == "Cursor")
+                pg.keyboard.press("Escape"); pg.wait_for_timeout(250); h1 = location_hash(pg)
+                pg.keyboard.press("Escape"); pg.wait_for_timeout(250); h2 = location_hash(pg)
+                check(f"{w}px: Escape goes back one level at a time ({h1}, {h2})", h1 == "#muse" and h2 == "#apps" and vis("[data-sv-pick]") and not vis("[data-sv-panel]"))
+                pg.goto(base + "/start#claude", wait_until="networkidle"); pg.wait_for_timeout(250)
+                check(f"{w}px: /start#claude opens Claude's strip directly", pg.inner_text("[data-sv-app]") == "Claude" and vis(".sv-tml"))
+                pg.goto(base + "/start", wait_until="networkidle"); pg.fill("[data-sv-n0]", "bad name"); pg.click("[data-sv-next]"); pg.wait_for_timeout(200)
+                check(f"{w}px: a bad name stays on step 1 with one line", vis("[data-sv-name0]") and pg.inner_text("[data-sv-err0]") == "Letters, numbers, _ or - only.")
+                ctx.close()
+            # paused (503): nothing copies or opens; POAScan's own read turning open re-enables the card, no reload
             db2 = os.path.join(tempfile.mkdtemp(), "p.db"); e2 = dict(env, POASCAN_DB=db2)
             subprocess.run([sys.executable, "-c", "import time;from poascan import db,routewatch as RW;db.init();n=int(time.time());"
                             "db.write('INSERT OR REPLACE INTO fetch_log(endpoint, last_ok, last_err, err, fails) VALUES(?,?,?,?,?)',('/api/join-pow',n-600,n-60,'HTTP 503 halted',1));RW.job(n)"], cwd=ROOT, env=e2, check=True)
@@ -188,22 +219,20 @@ if sync_playwright:
             for _ in range(150):
                 try: urllib.request.urlopen(base2 + "/healthz", timeout=2); break
                 except Exception: time.sleep(0.2)
-            pg = b.new_page(viewport={"width": 390, "height": 844}); pg.clock.install()
-            pg.add_init_script("window.__opened=0;window.open=function(){window.__opened++;return null};window.__copied=0;try{navigator.clipboard.writeText=function(){window.__copied++;return Promise.resolve()}}catch(e){}")
-            pg.goto(base2 + "/start", wait_until="networkidle")
-            q = lambda sel: pg.evaluate(f"()=>[...document.querySelectorAll('{sel}')].filter(e=>e.offsetParent).map(e=>[e.getAttribute('aria-disabled'),e.hasAttribute('data-pzoff')])")
-            check(f"client paused: Copy and open and Join on minepoa.com render disabled {q('[data-go],[data-mpjoin]')}", q("[data-go],[data-mpjoin]") and all(x == ["true", True] for x in q("[data-go],[data-mpjoin]")))
-            for sel in ("[data-go]", "[data-mpjoin]"):
-                pg.locator(sel).first.dispatch_event("click")
-            pg.locator("[data-more]").first.click(); pg.locator("label.cl:has(input[data-tag='codex'])").first.click()
-            pg.locator("[data-go]").first.dispatch_event("click")
-            st = pg.evaluate("()=>({o:window.__opened,c:window.__copied,u:location.href,go:document.querySelector('[data-go]').getAttribute('aria-disabled'),n:!!document.querySelector('[data-pauseoff]')})")
-            check(f"client paused: clicks open nothing and copy nothing, still off after a pick, the note stays {st}", st["o"] == 0 and st["c"] == 0 and st["u"].endswith("/start") and st["go"] == "true" and st["n"])
+            ctx = b.new_context(viewport={"width": 390, "height": 844}); ctx.add_init_script(HOOK); pg = ctx.new_page(); pg.clock.install()
+            pg.goto(base2 + "/start#claude-code", wait_until="networkidle")
+            offs = lambda: pg.evaluate("()=>[...document.querySelectorAll('[data-sv-body] .sv-btn')].map(e=>e.getAttribute('aria-disabled'))")
+            o1 = offs(); pg.locator("[data-sv-body] .sv-btn").first.dispatch_event("click")
+            pg.goto(base2 + "/start#claude", wait_until="networkidle"); o2 = offs()
+            for i in range(len(o2)): pg.locator("[data-sv-body] .sv-btn").nth(i).dispatch_event("click")
+            st = pg.evaluate("()=>({o:window.__opened,c:window.__c,halt:!!document.querySelector('[data-sv] .sthalt'),u:location.href})")
+            check(f"client paused: every Copy, Open, Join and Add is off; clicks copy and open nothing; the notice shows {o1} {o2} {st}", o1 and o2 and all(x == "true" for x in o1 + o2)
+                  and st["o"] == 0 and not st["c"] and st["halt"])
             pg.route("**/api/v1/prompts/join*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"join":{"state":{"state":"open"}}}'))
             pg.clock.run_for(301000); pg.wait_for_timeout(300)
-            st = pg.evaluate("()=>({off:document.querySelectorAll('[data-pzoff],.jwbtn.off,.gobtn.off').length,halt:document.querySelectorAll('li.st3 .sthalt,li.st3 [data-pauseoff],li.st3 [data-s1paused]').length,go:document.querySelector('[data-go]').getAttribute('aria-disabled')})")
-            check(f"client: when POAScan reads joins open again, every button turns back on and the paused lines go {st}", st["off"] == 0 and not st["halt"] and st["go"] is None)
-            pg.close(); srv2.terminate(); srv2.wait(10)
+            st = pg.evaluate("()=>({off:document.querySelectorAll('.sv-btn.off,[aria-disabled=true]').length,halt:!!document.querySelector('[data-sv] .sthalt'),p:document.querySelector('[data-sv]').dataset.paused||''})")
+            check(f"client: when POAScan reads joins open again, the card renders with every button on and the notice gone {st}", st["off"] == 0 and not st["halt"] and not st["p"])
+            ctx.close(); srv2.terminate(); srv2.wait(10)
             b.close()
     finally:
         srv.terminate(); srv.wait(10)

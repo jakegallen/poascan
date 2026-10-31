@@ -354,97 +354,71 @@ try:
         try: urllib.request.urlopen(base + "/healthz", timeout=2); break
         except Exception: time.sleep(0.2)
     c, _, h = req("/start"); m = h[h.index("<main"):h.index("</main>")]
-    steps = re.findall(r'<li class="sts[^"]*"><span class="stn" aria-hidden="true">(\d)</span><div class="stb"><h2 class="stt" id="st\d">([^<]+)</h2>', m)
-    check(f"/start: three numbered steps in order {steps}", c == 200 and steps == [("1", "Name your agent"), ("2", "Pick where it runs"), ("3", "Start mining")])
-    check("/start: one visible h1, the name field labelled by step 1, Enter hint next", m.count("<h1") == 1 and "<h1>Start mining PoA</h1>" in m
-          and 'id="stname"' in m and 'aria-labelledby="st1"' in m and 'enterkeyhint="next"' in m and "data-name" in m)
-    i_more = m.index('class="morep')
-    i_sup = m.index('Not supported<i')
-    up = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m[:i_more]); allr = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m)
-    check(f"/start: one radio group in three groups, Claude checked {up}", up == ["Grok Bot", "Claude Code", "Cursor", "Codex", "Claude", "ChatGPT", "Grok", "Perplexity Pro", "Le Chat"] and m.count('role="radiogroup"') == 1
-          and m.index('data-group="full">Runs code') < m.index('value="Grok Bot"') < m.index('data-group="connector">Chat with connector') < m.index('value="Claude"') < i_sup < m.index('value="Muse"')
-          and re.search(r'value="Claude" data-kind="auto" data-tier="connector"[^>]* checked>', m) and m.count(" checked>") == 1)
-    check("/start: Not supported behind the single toggle; no connector install choices or commands (1.26.245)", m.count("data-more") == 1 and ">More<" not in m
-          and len(allr) == len(CR.CLIENTS) and 'class="cmd"' not in m and "mcp add" not in m and "Other clients" not in m and "One click" not in m)
-    check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); Claude (hosted, 1.26.240): step 2 the connector, then step 3 the button",
-          len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-cfirst") < m.index("data-conrow") < m.index("data-gorow") and "gocrow" not in m and 'class="gon"' not in m
-          and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em><span class="gi gi-a" data-gi="a">' in m
-          and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=Proof%20of%20Agent&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Add connector in Claude</span><svg' in m)
-    _lb = {c["id"]: (S.go_label(c)[:2], S.con_label(c)) for c in top + rest if c["kind"] != "none"}
-    check(f"labels: auto copies and opens, the rest copy for the app; connector link only where the app has a connector",
-          _lb["claude"] == (("Copy prompt and open Claude", "Copy and open Claude"), "Add connector in Claude")
-          and _lb["cursor"] == (("Copy prompt for Cursor", "Copy for Cursor"), "") and _lb["le-chat"] == (("Copy prompt for Le Chat", "Copy for Le Chat"), "Open Le Chat settings")
-          and _lb["codex"] == (("Copy prompt for Codex", "Copy for Codex"), "") and _lb["grok-bot"] == (("Copy prompt for Grok Bot", "Copy for Grok Bot"), "")
-          and not any(ch in json.dumps(_lb) for ch in "\u2014\u2013"))
-    npn = m[m.index("data-nopath"):]; npn = npn[:npn.index("</div></div>")]
-    check("/start: the no-path panel is one terse line and the working alternatives (each picks that client), hidden until a no-path app is picked; no prompt, no warning",
-          '<div class="nopath" data-nopath role="status" hidden><p>This app can&#x27;t run an Agent yet. Pick one of these:</p>' in m and m.count("data-nopath") == 1
-          and "data-npjoin" not in npn
-          and re.findall(r'data-pick="([^"]+)"', npn) == [CR.BY_ID[a]["name"] for a in CR.NOPATH["alternatives"]] and "warn" not in npn.lower())
-    check("the two variant templates (v2.9) are embedded once on /start (outside main) for app.js, the full one is the canonical template",
-          [unescape(x) for x in re.findall(r'<pre hidden data-variant="([^"]+)">', h)] == ["full", "connector"] and "data-variant" not in m
-          and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)) == OP.TEMPLATE
-          and unescape(re.search(r'<pre hidden data-variant="connector">(.*?)</pre>', h, re.S).group(1)) == OP.CONNECTOR)
-    check("/start: every not supported client sits behind the Not supported toggle", all(m.index(f'value="{c["name"]}"') > i_more for c in CR.CLIENTS if c["tier"] == "none")
-          and re.search(r'value="Muse" data-kind="none" data-tier="none"', m))
-    css = open(os.path.join(ROOT, "static", "style.css")).read()
-    check("/start: no Join only tag on any client, no tag markup or CSS left",
-          "Join only" not in m and "cltag" not in m and "tagd" not in m and not hasattr(S, "JOIN_ONLY") and not hasattr(S, "JOIN_ONLY_TAG")
-          and ".cltag" not in css and "tagd" not in css)
-    check("/start: no standalone Copy prompt button; no helper or join lines under the button; the fallback box is hidden",
-          "data-gocopy" not in m and 'class="gocp"' not in m and '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>' in m
-          and "stjl" not in m and "Opens Claude" not in m and "starts earning once" not in m[m.index("data-go "):]
-          and '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly' in m)
-    check("/start: the name pattern is valid under the v flag (hyphen escaped in the class)", 'pattern="[A-Za-z0-9_\\-]{1,32}"' in m and 'pattern="[A-Za-z0-9_-]' not in m)
-    check("/start: name field is checked live, never cut: no maxlength, aria-invalid, aria-describedby, an assertive live error line",
-          "maxlength" not in m[m.index('id="stname"'):m.index('id="stname"') + 600] and 'aria-describedby="stname-hint stname-err" aria-invalid="false"' in m
-          and '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>' in m)
-    view = m[m.index('<details class="stview" data-stview>'):]
-    check("/start: the prompt sits collapsed behind View prompt, with its Copy, and is the template text", '<details class="stview" data-stview><summary>View prompt</summary>' in m
-          and "<details class=\"stview\" open" not in m and m.count("data-copy-prompt") == 1 and m.index("data-go") < m.index("stview") < m.index("data-copy-prompt")
-          and unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', view, re.S).group(1)).startswith(PASTED.replace("\nJoin ", "\nMine ") + " with the PoA connector")
-          and m.count('<p class="pnote" data-pnote>' + NOTICE + '</p>') == 1 and m.index('data-pnote') < m.index("stview"))
-    check("/start: one short key line, no red warning and no repeat outside the prompt", m.count(S.KEYLINE) == 1 and 'class="kwarn"' not in m
-          and "Treat a leaked key" not in m and "Never paste your pk_" not in m)
+    # 1.26.246: /start is startv2.py: name first, then the app (Claude preselected), then the card for that app
+    check("/start: one visible h1; the name step first, generated and prefilled, then the picker and the panel (hidden until reached)",
+          c == 200 and m.count("<h1") == 1 and "<h1>Start mining PoA</h1>" in m and m.index("data-sv-name0") < m.index("data-sv-pick") < m.index("data-sv-panel")
+          and re.search(r'<label for="sv-n0">Name your Agent</label><div class="sv-n0r"><input id="sv-n0" value="[a-z]+-[a-z]+-\d{3}"', m)
+          and '<button type="button" class="sv-btn" data-sv-next>Next</button>' in m and '<div class="sv-pick" data-sv-pick hidden>' in m and "data-sv-panel hidden" in m)
+    tiles = re.findall(r'<button type="button" class="sv-t sv-(full|connector)( sel)?" data-app="([^"]+)"', m)
+    check(f"/start: Runs code tiles, then Chat + connector tiles, registry order; Claude preselected with Continue {[t[2] for t in tiles]}",
+          [t[2] for t in tiles] == ["grok-bot", "claude-code", "cursor", "codex", "claude", "chatgpt", "grok", "perplexity", "le-chat"]
+          and [t[0] for t in tiles] == ["full"] * 4 + ["connector"] * 5 and [t[2] for t in tiles if t[1]] == ["claude"]
+          and '<button type="button" class="sv-btn sv-go" data-app="claude">Continue with Claude</button>' in m)
+    check("/start: the difference is a glyph, not a sentence: a terminal glyph with a live dot on code tiles, a plug on chat tiles, one legend line",
+          m.count('<span class="sv-b sv-bc" title="Runs code">') == 4 and m.count('<span class="sv-b sv-bp" title="Chat + connector">') == 5
+          and m.count('class="sv-live"') == 5 and '<div class="sv-key" aria-hidden="true">' in m)
+    check("/start: every not supported app behind one closed Something else; no connector install choices or commands",
+          m.count('<details class="sv-other">') == 1 and "<details class=\"sv-other\" open" not in m
+          and sorted(re.findall(r'class="sv-o" data-app="([^"]+)"', m)) == sorted(c["id"] for c in CR.CLIENTS if c["tier"] == "none")
+          and 'class="cmd"' not in m and "mcp add" not in m and 'value="mcp:' not in m)
+    d = json.loads(unescape(re.search(r'<script type="application/json" data-sv-json>(.*?)</script>', m, re.S).group(1)).replace("<\\/", "</"))
+    cl = {a["id"]: a for a in d["apps"]}
+    check("/start data: Claude's Add to Claude prefill (name Proof of Agent, minepoa's /mcp URL), the connector URL, the key warning, the redirect apps; no key, token or referral",
+          cl["claude"]["cset"] == "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Proof%20of%20Agent&connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" and cl["claude"]["cfill"]
+          and d["mcp"] == "https://minepoa.com/mcp" and d["warn"] == S.KEY_WARN and d["join"] == "https://minepoa.com/" and d["alts"] == ["claude-code", "cursor", "grok-bot"]
+          and cl["codex"]["note"] == "Allow network access in Codex first. Its default sandbox blocks web requests." and cl["cursor"]["open"] == "https://cursor.com/link/prompt"
+          and cl["chatgpt"]["cnote"] == "Needs a paid ChatGPT plan with developer mode turned on."
+          and not re.search(r"[?&](key|api_key|token|guid|ref|invited_by)=", json.dumps(d)) and d["paused"] is False)
+    check("the two templates are embedded once (full == the canonical template, connector == the connector variant)",
+          [x for x in re.findall(r'<pre hidden data-sv-tpl="([^"]+)">', m)] == ["full", "connector"]
+          and unescape(re.search(r'<pre hidden data-sv-tpl="full">(.*?)</pre>', m, re.S).group(1)) == OP.TEMPLATE
+          and unescape(re.search(r'<pre hidden data-sv-tpl="connector">(.*?)</pre>', m, re.S).group(1)) == OP.CONNECTOR and "data-variant" not in h)
+    view = m[m.index('<details class="sv-view">'):]
+    check("/start: View prompt (collapsed, its Copy) holds the full prompt with YOUR_NAME; the notice line once, before it; Add a wallet on POASwap once",
+          "<details class=\"sv-view\" open" not in m and m.count("data-copy-prompt") == 1 and m.index("data-sv-panel") < m.index("sv-view") < m.index("data-copy-prompt")
+          and unescape(re.search(r'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">(.*?)</pre>', view, re.S).group(1)) == S.prompt("YOUR_NAME")
+          and m.count('<p class="pnote" data-pnote>' + NOTICE + '</p>') == 1 and m.index('data-pnote') < m.index("sv-view")
+          and m.count('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') == 1 and "/swaps#xemb" not in m)
     _pn = h[h.index('id="livepill"'):h.index("</details>", h.index('id="livepill"'))] if 'id="livepill"' in h else ""
     check("/start (1.26.181): no status strip; the header status note carries the upgrade line and Details, never reopened", 'class="upstrip' not in h
           and '<span class="sp-r">Hosted mining' in _pn and 'href="/upgrade">Details</a>' in _pn and "reopened" not in m.lower() and "reopened" not in _pn.lower())
     st = m[m.index('<details class="card stepsd">'):]
-    check("/start: collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
-          "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
+    check("/start: under the card, collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
+          m.index('class="sv-card"') < m.index('class="card ptk"') < m.index('<details class="card stepsd">')
+          and "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
           and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
-          and [x for x, _, _ in S.STEPS] == ["Proof of work", "Register", "Store the key", "Answer the challenge", "Mine", "Check in"]
-          and st.count('id="self-custody"') == 1 and st.count("poa.mjs join --node https://minepoa.com/") == 2 and "alongside the signed join in your POST /api/submit body" in unescape(st) and "--invited-by" not in st)
-    go3 = m[m.index('data-cfirst'):m.index('<details class="stview" data-stview>')]
-    check("/start: Add a wallet on POASwap, low key, under the connector step and the button, new tab to https://poaswap.io/start",
-          go3.index("data-conrow") < go3.index("data-go ") < go3.index('<p class="stwal"><a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer" data-wallet>Add a wallet on POASwap</a></p>') < go3.index('class="stkey"')
-          and m.count("data-wallet") == 1 and "/swaps#xemb" not in m)
-    check("/start: no setup code in the v2 prompt path (no data-reg), keys never asked", 'data-reg' not in m and "SETUP_CODE" not in m and "api_key" not in m[:m.index("stview")]
-          and not any(x in m for x in ("\u2014", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
-    js = open(os.path.join(ROOT, "static", "app.js")).read(); css = open(os.path.join(ROOT, "static", "style.css")).read()
-    blk = js[js.index("/* /start step 3 (one button)"):js.index("/* /start close")]
-    ck = blk[blk.index('go.addEventListener("click"'):]
-    check("client: copy first, synchronously (writeText started, textarea execCommand in the same click), then window.open in the same gesture; no await before open",
-          'D.execCommand("copy")' in blk and "navigator.clipboard.writeText(v)" in blk and ck.index("var c=copyNow(P)") < ck.index('W.open(u,"_blank","noopener,noreferrer")') < ck.index("c.then(")
-          and "await" not in blk and 'flash("Copied. Opening "+n)' in blk and 'fail(P)' in blk and 'say("Select and copy this prompt")' in blk
-          and 'ev(PID+"."+(rg?"copyreg":"copy"))' in blk and "lb.innerHTML" not in blk)
-    check("client (one button): paste apps arm on the first click (Copied. Open X), open on the second with a fresh copy and no second beacon; no open URL means Copied. Paste it into X",
-          'lab(["Copied. Open "+n,"Copied. Open "+n])' in blk and "if(ARM&&u){copyNow(P);W.open(u," in blk and 'flash("Copied. Paste it into "+n)' in blk
-          and blk.index("if(ARM&&u)") < blk.index('ev(PID+"."+(rg?"copyreg":"copy"))') and '$$("[data-go]").forEach' in blk and "\u2014" not in blk and "\u2013" not in blk)
-    check("client: name messages, exact", 'return "Name your agent to continue."' in blk and '"Not allowed: "+' in blk and '". Use letters, numbers, _ or - (up to 32)."' in blk
-          and '"Too long: up to 32 characters."' in blk and 'c===" "?"space":c==="."?"period":c' in blk and 'bad.slice(0,-1).join(", ")+" and "+bad[bad.length-1]' in blk
-          and "/^[A-Za-z0-9_-]{1,32}$/.test(v)" in js and 'replace(/[^A-Za-z0-9_-]/g,"")' not in js)
-    check("client v2.4: variant templates from pre[data-variant]; the connector button copies the MCP URL (or CLI) and opens the settings, in button feedback, start.add beacon; the no-path panel picks",
-          'pre[data-variant]' in blk and "[data-gocon]" in blk and "[data-nopath]" in blk and "[data-pick]" in blk and 'ev(PID+".add")' in blk and "dataset.ccopy" in blk and "dataset.cset" in blk
-          and '"Connector URL copied. Opening "' in blk and "start.add" in PR.ids() and "join.add" in PR.ids())
-    check("client: one button handler with the existing beacons; Enter on the name moves to step 2, Enter on a choice to the button",
-          '[data-go]' in js and 'ev(PID+"."+(rg?"appreg":"app"))' in js and 'ev("mcp-poa.add")' in js and 'e.key==="Enter"' in js and "go.focus()" in js and "r.focus()" in js)
-    check("css: visible focus rings on choices, button, name and summaries", ".cl input:focus-visible+.clb{outline" in css and ".gobtn:focus-visible{outline" in css
-          and ".stin:focus{" in css and ".stview>summary:focus-visible" in css)
+          and [x for x, _, _ in S.STEPS] == ["Proof of work", "Register", "Store the key", "Answer the challenge", "Mine", "Check in"] and st.count('id="self-custody"') == 1)
+    check("/start: no setup code, keys never asked, no em or en dash, Agents not Accounts", 'data-reg' not in m and "SETUP_CODE" not in m
+          and not any(x in m for x in ("\u2014", "\u2013", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))
+    js = open(os.path.join(ROOT, "static", "startv2.js")).read(); css2 = open(os.path.join(ROOT, "static", "startv2.css")).read()
+    check("client: tiles never copy; Copy prompt copies synchronously in the click (textarea execCommand, then writeText); Open X copies and opens by its link",
+          "fromTap" not in js and 'D.execCommand("copy")' in js and "navigator.clipboard.writeText(v)" in js and "await" not in js
+          and 'bigBtn(copied?"Copy again":"Copy prompt",null,"")' in js and 'bigBtn("Open "+a.name,openUrl(a),"sec")' in js and "a.pre+encodeURIComponent(text(a))" in js)
+    check("client: name messages and the archive check (POAScan's own API, a network error never blocks; Taken shows the free suggestion)",
+          '"Name your Agent."' in js and '"Up to 32 characters."' in js and '"Letters, numbers, _ or - only."' in js and "/^[A-Za-z0-9_-]{1,32}$/" in js
+          and '"/api/v1/agents/name-available?name="' in js and '"Taken. Try another."' in js and "catch(function(){cb(null)})" in js)
+    check("client: chat strip (Join on minepoa.com, Add to Claude, connector URL copy, the warning, Copy prompt), not supported redirect tiles, Back, Escape, #app links, popstate",
+          '"Join on minepoa.com"' in js and '"Add to "+a.name' in js and "J.warn" in js and "J.mcp" in js and '"Paste the prompt"' in js and "J.alts.forEach" in js
+          and "[data-sv-back]" in js and 'e.key=="Escape"' in js and "location.hash" in js and "popstate" in js and "history.pushState" in js)
+    check("client: paused turns every action off and reads only POAScan's own join state every 5 min while visible",
+          "function off(b){if(PZ())" in js and '"/api/v1/prompts/join"' in js and "300000" in js and "D.hidden" in js and "minepoa.com/api" not in js)
+    check("css: reduced motion turns every animation and transition off; visible focus rings on tiles, buttons and back",
+          "@media (prefers-reduced-motion:reduce)" in css2 and "animation:none!important;transition:none!important" in css2
+          and ".sv-t:focus-visible,.sv-btn:focus-visible,.sv-back:focus-visible{outline" in css2)
 
     # ---- byte-identical text: API, /start (View prompt), llms.txt and MCP get_onboarding_steps
-    nm0 = re.search(r'id="stname" class="stin" name="label" value="([^"]+)"', m).group(1)
-    pre = unescape(re.search(r'<pre class="pc-text jm-p" tabindex="0">(.*?)</pre>', m, re.S).group(1))
+    nm0 = re.search(r'id="sv-n0" value="([^"]+)"', m).group(1)
+    pre = unescape(re.search(r'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">(.*?)</pre>', m, re.S).group(1))
     api_n = json.loads(req("/api/v1/prompts/join?name=" + nm0)[2]); api_y = json.loads(req("/api/v1/prompts/join")[2])
     ll = req("/llms.txt")[2]
     H = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
@@ -456,12 +430,13 @@ try:
     sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
     print("     sha256 YOUR_NAME: api", sha(api_y["text"])[:16], "mcp", sha(mp)[:16], "| /start", nm0, sha(pre)[:16], "api", sha(api_n["text"])[:16])
     api_c = json.loads(req("/api/v1/prompts/join?client=claude&name=" + nm0)[2])
-    full_t = unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, nm0)
+    full_t = unescape(re.search(r'<pre hidden data-sv-tpl="full">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, nm0)
     check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
           and api_y["version"] == api_n["version"] == "v2.9.4" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
-    check("byte-identical: /start View prompt (Claude, connector variant) tagged for claude == API ?client=claude for the same name",
-          pre == S.prompt("YOUR_NAME", "connector") and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
+    con_t = unescape(re.search(r'<pre hidden data-sv-tpl="connector">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, "YOUR_NAME")
+    check("byte-identical: /start View prompt == the full prompt (YOUR_NAME); the Claude strip's connector template tagged for claude == API ?client=claude for the same name",
+          pre == S.prompt("YOUR_NAME") and con_t == S.prompt("YOUR_NAME", "connector") and (pre := con_t) is not None and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
           and api_c["sha256"] == sha(api_c["text"]) and api_c["notice"] == NOTICE)
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
@@ -482,17 +457,12 @@ try:
     check("API checkin field: rule, client regex, the client list with poaswap, suggested poaswap",
           ci.get("in_text") is False and ci.get("client_rx") == OP.TAG_RX.pattern and "poaswap" in ci.get("clients", []) and ci.get("suggested_client") == "poaswap"
           and set(ci.get("clients", [])) == set(S.checkin_clients()))
-    radios = re.findall(r'<input type="radio" name="client" value="([^"]+)"([^>]*)>', m)
-    chat_tags = [re.search(r'data-tag="([^"]*)"', a).group(1) for v, a in radios if not v.startswith("mcp:")]
-    check(f"/start: every chat choice carries its tag ({len(chat_tags)}), connectors carry none, the card no longer carries a check-in base",
-          len(chat_tags) == len(CR.CLIENTS) and chat_tags == [c["id"] for c in CR.CLIENTS if c["row"] == "top"] + [c["id"] for c in CR.CLIENTS if c["row"] == "more"] and all(t in S.checkin_clients() for t in chat_tags) and not any("data-tag" in a for v, a in radios if v.startswith("mcp:"))
-          and "data-checkin" not in m)
+    tags = [t[2] for t in tiles] + re.findall(r'class="sv-o" data-app="([^"]+)"', m)
+    check(f"/start: every app carries its registry id ({len(tags)}), each a known check-in client; no check-in base, and the templates carry no check-in URL (none since v2.5)",
+          sorted(tags) == sorted(c["id"] for c in CR.CLIENTS) and all(t in S.checkin_clients() for t in tags) and "data-checkin" not in m and "poascan.io/j/" not in m)
     hl = '<p class="sthelp"><a href="mailto:jakegallen@gmail.com?subject=PoA%20join%20got%20stuck">If it got stuck, share the chat with us</a></p>'
-    check("/start: one 'If it got stuck' line, a mailto link only, after View prompt (not under the buttons), no helper text",
-          m.count(hl) == 1 and m.index('<details class="stview" data-stview>') < m.index(hl) < m.index('</section>') and m.count("sthelp") == 1 and "If it got stuck" not in m.replace(hl, ""))
-    check("client: the copy text is tagged for the picked client (W.poaTag on txt() and the View prompt Copy); the base comes from data-checkin",
-          'W.poaTag=function(c,t){' in js and 'function txt(){return W.poaTag(card,' in js and 'return c?W.poaTag(c,' in js and 'c.dataset.checkin' in js
-          and 't.split(b).join(b+g+"/")' in js and ".sthelp{" in css)
+    check("/start: one 'If it got stuck' line, a mailto link only, after View prompt, no helper text",
+          m.count(hl) == 1 and m.index('<details class="sv-view">') < m.index(hl) < m.index('</section>') and m.count("sthelp") == 1 and "If it got stuck" not in m.replace(hl, ""))
 
     # ---- the endpoint
     u = "/api/v1/prompts/join?name=test-agent-7"
@@ -558,10 +528,9 @@ try:
           VS.api_route("/api/v1/agents/name-available") == "/api/v1/agents/name-available" and "/api/v1/agents/name-available" in req("/openapi.json")[2]
           and "NameAvailable" in req("/openapi.json")[2] and "/api/v1/agents/name-available" in req("/api")[2] and "/agents/name-available?name=" in req("/llms.txt")[2]
           and "name-available" not in json.dumps(AG.TOOLS, default=str))
-    check("client: debounced 300 ms check, 3 s timeout, stale answers ignored, errors never block, Use link, default name regenerated",
-          '"Taken: "+v+" is already an agent. Try another."' in blk and '"/api/v1/agents/name-available?name="+encodeURIComponent(v)' in blk and "setTimeout(function(){avail(v)},300)" in blk
-          and "if(ac)ac.abort()},3000)" in blk and "q!==tSeq" in blk and ".catch(function(){clearTimeout(to)})" in blk and 'u.textContent="Use "+sg' in blk
-          and "dflt&&tries<5&&W.poaNewName" in blk and "W.poaNewName=gen" in js and ".stuse{" in css)
+    check("client: the generated name is checked once against POAScan's archive and swapped on a hit; a typed name is checked on Next; errors never block",
+          "avail(NAME,function(d){if(d&&d.valid&&d.available===false" in js and "NAME=gen()" in js and "busy=true;avail(v,function(d){busy=false;" in js
+          and '"Taken. Try another."+(d.suggestion?" "+d.suggestion+" is free.":"")' in js and "catch(function(){cb(null)})" in js)
     # ---- v2.7: prompt_version and template_sha256 on every surface, reproducible from the served text
     TS = S.template_sha256(); raw0 = urllib.request.urlopen(base + "/api/v1/prompts/join", timeout=30).read()
     j0 = json.loads(raw0); txt0 = j0["text"]
@@ -593,7 +562,7 @@ try:
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, /about",
           ms["prompt_version"] == "v2.9.4" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
           and all(("Prompt version: v2.9.4\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
-          and sm.count(pl) == 1 and sm.index("data-pnote") < sm.index('class="phash"') < sm.index("data-stview")
+          and sm.count(pl) == 1 and sm.index("data-pnote") < sm.index('class="phash"') < sm.index("sv-view")
           and 'id="prompt-hash"' in ab and TS in ab and "jq -j .text | sha256sum" in ab and not any(c in pl + ab for c in "\u2014\u2013"))
     oa = json.loads(req("/openapi.json")[2])["components"]["schemas"]["JoinPrompt"]["properties"]
     check("v2.7 hash: openapi documents prompt_version, template_sha256, variant_sha256, hash_rule and verify", all(k in oa for k in ("prompt_version", "template_sha256", "variant_sha256", "hash_rule", "verify")))

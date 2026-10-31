@@ -1,5 +1,6 @@
-/* /start v2 preview (POASCAN_STARTV2=1). Pick first; the card morphs into what the app needs. Runs code: the tap copies the
-   prompt. Chat + connector: join, connector (with the key warning), paste. Not supported: the apps that can.
+/* /start (1.26.246): name first (generated, one tap on Next), then the app (Claude preselected); the card morphs into what the
+   app needs. Runs code: Copy prompt. Chat + connector: join, connector (with the key warning), paste. Not supported: the apps
+   that can. States live in the hash: none = name, #apps = the picker, #<app id> = its panel.
    POAScan never asks for, sees or links a key. Reads only POAScan's own /api/v1 (name check; while paused, the join state). */
 (function(){"use strict";
 var D=document,W=window,root=D.querySelector("[data-sv]");if(!root)return;
@@ -7,8 +8,8 @@ var $=function(s,c){return(c||D).querySelector(s)},$$=function(s,c){return Array
 var J=JSON.parse($("[data-sv-json]").textContent),BY={};J.apps.forEach(function(a){BY[a.id]=a});
 var TPL={full:$('[data-sv-tpl="full"]').textContent,connector:$('[data-sv-tpl="connector"]').textContent};
 var pick=$("[data-sv-pick]"),panel=$("[data-sv-panel]"),body=$("[data-sv-body]"),foot=$("[data-sv-foot]"),pre=$("[data-sv-pre]");
-var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches,FLOW=/[?&]flow=name\b/.test(location.search);
-var NAME=root.dataset.svname,CUR=null,RX=/^[A-Za-z0-9_-]{1,32}$/;
+var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var NAME=root.dataset.svname,CUR=null,ST="name",n0=$("[data-sv-name0]"),i0=$("[data-sv-n0]"),er0=$("[data-sv-err0]"),RX=/^[A-Za-z0-9_-]{1,32}$/;
 var TOUCH=W.matchMedia&&W.matchMedia("(pointer: coarse)").matches,KEY=/Mac/.test(navigator.platform||"")?"Cmd+V":"Ctrl+V";
 function PZ(){return root.dataset.paused=="1"}
 /* a fresh name per visit, like /start today; swapped once if POAScan's archive has it taken */
@@ -17,7 +18,8 @@ var A="amber brisk cobalt copper dusk ember fable gentle hazel indigo jade lunar
 function gen(){var r=function(a){return a[Math.floor(Math.random()*a.length)]};return r(A)+"-"+r(N)+"-"+(100+Math.floor(Math.random()*900))}
 NAME=gen();
 function avail(v,cb){fetch("/api/v1/agents/name-available?name="+encodeURIComponent(v),{cache:"no-store",credentials:"omit"}).then(function(r){return r.json()}).then(cb).catch(function(){cb(null)})}
-avail(NAME,function(d){if(d&&d.valid&&d.available===false){NAME=gen();paintName()}});
+if(i0)i0.value=NAME;
+avail(NAME,function(d){if(d&&d.valid&&d.available===false&&i0&&i0.value===NAME){NAME=gen();i0.value=NAME;paintName()}});
 function nameMsg(v){if(!v)return"Name your Agent.";if(v.length>32)return"Up to 32 characters.";return RX.test(v)?"":"Letters, numbers, _ or - only."}
 function text(a){var t=TPL[a.tier=="connector"?"connector":"full"];return t.split(J.slot).join(NAME)}
 function copy(v){var ok=false,t=D.createElement("textarea");t.value=v;t.setAttribute("readonly","");t.style.cssText="position:fixed;top:0;left:0;opacity:0";
@@ -49,9 +51,9 @@ function openUrl(a){return a.pre?a.pre+encodeURIComponent(text(a)):a.open}
 function codePanel(a,copied){var f=D.createDocumentFragment(),st=el("div","sv-done"+(copied?" on":""));
  st.innerHTML='<span class="sv-ring">'+CHECK+'</span><div><b>'+(copied?"Prompt copied":PZ()?"Signups are paused":"Copy the prompt")+'</b><span>'+(PZ()?"Check back later.":"Paste it into "+esc(a.name)+(a.open||TOUCH?"":" with "+KEY)+".")+'</span></div>';f.appendChild(st);
  var row=el("div","sv-row");
- var cb=bigBtn(copied?"Copy again":"Copy prompt",null,a.open?"sec":"");cb.insertAdjacentHTML("afterbegin",CP);
+ var cb=bigBtn(copied?"Copy again":"Copy prompt",null,"");cb.insertAdjacentHTML("afterbegin",CP);
  cb.addEventListener("click",function(){if(cb.dataset.pz)return;if(copy(text(a))){flash(cb,"Copied");st.classList.add("on");$("b",st).textContent="Prompt copied"}});row.appendChild(cb);
- if(a.open){var ob=bigBtn("Open "+a.name,openUrl(a));ob.insertAdjacentHTML("beforeend",ARR);ob.addEventListener("click",function(e){if(ob.dataset.pz){e.preventDefault();return}copy(text(a))});row.appendChild(ob)}
+ if(a.open){var ob=bigBtn("Open "+a.name,openUrl(a),"sec");ob.insertAdjacentHTML("beforeend",ARR);ob.addEventListener("click",function(e){if(ob.dataset.pz){e.preventDefault();return}copy(text(a))});row.appendChild(ob)}
  f.appendChild(row);
  f.appendChild(nameChip(function(){st.classList.remove("on");$("b",st).textContent="Name changed";$("div span",st).textContent="Copy the prompt again.";pre.textContent=text(a)}));
  if(a.note){f.appendChild(el("p","sv-note",esc(a.note)))}
@@ -79,28 +81,32 @@ function nonePanel(a){var f=D.createDocumentFragment();f.appendChild(el("p","sv-
  f.appendChild(g);return f}
 /* morph: View Transitions where supported (the tile logo flies into the panel head), else a CSS fade and lift */
 function morph(fn){if(!RM&&D.startViewTransition)D.startViewTransition(fn);else fn()}
-function show(id,push,fromTap){var a=BY[id];if(!a)return;var copied=false;
- if(fromTap&&a.tier=="full"&&!PZ())copied=copy(text(a));   /* one tap: the copy runs inside the click */
- morph(function(){CUR=a;pick.hidden=true;panel.hidden=false;foot.hidden=a.tier=="none";
-  $("[data-sv-logo]").innerHTML=logo(a);$("[data-sv-app]").textContent=a.name;
-  var tg=$("[data-sv-tag]");tg.className="sv-ptag sv-"+a.tier;tg.textContent=a.tier=="full"?"Runs code":a.tier=="connector"?"Chat + connector":"Not supported";
-  body.innerHTML="";body.appendChild(a.tier=="full"?codePanel(a,copied):a.tier=="connector"?chatPanel(a):nonePanel(a));
-  panel.classList.remove("in");void panel.offsetWidth;panel.classList.add("in");
-  if(pre)pre.textContent=text(a);
-  var f=$("button.sv-btn:not(.off),a.sv-btn:not(.off)",body)||$("[data-sv-back]");if(f)f.focus({preventScroll:true})});
- if(push)history.pushState({sv:id},"","#"+id)}
-function back(push){morph(function(){CUR=null;panel.hidden=true;foot.hidden=true;pick.hidden=false;pick.classList.remove("in");void pick.offsetWidth;pick.classList.add("in");
- var t=$('.sv-grid [data-app]');if(t)t.focus({preventScroll:true})});if(push)history.pushState({},"",location.pathname+location.search)}
-root.addEventListener("click",function(e){var t=e.target.closest&&e.target.closest("[data-app]");if(t&&root.contains(t)){show(t.dataset.app,true,true);return}
- if(e.target.closest&&e.target.closest("[data-sv-back]"))back(true)});
-W.addEventListener("popstate",function(){var h=location.hash.slice(1);if(BY[h])show(h,false,false);else back(false)});
-D.addEventListener("keydown",function(e){if(e.key=="Escape"&&CUR&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){e.preventDefault();e.stopImmediatePropagation();history.back()}},true);
-/* ?flow=name: the name first variant (name, Next, then the picker) for comparison */
-if(FLOW){var n0=$("[data-sv-name0]"),i0=$("[data-sv-n0]"),er0=$("[data-sv-err0]");n0.hidden=false;pick.hidden=true;i0.value=NAME;
- function next(){var v=i0.value.trim(),m=nameMsg(v);if(m){er0.textContent=m;er0.hidden=false;return}NAME=v;morph(function(){n0.hidden=true;pick.hidden=false;pick.classList.add("in")})}
- $("[data-sv-next]").addEventListener("click",next);i0.addEventListener("keydown",function(e){if(e.key=="Enter"){e.preventDefault();next()}})}
-var h0=location.hash.slice(1);if(BY[h0])show(h0,false,false);
-/* paused: POAScan's own join state every 5 min while visible (never minepoa); reload once it opens */
+function parent(st){return BY[st]?"apps":"name"}
+function render(st){ST=st;var a=BY[st]||null;CUR=a;n0.hidden=st!="name";pick.hidden=st!="apps";panel.hidden=!a;foot.hidden=!a||a.tier=="none";
+ if(st=="apps"){pick.classList.remove("in");void pick.offsetWidth;pick.classList.add("in");var c=$(".sv-go",pick);if(c)c.focus({preventScroll:true})}
+ if(st=="name"&&i0)i0.focus({preventScroll:true});
+ if(!a)return;
+ $("[data-sv-logo]").innerHTML=logo(a);$("[data-sv-app]").textContent=a.name;
+ var tg=$("[data-sv-tag]");tg.className="sv-ptag sv-"+a.tier;tg.textContent=a.tier=="full"?"Runs code":a.tier=="connector"?"Chat + connector":"Not supported";
+ body.innerHTML="";body.appendChild(a.tier=="full"?codePanel(a,false):a.tier=="connector"?chatPanel(a):nonePanel(a));
+ panel.classList.remove("in");void panel.offsetWidth;panel.classList.add("in");
+ if(pre)pre.textContent=text(a);
+ var f=$("button.sv-btn:not(.off),a.sv-btn:not(.off)",body)||$("[data-sv-back]");if(f)f.focus({preventScroll:true})}
+function go(st,push){morph(function(){render(st)});if(push)history.pushState({sv:st},"",st=="name"?location.pathname+location.search:"#"+st)}
+function back(){if(history.state&&history.state.sv&&history.length>1)history.back();else{var p=parent(ST);history.replaceState({},"",p=="name"?location.pathname+location.search:"#"+p);morph(function(){render(p)})}}
+root.addEventListener("click",function(e){var t=e.target.closest&&e.target.closest("[data-app]");if(t&&root.contains(t)){go(t.dataset.app,true);return}
+ if(e.target.closest&&e.target.closest("[data-sv-back]"))back()});
+W.addEventListener("popstate",function(){var h=location.hash.slice(1);render(BY[h]||h=="apps"?h:"name")});
+D.addEventListener("keydown",function(e){if(e.key=="Escape"&&ST!="name"&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){e.preventDefault();e.stopImmediatePropagation();back()}},true);
+/* step 1: the name, generated and prefilled, so Next is one tap. Checked only against POAScan's own archive; a network error never blocks */
+var busy=false;
+function next(){if(busy)return;var v=i0.value.trim(),m=nameMsg(v);if(m){er0.textContent=m;er0.hidden=false;i0.focus();return}
+ var ok=function(){er0.hidden=true;NAME=v;paintName();go("apps",true)};if(v===NAME){ok();return}
+ busy=true;avail(v,function(d){busy=false;if(d&&d.valid&&d.available===false){er0.textContent="Taken. Try another."+(d.suggestion?" "+d.suggestion+" is free.":"");er0.hidden=false;i0.focus();return}ok()})}
+$("[data-sv-next]").addEventListener("click",next);i0.addEventListener("keydown",function(e){if(e.key=="Enter"){e.preventDefault();next()}});
+i0.addEventListener("input",function(){er0.hidden=true});
+var h0=location.hash.slice(1);render(BY[h0]||h0=="apps"?h0:"name");
+/* paused: POAScan's own join state every 5 min while visible (never minepoa); once it reads open the notice goes and the card renders again, buttons on */
 if(PZ())setInterval(function(){if(D.hidden)return;fetch("/api/v1/prompts/join",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
- var s=d&&d.join&&d.join.state&&d.join.state.state;if(s&&s!="halted")location.reload()}).catch(function(){})},300000);
+ var s=d&&d.join&&d.join.state&&d.join.state.state;if(s&&s!="halted"&&PZ()){delete root.dataset.paused;$$(".sthalt",root).forEach(function(e){e.remove()});render(ST)}}).catch(function(){})},300000);
 })();

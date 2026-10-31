@@ -1,8 +1,10 @@
-"""/start v2 preview (POASCAN_STARTV2=1; not live). Pick first, then the card morphs into what that app needs.
+"""/start (1.26.246): name first, then the app, then the card morphs into what that app needs.
 
-Runs code apps: one tap on the tile copies the prompt (the name is generated and editable inline). Chat apps: a three
-point mini timeline (join on minepoa.com, add minepoa's connector with the key warning, paste the prompt). Not supported:
-one line and the apps that can. ?flow=name shows the name first variant (name, Next, pick) for comparison.
+Step 1: the Agent name, generated and prefilled, so Next is one tap (checked only against POAScan's own archive). Step 2:
+"What are you using?", Claude preselected with Continue; Runs code tiles carry a terminal glyph with a live dot, chat tiles
+a plug, not supported apps sit behind Something else. Then: Runs code apps get Copy prompt (Cursor also Open Cursor; Codex
+its network note); chat apps a three point strip (join on minepoa.com, add minepoa's connector with the key warning, paste
+the prompt); not supported apps one line and the apps that can. POASCAN_STARTV2=0 serves the 1.26.245 layout (rollback).
 Static markup plus static/startv2.js and static/startv2.css. POAScan never sees, asks for or links a key."""
 import json, os
 from html import escape as _e
@@ -10,7 +12,7 @@ from html import escape as _e
 def E(s): return _e(str(s), quote=True)
 
 FLAG = "POASCAN_STARTV2"
-def on(): return os.environ.get(FLAG) == "1"
+def on(): return os.environ.get(FLAG, "1") != "0"
 
 def _apps():
     from . import start as S, clients as C
@@ -33,16 +35,19 @@ def _logo(a):
     return (f'<img src="/static/brands/{E(a["logo"])}?v=1" width="28" height="28" alt="" aria-hidden="true">' if a["logo"]
             else f'<i class="mono" aria-hidden="true">{E(a["name"][:1])}</i>')
 
+PRESELECT = "claude"
+
 def _tile(a, i):
     b = {"full": f'<span class="sv-b sv-bc" title="Runs code">{GLYPH_CODE}<i class="sv-live"></i></span>',
          "connector": f'<span class="sv-b sv-bp" title="Chat + connector">{GLYPH_PLUG}</span>'}.get(a["tier"], "")
-    return (f'<button type="button" class="sv-t sv-{a["tier"]}" data-app="{E(a["id"])}" style="--i:{i}">'
+    sel = a["id"] == PRESELECT
+    return (f'<button type="button" class="sv-t sv-{a["tier"]}{" sel" if sel else ""}" data-app="{E(a["id"])}" style="--i:{i}"{' aria-current="true"' if sel else ""}>'
             f'<span class="sv-tl">{_logo(a)}</span><span class="sv-tn">{E(a["name"])}</span>{b}</button>')
 
 def body():
     from . import start as S, onboarding_prompt as OP
     from .earnview import tabs
-    from .join import CLOSE
+    from .join import CLOSE, pbox
     apps = _apps(); sup = [a for a in apps if a["tier"] != "none"]; ns = [a for a in apps if a["tier"] == "none"]
     pz = S.paused()
     grid = "".join(_tile(a, i) for i, a in enumerate(sup))
@@ -53,11 +58,12 @@ def body():
     name = S.default_name()
     hero = (f'<div class="sv-hero">{tabs("/start")}<h1>Start mining PoA</h1>'
             f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
-    namescr = (f'<div class="sv-name0" data-sv-name0 hidden><label for="sv-n0">Name your Agent</label>'
+    namescr = (f'<div class="sv-name0" data-sv-name0><label for="sv-n0">Name your Agent</label>'
                f'<div class="sv-n0r"><input id="sv-n0" value="{E(name)}" autocomplete="off" autocapitalize="off" spellcheck="false" data-sv-n0>'
                f'<button type="button" class="sv-btn" data-sv-next>Next</button></div><p class="sv-err" data-sv-err0 hidden></p></div>')
-    pick = (f'<div class="sv-pick" data-sv-pick><p class="sv-q">What are you using?</p>'
+    pick = (f'<div class="sv-pick" data-sv-pick hidden><div class="sv-qh"><button type="button" class="sv-back" data-sv-back aria-label="Back to the name">{BACK}</button><p class="sv-q">What are you using?</p></div>'
             f'<div class="sv-grid" role="list">{grid}</div>'
+            f'<button type="button" class="sv-btn sv-go" data-app="{PRESELECT}">Continue with {E(next(a["name"] for a in apps if a["id"] == PRESELECT))}</button>'
             f'<div class="sv-key" aria-hidden="true"><span class="sv-b sv-bc">{GLYPH_CODE}<i class="sv-live"></i></span>Runs code'
             f'<span class="sv-b sv-bp">{GLYPH_PLUG}</span>Chat + connector</div>'
             f'<details class="sv-other"><summary>Something else</summary><div class="sv-ol">{other}</div></details></div>')
@@ -66,11 +72,11 @@ def body():
              f'<span class="sv-pl" data-sv-logo></span><b data-sv-app></b><span class="sv-ptag" data-sv-tag></span></div>'
              f'<div data-sv-body></div></div>')
     foot = (f'<div class="sv-foot" data-sv-foot hidden>{S.notice()}{S.phash()}'
-            f'<details class="sv-view"><summary>View prompt</summary><pre class="sv-pre" data-sv-pre tabindex="0"></pre></details>'
-            f'<p class="sv-wal"><a href="{S.WALLET_HREF}" target="_blank" rel="noopener noreferrer">Add a wallet on POASwap</a></p></div>')
+            f'<details class="sv-view"><summary>View prompt</summary>' + pbox(f'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">{E(S.prompt("YOUR_NAME"))}</pre>') + '</details>' + S.HELP_LINE
+            + S.WALLET_LINK + '</div>')
     return (f'<div class="s2v" data-sv data-svname="{E(name)}"{" data-paused=\"1\"" if pz else ""}>'
             f'<section class="sv-card">{hero}{S.join_halt_html()}{namescr}{pick}{panel}{foot}</section>'
-            f'{tpl}<script type="application/json" data-sv-json>{data}</script></div>')
+            f'{tpl}<script type="application/json" data-sv-json>{data}</script>{S.below()}</div>')
 
 def page(page_fn):
     from . import ui as U

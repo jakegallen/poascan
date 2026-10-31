@@ -88,7 +88,7 @@ try:
     c3, _, _ = req("/api/v1/prompts/join/history?x=1")
     check("history: any parameter is a 400", c3 == 400)
     c, _, h = req("/start"); m = h[h.index("<main"):h.index("</main>")]
-    i_card, i_box, i_all, i_hist = m.index("data-pid=\"start\""), m.index('class="card ptk"'), m.index("<h2>All steps</h2>"), m.index('id="prompt-history"')
+    i_card, i_box, i_all, i_hist = m.index('class="sv-card"'), m.index('class="card ptk"'), m.index("<h2>All steps</h2>"), m.index('id="prompt-history"')
     check("/start: the box sits under the card, history after All steps, collapsed", c == 200 and i_card < i_box < i_all < i_hist and '<details class="card stepsd pvh" id="prompt-history">' in m)
     rows = re.findall(r'<li class="pvh-r" id="prompt-(v[\d.]+)">', m)
     check(f"/start: one row per version, newest first {rows}", rows == vs[::-1])
