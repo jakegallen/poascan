@@ -24,6 +24,7 @@ CLIENTS = DATA["clients"]
 BY_ID = {c["id"]: c for c in CLIENTS}
 MCP_URL = DATA["mcp_url"]
 NOPATH = DATA["nopath"]
+GROUPS = [(t, DATA["tiers"][t]["group"]) for t in TIERS]   # 1.26.245: the /start groups, in order
 
 def get(cid):
     """The registry row for a client id, or None."""

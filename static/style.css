@@ -1390,6 +1390,9 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .cfu{display:flex;align-items:center;gap:8px;min-width:0}.cfu code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--bone-1)}
 .cfs{margin:0;padding:0 0 0 18px;display:grid;gap:8px;font:400 var(--t13)/1.45 var(--ui);color:var(--dim)}.cfs li{min-width:0}.cfs li>span:first-child{color:var(--bone-1)}.cfs .cfu{margin-top:6px}.cfs li[hidden]{display:none}
 .cfn{margin:8px 0 0;font:500 var(--t13)/1.45 var(--ui);color:var(--amber)}.cfn[hidden]{display:none}.cfirst .gocl{margin:8px 0 0;text-align:left}
+.clw>.clh{margin:16px 0 4px;color:var(--mute);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase}.clw>.clh:first-child{margin-top:0}
+.clcap{margin:0 0 8px;font:400 var(--t13)/1.4 var(--ui);color:var(--dim)}.clw>.moreb{margin-top:14px}.clm .clcap{margin-top:10px}
+.cfwarn{margin:8px 0 10px;padding:8px 10px;border:1px solid var(--line2);border-left:3px solid var(--amber);border-radius:var(--r-sm);font:500 var(--t13)/1.45 var(--ui);color:var(--bone-1)}
 .stnt{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 12px;font:400 var(--t13)/1.4 var(--ui);color:var(--dim)}.stnt[hidden]{display:none}
 .gocl a{display:inline-flex;align-items:center;gap:6px;color:var(--dim);text-decoration:underline;text-decoration-color:var(--line2,color-mix(in srgb,var(--white) 25%,transparent));text-underline-offset:3px;transition:color var(--fast) var(--ease)}
 .gocl a:hover{color:var(--amber);text-decoration-color:currentColor}.gocl a:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:var(--r-sm)}

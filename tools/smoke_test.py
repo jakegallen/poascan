@@ -186,7 +186,7 @@ def main():
             _q = _pq(_up(_cur.group(1).replace("&amp;", "&")).query)
             _ok = _js.loads(_b64.b64decode(_q["config"][0])) == {"url": "https://minepoa.com/mcp"} and _q["name"] == ["poa"]
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
-        check("/start: View prompt (with Copy) after the button, connector deeplinks decode", _ok and _m.index("data-go") < _m.index("View prompt") < _m.index("data-copy-prompt") and "claude mcp add --transport http poa https://minepoa.com/mcp" in _m)
+        check("/start: View prompt (with Copy) after the button; no connector install deeplinks or commands (1.26.245)", not _cur and not _vs and _m.index("data-go") < _m.index("View prompt") < _m.index("data-copy-prompt") and "mcp add" not in _m)
         check("pill: Stale (red) when our own fetch has nothing", b'id="livepill"><summary class="pill stale" aria-label="Status: Stale">' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
@@ -207,10 +207,8 @@ def main():
               and all(b'id="updot"' not in req(base + u)[1] for u in ("/chain", "/about", "/privacy")))
         check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/chain")[1])
         _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
-        check("/start: one More toggle, closed; extra connector deeplinks decode", _m.count('aria-expanded="false" aria-controls="mp') == 1 and '>More<' in _m and '>Other clients<' not in _m
-              and bool(_lm and _ki) and _js.loads(_b64.b64decode(_pq(_up(_lm.group(1).replace("&amp;", "&")).query)["config"][0])) == {"url": "https://minepoa.com/mcp"}
-              and _js.loads(_pq(_up(_ki.group(1).replace("&amp;", "&")).query)["config"][0])["url"] == "https://minepoa.com/mcp"
-              and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
+        check("/start: one Not supported toggle, closed; no connector deeplinks", _m.count('aria-expanded="false" aria-controls="mp') == 1 and 'Not supported<i' in _m and '>Other clients<' not in _m
+              and not (_lm or _ki) and all(f'data-app="{n}"' in _m for n in ("Kimi", "Z.ai", "DeepSeek", "Le Chat", "HuggingChat")))
         check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
         _pb = [req(base + u)[1] for u in ("/start", "/about", "/api", "/how-to-mine-poa")]
         check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x.replace(b'<button class="gocp" type="button" data-gocopy>Copy prompt</button>', b"") and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
@@ -219,15 +217,13 @@ def main():
         _bd = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "static", "brands")
         _lg = _re.findall(r'<span class="an">(?:<img class="blogo" src="/static/brands/([^"?]+)\?v=1"[^>]*>|<i class="blogo mono")', _m)
         check("logos: every option on /start has a brand mark (the no-path Copilot, Qwen and Voice keep the letter mark), files exist and serve, SOURCES.md listed",
-              len(_lg) == _m.count('<span class="an">') == 37 and all(f and _os.path.isfile(_os.path.join(_bd, f)) for f in _lg if f)
+              len(_lg) == _m.count('<span class="an">') == 24 and all(f and _os.path.isfile(_os.path.join(_bd, f)) for f in _lg if f)
               and _re.findall(r'<i class="blogo mono"[^>]*>.</i><span class="ant">([^<]+)', _m) == ["Copilot", "Qwen", "Voice assistants"]   # no-path choices only (no official mark)
               and all(req(base + "/static/brands/" + f)[0] == 200 for f in set(_lg) if f)
               and all(f in open(_os.path.join(_bd, "SOURCES.md")).read() for f in set(_lg) if f)
               and all(b'<span class="an"><img class="blogo"' in x for x in _pb))
-        _mp = _m[_m.index('class="morep'):]
-        check("/start connectors: every Add choice also copies a config", all(_re.search(f'value="mcp:{k}" data-kind="mcp" data-href="[^"]+" data-mcpc="[^"]*minepoa.com/mcp[^"]*" data-app=', _m) for k in ("cursor", "vscode", "lmstudio", "goose", "vscode-insiders", "kiro", "trae", "cherry")))
-        check("/start: ChatGPT, Claude, Grok, Cursor up front; connectors and the 7 commands behind More", 'value="mcp:' not in _m[:_m.index('class="morep')]
-              and _mp.count('value="mcp:') == 8 and _mp.count('class="cmd"') == 7 and _mp.index('value="mcp:cherry"') < _mp.index('data-mcp="claude-code"'))
+        check("/start: Runs code then Chat with connector up front; no connector install choices or commands anywhere", 'value="mcp:' not in _m and 'class="cmd"' not in _m
+              and _m.index('data-group="full"') < _m.index('value="Grok Bot"') < _m.index('data-group="connector"') < _m.index('value="Claude"') < _m.index('class="morep'))
         check("/start: chat choices + collapsed All steps", b'data-app="ChatGPT"' in b.split(b"<main")[1].split(b"</main>")[0] and b'<details class="card stepsd">' in b)
         check(f"GET /start -> {c}", c == 200 and b"npm install" not in b and b"Emblem" not in b.split(b"<main")[1].split(b"</main>")[0] and b"Never send payment outside the network" in b
                                               and b'rel="canonical" href="https://poascan.io/start"' in b and b"HowTo" in b)

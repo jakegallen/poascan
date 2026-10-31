@@ -31,14 +31,24 @@ check("step 2: for mining after you join, not for joining; the URL with copy; wh
       and h.count("Needs a paid ChatGPT plan") == 1 and '<p class="cfn" data-cfnote>Needs a paid ChatGPT plan with developer mode turned on.</p>' in h and "Open ChatGPT settings" in h)
 check("the connector is never a way to join: no fallback paste line, no Add the connector first", "Can't add connectors" not in h and "Add the connector first" not in h and "data-cffb" not in hr)
 cx = unescape(S.go_block(by["codex"]))
-check("Codex (code app, full prompt): step 1 the prompt line and Copy prompt only, no command, no package, no wallet step; no step 3",
-      by["codex"]["tier"] == "full" and S.s1_code("Codex") in cx and S.s1_code("Codex") == "Copy the prompt and paste it into Codex. This is the step that creates your PoA agent."
-      and pos("1. Create your agent", cx) < pos("data-slot1>", cx) < pos("data-go ", cx) < pos("data-cfirst", cx) < pos("codex mcp add poa --url https://minepoa.com/mcp", cx)
-      and not any(x in cx[:pos("data-cfirst", cx)] for x in ("npx", "npm ", "mcp add", "Run this once", "emblem", "Emblem", "wallet", "Wallet"))
+check("Codex (code app, full prompt): step 1 the prompt line, the allow network note and Copy prompt only; no connector step, no command (1.26.245)",
+      by["codex"]["tier"] == "full" and not by["codex"].get("connector") and S.s1_code("Codex") in cx
+      and pos("1. Create your agent", cx) < pos("Allow network access in Codex first. Its default sandbox blocks web requests.", cx) < pos("data-slot1>", cx) < pos("data-go ", cx)
+      and " data-cfirst hidden" in cx and not any(x in cx for x in ("npx", "npm ", "mcp add", "Run this once", "emblem", "Emblem"))
       and " data-s1join hidden" in cx and " data-s3h hidden" in cx and '<div class="jwslot" data-slot3></div>' in cx)
-check("Codex step 2 (mining): optional, the run-once command lives here, the connector does not create a new agent",
-      "2. Let Codex mine (optional)" in cx and "Add the PoA connector so Codex can answer challenges and check in for the agent you just created. The connector does not create a new agent." in cx
-      and pos("data-s2h", cx) < pos("Run this once", cx) < pos("codex mcp add poa", cx) and "The command in step 1 adds it." not in cx and " data-cflines hidden" in cx and " data-conrow hidden" in cx)
+check("regroup: Runs code (Grok Bot, Claude Code, Cursor, Codex), Chat with connector (Claude, ChatGPT, Grok, Perplexity, Le Chat), Not supported behind one toggle",
+      [x["id"] for x in top + rest if x["tier"] == "full"] == ["grok-bot", "claude-code", "cursor", "codex"]
+      and [x["id"] for x in top + rest if x["tier"] == "connector"] == ["claude", "chatgpt", "grok", "perplexity", "le-chat"]
+      and {"muse", "gemini", "huggingchat"} <= {x["id"] for x in rest if x["tier"] == "none"}
+      and pos('data-group="full">Runs code', S.clients()) < pos('data-group="connector">Chat with connector', S.clients()) < pos("Not supported<i", S.clients()))
+check("code apps never get a connector step or command; no connector install rows on /start",
+      all(" data-cfirst hidden" in S.go_block(c) for c in top + rest if c["tier"] == "full") and all(x not in S.clients() for x in ("mcp add", "data-mcp=", 'value="mcp:')))
+check("chat apps: the key warning sits in step 2, right under its line", all(pos("data-s2b", g) < pos(S.KEY_WARN, g) < pos("data-cflines", g) for g in (S.go_block(c) for c in top if c["tier"] == "connector"))
+      and S.KEY_WARN == "Your key is sent through this chat app on every call. Use a fresh Agent just for mining, with no other funds, and move earnings to a wallet you control.")
+check("Claude: Add opens Claude's documented prefill (name Proof of Agent, minepoa's /mcp URL), no key or referral; the plain URL and copy stay as the fallback",
+      by["claude"]["connector"]["settings_url"] == "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Proof%20of%20Agent&connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp"
+      and 'href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=Proof%20of%20Agent&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp"' in S.go_block(by["claude"])
+      and '<code data-cfval>https://minepoa.com/mcp</code><button class="cp" type="button" data-copy="https://minepoa.com/mcp" data-cfcopy' in S.go_block(by["claude"]))
 check("code apps: no run-once command in step 1 for any app", all("mcp add" not in (lambda g: g[:g.index("data-cfirst")])(unescape(S.go_block(c))) for c in top + rest))
 check("tested per v1.0 coverage: desktop Claude, ChatGPT, Grok, Grok Bot, Voice; phone Claude, ChatGPT, Voice",
       S.TESTED == {"claude", "chatgpt", "grok", "grok-bot", "voice"} and S.TESTED_PHONE == {"claude", "chatgpt", "voice"})
@@ -109,7 +119,7 @@ pc = unescape(S.go_block(by["codex"]))
 check("halted: code apps, Copy prompt disabled, notice under step 1, mining command untouched", ('<a class="gobtn' + OFF) in pc and pos("data-s1h", pc) < pos(P, pc) < pos("data-go ", pc) < pos("data-cfirst", pc)
       and "data-pzoff" not in pc[pc.index("data-s2cmd"):pc.index("data-cflines")])
 pm = unescape(S.go_block(by["muse"]))
-check("halted: the no-path Join on minepoa.com link is off too", ('<a class="npb npj' + OFF) in pm)
+check("halted: the not supported panel has no join link (it points to apps that run code)", "npj" not in pm and "data-npjoin" not in pm)
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
 hf = S.hash_fields()
 check("the prompt is v2.9.4: template 438bec61, combined a7210d16", hf["template_sha256"].startswith("438bec61") and hf["combined_sha256"].startswith("a7210d16"))
@@ -122,7 +132,7 @@ for c in top + rest:
     g = unescape(S.go_block(c)); cli = bool((c.get("connector") or {}).get("cli")); un = c["id"] not in S.TESTED and c["kind"] != "none"
     check(f"server {c['id']}: run-once block {'in step 2' if cli else 'absent'}, Not tested yet {'shown' if un else 'absent'}, no empty code span",
           ("Run this once" in g) == cli and (not cli or g.index("Run this once") > g.index("data-cfirst")) and ("Not tested yet" in g) == un and not EMPTY.search(g))
-check("server: Claude is the default and shows neither", top[0]["id"] == "claude" and not any(x in unescape(S.go_block(top[0])) for x in ("Run this once", "Not tested yet")))
+check("server: Claude is the default and shows neither", S.default_client()["id"] == "claude" and not any(x in unescape(S.go_block(S.default_client())) for x in ("Run this once", "Not tested yet")))
 
 # client side: the default pick and after each click, at 390 and 1280
 import socket, subprocess, time, urllib.request

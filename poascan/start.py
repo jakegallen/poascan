@@ -281,6 +281,12 @@ def chats():
         a.append(dict(c, kind=k, pre=c["prefill"] if k == "auto" else "", variant=v))
     return [x for x in a if x["row"] == "top"], [x for x in a if x["row"] == "more"]
 
+DEFAULT = "claude"   # picked on load, as before the 1.26.245 regroup
+
+def default_client():
+    top, rest = chats()
+    return next((x for x in top + rest if x["id"] == DEFAULT), top[0])
+
 def _opt(value, shown, attrs, checked=False, rn="client"):
     from .join import label
     return (f'<label class="cl"><input type="radio" name="{rn}" value="{E(value)}"{attrs}{" checked" if checked else ""}>'
@@ -291,6 +297,7 @@ def _chat(c, checked=False, rn="client"):
     con = (f' data-cset="{E(co.get("settings_url") or "")}" data-ccopy="{E(co.get("cli") or MCP)}" data-cwhere="{E(co.get("where") or "")}"'
            + (' data-cauto="1"' if co.get("prefills_url") else "")) if co else ""
     con += f' data-cnote="{E(CON_NOTE[c["id"]])}"' if c["id"] in CON_NOTE else ""
+    con += f' data-note="{E(c["note"])}"' if c.get("note") else ""
     return _opt(c["name"], c["name"], f' data-kind="{c["kind"]}" data-tier="{c["tier"]}" data-base="{E(c["open"])}" data-pre="{E(c["pre"])}" '
                 f'data-app="{E(c["name"])}" data-tag="{E(c["id"])}"{con}' + (' data-tested="1"' if c["id"] in TESTED else "") + (' data-tphone="1"' if c["id"] in TESTED_PHONE else ""), checked, rn)
 
@@ -298,8 +305,7 @@ def nopath_panel():
     """Step 3 for a no-path client (tier none): one line and the working alternatives, each picks that client. No prompt."""
     from . import clients as C
     from .join import label
-    j = f'<a class="npb npj" href="{E(C.NOPATH["join_url"])}" target="_blank" rel="noopener noreferrer" data-npjoin>{E(C.NOPATH["join_label"])}</a>'; j = _off(j, paused())
-    b = j + "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
+    b = "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
     return f'<div class="nopath" data-nopath role="status" hidden><p>{E(C.NOPATH["line"])}</p><div class="npg">{b}</div></div>'
 
 def variant_templates():
@@ -307,22 +313,24 @@ def variant_templates():
     from . import onboarding_prompt as OP
     return "".join(f'<pre hidden data-variant="{v}">{E(t)}</pre>' for v, t in OP.VARIANTS.items())
 
+GROUP_CAP = {"full": "One prompt creates your Agent and starts mining.",
+             "connector": "Join on minepoa.com, then add its connector to mine.",
+             "none": "Can't run an Agent yet."}
+
 def clients(rn="client"):
-    """Step 2 markup: a radio group, so the arrow keys move between choices and one is always picked. rn is the radio
-    name: "client" on /start (radios group by name page-wide)."""
-    from . import oneclick as OC
-    from .join import more, label
-    top, rest = chats()
-    l, fb = OC.links("poa", MCP), OC.fallback("poa", MCP)
-    con = "".join(_opt("mcp:" + k.replace("_", "-"), n, f' data-kind="mcp" data-href="{E(l[k])}" data-mcpc="{E(fb[k])}" data-app="{E(n)}"'
-                       + (' data-web="1"' if k in OC.WEB else ""), False, rn) for k, n in OC.BUTTONS)
-    row = lambda k, n: (f'<div class="cmd" data-mcp="{k.replace("_", "-")}"><span class="lbl">{label(n)}</span><code>{E(l[k])}</code>'
-                        f'<button class="cp" type="button" data-copy="{E(l[k])}" aria-label="Copy {n}"><i></i></button></div>')
-    inner = (f'<div class="clg" role="presentation">{"".join(_chat(x, False, rn) for x in rest)}</div>'
-             f'<p class="clh">Add the PoA connector (mining after you join, not joining)</p><div class="clg">{con}</div>'
-             f'<p class="clh">Connector setup for mining (after you join)</p><div class="cmds">{"".join(row(k, n) for k, n in OC.COPY)}</div>')
-    return (f'<div class="clg clt">{"".join(_chat(x, (i == 0), rn) for i, x in enumerate(top))}</div>'
-            + more("More", inner, "clm"))
+    """Step 2 markup: one radio group (the arrow keys move between choices and one is always picked), in three labelled
+    groups by what the app can do (1.26.245): Runs code, Chat with connector, Not supported (behind one toggle). Registry
+    order within each. rn is the radio name: "client" on /start (radios group by name page-wide)."""
+    from . import clients as C
+    from .join import more
+    top, rest = chats(); a = top + rest; d = default_client()["id"]
+    g = lambda t: "".join(_chat(x, x["id"] == d, rn) for x in a if x["tier"] == t)
+    out = ""
+    for t, title in C.GROUPS:
+        cap = f'<p class="clcap">{E(GROUP_CAP[t])}</p>'
+        if t == "none": out += more(E(title), cap + f'<div class="clg" role="presentation">{g(t)}</div>', "clm")
+        else: out += f'<p class="clh" data-group="{t}">{E(title)}</p>{cap}<div class="clg clt">{g(t)}</div>'
+    return out
 
 # One button (one button): the step 3 button copies the prompt in every case. Auto apps (the link carries the prompt): one click
 # copies and opens. Paste apps with an open URL: the first click copies and the button becomes "Copied. Open X"; the second
@@ -341,7 +349,8 @@ def go_label(c):
 def con_label(c):
     """The settings link in the connector step, or "" when the app has no settings page (a command, or no connector)."""
     co = c.get("connector") or {}
-    return f"Open {c['name']} settings" if co.get("settings_url") else ""
+    if not co.get("settings_url"): return ""
+    return f"Add connector in {c['name']}" if co.get("prefills_url") else f"Open {c['name']} settings"   # 1.26.245: Claude's link fills the form
 
 # 1.26.238 (Join with Anything, stage 1): apps whose launch was checked live (the agent matrix, Oct 22 and 28). Any other
 # app keeps the default prompt with a short Not tested yet note.
@@ -375,6 +384,9 @@ def s2_body(n, h):
     return (f"Add the PoA connector so {n} can answer challenges and check in for the agent you created. For mining after you join, not for joining." if h
             else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
 
+# 1.26.245: minepoa's connector takes the key as a tool argument on every call, so it goes through the chat app. Shown in step 2.
+KEY_WARN = "Your key is sent through this chat app on every call. Use a fresh Agent just for mining, with no other funds, and move earnings to a wallet you control."
+
 UNTESTED_HTML = '<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>'
 
 def cli_html(cli, where):
@@ -390,6 +402,7 @@ def step1(c0):
     return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>' + join_halt_html()
             + f'<p class="jwb" data-s1b{" hidden" if none or pz else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
             + (f'<p class="jwb jwpz" data-s1paused>{PAUSED_S1}</p>' if pz else "")
+            + f'<p class="cfn" data-s1note{"" if c0.get("note") and not none else " hidden"}>{E(c0.get("note") or "")}</p>'
             + f'<p class="jwj" data-s1join{"" if h else " hidden"}>' + _off(f'<a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>', pz) + '</p>'
             f'<div class="jwslot" data-slot1></div>')
 
@@ -400,7 +413,7 @@ def con_first(c0):
     co = c0.get("connector") or {}; cli = co.get("cli") or ""; n = c0["name"]; h = hosted(c0)
     on = bool(co) and c0["kind"] != "none"; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
     return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh"><span data-s2h>{E(s2_head(n))}</span> <span class="jwl">{S2_LABEL}</span></p>'
-            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p>'
+            f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="cfwarn" data-s2warn>{E(KEY_WARN)}</p>'
             + (cli_html(cli, co.get("where") or "") if cli else '<div class="jwcli" data-s2cmd hidden></div>') +
             f'<ol class="cfs" data-cflines{" hidden" if cli else ""}><li><span>Copy the connector URL</span>'
             f'<div class="cfu"><code data-cfval>{E(MCP)}</code><button class="cp" type="button" data-copy="{E(MCP)}" data-cfcopy aria-label="Copy"><i></i></button></div></li>'
@@ -460,7 +473,7 @@ def page(page_fn, card=None, apps=None):
              '<p class="sthint" id="stname-hint">Letters, numbers, - and _</p>'
              '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>')
     pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
-    c0 = chats()[0][0]
+    c0 = default_client()
     go = (go_block(c0)
           + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice() + phash()
           + '<details class="stview" data-stview><summary>View prompt</summary>'

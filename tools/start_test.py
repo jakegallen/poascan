@@ -169,22 +169,24 @@ check("v2.7 hash: one changed character changes template_sha256, and restoring t
 
 # ---- clients
 top, rest = S.chats()
-check("client order comes from the registry (one button): Claude, ChatGPT, Grok, Muse; Grok Bot first under More, then Cursor",
-      [x["name"] for x in top] == ["Claude", "ChatGPT", "Grok", "Muse"] and [x["name"] for x in rest][:2] == ["Grok Bot", "Cursor"] and "Muse" not in [x["name"] for x in rest]
+check("client order comes from the registry (1.26.245 regroup): Runs code, then Chat with connector up front; Not supported under one toggle; Claude is the default",
+      [x["name"] for x in top] == ["Grok Bot", "Claude Code", "Cursor", "Codex", "Claude", "ChatGPT", "Grok", "Perplexity Pro", "Le Chat"] and all(x["tier"] == "none" for x in rest)
+      and rest[0]["name"] == "Muse" and S.default_client()["id"] == "claude"
       and [x["id"] for x in top + rest] == [c["id"] for c in CR.CLIENTS if c["row"] == "top"] + [c["id"] for c in CR.CLIENTS if c["row"] == "more"])
 check("every registry client is offered once; every Join modal app is in the registry", len(top) + len(rest) == len(CR.CLIENTS) and len({x["id"] for x in top + rest}) == len(CR.CLIENTS))
 _tiers = {c["id"]: c["tier"] for c in CR.CLIENTS}
-check("tiers: connector first for Claude, ChatGPT, Grok, Le Chat, Gemini (US), Perplexity Pro and Codex; no path for Muse, Kimi, Z.ai, MiniMax, OpenRouter (v2.9), DeepSeek, Copilot, Gemini Gems, Qwen, Voice",
-      all(_tiers[i] == "connector" for i in ("claude", "chatgpt", "grok", "le-chat", "gemini", "perplexity")) and _tiers["codex"] == "full"
-      and [c["id"] for c in CR.CLIENTS if c["tier"] == "none"] == ["muse", "kimi", "z-ai", "minimax", "openrouter", "deepseek", "copilot", "gemini-gems", "qwen", "voice"]
+check("tiers (1.26.245): Runs code Grok Bot, Claude Code, Cursor, Codex; Chat with connector Claude, ChatGPT, Grok, Perplexity Pro, Le Chat; Not supported Muse, Gemini (US), HuggingChat and the rest",
+      all(_tiers[i] == "connector" for i in ("claude", "chatgpt", "grok", "le-chat", "perplexity")) and _tiers["codex"] == "full" and _tiers["claude-code"] == "full"
+      and [c["id"] for c in CR.CLIENTS if c["tier"] == "none"] == ["muse", "gemini", "huggingchat", "kimi", "z-ai", "minimax", "openrouter", "deepseek", "copilot", "gemini-gems", "qwen", "voice"]
+      and [g for _, g in CR.GROUPS] == ["Runs code", "Chat with connector", "Not supported"]
       and "chat-browse" not in CR.TIERS and "chat-browse" not in CR.DATA["tiers"]
       and _tiers["cursor"] == "full" and _tiers["grok-bot"] == "full" and CR.BY_ID["perplexity"]["name"] == "Perplexity Pro" and CR.BY_ID["gemini"]["name"] == "Gemini (US)")
 check("registry: every connector client has a settings URL or a CLI line, the MCP URL is minepoa.com/mcp, no-path alternatives all work",
       CR.MCP_URL == "https://minepoa.com/mcp" and all((c["connector"].get("settings_url") or c["connector"].get("cli")) for c in CR.CLIENTS if c["tier"] == "connector")
-      and all(CR.BY_ID[a]["tier"] == "full" for a in CR.NOPATH["alternatives"]) and CR.NOPATH["line"] == "This app can't run the join. Join on minepoa.com, or use one of these:"
+      and all(CR.BY_ID[a]["tier"] == "full" for a in CR.NOPATH["alternatives"]) and CR.NOPATH["line"] == "This app can't run an Agent yet. Pick one of these:"
       and CR.NOPATH["join_url"] == "https://minepoa.com" and CR.NOPATH["join_label"] == "Join on minepoa.com" and CR.DATA["tiers"]["connector"]["joins"] is False
       and CR.BY_ID["claude"]["connector"]["settings_url"].startswith("https://claude.ai/customize/connectors?modal=add-custom-connector") and CR.BY_ID["claude"]["connector"]["prefills_url"]
-      and CR.BY_ID["codex"]["connector"]["cli"] == "codex mcp add poa --url https://minepoa.com/mcp")
+      and not CR.BY_ID["codex"]["connector"] and all(not c["connector"] for c in CR.CLIENTS if c["tier"] != "connector"))
 from urllib.parse import quote
 LL = {c["id"]: S.link_len(c) for c in CR.CLIENTS if c["prefill"] and CR.variant(c)}
 print("     prefill link chars (32 char name):", LL)
@@ -279,7 +281,7 @@ _am = _J.ask_modal()
 _js = open(os.path.join(ROOT, "static", "app.js")).read()
 _aps = re.findall(r'data-app="([^"]+)"', _am)
 check(f"v2.9: the Ask dialog's Open in list has only apps with a working path (full or connector tier); Kimi, Z.ai, Muse, DeepSeek, MiniMax and OpenRouter are gone {_aps}",
-      not any(x in _aps for x in ("Kimi", "Z.ai", "Muse", "DeepSeek", "MiniMax", "OpenRouter")) and all(CR.BY_ID[S.client_tag(x[0])]["tier"] in ("full", "connector") for x in J.APPS if S.client_tag(x[0]) in CR.BY_ID)
+      not any(x in _aps for x in ("Kimi", "Z.ai", "Muse", "DeepSeek", "MiniMax", "OpenRouter")) and all(S.client_tag(x[0]) not in ("kimi", "z-ai", "muse", "deepseek", "minimax", "openrouter") for x in J.APPS)
       and "data-ios=" not in _am and "id1558240027" not in _am + _js and "com.facebook.stella" not in _am + _js)
 _fx = [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
 _aa = "poa1" + "x" * 40
@@ -357,32 +359,34 @@ try:
     check("/start: one visible h1, the name field labelled by step 1, Enter hint next", m.count("<h1") == 1 and "<h1>Start mining PoA</h1>" in m
           and 'id="stname"' in m and 'aria-labelledby="st1"' in m and 'enterkeyhint="next"' in m and "data-name" in m)
     i_more = m.index('class="morep')
+    i_sup = m.index('Not supported<i')
     up = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m[:i_more]); allr = re.findall(r'<input type="radio" name="client" value="([^"]+)"', m)
-    check(f"/start: one radio group, Claude first and checked, four up front {up}", up == ["Claude", "ChatGPT", "Grok", "Muse"] and m.count('role="radiogroup"') == 1
+    check(f"/start: one radio group in three groups, Claude checked {up}", up == ["Grok Bot", "Claude Code", "Cursor", "Codex", "Claude", "ChatGPT", "Grok", "Perplexity Pro", "Le Chat"] and m.count('role="radiogroup"') == 1
+          and m.index('data-group="full">Runs code') < m.index('value="Grok Bot"') < m.index('data-group="connector">Chat with connector') < m.index('value="Claude"') < i_sup < m.index('value="Muse"')
           and re.search(r'value="Claude" data-kind="auto" data-tier="connector"[^>]* checked>', m) and m.count(" checked>") == 1)
-    check("/start: everything else behind the single More (other chats, 8 connectors, 7 commands)", m.count("data-more") == 1 and ">More<" in m
-          and len(allr) == len(CR.CLIENTS) + 8 and m[i_more:].count('class="cmd"') == 7 and "Other clients" not in m and "One click" not in m)
+    check("/start: Not supported behind the single toggle; no connector install choices or commands (1.26.245)", m.count("data-more") == 1 and ">More<" not in m
+          and len(allr) == len(CR.CLIENTS) and 'class="cmd"' not in m and "mcp add" not in m and "Other clients" not in m and "One click" not in m)
     check("/start (one button): one button, Copy prompt and open Claude (short form at 390px, Auto, arrow); Claude (hosted, 1.26.240): step 2 the connector, then step 3 the button",
           len(re.findall(r"data-go[ >]", m)) == 1 and m.count("data-gocon") == 1 and m.index("data-cfirst") < m.index("data-conrow") < m.index("data-gorow") and "gocrow" not in m and 'class="gon"' not in m
           and '<a class="gobtn" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" data-go data-kind="auto"><span data-golbl><span class="gll">Copy prompt and open Claude</span><span class="gls">Copy and open Claude</span></span><em class="gauto">Auto</em><span class="gi gi-a" data-gi="a">' in m
-          and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=PoA&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Open Claude settings</span><svg' in m)
+          and '<p class="gocl" data-conrow><a href="https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=Proof%20of%20Agent&amp;connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp" target="_blank" rel="noopener noreferrer" data-gocon><span data-conlbl>Add connector in Claude</span><svg' in m)
     _lb = {c["id"]: (S.go_label(c)[:2], S.con_label(c)) for c in top + rest if c["kind"] != "none"}
     check(f"labels: auto copies and opens, the rest copy for the app; connector link only where the app has a connector",
-          _lb["claude"] == (("Copy prompt and open Claude", "Copy and open Claude"), "Open Claude settings")
+          _lb["claude"] == (("Copy prompt and open Claude", "Copy and open Claude"), "Add connector in Claude")
           and _lb["cursor"] == (("Copy prompt for Cursor", "Copy for Cursor"), "") and _lb["le-chat"] == (("Copy prompt for Le Chat", "Copy for Le Chat"), "Open Le Chat settings")
           and _lb["codex"] == (("Copy prompt for Codex", "Copy for Codex"), "") and _lb["grok-bot"] == (("Copy prompt for Grok Bot", "Copy for Grok Bot"), "")
           and not any(ch in json.dumps(_lb) for ch in "\u2014\u2013"))
     npn = m[m.index("data-nopath"):]; npn = npn[:npn.index("</div></div>")]
     check("/start: the no-path panel is one terse line and the working alternatives (each picks that client), hidden until a no-path app is picked; no prompt, no warning",
-          '<div class="nopath" data-nopath role="status" hidden><p>This app can&#x27;t run the join. Join on minepoa.com, or use one of these:</p>' in m and m.count("data-nopath") == 1
-          and '<a class="npb npj" href="https://minepoa.com" target="_blank" rel="noopener noreferrer" data-npjoin>Join on minepoa.com</a>' in npn and npn.index("data-npjoin") < npn.index("data-pick")
+          '<div class="nopath" data-nopath role="status" hidden><p>This app can&#x27;t run an Agent yet. Pick one of these:</p>' in m and m.count("data-nopath") == 1
+          and "data-npjoin" not in npn
           and re.findall(r'data-pick="([^"]+)"', npn) == [CR.BY_ID[a]["name"] for a in CR.NOPATH["alternatives"]] and "warn" not in npn.lower())
     check("the two variant templates (v2.9) are embedded once on /start (outside main) for app.js, the full one is the canonical template",
           [unescape(x) for x in re.findall(r'<pre hidden data-variant="([^"]+)">', h)] == ["full", "connector"] and "data-variant" not in m
           and unescape(re.search(r'<pre hidden data-variant="full">(.*?)</pre>', h, re.S).group(1)) == OP.TEMPLATE
           and unescape(re.search(r'<pre hidden data-variant="connector">(.*?)</pre>', h, re.S).group(1)) == OP.CONNECTOR)
-    check("/start: no-path clients sit under More, apart from Muse in the first row (it gets the no-path panel)", all(m.index(f'value="{c["name"]}"') > i_more for c in CR.CLIENTS if c["tier"] == "none" and c["id"] != "muse")
-          and m.index('value="Muse"') < i_more and re.search(r'value="Muse" data-kind="none" data-tier="none"', m))
+    check("/start: every not supported client sits behind the Not supported toggle", all(m.index(f'value="{c["name"]}"') > i_more for c in CR.CLIENTS if c["tier"] == "none")
+          and re.search(r'value="Muse" data-kind="none" data-tier="none"', m))
     css = open(os.path.join(ROOT, "static", "style.css")).read()
     check("/start: no Join only tag on any client, no tag markup or CSS left",
           "Join only" not in m and "cltag" not in m and "tagd" not in m and not hasattr(S, "JOIN_ONLY") and not hasattr(S, "JOIN_ONLY_TAG")

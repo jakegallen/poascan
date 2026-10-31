@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.245] - 2026-10-30
+
+### Changed
+
+- /start picker grouped by what the app can do: Runs code (Grok Bot, Claude Code, Cursor, Codex), Chat with connector (Claude, ChatGPT, Grok, Perplexity Pro, Le Chat) and Not supported (Muse, Gemini, HuggingChat and the rest, behind one toggle). Order within each group follows the old list; Claude stays the default.
+- Runs code apps: Copy prompt only, no connector step or command. Claude Code is new in the registry. Codex shows one note: allow network access first. The connector install choices and commands under More are gone.
+- Chat with connector apps keep the three steps (join on minepoa.com, add minepoa's connector, paste the prompt). Step 2 carries a warning: the key is sent through the chat app on every call, so use a fresh Agent just for mining, with no other funds, and move earnings to a wallet you control. The FAQ says the same.
+- Claude's step 2 button reads Add connector in Claude and opens Claude's own add connector form, prefilled with the name Proof of Agent and https://minepoa.com/mcp (no key, no referral; the user confirms). The plain URL with a copy button stays.
+- Not supported apps show one line and the apps that can run an Agent. Registry: tiers carry a group name; Gemini (US) and HuggingChat moved to tier none; Codex has no connector row.
+- Join prompt unchanged (v2.9.4).
+
 ## [1.26.244] - 2026-10-30
 
 ### Changed
