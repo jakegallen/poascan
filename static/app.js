@@ -752,3 +752,28 @@ D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest(
 /* header status (1.26.169): keyboard focus on the dot opens its note like a hover; moving focus out of it closes what focus opened */
 D.addEventListener("focusin",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||q.open||!e.target.matches("summary:focus-visible"))return;shut(q);q.open=true;q.dataset.hv="1"});
 D.addEventListener("focusout",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv})})();
+/* Join popup PROTOTYPE (branch popup-join-proto, flag POASCAN_JOINPOPUP=1, not shipped). minepoa.com's signup opens with
+   noopener,noreferrer: window.open returns no handle, and the minepoa window gets no opener, so neither page can reach the
+   other (no postMessage, no DOM read). The only thing that leaves this page is a string that matches a poa1 address, sent
+   to POAScan's own /api/v1/agents/joined. Never a key: anything else is cleared and never sent. */
+(function(){var b=document.querySelector("[data-popjoin]"),pn=document.querySelector("[data-pop]");if(!b||!pn)return;
+var q=function(s){return pn.querySelector(s)},st=q("[data-popst]"),ad=q("[data-popaddr]"),fd=q("[data-popfind]"),sv=q("[data-popsaved]"),nx=q("[data-popnext]"),
+t=null,n=0,M=pn.dataset,ADDR=/^poa1[1-9A-HJ-NP-Za-km-z]{30,60}$/,KEYISH=/pk_|psk_|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}|[0-9a-f]{32}/i;
+function say(s){st.textContent=s}
+function stop(){if(t){clearInterval(t);t=null}}
+function wide(){return window.matchMedia&&matchMedia("(min-width:700px) and (pointer:fine)").matches}
+function step2(){var c=document.querySelector("[data-cfirst]");if(!c||c.hidden)return;c.classList.add("jwgo");c.scrollIntoView({behavior:"smooth",block:"start"});
+  var h=c.querySelector("[data-s2h]");if(h){h.setAttribute("tabindex","-1");h.focus({preventScroll:true})}}
+b.addEventListener("click",function(e){if(b.hasAttribute("data-pzoff"))return;pn.hidden=false;
+  if(!wide())return;   /* phones and tablets: the plain new tab the link already opens */
+  e.preventDefault();var W=480,H=Math.min(760,(screen.availHeight||800)-40),L=Math.max(0,((screen.availWidth||W)-W)/2),T=Math.max(0,((screen.availHeight||H)-H)/2);
+  window.open(b.href,"poajoin","popup,width="+W+",height="+H+",left="+L+",top="+T+",noopener,noreferrer")});
+function look(){var a=ad.value.trim();
+  if(KEYISH.test(a)){ad.value="";stop();say(M.mkey);return}
+  if(!ADDR.test(a)){stop();say(M.mbad);return}
+  fetch("/api/v1/agents/joined?address="+encodeURIComponent(a),{cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"}).then(function(r){return r.ok?r.json():null}).then(function(d){
+    if(d&&d.found){stop();say(M.mfound);nx.disabled=false;step2()}else if(++n>=30){stop();say(M.mslow)}else say(M.mlook)}).catch(function(){})}
+fd.addEventListener("click",function(){n=0;stop();look();if(ADDR.test(ad.value.trim()))t=setInterval(function(){if(!document.hidden)look()},20000)});
+ad.addEventListener("paste",function(){setTimeout(function(){if(KEYISH.test(ad.value)){ad.value="";say(M.mkey)}},0)});
+sv.addEventListener("change",function(){nx.disabled=!sv.checked&&!st.textContent.length});
+nx.addEventListener("click",step2)})();

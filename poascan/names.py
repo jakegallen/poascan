@@ -49,3 +49,19 @@ def available(name):
     if taken(name):
         return 200, dict(name=name, valid=True, available=False, reason=TAKEN.format(name=name), suggestion=suggest(name), checked_ts=now, synced_ts=synced)
     return 200, dict(name=name, valid=True, available=True, reason="", checked_ts=now, synced_ts=synced)
+
+
+# ---- Join popup prototype: did this public poa1 address join? POAScan's own index only (no minepoa.com read). Anything that is
+# not a poa1 address (a key above all) is refused without being echoed, stored or logged.
+import re as _re
+ADDR = _re.compile(r"poa1[1-9A-HJ-NP-Za-km-z]{30,60}")
+def joined(a):
+    from . import keysafe as KS
+    now = _iso(int(time.time()))
+    if not a or KS.has_key(a) or not ADDR.fullmatch(a):
+        return 400, dict(found=None, reason="Not a poa1 address.", checked_ts=now)
+    r = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=?", (a,))
+    l = db.q1("SELECT ts FROM labels WHERE addr=?", (a,))
+    t = (r and r["t"]) or (l and l["ts"]) or None
+    s = db.q1("SELECT MAX(ts) AS t FROM txs")
+    return 200, dict(address=a, found=bool(t), joined_ts=_iso(t), checked_ts=now, synced_ts=_iso(s["t"] if s and s["t"] else None))

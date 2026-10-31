@@ -383,6 +383,34 @@ def cli_html(cli, where):
     return (f'<div class="jwcli" data-s2cmd><span>Run this once</span><div class="cfu"><code>{E(cli)}</code>'
             f'<button class="cp" type="button" data-copy="{E(cli)}" aria-label="Copy"><i></i></button></div><p class="jwb">{E(where)}</p></div>')
 
+# ---- Join popup (PROTOTYPE, branch popup-join-proto, flag POASCAN_JOINPOPUP=1, not shipped). minepoa.com's signup opens in a
+# window POAScan holds no handle to (window.open with noopener,noreferrer): no postMessage, no opener, no DOM read, no proxy.
+# POAScan learns only what the person types on POAScan: their Agent's public poa1 address, checked against POAScan's own index.
+POP_WAIT = "Finish the signup in the minepoa.com window and save your key there. POAScan never sees it."
+POP_SAVED = "I saved my key"
+POP_ADDR = "Your Agent's poa1 address (public, optional)"
+POP_FIND = "Find my Agent"
+POP_LOOK = "Looking for your Agent. New Agents show up here within a few minutes."
+POP_FOUND = "Found your Agent. Keep the minepoa.com window open until your key is saved."
+POP_SLOW = "Not on POAScan yet. Try Find my Agent again in a few minutes."
+POP_BAD = "Paste the poa1 address minepoa.com shows after signup."
+POP_KEY = "That looks like a key. Never share it. Paste the poa1 address instead."
+POP_NEXT = "Go to step 2"
+POP_BLOCKED = "Window didn't open? Open minepoa.com in a new tab"
+def popup_on():
+    import os
+    return os.environ.get("POASCAN_JOINPOPUP") == "1"
+def popup_html():
+    d = dict(look=POP_LOOK, found=POP_FOUND, slow=POP_SLOW, bad=POP_BAD, key=POP_KEY)
+    return ('<div class="jwpop" data-pop hidden' + "".join(f' data-m{k}="{E(v)}"' for k, v in d.items()) + '>'
+            f'<p class="jwb" data-popw>{E(POP_WAIT)}</p>'
+            f'<label class="jwck"><input type="checkbox" data-popsaved> <span>{E(POP_SAVED)}</span></label>'
+            f'<div class="jwaddr"><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="poa1..." aria-label="{E(POP_ADDR)}" data-popaddr>'
+            f'<button type="button" class="jwfind" data-popfind>{E(POP_FIND)}</button></div>'
+            f'<p class="jwst" data-popst role="status" aria-live="polite"></p>'
+            f'<p class="jwpn"><button type="button" class="jwnext" data-popnext disabled>{E(POP_NEXT)}</button>'
+            f'<a href="{JOIN_URL}" target="_blank" rel="noopener noreferrer">{E(POP_BLOCKED)}</a></p></div>')
+
 def step1(c0):
     """Step 1 (Create your agent): hosted apps get the minepoa.com join link, code apps the prompt line and the button slot
     (1.26.243: Copy prompt only, no command). While joins are paused: the notice, step 1's paused line, its button off."""
@@ -390,8 +418,9 @@ def step1(c0):
     return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>' + join_halt_html()
             + f'<p class="jwb" data-s1b{" hidden" if none or pz else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
             + (f'<p class="jwb jwpz" data-s1paused>{PAUSED_S1}</p>' if pz else "")
-            + f'<p class="jwj" data-s1join{"" if h else " hidden"}>' + _off(f'<a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>', pz) + '</p>'
-            f'<div class="jwslot" data-slot1></div>')
+            + f'<p class="jwj" data-s1join{"" if h else " hidden"}>' + _off(f'<a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin' + (" data-popjoin" if popup_on() and h else "") + '>Join on minepoa.com</a>', pz) + '</p>'
+            + (popup_html() if popup_on() and h else "")
+            + f'<div class="jwslot" data-slot1></div>')
 
 def con_first(c0):
     """Step 2 (optional): the PoA connector for mining after the join, never a way to join: the URL with copy, where to add
