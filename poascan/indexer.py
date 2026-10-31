@@ -773,7 +773,13 @@ def job_epochs(force=False):
     r = db.q1("SELECT MAX(COALESCE(last_ok, 0), COALESCE(last_err, 0)) AS t FROM fetch_log WHERE endpoint='/api/epochs'")
     if not force and seeded and r and r["t"] and time.time() - r["t"] < EPOCHS_GAP_S: return False
     d = fetch("/api/epochs", timeout=180, cond=True)
-    if isinstance(d, list) and d: return store_epochs(d)
+    if isinstance(d, list) and d:
+        wrote = store_epochs(d)
+        d = None   # drop the ~51 MB list before handing freed heap back
+        try:
+            from . import guard as _G; _G.trim()   # 1.26.250: return the epochs parse/store peak to the OS now, not up to 60 s later (the per-close RSS ratchet)
+        except Exception: pass
+        return wrote
     return False
 
 def store_epochs(d):
