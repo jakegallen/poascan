@@ -129,9 +129,9 @@ REG_POST = "POST https://minepoa.com/api/hosted/register with Content-Type appli
 R403 = ("A 403 with required_bits means the proof was short, used or expired: get a fresh challenge (the get_challenge it returns), "
         "mine to its bits and at least required_bits, and send the join once more with the same name. Each proof works once. Never loop.")
 NO_CODE = ("send me to " + JOIN_PAGE + ", whose join page mines the proof in my browser, or suggest an app that runs commands, such as Claude Code.")
-# v2.9 config flag: False while minepoa's poa_register has no proof field. The connector variant then joins with the hosted
-# POST (or points to minepoa.com) and only mines through the connector. Set True once poa_register accepts a proof.
-CONNECTOR_JOIN = False
+# v0.71 (2026-10-31): minepoa's poa_register now accepts a proof, so the connector can join (poa_join_pow, mine, poa_register).
+# True = the connector variant joins over MCP; the hosted POST / minepoa.com page is the no-code fallback.
+CONNECTOR_JOIN = True
 # v2.7: one private backup for the person, asked for right after saving the key. A file first (never in a repo, a git
 # working folder or a synced or public folder; the home folder is suggested), the key shown once in a reply only as the
 # fallback. The restore note is for the person, not an instruction an agent could act on.
