@@ -64,7 +64,7 @@ check("API text: no pending score", str(SCORE_MARK) not in json.dumps(r))
 cs = SV.to_csv(r["rows"])
 check("CSV: flat band rows", cs.splitlines()[0].startswith("band,lo,hi,answers,share") and len([l for l in cs.splitlines() if l]) == 7)
 src = open(os.path.join(ROOT, "poascan", "server.py")).read()
-check("CSV route takes the settle-age rows", '"/api/governance/settle-age", "/api/protocol")' in src)
+check("CSV route takes the settle-age rows", '"/api/governance/settle-age", "/api/governance/intake"' in src)
 rt = AG.TOOL_FN["get_settle_age"]({})
 tl = {t["name"]: t for t in AG.tools_list()}
 check("MCP get_settle_age answers like the API", rt["total"] == 6 and rt["juried"] == 4 and "get_settle_age" in tl and "Use it" in tl["get_settle_age"]["description"])
