@@ -314,7 +314,7 @@ def variant_templates():
     return "".join(f'<pre hidden data-variant="{v}">{E(t)}</pre>' for v, t in OP.VARIANTS.items())
 
 GROUP_CAP = {"full": "One prompt creates your Agent and starts mining.",
-             "connector": "Join on minepoa.com, then add its connector to mine.",
+             "connector": "Add the PoA connector, then paste one prompt to join and mine.",
              "none": "Can't run an Agent yet."}
 
 def clients(rn="client"):
@@ -359,18 +359,22 @@ def con_label(c):
 TESTED = frozenset(("claude", "chatgpt", "grok", "grok-bot", "voice"))
 TESTED_PHONE = frozenset(("claude", "chatgpt", "voice"))
 CON_NOTE = {"chatgpt": "Needs a paid ChatGPT plan with developer mode turned on."}
-# 1.26.240: the connector is never a way to join. Hosted chat apps (tier connector without a command) join on minepoa.com
-# (its page solves the join puzzle in the browser; POAScan only links there, keyless), then add the connector to mine,
-# then paste the prompt. Apps that run code (tier full, or a command like Codex) create the agent with the prompt in step 1
-# and add the connector as an optional step 2. app.js setup() mirrors these and moves the button between the two slots.
+# 1.26.248 (minepoa v0.71, connector-first): poa_register now carries the admission proof, so the connector is a way to join.
+# Hosted chat apps (tier connector without a command): step 1 adds the PoA connector (Claude's prefilled Add button, ChatGPT
+# its URL with Copy and the developer-mode note), with the key warning always shown; step 2 pastes the connector-variant
+# prompt, which joins over MCP (poa_join_pow, mine, poa_register) and mines, both through the connector. minepoa.com's join
+# page is the no-code fallback (no code tool, or the join fails), not the primary. Apps that run code (tier full, or a command
+# like Codex) still create the agent with the prompt in step 1 and add the connector as an optional step 2. app.js setup()
+# mirrors these and moves the button between the two slots.
 JOIN_URL = "https://minepoa.com/"
-S1_HOSTED = "Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key."
+FALLBACK = "No code tool, or the join fails? Join on minepoa.com first, then paste the same prompt."
 def hosted(c): return c.get("tier") == "connector" and not (c.get("connector") or {}).get("cli")
 def s1_code(n): return f"Copy the prompt and paste it into {n}. This is the step that creates your PoA agent."
-def s2_head(n): return f"2. Let {n} mine (optional)"
-S2_LABEL = "(mining after you join, not joining)"
-# 1.26.243: joins paused (minepoa's /api/join-pow answers 503, from POAScan's own read): the notice under step 1, step 1's
-# line, and every copy or join button off with this note beside it. app.js turns them back on when POAScan reads it open.
+def s2_head(n, h=False): return "1. Add the PoA connector" if h else f"2. Let {n} mine (optional)"
+S2_LABEL = ""
+# 1.26.247: joins are paused only when MCP joins actually fail (maint.join_open() false), never the direct HTTP /api/join-pow
+# 503 halt alone: the notice under step 1, step 1's line, and every copy or join button off with this note beside it. app.js
+# turns them back on when POAScan reads joins open.
 PAUSED_S1 = "Signups are paused. Check back later."
 PAUSED_OFF = "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again."
 def paused():
@@ -385,7 +389,7 @@ def _off(html, on):
     """Mark one button (an <a class="...">) off while paused: aria-disabled, no tab stop, data-pzoff for app.js."""
     return html.replace('" href=', ' off" aria-disabled="true" tabindex="-1" data-pzoff href=', 1) if on else html
 def s2_body(n, h):
-    return (f"Add the PoA connector so {n} can answer challenges and check in for the agent you created. For mining after you join, not for joining." if h
+    return (f"Add the PoA connector, then paste the prompt below. {n} joins and mines through it, both over the connector." if h
             else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
 
 # 1.26.245: minepoa's connector takes the key as a tool argument on every call, so it goes through the chat app. Shown in step 2.
@@ -400,23 +404,25 @@ def cli_html(cli, where):
             f'<button class="cp" type="button" data-copy="{E(cli)}" aria-label="Copy"><i></i></button></div><p class="jwb">{E(where)}</p></div>')
 
 def step1(c0):
-    """Step 1 (Create your agent): hosted apps get the minepoa.com join link, code apps the prompt line and the button slot
-    (1.26.243: Copy prompt only, no command). While joins are paused: the notice, step 1's paused line, its button off."""
+    """Step 1 (Create your agent): apps that run code get the prompt line and the button slot (1.26.243: Copy prompt only, no
+    command); hosted chat apps hide this step, their step 1 is the connector (con_first). While joins are paused: the notice,
+    the paused line, its button off."""
     n = c0["name"]; none = c0["kind"] == "none"; h = hosted(c0); pz = paused()
-    return (f'<p class="cfh jwh" data-s1h{" hidden" if none else ""}>1. Create your agent</p>' + join_halt_html()
-            + f'<p class="jwb" data-s1b{" hidden" if none or pz else ""}>{E(S1_HOSTED if h else s1_code(n))}</p>'
+    hide1 = none or h   # the create-agent step is code apps only; a hosted app joins over the connector (con_first is its step 1)
+    return (f'<p class="cfh jwh" data-s1h{" hidden" if hide1 else ""}>1. Create your agent</p>' + join_halt_html()
+            + f'<p class="jwb" data-s1b{" hidden" if hide1 or pz else ""}>{E(s1_code(n))}</p>'
             + (f'<p class="jwb jwpz" data-s1paused>{PAUSED_S1}</p>' if pz else "")
-            + f'<p class="cfn" data-s1note{"" if c0.get("note") and not none else " hidden"}>{E(c0.get("note") or "")}</p>'
-            + f'<p class="jwj" data-s1join{"" if h else " hidden"}>' + _off(f'<a class="jwbtn" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>', pz) + '</p>'
+            + f'<p class="cfn" data-s1note{"" if c0.get("note") and not hide1 else " hidden"}>{E(c0.get("note") or "")}</p>'
             f'<div class="jwslot" data-slot1></div>')
 
 def con_first(c0):
-    """Step 2 (optional): the PoA connector for mining after the join, never a way to join: the URL with copy, where to add
-    it, turn it on for the chat, the app's note and settings link. Hidden for apps with no connector."""
+    """The PoA connector block: step 1 for a hosted chat app (the join-and-mine step, with the key warning), an optional step 2
+    for an app that runs code. The URL with copy, where to add it, turn it on for the chat, the app's note and settings link.
+    Hidden for apps with no connector."""
     from .join import ARROW
     co = c0.get("connector") or {}; cli = co.get("cli") or ""; n = c0["name"]; h = hosted(c0)
     on = bool(co) and c0["kind"] != "none"; cl = con_label(c0); nt = CON_NOTE.get(c0.get("id"), "")
-    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh"><span data-s2h>{E(s2_head(n))}</span> <span class="jwl">{S2_LABEL}</span></p>'
+    return (f'<div class="cfirst" data-cfirst{"" if on else " hidden"}><p class="cfh"><span data-s2h>{E(s2_head(n, h))}</span> <span class="jwl">{E(S2_LABEL)}</span></p>'
             f'<p class="jwb" data-s2b>{E(s2_body(n, h))}</p><p class="cfwarn" data-s2warn>{E(KEY_WARN)}</p>'
             + (cli_html(cli, co.get("where") or "") if cli else '<div class="jwcli" data-s2cmd hidden></div>') +
             f'<ol class="cfs" data-cflines{" hidden" if cli else ""}><li><span>Copy the connector URL</span>'
@@ -432,9 +438,16 @@ def untested_html(c0):
     off = c0["id"] in TESTED or c0["kind"] == "none"   # the desktop render; app.js applies TESTED_PHONE on a phone or tablet
     return f'<p class="stnt" data-untested{" hidden" if off else ""}>{"" if off else UNTESTED_HTML}</p>'
 
+def fallback_html(c0, pz):
+    """Hosted chat apps: minepoa.com's join page as the no-code fallback (no code tool, or the join fails), after the paste
+    step. Hidden for apps that run code, which create the agent with the prompt themselves. Off while joins are paused."""
+    h = hosted(c0)
+    return (f'<p class="jwfb" data-cffb{"" if h else " hidden"}>{E(FALLBACK)} '
+            + _off(f'<a class="jwbln" href="{JOIN_URL}" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>', pz) + '</p>')
+
 def go_block(c0):
-    """Step 3 of /start: the three join steps (step1, con_first, Paste the prompt) with the one button in the slot for the
-    picked app's lane, the no-path panel and the copy fallback."""
+    """Step 3 of /start: the join steps (step1, con_first, Paste the prompt) with the one button in the slot for the picked
+    app's lane, the hosted no-code fallback, the no-path panel and the copy fallback."""
     from .join import ARROW
     ll, ls, ic = go_label(c0); h = hosted(c0); pz = paused()
     ico = (f'<span class="gi gi-a" data-gi="a"{"" if ic == "a" else " hidden"}>{ARROW}</span><span class="gi gi-c" data-gi="c"{"" if ic == "c" else " hidden"}>{COPYI}</span>'
@@ -444,8 +457,8 @@ def go_block(c0):
            + (f'<p class="jwoff" data-pauseoff>{PAUSED_OFF}</p>' if pz else ""))
     s1 = step1(c0)
     if not h: s1 = s1.replace('<div class="jwslot" data-slot1></div>', f'<div class="jwslot" data-slot1>{btn}</div>')
-    return (s1 + con_first(c0) + f'<p class="cfh jwh" data-s3h{"" if h else " hidden"}>3. Paste the prompt</p>'
-            f'<div class="jwslot" data-slot3>{btn if h else ""}</div>'
+    return (s1 + con_first(c0) + f'<p class="cfh jwh" data-s3h{"" if h else " hidden"}>2. Paste the prompt</p>'
+            f'<div class="jwslot" data-slot3>{btn if h else ""}</div>' + fallback_html(c0, pz)
             + nopath_panel() + '<p class="sr-only" data-gofb role="status" aria-live="polite"></p>'
             '<div class="gofail" data-gofail hidden><p>Select and copy this prompt</p><textarea readonly rows="8" aria-label="Prompt"></textarea></div>')
 
