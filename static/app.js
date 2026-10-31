@@ -412,8 +412,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goOn)return;go.dataset.goOn="1";var PID=card.dataset.pid||"start",RN=card.dataset.rname||"client",
  dlg=card.closest("dialog"),fb=$("[data-gofb]",card),lb=$("[data-golbl]",go),ap=$(".gauto",go),L0=["",""],I0="a",T,ARM=false,nf=$("[data-name]",card),fl=$("[data-gofail]",card);
  /* v2.4: one prompt variant per client tier (full, connector; v2.9 retired chat-browse) from the page's templates; a no-path client (tier none) gets the panel instead of a prompt. */
- var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s1n=$("[data-s1note]",card),s2m=$("[data-s2cmd]",card),pzo=$("[data-pauseoff]",card),s1p=$("[data-s1paused]",card),PHONE=/iPhone|iPad|iPod|Android/.test(navigator.userAgent||"")||(/Macintosh/.test(navigator.userAgent||"")&&navigator.maxTouchPoints>1),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),cfl=$("[data-cflines]",card),C0="",CT,
-  S1H="Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key.";
+ var TPL={},pv=$(".pc-text",card),crow=$("[data-conrow]",card),con=$("[data-gocon]",card),clb=$("[data-conlbl]",card),grow=$("[data-gorow]",card),np=$("[data-nopath]",card),stk=$("[data-stkey]",card),stv=$("[data-stview]",card),cfs=$("[data-cfirst]",card),cfv=$("[data-cfval]",card),cfc=$("[data-cfcopy]",card),cfw=$("[data-cfwhere]",card),cin=$("[data-cfin]",card),cnt=$("[data-cfnote]",card),ut=$("[data-untested]",card),s1h=$("[data-s1h]",card),s1b=$("[data-s1b]",card),s1j=$("[data-s1join]",card),s1n=$("[data-s1note]",card),s2m=$("[data-s2cmd]",card),pzo=$("[data-pauseoff]",card),s1p=$("[data-s1paused]",card),PHONE=/iPhone|iPad|iPod|Android/.test(navigator.userAgent||"")||(/Macintosh/.test(navigator.userAgent||"")&&navigator.maxTouchPoints>1),sl1=$("[data-slot1]",card),sl3=$("[data-slot3]",card),s3h=$("[data-s3h]",card),s2h=$("[data-s2h]",card),s2b=$("[data-s2b]",card),cfl=$("[data-cflines]",card),cfb=$("[data-cffb]",card),C0="",CT;
  $$("pre[data-variant]").forEach(function(p){TPL[p.dataset.variant]=p.textContent});
  function nameV(){return nf?nf.value||"":W.poaName||""}
  function render(r){var t=TPL[r.dataset.tier],v=nameV();if(t&&pv&&/^[A-Za-z0-9_-]{1,32}$/.test(v))pv.textContent=t.split("{NAME}").join(v)}
@@ -464,20 +463,21 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
  if(PZ()){pzOff();setInterval(function(){if(!PZ()||D.hidden)return;fetch("/api/v1/prompts/join",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
   var st=d&&d.join&&d.join.state&&d.join.state.state;if(st&&st!="halted")unpause()}).catch(function(){})},300000)}
  function setup(){var r=sel();if(!r)return;var tier=r.dataset.tier||"full",none=tier=="none",n=r.dataset.app,k=r.dataset.kind;render(r);
-  /* 1.26.240: the connector is never a way to join. Hosted chat apps: 1 join on minepoa.com, 2 the connector to mine (optional),
-     3 paste the prompt. Apps that run code: 1 Copy prompt only, 2 the connector (optional; 1.26.243: Codex's run-once command
-     sits here). The button (and its Not tested yet note) moves to the slot of the picked app's lane. Mirrors start.step1/con_first/go_block. */
+  /* 1.26.248 (minepoa v0.71, connector-first): hosted chat apps join over the connector. 1 Add the PoA connector (with the key
+     warning), 2 paste the connector-variant prompt that joins and mines; minepoa.com is the no-code fallback. Apps that run code:
+     1 Copy prompt only, 2 the connector (optional; 1.26.243: Codex's run-once command sits here). The button (and its Not tested
+     yet note) moves to the slot of the picked app's lane. Mirrors start.step1/con_first/go_block. */
   var mc=k=="mcp",cli=!!r.dataset.ccopy&&!/^https:/.test(r.dataset.ccopy),h=tier=="connector"&&!cli&&!mc,cf=!!r.dataset.ccopy&&!mc&&!none,
    cl=r.dataset.cset&&!cli?(r.dataset.cauto?"Add connector in "+n:"Open "+n+" settings"):"";
-  hide(s1h,none||mc);hide(s1b,none||mc||PZ());if(s1b)s1b.textContent=h?S1H:"Copy the prompt and paste it into "+n+". This is the step that creates your PoA agent.";
-  hide(s1j,!h);if(s1n){s1n.textContent=r.dataset.note||"";hide(s1n,none||!r.dataset.note)}   /* 1.26.245: an app note in step 1 (Codex: allow network) */
+  hide(s1h,none||mc||h);hide(s1b,none||mc||h||PZ());if(s1b)s1b.textContent="Copy the prompt and paste it into "+n+". This is the step that creates your PoA agent.";
+  if(s1n){s1n.textContent=r.dataset.note||"";hide(s1n,none||h||!r.dataset.note)}   /* 1.26.245: an app note in step 1 (Codex: allow network); hosted apps join over the connector so there is no create-agent step */
   /* 1.26.241: the run-once block and the Not tested yet note exist only for an app they apply to (no empty code span, no stray line) */
   if(s2m){s2m.textContent="";if(cli&&cf){var sp=D.createElement("span"),cu=D.createElement("div"),cd=D.createElement("code"),cb=D.createElement("button"),cw=D.createElement("p");
    sp.textContent="Run this once";cu.className="cfu";cd.textContent=r.dataset.ccopy;cb.className="cp";cb.type="button";cb.dataset.copy=r.dataset.ccopy;cb.setAttribute("aria-label","Copy");cb.appendChild(D.createElement("i"));
    cw.className="jwb";cw.textContent=r.dataset.cwhere||"";cu.appendChild(cd);cu.appendChild(cb);s2m.appendChild(sp);s2m.appendChild(cu);s2m.appendChild(cw)}hide(s2m,!(cli&&cf))}
-  var slot=h?sl3:sl1;if(slot){if(ut)slot.appendChild(ut);if(grow)slot.appendChild(grow);if(pzo)slot.appendChild(pzo)}hide(s3h,!h);
-  hide(cfs,!cf);if(cf){if(s2h)s2h.textContent="2. Let "+n+" mine (optional)";
-   if(s2b)s2b.textContent=h?"Add the PoA connector so "+n+" can answer challenges and check in for the agent you created. For mining after you join, not for joining.":"Add the PoA connector so "+n+" can answer challenges and check in for the agent you just created. The connector does not create a new agent.";
+  var slot=h?sl3:sl1;if(slot){if(ut)slot.appendChild(ut);if(grow)slot.appendChild(grow);if(pzo)slot.appendChild(pzo)}hide(s3h,!h);hide(cfb,!h);
+  hide(cfs,!cf);if(cf){if(s2h)s2h.textContent=h?"1. Add the PoA connector":"2. Let "+n+" mine (optional)";
+   if(s2b)s2b.textContent=h?"Add the PoA connector, then paste the prompt below. "+n+" joins and mines through it, both over the connector.":"Add the PoA connector so "+n+" can answer challenges and check in for the agent you just created. The connector does not create a new agent.";
    hide(cfl,cli);if(cfw)cfw.textContent=r.dataset.cwhere||"";if(cin)cin.textContent="Add it in "+n+": ";if(cnt){cnt.textContent=r.dataset.cnote||"";hide(cnt,!r.dataset.cnote)}}
   /* 1.26.243: tested per app and device (v1.0 coverage): data-tested on a desktop, data-tphone on a phone or tablet */
   var un=!(none||mc||(PHONE?r.dataset.tphone=="1":r.dataset.tested=="1"));if(ut){ut.innerHTML=un?'<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>':"";hide(ut,!un)}
