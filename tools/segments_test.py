@@ -83,6 +83,11 @@ with SG.use(1): check("open epoch ignores ?segment=1", A.open_epoch()["epoch"] =
 rb = A.rewards_by_addr()
 check("lifetime rewards span both segments (S1 E14, S2 E0)", float(rb[X][14]) == 10 and float(rb[X][15]) == 7)
 check("lifetime close labels", SG.ep_label(14) == "S1 E14" and SG.ep_label(15) == "E0" and SG.ep_href(3) == "/epoch/3?segment=1")
+# 1.26.251: the Rising tab's First paid cell renders the segment-local label, not the raw lifetime key (segment 2 close 8 is key 23)
+from poascan import views4 as V4
+_rc = V4._cell("ep", 23)
+check("Rising first-paid renders the segment-local label E8 linking /epoch/8, not E23/epoch/23 (sort value stays the lifetime key)",
+      ">E8</a>" in _rc and 'href="/epoch/8"' in _rc and 'data-v="23"' in _rc and ">E23<" not in _rc and "/epoch/23" not in _rc)
 check("records index per segment", [x["epoch"] for x in RR.index()] == [0, 1] if hasattr(RR, "index") else True)
 
 # 1.26.140: standing carries over the cut through the segment's genesis import (estfold.py), not segment 1's fold

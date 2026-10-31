@@ -5,6 +5,7 @@ from . import db, analytics as A, agents as G
 from .ui import *
 from . import prompts as PR
 from . import market as X   # POA | USD toggle; the price comes from the swap module's /api/v1/price
+from . import segments as SG   # lifetime close numbers render as segment-local labels (ep_label, ep_href)
 
 ALIAS = {"earners": "richlist"}  # old tab key (pre 2026-10-20) keeps working
 PAGE_ALIAS = {"models": "ai"}     # the page's AI models tab shows the models table plus the AI leaderboard (was /agents/leaderboard)
@@ -159,7 +160,7 @@ def _cell(kind, v):
     if kind == "int": return f'<td data-v="{v}">{intc(int(v))}</td>'
     if kind == "pct": return f'<td data-v="{v}">{pct(v)}</td>'
     if kind == "ts": return f'<td data-v="{v}">{rel(v)}</td>'
-    if kind == "ep": return f'<td data-v="{v}"><a href="/epoch/{v}">E{v}</a></td>'
+    if kind == "ep": return f'<td data-v="{v}"><a href="{SG.ep_href(int(v))}">{SG.ep_label(int(v))}</a></td>'   # v is a lifetime close number; render its segment-local label, keep v as the sort value
     return f'<td data-v="{E(str(v))}">{E(str(v))}</td>'
 
 PAGE = 50   # rows per page; Load more appends the next 50 (/fragment/lb)
