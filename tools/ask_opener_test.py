@@ -1,5 +1,5 @@
 """Every "Ask your agent" prompt opens with the join prompt's pasted-only line (Tidewatch, LabLeak comment 5899):
-the prompts in data-ask attributes on every page, the /upgrade copy, and /start's hidden <pre data-variant> client variants
+the prompts in data-ask attributes on every page, the /upgrade copy, and /start's hidden <pre data-sv-tpl> client variants
 (full and connector, which already carried it since v2.5). Ask prompts carry no hash, and the join prompt's
 template_sha256, variant_sha256 and combined_sha256 are unchanged (data/prompt_history.json keeps every published entry).
 No request leaves the box. Usage: python3 tools/ask_opener_test.py"""
@@ -60,7 +60,7 @@ c, h = get("/upgrade")
 pre = re.search(r'<div class="upa"[^>]*>.*?<pre class="pc-text"[^>]*>(.*?)</pre>', h, re.S)
 check("/upgrade's Ask copy opens with the line", bool(pre) and html.unescape(pre.group(1)).startswith(OPEN + "\n"))
 c, h = get("/start")
-vs = dict(re.findall(r'<pre hidden data-variant="([a-z-]+)">(.*?)</pre>', h, re.S))
+vs = dict(re.findall(r'<pre hidden data-sv-tpl="([a-z-]+)">(.*?)</pre>', h, re.S))   # 1.26.246: /start is startv2, which embeds its variant templates as data-sv-tpl
 check(f"/start hidden <pre> elements are the served client variants {sorted(vs)}", sorted(vs) == sorted(OP.VARIANTS))
 check("each hidden variant opens with the line and equals the variant template (byte identical)",
       all(html.unescape(t).startswith(OPEN + "\n") and html.unescape(t) == OP.VARIANTS[v] for v, t in vs.items()))
