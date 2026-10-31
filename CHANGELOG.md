@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### In progress
+- /start connector-first join flow for minepoa v0.71 (add-connector step, key-in-logs warning, paste-prompt, no-code fallback, MCP-join paused state, three badges) + join prompt bump. Work in progress on branch feat/start-v071-connector-first, not for merge yet.
+
 ## [1.26.247] - 2026-10-31
 
 ### Fixed
