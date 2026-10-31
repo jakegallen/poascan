@@ -96,6 +96,19 @@
 .sv-foot .pnote{margin:0;font-size:var(--t12);color:var(--mute)}.sv-view summary{cursor:pointer;color:var(--dim);font-size:var(--t13)}
 .sv-pre{max-height:280px;overflow:auto;text-align:left;white-space:pre-wrap;font:400 var(--t12)/1.5 var(--mono);color:var(--bone-1);padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--ink-0)}
 .sv-foot .stwal{margin:0;font-size:var(--t13)}
+/* the verification strip: three honest badges plus an optional Agent check */
+.sv-vf{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.sv-vf-b{display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 7px;border:1px solid var(--line2);border-radius:var(--r-pill);color:var(--dim);font:600 var(--t13)/1 var(--ui);background:color-mix(in srgb,var(--ink-1) 60%,transparent);transition:color var(--state) var(--ease),border-color var(--state),background var(--state)}
+.sv-vf-i{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line2);color:transparent;transition:all var(--state) var(--ease)}
+.sv-vf-i svg{width:12px;height:12px}
+.sv-vf-b.on{color:var(--verd);border-color:color-mix(in srgb,var(--verd) 40%,transparent);background:color-mix(in srgb,var(--verd) 8%,transparent)}
+.sv-vf-b.on .sv-vf-i{border-color:var(--verd);background:color-mix(in srgb,var(--verd) 14%,transparent);color:var(--verd);animation:svpop .5s var(--ease)}
+.sv-vf-chk{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-left:auto}
+.sv-vf-chk label{font:500 var(--t12)/1 var(--ui);color:var(--mute)}
+.sv-vf-chk input{width:min(240px,46vw);min-height:34px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--ink-0);color:var(--hi);font:400 var(--t12)/1 var(--mono)}
+.sv-vf-chk input:focus{outline:none;border-color:var(--gold-focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 12%,transparent)}
+.sv-vf-msg{flex-basis:100%;text-align:right;font:500 var(--t12)/1.3 var(--ui);color:var(--mute);min-height:1em}
+@media (max-width:640px){.sv-vf-chk{margin-left:0;width:100%}.sv-vf-chk input{width:100%}.sv-vf-msg{text-align:left}}
 [data-sv] [hidden]{display:none!important}
 @keyframes svin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes svpulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--verd) 55%,transparent)}70%,100%{box-shadow:0 0 0 6px transparent}}

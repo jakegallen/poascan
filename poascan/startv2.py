@@ -74,8 +74,18 @@ def body():
     foot = (f'<div class="sv-foot" data-sv-foot hidden>{S.notice()}{S.phash()}'
             f'<details class="sv-view"><summary>View prompt</summary>' + pbox(f'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">{E(S.prompt("YOUR_NAME"))}</pre>') + '</details>' + S.HELP_LINE
             + S.WALLET_LINK + '</div>')
+    # the verification strip: three honest badges. Prompt copied is client state; Network open mirrors POAScan's own
+    # route health for hosted mining; Answer verified reads the public ledger for a challenge tx on a poa1 the person
+    # pastes. POAScan's own /api/v1 reads only, never a key, never a minepoa.com fetch. New sv-vf prefix only.
+    strip = (f'<div class="sv-vf" data-sv-vf role="group" aria-label="Verification" aria-live="polite">'
+             f'<span class="sv-vf-b" data-sv-vf-b="copied"><span class="sv-vf-i">{CHECK}</span>Prompt copied</span>'
+             f'<span class="sv-vf-b" data-sv-vf-b="network"><span class="sv-vf-i">{CHECK}</span>Network open</span>'
+             f'<span class="sv-vf-b" data-sv-vf-b="answer" title="Lights when the public ledger shows your answer. Indexing can lag."><span class="sv-vf-i">{CHECK}</span>Answer verified</span>'
+             f'<div class="sv-vf-chk"><label for="sv-vf-a">Check my Agent</label>'
+             f'<input id="sv-vf-a" data-sv-vf-addr type="text" placeholder="poa1 address, never a key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="verbatim" maxlength="66">'
+             f'<span class="sv-vf-msg" data-sv-vf-msg></span></div></div>')
     return (f'<div class="s2v" data-sv data-svname="{E(name)}"{" data-paused=\"1\"" if pz else ""}>'
-            f'<section class="sv-card">{hero}{S.join_halt_html()}{namescr}{pick}{panel}{foot}</section>'
+            f'<section class="sv-card">{hero}{S.join_halt_html()}{namescr}{pick}{panel}{strip}{foot}</section>'
             f'{tpl}<script type="application/json" data-sv-json>{data}</script>{S.below()}</div>')
 
 def page(page_fn):
