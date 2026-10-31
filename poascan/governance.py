@@ -10,8 +10,9 @@ from . import views as V
 from . import govv2 as GV2
 from . import netparams as NP
 from . import intake as IK
+from . import settleage as SA
 
-TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("intake", "Intake"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("intake", "Intake"), ("settleage", "Settle age"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 AGENT_COL = SS.Col("name", "Agent", "text")   # header sorting (1.26.117): Agent sorts by name A to Z, unnamed Agents last
 LEVEL_ORDER = {k: i for i, (k, _) in enumerate(LEVELS)}
@@ -622,13 +623,13 @@ def rules():
                f"<p>The genesis import (/api/genesis-import, checkpoint 44003) flags {len(EF.imported(2))} Agents established; segment 2 starts from them. They carry no segment 2 challenge_eligible until they earn one, so L is -1. Segment 1 standing stays under Segment 1.</p>")
     return b
 
-TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "settlement": "Governance · Settlement", "changes": "Governance · Changes", "intake": "Governance · Intake", "never": "Governance · Never established", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
+TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "settlement": "Governance · Settlement", "changes": "Governance · Changes", "intake": "Governance · Intake", "settleage": "Governance · Settle age", "never": "Governance · Never established", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "settlement": lambda q: GV2.settlement_tab(q, href, qsx), "changes": lambda q: GV2.changes_tab(q, href, qsx), "intake": lambda q: IK.tab(q, href, qsx), "never": lambda q: GV2.never_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
+    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "settlement": lambda q: GV2.settlement_tab(q, href, qsx), "changes": lambda q: GV2.changes_tab(q, href, qsx), "intake": lambda q: IK.tab(q, href, qsx), "settleage": lambda q: SA.tab(q, href, qsx), "never": lambda q: GV2.never_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
