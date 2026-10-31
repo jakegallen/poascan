@@ -6,7 +6,7 @@
   "prompt_endpoint": "https://poascan.io/api/v1/prompts/join",
   "tiers": {
     "full": {"variant": "full", "about": "Shell and code agents: the full prompt (OS secret store, curl -K -). The agent mines its own join proof of work, then registers with one POST.", "group": "Runs code"},
-    "connector": {"variant": "connector", "about": "Chat apps that can add a remote MCP server: add https://minepoa.com/mcp once, then a short prompt that mines with the poa_ tools. Joining stays outside the connector until poa_register accepts a proof of work: the hosted POST if the app runs code, else minepoa.com's join page.", "joins": false, "group": "Chat with connector"},
+    "connector": {"variant": "connector", "about": "Chat apps that can add a remote MCP server: add https://minepoa.com/mcp once, then a short prompt that joins and mines with the poa_ tools (minepoa v0.71: poa_join_pow, mine, poa_register). No code tool, or the join fails: join on minepoa.com's page first, then paste the same prompt.", "joins": true, "group": "Chat with connector"},
     "none": {"variant": null, "about": "Can't run an Agent yet: no prompt. The panel points to an app that can.", "group": "Not supported"}
   },
   "nopath": {"line": "This app can't run an Agent yet. Pick one of these:", "join_url": "https://minepoa.com", "join_label": "Join on minepoa.com", "alternatives": ["claude-code", "cursor", "grok-bot"]},
