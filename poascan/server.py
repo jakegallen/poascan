@@ -406,7 +406,10 @@ def page(path, qs):
         if r is None: return (404, V.page("Swap offer not found", V.card("Swap offer", V.na(f"POAScan holds no swap offer <code>{V.E(m.group(1))}</code>. Offers appear here once the network lists them.")), "/txs"))
         return V.page(r[0], r[1], "/txs")
     if path == SW.config.PAGE_PATH: return SW.page(path)
-    if path in ("/start", "/join", "/onboarding"): return ST.page(V.page)
+    if path in ("/start", "/join", "/onboarding"):
+        from . import startv2 as SV2
+        if SV2.on(): return SV2.page(V.page)   # preview only: POASCAN_STARTV2=1
+        return ST.page(V.page)
     if path == EA.ROUTE: return EV.page(qs, V.page, earn_check)   # Start earning: the earn check and the starter guide
     if path == WB.ROUTE: return WV.page(qs, V.page)   # 1.26.187: Check my wallet, /wallet?address=poa1... (stable; POASwap /start links here)
     if path == "/governance": return GV.page(qs)
