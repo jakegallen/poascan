@@ -67,6 +67,10 @@
 .sv-note{margin:10px 0 0;font:500 var(--t13)/1.45 var(--ui);color:var(--amber)}
 .sv-warn{margin:10px 0 0;padding:8px 10px;border:1px solid var(--line2);border-left:3px solid var(--amber);border-radius:var(--r-sm);font:500 var(--t13)/1.45 var(--ui);color:var(--bone-1)}
 .sv-where{margin:8px 0 0;font-size:var(--t13);color:var(--dim)}
+.sv-fb{margin:14px 0 0;font:500 var(--t13)/1.5 var(--ui);color:var(--dim)}
+.sv-fblink{color:var(--amber);text-decoration:underline}
+.sv-fblink.off{opacity:.5;pointer-events:none}
+.sv-fblink:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .sv-no{margin:0 0 14px;font:500 var(--t16)/1.4 var(--ui);color:var(--hi)}
 .sv-alts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 /* the mini timeline */

@@ -119,7 +119,7 @@ if os.path.exists(CB.SLOT):
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
-              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("079053c5"))
+              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("9e214bc9"))
     finally:
         p.terminate(); p.wait(10)
 sys.exit(1 if fails else 0)

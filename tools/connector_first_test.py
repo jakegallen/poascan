@@ -1,9 +1,10 @@
-"""Join with Anything on /start (1.26.238, lanes 1.26.240, v1.0 handoff 1.26.243). The connector is never a way to join.
-Hosted chat apps: 1 Create your agent on minepoa.com (its page solves the join puzzle; POAScan only links, keyless), 2 Let {App}
-mine (optional, mining after you join), 3 Paste the prompt. Code apps (Grok Bot, Cursor, Codex): 1 Copy prompt only, 2 the
-connector (Codex: its run-once command lives here). Not tested yet per the v1.0 coverage (desktop and phone). While
-/api/join-pow answers 503: the notice under step 1, every copy or join button off (server and client), back on when POAScan's
-own read turns open. No key in any URL or query in the prompts, prefills or /start; no leak-term links. Usage: python3 tools/connector_first_test.py"""
+"""Join with Anything on /start (1.26.238, lanes 1.26.240, connector-first 1.26.248). minepoa v0.71 made MCP joins real, so
+the connector is a way to join. Hosted chat apps: 1 Add the PoA connector (the join-and-mine step, with the key warning), 2
+Paste the prompt (the connector variant joins over MCP and mines); minepoa.com's join page is the no-code fallback. Code apps
+(Grok Bot, Cursor, Codex): 1 Copy prompt only, 2 the connector (optional; Codex: its run-once command lives here). Not tested
+yet per the v1.0 coverage (desktop and phone). Joins are paused only when MCP joins actually fail (maint.join_open() false,
+not the direct HTTP /api/join-pow 503 alone): the notice, every copy or join button off (server and client), back on when
+POAScan reads joins open. No key in any URL or query in the prompts, prefills or /start; no leak-term links. Usage: python3 tools/connector_first_test.py"""
 import os, re, sys, tempfile
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "c.db"), POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -20,23 +21,24 @@ M.join_halt = lambda: None; M.join_open = lambda: True
 top, rest = S.chats(); by = {c["id"]: c for c in top + rest}
 gpt = by["chatgpt"]; h = unescape(S.go_block(gpt)); hr = S.go_block(gpt)
 pos = lambda x, t=h: t.index(x)
-check("ChatGPT (hosted): steps 1, 2, 3 in order, the button in step 3", pos("1. Create your agent") < pos("2. Let ChatGPT mine (optional)") < pos("3. Paste the prompt") < pos("data-slot3") < pos("data-go ")
-      and '<div class="jwslot" data-slot1></div>' in h)
-check("step 1: the exact line (join puzzle) and Join on minepoa.com, new tab, no query", S.S1_HOSTED in h and S.S1_HOSTED == "Open minepoa.com and complete the signup there. Your browser solves the join puzzle, and minepoa creates your agent. POAScan never sees your key."
-      and '<a class="jwbtn" href="https://minepoa.com/" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>' in h and "signup puzzle" not in h)
-check("step 2 heading: (mining after you join, not joining)", '<span data-s2h>2. Let ChatGPT mine (optional)</span> <span class="jwl">(mining after you join, not joining)</span>' in h and S.S2_LABEL == "(mining after you join, not joining)")
-check("step 2: for mining after you join, not for joining; the URL with copy; where; turn on; exactly one ChatGPT paid-plan note",
-      "Add the PoA connector so ChatGPT can answer challenges and check in for the agent you created. For mining after you join, not for joining." in h
+check("ChatGPT (hosted, connector-first): step 1 add connector, step 2 paste, the button in step 2, the fallback after", pos("1. Add the PoA connector") < pos("2. Paste the prompt") < pos("data-slot3") < pos("data-go ") < pos("data-cffb")
+      and '<div class="jwslot" data-slot1></div>' in h and " data-s1h hidden" in h)
+check("step 1 (connector): the connector URL with copy and the key warning; the no-code fallback links minepoa.com, new tab, no query", S.FALLBACK in h
+      and S.FALLBACK == "No code tool, or the join fails? Join on minepoa.com first, then paste the same prompt."
+      and '<a class="jwbln" href="https://minepoa.com/" target="_blank" rel="noopener noreferrer" data-mpjoin>Join on minepoa.com</a>' in h and "signup puzzle" not in h)
+check("step 1 heading: Add the PoA connector, no stale mining label", '<span data-s2h>1. Add the PoA connector</span>' in h and S.S2_LABEL == "")
+check("step 1 body: add the connector then paste; the URL with copy; where; turn on; exactly one ChatGPT paid-plan note",
+      "Add the PoA connector, then paste the prompt below. ChatGPT joins and mines through it, both over the connector." in h
       and '<code data-cfval>https://minepoa.com/mcp</code><button class="cp" type="button" data-copy="https://minepoa.com/mcp" data-cfcopy' in h
       and f'Add it in ChatGPT: </span><span data-cfwhere>{gpt["connector"]["where"]}</span>' in h and "<li>Turn it on for the chat.</li>" in h
       and h.count("Needs a paid ChatGPT plan") == 1 and '<p class="cfn" data-cfnote>Needs a paid ChatGPT plan with developer mode turned on.</p>' in h and "Open ChatGPT settings" in h)
-check("the connector is never a way to join: no fallback paste line, no Add the connector first", "Can't add connectors" not in h and "Add the connector first" not in h and "data-cffb" not in hr)
+check("connector-first (v0.71): the connector is the join step; the no-code fallback (data-cffb) is present and points to minepoa.com", "data-cffb" in hr and "data-mpjoin" in hr and S.FALLBACK in h)
 cx = unescape(S.go_block(by["codex"]))
 check("Codex (code app, full prompt): step 1 the prompt line, the allow network note and Copy prompt only; no connector step, no command (1.26.245)",
       by["codex"]["tier"] == "full" and not by["codex"].get("connector") and S.s1_code("Codex") in cx
       and pos("1. Create your agent", cx) < pos("Allow network access in Codex first. Its default sandbox blocks web requests.", cx) < pos("data-slot1>", cx) < pos("data-go ", cx)
       and " data-cfirst hidden" in cx and not any(x in cx for x in ("npx", "npm ", "mcp add", "Run this once", "emblem", "Emblem"))
-      and " data-s1join hidden" in cx and " data-s3h hidden" in cx and '<div class="jwslot" data-slot3></div>' in cx)
+      and " data-cffb hidden" in cx and " data-s3h hidden" in cx and '<div class="jwslot" data-slot3></div>' in cx)
 check("regroup: Runs code (Grok Bot, Claude Code, Cursor, Codex), Chat with connector (Claude, ChatGPT, Grok, Perplexity, Le Chat), Not supported behind one toggle",
       [x["id"] for x in top + rest if x["tier"] == "full"] == ["grok-bot", "claude-code", "cursor", "codex"]
       and [x["id"] for x in top + rest if x["tier"] == "connector"] == ["claude", "chatgpt", "grok", "perplexity", "le-chat"]
@@ -44,7 +46,7 @@ check("regroup: Runs code (Grok Bot, Claude Code, Cursor, Codex), Chat with conn
       and pos('data-group="full">Runs code', S.clients()) < pos('data-group="connector">Chat with connector', S.clients()) < pos("Not supported<i", S.clients()))
 check("code apps never get a connector step or command; no connector install rows on /start",
       all(" data-cfirst hidden" in S.go_block(c) for c in top + rest if c["tier"] == "full") and all(x not in S.clients() for x in ("mcp add", "data-mcp=", 'value="mcp:')))
-check("chat apps: the key warning sits in step 2, right under its line", all(pos("data-s2b", g) < pos(S.KEY_WARN, g) < pos("data-cflines", g) for g in (S.go_block(c) for c in top if c["tier"] == "connector"))
+check("chat apps: the key warning sits in the connector (join) step, right under its line", all(pos("data-s2b", g) < pos(S.KEY_WARN, g) < pos("data-cflines", g) for g in (S.go_block(c) for c in top if c["tier"] == "connector"))
       and S.KEY_WARN == "Your key is sent through this chat app on every call. Use a fresh Agent just for mining, with no other funds, and move earnings to a wallet you control.")
 check("Claude: Add opens Claude's documented prefill (name Proof of Agent, minepoa's /mcp URL), no key or referral; the plain URL and copy stay as the fallback",
       by["claude"]["connector"]["settings_url"] == "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Proof%20of%20Agent&connectorUrl=https%3A%2F%2Fminepoa.com%2Fmcp"
@@ -63,8 +65,9 @@ check("Muse (no prompt): no steps, no note", " data-untested hidden" in S.go_blo
 check("radios carry tested (desktop), tphone (phone) and the note for app.js", ' data-tested="1"' in S._chat(gpt) and ' data-tphone="1"' in S._chat(gpt)
       and ' data-tested="1"' in S._chat(by["grok-bot"]) and ' data-tphone' not in S._chat(by["grok-bot"]) and ' data-tested' not in S._chat(by["cursor"]) and 'data-cnote="Needs a paid ChatGPT plan' in S._chat(gpt))
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check("app.js mirrors the lanes: the same lines, the button moves to its slot, the command builds in step 2", S.S1_HOSTED in js and "This is the step that creates your PoA agent." in js
-      and "For mining after you join, not for joining." in js and "The connector does not create a new agent." in js and "var slot=h?sl3:sl1" in js and "cffb" not in js and "data-s1cli" not in js)
+check("app.js mirrors the lanes: connector-first copy, the button moves to its slot, the no-code fallback toggles", "This is the step that creates your PoA agent." in js
+      and "Add the PoA connector, then paste the prompt below." in js and "The connector does not create a new agent." in js and "1. Add the PoA connector" in js
+      and "var slot=h?sl3:sl1" in js and "cffb" in js and "data-s1cli" not in js and "For mining after you join, not for joining." not in js)
 check("app.js: no minepoa polling; while paused it reads only POAScan's own /api/v1/prompts/join, every 5 min, when visible",
       "minepoa.com/api" not in js[js.index("function PZ"):js.index("function PZ") + 1500] and '"/api/v1/prompts/join"' in js and "},300000)" in js and "D.hidden" in js)
 
@@ -114,7 +117,7 @@ ph = unescape(S.go_block(gpt))
 check("halted (503): the exact notice right under the step 1 heading, step 1 says Signups are paused", S.PAUSED == P and P in ph and pos("data-s1h", ph) < pos(P, ph) < pos("data-mpjoin", ph)
       and " data-s1b hidden" in ph and '<p class="jwb jwpz" data-s1paused>Signups are paused. Check back later.</p>' in ph and "while minepoa hardens" not in ph)
 OFF = ' off" aria-disabled="true" tabindex="-1" data-pzoff href='
-check("halted (503): Join on minepoa.com and Copy and open are disabled, with the note beside them", ('<a class="jwbtn' + OFF) in ph and ('<a class="gobtn' + OFF) in ph
+check("halted (503): Join on minepoa.com and Copy and open are disabled, with the note beside them", ('<a class="jwbln' + OFF) in ph and ('<a class="gobtn' + OFF) in ph
       and f'<p class="jwoff" data-pauseoff>{S.PAUSED_OFF}</p>' in ph and S.PAUSED_OFF == "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again.")
 pc = unescape(S.go_block(by["codex"]))
 check("halted: code apps, Copy prompt disabled, notice under step 1, mining command untouched", ('<a class="gobtn' + OFF) in pc and pos("data-s1h", pc) < pos(P, pc) < pos("data-go ", pc) < pos("data-cfirst", pc)
@@ -124,7 +127,7 @@ check("halted: the not supported panel has no join link (it points to apps that 
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
 hf = S.hash_fields()
 check("the prompt is v2.9.4: template 438bec61, combined a7210d16", hf["template_sha256"].startswith("438bec61") and hf["combined_sha256"].startswith("a7210d16"))
-check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.240"):js.index("1.26.240") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
+check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.248"):js.index("1.26.248") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
 M.join_open = lambda: True
@@ -182,16 +185,16 @@ if sync_playwright:
                     d = pg.evaluate("""()=>{const b=document.querySelector('[data-sv-body]'),t=b.innerText.toLowerCase(),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight);
                         return {copied:window.__c.length,btns:[...b.querySelectorAll('.sv-btn')].filter(v).map(e=>e.innerText.trim()),warn:v(b.querySelector('.sv-warn'))?b.querySelector('.sv-warn').innerText:'',
                                 url:(b.querySelector('.sv-url code')||{}).textContent||'',note:[...b.querySelectorAll('.sv-note')].map(e=>e.innerText).join('|'),mcp:t.includes('mcp add')||t.includes('run this once'),
-                                empty:[...b.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,head:document.querySelector('[data-sv-app]').textContent,hash:location.hash}}""")
+                                empty:[...b.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,fb:(b.querySelector('.sv-fb')||{}).innerText||'',head:document.querySelector('[data-sv-app]').textContent,hash:location.hash}}""")
                     if c["tier"] == "full":
                         good = (d["copied"] == 0 and d["btns"] == ["Copy prompt"] + (["Open " + c["name"]] if c["open"] else []) and not d["warn"] and not d["mcp"]
                                 and d["note"] == (c.get("note") or "") and d["head"] == c["name"] and d["hash"] == "#" + c["id"])
                     else:
                         co = c.get("connector") or {}
-                        good = (d["copied"] == 0 and d["btns"][0] == "Join on minepoa.com" and (("Add to " + c["name"]) in d["btns"]) == bool(co.get("prefills_url"))
+                        good = (d["copied"] == 0 and (("Add to " + c["name"]) in d["btns"]) == bool(co.get("prefills_url"))
                                 and d["btns"][-1] in ("Copy prompt", "Copy and open " + c["name"]) and d["warn"] == S.KEY_WARN and d["url"] == "https://minepoa.com/mcp"
-                                and not d["mcp"] and d["empty"] == 0 and ("Needs a paid ChatGPT plan" in d["note"]) == (c["id"] == "chatgpt"))
-                    check(f"{w}px {c['id']}: the tap opens its card and copies nothing; {'Copy prompt' + (' and Open' if c['open'] else '') if c['tier'] == 'full' else 'join, connector with the warning, paste'} {d}", good)
+                                and "Join on minepoa.com" in d["fb"] and "No code tool" in d["fb"] and not d["mcp"] and d["empty"] == 0 and ("Needs a paid ChatGPT plan" in d["note"]) == (c["id"] == "chatgpt"))
+                    check(f"{w}px {c['id']}: the tap opens its card and copies nothing; {'Copy prompt' + (' and Open' if c['open'] else '') if c['tier'] == 'full' else 'connector with the warning, paste, minepoa.com fallback'} {d}", good)
                     if c["tier"] == "full":
                         pg.click('[data-sv-body] .sv-btn >> nth=0'); pg.wait_for_timeout(150)
                         cp = pg.evaluate("window.__c"); pg.evaluate("window.__c=''")

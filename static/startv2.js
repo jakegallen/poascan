@@ -62,20 +62,22 @@ function chatPanel(a){var f=D.createDocumentFragment(),ol=el("ol","sv-tml");
  function step(n,title,content){var li=el("li","sv-s");li.innerHTML='<span class="sv-dot"><b>'+n+'</b>'+CHECK+'</span><div class="sv-sb"><p class="sv-st">'+title+'</p></div>';
   var sb=$(".sv-sb",li);content.forEach(function(c){sb.appendChild(c)});ol.appendChild(li);return li}
  function mark(li){li.classList.add("done");var nx=li.nextElementSibling;if(nx)nx.classList.add("now")}
- var j=bigBtn("Join on minepoa.com",J.join,"sv-sm");j.insertAdjacentHTML("beforeend",ARR);
- var s1=step(1,"Create your Agent",[j]);s1.classList.add("now");j.addEventListener("click",function(e){if(j.dataset.pz){e.preventDefault();return}mark(s1)});
- var c2=[];
- if(a.cset&&a.cfill){var ad=bigBtn("Add to "+a.name,a.cset,"sv-sm");ad.insertAdjacentHTML("beforeend",ARR);c2.push(ad);ad.addEventListener("click",function(){mark(s2)})}
+ /* 1.26.248 (minepoa v0.71, connector-first): step 1 adds the connector (the join-and-mine step), step 2 pastes the prompt that joins and mines over it; minepoa.com is the no-code fallback */
+ var c1=[];
+ if(a.cset&&a.cfill){var ad=bigBtn("Add to "+a.name,a.cset,"sv-sm");ad.insertAdjacentHTML("beforeend",ARR);c1.push(ad);ad.addEventListener("click",function(){mark(s1)})}
  var u=el("div","sv-url",'<code>'+esc(J.mcp)+'</code>');var ub=el("button","sv-ic",CP);ub.type="button";ub.setAttribute("aria-label","Copy connector URL");
- ub.addEventListener("click",function(){if(copy(J.mcp)){ub.classList.add("ok");setTimeout(function(){ub.classList.remove("ok")},1600);mark(s2)}});u.appendChild(ub);c2.push(u);
- if(a.where&&!a.cfill)c2.push(el("p","sv-where",esc(a.where)));
- if(a.cnote)c2.push(el("p","sv-note",esc(a.cnote)));
- c2.push(el("p","sv-warn",esc(J.warn)));
- var s2=step(2,"Add the connector",c2);
+ ub.addEventListener("click",function(){if(copy(J.mcp)){ub.classList.add("ok");setTimeout(function(){ub.classList.remove("ok")},1600);mark(s1)}});u.appendChild(ub);c1.push(u);
+ if(a.where&&!a.cfill)c1.push(el("p","sv-where",esc(a.where)));
+ if(a.cnote)c1.push(el("p","sv-note",esc(a.cnote)));
+ c1.push(el("p","sv-warn",esc(J.warn)));
+ var s1=step(1,"Add the PoA connector",c1);s1.classList.add("now");
  var pb=bigBtn(a.pre?"Copy and open "+a.name:"Copy prompt",a.pre?openUrl(a):null,"sv-sm");pb.insertAdjacentHTML("afterbegin",CP);
- pb.addEventListener("click",function(e){if(pb.dataset.pz){e.preventDefault();return}if(copy(text(a))){if(!a.pre)flash(pb,TOUCH?"Copied":"Copied. Paste with "+KEY);mark(s3)}});
- var s3=step(3,"Paste the prompt",[pb]);
- f.appendChild(ol);return f}
+ pb.addEventListener("click",function(e){if(pb.dataset.pz){e.preventDefault();return}if(copy(text(a))){if(!a.pre)flash(pb,TOUCH?"Copied":"Copied. Paste with "+KEY);mark(s2)}});
+ var s2=step(2,"Paste the prompt",[pb]);
+ f.appendChild(ol);
+ var fb=el("p","sv-fb"),jl='<a class="sv-fblink" href="'+esc(J.join)+'" target="_blank" rel="noopener noreferrer">Join on minepoa.com</a>';
+ fb.innerHTML="No code tool, or the join fails? "+jl+" first, then paste the same prompt.";off(fb.querySelector("a"));f.appendChild(fb);
+ return f}
 function nonePanel(a){var f=D.createDocumentFragment();f.appendChild(el("p","sv-no",esc(a.name)+" can't run an Agent yet. Use one of these:"));
  var g=el("div","sv-alts");J.alts.forEach(function(id){var x=BY[id],b=el("button","sv-t sv-full",'<span class="sv-tl">'+logo(x)+'</span><span class="sv-tn">'+esc(x.name)+'</span>');b.type="button";b.dataset.app=id;g.appendChild(b)});
  f.appendChild(g);return f}

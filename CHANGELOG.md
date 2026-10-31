@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### In progress
+- /start connector-first join flow for minepoa v0.71 (core). Hosted chat apps now join over the connector: step 1 "Add the PoA connector" (Claude's prefilled Add button, ChatGPT its URL with Copy and the developer-mode note) with the key-in-logs warning always shown, then step 2 "Paste the prompt" (the connector variant joins over MCP with poa_join_pow, mine, poa_register, then mines). minepoa.com's join page becomes the no-code fallback ("No code tool, or the join fails? Join on minepoa.com first, then paste the same prompt."), not the primary. Apps that run code are unchanged (the prompt creates the agent, the connector is optional). The "Joins paused" card shows only when MCP joins actually fail (maint.join_open()), never the direct HTTP /api/join-pow 503 alone. onboarding_prompt CONNECTOR_JOIN is on, so the connector variant joins through poa_register with the mined proof; the hosted REST POST and minepoa.com page stay as the no-code fallback. Prompt version stays v2.9.4 (the full template is byte-for-byte unchanged, so its hash stays unique per version). Mirrored in both /start renderers (startv2.js live layout and app.js rollback layout). Awaiting review on branch feat/start-v071-connector-first; merge deploys to prod. The three verification badges (Prompt copied / Connector reachable / Answer verified) and the full-variant v0.71 prompt-version bump are a separate follow-up.
+
 ## [1.26.247] - 2026-10-31
 
 ### Fixed
