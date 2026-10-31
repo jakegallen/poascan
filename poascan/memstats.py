@@ -43,6 +43,10 @@ def caches():
     put("ondemand_neg", lambda: len(I._neg))
     put("etags", lambda: len(I._etags) + len(I._lastmod))
     try:
+        import importlib; SW = importlib.import_module("poascan.swap.api")   # the package re-exports api() as a function, so import the submodule
+        put("swap_rc", lambda: dict(rc=len(SW._rc), rc_build=len(SW._rc_build)))   # 1.26.249: watch the swap build-lock dict
+    except Exception: pass
+    try:
         from . import fastindex as FX
         put("fast_addr", lambda: len(FX._addr_cache))
     except Exception: pass

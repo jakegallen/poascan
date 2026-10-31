@@ -328,6 +328,7 @@ def _rebuild_bg(k, version):
         try: _build(k, version)
         except Exception: pass
         finally:
+            db.release()   # 1.26.249: this short-lived thread opened a thread-local conn; release it (same pattern as 1.26.227)
             with _lock: _building.discard(k)
     with _lock:
         if k in _building: return
