@@ -20,10 +20,6 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 - Memory hardening (clear-cut, no behavior change on the happy path). swap/api.py: when a cached build fails for an unknown offer id, the per-path build lock is now removed from _rc_build instead of being left behind forever, so a sweep of unknown /api/swaps/<id> ids can no longer grow that dict without bound. opsdash.py: the background dashboard-rebuild thread now calls db.release() in its finally, so its thread-local SQLite connection is closed instead of lingering until a full GC (the same pattern fixed on request threads in 1.26.227).
 
-### Added
-
-- /ops/memory now reports the swap build-lock dict sizes (caches.swap_rc: rc and rc_build), so the lock-dict question can be read directly from prod telemetry.
-
 ## [1.26.248] - 2026-10-31
 
 ### Added
