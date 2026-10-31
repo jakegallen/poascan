@@ -23,7 +23,7 @@ check("startv2.js: badge 2 reads /api/v1/routes for hosted_mining open and not s
       and '/api/v1/address/"+encodeURIComponent(a)+"/txs?type=challenge&limit=1' in js and "d.types.challenge" in js
       and "await" not in js and "minepoa.com/api" not in js and not re.search(r'fetch\("https?://', js))
 check("startv2.js: the Agent input validates against the server's own poa1 shape, rejecting key-shaped input; no dashes",
-      "/^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$/" in js and 'data-sv-vf-addr' in js and not any(c in js for c in "—–"))
+      "/^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$/" in js and 'data-sv-vf-addr' in js and not any(c in js for c in "\u2014\u2013"))
 
 # ---- the rendered strip (needs the body only, no server)
 from poascan import startv2 as SV
@@ -36,7 +36,7 @@ check("strip: one sv-vf group, aria-live polite, three sv-vf-b badges, the Check
       and 'data-sv-vf-addr' in h and ">Check my Agent<" in h
       and h.index('class="sv-vf"') < h.index('data-sv-foot') and h.index('class="sv-card"') < h.index('class="sv-vf"'))
 check("strip: honest and consistent copy: Agents not Accounts, no em or en dash, never a key field",
-      "Accounts" not in h and not any(c in h for c in "—–") and 'type="password"' not in h and "never a key" in h)
+      "Accounts" not in h and not any(c in h for c in "\u2014\u2013") and 'type="password"' not in h and "never a key" in h)
 reg = h[h.index('class="sv-vf"'):h.index('data-sv-foot')]
 check("strip: the sv-vf region reuses none of the classes the other tests count (sv-t , sv-o, sv-live, sv-b sv-bc, sv-b sv-bp, sv-other)",
       not any(x in reg for x in ('class="sv-t ', 'class="sv-o"', 'class="sv-live"', 'sv-b sv-bc', 'sv-b sv-bp', 'class="sv-other"')))
