@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.247] - 2026-10-31
+
+### Fixed
+
+- Honest join_state for minepoa v0.71-mcpjoin. MCP joins are real now (poa_join_pow, mine the nonce, poa_register on the connector at https://minepoa.com/mcp), so the direct HTTP GET /api/join-pow route answering 503 (API hardening) is no longer presented as a blanket "joins halted". meta.maintenance.join_state (on /api/v1/status, /summary and /swaps/status) follows the operator and tracker signal only (open or paused) and no longer reads halted from that one route's 503.
+- New meta.maintenance.join_pow_route reports that direct HTTP route on its own (halted, since, as_of, note), so the detail is kept without overstating a pause. MCP joins are unaffected while the route is halted.
+- The /start "Joins paused" card now shows only when joining is actually paused (the operator and tracker signal), not from the direct HTTP /api/join-pow 503, so the page copy and the API join_state agree.
+- /upgrade "Working" list reads "Joining open" while the direct HTTP route is halted, because MCP joins stay open.
+
 ## [1.26.246] - 2026-10-30
 
 ### Changed

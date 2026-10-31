@@ -373,9 +373,13 @@ S2_LABEL = "(mining after you join, not joining)"
 # line, and every copy or join button off with this note beside it. app.js turns them back on when POAScan reads it open.
 PAUSED_S1 = "Signups are paused. Check back later."
 PAUSED_OFF = "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again."
-def paused(): 
+def paused():
+    # 1.26.247 (minepoa v0.71): joins are paused only when the operator/tracker signal says so (join_open() false),
+    # which is the honest proxy for MCP joins actually failing. The direct HTTP /api/join-pow 503 halt is NOT a
+    # blanket pause (MCP joins work), so it no longer turns the /start card off. Fail open (not paused) on any read error.
     from . import maint as M
-    return bool(M.join_halt())
+    try: return not M.join_open()
+    except Exception: return False
 OFF = ' class="off" aria-disabled="true" tabindex="-1" data-pzoff'
 def _off(html, on):
     """Mark one button (an <a class="...">) off while paused: aria-disabled, no tab stop, data-pzoff for app.js."""
@@ -448,13 +452,16 @@ def go_block(c0):
 PAUSED = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
 
 def join_halt_html():
-    """1.26.232: a terse paused state while minepoa's /api/join-pow answers 503 halted (maint.join_halt(), from the
-    indexer's read every 5 min at most; nothing is read per page view)."""
+    """1.26.247 (minepoa v0.71): a terse paused state shown only when joins are actually paused, from the operator and
+    tracker signal (maint.join_open()), never from the direct HTTP /api/join-pow 503 halt alone. MCP joins
+    (poa_join_pow then poa_register on the connector) keep working while that one HTTP route is halted, so the card
+    stays on. Nothing is read per page view."""
     from . import maint as M
-    import time as _t
-    h = M.join_halt()
-    if not h: return ""
-    tip = "minepoa.com answers 503 halted on /api/join-pow" + (f" since {_t.strftime('%H:%M', _t.gmtime(h['since_ts']))}Z" if h.get("since_ts") else "") + ". POAScan reads it every 5 min at most (hourly while halted, as minepoa asks)."
+    try:
+        if M.join_open(): return ""
+    except Exception:
+        return ""
+    tip = "Joining is paused by the operators or during a network pause. MCP joins resume when the operators reopen them."
     return f'<p class="sthalt" role="status" data-joinhalt title="{E(tip)}"><span class="tag warn">Joins paused</span><span>{E(PAUSED)}</span></p>'
 
 def _step(n, title, body, cls=""):

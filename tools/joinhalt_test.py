@@ -26,17 +26,31 @@ r = next(x for x in RW.state(now)["routes"] if x["id"] == "joining")
 check("one halt read: Halted", r["state"] == "halted" and "joining" in RW.state(now)["halted"])
 h = M.join_halt()
 check("join_halt gives since and as_of", h and h["since_ts"] == now - 60 and h["as_of_ts"] == now - 60)
-html = S.join_halt_html()
-check("/start notice: the public text (1.26.238)", "Joins paused" in html and "data-joinhalt" in html and " ".join(re.sub("<[^>]+>", " ", html).split()) == "Joins paused " + S.PAUSED
-      and S.PAUSED == "New PoA signups are paused. Check back later. Existing balances and pending grades are safe.")
-check("banner tooltip names the source", "/api/join-pow" in html and "every 5 min at most" in html)
-check("/start page carries it in step 3", "data-joinhalt" in S.page(lambda title, body, *a, **k: body))
-js = S.join_shape()
-check("join_shape: state paused and the 503 rule", js["state"]["state"] == "halted" and js["halted"]["status"] == 503 and js["halted"]["say"] == "Joins are paused. Check back later.")
+# 1.26.247 (minepoa v0.71-mcpjoin): the direct HTTP GET /api/join-pow 503 is tracked but is NOT a blanket pause,
+# because MCP joins (poa_join_pow then poa_register) stay open. The /start banner and API join_state do not read halted
+# from this route alone; join_pow_route reports the route on its own.
+_jpr = M.join_pow_route()
+check("join_pow_route: halted true with since and as_of; note names MCP joins as unaffected",
+      _jpr["halted"] is True and _jpr["since"] and _jpr["as_of"] and "poa_register" in _jpr["note"] and "GET /api/join-pow" in _jpr["note"])
+check("the HTTP-route halt does not show the /start Joins paused banner (MCP joins open)",
+      M.join_open() is True and S.join_halt_html() == "" and "data-joinhalt" not in S.page(lambda title, body, *a, **k: body))
 st = M.state()
-check("API join_state: halted, same cached read; field name kept; join_open untouched", st["join_state"] == "halted" and isinstance(st["join_open"], bool) and M.join_state() in ("open", "paused"))
+check("API join_state not halted from the HTTP-route 503; join_pow_route carries the route; join_open stays a bool",
+      st["join_state"] in ("open", "paused") and st["join_state"] != "halted" and st["join_pow_route"]["halted"] is True and isinstance(st["join_open"], bool) and M.join_state() in ("open", "paused"))
+# a real operator or tracker halt (join_open false) is what shows the paused state
+_jo = M.join_open
+try:
+    M.join_open = lambda: False
+    html = S.join_halt_html()
+    check("operator halt (join_open false): the /start Joins paused banner shows with the public text",
+          "Joins paused" in html and "data-joinhalt" in html and S.PAUSED == "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
+          and S.paused() is True)
+finally:
+    M.join_open = _jo
+js = S.join_shape()
+check("join_shape: the route state and the 503 rule are still reported for the direct HTTP path", js["state"]["state"] == "halted" and js["halted"]["status"] == 503 and js["halted"]["say"] == "Joins are paused. Check back later.")
 from poascan import agentapi as AA
-check("schema enum adds halted only", '"enum": ["open", "paused", "halted"]' in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "agentapi.py")).read())
+check("schema keeps the open, paused, halted enum", '"enum": ["open", "paused", "halted"]' in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "agentapi.py")).read())
 # a plain timeout is not a halt: two bad reads still needed
 db.write("DELETE FROM blobs WHERE kind=?", (RW.BLOB,))
 db.write("UPDATE fetch_log SET err=?, fails=1 WHERE endpoint=?", ("timed out", "/api/join-pow"))

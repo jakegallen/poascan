@@ -27,4 +27,16 @@ M._active = lambda: False; add_join(3, now - 5 * 3600); db.write("DELETE FROM tx
 check("maintenance off -> open", M.join_state() == "open")
 M._surfaces = lambda: {"Joining": "paused"}
 check("tracker paused wins", M.join_state() == "paused")
+
+# 1.26.247 (minepoa v0.71-mcpjoin): the direct HTTP GET /api/join-pow 503 halt is reported on its own
+# (join_pow_route) and never turns join_state to halted or flips join_open; only the operator/tracker signal pauses
+# joining, so the API join_state and the /start copy agree.
+M._active = lambda: False; M._surfaces = lambda: {}
+M.join_halt = lambda: dict(since_ts=now - 60, as_of_ts=now - 60)
+check("HTTP-route 503 alone: join_state_api open, join_open true, join_pow_route halted (not a blanket pause)",
+      M.join_state_api() == "open" and M.join_open() is True and M.join_pow_route()["halted"] is True and M.join_state_api() != "halted")
+M.join_halt = lambda: None
+M._surfaces = lambda: {"Joining": "paused"}
+check("operator or tracker pause: join_state_api paused, join_open false, join_pow_route not halted",
+      M.join_state_api() == "paused" and M.join_open() is False and M.join_pow_route()["halted"] is False)
 sys.exit(1 if fails else 0)
