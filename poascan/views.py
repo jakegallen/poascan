@@ -188,13 +188,20 @@ def epoch_cols():
             SS.Col("burned", "Burned"), SS.Col("burn_pct", "Burn %"), SS.Col("median", "Median reward")]
 EPOCH_SORTS = ("epoch", "close_ts", "paid", "minted", "burned", "burn_pct", "median")
 
+def nopay_tag(r):
+    """A zero-payout close: no answer reached the grading quorum, so nothing was paid. Empty when something was paid.
+    The reason is inferred (settled_passed == 0 and settled_failed == 0); the close record states no explicit reason."""
+    if r.get("paid") == 0 and r.get("minted") == 0:
+        return ' <span class="tag warn" title="No answer reached the grading quorum; nothing was paid">No payout</span>'
+    return ""
+
 def epochs_table(rows, link=True, qs=None, base=None):
     """Closes, newest first. qs and base: every header sorts the list (?sort=&dir=, server side; blanks last)."""
     from . import scoresort as SS
     by = SS.q(qs, "sort", "epoch"); by = by if by in EPOCH_SORTS else "epoch"; d = SS.page_dir(qs)
     rs = SS.sort_rows(list(rows), lambda r: r.get(by), "num", d, tie=lambda r: -r["epoch"])
     lk = SS.link_fn(base, "epoch", "#history", **({"segment": str(SG.selected())} if SG.archived() else {})) if base else None
-    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk">{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")), utc(r["close_ts"]), intc(r["paid"]),
+    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk">{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
                    num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
 
@@ -215,7 +222,7 @@ def home_epochs(ep):
         t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
         return f'<span class="mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
     return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burned", "Pour"],
-               [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>', utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
+               [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>' + nopay_tag(r), utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
                  f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>',
                  f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"], 1)}</span>', pour(r)] for r in rows], cls="closes", pri=(0, 2, 3, 5))
 
@@ -1094,6 +1101,7 @@ def epoch(n):
     e = A.epoch_detail(n); nm = names()
     rw = sorted(((a, float(v)) for a, v in e.get("rewards", {}).items()), key=lambda x: -x[1])
     unp = r["slashed"] - len((A.params().get("slash_pardons") or {}).get(str(n), []))   # red only when some slash was not pardoned
+    zeropay = r["paid"] == 0 and r["minted"] == 0   # a zero-payout close: no answer reached the grading quorum, nothing paid (the 100% burned figure is derived, not an explicit reason)
     rew = ([stat("Median reward", num(r["median"]) + X.usd_of(r["median"])), stat("Top reward", num(r["max"]) + X.usd_of(r["max"]))] if r["max"] != r["median"]
            else [stat("Reward", num(r["median"]) + X.usd_of(r["median"]))])   # one card when every paid Agent got the same
     # Burned amount and burn share are one fact: the amount is a card, the share is in the header line. Paid Agents is in the header line too.
@@ -1130,10 +1138,13 @@ def epoch(n):
     unc = SG.unconfirmed(n)   # rewards not confirmed in later balances (segments config)
     sgt += '<span class="tag warn" title="Rewards not confirmed in later balances">Unconfirmed</span> ' if unc else ""
     sgt += CPZ.tag(r.get("pause")).lstrip() + (" " if r.get("paused") else "")   # 1.26.192: the close record flags a halt (closepause.py)
+    sgt += nopay_tag(r).lstrip() + (" " if zeropay else "")   # 1.26.251: a zero-payout close is tagged, not read as missing data
+    burn_clause = " · no payout" if zeropay else f' · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span>'   # do not assert the derived 100% burned as fact for a zero-payout close
     line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span>closed {lt(r["close_ts"])}</span>'
-            f' · {r["paid"]:,} Agents paid · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span></h1>')
+            f' · {r["paid"]:,} Agents paid{burn_clause}</h1>')
+    payouts = na("Closed, no payout (no answer reached quorum).") if zeropay else ((note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt)
     body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
-            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", (note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
+            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
 # ---------------- The Agents ----------------
