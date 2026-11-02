@@ -48,6 +48,24 @@ def settled_records():
             out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", []), O.of(s)))
     return out
 
+@cached("record_agents", 120)
+def record_agents():
+    """Every address POAScan has a close-record footprint for in the selected segment (1.26.252): answerers, settled
+    answer authors and jury graders, graders served, and established changes (added, removed or imported). Built once per
+    cache interval from already-cached inputs; the address page uses it to tell a real Agent from a probe cheaply, so a
+    crawler walking random addresses never runs the full profile and history work. The full known check stays the arbiter."""
+    s = set()
+    for ans in answerers().values(): s |= ans
+    for _, _, au, _, jury, _ in settled_records():
+        if au: s.add(au)
+        for j in jury or []:
+            g = j.get("grader") if isinstance(j, dict) else None
+            if g: s.add(g)
+    for e in A.epochs_raw(): s |= set((e.get("basis", {}).get("graders_served") or {}).keys())
+    s |= set(A.established_fold()[2].keys())
+    s.discard(None)
+    return frozenset(s)
+
 @cached("accounts_all", 10, light=True)   # 1.26.236: read by the invite tree and Agent tables on most pages; one table read per 10 s, not per page (every caller only reads it)
 def accounts_all():
     return {r["addr"]: r for r in db.q("SELECT addr, invited_by, balance, first_seen FROM accounts")}

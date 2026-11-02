@@ -28,6 +28,7 @@ def _ensure():
     db.write("CREATE TABLE IF NOT EXISTS grade_history(seg INTEGER NOT NULL, answer TEXT NOT NULL, grader TEXT NOT NULL, close INTEGER NOT NULL, "
              "aligned INTEGER NOT NULL, passed INTEGER NOT NULL, score INTEGER, PRIMARY KEY(seg, answer, grader)) WITHOUT ROWID")
     db.write("CREATE INDEX IF NOT EXISTS grade_history_g ON grade_history(grader, seg, close)")
+    db.write("CREATE INDEX IF NOT EXISTS grade_history_seg_close ON grade_history(seg, close)")   # 1.26.252: graderpat.py does WHERE seg=?; grade_history_g starts with grader, so that was a scan
     db.write("CREATE INDEX IF NOT EXISTS grade_history_null ON grade_history(answer, grader) WHERE score IS NULL")
     db.write("CREATE TABLE IF NOT EXISTS open_seats(addr TEXT PRIMARY KEY, epoch INTEGER, total INTEGER, graded INTEGER, has_seat INTEGER, read_at INTEGER NOT NULL)")
 

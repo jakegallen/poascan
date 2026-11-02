@@ -37,3 +37,14 @@ def of(headers, peer=None):
 def proxied(headers):
     """Only the Fly header, Cloudflare aware: None without Fly-Client-IP (callers that skip local runs)."""
     return of(headers) if (headers.get("Fly-Client-IP") or "").strip() else None
+
+def limiter_key(s):
+    """The rate-limit bucket key for a client address (1.26.252): the /64 network for IPv6 and the full address for IPv4.
+    One IPv6 allocation holds 2^64 addresses, so without the /64 a single /64 could rotate addresses to slip the per-IP
+    limit; IPv4 keeps its exact address, as before. Not an address (local runs: a peer or a header value) is returned
+    unchanged, so nothing that is not an IP is grouped by accident."""
+    a = _addr(s)
+    if a is None: return s
+    if a.version == 6:
+        return str(ipaddress.ip_network(f"{a}/64", strict=False).network_address) + "/64"
+    return str(a)

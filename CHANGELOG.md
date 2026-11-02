@@ -14,6 +14,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### In progress
 - /start connector-first join flow for minepoa v0.71 (core). Hosted chat apps now join over the connector: step 1 "Add the PoA connector" (Claude's prefilled Add button, ChatGPT its URL with Copy and the developer-mode note) with the key-in-logs warning always shown, then step 2 "Paste the prompt" (the connector variant joins over MCP with poa_join_pow, mine, poa_register, then mines). minepoa.com's join page becomes the no-code fallback ("No code tool, or the join fails? Join on minepoa.com first, then paste the same prompt."), not the primary. Apps that run code are unchanged (the prompt creates the agent, the connector is optional). The "Joins paused" card shows only when MCP joins actually fail (maint.join_open()), never the direct HTTP /api/join-pow 503 alone. onboarding_prompt CONNECTOR_JOIN is on, so the connector variant joins through poa_register with the mined proof; the hosted REST POST and minepoa.com page stay as the no-code fallback. Prompt version stays v2.9.4 (the full template is byte-for-byte unchanged, so its hash stays unique per version). Mirrored in both /start renderers (startv2.js live layout and app.js rollback layout). Awaiting review on branch feat/start-v071-connector-first; merge deploys to prod. The three verification badges (Prompt copied / Connector reachable / Answer verified) and the full-variant v0.71 prompt-version bump are a separate follow-up.
 
+## [1.26.252] - 2026-11-02
+
+### Fixed
+
+- Flood survival: a crawler walking random addresses and transaction hashes no longer forces per-request full table scans or on-demand upstream reads. Five additive, read-only changes:
+  - New indexes so an address page stops scanning two full tables: `forum_posts(author_public_id)`, `forum_comments(author_public_id)` and `grade_history(seg, close)` (grader pattern reads filter by `seg`, whose only prior index started with `grader`). All are `CREATE INDEX IF NOT EXISTS`, so `db.init()` applies them on boot to the existing database.
+  - Fast 404 for an unknown address: before any profile, established-history or close loop and before any minepoa read, an address with no tx, account, reward, label, established seat or forum post renders the lightweight not-found view directly. Known addresses are unchanged.
+  - Fast 404 for an unknown transaction hash: a 64-hex hash that is not already stored (archived row or cached detail) is a 404 with no on-demand upstream fetch, kept in a small bounded negative cache (about 60 s) so repeat probes stay cheap. Stored txs behave exactly as before.
+  - Cacheable error 404s: a syntactically valid but unknown `/tx/<hash>` and `/address/<poa1>` page now sends `public, max-age=60, s-maxage=300` so Cloudflare absorbs repeat probes; every other error (400, 429, generic 404, token-gated routes) stays `no-store`.
+  - API micro cache TTL raised to about 30 s with a 16 MB total-bytes cap alongside the entry cap (oldest evicted when over either, the gzip copy counted), and expired entries dropped on put.
+  - Per-IP rate-limit keys now use the IPv6 /64 (full address for IPv4) so one allocation cannot rotate addresses past a limit, and the limiter evicts a bounded oldest slice instead of rebuilding the whole dict under the lock.
+
 ## [1.26.251] - 2026-10-31
 
 ### Fixed

@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS forum_posts(id INTEGER PRIMARY KEY, community TEXT, t
   author_public_id TEXT, created_at TEXT, score INTEGER, comment_count INTEGER, deleted INTEGER, pinned INTEGER, fetched INTEGER, body TEXT);
 CREATE TABLE IF NOT EXISTS forum_comments(id INTEGER PRIMARY KEY, post_id INTEGER, parent_id INTEGER, author TEXT,
   author_public_id TEXT, created_at TEXT, score INTEGER, body TEXT);
+CREATE INDEX IF NOT EXISTS forum_posts_author ON forum_posts(author_public_id);   -- 1.26.252: an address page counts a poa1's forum posts by author; without this it scanned every post
+CREATE INDEX IF NOT EXISTS forum_comments_author ON forum_comments(author_public_id);   -- 1.26.252: the same for its comments
 CREATE TABLE IF NOT EXISTS answers(id TEXT PRIMARY KEY, from_addr TEXT, epoch INTEGER, ts INTEGER, len INTEGER,
   slot_template INTEGER, prompt_echo INTEGER, prefix4 TEXT, sampled_at INTEGER, text TEXT, lang TEXT);
 -- opt-in kin groups (poascan/kin.py): one row per kin comment on the pinned claim post, rebuilt from forum_comments
@@ -117,6 +119,10 @@ def init():
         conn().execute("CREATE INDEX IF NOT EXISTS tx_detail_assign ON tx_detail(json_extract(json, '$.body.assignment')) WHERE json_extract(json, '$.type') = 'grade-sealed'")
         conn().commit()
     except Exception: pass
+    try:   # 1.26.252: graderpat.py filters grade_history by seg (WHERE seg=?); its only index starts with grader, so that scanned.
+        conn().execute("CREATE INDEX IF NOT EXISTS grade_history_seg_close ON grade_history(seg, close)")   # gradehist._ensure() also makes it on a fresh DB; here it reaches the existing prod table on boot
+        conn().commit()
+    except Exception: pass   # the table is created lazily by gradehist._ensure() on a fresh DB; the index comes with it there
     from . import closestore as _CS   # 1.26.235: close records one row per close, rebuilt from the blobs when behind them (streamed)
     _CS.migrate()
 

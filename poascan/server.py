@@ -445,6 +445,9 @@ CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
 PAGE_LIMIT = AG.Limiter(float(os.environ.get("POASCAN_PAGE_RATE", "0.5")), int(os.environ.get("POASCAN_PAGE_BURST", "60")))
 PAGE_LIMITED = re.compile(r"^/(address|tx|swap|offer)/[^/]+$")
+# 1.26.252: a syntactically valid but unknown /tx/<hash> or /address/<poa1> 404 is cacheable at the edge (bots probe random
+# ones); the strict patterns keep malformed addresses, swap offers, /ops and every other 404 on no-store.
+CACHEABLE_404 = re.compile(r"^/(?:tx/[0-9a-fA-F]{64}|address/poa1[1-9A-HJ-NP-Za-km-z]{20,60})$")
 _fci_seen = [False]
 # 1.26.201: Crawl-delay 5 s in every group, and sorted copies of a table (?sort=, ?esort=) are not crawled (bots were 76k page views a day; Bing, Yandex and several AI crawlers honour it)
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
@@ -818,11 +821,13 @@ class H(BaseHTTPRequestHandler):
         return "segment" in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
     def client_ip(self):
         return CIP.of(self.headers, self.client_address[0])   # 1.26.241: CF-Connecting-IP only from a Cloudflare edge
+    def limiter_key(self):
+        return CIP.limiter_key(self.client_ip())   # 1.26.252: the /64 for IPv6, the full address for IPv4, so one /64 cannot rotate past a limit
     def ops_event(self):
         """POST /ops/e {"e": "<id>"}: one prompt button click, by a fixed id from prompts.ids(). No cookie is read or set,
         nothing about the sender is kept; unknown ids, other origins, big bodies and bursts are refused. 204 when counted."""
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
-        ok, wait = EVENT_LIMIT.allow(self.client_ip())
+        ok, wait = EVENT_LIMIT.allow(self.limiter_key())
         if not ok: return self.send(429, "", TXT, dict(hd, **{"Retry-After": str(wait)}))
         org = self.headers.get("Origin")
         if org and org != "null":
@@ -849,7 +854,7 @@ class H(BaseHTTPRequestHandler):
                 except Exception: return
         if pth != "/mcp": return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
         try:
-            ok, wait = AG.LIMIT.allow(self.client_ip())
+            ok, wait = AG.LIMIT.allow(self.limiter_key())
             if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
             n = self.headers.get("Content-Length") or ""
             n = int(n) if n.isdigit() else -1
@@ -863,7 +868,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send(400, json.dumps(AG._err(None, -32602, KS.WARN)), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
             extra = AG.batch_size(raw) - 1   # SC-013: a batch spends one token per message, not one per POST
             if extra > 0:
-                ok, wait = AG.LIMIT.allow(self.client_ip(), extra)
+                ok, wait = AG.LIMIT.allow(self.limiter_key(), extra)
                 if not ok: return self.send(429, json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "rate limited"}}), "application/json", dict(MCP_HDRS, **{"Retry-After": str(wait)}))
             code, out = AG.handle_mcp(raw)
             if out is None: return self.send(202, b"", "application/json", MCP_HDRS)
@@ -895,7 +900,7 @@ class H(BaseHTTPRequestHandler):
         """Shared gate for the private /ops JSON: without POASCAN_STATS_TOKEN set, or without the right Bearer token, the
         normal 404 page, byte for byte. Rate limited per IP; never cached, indexed or CORS-enabled.
         Returns (headers, from, to) when the caller may answer, else None after sending the response."""
-        ok, _ = OPS_LIMIT.allow(self.client_ip())   # checked first, own bucket: over the limit is the same 404, token or not
+        ok, _ = OPS_LIMIT.allow(self.limiter_key())   # checked first, own bucket: over the limit is the same 404, token or not
         if not ok or not VS.token_ok(self.headers.get("Authorization")): self.send(404, V.not_found(path=path)); return None
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
         try: fr, to = parse(qs)
@@ -970,7 +975,7 @@ class H(BaseHTTPRequestHandler):
         """GET /j/<version>[/<client>]/start, .../joined?addr=<poa1>, (v2.3.1) .../rate?route=<route> and (v2.4) .../probe?w=<word>: an optional, keyless signup check-in (poascan/checkin.py).
         Strict allowlist, else 400 with nothing stored. Rate limited per IP in memory; never cached, indexed or logged with its path."""
         hd = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Access-Control-Allow-Origin": "*"}
-        ok, wait = CHECKIN_LIMIT.allow(self.client_ip())
+        ok, wait = CHECKIN_LIMIT.allow(self.limiter_key())
         if not ok: return self.send(429, "Too many check-ins. Skip it and carry on with the steps.\n", TXT, dict(hd, **{"Retry-After": str(wait)}))
         try: v, c, st, addr = CK.parse(path, query)
         except ValueError: return self.send(400, CK.BAD_TEXT, TXT, hd)
@@ -986,7 +991,7 @@ class H(BaseHTTPRequestHandler):
         if not _fci_seen[0]:
             _fci_seen[0] = True; log.info("page limit: Fly-Client-IP header present=%s", bool(ip))   # presence only, once per process
         if not ip: return False
-        ok, wait = PAGE_LIMIT.allow(ip)
+        ok, wait = PAGE_LIMIT.allow(CIP.limiter_key(ip))
         if ok: return False
         self.send(429, "Too many page requests. Please slow down; the JSON API at /api/v1 is the better fit for bulk reads.\n", TXT,
                   {"Retry-After": str(wait), "Cache-Control": "no-store"})
@@ -1151,14 +1156,14 @@ class H(BaseHTTPRequestHandler):
                 p = path[:-4] if path.endswith(".csv") else path
                 if p == "/api/epoch-records" or re.match(r"^/api/epoch/\d+/record$", p): return self.records(p, qs, fmt)
                 if p == "/api/agents/name-available":   # names.available: POAScan's archive only, no upstream read; the name is never logged
-                    ok, wait = NAME_LIMIT.allow(self.client_ip())
+                    ok, wait = NAME_LIMIT.allow(self.limiter_key())
                     hd = {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS"}
                     if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", dict(hd, **{"Retry-After": str(wait), "Cache-Control": "no-store"}))
                     nq = qs.get("name") or [""]
                     code, d = NM.available(nq[0] if len(nq) == 1 else "")
                     return self.send(code, json.dumps(d, ensure_ascii=False), "application/json", dict(hd, **{"Cache-Control": "public, max-age=30" if code == 200 else "no-store"}))
                 if p == "/api/prompts/join":   # the /start prompt as data (start.api_join); keyless, read-only, cached 10 min
-                    ok, wait = PROMPT_LIMIT.allow(self.client_ip())
+                    ok, wait = PROMPT_LIMIT.allow(self.limiter_key())
                     if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
                     nq = qs.get("name"); cq = qs.get("client")
                     if nq is not None and len(nq) != 1: return self.send(400, json.dumps({"error": "one name only"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
@@ -1232,7 +1237,12 @@ class H(BaseHTTPRequestHandler):
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))
-            if isinstance(html, tuple): return self.send(*html)   # (status, html): a known route with an unknown subject
+            if isinstance(html, tuple):   # (status, html): a known route with an unknown subject
+                # 1.26.252: a syntactically valid but unknown /tx/<hash> or /address/<poa1> is a 404 Cloudflare can absorb on
+                # repeat probes; every other error (400, 429, generic 404, dynamic) stays no-store (send() sets it).
+                if html[0] == 404 and CACHEABLE_404.match(path):
+                    return self.send(html[0], html[1], extra={"Cache-Control": "public, max-age=60, s-maxage=300"})
+                return self.send(*html)
             return self.send(200, html)
         except BrokenPipeError:
             pass
@@ -1244,8 +1254,8 @@ class H(BaseHTTPRequestHandler):
 # API micro cache (1.26.81): the same JSON answer is served for MICRO_S seconds, so a client polling /api/v1/txs or
 # swap detail several times a second costs one build, one plainjson/redact pass and one gzip. Within the 15 s the
 # responses already allow clients to cache (Cache-Control max-age=15); meta.generated_at is the build time.
-MICRO_S = float(os.environ.get("POASCAN_API_MICRO_S", "5"))
-MICRO_MAX = 64; MICRO_MAX_BYTES = 1_500_000
+MICRO_S = float(os.environ.get("POASCAN_API_MICRO_S", "30"))
+MICRO_MAX = 64; MICRO_MAX_BYTES = 1_500_000; MICRO_TOTAL_MAX = 16 * 1024 * 1024   # 1.26.252: ~30 s TTL plus a 16 MB total-bytes cap
 MICRO_SKIP = ("/api/health", "/api/search")
 _micro = {}; _micro_lock = __import__("threading").Lock()
 def _micro_get(key):
@@ -1255,14 +1265,17 @@ def _micro_get(key):
         if not e: return None
         if time.time() - e[0] >= MICRO_S: _micro.pop(key, None); return None
         return e[1]
+def _micro_total():
+    """Sum of stored bodies and the gzip copy each entry keeps (set by send()), over at most MICRO_MAX entries. Caller holds the lock."""
+    return sum(len(p[0]) + (len(p[2]) if len(p) > 2 and p[2] is not None else 0) for _, p in _micro.values())
 def _micro_put(key, b, hd):
     if MICRO_S <= 0 or len(b) > MICRO_MAX_BYTES: return
+    now = time.time()
     with _micro_lock:
-        if len(_micro) >= MICRO_MAX:
-            now = time.time()
-            for k in [k for k, v in _micro.items() if now - v[0] >= MICRO_S]: _micro.pop(k, None)
-            while len(_micro) >= MICRO_MAX: _micro.pop(next(iter(_micro)))
-        _micro[key] = (time.time(), [b, dict(hd), None])
+        for k in [k for k, v in _micro.items() if now - v[0] >= MICRO_S]: _micro.pop(k, None)   # 1.26.252: drop expired on put
+        _micro[key] = (now, [b, dict(hd), None])
+        while len(_micro) > 1 and (len(_micro) > MICRO_MAX or _micro_total() > MICRO_TOTAL_MAX):   # evict oldest when over either cap (the gzip copy counts)
+            _micro.pop(next(iter(_micro)))
 
 # Strict CSP: own scripts plus the one inline class toggle (by hash), own fonts and images, same-origin fetch and WebSocket.
 CSP = ("default-src 'self'; script-src 'self' 'sha256-cvlem2Rlcb+inScVb7910PMAU98gRDEfAIUVUKXOWd4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
