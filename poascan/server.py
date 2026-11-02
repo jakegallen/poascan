@@ -906,7 +906,7 @@ class H(BaseHTTPRequestHandler):
         enable at runtime with `fly secrets set POASCAN_CF_ONLY=on`) a request that reached the origin directly is
         refused here with a cheap 403, before any routing, DB or upstream work, so the direct flood is shed at near-zero
         cost (the 403 is tallied in memory by send(); no DB or upstream call is made on this path). The health check is
-        never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or a loopback/private socket
+        never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or a loopback/private
         peer always passes. Only a Fly-Client-IP that is present and is NOT a Cloudflare edge, from a public peer, is
         refused. Returns True after sending the 403, else False (let the request through)."""
         if not cf_only_on(): return False
