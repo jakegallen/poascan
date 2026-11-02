@@ -247,6 +247,8 @@ jobs:
         run: python tools/fold_notices_test.py
       - name: Request cost under load (grading state memo per db write, API micro cache with gzip reuse, no health or search caching, plainjson fast path)
         run: python tools/perf_test.py
+      - name: Flood survival (author and grade_history seg indexes on boot, unknown address and tx 404 without upstream and edge-cacheable, micro cache byte cap, IPv6 /64 limiter key and bounded eviction)
+        run: python tools/flood_survival_test.py
       - name: Accuracy and resilience (grader counts from grade rows, Max reward from the rewards row, failed jobs retry soon, node counter restart explained, guard steal threshold)
         run: python tools/accuracy_test.py
       - name: Re-admission flag (back in established_after one close after removal, no eligibility record; history, standing state, address card)

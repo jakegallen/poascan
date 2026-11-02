@@ -359,8 +359,6 @@ def tx_unavailable(tid, paused):
 
 def tx(tid):
     err = None; busy = False; fallback = False
-    if re.fullmatch(r"[0-9a-f]{64}", tid or "") and I.tx_unknown(tid):   # 1.26.252: a probe for a hash POAScan has nothing on; 404 without a minepoa read (negative-cached)
-        return 404, page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1.")), "/txs")
     skip = re.fullmatch(r"[0-9a-f]{64}", tid or "") is not None and not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))   # 1.26.219
     try: d = I.get_tx_detail(tid, node=not skip)
     except I.Missing as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e)
@@ -624,17 +622,18 @@ NF_LINKS = '<p class="cov small"><a href="/help?address={a}">Why am I not earnin
 
 def _addr_known_cheap(a):
     """A probe-cheap test that POAScan has anything on an address, run before the heavy profile/established_history work and
-    the minepoa read (1.26.252). Only indexed or already-cached lookups: a tx (txs_from/txs_to), an account row, a reward
-    entry, a label, an established seat or a forum post (forum_posts/comments author index). True means render the full page;
-    False is a genuine not-found, so a crawler walking random addresses never spends settled_records() or an upstream read.
-    An error means proceed (never 404 a real Agent on a lookup slip). The full known check in the body stays the exact arbiter
-    for a hit. A brand new join not yet indexed shows within a few minutes, as the not-found copy says."""
+    before trusting the live read (1.26.252). Only indexed or already-cached lookups: a tx (txs_from/txs_to), an account row,
+    a reward entry, a label, a forum post (forum_posts/comments author index) or any close-record footprint (record_agents:
+    answers, settled, jury, served, established changes). True means render the full page; False with no live read is a genuine
+    not-found, so a crawler walking random addresses never spends settled_records(), established_history() or the all-closes
+    loops. An error means proceed (never 404 a real Agent on a lookup slip). The full known check in the body stays the exact
+    arbiter for a hit; a brand new join not yet indexed shows within a few minutes, as the not-found copy says."""
     try:
         if db.q1("SELECT 1 AS x FROM txs WHERE from_addr=? OR to_addr=? LIMIT 1", (a, a)): return True
         if db.q1("SELECT 1 AS x FROM accounts WHERE addr=?", (a,)): return True
         if db.q1("SELECT 1 AS x FROM labels WHERE addr=?", (a,)): return True
         if A.rewards_by_addr().get(a): return True
-        if a in A.established_set(): return True
+        if a in G.record_agents(): return True   # answers, settled, jury, served or an established change at any close (covers an Agent known only from close records, e.g. a seat or a removal)
         if db.q1("SELECT 1 AS x FROM forum_posts WHERE author_public_id=? LIMIT 1", (a,)): return True
         if db.q1("SELECT 1 AS x FROM forum_comments WHERE author_public_id=? LIMIT 1", (a,)): return True
     except Exception:
@@ -648,8 +647,13 @@ def _addr_not_found(a):
 
 def address(a):
     if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
-    if not _addr_known_cheap(a): return _addr_not_found(a)   # 1.26.252: a probe for an unknown address, before any heavy work or upstream read
-    d, err, at = address_read(a); nm = names(); p = G.profile(a)
+    d, err, at = address_read(a); nm = names()
+    # 1.26.252: a probe for an address POAScan has nothing on (not in the archive by any indexed signal and not shown by the
+    # live read, which a crawler never triggers) is the not-found view directly, skipping the heavy profile, established_history
+    # and settled_records / all-closes work. address_read above is the budgeted, crawler-skipped live read, so a genuine new
+    # join (seen only by the live read) still renders; the full known check below stays the exact arbiter for the rest.
+    if not _addr_known_cheap(a) and not live_known(d): return _addr_not_found(a)
+    p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None; btag = balance_tag(bb)
     if err and bal is None:   # minepoa.com's read failed and nothing is stored: the fast index's copy, tagged with its time

@@ -716,7 +716,7 @@ def tx_api(tid):
     un = lambda: I.halt_notice(I.TX_TPL, data="indexed")
     # 1.26.219: indexed copies first (stored detail, then the fast index); minepoa.com only on a miss, and not at all while
     # its tx route is Halted or Down and the archive already has the tx. source names the copy, as_of when it was read.
-    skip = (not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))) or I.tx_unknown(tid)   # 1.26.252: no minepoa read for an unknown hash probe
+    skip = not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))
     try:
         d = I.get_tx_detail(tid, node=not skip)
         if isinstance(d, dict) and d.get("id"): return dict(d, found=True, **tx_source(d), upstream_notice=None if d.get("final") else un())

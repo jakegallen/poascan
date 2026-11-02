@@ -105,7 +105,6 @@ def receipt(tid, fetch=False, row=None):
     segment (segments.py): a segment 1 answer is never matched to a segment 2 close with the same number."""
     tid = tid.lower()
     row = row or db.q1("SELECT id, type, from_addr, epoch, ts, final, segment FROM txs WHERE id=?", (tid,))
-    if fetch and row is None and I.tx_unknown(tid): fetch = False   # 1.26.252: no on-demand minepoa read for an unknown hash probe; a stored tx keeps fetching as before
     seg = (row or {}).get("segment") or S.of_ts((row or {}).get("ts"))
     with S.use(seg):
         r = _receipt(tid, fetch, row)
