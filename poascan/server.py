@@ -642,6 +642,12 @@ HSTS = "max-age=31536000; includeSubDomains"   # 1.26.88: subdomains too (www re
 SECURITY_TXT = ("Contact: mailto:jakegallen@gmail.com\nExpires: 2027-10-24T00:00:00.000Z\nPreferred-Languages: en\n"
                 "Canonical: https://poascan.io/.well-known/security.txt\n")
 CANONICAL = os.environ.get("POASCAN_CANONICAL", "https://poascan.io").rstrip("/")   # the apex www. redirects to
+
+def cf_only_on():
+    """The Cloudflare-only origin guard is enabled only when POASCAN_CF_ONLY is set to a true value. Read per request so a
+    `fly secrets set POASCAN_CF_ONLY=on` (which restarts the machine) takes effect without a code change; the lookup is a
+    dict read plus a lowercase compare, so the reject path stays cheap."""
+    return (os.environ.get("POASCAN_CF_ONLY") or "").strip().lower() in ("1", "true", "on", "yes")
 MPID = re.compile(rb'"mp\d+"')
 # 1.26.87: HTML page cache. The weak ETag hashes the page with the parts app.js recomputes every second blanked: toggle ids,
 # countdown text (.cd/.xcd data-close), the ring and vessel fill, and relative times (time.rel data-ts). Two renders with the
@@ -843,6 +849,7 @@ class H(BaseHTTPRequestHandler):
         return self.send(204, b"", TXT, hd)
     def do_POST(self):
         """The only write-shaped methods we accept are JSON-RPC to the read-only MCP server and the click count."""
+        if self.cf_origin_blocked(): return   # shed a direct poascan.fly.dev hit before any routing, DB or upstream work
         I.CLIENT.ip = self.client_ip()
         pth = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
         if pth == "/ops/e":
@@ -879,9 +886,12 @@ class H(BaseHTTPRequestHandler):
             try: self.send(500, json.dumps(AG._err(None, -32603, "internal error")), "application/json", MCP_HDRS)
             except Exception: pass
     def do_OPTIONS(self):
+        if self.cf_origin_blocked(): return
         if (urllib.parse.urlparse(self.path).path.rstrip("/") or "/") == "/mcp": return self.send(204, b"", "text/plain", MCP_HDRS)
         return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
-    def do_PUT(self): self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
+    def do_PUT(self):
+        if self.cf_origin_blocked(): return
+        self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
     do_DELETE = do_PATCH = do_PUT
     def www(self):
         """www.poascan.io redirects to the apex, keeping path and query. Fly health checks use the machine address, never www."""
@@ -889,6 +899,25 @@ class H(BaseHTTPRequestHandler):
         if not host.startswith("www."): return False
         off = offsite(urllib.parse.urlparse(self.path).path)   # one hop for the moved swap pages
         self.send(301, "", TXT, {"Location": off or (CANONICAL + self.path), "Cache-Control": "public, max-age=86400"}); return True   # never built from Host
+    def cf_origin_blocked(self):
+        """Cloudflare-only origin guard (1.26.253). poascan.io is served through Cloudflare, but the machine also answers
+        directly at poascan.fly.dev; a bot that hits that host skips the edge and can saturate the single Fly machine
+        (the live-outage vector the audit flagged). When POASCAN_CF_ONLY is on (off by default, so this ships inert;
+        enable at runtime with `fly secrets set POASCAN_CF_ONLY=on`) a request that reached the origin directly is
+        refused here with a cheap 403, before any routing, DB or upstream work, so the direct flood is shed at near-zero
+        cost (the 403 is tallied in memory by send(); no DB or upstream call is made on this path). The health check is
+        never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or a loopback/private socket
+        peer always passes. Only a Fly-Client-IP that is present and is NOT a Cloudflare edge, from a public peer, is
+        refused. Returns True after sending the 403, else False (let the request through)."""
+        if not cf_only_on(): return False
+        fci = (self.headers.get("Fly-Client-IP") or "").strip()
+        if not fci or CIP.is_cloudflare(fci): return False   # no edge header (local run, Fly internal, health) or a real Cloudflare edge: the normal path
+        path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        if path in ("/healthz", "/api/health"): return False   # never block a Fly or uptime health check, whatever its source address
+        peer = self.client_address[0] if self.client_address else ""
+        if CIP.is_internal(peer): return False   # loopback, private or link-local peer: Fly internal, not a public direct hit
+        self.send(403, "Direct origin access is not allowed; use poascan.io\n", TXT, {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
+        return True
     def key_guard(self):
         """Anything key-shaped in the path or query, or a credential parameter, is refused before routing:
         never fetched upstream, never logged, stored, cached, echoed or redirected."""
@@ -1000,6 +1029,7 @@ class H(BaseHTTPRequestHandler):
         try: return self._get()
         finally: SG.reset()   # the segment a request reads (?segment=) never leaks into the next one on this thread
     def _get(self):
+        if self.cf_origin_blocked(): return   # shed a direct poascan.fly.dev hit before any routing, DB or upstream work
         I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)
         I.CLIENT.crawler = False
         if self.key_guard(): return
