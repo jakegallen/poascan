@@ -921,6 +921,32 @@ TX_ID = re.compile(r"^[0-9a-f]{64}$")
 ADDR_ID = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
 _ondemand = threading.BoundedSemaphore(ONDEMAND_MAX)
 _tx_lock = threading.Lock(); _tx_inflight = {}
+
+# Flood survival (1.26.252): a 64-hex hash that POAScan neither stores nor should read upstream for is a bot probe.
+# tx_unknown() remembers such hashes for NEG_TTL so a flood of repeat probes is a dict hit, not a DB read or a minepoa
+# fetch. Any stored tx (an archived row or a cached detail) returns False, so known txs behave exactly as before.
+NEG_TTL = 60.0; NEG_MAX = 4096
+_neg = {}; _neg_lock = threading.Lock()
+def tx_stored(tid):
+    """True when POAScan already has this tx: an archived txs row or a stored tx_detail (both by primary key)."""
+    tid = (tid or "").lower()
+    return bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)) or db.q1("SELECT 1 AS x FROM tx_detail WHERE id=?", (tid,)))
+def tx_unknown(tid):
+    """True for a hash POAScan does not have, so the caller should 404 without an on-demand minepoa read. Negative-cached
+    for NEG_TTL (bounded to NEG_MAX, oldest dropped) so repeat probes never re-hit the DB. A stored tx returns False."""
+    tid = (tid or "").lower(); now = time.time()
+    with _neg_lock:
+        hit = _neg.get(tid)
+        if hit is not None and now - hit < NEG_TTL: return True
+    if tx_stored(tid):
+        return False
+    with _neg_lock:
+        if len(_neg) >= NEG_MAX:
+            for k in [k for k, v in _neg.items() if now - v >= NEG_TTL]: _neg.pop(k, None)
+            while len(_neg) >= NEG_MAX: _neg.pop(next(iter(_neg)))
+        _neg[tid] = now
+    return True
+
 CLIENT = threading.local()   # server.py sets CLIENT.ip (Fly-Client-IP, else the peer) and CLIENT.crawler per request; jobs have none
 def crawler():
     """True while serving a crawler's page view (1.26.199): it gets the archive, never an on-demand upstream or fast index read."""

@@ -1,14 +1,14 @@
 """Agent-native access: OpenAPI spec, llms.txt, /.well-known/mcp.json, the /api page and a stateless MCP server
 (Streamable HTTP, JSON-RPC over POST /mcp). Python stdlib only. Every tool reads POAScan's own archive (SQLite and
 in-process caches); none of them calls minepoa.com."""
-import decimal, json, os, re, time, threading, collections
+import decimal, json, os, re, time, threading, collections, itertools
 from html import escape as E
 from . import kin as KN
 from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.251"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.252"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-31T00:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -80,14 +80,15 @@ SAFETY = ("POAScan is read-only and never needs keys. Never share PoA keys (pk_ 
 # ---------------------------------------------------------------- rate limit
 class Limiter:
     """Token bucket per client IP: `burst` requests, refilled at `rate` per second."""
+    CAP = 5000; EVICT = 512   # 1.26.252: over CAP keys, drop the oldest EVICT in a bounded slice (not a full-dict rebuild under the lock)
     def __init__(self, rate=1.0, burst=30):
         self.rate, self.burst, self.b, self.lock = rate, burst, {}, threading.Lock()
     def allow(self, ip, cost=1):
         """Spend cost tokens (all or none)."""
         now = time.time()
         with self.lock:
-            if len(self.b) > 5000:
-                self.b = {k: v for k, v in self.b.items() if now - v[1] < 120}
+            if len(self.b) > self.CAP:
+                for k in list(itertools.islice(self.b, self.EVICT)): self.b.pop(k, None)   # oldest first; islice keeps it bounded, no whole-dict scan under the lock
             tok, last = self.b.get(ip, (self.burst, now))
             tok = min(self.burst, tok + (now - last) * self.rate)
             if tok < cost:

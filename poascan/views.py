@@ -359,6 +359,8 @@ def tx_unavailable(tid, paused):
 
 def tx(tid):
     err = None; busy = False; fallback = False
+    if re.fullmatch(r"[0-9a-f]{64}", tid or "") and I.tx_unknown(tid):   # 1.26.252: a probe for a hash POAScan has nothing on; 404 without a minepoa read (negative-cached)
+        return 404, page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1.")), "/txs")
     skip = re.fullmatch(r"[0-9a-f]{64}", tid or "") is not None and not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))   # 1.26.219
     try: d = I.get_tx_detail(tid, node=not skip)
     except I.Missing as e: d = I.get_tx_detail(tid, allow_fetch=False); err = str(e)
@@ -620,8 +622,33 @@ def live_known(d):
 
 NF_LINKS = '<p class="cov small"><a href="/help?address={a}">Why am I not earning?</a> · <a href="/start">Sign up</a> · <a href="/agents/top">Find an Agent</a></p>'
 
+def _addr_known_cheap(a):
+    """A probe-cheap test that POAScan has anything on an address, run before the heavy profile/established_history work and
+    the minepoa read (1.26.252). Only indexed or already-cached lookups: a tx (txs_from/txs_to), an account row, a reward
+    entry, a label, an established seat or a forum post (forum_posts/comments author index). True means render the full page;
+    False is a genuine not-found, so a crawler walking random addresses never spends settled_records() or an upstream read.
+    An error means proceed (never 404 a real Agent on a lookup slip). The full known check in the body stays the exact arbiter
+    for a hit. A brand new join not yet indexed shows within a few minutes, as the not-found copy says."""
+    try:
+        if db.q1("SELECT 1 AS x FROM txs WHERE from_addr=? OR to_addr=? LIMIT 1", (a, a)): return True
+        if db.q1("SELECT 1 AS x FROM accounts WHERE addr=?", (a,)): return True
+        if db.q1("SELECT 1 AS x FROM labels WHERE addr=?", (a,)): return True
+        if A.rewards_by_addr().get(a): return True
+        if a in A.established_set(): return True
+        if db.q1("SELECT 1 AS x FROM forum_posts WHERE author_public_id=? LIMIT 1", (a,)): return True
+        if db.q1("SELECT 1 AS x FROM forum_comments WHERE author_public_id=? LIMIT 1", (a,)): return True
+    except Exception:
+        return True
+    return False
+
+def _addr_not_found(a):
+    body = (na(f"No Agent at <code>{E(short(a, 10, 6))}</code> in POAScan's archive. Addresses are case sensitive; a new join shows within a few minutes.")
+            + NF_LINKS.format(a=E(a)))
+    return 404, page("Address not found", '<div class="sechead"><h1>Address</h1></div>' + card("Not found", body, cls="nfc"), "/")
+
 def address(a):
     if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
+    if not _addr_known_cheap(a): return _addr_not_found(a)   # 1.26.252: a probe for an unknown address, before any heavy work or upstream read
     d, err, at = address_read(a); nm = names(); p = G.profile(a)
     rb = p["rewards"]; acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,))
     bb = address_balance(a, d, at, acc); bal = float(bb["balance"]) if bb["balance"] is not None else None; btag = balance_tag(bb)
@@ -683,9 +710,7 @@ def address(a):
         try: known = (G.established_history(a) or {}).get("basis") not in (None, "none")
         except Exception: known = True   # never 404 a real Agent on a read error
     if not known:
-        body = (na(f"No Agent at <code>{E(short(a, 10, 6))}</code> in POAScan's archive. Addresses are case sensitive; a new join shows within a few minutes.")
-                + NF_LINKS.format(a=E(a)))
-        return 404, page("Address not found", '<div class="sechead"><h1>Address</h1></div>' + card("Not found", body, cls="nfc"), "/")
+        return _addr_not_found(a)
     if tab == "timeline":
         from . import timeline as TL
         main = TL.tab_html(a)
