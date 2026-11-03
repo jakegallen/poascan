@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.255] - 2026-11-03
+
+### Changed
+
+- Footer "API" link now points to the `/api` reference page (the human-readable index: every endpoint, the MCP one-click setup and the tool list) instead of dropping straight into the raw `/api/health` JSON. The health JSON is still reachable from the `/api` page and the Status link; this just makes the one prominent "API" link in the site chrome land on docs a person can read. No API or endpoint changes.
+
 ## [1.26.254] - 2026-11-03
 
 ### Fixed
