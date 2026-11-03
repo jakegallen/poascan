@@ -1337,7 +1337,7 @@ class Server(ThreadingHTTPServer):
         super().__init__(*a, **k); self.detached = set()
     def process_request(self, request, client_address):
         # 1.26.254: bound TOTAL in-flight threads here (not heavy work) and shed the overflow fast instead of queueing
-        # it hundreds deep (a deep backlog just holds crawler sockets open). The heavy-work cap (GD.slots, MAX_WORKERS)
+        # it hundreds deep (a deep backlog just holds crawler connections open). The heavy-work cap (GD.slots, MAX_WORKERS)
         # is taken inside the handler, so /healthz and /api/health never wait behind a flood of slow renders for a
         # worker slot. That starvation (the health check timing out while every slot was held) is what tripped Fly's
         # check and pulled the machine under a crawler flood.
