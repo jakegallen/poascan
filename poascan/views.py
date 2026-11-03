@@ -796,6 +796,9 @@ def established_card(a):
             ("Est. expires", (_risk_tag(h) + f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
                               f'<span class="dim">· {_closes_left(h)}last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
                              if h["established_expires_epoch_est"] is not None else "···")]
+    from . import netfacts as NF   # authoritative per-address chip from the cached /api/established set, cross checked against our estimate (fails soft)
+    arow = NF.addr_row(a, h["established"])
+    if arow: rows.append(arow)
     pd = SD.pending(a, 8); mk = SD.marks(a)
     rows += [("Pending", _pending_txt(pd)), ("Marks", _marks_txt(mk))]
     if w["through"] is not None:
@@ -1555,7 +1558,16 @@ def network_overview(head):
         ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
         ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
+    from . import netfacts as NF   # authoritative minepoa facts, cross checked against POAScan's own derivation (fails soft)
+    _nflog = __import__("logging").getLogger("poascan.views")
+    try: facts_card = NF.render_card()
+    except Exception as e: facts_card = ""; _nflog.warning("netfacts card: %s", type(e).__name__)
+    try: close_card = NF.render_close_card()
+    except Exception as e: close_card = ""; _nflog.warning("netfacts close card: %s", type(e).__name__)
+    try: expiry_card = NF.render_expiry_card()
+    except Exception as e: expiry_card = ""; _nflog.warning("netfacts expiry card: %s", type(e).__name__)
     body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
+<div class="grid2">{facts_card}{close_card}</div>{expiry_card}
 <div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>'''
     return page("Network", head + body, "/network")
 
