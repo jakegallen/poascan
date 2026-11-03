@@ -11,11 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.255] - 2026-11-03
+## [1.26.256] - 2026-11-03
+
+### Added
+
+- Interactive API reference at `/api/reference`: the live `openapi.json` rendered client-side into grouped, searchable, expandable endpoint cards, with a one-click **Try** for the read-only GET endpoints (fills in path and query parameters, calls the endpoint same-origin and shows the status, timing and pretty-printed JSON). The renderer is a single static same-origin script (`static/apiref.js`) with no external dependencies, so it runs under the existing strict Content-Security-Policy with no relaxation; it degrades to the `/api` table and `/openapi.json` when JavaScript is off. Linked from the `/api` page.
 
 ### Changed
 
-- Footer "API" link now points to the `/api` reference page (the human-readable index: every endpoint, the MCP one-click setup and the tool list) instead of dropping straight into the raw `/api/health` JSON. The health JSON is still reachable from the `/api` page and the Status link; this just makes the one prominent "API" link in the site chrome land on docs a person can read. No API or endpoint changes.
+- Footer "API" link now points to the `/api` reference page (the human-readable index: every endpoint, the MCP one-click setup and the tool list) instead of dropping straight into the raw `/api/health` JSON. The health JSON is still reachable from the `/api` page and the Status link; this just makes the one prominent "API" link in the site chrome land on docs a person can read.
+- `robots.txt`: the AI-crawler group (GPTBot, ClaudeBot, PerplexityBot, CCBot and the rest) is now told to stay off the heavy per-entity HTML pages (`/address/`, `/tx/`) and is pointed at the API, `openapi.json` and `llms.txt` instead, which carry the same data far more cheaply. Search engines (the `*` group) keep full access for indexing. This reinforces, at the polite layer, the steer that Cloudflare already enforces: agents belong on the API, not crawling the site.
+
+No API field or endpoint changes.
 
 ## [1.26.254] - 2026-11-03
 

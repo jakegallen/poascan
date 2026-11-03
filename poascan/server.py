@@ -450,8 +450,11 @@ PAGE_LIMITED = re.compile(r"^/(address|tx|swap|offer)/[^/]+$")
 CACHEABLE_404 = re.compile(r"^/(?:tx/[0-9a-fA-F]{64}|address/poa1[1-9A-HJ-NP-Za-km-z]{20,60})$")
 _fci_seen = [False]
 # 1.26.201: Crawl-delay 5 s in every group, and sorted copies of a table (?sort=, ?esort=) are not crawled (bots were 76k page views a day; Bing, Yandex and several AI crawlers honour it)
+# The AI crawler group additionally stays off the heavy per-entity HTML pages (/address/, /tx/): those are
+# what flooded the box, and the same data is available over the API (openapi.json, llms.txt, /mcp), which the
+# group's opening lines point at. Search engines (the * group) keep full access for indexing.
 ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
-          + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\nSitemap: https://poascan.io/sitemap.xml\n")
+          + "Allow: /api\nAllow: /openapi.json\nAllow: /llms.txt\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nDisallow: /address/\nDisallow: /tx/\nCrawl-delay: 5\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
@@ -1137,6 +1140,7 @@ class H(BaseHTTPRequestHandler):
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
+            if path == "/api/reference": return self.send(200, AG.reference_page(V.page, V.card))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
             if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/network?tab=health"})
             # the raw query: ?segment= was taken out of qs above, and a moved list URL keeps it

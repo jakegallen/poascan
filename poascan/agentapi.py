@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.255"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.256"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-10-31T00:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -1639,8 +1639,60 @@ def api_page(page, card):
     tools = "".join(f'<tr><td class="mono">{E(n)}</td><td>{E(d)}</td></tr>' for n, _, d, _, _ in TOOLS)
     body = ('<div class="sechead"><h1>API</h1></div>'
             + card("For agents", agents_html())
-            + card("Endpoints", '<p>No auth. JSON by default; add <code>.csv</code> to list endpoints. Cache results and poll at most once a minute.</p>' + tbl,
-                   '<a class="more" href="/openapi.json">openapi.json →</a>')
+            + card("Endpoints",
+                   '<p>No auth. JSON by default; add <code>.csv</code> to list endpoints. Cache results and poll at most once a minute. '
+                   'Please use these endpoints rather than crawling the pages. <a href="/api/reference">Browse and try every endpoint in the interactive reference</a>.</p>' + tbl,
+                   '<a class="more" href="/api/reference">interactive reference →</a>')
             + card(f"MCP tools · {len(TOOLS)}", f'<div class="tw"><table class="t"><thead><tr><th>Tool</th><th>Returns</th></tr></thead><tbody>{tools}</tbody></table></div>',
                    '<a class="more" href="/.well-known/mcp.json">mcp.json →</a>'))
     return page("API", body, "/about")
+
+def reference_page(page, card):
+    """Interactive API reference: /openapi.json rendered client-side into grouped,
+    expandable endpoint cards with a live Try for read-only GET calls. The renderer
+    is a static same-origin script (static/apiref.js); no external code, so it runs
+    under the site's strict CSP. Degrades to the /api table and /openapi.json."""
+    intro = ('<p>Every endpoint, grouped and searchable, with a live <strong>Try</strong> for the read-only GET calls. '
+             'No key, no sign-in. The same spec powers <a href="/openapi.json">openapi.json</a>, '
+             '<a href="/llms.txt">llms.txt</a> and the <a href="/api">MCP server</a>. '
+             'Prefer these over scraping the HTML pages: the API is built for machines, cached at the edge and kinder to the box.</p>')
+    body = ('<div class="sechead"><h1>API reference</h1></div>'
+            + card("Interactive reference", intro
+                   + '<div id="apiref" class="apiref"><noscript>This interactive reference needs JavaScript. '
+                     'The full endpoint list is on the <a href="/api">API page</a> and the machine-readable spec is at '
+                     '<a href="/openapi.json">openapi.json</a>.</noscript></div>',
+                   '<a class="more" href="/api">API index →</a>')
+            + APIREF_STYLE + '<script src="/static/apiref.js" defer></script>')
+    return page("API reference", body, "/about")
+
+APIREF_STYLE = """<style>
+.apiref{margin-top:.5rem}
+.aref-bar{display:flex;gap:.75rem;align-items:center;margin:.5rem 0 1rem}
+.aref-search{flex:1;min-width:0;padding:.55rem .7rem;border:1px solid var(--line,#2a2a2a);border-radius:8px;background:var(--bg2,#111);color:inherit;font:inherit}
+.aref-count{white-space:nowrap;opacity:.6;font-size:.85rem}
+.aref-group{margin:0 0 1.4rem}
+.aref-gh{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;opacity:.6;margin:0 0 .5rem;font-weight:600}
+.aref-row{border:1px solid var(--line,#2a2a2a);border-radius:8px;margin:.35rem 0;overflow:hidden;background:var(--bg2,#0d0d0d)}
+.aref-row.open{border-color:var(--accent,#4a9)}
+.aref-head{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;padding:.6rem .75rem;background:none;border:0;color:inherit;cursor:pointer;font:inherit}
+.aref-head:hover{background:rgba(127,127,127,.06)}
+.aref-m{flex:none;font-size:.72rem;font-weight:700;padding:.12rem .4rem;border-radius:4px;letter-spacing:.03em}
+.m-get{background:#123a2a;color:#5fd3a0}.m-post{background:#3a2e12;color:#e0b65f}.m-put{background:#123249;color:#5fb0e0}.m-delete{background:#3a1a1a;color:#e06f6f}.m-patch{background:#2e1f3a;color:#c08fe0}
+.aref-path{flex:none;font-size:.86rem}
+.aref-sum{opacity:.65;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aref-body{padding:.25rem .85rem .9rem;border-top:1px solid var(--line,#222)}
+.aref-desc{opacity:.85;font-size:.88rem;margin:.6rem 0}
+.aref-params{width:100%;border-collapse:collapse;font-size:.82rem;margin:.5rem 0}
+.aref-params th{text-align:left;opacity:.55;font-weight:600;padding:.2rem .4rem;border-bottom:1px solid var(--line,#222)}
+.aref-params td{padding:.25rem .4rem;vertical-align:top;border-bottom:1px solid rgba(127,127,127,.08)}
+.aref-try{display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end;margin:.7rem 0 .3rem}
+.aref-lab{display:flex;flex-direction:column;gap:.2rem;font-size:.78rem}
+.aref-labn{opacity:.6}
+.aref-in{padding:.4rem .55rem;border:1px solid var(--line,#2a2a2a);border-radius:6px;background:var(--bg,#111);color:inherit;font:inherit;min-width:16rem}
+.aref-send{padding:.45rem .9rem;border:0;border-radius:6px;background:var(--accent,#2f8f6b);color:#fff;cursor:pointer;font:inherit;font-weight:600}
+.aref-send[disabled]{opacity:.5;cursor:default}
+.aref-out{margin:.6rem 0 0;padding:.7rem .8rem;background:#0a0a0a;border:1px solid var(--line,#222);border-radius:6px;font-size:.8rem;white-space:pre-wrap;word-break:break-word;max-height:28rem;overflow:auto}
+.aref-note{opacity:.7;font-size:.82rem}
+.aref-err{color:#e88}
+</style>"""
+
