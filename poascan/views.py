@@ -1564,8 +1564,10 @@ def network_overview(head):
     except Exception as e: facts_card = ""; _nflog.warning("netfacts card: %s", type(e).__name__)
     try: close_card = NF.render_close_card()
     except Exception as e: close_card = ""; _nflog.warning("netfacts close card: %s", type(e).__name__)
+    try: expiry_card = NF.render_expiry_card()
+    except Exception as e: expiry_card = ""; _nflog.warning("netfacts expiry card: %s", type(e).__name__)
     body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{facts_card}{close_card}</div>
+<div class="grid2">{facts_card}{close_card}</div>{expiry_card}
 <div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>'''
     return page("Network", head + body, "/network")
 

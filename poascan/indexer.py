@@ -1192,7 +1192,7 @@ EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks"
          "/api/anchors": META_S, "/api/notices": META_S, "/api/ballots": META_S, "/api/epochs": 300, "/api/agents": 900, "/api/params": 3600,
          "/api/release": 3600, "/api/chains": 3600, "/lableak/api/communities": FORUM_S, "/lableak/api/posts": FORUM_S,
          "/api/explorer/grading": 900, "/api/links": 600, "/api/join-pow": JOIN_POW_S, "/client/poa.mjs": 3600, "/poa-web.mjs": 3600,
-         "/api/network-facts": 3600, "/api/established": 3600, "/api/close-report": 3600, "/api/settled": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
+         "/api/network-facts": 3600, "/api/established": 3600, "/api/close-report": 3600, "/api/settled": 3600, "/api/expiry-schedule": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
@@ -1210,6 +1210,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("established_auth", lambda: __import__("poascan.netfacts", fromlist=["x"]).established_job(), 3600, "/api/established"),   # authoritative /api/established, one conditional GET an hour; reconciled against POAScan's derived established set
     ("close_report", lambda: __import__("poascan.netfacts", fromlist=["x"]).close_job(), 3600, "/api/close-report"),   # authoritative last close report, one conditional GET an hour; cross checked against POAScan's own close stats
     ("settled_auth", lambda: __import__("poascan.netfacts", fromlist=["x"]).settled_job(), 3600, "/api/settled"),   # authoritative settled rows for the last close, one conditional GET an hour
+    ("expiry_schedule", lambda: __import__("poascan.netfacts", fromlist=["x"]).expiry_job(), 3600, "/api/expiry-schedule"),   # authoritative forward expiry schedule, one conditional GET an hour; cross checked against POAScan's derived horizon
     ("hourly_retry", job_hourly_retry, 300, None),
     ("release_nudge", lambda: __import__("poascan.protocol", fromlist=["x"]).release_nudge(), 300, None),   # 1.26.226: an indexed G0 release tx not yet in /api/release triggers one early read   # health-fix 1026: a failed hourly read retried after its backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),

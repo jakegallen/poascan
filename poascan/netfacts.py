@@ -326,6 +326,7 @@ def api_block(now=None):
                 system_accounts=system_accounts(facts), trusted_graders=trusted_graders(facts),
                 hashes=facts_hashes(facts), crosscheck=cc,
                 established=established_reconcile(now), close=close_crosscheck(now),
+                expiry=dict(expiry_schedule(now), crosscheck=expiry_crosscheck(now)),
                 method="https://poascan.io" + METHOD)
 
 
@@ -407,6 +408,20 @@ def settled_job():
         except I.Busy as e: log.warning("%s: %s", SETTLED_PATH, e)
     else:
         I.skip_backoff(SETTLED_PATH)
+
+
+def fetch_expiry():
+    """One conditional GET of /api/expiry-schedule; stores the expiry_schedule_auth blob on a 200, keeps it on a 304."""
+    return _fetch_one(EXPIRY_PATH, EXPIRY_BLOB)
+
+
+def expiry_job():
+    from . import indexer as I
+    if I.can_fetch(EXPIRY_PATH):
+        try: fetch_expiry()
+        except I.Busy as e: log.warning("%s: %s", EXPIRY_PATH, e)
+    else:
+        I.skip_backoff(EXPIRY_PATH)
 
 
 # ---------------------------------------------------------------- rendering (Network > Overview)
@@ -564,3 +579,96 @@ def render_close_card(now=None):
 
 
 def _n(v): return str(v) if v is not None else "-"
+
+
+# ---------------------------------------------------------------- expiry schedule (/api/expiry-schedule)
+EXPIRY_PATH = "/api/expiry-schedule"
+EXPIRY_BLOB = "expiry_schedule_auth"
+
+
+def _int(v):
+    try: return int(v) if v is not None and not isinstance(v, bool) else None
+    except (TypeError, ValueError): return None
+
+
+def _expiry_rows(sched):
+    """[(close, pending)] sorted by close, from a list of rows, a dict wrapper around one, or a {close: count} map."""
+    src = sched
+    if isinstance(sched, dict):
+        inner = _first(sched, "schedule", "expiry_schedule", "rows", "by_close", "pending_by_close")
+        if isinstance(inner, (list, dict)): src = inner
+    out = []
+    if isinstance(src, dict):
+        for k, v in src.items():
+            c = _int(k); n = _int(_first(v, "pending", "count", "n") if isinstance(v, dict) else v)
+            if c is not None and n is not None: out.append((c, n))
+    elif isinstance(src, list):
+        for r in src:
+            if not isinstance(r, dict): continue
+            c = _int(_first(r, "close", "epoch", "expires_close", "expiry_close", "expires"))
+            n = _int(_first(r, "pending", "count", "n", "answers"))
+            if c is not None and n is not None: out.append((c, n))
+    return sorted(out)
+
+
+def expiry_schedule(now=None):
+    """{available, rows:[{close, pending}], total, next_close, as_of} from the cached /api/expiry-schedule copy."""
+    d, ts = db.get_blob(EXPIRY_BLOB)
+    if d is None:
+        return dict(available=False, rows=[], total=None, next_close=None, as_of=None)
+    rows = [dict(close=c, pending=n) for c, n in _expiry_rows(d)]
+    return dict(available=True, rows=rows, total=sum(r["pending"] for r in rows),
+                next_close=(rows[0]["close"] if rows else None), as_of=int(ts) if ts else None)
+
+
+def expiry_crosscheck(now=None):
+    """The authoritative schedule's total and next expiry close against POAScan's derived horizon (horizon.horizon).
+    {available, verdict, authoritative_total, derived_total, authoritative_next, derived_next}. verdict match when the
+    totals agree, differ when they do not, unknown when the schedule is unavailable or the derivation has no total."""
+    sched = expiry_schedule(now)
+    try:
+        from . import horizon as H
+        h = H.horizon(); d_total, d_next = h.get("total"), h.get("next_expiry")
+    except Exception:
+        d_total = d_next = None
+    if not sched["available"]:
+        return dict(available=False, verdict="unknown", authoritative_total=None, derived_total=d_total,
+                    authoritative_next=None, derived_next=d_next)
+    a_total = sched["total"]
+    verdict = "unknown" if d_total is None else ("match" if a_total == d_total else "differ")
+    return dict(available=True, verdict=verdict, authoritative_total=a_total, derived_total=d_total,
+                authoritative_next=sched["next_close"], derived_next=d_next)
+
+
+_EXPIRY_VERDICT = {"match": ("ok", "Matches derived horizon"), "differ": ("bad", "Differs from derived horizon"),
+                   "unknown": ("warn", "Not cross checked")}
+
+
+def render_expiry_card(now=None):
+    """The authoritative forward expiry schedule: pending answers by expiry close, with the total cross checked against
+    POAScan's derived horizon. Fails soft to a note pointing at the derived horizon when the schedule is unavailable."""
+    from .ui import card, flag, table, E
+    sched = expiry_schedule(now); cc = expiry_crosscheck(now)
+    if not sched["available"]:
+        body = ('<p class="na">Authoritative source unavailable; POAScan shows its derived expiry horizon on Governance, '
+                'Queue. The forward curve needs a /api/expiry-schedule read.</p>')
+        return card("Expiry schedule · authoritative", body, '<span class="na small">authoritative</span>')
+    tone, word = _EXPIRY_VERDICT[cc["verdict"]]
+    if cc["verdict"] == "match":
+        det = "The authoritative total pending equals POAScan's derived horizon total."
+    elif cc["verdict"] == "differ":
+        det = f"Authoritative total {cc['authoritative_total']}, POAScan's derived horizon {cc['derived_total']}. A real signal worth a look."
+    else:
+        det = "POAScan has no derived horizon total to compare yet."
+    head = f'<div class="kv"><span>Total pending</span><div><b>{sched["total"]}</b> {flag(word, det, tone=tone)}</div></div>'
+    rows = [[f'E{E(str(r["close"]))}', f'{r["pending"]:,}', _bar(r["pending"], sched["rows"])] for r in sched["rows"]]
+    tbl = table(["Expiry close", "Pending", ""], rows, cls="wrapt") if rows else '<p class="na">No pending cohorts scheduled to expire.</p>'
+    extra = '<span class="na small" title="Read /api/expiry-schedule hourly">authoritative</span>'
+    return card("Expiry schedule · authoritative", head + tbl, extra)
+
+
+def _bar(n, rows):
+    """A plain unicode block bar for one schedule row, scaled to the largest pending count (no CSS, no color)."""
+    mx = max((r["pending"] for r in rows), default=0) or 1
+    width = max(1, round(12 * n / mx)) if n else 0
+    return f'<span class="mono dim" aria-hidden="true">{"█" * width}</span>'

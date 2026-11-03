@@ -223,6 +223,57 @@ def main():
     NF.close_job()
     check("close_job skips the fetch while the endpoint is backing off", calls3 == [])
 
+    # ---- expiry schedule (/api/expiry-schedule) ----
+    db.put_blob(NF.EXPIRY_BLOB, None)
+    sc = NF.expiry_schedule()
+    check("no schedule copy: expiry fails soft (available False, no rows)", sc["available"] is False and sc["rows"] == [])
+    check("render_expiry_card fails soft with the unavailable note", "Authoritative source unavailable" in NF.render_expiry_card())
+    check("no em or en dash on the expiry card (fail soft)", "\u2014" not in NF.render_expiry_card() and "\u2013" not in NF.render_expiry_card())
+
+    # a forward schedule as a list of rows (several key spellings), sorted by close
+    db.put_blob(NF.EXPIRY_BLOB, [{"close": 20, "pending": 1}, {"epoch": 18, "count": 10}, {"close": 19, "pending": 4}])
+    sc = NF.expiry_schedule()
+    check("list of rows parsed, sorted by close, with total and next close",
+          [(r["close"], r["pending"]) for r in sc["rows"]] == [(18, 10), (19, 4), (20, 1)] and sc["total"] == 15 and sc["next_close"] == 18)
+    html = NF.render_expiry_card()
+    check("expiry card renders the pending-by-close curve (table rows and a bar)", "Expiry close" in html and "E18" in html and "█" in html)
+    check("no em or en dash on the expiry card", "\u2014" not in html and "\u2013" not in html)
+    # a {close: count} map and a dict wrapper both parse
+    db.put_blob(NF.EXPIRY_BLOB, {"schedule": {"18": 10, "19": 4}})
+    check("a {close: count} map under a schedule wrapper parses", [(r["close"], r["pending"]) for r in NF.expiry_schedule()["rows"]] == [(18, 10), (19, 4)])
+
+    # cross check the authoritative total against POAScan's derived horizon
+    db.put_blob("epochs", [{"epoch": 0, "ts": 1000, "pool": 1e9, "rewards": {}, "challenges": {}, "propagation": {},
+                           "basis": {"pending": {"t1": {"kind": "short", "since": 0, "panel": []}, "t2": {"kind": "short", "since": 0, "panel": []}}}}])
+    db.put_blob("params", {"pending_ttl_epochs": 16, "auto_epoch_seconds": 21600}); A._cache.clear()
+    from poascan import horizon as H
+    H.horizon.__wrapped__() if hasattr(H.horizon, "__wrapped__") else None
+    dtot = H.horizon()["total"]
+    db.put_blob(NF.EXPIRY_BLOB, [{"close": 16, "pending": dtot}])
+    cc = NF.expiry_crosscheck()
+    check("authoritative total equals the derived horizon total: verdict match", cc["verdict"] == "match" and cc["authoritative_total"] == dtot and cc["derived_total"] == dtot)
+    db.put_blob(NF.EXPIRY_BLOB, [{"close": 16, "pending": dtot + 5}])
+    cc = NF.expiry_crosscheck()
+    check("a different authoritative total: verdict differ", cc["verdict"] == "differ")
+
+    # the expiry job: hourly, conditional, gated, 304 keeps the copy, backoff skips
+    check("expiry_schedule job every hour, gated on /api/expiry-schedule", jobs.get("expiry_schedule") == (3600, "/api/expiry-schedule"))
+    check("EVERY carries the expiry cadence (hourly)", I.EVERY.get("/api/expiry-schedule") == 3600)
+    seen4 = []
+    I.fetch = lambda path, timeout=60, endpoint=None, cond=False, soft=False, gate=None: seen4.append((path, cond)) or [{"close": 16, "pending": 2}]
+    db.put_blob(NF.EXPIRY_BLOB, None); NF.fetch_expiry()
+    check("fetch_expiry reads /api/expiry-schedule conditionally and stores the blob", seen4 == [("/api/expiry-schedule", True)] and NF.expiry_schedule()["available"])
+    I.fetch = lambda *a, **k: I.NOT_MODIFIED; before4 = db.get_blob(NF.EXPIRY_BLOB)[0]
+    check("a 304 keeps the stored expiry schedule", NF.fetch_expiry() is None and db.get_blob(NF.EXPIRY_BLOB)[0] == before4)
+    db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at,err) VALUES('/api/expiry-schedule',?,3,?,'HTTP 503')", (int(time.time()), int(time.time()) + 600))
+    calls4 = []; I.fetch = lambda *a, **k: calls4.append(a) or []
+    NF.expiry_job()
+    check("expiry_job skips the fetch while the endpoint is backing off", calls4 == [])
+
+    # the api block carries every cross check, no upstream read
+    ab = NF.api_block()
+    check("api_block carries crosscheck, established, close and expiry", all(k in ab for k in ("crosscheck", "established", "close", "expiry")))
+
     print(f"\n{len(fails)} failed" if fails else "\nall ok")
     sys.exit(1 if fails else 0)
 

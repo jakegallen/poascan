@@ -119,7 +119,7 @@ jobs:
         run: python tools/audit_test.py
       - name: Established set
         run: python tools/established_test.py
-      - name: Authoritative network facts and the drift cross check (/api/network-facts via indexer.fetch, cached hourly; economics params, system accounts v1 to v5 liveness, trusted graders; derived vs authoritative engine and params hashes match or drift; fails soft; allowlist)
+      - name: Authoritative minepoa facts cross check (network-facts drift on engine and params hashes; established set reconciliation and per-address chip; close-report and settled split with grader concentration; expiry schedule vs the derived horizon; all via indexer.fetch cached hourly, fail soft, allowlist and job cadence)
         run: python tools/netfacts_test.py
       - name: Graders tile (distinct sealers, official served, Halted state)
         run: python tools/graders_tile_test.py
