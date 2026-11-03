@@ -119,6 +119,8 @@ jobs:
         run: python tools/audit_test.py
       - name: Established set
         run: python tools/established_test.py
+      - name: Authoritative network facts and the drift cross check (/api/network-facts via indexer.fetch, cached hourly; economics params, system accounts v1 to v5 liveness, trusted graders; derived vs authoritative engine and params hashes match or drift; fails soft; allowlist)
+        run: python tools/netfacts_test.py
       - name: Graders tile (distinct sealers, official served, Halted state)
         run: python tools/graders_tile_test.py
       - name: Halts

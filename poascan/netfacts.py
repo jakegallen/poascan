@@ -1,0 +1,257 @@
+"""Authoritative network facts, cross checked against POAScan's own derivation (minepoa /api/network-facts).
+
+minepoa publishes the live network facts at /api/network-facts: the economics params the running network uses (the
+establishment intake floor and rate, estab_ttl, grade_quorum, panel_size, pending_ttl, auto_epoch_seconds and K), the
+system accounts v1 to v5 with their liveness, the trusted graders, and the engine and params hashes the running network
+is on. POAScan already models these params per segment (netparams.py) and derives engine_sha256 and params_sha256 from
+the signed release manifest (protocol.py), so the facts are read as an independent authority: the bundle of params
+becomes an integrity signal when POAScan compares its own derived engine_sha and params_sha against the authoritative
+ones. A match reads "matches consensus"; any difference reads "drift".
+
+Server side only. The facts are read through indexer.fetch on the facts job cadence (FACTS_S, hourly) and cached in the
+"network_facts" blob, exactly like the other hourly meta reads (one conditional GET, a 304 keeps the stored copy).
+Nothing here adds a browser fetch or a hot poll. When the facts are unavailable the caller keeps POAScan's derived
+values with a small "authoritative source unavailable" note; this module never raises into a page."""
+import logging, time
+from . import db
+
+log = logging.getLogger("poascan.netfacts")
+
+PATH = "/api/network-facts"
+BLOB = "network_facts"
+FACTS_S = 3600          # one conditional GET an hour, the same cadence as /api/params and /api/release
+STALE_S = 3 * 3600      # a stored copy read longer ago than this is flagged Stale (matches ui.STALE_S)
+METHOD = "/about#network-facts"
+
+# The economics params POAScan surfaces from the facts, newest engine naming first with POAScan's own fallbacks.
+# key: the field in the facts (and /api/params); label: the page wording; src: the matching netparams key, when any.
+ECON = [
+    ("estab_intake_floor", "Intake floor", None),
+    ("estab_intake_rate", "Intake rate", None),
+    ("estab_ttl", "Establishment TTL", "estab_ttl"),
+    ("grade_quorum", "Grade quorum", None),
+    ("panel_size", "Panel size", None),
+    ("pending_ttl_epochs", "Pending TTL", "pending_ttl_epochs"),
+    ("auto_epoch_seconds", "Auto epoch seconds", None),
+    ("K", "K", None),
+]
+
+
+def _first(d, *keys):
+    """The first key present (not None) in a dict, so a flat or a nested facts shape both read."""
+    if not isinstance(d, dict): return None
+    for k in keys:
+        v = d.get(k)
+        if v is not None: return v
+    return None
+
+
+def cached(now=None):
+    """(facts dict or None, read ts or None) from the stored blob. No upstream read."""
+    d, ts = db.get_blob(BLOB)
+    return (d if isinstance(d, dict) else None), (int(ts) if ts else None)
+
+
+def available(now=None):
+    d, _ = cached(now); return d is not None
+
+
+def stale(now=None):
+    d, ts = cached(now)
+    return d is None or not ts or (now or time.time()) - ts > STALE_S
+
+
+# ---------------------------------------------------------------- parsing (pure, tolerant)
+def _econ_src(facts):
+    """Where the economics params live in the facts: a dedicated block when present, else the top level."""
+    return _first(facts, "economics", "params", "economics_params") or facts or {}
+
+
+def economics(facts=None):
+    """[{key, label, value}] for the economics params the facts carry (value None when a key is absent)."""
+    facts, _ = (facts, None) if facts is not None else cached()
+    src = _econ_src(facts or {})
+    out = []
+    for key, label, _ in ECON:
+        out.append(dict(key=key, label=label, value=src.get(key) if isinstance(src, dict) else None))
+    return out
+
+
+def _accounts_src(facts):
+    return _first(facts, "system_accounts", "system_accounts_liveness", "accounts", "system")
+
+
+def system_accounts(facts=None):
+    """[{id, address, live}] for the system accounts v1 to v5, from a dict keyed by id or a list of rows. live is the
+    reported liveness (True, False or None when the facts do not say)."""
+    facts, _ = (facts, None) if facts is not None else cached()
+    src = _accounts_src(facts or {})
+    out = []
+    if isinstance(src, dict):
+        for k in sorted(src):
+            v = src[k]
+            if isinstance(v, dict):
+                out.append(dict(id=str(k), address=_first(v, "address", "addr", "account"), live=_live(v)))
+            else:
+                out.append(dict(id=str(k), address=v if isinstance(v, str) else None, live=None))
+    elif isinstance(src, list):
+        for v in src:
+            if not isinstance(v, dict): continue
+            out.append(dict(id=str(_first(v, "id", "name", "label") or "?"), address=_first(v, "address", "addr", "account"), live=_live(v)))
+    return out
+
+
+def _live(v):
+    """The liveness a system account row reports, as True, False or None (several field names, several shapes)."""
+    for k in ("live", "alive", "active", "online", "healthy"):
+        if k in v and isinstance(v[k], bool): return v[k]
+    s = _first(v, "status", "state", "liveness")
+    if isinstance(s, str): return s.strip().lower() in ("live", "alive", "active", "online", "ok", "healthy", "up")
+    return None
+
+
+def trusted_graders(facts=None):
+    """The trusted grader addresses the facts list (empty when none)."""
+    facts, _ = (facts, None) if facts is not None else cached()
+    v = _first(facts or {}, "trusted_graders", "trusted_grader_accounts")
+    return [a for a in v if isinstance(a, str)] if isinstance(v, list) else []
+
+
+def facts_hashes(facts=None):
+    """{engine, params} as the facts report them (None when a hash is absent). A nested "hashes" block is read too."""
+    facts, _ = (facts, None) if facts is not None else cached()
+    f = facts or {}
+    h = f.get("hashes") if isinstance(f.get("hashes"), dict) else {}
+    engine = _first(f, "engine_sha256", "engine_sha", "engine_hash") or _first(h, "engine_sha256", "engine", "engine_sha")
+    params = _first(f, "params_sha256", "params_sha", "params_hash") or _first(h, "params_sha256", "params", "params_sha")
+    return dict(engine=engine, params=params)
+
+
+# ---------------------------------------------------------------- cross check (the integrity signal)
+def derived_hashes(rel=None):
+    """POAScan's own engine_sha256 and params_sha256, from the signed release manifest (protocol.current_release)."""
+    from . import protocol as P
+    cur = P.current_release(rel) or {}
+    return dict(engine=cur.get("engine_sha256") or cur.get("client_sha256"), params=cur.get("params_sha256"),
+                version=cur.get("version"))
+
+
+def crosscheck(facts=None, rel=None, now=None):
+    """Compare POAScan's derived engine and params hashes against the authoritative ones the facts report.
+
+    Returns {available, verdict, rows, derived_version}. verdict: "match" when every hash both sides carry is equal,
+    "drift" when any pair the two sides both carry differs, "unknown" when the facts are unavailable or a hash is
+    missing on either side so no pair can be compared. rows: one per hash, each {name, derived, authoritative, state}
+    where state is "match", "drift" or "unknown"."""
+    facts, fts = (facts, None) if facts is not None else cached(now)
+    der = derived_hashes(rel); auth = facts_hashes(facts)
+    rows = []
+    compared = drift = 0
+    for name in ("engine", "params"):
+        d, a = der.get(name), auth.get(name)
+        if d and a:
+            compared += 1; ok = d == a
+            if not ok: drift += 1
+            rows.append(dict(name=name, derived=d, authoritative=a, state="match" if ok else "drift"))
+        else:
+            rows.append(dict(name=name, derived=d, authoritative=a, state="unknown"))
+    verdict = "unknown" if facts is None or compared == 0 else ("drift" if drift else "match")
+    return dict(available=facts is not None, verdict=verdict, rows=rows, derived_version=der.get("version"), as_of=fts)
+
+
+# ---------------------------------------------------------------- API block (no upstream read)
+def api_block(now=None):
+    facts, ts = cached(now)
+    cc = crosscheck(facts)
+    return dict(available=facts is not None, as_of=ts, stale=stale(now),
+                economics={e["key"]: e["value"] for e in economics(facts)},
+                system_accounts=system_accounts(facts), trusted_graders=trusted_graders(facts),
+                hashes=facts_hashes(facts), crosscheck=cc, method="https://poascan.io" + METHOD)
+
+
+# ---------------------------------------------------------------- the indexer job (server side, gated, cached)
+def fetch_facts():
+    """One conditional GET through indexer.fetch; stores the facts blob on a 200, keeps the stored copy on a 304.
+    Raises indexer.Busy on a failure, like the other meta reads, so run_forever logs and backs the endpoint off."""
+    from . import indexer as I
+    d = I.fetch(PATH, cond=True)
+    if d is I.NOT_MODIFIED: return None
+    if isinstance(d, dict):
+        db.put_blob(BLOB, d)
+    return d
+
+
+def job():
+    from . import indexer as I
+    if not I.can_fetch(PATH):
+        I.skip_backoff(PATH); return
+    try:
+        fetch_facts()
+    except I.Busy as e:
+        log.warning("%s: %s", PATH, e)
+
+
+# ---------------------------------------------------------------- rendering (Network > Overview)
+_VERDICT = {"match": ("ok", "Matches consensus"), "drift": ("bad", "Drift"), "unknown": ("warn", "Authoritative source unavailable")}
+
+
+def _badge(cc):
+    from .ui import flag
+    tone, word = _VERDICT[cc["verdict"]]
+    if cc["verdict"] == "match":
+        det = "POAScan's derived engine and params hashes equal the ones the running network reports."
+    elif cc["verdict"] == "drift":
+        bad = ", ".join(r["name"] for r in cc["rows"] if r["state"] == "drift")
+        det = f"POAScan's derived hash differs from the running network's for: {bad}. A real signal worth a look."
+    else:
+        det = "POAScan keeps its own derived values; the authoritative /api/network-facts was not read."
+    return flag(word, det, tone=tone)
+
+
+def render_card(now=None):
+    """The Network facts card for Network > Overview. Fails soft: with no facts it shows POAScan's derived hashes with an
+    "authoritative source unavailable" note and never raises. Returns a full card section."""
+    from .ui import card, flag, short, E
+    facts, ts = cached(now)
+    cc = crosscheck(facts)
+    hrow = lambda name: next((r for r in cc["rows"] if r["name"] == name), {})
+
+    def hash_kv(name, label):
+        r = hrow(name)
+        d, a = r.get("derived"), r.get("authoritative")
+        st = r.get("state")
+        tag = flag("match", "Derived equals authoritative", tone="ok") if st == "match" else (
+              flag("drift", "Derived differs from authoritative", tone="bad") if st == "drift" else "")
+        val = (f'<span class="mono" title="authoritative {E(a)}">{E(short(a, 8, 6))}</span>' if a
+               else (f'<span class="mono dim" title="derived {E(d)}">{E(short(d, 8, 6))}</span>' if d else '<span class="na">-</span>'))
+        return f'<div class="kv"><span>{E(label)}</span><div>{val} {tag}</div></div>'
+
+    note = ("" if facts is not None else
+            '<p class="na">Authoritative source unavailable; showing POAScan\'s derived values. The cross check needs a '
+            '/api/network-facts read.</p>')
+    head = f'<div class="kv"><span>Integrity</span><div>{_badge(cc)}</div></div>'
+    hashes = hash_kv("engine", "Engine hash") + hash_kv("params", "Params hash")
+
+    econ_rows = economics(facts)
+    def ev(v): return f'<b>{E(str(v))}</b>' if v is not None else '<span class="na">-</span>'
+    econ = ('<div class="sy">' + "".join(f'<div><span>{E(e["label"])}</span>{ev(e["value"])}</div>' for e in econ_rows) + '</div>'
+            if facts is not None else '<p class="na">No economics params without a facts read.</p>')
+
+    accts = system_accounts(facts)
+    def live_tag(a):
+        if a["live"] is True: return flag("live", "Reported live by the network facts", tone="ok")
+        if a["live"] is False: return flag("down", "Reported not live by the network facts", tone="bad")
+        return flag("unknown", "The facts do not report this account's liveness", tone="warn")
+    acct_html = ("".join(f'<div class="kv"><span>{E(a["id"])}</span><div>'
+                         + (f'<span class="mono">{E(short(a["address"], 6, 4))}</span> ' if a.get("address") else "")
+                         + live_tag(a) + '</div></div>' for a in accts)
+                 if accts else '<p class="na">No system accounts in the facts read.</p>')
+
+    tg = trusted_graders(facts)
+    tg_html = f'<div class="kv"><span>Trusted graders</span><div><b>{len(tg)}</b></div></div>'
+
+    extra = f'<span class="na small" title="Read {E(PATH)} hourly; derived from the signed release">authoritative</span>'
+    body = (f'{head}{hashes}{tg_html}'
+            f'<h3>Economics</h3>{econ}'
+            f'<h3>System accounts</h3>{acct_html}{note}')
+    return card("Network facts · authoritative", body, extra)
