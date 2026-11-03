@@ -395,7 +395,7 @@ from . import join as _join
 
 FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
-        ("/privacy", "Privacy"), ("/api/health", "API")]
+        ("/privacy", "Privacy"), ("/api", "API")]
 def _footer():
     """One row of small links. Skips the page you are on (its title already says it); home and About live in the header."""
     cur = req_path(); ext = lambda h: h.startswith("http")
