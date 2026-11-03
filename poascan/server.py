@@ -847,7 +847,7 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(e, str) or e not in VS.PROMPT_IDS: return self.send(400, json.dumps({"error": "unknown event"}), "application/json", hd)
         if VS.kind("/", self.headers.get("User-Agent") or "") == "human": VS.COUNTER.event("prompt", e)
         return self.send(204, b"", TXT, hd)
-    def do_POST(self):
+    def _post(self):
         """The only write-shaped methods we accept are JSON-RPC to the read-only MCP server and the click count."""
         if self.cf_origin_blocked(): return   # shed a direct poascan.fly.dev hit before any routing, DB or upstream work
         I.CLIENT.ip = self.client_ip()
@@ -1025,9 +1025,27 @@ class H(BaseHTTPRequestHandler):
         self.send(429, "Too many page requests. Please slow down; the JSON API at /api/v1 is the better fit for bulk reads.\n", TXT,
                   {"Retry-After": str(wait), "Cache-Control": "no-store"})
         return True
+    # 1.26.254: the heavy-work slot (GD.slots, MAX_WORKERS) is taken HERE, per request, once the method is dispatched,
+    # and NOT for the two health paths. Fly's /healthz check and the loopback watchdog therefore answer immediately even
+    # when every worker slot is held by slow /address renders under a crawler flood, so the machine is never pulled for
+    # a late health check. A gated request that cannot get a slot within HEAVY_WAIT is shed with a 503 + Retry-After
+    # rather than piling up. Total thread count is still bounded upstream by GD.conns in Server.process_request.
+    HEALTH_PATHS = ("/healthz", "/api/health")
+    def _is_health(self):
+        try: p = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        except Exception: return False
+        return p in self.HEALTH_PATHS
+    def _gated(self, fn):
+        if self._is_health(): return fn()
+        if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
+            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+        try: return fn()
+        finally: GD.slots.release()
     def do_GET(self):
-        try: return self._get()
-        finally: SG.reset()   # the segment a request reads (?segment=) never leaks into the next one on this thread
+        try: return self._gated(self._get)
+        finally: SG.reset()
+    def do_POST(self):
+        return self._gated(self._post)   # the segment a request reads (?segment=) never leaks into the next one on this thread
     def _get(self):
         if self.cf_origin_blocked(): return   # shed a direct poascan.fly.dev hit before any routing, DB or upstream work
         I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)
@@ -1318,14 +1336,21 @@ class Server(ThreadingHTTPServer):
     def __init__(self, *a, **k):
         super().__init__(*a, **k); self.detached = set()
     def process_request(self, request, client_address):
-        GD.slots.acquire()               # bounded: at most GD.MAX_WORKERS requests in flight, the rest wait in the backlog
+        # 1.26.254: bound TOTAL in-flight threads here (not heavy work) and shed the overflow fast instead of queueing
+        # it hundreds deep (a deep backlog just holds crawler connections open). The heavy-work cap (GD.slots, MAX_WORKERS)
+        # is taken inside the handler, so /healthz and /api/health never wait behind a flood of slow renders for a
+        # worker slot. That starvation (the health check timing out while every slot was held) is what tripped Fly's
+        # check and pulled the machine under a crawler flood.
+        if not GD.conns.acquire(timeout=GD.CONN_WAIT):
+            try: self.shutdown_request(request)
+            finally: return
         try: super().process_request(request, client_address)
-        except Exception: GD.slots.release(); raise
+        except Exception: GD.conns.release(); raise
     def process_request_thread(self, request, client_address):
         try: super().process_request_thread(request, client_address)
         finally:
             db.release()   # 1.26.227: this thread's SQLite connection goes now, not at the next full GC
-            GD.slots.release()
+            GD.conns.release()
     def shutdown_request(self, request):
         if request in self.detached:      # upgraded to WebSocket: the hub owns it now
             self.detached.discard(request); return

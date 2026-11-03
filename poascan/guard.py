@@ -17,7 +17,10 @@
 import ctypes, gc, logging, os, threading, time, urllib.request
 
 log = logging.getLogger("guard")
-MAX_WORKERS = int(os.environ.get("POASCAN_MAX_WORKERS", "16"))
+MAX_WORKERS = int(os.environ.get("POASCAN_MAX_WORKERS", "16"))   # heavy-work slots: concurrent page/API renders
+MAX_CONNS = int(os.environ.get("POASCAN_MAX_CONNS", "200"))   # total in-flight request threads (far above MAX_WORKERS so /healthz always gets a thread)
+CONN_WAIT = float(os.environ.get("POASCAN_CONN_WAIT", "0.5"))   # a new connection waits this long for a thread slot, then is shed (no deep backlog that holds crawler sockets open)
+HEAVY_WAIT = float(os.environ.get("POASCAN_HEAVY_WAIT", "2.0"))   # a gated (non-health) request waits this long for a heavy-work slot, then 503s with Retry-After
 HANG_FAILS = int(os.environ.get("POASCAN_HANG_FAILS", "4"))
 THROTTLED_FAILS = int(os.environ.get("POASCAN_THROTTLED_FAILS", "40"))   # about 10 minutes of throttled failures
 STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # share of CPU time that was steal over a check interval (1.26.82: 0.5 let 40 to 50% steal intervals count as hangs, so a throttled VM still restarted)
@@ -27,7 +30,8 @@ RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "860"))   # 1 GB VM (1.2
 TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
 GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
 
-slots = threading.BoundedSemaphore(MAX_WORKERS)
+slots = threading.BoundedSemaphore(MAX_WORKERS)   # heavy-work cap; taken inside the handler so health paths never wait on it
+conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
 state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0}
 
 try:
