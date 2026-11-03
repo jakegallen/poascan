@@ -796,6 +796,9 @@ def established_card(a):
             ("Est. expires", (_risk_tag(h) + f'<span title="{E(A.STANDING_NOTE)}">{_ep_link(h["established_expires_epoch_est"])} close '
                               f'<span class="dim">· {_closes_left(h)}last cleared + {int(A.params().get("estab_ttl") or 6) + 1}, <a href="/about#established-expiry">estimate</a></span></span>')
                              if h["established_expires_epoch_est"] is not None else "···")]
+    from . import netfacts as NF   # authoritative per-address chip from the cached /api/established set, cross checked against our estimate (fails soft)
+    arow = NF.addr_row(a, h["established"])
+    if arow: rows.append(arow)
     pd = SD.pending(a, 8); mk = SD.marks(a)
     rows += [("Pending", _pending_txt(pd)), ("Marks", _marks_txt(mk))]
     if w["through"] is not None:

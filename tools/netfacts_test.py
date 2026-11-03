@@ -110,6 +110,61 @@ def main():
     NF.job()
     check("job skips the fetch while the endpoint is backing off", calls == [])
 
+    # ---- established set cross check (/api/established) ----
+    from poascan import analytics as A, estfold as EF, segments as S
+    db.put_blob(NF.EST_BLOB, None)
+    check("no established copy: reconcile fails soft (available False, agree None, derived size reported)",
+          (r := NF.established_reconcile())["available"] is False and r["agree"] is None and isinstance(r["derived_size"], int))
+    check("addr_established and addr_row fail soft to None with no copy", NF.addr_established(addr("a")) is None and NF.addr_row(addr("a"), True) is None)
+
+    # a known derived set: segment genesis import of A1 and A2, no close changes
+    A1, A2, A3 = addr("1"), addr("2"), addr("3")
+    seg = S.selected()
+    EF.CFG["imports"] = {str(seg): {"established": [A1, A2], "established_count": 2, "url": "x", "sha256": "x", "final_checkpoint_height": 1, "agents": 2}}
+    db.put_blob("params", {"estab_ttl": 6}); db.put_blob(S.blob_kind(), [])
+    A._cache.clear()
+    check("derived established set is A1 and A2", set(A.established_set()) == {A1, A2})
+
+    # authoritative set: A1 (agrees) and A3 (only authoritative); A2 is only in the derivation
+    db.put_blob(NF.EST_BLOB, [{"address": A1, "established_since": 3, "expires_after": 10}, {"address": A3, "since": 5}])
+    aset, detail = NF.authoritative_established()
+    check("authoritative set parsed from a list of rows", aset == {A1, A3} and detail[A1]["since"] == 3 and detail[A1]["expires"] == 10)
+    rec = NF.established_reconcile()
+    check("reconcile: not agree, A2 only in derivation, A3 only authoritative",
+          rec["available"] and rec["agree"] is False and rec["only_derived"] == [A2] and rec["only_authoritative"] == [A3]
+          and rec["derived_size"] == 2 and rec["authoritative_size"] == 2)
+    row = NF.addr_row(A1, True)
+    check("A1 chip: authoritative YES, since and expires shown, no drift (agrees with derivation)",
+          row[0] == "Established (authoritative)" and "since E3" in row[1] and "expires after E10" in row[1] and "Drift" not in row[1] and ">YES<" in row[1])
+    check("A3 chip: authoritative YES but derived False is a Drift", "Drift" in NF.addr_row(A3, False)[1])
+    check("A2 chip: authoritative NO but derived True is a Drift", "Drift" in NF.addr_row(A2, True)[1] and ">NO<" in NF.addr_row(A2, True)[1])
+    html = NF.render_card()
+    check("facts card carries the Established set reconciliation (Differs)", "Established set" in html and "Differs" in html)
+    check("no em or en dash on the reconciliation card", "\u2014" not in html and "\u2013" not in html)
+
+    # agreement reads Matches derivation; a plain list of addresses parses too
+    db.put_blob(NF.EST_BLOB, [A1, A2])
+    rec = NF.established_reconcile()
+    check("identical sets agree (Matches derivation), a plain address list parses", rec["agree"] is True and rec["only_derived"] == [] and rec["only_authoritative"] == [])
+    check("render shows Matches derivation when the sets agree", "Matches derivation" in NF.render_card())
+    # a dict wrapper around the list
+    db.put_blob(NF.EST_BLOB, {"established": [A1, A2], "count": 2})
+    check("a dict wrapping the established list parses", NF.authoritative_established()[0] == {A1, A2})
+
+    # the established job: conditional read, 304 keeps the copy, backoff skips
+    check("established_auth job every hour, gated on /api/established", jobs.get("established_auth") == (3600, "/api/established"))
+    check("EVERY carries the established cadence (hourly)", I.EVERY.get("/api/established") == 3600)
+    seen2 = []
+    I.fetch = lambda path, timeout=60, endpoint=None, cond=False, soft=False, gate=None: seen2.append((path, cond)) or [A1, A2, A3]
+    db.put_blob(NF.EST_BLOB, None); NF.fetch_established()
+    check("fetch_established reads /api/established conditionally and stores the blob", seen2 == [("/api/established", True)] and NF.established_available())
+    I.fetch = lambda *a, **k: I.NOT_MODIFIED; before2 = db.get_blob(NF.EST_BLOB)[0]
+    check("a 304 keeps the stored established copy", NF.fetch_established() is None and db.get_blob(NF.EST_BLOB)[0] == before2)
+    db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at,err) VALUES('/api/established',?,3,?,'HTTP 503')", (int(time.time()), int(time.time()) + 600))
+    calls2 = []; I.fetch = lambda *a, **k: calls2.append(a) or []
+    NF.established_job()
+    check("established_job skips the fetch while the endpoint is backing off", calls2 == [])
+
     print(f"\n{len(fails)} failed" if fails else "\nall ok")
     sys.exit(1 if fails else 0)
 

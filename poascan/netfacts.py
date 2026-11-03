@@ -159,6 +159,67 @@ def crosscheck(facts=None, rel=None, now=None):
     return dict(available=facts is not None, verdict=verdict, rows=rows, derived_version=der.get("version"), as_of=fts)
 
 
+# ---------------------------------------------------------------- established set cross check (/api/established)
+EST_PATH = "/api/established"
+EST_BLOB = "established_auth"
+
+
+def _est_rows(facts):
+    if isinstance(facts, dict):
+        v = _first(facts, "established", "established_set", "set", "agents")
+        return v if isinstance(v, list) else []
+    return facts if isinstance(facts, list) else []
+
+
+def authoritative_established(facts=None):
+    """(frozenset of established addresses, {addr: {since, expires}}) from the stored /api/established copy. Empty when
+    unavailable. Accepts a list of addresses, a list of {address, since, expires} rows, or a dict wrapping either."""
+    if facts is None: facts, _ = db.get_blob(EST_BLOB)
+    aset, detail = set(), {}
+    for r in _est_rows(facts):
+        if isinstance(r, str):
+            if r.startswith("poa1"): aset.add(r)
+        elif isinstance(r, dict):
+            a = _first(r, "address", "addr", "account")
+            if isinstance(a, str) and a.startswith("poa1"):
+                aset.add(a)
+                detail[a] = dict(since=_first(r, "established_since", "since", "established_at", "since_epoch"),
+                                 expires=_first(r, "expires_after", "expires", "expires_epoch", "expires_after_epoch"))
+    return frozenset(aset), detail
+
+
+def established_available():
+    d, _ = db.get_blob(EST_BLOB); return d is not None
+
+
+def established_reconcile(now=None):
+    """POAScan's derived established set (analytics.established_set, from intake and estfold) against the authoritative
+    /api/established copy. {available, agree, derived_size, authoritative_size, only_derived, only_authoritative, as_of}.
+    agree is True when the two sets are identical; any address on exactly one side is a real signal worth a look. Fails
+    soft: with no authoritative copy it still reports the derived size and agree None."""
+    from . import analytics as A
+    der = set(A.established_set())
+    d, ts = db.get_blob(EST_BLOB)
+    if d is None:
+        return dict(available=False, agree=None, derived_size=len(der), authoritative_size=None,
+                    only_derived=[], only_authoritative=[], as_of=None)
+    auth, _ = authoritative_established(d)
+    only_d, only_a = sorted(der - auth), sorted(auth - der)
+    return dict(available=True, agree=(not only_d and not only_a), derived_size=len(der), authoritative_size=len(auth),
+                only_derived=only_d, only_authoritative=only_a, as_of=int(ts) if ts else None)
+
+
+def addr_established(a, facts=None):
+    """{authoritative, since, expires} for one address from the cached /api/established copy, or None when the facts are
+    unavailable. Read from the cached bulk set, never a per view upstream call (the per-address /api/established/<addr>
+    read is allowlisted for a future on demand enrichment under the existing budget, not polled here)."""
+    if facts is None: facts, _ = db.get_blob(EST_BLOB)
+    if facts is None: return None
+    aset, detail = authoritative_established(facts)
+    info = detail.get(a) or {}
+    return dict(authoritative=a in aset, since=info.get("since"), expires=info.get("expires"))
+
+
 # ---------------------------------------------------------------- API block (no upstream read)
 def api_block(now=None):
     facts, ts = cached(now)
@@ -189,6 +250,27 @@ def job():
         fetch_facts()
     except I.Busy as e:
         log.warning("%s: %s", PATH, e)
+
+
+def fetch_established():
+    """One conditional GET of /api/established through indexer.fetch; stores the established_auth blob on a 200, keeps
+    the stored copy on a 304. Raises indexer.Busy on a failure, like the other meta reads."""
+    from . import indexer as I
+    d = I.fetch(EST_PATH, cond=True)
+    if d is I.NOT_MODIFIED: return None
+    if isinstance(d, (list, dict)):
+        db.put_blob(EST_BLOB, d)
+    return d
+
+
+def established_job():
+    from . import indexer as I
+    if not I.can_fetch(EST_PATH):
+        I.skip_backoff(EST_PATH); return
+    try:
+        fetch_established()
+    except I.Busy as e:
+        log.warning("%s: %s", EST_PATH, e)
 
 
 # ---------------------------------------------------------------- rendering (Network > Overview)
@@ -253,5 +335,47 @@ def render_card(now=None):
     extra = f'<span class="na small" title="Read {E(PATH)} hourly; derived from the signed release">authoritative</span>'
     body = (f'{head}{hashes}{tg_html}'
             f'<h3>Economics</h3>{econ}'
-            f'<h3>System accounts</h3>{acct_html}{note}')
+            f'<h3>System accounts</h3>{acct_html}'
+            f'{_established_block()}{note}')
     return card("Network facts · authoritative", body, extra)
+
+
+def _established_block():
+    """The established set reconciliation sub-block for the facts card (derived vs authoritative /api/established)."""
+    from .ui import flag, short, E
+    rec = established_reconcile()
+    if not rec["available"]:
+        tag = flag("unknown", "Authoritative /api/established not read; POAScan shows its derived set.", tone="warn")
+        return f'<h3>Established set</h3><div class="kv"><span>Reconciliation</span><div>{tag} <span class="na">derived {rec["derived_size"]}</span></div></div>'
+    if rec["agree"]:
+        badge = flag("Matches derivation", "The authoritative established set equals POAScan's derived set.", tone="ok")
+    else:
+        badge = flag("Differs", f"{len(rec['only_derived'])} only in POAScan's derivation, {len(rec['only_authoritative'])} only authoritative. A real signal.", tone="bad")
+    rows = f'<div class="kv"><span>Reconciliation</span><div>{badge}</div></div>'
+    rows += f'<div class="kv"><span>Size, derived / authoritative</span><div><b>{rec["derived_size"]}</b> / <b>{rec["authoritative_size"]}</b></div></div>'
+
+    def addrs(label, lst):
+        if not lst: return ""
+        shown = " ".join(f'<a class="mono" href="/address/{E(x)}">{E(short(x, 6, 4))}</a>' for x in lst[:6])
+        more = f' <span class="dim">+{len(lst) - 6}</span>' if len(lst) > 6 else ""
+        return f'<div class="kv"><span>{label}</span><div>{shown}{more}</div></div>'
+
+    rows += addrs("Only in derivation", rec["only_derived"]) + addrs("Only authoritative", rec["only_authoritative"])
+    return f'<h3>Established set</h3>{rows}'
+
+
+def addr_row(a, derived_established):
+    """(label, value) for the Established (authoritative) row on the address page, or None when no facts are cached.
+    Shows established since and expires after from the cached /api/established copy, and a Drift tag when the
+    authoritative membership disagrees with POAScan's own derivation for this address. Fails soft."""
+    info = addr_established(a)
+    if info is None: return None
+    from .ui import flag, E
+    auth = info["authoritative"]
+    tag = '<span class="tag ok">YES</span>' if auth else '<span class="tag">NO</span>'
+    bits = []
+    if info["since"] is not None: bits.append(f'since E{E(str(info["since"]))}')
+    if info["expires"] is not None: bits.append(f'expires after E{E(str(info["expires"]))}')
+    det = (' <span class="dim">· ' + " · ".join(bits) + "</span>") if bits else ""
+    drift = flag("Drift", "POAScan's derivation disagrees with the authoritative set for this address.", tone="bad") if auth != bool(derived_established) else ""
+    return ("Established (authoritative)", f'{tag}{det} {drift}')
