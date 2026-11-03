@@ -27,7 +27,7 @@ def main():
     check("no facts read: every hash row is unknown, derived still shown", all(r["state"] == "unknown" for r in cc["rows"]) and all(r["derived"] for r in cc["rows"]))
     html = NF.render_card()
     check("render fails soft with the unavailable note", "Authoritative source unavailable" in html and "authoritative" in html)
-    check("no em or en dash on the facts card", "—" not in html and "–" not in html)
+    check("no em or en dash on the facts card", "\u2014" not in html and "\u2013" not in html)
     check("economics(None) lists every key with a None value", [e["value"] for e in NF.economics(None)] == [None] * len(NF.ECON))
     check("system_accounts(None) and trusted_graders(None) are empty, never raise", NF.system_accounts(None) == [] and NF.trusted_graders(None) == [])
 
@@ -56,7 +56,7 @@ def main():
     check("facts_hashes reads engine and params", NF.facts_hashes() == {"engine": der["engine"], "params": der["params"]})
     html = NF.render_card()
     check("match card shows Matches consensus and the economics and system account rows", "Matches consensus" in html and "Intake floor" in html and "v1" in html)
-    check("no em or en dash on the match card", "—" not in html and "–" not in html)
+    check("no em or en dash on the match card", "\u2014" not in html and "\u2013" not in html)
 
     # ---- a drift in one hash is a real signal ----
     db.put_blob(NF.BLOB, dict(facts, engine_sha256="ff" * 32))
