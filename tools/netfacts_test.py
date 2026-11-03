@@ -165,6 +165,64 @@ def main():
     NF.established_job()
     check("established_job skips the fetch while the endpoint is backing off", calls2 == [])
 
+    # ---- close report + settled authoritative split (/api/close-report, /api/settled) ----
+    db.put_blob(NF.CLOSE_BLOB, None); db.put_blob(NF.SETTLED_BLOB, None)
+    # a derived last close: 1 passed, 1 failed, 1 expired-no-jury, graded by A1 only
+    eps = [{"epoch": 0, "ts": 1000, "pool": 1e9, "rewards": {A1: 1e8}, "challenges": {}, "propagation": {},
+            "basis": {"settled": [{"answer": "x", "passed": True, "jury": [{"grader": A1, "aligned": True}]},
+                                  {"answer": "y", "passed": False, "jury": [{"grader": A1}]},
+                                  {"answer": "z", "passed": False, "expired": True, "jury": []}]}}]
+    db.put_blob("epochs", eps); db.put_blob("params", {"grade_quorum": 3}); A._cache.clear()
+    dc = NF.derived_close()
+    check("derived close split: 1 passed, 1 failed, 1 expired, 3 settled, grader A1",
+          (dc["passed"], dc["failed"], dc["expired"], dc["settled"], dc["graders"]) == (1, 1, 1, 3, 1))
+    cc = NF.close_crosscheck()
+    check("no authoritative close: verdict unknown, available False", cc["available"] is False and cc["verdict"] == "unknown")
+    check("render_close_card fails soft to the derived stats with the unavailable note",
+          "Authoritative source unavailable" in NF.render_close_card() and "Passed / failed / expired" in NF.render_close_card())
+    check("no em or en dash on the close card (fail soft)", "\u2014" not in NF.render_close_card() and "\u2013" not in NF.render_close_card())
+
+    # authoritative close that agrees, with a grader distribution for concentration
+    db.put_blob(NF.CLOSE_BLOB, {"epoch": 0, "settled": {"passed": 1, "failed": 1, "expired": 1}, "grades": 2, "graders": 1,
+                                "quorum_rows": 2, "grades_by_grader": {A1: 2}})
+    cc = NF.close_crosscheck()
+    check("authoritative agrees: verdict match, every pair matches", cc["verdict"] == "match" and all(r["state"] == "match" for r in cc["rows"]))
+    check("authoritative only fields surface: rows at quorum, n_eff and top grader share", cc["quorum_rows"] == 2 and cc["n_eff"] == 1.0 and cc["top_grader_share"] == 1.0)
+    check("preferred takes the authoritative split", cc["preferred"]["passed"] == 1 and cc["preferred"]["settled"] == 3)
+    check("close card shows Matches close stats and the split", "Matches close stats" in NF.render_close_card() and "Rows at quorum" in NF.render_close_card())
+
+    # authoritative that differs is a real signal
+    db.put_blob(NF.CLOSE_BLOB, {"epoch": 0, "passed": 5, "failed": 1, "expired": 1})
+    cc = NF.close_crosscheck()
+    check("authoritative differs on passed: verdict differ", cc["verdict"] == "differ" and {r["name"]: r["state"] for r in cc["rows"]}["passed"] == "differ")
+    check("close card shows Differs", "Differs" in NF.render_close_card())
+
+    # the split can also be counted from /api/settled rows when close-report carries no split block
+    db.put_blob(NF.CLOSE_BLOB, None)
+    db.put_blob(NF.SETTLED_BLOB, [{"passed": True, "jury": [{"grader": A1}]}, {"passed": False, "jury": [{"grader": A1}]}, {"passed": False, "expired": True, "jury": []}])
+    ac = NF.authoritative_close()
+    check("settled split counted from /api/settled rows (outcome.counts)", (ac["passed"], ac["failed"], ac["expired"]) == (1, 1, 1))
+    check("a settled-rows-only close still cross checks to match", NF.close_crosscheck()["verdict"] == "match")
+
+    # n_eff and top share reflect concentration: two equal graders read n_eff 2, top share 0.5
+    conc = NF._concentration({A1: 5, A2: 5})
+    check("concentration: two equal graders give n_eff 2.0 and top share 0.5", conc["n_eff"] == 2.0 and conc["top_share"] == 0.5)
+
+    # the close and settled jobs: hourly, conditional, gated, 304 keeps the copy, backoff skips
+    check("close_report and settled_auth jobs every hour, gated on their endpoints",
+          jobs.get("close_report") == (3600, "/api/close-report") and jobs.get("settled_auth") == (3600, "/api/settled"))
+    check("EVERY carries the close and settled cadence (hourly)", I.EVERY.get("/api/close-report") == 3600 and I.EVERY.get("/api/settled") == 3600)
+    seen3 = []
+    I.fetch = lambda path, timeout=60, endpoint=None, cond=False, soft=False, gate=None: seen3.append((path, cond)) or {"epoch": 0, "passed": 1}
+    db.put_blob(NF.CLOSE_BLOB, None); NF.fetch_close()
+    check("fetch_close reads /api/close-report conditionally and stores the blob", seen3 == [("/api/close-report", True)] and db.get_blob(NF.CLOSE_BLOB)[0] is not None)
+    I.fetch = lambda *a, **k: I.NOT_MODIFIED; before3 = db.get_blob(NF.CLOSE_BLOB)[0]
+    check("a 304 keeps the stored close report", NF.fetch_close() is None and db.get_blob(NF.CLOSE_BLOB)[0] == before3)
+    db.write("INSERT INTO fetch_log(endpoint,last_err,fails,next_at,err) VALUES('/api/close-report',?,3,?,'HTTP 503')", (int(time.time()), int(time.time()) + 600))
+    calls3 = []; I.fetch = lambda *a, **k: calls3.append(a) or {}
+    NF.close_job()
+    check("close_job skips the fetch while the endpoint is backing off", calls3 == [])
+
     print(f"\n{len(fails)} failed" if fails else "\nall ok")
     sys.exit(1 if fails else 0)
 

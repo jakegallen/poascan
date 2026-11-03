@@ -220,6 +220,103 @@ def addr_established(a, facts=None):
     return dict(authoritative=a in aset, since=info.get("since"), expires=info.get("expires"))
 
 
+# ---------------------------------------------------------------- close report + settled split (/api/close-report, /api/settled)
+CLOSE_PATH = "/api/close-report"
+SETTLED_PATH = "/api/settled"
+CLOSE_BLOB = "close_report_auth"
+SETTLED_BLOB = "settled_auth"
+CLOSE_FIELDS = [("passed", "Passed"), ("failed", "Failed"), ("expired", "Expired, no jury"),
+                ("settled", "Settled"), ("grades", "Grades"), ("graders", "Graders")]
+
+
+def _concentration(dist):
+    """{graders, grades, n_eff, top_share} for a {grader: grades} distribution. n_eff is the effective grader count
+    (Herfindahl inverse, (sum w) squared over sum of w squared); top_share is the largest grader's share. n_eff and
+    top_share are None with no grades."""
+    vals = [float(v) for v in (dist or {}).values() if isinstance(v, (int, float)) and v > 0]
+    tot = sum(vals)
+    if not vals or tot <= 0:
+        return dict(graders=len(vals), grades=int(tot), n_eff=None, top_share=None)
+    n_eff = (tot * tot) / sum(v * v for v in vals)
+    return dict(graders=len(vals), grades=int(tot), n_eff=round(n_eff, 2), top_share=round(max(vals) / tot, 4))
+
+
+def _split_from(obj):
+    """{passed, failed, expired} from a settled summary block (several key spellings), or None when it carries none."""
+    if not isinstance(obj, dict): return None
+    p, f = _first(obj, "passed", "pass", "accepted"), _first(obj, "failed", "fail", "rejected")
+    x = _first(obj, "expired_no_jury", "expired", "expired_nojury")
+    if p is None and f is None and x is None: return None
+    g = lambda v: int(v) if isinstance(v, (int, float)) else 0
+    return dict(passed=g(p), failed=g(f), expired=g(x))
+
+
+def authoritative_close(now=None):
+    """The authoritative last close, from /api/close-report and /api/settled (cached). {available, epoch, passed,
+    failed, expired, settled, grades, graders, quorum_rows, n_eff, top_grader_share, as_of}. The settled split is read
+    from close-report's settled block, else counted from the /api/settled rows (outcome.counts). Empty when neither
+    endpoint has a copy."""
+    from . import outcome as OC
+    cr, crt = db.get_blob(CLOSE_BLOB); se, set_ = db.get_blob(SETTLED_BLOB)
+    if cr is None and se is None:
+        return dict(available=False, as_of=None)
+    cr = cr if isinstance(cr, dict) else {}
+    split = _split_from(cr.get("settled")) or _split_from(cr)
+    rows = se if isinstance(se, list) else (se.get("settled") if isinstance(se, dict) and isinstance(se.get("settled"), list) else None)
+    if split is None and rows is not None:
+        c = OC.counts(rows); split = dict(passed=c["passed"], failed=c["failed"], expired=c["expired_no_jury"])
+    split = split or dict(passed=None, failed=None, expired=None)
+    dist = _first(cr, "grades_by_grader", "grader_grades", "grader_distribution", "graders_served")
+    conc = _concentration(dist if isinstance(dist, dict) else None)
+    grades = _first(cr, "grades", "grades_cast", "grade_count")
+    graders = _first(cr, "graders", "grader_count", "n_graders")
+    settled = None if split["passed"] is None else (split["passed"] + split["failed"] + split["expired"])
+    return dict(available=True, epoch=_first(cr, "epoch", "close", "epoch_number"),
+                passed=split["passed"], failed=split["failed"], expired=split["expired"], settled=settled,
+                grades=int(grades) if isinstance(grades, (int, float)) else (conc["grades"] or None),
+                graders=int(graders) if isinstance(graders, (int, float)) else (conc["graders"] or None),
+                quorum_rows=_first(cr, "quorum_rows", "rows_at_quorum", "reached_quorum", "at_quorum"),
+                n_eff=conc["n_eff"], top_grader_share=conc["top_share"], as_of=int(crt) if crt else (int(set_) if set_ else None))
+
+
+def derived_close():
+    """POAScan's own last close stats, from the close records (analytics.epoch_rows and grade_counts). The grader
+    concentration is derived from POAScan's grade rows. quorum_rows is authoritative only (None here)."""
+    from . import analytics as A
+    rows = A.epoch_rows()
+    if not rows: return dict(available=False)
+    r = rows[-1]
+    raw = A.epochs_raw()
+    conc = _concentration(dict(A.grade_counts(raw[-1])) if raw else {})
+    return dict(available=True, epoch=r["epoch"], passed=r["settled_passed"], failed=r["settled_failed"],
+                expired=r["settled_expired_no_jury"], settled=r["settled"], grades=r["grades"], graders=r["graders"],
+                quorum_rows=None, n_eff=conc["n_eff"], top_grader_share=conc["top_share"])
+
+
+def close_crosscheck(now=None):
+    """Authoritative last close against POAScan's own close stats. {available, verdict, rows, preferred, epoch,
+    quorum_rows, n_eff, top_grader_share, as_of}. verdict: match when every field both sides carry is equal, differ
+    when any differs, unknown when the authoritative close is unavailable. preferred takes the authoritative value where
+    present and falls back to the derived one (so the page shows the authoritative split and derived where it is not)."""
+    auth = authoritative_close(now); der = derived_close()
+    rows = []; compared = diff = 0; preferred = {}
+    for key, label in CLOSE_FIELDS:
+        a = auth.get(key) if auth.get("available") else None
+        d = der.get(key) if der.get("available") else None
+        preferred[key] = a if a is not None else d
+        if a is not None and d is not None:
+            compared += 1; ok = a == d
+            if not ok: diff += 1
+            rows.append(dict(name=key, label=label, authoritative=a, derived=d, state="match" if ok else "differ"))
+        else:
+            rows.append(dict(name=key, label=label, authoritative=a, derived=d, state="unknown"))
+    verdict = "unknown" if not auth.get("available") or compared == 0 else ("differ" if diff else "match")
+    return dict(available=auth.get("available", False), verdict=verdict, rows=rows, preferred=preferred,
+                epoch=auth.get("epoch") if auth.get("available") else (der.get("epoch") if der.get("available") else None),
+                quorum_rows=auth.get("quorum_rows"), n_eff=auth.get("n_eff"), top_grader_share=auth.get("top_grader_share"),
+                as_of=auth.get("as_of"))
+
+
 # ---------------------------------------------------------------- API block (no upstream read)
 def api_block(now=None):
     facts, ts = cached(now)
@@ -227,7 +324,9 @@ def api_block(now=None):
     return dict(available=facts is not None, as_of=ts, stale=stale(now),
                 economics={e["key"]: e["value"] for e in economics(facts)},
                 system_accounts=system_accounts(facts), trusted_graders=trusted_graders(facts),
-                hashes=facts_hashes(facts), crosscheck=cc, method="https://poascan.io" + METHOD)
+                hashes=facts_hashes(facts), crosscheck=cc,
+                established=established_reconcile(now), close=close_crosscheck(now),
+                method="https://poascan.io" + METHOD)
 
 
 # ---------------------------------------------------------------- the indexer job (server side, gated, cached)
@@ -271,6 +370,43 @@ def established_job():
         fetch_established()
     except I.Busy as e:
         log.warning("%s: %s", EST_PATH, e)
+
+
+def _fetch_one(path, blob):
+    from . import indexer as I
+    d = I.fetch(path, cond=True)
+    if d is I.NOT_MODIFIED: return None
+    if isinstance(d, (list, dict)):
+        db.put_blob(blob, d)
+    return d
+
+
+def fetch_close():
+    """One conditional GET of /api/close-report; stores the close_report_auth blob on a 200, keeps it on a 304."""
+    return _fetch_one(CLOSE_PATH, CLOSE_BLOB)
+
+
+def fetch_settled():
+    """One conditional GET of /api/settled; stores the settled_auth blob on a 200, keeps it on a 304."""
+    return _fetch_one(SETTLED_PATH, SETTLED_BLOB)
+
+
+def close_job():
+    from . import indexer as I
+    if I.can_fetch(CLOSE_PATH):
+        try: fetch_close()
+        except I.Busy as e: log.warning("%s: %s", CLOSE_PATH, e)
+    else:
+        I.skip_backoff(CLOSE_PATH)
+
+
+def settled_job():
+    from . import indexer as I
+    if I.can_fetch(SETTLED_PATH):
+        try: fetch_settled()
+        except I.Busy as e: log.warning("%s: %s", SETTLED_PATH, e)
+    else:
+        I.skip_backoff(SETTLED_PATH)
 
 
 # ---------------------------------------------------------------- rendering (Network > Overview)
@@ -379,3 +515,52 @@ def addr_row(a, derived_established):
     det = (' <span class="dim">· ' + " · ".join(bits) + "</span>") if bits else ""
     drift = flag("Drift", "POAScan's derivation disagrees with the authoritative set for this address.", tone="bad") if auth != bool(derived_established) else ""
     return ("Established (authoritative)", f'{tag}{det} {drift}')
+
+
+# ---------------------------------------------------------------- close report card (Network > Overview)
+_CLOSE_VERDICT = {"match": ("ok", "Matches close stats"), "differ": ("bad", "Differs"), "unknown": ("warn", "Authoritative source unavailable")}
+
+
+def render_close_card(now=None):
+    """The authoritative last close card: the settled split (passed, failed, expired), grades cast, rows reaching
+    quorum and grader concentration (n_eff, top-grader share), each preferring the authoritative figure and falling
+    back to POAScan's derived one, with a match or differ badge against POAScan's own close stats. Fails soft."""
+    from .ui import card, flag, stat, E
+    cc = close_crosscheck(now)
+    tone, word = _CLOSE_VERDICT[cc["verdict"]]
+    if cc["verdict"] == "match":
+        det = "The authoritative settled split and grade counts equal POAScan's own close stats."
+    elif cc["verdict"] == "differ":
+        bad = ", ".join(r["label"] for r in cc["rows"] if r["state"] == "differ")
+        det = f"The authoritative close differs from POAScan's close stats for: {bad}. A real signal worth a look."
+    else:
+        det = "POAScan keeps its own derived close stats; the authoritative /api/close-report was not read."
+    ep = cc["epoch"]
+    head = (f'<div class="kv"><span>{"Close E" + str(E(str(ep))) if ep is not None else "Last close"}</span>'
+            f'<div>{flag(word, det, tone=tone)}</div></div>')
+    pref = cc["preferred"]
+    def v(k): return pref.get(k)
+    def row(label, val, tip=None):
+        shown = f'<b>{E(str(val))}</b>' if val is not None else '<span class="na">-</span>'
+        t = f' title="{E(tip)}"' if tip else ""
+        return f'<div class="kv"><span{t}>{E(label)}</span><div>{shown}</div></div>'
+    juried = None
+    if v("passed") is not None and v("failed") is not None:
+        juried = v("passed") + v("failed")
+    rate = f'{round(100 * v("passed") / juried)}%' if juried else None
+    body = (head
+            + row("Settled", v("settled"))
+            + row("Passed / failed / expired", f'{_n(v("passed"))} / {_n(v("failed"))} / {_n(v("expired"))}')
+            + (row("Pass rate (juried)", rate) if rate is not None else "")
+            + row("Grades cast", v("grades")) + row("Graders", v("graders"))
+            + row("Rows at quorum", cc["quorum_rows"], tip="Pending rows that reached grade_quorum (authoritative)")
+            + row("Effective graders (n_eff)", cc["n_eff"], tip="Herfindahl effective grader count; low means a few graders cast most grades")
+            + row("Top grader share", f'{round(100 * cc["top_grader_share"])}%' if cc["top_grader_share"] is not None else None, tip="Share of this close's grades cast by the single busiest grader"))
+    if not cc["available"]:
+        body += ('<p class="na">Authoritative source unavailable; showing POAScan\'s derived close stats. The cross check '
+                 'needs a /api/close-report read.</p>')
+    extra = '<span class="na small" title="Read /api/close-report and /api/settled hourly">authoritative</span>'
+    return card("Last close · authoritative", body, extra)
+
+
+def _n(v): return str(v) if v is not None else "-"

@@ -1558,12 +1558,15 @@ def network_overview(head):
         ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
         ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
         ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
-    from . import netfacts as NF   # authoritative /api/network-facts, cross checked against the derived engine and params hashes (fails soft)
+    from . import netfacts as NF   # authoritative minepoa facts, cross checked against POAScan's own derivation (fails soft)
+    _nflog = __import__("logging").getLogger("poascan.views")
     try: facts_card = NF.render_card()
-    except Exception as e: facts_card = ""; __import__("logging").getLogger("poascan.views").warning("netfacts card: %s", type(e).__name__)
+    except Exception as e: facts_card = ""; _nflog.warning("netfacts card: %s", type(e).__name__)
+    try: close_card = NF.render_close_card()
+    except Exception as e: close_card = ""; _nflog.warning("netfacts close card: %s", type(e).__name__)
     body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{facts_card}{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}</div>
-<div class="grid2">{card("Recent", rels, PV.badge())}</div>'''
+<div class="grid2">{facts_card}{close_card}</div>
+<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>'''
     return page("Network", head + body, "/network")
 
 def privacy():
