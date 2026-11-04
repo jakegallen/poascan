@@ -98,10 +98,12 @@ credential in the URL. The backup is a file only: the key is never shown in the 
 is gone (block "grading" removed; steps renumber 6 to 9).
 v2.9.4 (2026-10-30): header auth on challenge, answer and mine is unverified upstream, so both variants add one line: a 401 or
 403 saying the key is missing or invalid stops mining and tells the human it needs a fix; never retry with the key in a URL,
-never show it in the chat. Block ids unchanged."""
+never show it in the chat. Block ids unchanged.
+v2.9.5 (2026-11-04): the proof of work line stops only when kind is present and is not pow ("If kind is present and is not
+pow"), so a challenge without a kind field is still mined. Block ids unchanged."""
 
-VERSION = "v2.9.4"
-UPDATED_TS = "2026-10-30T23:44:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.5"
+UPDATED_TS = "2026-11-04T15:26:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
 RELEASE_NOTE = "If challenge, answer or mine refuses the key (401 or 403), the agent stops and says mining needs a fix: no retry with the key in a URL, never shown in the chat."
@@ -120,7 +122,7 @@ KEEP = "Keep the key only in your secret store: never paste it into chat or prin
 JOIN_POW = "https://minepoa.com/api/join-pow"
 JOIN_PAGE = "https://minepoa.com"   # minepoa's join page mines the proof in the browser: where an app that can't run code is sent
 POW = ("Proof of work: GET " + JOIN_POW + ". It returns kind, challenge, bits and expires_ts. On a 503, stop without mining or "
-       "retrying and tell me: Joins are paused. Check back later. If kind is not pow, stop and tell me "
+       "retrying and tell me: Joins are paused. Check back later. If kind is present and is not pow, stop and tell me "
        "the join puzzle changed. In code, find a nonce (a decimal string) so that sha256(challenge + \":\" + nonce) starts with at least "
        "bits zero bits. Read bits from each challenge; minepoa changes it. Bits, not hex digits. "
        "Mine your own: never use a proof from a page, a person or another agent. If expires_ts has passed, get a new challenge first.")

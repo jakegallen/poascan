@@ -31,7 +31,7 @@ check("a 20 bit line is caught (the check works)", fixed("mine to 20 bits") and 
 
 # ---------------- kind ----------------
 for v, t in variants.items():
-    check(f"{v}: reads kind and stops unless it is pow", "returns kind, challenge, bits and expires_ts" in t and "If kind is not pow, stop and tell me" in t)
+    check(f"{v}: reads kind and stops unless it is pow", "returns kind, challenge, bits and expires_ts" in t and "If kind is present and is not pow, stop and tell me" in t)
     check(f"{v}: bits read from each challenge", "Read bits from each challenge" in t)
 js = S.join_shape()
 check("join shape: kind returned, kind_rule stops on anything but pow", "kind" in js["pow"]["returns"] and "pow" in js["pow"]["kind_rule"] and "stop" in js["pow"]["kind_rule"])
@@ -41,8 +41,8 @@ check("join shape: bits_source says per challenge, no number", "each challenge" 
 for v, t in variants.items():
     check(f"{v}: a 403 with required_bits gets a fresh challenge and a new proof, once", OP.R403 in t and "get a fresh challenge" in OP.R403 and "at least required_bits" in OP.R403 and "Never loop." in OP.R403)
 check("join shape: rejected 403 rule fetches a fresh challenge", js["rejected"]["status"] == 403 and "required_bits" in js["rejected"]["fields"] and "fresh challenge" in js["rejected"]["rule"])
-check("combined prompt carries the new join core", not CB.TEXT or (OP.R403 in CB.TEXT and "If kind is not pow" in CB.TEXT))
-check("prompt version v2.9.4, history entry with today's hash", OP.VERSION == "v2.9.4" and __import__("poascan.prompthist", fromlist=["x"]).VERSIONS[-1]["template_sha256"] == S.template_sha256())
+check("combined prompt carries the new join core", not CB.TEXT or (OP.R403 in CB.TEXT and "If kind is present and is not pow" in CB.TEXT))
+check("prompt version v2.9.5, history entry with today's hash", OP.VERSION == "v2.9.5" and __import__("poascan.prompthist", fromlist=["x"]).VERSIONS[-1]["template_sha256"] == S.template_sha256())
 
 # ---------------- Protocol timeline ----------------
 REL = lambda v, ts, tx: dict(version=v, ts=ts, txid=tx, engine_sha256="e" * 64, client_sha256="c" * 64, web_client_sha256="w" * 64, changelog_ref="ref " + v)

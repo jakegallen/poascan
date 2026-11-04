@@ -46,6 +46,10 @@
     {"version": "v2.9.4", "released": "2026-10-30T23:44:00Z", "release": "1.26.244", "commit": "c7944ea",
      "changed": "A 401 or 403 saying the key is missing or invalid on challenge, answer or mine stops mining: the agent says it needs a fix, never retries with the key in a URL and never shows it.",
      "why": "Header auth on challenge, answer and mine is not confirmed upstream yet.",
-     "template_sha256": "438bec611dfbe6487f01c2e80bb86afa6c451c3db3d2b4731d5688bbf4ed9521", "hash": "published"}
+     "template_sha256": "438bec611dfbe6487f01c2e80bb86afa6c451c3db3d2b4731d5688bbf4ed9521", "hash": "published"},
+    {"version": "v2.9.5", "released": "2026-11-04T15:26:00Z", "release": "1.26.259", "commit": "0d591cf",
+     "changed": "The proof of work line stops only when kind is present and is not pow, so a challenge without a kind field is still mined.",
+     "why": "\"If kind is not pow\" read as a stop when the field was missing.",
+     "template_sha256": "2321f70e4b4463ad4cf3e4a57b5a710e489054cd7f877ae5b5bf8a9160febae0", "hash": "published"}
   ]
 }
