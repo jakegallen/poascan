@@ -8,7 +8,7 @@ Marks are shown as the close record lists them. That they match the Agent's losi
 observation, not documented upstream, and is said so only in the tooltip and on /about#standing."""
 import os, time
 from html import escape as E
-from . import db, analytics as A, segments as _SG
+from . import db, analytics as A, segments as _SG, econ as X
 
 BASE = os.environ.get("POASCAN_PUBLIC_URL", "https://poascan.io").rstrip("/")
 # EmBot-Lantern's Standing Watch (LabLeak 1357 c3747): hourly, keyless, MIT. Credited by handle; no referral codes (checked 2026-10-23).
@@ -19,7 +19,7 @@ AT_RISK_CLOSES = 2   # the open epoch's close and the one after
 PAGE = "/governance?tab=at-risk"
 MARKS_TIP = ("From basis.marks in the close record. Matches losing-side jury votes at E11 (observed, not documented). "
              "What marks do is not published.")
-NOTE = ("Estimates from public close records: the drop close follows the observed L + 7 rule, not an official one. "
+NOTE = ("Estimates from public close records: the drop close follows the engine's L + estab_ttl + 1 rule (L + 27 from E36), not an official one. "
         "Your hosted /me is the authority.")
 
 def _latest():
@@ -81,6 +81,12 @@ def marks(a):
     return dict(latest_close=last, at_latest_close=next((v for n, v in by if n == last), 0) if last is not None else None,
                 total=sum(v for _, v in by), by_close=[dict(epoch=n, marks=v) for n, v in by], note=MARKS_TIP)
 
+def _wl(a):
+    try:
+        from . import intake as IK
+        return IK.waitlist_of(a)
+    except Exception: return None
+
 def standing(a):
     """The per-address standing view: the 1.26.55+ estimate plus the at-risk flag, pending answers and marks."""
     x = A.established_expiry_est(a); o = A.open_epoch(); e = _latest()
@@ -91,7 +97,7 @@ def standing(a):
     src, mest, _d = GR.established_check(a) if est else ("close_records", GR.minepoa_established(a), None)
     return dict(address=a, established=est, trusted=a in _trusted(), established_source=src, minepoa_established=mest,
                 state="readmitted" if est and h.get("readmitted") else "established" if est else "not_established",
-                readmitted_epoch=h.get("readmitted_epoch"),
+                readmitted_epoch=h.get("readmitted_epoch"), waitlist=None if est else _wl(a),
                 last_challenge_eligible_epoch=x["last_challenge_eligible_epoch"],
                 established_expires_epoch_est=x["established_expires_epoch_est"], established_expires_closes_left=x["established_expires_closes_left"],
                 established_expires_ts_est=x["established_expires_ts_est"], established_expires_basis=x["established_expires_basis"],
@@ -106,7 +112,7 @@ def standing(a):
 def at_risk():
     """Established Agents whose estimated drop close is the open epoch's close or the next one, soonest first.
     The same rule and inputs as analytics.established_expiry_est, computed once for the whole set."""
-    o = A.open_epoch(); cur = o.get("epoch"); pp = A.params(); ttl = int(pp.get("estab_ttl") or 6)
+    o = A.open_epoch(); cur = o.get("epoch"); pp = A.params(); ttl = X.estab_ttl()   # 1.26.257: econ.py, segment aware
     out = dict(open_epoch=cur, window_closes=AT_RISK_CLOSES, closes=[], count=0, by_close={}, rows=[], estab_ttl=ttl,
                rule=f"drop close = last challenge_eligible close in this segment (-1 when none) + estab_ttl {ttl} + 1 (minepoa's engine)",
                tracker=TRACKER, tracker_by=TRACKER_BY, note=NOTE, method=BASE + "/about#standing", url=BASE + PAGE)

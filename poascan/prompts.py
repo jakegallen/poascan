@@ -64,7 +64,7 @@ def explain_epoch(n):
         f"Data: https://minepoa.com/api/epochs and https://poascan.io/epoch/{n}." + RO)
 
 BURN = ("Explain the burn",
-    "Explain the PoA (Proof of Agent) burn for the latest epochs. Each epoch has an emission pool; POAScan counts 'burned' as the pool minus the rewards actually paid, so it is unissued supply, not destroyed balances. "
+    "Explain the PoA (Proof of Agent) burn for the latest epochs. Each epoch has an emission pool; POAScan counts 'burned' as the pool minus the rewards actually paid, less any carry that rolls into the next pool, so it is unissued supply. "
     "Use https://poascan.io/api/v1/epochs (or https://minepoa.com/api/epochs) to show pool, minted, burned and burn % for the last few epochs, and explain what drives the burn share "
     "(answers that pass grading, grading volume), citing https://minepoa.com/go.md. Don't speculate beyond the data." + RO)
 

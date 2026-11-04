@@ -45,8 +45,8 @@ def main():
 
     econ = {e["key"]: e["value"] for e in NF.economics()}
     check("economics parsed from the facts block (floor, rate, ttl, quorum, panel, pending, auto epoch, K)",
-          econ == {"estab_intake_floor": 5, "estab_intake_rate": 0.1, "estab_ttl": 6, "grade_quorum": 3, "panel_size": 5,
-                   "pending_ttl_epochs": 16, "auto_epoch_seconds": 21600, "K": 5})
+          {k: v for k, v in econ.items() if v is not None} == {"estab_intake_floor": 5, "estab_intake_rate": 0.1, "estab_ttl": 6, "grade_quorum": 3, "panel_size": 5,
+                   "pending_ttl_epochs": 16, "auto_epoch_seconds": 21600, "K": 5} and "estab_waitlist_epochs" in econ)
     acc = {a["id"]: a["live"] for a in NF.system_accounts()}
     check("system accounts v1 to v5 with liveness (bool from live, string status, None when absent)",
           acc == {"v1": True, "v2": False, "v3": None, "v4": True, "v5": True})
@@ -186,7 +186,8 @@ def main():
     db.put_blob(NF.CLOSE_BLOB, {"epoch": 0, "settled": {"passed": 1, "failed": 1, "expired": 1}, "grades": 2, "graders": 1,
                                 "quorum_rows": 2, "grades_by_grader": {A1: 2}})
     cc = NF.close_crosscheck()
-    check("authoritative agrees: verdict match, every pair matches", cc["verdict"] == "match" and all(r["state"] == "match" for r in cc["rows"]))
+    check("authoritative agrees: verdict match, every compared pair matches (grades and graders: different definitions, not compared)",
+          cc["verdict"] == "match" and all(r["state"] == ("not_compared" if r["name"] in NF.NOT_COMPARED else "match") for r in cc["rows"]))
     check("authoritative only fields surface: rows at quorum, n_eff and top grader share", cc["quorum_rows"] == 2 and cc["n_eff"] == 1.0 and cc["top_grader_share"] == 1.0)
     check("preferred takes the authoritative split", cc["preferred"]["passed"] == 1 and cc["preferred"]["settled"] == 3)
     check("close card shows Matches close stats and the split", "Matches close stats" in NF.render_close_card() and "Rows at quorum" in NF.render_close_card())

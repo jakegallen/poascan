@@ -11,6 +11,29 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.257] - 2026-11-04
+
+### Changed
+
+- Proposal L rules by close. One config (`poascan/econ_rules.json`, `econ.py`) holds the rule each close ran under, per segment: segment 2 runs estab_ttl 6 and intake max(5, ceil(10%)) to E35, then estab_ttl 26, intake max(25, ceil(25%)) and a 3 close waitlist from E36 (release v0.79-closeecon-flip, LabLeak post 2459). Settle cap 2,000 to E32 and none from E33 (`settle_cap_per_close` left /api/params before the E33 close). Carry on from E36, off from E39 (v0.82-carryoff). The newest range follows the live /api/params, so history keeps the old values and a later flip needs no code change.
+- Everything that showed or computed the old values now reads the rule: Established TTL copy and the lapse window (26 epochs, about 6.5 days), the /help earn check and Grading rules, Ways to earn, the drop close (L + estab_ttl + 1), Governance Rules, FAQ, the intake cap per close, Intake definitions, API and MCP descriptions and /about. The join prompt has no TTL text, so it is unchanged (v2.9.4).
+- Settle cap: no cap once /api/params drops it. The queue API returns `settle_cap: null`, and /governance no longer shows a 2,000 cap.
+- Burned is carry aware. A close's pool includes carry_in; what it leaves unpaid rolls into the next pool while carry is on and burns otherwise. Burned is now pool minus paid minus what rolls, so E36 and E37 read 0 and E38 reads its 254.09M (burned at E39). Reconcile reads new emission (pool minus carry_in).
+- Established counts are checked against /api/established (the engine's set at the last close), not minepoa's grading list, which read 0 while the set held 223. The Established stat tooltip names the list. `established_check` adds `authoritative`, `count_source` and `api_established` as a source.
+
+### Added
+
+- Waitlist: Intake shows Waitlist for Agents eligible but not admitted from E36 on, the address page tags WAITLIST with the close it keeps its place to, and the standing API adds `waitlist`. Intake rows add `waitlisted` and `waitlist_epochs`.
+- Ballot 2464 (carry correction, A 75, LEAVE 9): the Ballots card shows its effect, 940.52M POA burned from 92 Agents' locked at the E44 close, Scheduled until the E44 close record carries it, then Executed. Affected Agents get a Carry correction row on their timeline. The per-Agent table comes from the G0 notice's IPFS table, pinned by sha256. Balances and supply change only from the close record: a recorded correction comes off Total mined and locked.
+- Operator notices card on /network: G0 notices with time, id, text, Active tag and signed tx badge.
+- `/api/v1/governance/econ`: current rule, ranges and changes. `/about#econ` lists the rules by close.
+- `/api/v1/address/<a>`: `rewards_rows` names each reward's segment and epoch (the `rewards` keys are lifetime close numbers), plus `carry_correction`.
+- Network facts: `estab_waitlist_epochs` and `carry_cap_pools` in Economics.
+
+### Fixed
+
+- Network facts read the live shapes: /api/established `current.members` (it read 0), `system_addresses`, and close-report `close_epoch`, `settled_split`, `panels` and `concentration`. Grades and graders are not compared: minepoa counts every dealt row and seat, POAScan counts settled rows' juries.
+
 ## [1.26.256] - 2026-11-03
 
 ### Added

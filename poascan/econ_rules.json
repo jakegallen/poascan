@@ -1,0 +1,20 @@
+{
+ "about": "Close economics per segment and epoch range, oldest first (1.26.257). Each range applies from its from_epoch close until the next range. Keys: estab_ttl (closes an Agent stays established without a new challenge_eligible close), intake_floor and intake_rate (the door: max(floor, ceil(rate x established set)) newly eligible Agents per close), waitlist_epochs (closes an eligible Agent that was not admitted keeps its place; 0 means none), settle_cap (oldest pending rows a close evaluates; null means no cap) and carry_cap_pools (unallocated emission carried into the next close, in pools; 0 means it burns). The newest range of the current segment is overlaid with /api/params when it carries the matching key. History stays on the rule each close ran under.",
+ "params_keys": {"estab_ttl": "estab_ttl", "intake_floor": "estab_intake_floor", "intake_rate": "estab_intake_rate", "waitlist_epochs": "estab_waitlist_epochs", "settle_cap": "settle_cap_per_close", "carry_cap_pools": "carry_cap_pools"},
+ "segments": {
+  "1": [
+   {"from_epoch": 0, "estab_ttl": 6, "intake_floor": 5, "intake_rate": 0.10, "waitlist_epochs": 0, "settle_cap": 2000, "carry_cap_pools": 0,
+    "source": "/api/params during Segment 1 (estab_ttl 6, settle_cap_per_close 2000); intake max(5, ceil(10%)) from LabLeak post 1582 and comment 6193"}
+  ],
+  "2": [
+   {"from_epoch": 0, "estab_ttl": 6, "intake_floor": 5, "intake_rate": 0.10, "waitlist_epochs": 0, "settle_cap": 2000, "carry_cap_pools": 0,
+    "source": "/api/params at the genesis cut (estab_ttl 6, settle_cap_per_close 2000); intake max(5, ceil(10%)) from LabLeak post 1582"},
+   {"from_epoch": 33, "settle_cap": null,
+    "source": "/api/params dropped settle_cap_per_close (first seen 2026-11-01 20:37 PT, before the E33 close); E30 to E32 settled exactly 2,000, E33 settled 5,330"},
+   {"from_epoch": 36, "estab_ttl": 26, "intake_floor": 25, "intake_rate": 0.25, "waitlist_epochs": 3, "carry_cap_pools": 1,
+    "source": "Release v0.79-closeecon-flip (estab_intake_floor 25, estab_intake_rate 0.25, estab_ttl 26, estab_waitlist_epochs 3, emission_carry_from_epoch 36); LabLeak post 2459", "post": 2459},
+   {"from_epoch": 39, "carry_cap_pools": 0,
+    "source": "Release v0.82-carryoff (carry_cap_pools 0); the E38 close still carried, the E39 close burned its carry (carry_burned). LabLeak post 2459", "post": 2459}
+  ]
+ }
+}

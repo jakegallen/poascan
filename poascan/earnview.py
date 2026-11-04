@@ -152,7 +152,7 @@ def ways(a=None):
         f'<li><div class="ewh"><b>{E(w["label"])}</b>' + (f'<span class="tag est">Observed</span>' if w["source"] == "observed" else "")
         + (" " + qtip("Close record: " + w["field"], EA.METHOD, "Where it shows", "hv") if w["field"] else "") + "</div>"
         f'<dl class="ewd"><div><dt>Pays</dt><dd>{E(w["pays"])}</dd></div><div><dt>Qualifies</dt><dd>{E(w["qualifies"])}</dd></div>'
-        f'<div><dt>Next</dt><dd>{E(w["next"])}</dd></div></dl></li>' for w in EA.WAYS)
+        f'<div><dt>Next</dt><dd>{E(w["next"])}</dd></div></dl></li>' for w in EA.ways())
     li += (f'<li><div class="ewh"><b>Ask your agent</b></div><div class="egt"><p>Copy the prompt and give it to your own agent. It reads your status and asks before it submits. '
            f'Your key goes in a header or a POST body only.</p>{PR.ask([ask_item(a)], label="Help my agent earn")}</div></li>')
     src = (f'<p class="cov dim small">From <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a>, '

@@ -180,12 +180,17 @@ def api(path, qs):
         stale = bool(bb.get("stale") or _ST.for_endpoint("/api/explorer/address/:addr") or (bb["source"] == "agents" and _ST.for_endpoint("/api/agents")))
         from . import rewardbasis as RB
         rb = p["rewards"]; rsum = sum(rb.values()); sp, lk = A.vest_split(rb, A.open_gkey())
+        from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.257: ballot 2464, once the E44 record carries it
         rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum, bb["as_of"], a, rb)
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
                     rewards_total=round(rsum, 6), spendable_est=round(sp, 6), locked_est=round(lk, 6), rewards_as_of=rbs["as_of"],
                     rewards_behind=rbs["behind"], rewards_behind_reason=rbs["reason"], balance_ahead_by=rbs["balance_ahead_by"],
                     balance_as_of_checkpoint=bb.get("as_of_checkpoint"), balance_segment=bb.get("segment"),
-                    rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(p["rewards"]) if SG.unconfirmed_g(k)], rewards=p["rewards"], streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
+                    rewards_unconfirmed=[dict(zip(("segment", "epoch"), SG.split_gkey(k))) for k in sorted(p["rewards"]) if SG.unconfirmed_g(k)], rewards=p["rewards"],
+                    # 1.26.257: rewards keys are lifetime close numbers (segment 2 E36 is 51); each row names its segment and epoch
+                    rewards_key="lifetime close number: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15",
+                    rewards_rows=[dict(zip(("segment", "epoch"), SG.split_gkey(int(k))), lifetime=int(k), reward=v) for k, v in sorted(p["rewards"].items(), key=lambda kv: int(kv[0]))],
+                    carry_correction=_CC.for_address(a), streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
                     forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), wallet_binding=WB.binding(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
@@ -480,7 +485,7 @@ GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "di
            "/api/governance/pending-horizon": {"sort", "dir"},
            "/api/governance/board": set(),
            "/api/governance/genesis-carry": {"address", "filter"},
-           "/api/governance/intake": {"close", "state", "sort", "dir", "limit", "offset"},
+           "/api/governance/intake": {"close", "state", "sort", "dir", "limit", "offset"}, "/api/governance/econ": set(),
            "/api/governance/settle-age": {"sort", "dir"},
            "/api/governance/settlement": {"close", "sort", "dir", "limit", "offset"}, "/api/governance/standing-changes": {"close", "sort", "dir"},
            "/api/governance/never-established": {"sort", "dir", "limit", "offset"}}
@@ -534,6 +539,9 @@ def governance_api(path, qs):
         from . import graderpat as GP
         so, d = sd(GP.SORTS, "name")
         return GP.api(pick("range", [k for k, _, _ in GP.RANGES], "all"), so, d, num("min_n", GP.MIN_N, 0, 1000), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6))
+    if path == "/api/governance/econ":   # 1.26.257: the rule each close ran under (econ_rules.json + live params)
+        from . import econ as EC
+        return EC.api_block()
     if path == "/api/governance/intake":   # 1.26.189
         from . import intake as IK
         cl = num("close", None, 0, 10 ** 6); st = pick("state", [""] + [k for k, _ in IK.STATES], "")

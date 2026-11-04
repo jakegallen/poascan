@@ -13,6 +13,10 @@ def tags(est, level, cen, a=None):
     if est and a:   # 1.26.134: POAScan counts it, minepoa's grading list does not: Unconfirmed with the detail on hover or tap
         from . import grading as GR
         t.append(GR.tag_html(GR.established_check(a)[2]))
+    if not est and a:   # 1.26.257: Proposal L waitlist (eligible, not admitted, keeps its place a few closes)
+        from . import intake as IK
+        wl = IK.waitlist_of(a)
+        if wl: t.append(f'<span class="tag warn" title="Eligible at the E{wl["close"]} close, not admitted (draw {wl["draw"]}). Keeps its place to the E{wl["keeps_until"]} close.">Waitlist</span>')
     lv = LEVEL.get(level or "norecord")
     if lv: t.append(f'<span class="tag {lv[1]}">{lv[0]}</span>')
     if cen:

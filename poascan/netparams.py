@@ -18,6 +18,16 @@ STALE_S = 3 * 3600   # same as ui.STALE_S: hourly sources read longer ago than t
 METHOD = "/about#ttl"
 _obs = {}
 
+def _fallback(key, seg):
+    """1.26.257: the establishment TTL falls back to the segment's newest rule in econ_rules.json (26 from segment 2's E36),
+    not a fixed 6; the pending TTL keeps FALLBACK."""
+    if key == "estab_ttl":
+        try:
+            from . import econ as X
+            return int(X.at(None, seg, live=False)["estab_ttl"])
+        except Exception: pass
+    return FALLBACK[key]
+
 def _seg_params(n):
     return dict((SG.BY_N.get(n) or {}).get("params") or {})
 
@@ -29,7 +39,7 @@ def read(key, seg=None, now=None):
     """{key, label, value, source, confirmed, stale, fallback, as_of, age_s, segment, note} for one TTL param.
     confirmed: the value comes from /api/params (or, for an archived segment, the values it closed under).
     stale: the params copy is older than STALE_S, or there is no params value at all."""
-    seg = seg or SG.selected(); now = int(now or time.time()); fb = FALLBACK[key]
+    seg = seg or SG.selected(); now = int(now or time.time()); fb = _fallback(key, seg)
     out = dict(key=key, label=LABEL[key], segment=seg, archived=SG.archived(seg), as_of=None, age_s=None)
     cfg = _int(_seg_params(seg).get(key))
     if SG.archived(seg):

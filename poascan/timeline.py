@@ -9,7 +9,7 @@ from .ui import E, card, lt, intc
 METHOD = "/about#timeline"
 KINDS = {"join": "Joined", "answer": "First answer", "seal": "First grade seal", "transfer": "First transfer",
          "invite": "First invitee joined", "paid": "First paid close", "best": "Best close reward", "est_add": "Established",
-         "est_rm": "Established removed", "slashed": "Slashed", "ejected": "Ejected", "latest": "Latest tx"}
+         "est_rm": "Established removed", "slashed": "Slashed", "ejected": "Ejected", "correction": "Carry correction", "latest": "Latest tx"}
 _TX = (("join", "join"), ("answer", "challenge"), ("seal", "grade-sealed"))
 
 def _f(v):
@@ -50,6 +50,9 @@ def _events(a):
         if a in (b.get("slashed") or []): ev.append(dict(kind="slashed", ts=ts, tx=None, close=n, value=None))
         if a in (b.get("ejected") or []): ev.append(dict(kind="ejected", ts=ts, tx=None, close=n, value=None))
     ev += [x for x in (paid, best) if x]
+    from . import correction as CC   # 1.26.257: ballot 2464, scheduled until the E44 record carries it
+    cc = CC.for_address(a)
+    if cc: ev.append(dict(kind="correction", ts=cc["ts"], tx=None, close=cc["close"], value=cc["amount"], state=cc["state"], post=cc["post"]))
     r = _first("SELECT id, ts, type FROM txs WHERE (from_addr=? OR to_addr=?) AND segment=? ORDER BY ts DESC, id DESC LIMIT 1", (a, a, seg))
     if r and not any(x.get("tx") == r["id"] for x in ev): ev.append(dict(kind="latest", ts=r["ts"], tx=r["id"], close=None, value=None, type=r["type"]))
     order = list(KINDS)
@@ -62,6 +65,11 @@ def _where(x):
     if x.get("close") is not None: g = SG.gkey(x["close"], SG.CURRENT); return f'<a href="{SG.ep_href(g)}">{SG.ep_label(g)}</a>'
     return ""
 
+def _cc(x):
+    st = x.get("state"); word = {"scheduled": "Scheduled", "executed": "Executed"}.get(st, "Not in the record yet")
+    return (f' · {intc(round(x["value"]))} POA from locked <a href="https://minepoa.com/lableak/#/post/{int(x["post"])}" target="_blank" rel="noopener noreferrer">ballot {int(x["post"])}</a>'
+            f' <span class="tag {"ok" if st == "executed" else "est" if st == "scheduled" else "warn"}">{word}</span>')
+
 def tab_html(a):
     if SG.selected() != SG.CURRENT: return card("Timeline", '<p class="na">The timeline covers the current segment.</p>', id="timeline")
     ev = events(a)
@@ -69,6 +77,7 @@ def tab_html(a):
     li = "".join(f'<li class="tlx tl-{E(x["kind"])}"><span class="tld" aria-hidden="true"></span><div><b>{E(x["label"])}</b>'
                  f'{" · " + intc(round(x["value"])) + " POA" if x.get("value") and x["kind"] in ("paid", "best", "transfer") else ""}'
                  f'{" · " + E(x.get("type") or "") if x["kind"] == "latest" else ""}'
+                 f'{_cc(x) if x["kind"] == "correction" else ""}'
                  f'<span class="tlw">{lt(x["ts"], "dt") if x["ts"] else ""} {_where(x)}</span></div></li>' for x in ev)
     foot = f'<p class="cov dim small">From final txs and close records in this segment · <a href="{METHOD}">Method</a></p>'
     return records_html(a) + peers_html(a) + card(f"Timeline · {len(ev)}", f'<ol class="tl">{li}</ol>' + foot, f'<a class="more" href="/api/v1/address/{E(a)}/timeline">API →</a>', id="timeline")
