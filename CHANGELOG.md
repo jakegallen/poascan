@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.258] - 2026-11-04
+
+### Fixed
+
+- Cloudflare-only origin guard (1.26.253) now reads Fly-Client-IP, not the socket peer. On Fly every request reaches the machine from the proxy's private address, so the old private-peer exemption let every direct poascan.fly.dev hit through even with `POASCAN_CF_ONLY` on. A public Fly-Client-IP that is not a Cloudflare edge is refused; Cloudflare edges, an internal Fly-Client-IP, a request with no Fly-Client-IP and the health paths pass, as in POASwap's guard. Still gated by the same secret; its value is unchanged. tools/cforigin_test.py covers the proxy peer cases.
+
 ## [1.26.257] - 2026-11-04
 
 ### Changed
