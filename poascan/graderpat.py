@@ -11,7 +11,7 @@ Fairness defaults (Jake, 2026-10-27): rows under MIN_N scored settled seats hidd
 MIN_N settled seats), shown with the All chip; charts are distributions with no names; the table sorts A to Z by default;
 system graders (params trusted_graders and system_grader_accounts) are tagged and left out of percentiles, medians and charts;
 percentiles on hover; neutral labels."""
-import collections, statistics, time
+import collections, statistics, threading, time
 from html import escape as E
 from . import db, analytics as A, segments as SG, scoresort as SS
 from .analytics import cached
@@ -57,8 +57,28 @@ def _pctile(xs, v):
     if v is None or not xs: return None
     return round(100 * sum(1 for x in xs if x <= v) / len(xs))
 
-@cached("grader_patterns", 300)
+# 1.26.260 (memory handoff C7): min_n is a request parameter (0 to 1000), and every value used to be a key in the
+# shared 256 entry analytics LRU, so a crawler walking ?min_n= could evict the hot entries. The default and 0 (the All chip)
+# stay in the shared cache; any other value lives in a 4 entry LRU of its own, computed one at a time.
+ODD_MAX, ODD_TTL = 4, 300
+_odd, _odd_lock = collections.OrderedDict(), threading.Lock()
+
 def patterns(rng="all", min_n=MIN_N):
+    if min_n in (MIN_N, 0): return _patterns_hot(rng, min_n)
+    k = (SG.selected(), rng, min_n)
+    with _odd_lock:
+        hit = _odd.get(k)
+        if hit and time.time() - hit[0] < ODD_TTL:
+            _odd.move_to_end(k); return hit[1]
+        v = _patterns(rng, min_n)
+        _odd[k] = (time.time(), v); _odd.move_to_end(k)
+        while len(_odd) > ODD_MAX: _odd.popitem(last=False)
+        return v
+
+@cached("grader_patterns", 300)
+def _patterns_hot(rng, min_n): return _patterns(rng, min_n)
+
+def _patterns(rng="all", min_n=MIN_N):
     from . import gradehist as GH
     GH._ensure(); seg = SG.selected(); sc_on = has_scores(seg)
     cl = _closes_in(rng)

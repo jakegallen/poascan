@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.260] - 2026-11-04
+
+### Fixed
+
+- Grader patterns: `?min_n=` took any value from 0 to 1000 and each one became its own key in the shared analytics cache, so a crawler walking the parameter could push other pages' results out. Only the default (20) and 0 use the shared cache now; any other value goes to a small private cache (4 entries, 5 minutes). Results are unchanged.
+
 ## [1.26.259] - 2026-11-04
 
 ### Changed
