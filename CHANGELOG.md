@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.259] - 2026-11-04
+
+### Changed
+
+- robots.txt: user initiated agents (ChatGPT-User, Claude-User, Perplexity-User) get their own group with the default access, so a person asking one of them to open an /address/ or /tx/ page is no longer turned away. The AI crawlers (GPTBot, ClaudeBot, PerplexityBot and the rest) keep the /address/ and /tx/ block and are still pointed at the API. The per client page limit is unchanged. The join prompt is unchanged.
+
 ## [1.26.258] - 2026-11-04
 
 ### Fixed
