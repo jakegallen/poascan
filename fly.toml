@@ -37,7 +37,7 @@ kill_timeout = 10
     path = "/healthz"
     timeout = "5s"
 
-[[vm]]   # shared-cpu-4x 1 GB (1.26.162): twice the 2x CPU baseline and burst balance after the 2026-10-26 steal; covered in part by a Fly shared reservation in sjc
+[[vm]]   # shared-cpu-4x 2 GB: the 1 GB tier OOMd under crawler-flood + slow RSS creep in the 2026-11-02 incident; the live machine was hot-scaled to 2 GB then, but fly.toml still said 1gb so every redeploy reset it (the 2026-11-04 relaunch did). Pin 2 GB here so deploys keep it.
   cpu_kind = "shared"
   cpus = 4
-  memory = "1gb"
+  memory = "2gb"
