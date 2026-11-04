@@ -136,6 +136,14 @@ check("calibration.py reads no pending score", 'gr.get("score")' not in csrc and
 with SG.use(1):
     A._cache.clear(); c1 = CA.calibration()
     check("Segment 1 Calibration: no scores", all(r["scored"] == 0 and r["score_mean"] is None for r in c1["graders"]))
+# 1.26.260: min_n values other than the default and 0 stay out of the shared analytics LRU (memory handoff C7)
+A._cache.clear(); GP._odd.clear()
+GP.patterns("all", 20); GP.patterns("all", 0)
+base = sum(1 for k in list(A._cache) if k[0] == "grader_patterns")
+for n in range(1, 40): GP.patterns("all", n if n != 20 else 41)
+check(f"a crawler walking ?min_n= adds no shared LRU keys ({base} grader_patterns keys) and the side LRU stays at {GP.ODD_MAX}",
+      sum(1 for k in list(A._cache) if k[0] == "grader_patterns") == base == 2 and len(GP._odd) == GP.ODD_MAX)
+check("an odd min_n still flags rows by its own threshold", all(r["below_min"] == ((r.get("scored") if r.get("scored") is not None else r["seats"]) < 7) for r in GP.patterns("all", 7)["rows"]))
 A._cache.clear()
 gsrc = open(os.path.join(ROOT, "poascan", "graderpat.py")).read()
 check("graderpat.py: no em or en dash, says Agents not Accounts, reads no pending table", "\u2014" not in gsrc and "\u2013" not in gsrc and "Accounts" not in gsrc and "basis" not in gsrc)
