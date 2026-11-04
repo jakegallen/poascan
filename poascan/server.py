@@ -919,7 +919,7 @@ class H(BaseHTTPRequestHandler):
         cost (the 403 is tallied in memory by send(); no DB or upstream call is made on this path). The health check is
         never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or an internal Fly-Client-IP
         (loopback, private, link-local) always passes. Only a Fly-Client-IP that is public and NOT a Cloudflare edge is
-        refused. 1.26.258: the check reads Fly-Client-IP, not the socket peer. On Fly every request arrives from the
+        refused. 1.26.258: the check reads Fly-Client-IP, not the connecting peer. On Fly every request arrives from the
         proxy's private address, so the old peer exemption let every direct poascan.fly.dev hit through (POASwap's
         guard.py reads the header the same way). Returns True after sending the 403, else False (let the request through)."""
         if not cf_only_on(): return False
