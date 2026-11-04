@@ -79,6 +79,37 @@ def economics(facts=None):
     return out
 
 
+# 1.26.262: /api/params keys from minepoa v0.84-slotlatch-cc44 that the facts do not carry; listed beside Economics.
+PARAMS_EXTRA = (("carry_correction", "Carry correction"), ("slot_latch_overrides", "Slot latch pins"))
+
+def _num(v):
+    try: return float(v)
+    except (TypeError, ValueError): return 0.0
+
+def params_extra(p=None):
+    """[{key, label, value, text}] for the v0.84 params keys present in /api/params (POAScan's hourly copy, no extra read).
+    carry_correction: from_epoch, Agents, total and whether table_sha256 is the pinned ballot 2464 table.
+    slot_latch_overrides: the pinned nonce slots, author, nonce and winning txid each."""
+    if p is None:
+        from . import analytics as A
+        p = A.params()
+    out = []
+    cc = p.get("carry_correction") if isinstance(p, dict) else None
+    if isinstance(cc, dict):
+        ent = cc.get("entries") if isinstance(cc.get("entries"), dict) else {}
+        tot = round(sum(_num(v) for v in ent.values()), 6)
+        from . import correction as CC
+        sha = str(cc.get("table_sha256") or "").lower() or None
+        v = dict(from_epoch=cc.get("from_epoch"), agents=len(ent), total=tot, table_sha256=sha, pinned_table=sha == CC.SHA256)
+        out.append(dict(key="carry_correction", label="Carry correction", value=v,
+                        text=f"E{cc.get('from_epoch')} · {len(ent)} Agents · {tot / 1e6:,.2f}M"))
+    sl = p.get("slot_latch_overrides") if isinstance(p, dict) else None
+    if isinstance(sl, list):
+        rows = [dict(author=r.get("author"), nonce=r.get("nonce"), txid=r.get("txid")) for r in sl if isinstance(r, dict)]
+        out.append(dict(key="slot_latch_overrides", label="Slot latch pins", value=dict(count=len(rows), slots=rows), text=f"{len(rows)}"))
+    return out
+
+
 def _accounts_src(facts):
     return _first(facts, "system_accounts", "system_addresses", "system_accounts_liveness", "accounts", "system")
 
@@ -487,8 +518,9 @@ def render_card(now=None):
 
     econ_rows = economics(facts)
     def ev(v): return f'<b>{E(str(v))}</b>' if v is not None else '<span class="na">-</span>'
-    econ = ('<div class="sy">' + "".join(f'<div><span>{E(e["label"])}</span>{ev(e["value"])}</div>' for e in econ_rows) + '</div>'
-            if facts is not None else '<p class="na">No economics params without a facts read.</p>')
+    px = "".join(f'<div><span title="/api/params {E(x["key"])}">{E(x["label"])}</span><b>{E(x["text"])}</b></div>' for x in params_extra())
+    econ = ('<div class="sy">' + "".join(f'<div><span>{E(e["label"])}</span>{ev(e["value"])}</div>' for e in econ_rows) + px + '</div>'
+            if facts is not None else ('<div class="sy">' + px + '</div>' if px else '<p class="na">No economics params without a facts read.</p>'))
 
     accts = system_accounts(facts)
     def live_tag(a):

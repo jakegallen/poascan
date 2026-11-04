@@ -59,6 +59,8 @@ jobs:
         run: python tools/propl_test.py
       - name: Ballot 2464 at the E44 close (record shapes, Applied from the record or params plus the record, locked and balance check, reconcile)
         run: python tools/e44_test.py
+      - name: minepoa v0.84 params (carry_correction and slot_latch_overrides are data, params change, hashes match the facts, listed on the facts card and the econ API)
+        run: python tools/v084_params_test.py
       - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
         run: python tools/earn_test.py
       - name: Expired, no jury (a settled row with expired true and an empty jury is never failed; E19 split; receipts, earn check, epoch rows, cohorts, Score over juried answers, settlement Paid per close split)
