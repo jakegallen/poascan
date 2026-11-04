@@ -48,7 +48,7 @@ top = [r["addr"] for r in A.holders()["rows"][:min(100, SV.SITEMAP_ADDRS)]]
 check("sitemap: the largest holders come first", addrs[:len(top)] == top[:len(addrs)])
 check("sitemap_addrs(cap) honours the cap", len(SV.sitemap_addrs(3)) <= 3)
 st, rb = get("/robots.txt")
-check("robots.txt: Crawl-delay and no sorted copies in both groups", rb.count("Crawl-delay: 5") == 2 and rb.count("Disallow: /*sort=") == 2 and "Sitemap: https://poascan.io/sitemap.xml" in rb)
+check("robots.txt: Crawl-delay and no sorted copies in every group (1.26.259: three)", rb.count("Crawl-delay: 5") == 3 and rb.count("Disallow: /*sort=") == 3 and "Sitemap: https://poascan.io/sitemap.xml" in rb)
 
 # ---- /upgrade release line, health 503 doc
 st, up = get("/upgrade")
