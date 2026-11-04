@@ -48,6 +48,12 @@ def main():
               "Allow: /api" in ai and "Disallow: /address/" in ai and "Disallow: /tx/" in ai)
         check("robots: the default (search-engine) group keeps full access to /address/ and /tx/",
               "Disallow: /address/" not in rob.split("User-agent: GPTBot", 1)[0])
+        # 1.26.259: user initiated agents follow our prompts to /address/ and /tx/; only crawlers are kept off
+        grp = lambda ua: next(g for g in rob.split("\n\n") if f"User-agent: {ua}\n" in g + "\n")
+        check("robots: ChatGPT-User, Claude-User and Perplexity-User may open /address/ and /tx/",
+              all("Disallow: /address/" not in grp(u) and "Disallow: /tx/" not in grp(u) and "Allow: /" in grp(u) for u in ("ChatGPT-User", "Claude-User", "Perplexity-User")))
+        check("robots: crawler bots (GPTBot, ClaudeBot, PerplexityBot, CCBot) stay off /address/ and /tx/",
+              all("Disallow: /address/" in grp(u) and "Disallow: /tx/" in grp(u) for u in ("GPTBot", "ClaudeBot", "PerplexityBot", "CCBot")))
     finally:
         p.terminate()
         try: p.wait(timeout=5)

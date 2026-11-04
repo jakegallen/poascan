@@ -458,7 +458,14 @@ _fci_seen = [False]
 # The AI crawler group additionally stays off the heavy per-entity HTML pages (/address/, /tx/): those are
 # what flooded the box, and the same data is available over the API (openapi.json, llms.txt, /mcp), which the
 # group's opening lines point at. Search engines (the * group) keep full access for indexing.
-ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
+# 1.26.259: user initiated agents (a person asked ChatGPT, Claude or Perplexity to open a page) fetch one page at a time and
+# our prompts send them to /address/ and /tx/, so they get their own group with the default access; the AI crawlers keep
+# the /address/ and /tx/ block. PAGE_LIMIT still caps any one client.
+AI_USER_AGENTS = ["ChatGPT-User", "Claude-User", "Perplexity-User"]
+AI_CRAWLERS = [b for b in AI_BOTS if b not in AI_USER_AGENTS]
+ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n"
+          + "".join(f"User-agent: {b}\n" for b in AI_USER_AGENTS) + "Allow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n"
+          + "".join(f"User-agent: {b}\n" for b in AI_CRAWLERS)
           + "Allow: /api\nAllow: /openapi.json\nAllow: /llms.txt\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nDisallow: /address/\nDisallow: /tx/\nCrawl-delay: 5\n\nSitemap: https://poascan.io/sitemap.xml\n")
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
