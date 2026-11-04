@@ -1,6 +1,6 @@
 {
   "name": "poascan",
-  "version": "1.26.260",
+  "version": "1.26.261",
   "description": "Read-only Proof of Agent explorer: epochs, rewards, holders, swaps and agent census. No auth.",
   "mcpServers": {
     "poascan": {
