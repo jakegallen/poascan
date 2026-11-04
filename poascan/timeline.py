@@ -66,9 +66,9 @@ def _where(x):
     return ""
 
 def _cc(x):
-    st = x.get("state"); word = {"scheduled": "Scheduled", "executed": "Executed"}.get(st, "Not in the record yet")
+    st = x.get("state"); ok = st in ("executed", "applied"); word = "Applied" if ok else "Scheduled" if st == "scheduled" else "Not in the record yet"
     return (f' · {intc(round(x["value"]))} POA from locked <a href="https://minepoa.com/lableak/#/post/{int(x["post"])}" target="_blank" rel="noopener noreferrer">ballot {int(x["post"])}</a>'
-            f' <span class="tag {"ok" if st == "executed" else "est" if st == "scheduled" else "warn"}">{word}</span>')
+            f' <span class="tag {"ok" if ok else "est" if st == "scheduled" else "warn"}">{word}</span>')
 
 def tab_html(a):
     if SG.selected() != SG.CURRENT: return card("Timeline", '<p class="na">The timeline covers the current segment.</p>', id="timeline")

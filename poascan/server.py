@@ -181,7 +181,7 @@ def api(path, qs):
         from . import rewardbasis as RB
         rb = p["rewards"]; rsum = sum(rb.values()); sp, lk = A.vest_split(rb, A.open_gkey())
         from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.257: ballot 2464, once the E44 record carries it
-        rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum, bb["as_of"], a, rb)
+        rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum - _CC.applied(a), bb["as_of"], a, rb)   # 1.26.261: less a ballot 2464 burn
         return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
                     rewards_total=round(rsum, 6), spendable_est=round(sp, 6), locked_est=round(lk, 6), rewards_as_of=rbs["as_of"],
                     rewards_behind=rbs["behind"], rewards_behind_reason=rbs["reason"], balance_ahead_by=rbs["balance_ahead_by"],

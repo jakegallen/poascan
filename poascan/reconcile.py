@@ -29,7 +29,7 @@ def _iso_ts(s):
 @cached("reconcile_close", 300)
 def per_close():
     """Mint per close from close records against the node's supply step across that close, from archived /api/status reads (bracketed by the node's as_of)."""
-    out = []
+    out = []; from . import correction as _CC
     for r in A.epoch_rows():
         t = r["close_ts"]; b = a = None
         for x in db.q("SELECT ts, json FROM snaps WHERE kind='status' AND ts BETWEEN ? AND ? ORDER BY ts", (t - 7200, t + 7200)):
@@ -39,11 +39,20 @@ def per_close():
             elif a is None: a = (at, sp)
         step = (a[1] - b[1]) if a and b else None
         m = sum((_d(v) or D(0)) for v in (A.epoch_detail(r["epoch"]) or {}).get("rewards", {}).values())
+        cc = _d(r.get("correction") or 0) or D(0)   # 1.26.261: a correction burned from locked at this close (ballot 2464, E44)
+        if not cc and r.get("segment") == _CC.SEG and int(r["epoch"]) == _CC.CLOSE and _CC.status()["state"] == "closed_no_record": cc = _d(round(_CC.total(), 6))
+        m -= cc
         d = (m - step) if step is not None else None
-        out.append(dict(epoch=r["epoch"], close_ts=t, record_mint=float(m), supply_step=float(step) if step is not None else None,
+        out.append(dict(epoch=r["epoch"], close_ts=t, record_mint=float(m), supply_step=float(step) if step is not None else None, correction=float(cc) if cc else None,
                         diff=float(d) if d is not None else None, state=("no_reads" if step is None else "match" if abs(d) <= D("0.01") else "differs"),
                         before_as_of=b[0] if b else None, after_as_of=a[0] if a else None))
     return out
+
+def _mined_why(mint, sup, exc, exc_why, cc_tab, why):
+    """The Mined reason: the genesis cut exclusion and, while the E44 record has no correction field, ballot 2464's table."""
+    if sup is None or abs(mint - sup - exc - cc_tab) > EPS * 10: return why
+    parts = ([exc_why] if exc_why and exc else []) + ([f"ballot 2464 carry correction at the E44 close, burned from locked ({cc_tab:,.6f} POA, pinned table)"] if cc_tab else [])
+    return " plus ".join(parts) or why
 
 def _held_why(gap, esc, unl, n):
     parts = ([f"{n} address{'es' if n != 1 else ''} with rewards or transfers missing from /api/agents ({unl:,.6f} POA)"] if n else []) + ([f"{esc:,.6f} POA escrowed in open swap offers"] if esc else [])
@@ -99,7 +108,10 @@ def reconcile():
     # 1.26.257: a carried pool (segment 2 E37, E38) holds the last close's carry_in, so new emission is pool minus carry_in;
     # a correction recorded in a close (ballot 2464) burns locked balances, so it comes off Mined.
     pool = sum(((_d(e.get("pool")) or D(0)) - (_d((e.get("basis") or {}).get("carry_in")) or D(0))) for e in EA)
-    corr = sum(D(str(A.correction_of(e))) for e in EA)
+    from . import correction as _CC   # 1.26.261: or the pinned table once params and the E44 record say it ran (no field in the record)
+    corr = sum(D(str(A.correction_of(e) or _CC.implied(e, n))) for n in S.NUMBERS for e in A.segment_closes(n))
+    cc_due = _CC.status()["state"] == "closed_no_record"   # E44 in, no field and no params match: a supply step of exactly the table is still the correction
+    cc_tab = D(str(round(_CC.total(), 6))) if cc_due else D(0)
     mint -= corr
     sup = _d(st.get("supply"))
     lagging = (st.get("epochs_closed") or 0) > len(E); behind = bool(E and node_at and node_at < int(E[-1]["ts"]))
@@ -136,11 +148,11 @@ def reconcile():
     pend_ours = A.pending_by_epoch().get("stale_total") if E else None
     rows = [
         _row("mined", "Mined", mint, sup, "sum of rewards in close records", ep_t, "/api/status supply", node_at, "poa",
-             exc_why if exc_why and sup is not None and abs(mint - sup - exc) <= EPS * 10 else why_mint, explained=exc if xs else None, tol=EPS * 10),
+             _mined_why(mint, sup, exc, exc_why, cc_tab, why_mint), explained=(exc + cc_tab) if (xs or cc_due) else None, tol=EPS * 10),
         _row("burned", "Burned", pool - mint, (pool - sup) if sup is not None else None, "pool minus rewards, close records", ep_t, "pool minus /api/status supply", node_at, "poa",
-             "burn is pool minus mined, so it moves with Mined", explained=-exc if xs else None, tol=EPS * 10),
+             "burn is pool minus mined, so it moves with Mined", explained=-(exc + cc_tab) if (xs or cc_due) else None, tol=EPS * 10),
         _row("held", "Held", mint - exc, held, "sum of carried rewards in close records", ep_t, "sum of /api/agents balances", acc_t, "poa",
-             _held_why(mint - exc - held, esc, unl_sum, len(unl)), explained=esc + unl_sum, tol=D("0.01")),
+             _held_why(mint - exc - held - cc_tab, esc, unl_sum, len(unl)) + (" plus ballot 2464's E44 burn from locked (pinned table)" if cc_tab else ""), explained=esc + unl_sum + cc_tab, tol=D("0.01")),
         _row("holders", "Holders", hold, st.get("holders"), "balances above 0, plus reward sums missing from /api/agents", acc_t, "/api/status holders", node_at,
              reason="/api/agents and /api/status are read at different times"),
         _row("agents", "Agents", acc, st.get("agents_joined"), "addresses in /api/agents", acc_t, "/api/status agents_joined", node_at,
