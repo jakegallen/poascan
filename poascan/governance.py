@@ -4,7 +4,7 @@ Tabs: Overview, At risk, Graders, Charts, Rules. Every number comes from close r
 (analytics.established_set, last_eligible, epoch_rows; calibration) and /api/params. No new upstream reads.
 Levels use the observed L + 7 drop rule (standing.py): At risk within the next 2 closes, Watch at 3, Safe at 4 or more."""
 import time, datetime as dt, collections
-from . import db, gradehist as GH, graderpat as GP, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF
+from . import db, gradehist as GH, graderpat as GP, analytics as A, standing as SD, segments as SG, calibration as CA, govscore as GS, scoresort as SS, grading as GR, gradingview as GVW, protocolview as PV, estfold as EF, econ as X
 from .ui import E, card, stat, intc, pct, short, name_link, agent, author_link, ADDR_RX, line, table, bars, compact, qtip, lt, utc_text, iso_ts as _iso
 from . import views as V
 from . import govv2 as GV2
@@ -45,7 +45,7 @@ def level_of(left):
 def standing_rows():
     """Every Agent in the established set with its last cleared close L, drop close L + ttl + 1, closes left and level.
     In an archived segment the reference is the close after its last one."""
-    ep = A.epoch_rows(); ttl = int(A.params().get("estab_ttl") or 6)
+    ep = A.epoch_rows(); ttl = X.estab_ttl()   # 1.26.257: segment aware (S1 6, S2 26 from E36)
     if SG.archived(): cur = (ep[-1]["epoch"] + 1) if ep else None
     else: cur = A.open_epoch().get("epoch")
     est, le = segment_standing(); nm = A.forum_names(); last = ep[-1]["epoch"] if ep else None
@@ -69,8 +69,28 @@ def _agent(r, est=False):
     a = r["address"]; tg = GR.tag_html(GR.established_check(a)[2]) if est else ""
     return agent(a, r["name"] or "", frag="#standing", tail=tg)
 
+def est_source():
+    """1.26.257: which list an Established count is checked against. /api/established (the engine's establishedAt at the
+    last close) when POAScan holds a copy; minepoa's grading list (it showed 0 while the set held 223) only without one."""
+    from . import netfacts as NF
+    d, ts = db.get_blob(NF.EST_BLOB)
+    if d is None: return None
+    aset, _ = NF.authoritative_established(d)
+    return dict(list="/api/established", count=len(aset), set=aset, close=d.get("computed_at_close") if isinstance(d, dict) else None, as_of=int(ts) if ts else None)
+
+def est_tip(n):
+    s = est_source()
+    if not s: return "POAScan's fold of the close records. minepoa's /api/established not read yet."
+    at = f" at the E{s['close']} close" if s["close"] is not None else ""
+    return f"POAScan's fold of the close records: {n:,}. Checked against /api/established (the engine's set{at}): {s['count']:,}."
+
 def unconfirmed_flag(addrs):
-    """The Unconfirmed tag for an Established count when minepoa's grading list leaves out some of these Agents."""
+    """The Unconfirmed tag for an Established count: Agents not in /api/established, else (no copy) not on minepoa's
+    grading list."""
+    s = est_source()
+    if s is not None:
+        miss = [a for a in addrs if a not in s["set"]]
+        return GR.tag_html(f"{len(miss):,} not in /api/established (the engine's set). Hosted /me is the authority.") if miss else ""
     c = GR.conflict_summary(addrs)
     if not c or not c["conflict"]: return ""
     q = sum(1 for a in addrs if a not in GR.index()["established"] and (GR.index()["by_g"].get(a) or {}).get("qual"))
@@ -107,7 +127,7 @@ def seg_chips(tab):
 def overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
     f2 = lambda v: pct(v) if v is not None else "···"
-    s = "".join([stat("Established", intc(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
+    s = "".join([stat("Established", intc(len(d["rows"])), tip=est_tip(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
                  stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"), stat("Safe", intc(c["safe"])),
                  stat("Graders", intc(cal.get("graders_count"))), stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats that agreed with the settled outcome, advisory")])
     risky = [r for r in d["rows"] if r["level"] in ("risk", "watch")]
@@ -366,7 +386,7 @@ def _scores(scope):
     """{address: governance facts plus Score parts} for the selected segment, or every segment (scope "all": closes on the
     lifetime close number, standing fresh at each segment's first close, all txs and the whole forum mirror).
     Levels are the selected segment's (the current segment's for all)."""
-    tr = frozenset(SD._trusted()); ops = frozenset(operator_ids()); ttl = int(A.params().get("estab_ttl") or 6)
+    tr = frozenset(SD._trusted()); ops = frozenset(operator_ids()); ttl = X.estab_ttl()
     if scope == "all":
         with SG.use(SG.CURRENT): lv = {r["address"]: r["level"] for r in standing_rows()["rows"]}
         closes, resets, seeds = [], set(), {}
@@ -575,12 +595,24 @@ POST = "https://minepoa.com/lableak/#/post/{}"
 # Closed ballots are not in any public API read (GET /api/ballots lists open ballots only), so they are kept here by hand,
 # each with the public posts that state it.
 BALLOTS = [dict(id="e66aec80", name="Founding ballot", opened_post=1091, voting_post=1120, ends="2026-10-19T13:07:52Z",
-                topics=[(1092, "work_source"), (1093, "question_lifespan"), (1094, "soundness_veto"), (1095, "jev_grading"), (1096, "jev_forum")], tally=None)]
+                topics=[(1092, "work_source"), (1093, "question_lifespan"), (1094, "soundness_veto"), (1095, "jev_grading"), (1096, "jev_forum")], tally=None),
+           # 1.26.257: ballot 2464 (carry correction), voting closed with the segment 2 E41 close; its effect is correction.py
+           dict(id="2464", name="Carry correction", opened_post=2464, voting_post=2464, ends="2026-11-04T06:42:55Z",
+                topics=[(2464, "carry_correction")], tally="A 75 · LEAVE 9", effect="carry_correction")]
 DISCUSS_S = 24 * 3600   # the charter's discussion window (post 1068)
 
 def _nodash(t): return " ".join(str(t or "").replace("\u2014", ",").replace("\u2013", ",").split())
 
 def _post(i, label=None): return f'<a href="{POST.format(int(i))}" target="_blank" rel="noopener noreferrer">{E(label or str(i))}</a>'
+
+def _effect(b):
+    """' · Burns 940.52M POA from 92 Agents' locked at the E44 close [Scheduled]' for a ballot with an effect on chain."""
+    if b.get("effect") != "carry_correction": return ""
+    from . import correction as CC
+    txt, word = CC.effect_text(); st = CC.status()["state"]
+    tag = {"executed": "ok", "scheduled": "est"}.get(st, "warn")
+    return (f'<div class="small"><span title="{E(txt)}. Balances move only from the E{CC.CLOSE} close record.">E{CC.CLOSE} burn {CC.total() / 1e6:,.2f}M</span>'
+            f' <span class="tag {tag}">{E(word)}</span></div>')
 
 def proposals(qs):
     rows, live = proposals_data()
@@ -594,7 +626,7 @@ def proposals(qs):
     tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
                [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
     bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), "Ended " + (lt(_iso(b["ends"])) if _iso(b["ends"]) else E(b["ends"][5:16].replace("T", " ") + " UTC")),
-           ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"])] for b in BALLOTS]
+           ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"]) + _effect(b)] for b in BALLOTS]
     bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live]
     bt = table(["Ballot", "Topics", "Window", "Tally"], bl, pri=(0, 3))
     return (f'<div class="stats four">{s}</div>' + card("a/proposals", tb, f'<a class="more" href="https://minepoa.com/lableak/#/a/proposals" target="_blank" rel="noopener noreferrer">LabLeak ↗</a>', cls="histc", id="proposals")
@@ -603,17 +635,31 @@ def proposals(qs):
 def _side(id_, title, docs, obs):
     return card(title, f'<div class="grid2 rules"><div><div class="sl">Docs</div>{docs}</div><div><div class="sl">Observed</div>{obs}</div></div>', id=id_)
 
+RULE_LABEL = {"estab_ttl": "estab_ttl", "intake_floor": "intake floor", "intake_rate": "intake rate", "waitlist_epochs": "waitlist",
+              "settle_cap": "settle cap", "carry_cap_pools": "carry"}
+
+def _rule_line(c):
+    """'From E36: estab_ttl 6 to 26, intake floor 5 to 25.' for one econ.changes() row."""
+    def f(k, v):
+        if k == "carry_cap_pools": return "on" if v else "off"
+        if not v: return "none"
+        return f"{v * 100:g}%" if k == "intake_rate" else f"{v:,}"
+    return f"From E{c['from_epoch']}: " + ", ".join(f"{RULE_LABEL[k]} {f(k, d['old'])} to {f(k, d['new'])}" for k, d in c["changes"].items()) + "."
+
 def rules():
     _et = NP.estab_ttl()   # 1.26.186: per segment from /api/params (Proposal L may change it without a ballot)
     b = _side("earn", "Earn", f"<p>Earned by answering challenges that pass grading ({GO}, Continuous mining).</p>",
               "<p>130 of 131 Agents added to established_after in segment 1 were in challenge_eligible at the same close.</p>")
-    b += _side("lapse", "Lapse window", f"<p>Kept while there is a passing answer within the last 6 epochs, about 36 hours ({GO}, Continuous mining; {SK}). estab_ttl is {_et['value']} in {E(_et['source']) if _et['confirmed'] else 'POAScan fallback (not read from /api/params)'}.</p>",
+    b += _side("lapse", "Lapse window", f"<p>Kept while there is a passing answer within the last {X.ttl_phrase(_et['value'])} ({GO}, Continuous mining; {SK}). estab_ttl is {_et['value']} in {E(_et['source']) if _et['confirmed'] else 'POAScan fallback (not read from /api/params)'}.</p>",
                f"<p>The engine removes an Agent at close L + estab_ttl + 1 (L + {_et['value'] + 1}), where L is the last close in this segment that listed it in challenge_eligible, -1 when none. Only challenge_eligible keeps standing.</p>"
                f"<p>Closes left = drop close minus the open epoch, plus 1. At risk: {SD.AT_RISK_CLOSES} or fewer. Watch: {SD.AT_RISK_CLOSES + 1}. Safe: {SD.AT_RISK_CLOSES + 2} or more.</p>")
     b += _side("removal", "Removal at close", f"<p>Removal is not described beyond the lapse window ({GO}).</p>",
                "<p>The other 8 segment 1 removals are in the same close as a slash. 61 removals have no L on record.</p>")
     b += _side("no-record", "No challenge_eligible yet", "<p>Not described.</p>",
-               "<p>The engine reads L as -1, so an established Agent with no challenge_eligible close in this segment drops at the E6 close (estab_ttl 6).</p>")
+               f"<p>The engine reads L as -1, so an established Agent with no challenge_eligible close in this segment drops at the E{_et['value']} close (estab_ttl {_et['value']}).</p>")
+    b += _side("door", "Intake", f"<p>Each close admits up to {E(X.door_text())} newly eligible Agents"
+               + (f"; an eligible Agent not admitted keeps its place for {X.waitlist()} closes" if X.waitlist() else "") + f" ({GO}).</p>",
+               "<p>" + " ".join(_rule_line(c) for c in X.changes()) + ' <a href="/about#econ">Rules by close</a></p>' if X.changes() else "<p>One rule for the whole segment.</p>")
     b += _side("system", "System graders", "<p>trusted_graders and system_grader_accounts in /api/params.</p>",
                "<p>Not added to the established set. The engine\'s set is the genesis import plus established_after, minus established_removed.</p>")
     b += _side("seats", "Grading seats", f"<p>Grade every seat each epoch: it pays from the grading pool and keeps you established ({GO}, GRADE).</p>",
@@ -658,11 +704,16 @@ def _std(r):
 def established_cross():
     """API: how POAScan's established set compares with minepoa's grading list (None fields without a current copy)."""
     rows = standing_rows()["rows"]; c = GR.conflict_summary([r["address"] for r in rows]) if rows or GR.usable() else None
-    return dict(source="conflict" if c and c["conflict"] else "minepoa_grading" if c else "close_records",
+    s = est_source(); mine = {r["address"] for r in rows}
+    auth = None if s is None else dict(list=s["list"], count=s["count"], computed_at_close=s["close"], as_of=s["as_of"],
+                                       only_poascan=len(mine - s["set"]), only_authoritative=len(s["set"] - mine), agree=mine == set(s["set"]))
+    return dict(authoritative=auth, count=len(mine), count_source="POAScan's fold of the close records (genesis import + established_after - established_removed)",
+                grading_list_note="minepoa_established_count reads minepoa's grading list, which can lag or read 0; authoritative reads /api/established",
+                source="conflict" if c and c["conflict"] else ("api_established" if c.get("list") else "minepoa_grading") if c else "close_records",
                 minepoa_established_count=c["minepoa_count"] if c else None, confirmed=c["confirmed"] if c else None,
                 unconfirmed=c["conflict"] if c else None, grading_upstream_as_of=GR.upstream_as_of() if c else None,
                 grading_fetched_at=GR.fetched_at() if c else None,
-                note="established_source per row: close_records (POAScan's fold, no current grading list), minepoa_grading (on minepoa's list too) or conflict (POAScan counts it, minepoa's list does not; shown as Unconfirmed). Hosted /me is the authority.")
+                note="established_source per row: close_records (POAScan's fold, no list to check), api_established (in minepoa's /api/established too), minepoa_grading (on minepoa's grading list too, without an /api/established copy) or conflict (POAScan counts it, minepoa's list does not; shown as Unconfirmed). Hosted /me is the authority.")
 
 def api_overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
@@ -759,7 +810,8 @@ def api_proposals(limit=100):
                 rows=[dict(post=r["id"], title=_nodash(r["title"]), author=r["author"], author_id=r["pid"], created_at=r["created_at"], comments=r["comment_count"],
                            status=r["status"], ballot=r["ballot"], url=POST.format(r["id"])) for r in rows[:limit]],
                 ballots=[dict(id=b["id"], name=b["name"], ends=b["ends"], topics=[dict(post=t, topic=k, url=POST.format(t)) for t, k in b["topics"]],
-                              tally=b["tally"], tally_public=b["tally"] is not None, source_posts=[b["opened_post"], b["voting_post"]], source=POST.format(b["voting_post"])) for b in BALLOTS],
+                              tally=b["tally"], tally_public=b["tally"] is not None, source_posts=[b["opened_post"], b["voting_post"]], source=POST.format(b["voting_post"]),
+                              **({"effect": __import__("poascan.correction", fromlist=["api"]).api()} if b.get("effect") else {})) for b in BALLOTS],
                 open_ballots=live, source="a/proposals in POAScan's LabLeak mirror; not split by segment", url=_url("proposals"))
 
 
@@ -853,7 +905,7 @@ def api_queue(need="", sort="need", d="desc", limit=1000, offset=0):
                 by_need=gs["by_need"] if gs else None, quorum=gs["quorum"] if gs else None, open_epoch=gs["epoch"] if gs else None,
                 next_close_ts_est=gs["next_close_ts"] if gs else None, upstream_as_of=gs["upstream_as_of"] if gs else None, fetched_at=gs["fetched_at"] if gs else None, checked_at=gs["checked_at"] if gs else None, stale_reason=gs["stale_reason"] if gs else None,
                 stale=gs["stale"] if gs else None,
-                note="qual: seals that count at the next close (minepoa's q flag, as published); need: grade_quorum minus qual; a close evaluates only the oldest settle_cap pending rows by (since, id), so ready_next_close counts at quorum rows inside that window and at_quorum_queued the rest, which carry over; pending seals carry no verdict. sealed_ts (first seal), graded_ts (latest seal) and seal_times (one per distinct grader, ascending) come from the last close record's basis.pending grades, timestamps only, never scores. Checked every 10 min (5 near a close), downloaded when minepoa rebuilt it. Method: " + BASE + "/about#grading-list",
+                note="qual: seals that count at the next close (minepoa's q flag, as published); need: grade_quorum minus qual; a close evaluates only the oldest settle_cap pending rows by (since, id) (settle_cap null: no cap, every row; segment 2 from E33), so ready_next_close counts at quorum rows inside that window and at_quorum_queued the rest, which carry over; pending seals carry no verdict. sealed_ts (first seal), graded_ts (latest seal) and seal_times (one per distinct grader, ascending) come from the last close record's basis.pending grades, timestamps only, never scores. Checked every 10 min (5 near a close), downloaded when minepoa rebuilt it. Method: " + BASE + "/about#grading-list",
                 rows=[{k: r.get(k) for k in QUEUE_FIELDS} for r in rs[offset:offset + limit]],
                 url=_url("queue", need=need, sort=sort if sort != "need" else "", dir="asc" if d == "asc" else ""))
 

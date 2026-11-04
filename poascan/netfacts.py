@@ -29,6 +29,8 @@ ECON = [
     ("estab_intake_floor", "Intake floor", None),
     ("estab_intake_rate", "Intake rate", None),
     ("estab_ttl", "Establishment TTL", "estab_ttl"),
+    ("estab_waitlist_epochs", "Waitlist epochs", None),
+    ("carry_cap_pools", "Carry cap pools", None),
     ("grade_quorum", "Grade quorum", None),
     ("panel_size", "Panel size", None),
     ("pending_ttl_epochs", "Pending TTL", "pending_ttl_epochs"),
@@ -78,7 +80,7 @@ def economics(facts=None):
 
 
 def _accounts_src(facts):
-    return _first(facts, "system_accounts", "system_accounts_liveness", "accounts", "system")
+    return _first(facts, "system_accounts", "system_addresses", "system_accounts_liveness", "accounts", "system")
 
 
 def system_accounts(facts=None):
@@ -97,7 +99,8 @@ def system_accounts(facts=None):
     elif isinstance(src, list):
         for v in src:
             if not isinstance(v, dict): continue
-            out.append(dict(id=str(_first(v, "id", "name", "label") or "?"), address=_first(v, "address", "addr", "account"), live=_live(v)))
+            out.append(dict(id=str(_first(v, "id", "name", "label") or "?"), address=_first(v, "address", "addr", "account"), live=_live(v),
+                            **({"role": v["role"]} if isinstance(v.get("role"), str) else {})))
     return out
 
 
@@ -166,7 +169,10 @@ EST_BLOB = "established_auth"
 
 def _est_rows(facts):
     if isinstance(facts, dict):
-        v = _first(facts, "established", "established_set", "set", "agents")
+        cur = facts.get("current")   # 1.26.257: the live shape, {current: {members: [{addr, since_epoch, ...}]}}
+        if isinstance(cur, dict) and isinstance(cur.get("members"), list): return cur["members"]
+        if isinstance(cur, list): return cur
+        v = _first(facts, "established", "established_set", "set", "agents", "members")
         return v if isinstance(v, list) else []
     return facts if isinstance(facts, list) else []
 
@@ -229,6 +235,11 @@ CLOSE_FIELDS = [("passed", "Passed"), ("failed", "Failed"), ("expired", "Expired
                 ("settled", "Settled"), ("grades", "Grades"), ("graders", "Graders")]
 
 
+# 1.26.257: close-report counts grades cast on every dealt row and distinct graders over all seats; POAScan derives
+# grades and graders from the settled rows' juries, so the two never line up (E42: 8,621 and 17 against 3,516 and 81).
+NOT_COMPARED = {"grades": "minepoa counts grades cast on every dealt row; POAScan counts settled rows' jury grades",
+                "graders": "minepoa counts distinct graders over every seat; POAScan counts graders on settled rows"}
+
 def _concentration(dist):
     """{graders, grades, n_eff, top_share} for a {grader: grades} distribution. n_eff is the effective grader count
     (Herfindahl inverse, (sum w) squared over sum of w squared); top_share is the largest grader's share. n_eff and
@@ -261,21 +272,28 @@ def authoritative_close(now=None):
     if cr is None and se is None:
         return dict(available=False, as_of=None)
     cr = cr if isinstance(cr, dict) else {}
-    split = _split_from(cr.get("settled")) or _split_from(cr)
+    ss = cr.get("settled_split")   # 1.26.257: the live shape (settled_split, panels, concentration, establishment)
+    split = (dict(passed=int(ss.get("passed") or 0), failed=int(ss.get("failed") or 0),
+                  expired=int(ss.get("expired_empty_jury") or 0) + int(ss.get("expired_with_seals") or 0)) if isinstance(ss, dict) else None) \
+        or _split_from(cr.get("settled")) or _split_from(cr)
     rows = se if isinstance(se, list) else (se.get("settled") if isinstance(se, dict) and isinstance(se.get("settled"), list) else None)
     if split is None and rows is not None:
         c = OC.counts(rows); split = dict(passed=c["passed"], failed=c["failed"], expired=c["expired_no_jury"])
     split = split or dict(passed=None, failed=None, expired=None)
     dist = _first(cr, "grades_by_grader", "grader_grades", "grader_distribution", "graders_served")
     conc = _concentration(dist if isinstance(dist, dict) else None)
-    grades = _first(cr, "grades", "grades_cast", "grade_count")
-    graders = _first(cr, "graders", "grader_count", "n_graders")
+    pn = cr.get("panels") if isinstance(cr.get("panels"), dict) else {}; cn = cr.get("concentration") if isinstance(cr.get("concentration"), dict) else {}
+    grades = _first(cr, "grades", "grades_cast", "grade_count") if _first(pn, "grades_cast") is None else pn["grades_cast"]
+    graders = _first(cr, "graders", "grader_count", "n_graders") if _first(cn, "distinct_graders") is None else cn["distinct_graders"]
+    if cn.get("n_eff_inverse_herfindahl") is not None: conc = dict(conc, n_eff=cn["n_eff_inverse_herfindahl"])
+    if cn.get("top_grader_share") is not None: conc = dict(conc, top_share=cn["top_grader_share"])
     settled = None if split["passed"] is None else (split["passed"] + split["failed"] + split["expired"])
-    return dict(available=True, epoch=_first(cr, "epoch", "close", "epoch_number"),
+    est = cr.get("establishment") if isinstance(cr.get("establishment"), dict) else None
+    return dict(available=True, epoch=_first(cr, "close_epoch", "epoch", "close", "epoch_number"), establishment=est,
                 passed=split["passed"], failed=split["failed"], expired=split["expired"], settled=settled,
                 grades=int(grades) if isinstance(grades, (int, float)) else (conc["grades"] or None),
                 graders=int(graders) if isinstance(graders, (int, float)) else (conc["graders"] or None),
-                quorum_rows=_first(cr, "quorum_rows", "rows_at_quorum", "reached_quorum", "at_quorum"),
+                quorum_rows=_first(pn, "rows_reaching_quorum") if _first(pn, "rows_reaching_quorum") is not None else _first(cr, "quorum_rows", "rows_at_quorum", "reached_quorum", "at_quorum"),
                 n_eff=conc["n_eff"], top_grader_share=conc["top_share"], as_of=int(crt) if crt else (int(set_) if set_ else None))
 
 
@@ -304,6 +322,8 @@ def close_crosscheck(now=None):
         a = auth.get(key) if auth.get("available") else None
         d = der.get(key) if der.get("available") else None
         preferred[key] = a if a is not None else d
+        if key in NOT_COMPARED:
+            rows.append(dict(name=key, label=label, authoritative=a, derived=d, state="not_compared", note=NOT_COMPARED[key])); continue
         if a is not None and d is not None:
             compared += 1; ok = a == d
             if not ok: diff += 1

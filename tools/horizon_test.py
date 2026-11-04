@@ -81,7 +81,8 @@ check("missing pending_ttl_epochs: 16 as fallback, flagged", t3["value"] == 16 a
 check("flags: Stale and Unconfirmed", [w for w, _ in NP.flags(t3)] == ["Stale", "Unconfirmed"])
 h3 = HZ.horizon(); c3 = HZ.card_html({}, GV.href)
 check("horizon keeps working on the fallback and says so", h3["rows"][0]["expires_close"] == 18 and h3["ttl_fallback"] and h3["ttl_flags"] == ["Stale", "Unconfirmed"] and ">Unconfirmed<" in c3 and ">Stale<" in c3)
-check("the establishment fallback (6) is flagged too", NP.estab_ttl()["value"] == 6 and NP.estab_ttl()["fallback"])
+from poascan import econ as _EC   # 1.26.257: the fallback is the segment's newest rule in econ_rules.json (26 from segment 2's E36)
+check("the establishment fallback (econ_rules.json, 26) is flagged too", NP.estab_ttl()["value"] == _EC.at(None, None, live=False)["estab_ttl"] == 26 and NP.estab_ttl()["fallback"])
 
 # 5. an old params copy: the value stands, tagged Stale but confirmed
 seed(P, NOW - 5 * 3600)

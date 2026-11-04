@@ -27,7 +27,8 @@ def stats_row():
     f = stale_flag()
     nc = f'E{s["epoch"]} close' if s.get("epoch") is not None else "Next close"
     return ('<div class="stats four">' + "".join([
-        stat("At quorum", intc(s["ready_next_close"]), tip=(f"At quorum and inside the oldest {s['settle_cap']:,} pending rows the next close evaluates"
+        stat("At quorum", intc(s["ready_next_close"]), tip=((f"At quorum and inside the oldest {s['settle_cap']:,} pending rows the next close evaluates" if s["settle_cap"]
+              else "At quorum; the next close evaluates every pending row (no settle cap)")
              + (f"; {s['at_quorum_queued']:,} more at quorum wait beyond that cap" if s["at_quorum_queued"] else "")),
              flag_html=f or (flag(f"+{s['at_quorum_queued']:,} queued", f"{s['at_quorum_queued']:,} more answers are at quorum but outside the {s['settle_cap']:,} oldest rows a close evaluates. They carry over.", "warn") if s["at_quorum_queued"] else "")),
         stat("Pending", intc(s["pending"]), tip="Answers waiting on graders in minepoa's grading list", flag_html=f),
@@ -116,7 +117,8 @@ def queue_tab(qs, href, qsx):
                + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg + 1)))}#queue">More</a>' if pg < pages else "") + "</div>")
     ct = s["next_close_ts"]; cl = _last_close()
     foot = (f'<p class="cov dim small">E{s["epoch"]} closes about {lt(ct, "t")}, in {countdown(ct)}, an estimate · '
-            f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
+            + (f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' if s["settle_cap"] else f'It evaluates every pending row (no settle cap): {s["ready_next_close"]:,} at quorum')
+            + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
             f'Checked {lt(s["checked_at"] or s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · '
             f'Sealed and Graded: first and latest seal in the {"E" + str(cl) + " " if cl is not None else ""}close record · <a href="/about#grading-list">Method</a></p>') if ct else ""
     q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
@@ -132,7 +134,7 @@ def grader_badge(r): return ' <span class="tag est">trusted</span>' if r.get("tr
 
 # ---------------------------------------------------------------- per-Agent
 READY = '<span class="tag ok">Ready</span>'
-QUEUED = '<span class="tag warn" title="At quorum, but outside the oldest rows the next close evaluates (params.settle_cap_per_close). It carries over.">Queued</span>'
+QUEUED = '<span class="tag warn" title="At quorum, but outside the oldest rows the next close evaluates (the settle cap). It carries over.">Queued</span>'
 def _res(passed, expired=False):
     if not passed and expired: return '<span class="tag">Expired, no jury</span>'   # settled with no jurors: not a failure (outcome.py)
     return '<span class="tag ok">Passed</span>' if passed else '<span class="tag bad">Failed</span>'

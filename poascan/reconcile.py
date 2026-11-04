@@ -96,7 +96,11 @@ def reconcile():
     exc = sum((_d(v) or D(0)) for _, e in xs for v in (e.get("rewards") or {}).values())
     exc_lab = " and ".join(f"S{n} E{int(e.get('epoch', 0))}" for n, e in xs)
     exc_why = f"{exc_lab} rewards excluded at the genesis cut ({exc:,.6f} POA)" if xs else None
-    pool = sum((_d(e.get("pool")) or D(0)) for e in EA)
+    # 1.26.257: a carried pool (segment 2 E37, E38) holds the last close's carry_in, so new emission is pool minus carry_in;
+    # a correction recorded in a close (ballot 2464) burns locked balances, so it comes off Mined.
+    pool = sum(((_d(e.get("pool")) or D(0)) - (_d((e.get("basis") or {}).get("carry_in")) or D(0))) for e in EA)
+    corr = sum(D(str(A.correction_of(e))) for e in EA)
+    mint -= corr
     sup = _d(st.get("supply"))
     lagging = (st.get("epochs_closed") or 0) > len(E); behind = bool(E and node_at and node_at < int(E[-1]["ts"]))
     why_mint = ("the node has closed an epoch whose record POAScan has not read yet" if lagging else

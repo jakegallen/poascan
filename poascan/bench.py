@@ -22,26 +22,38 @@ _K = {t: k for t, _, k in LANES}
 _lock = threading.Lock(); _cache = {"t": 0.0, "v": None}
 
 # epoch tips: one plain definition per term on the card, the qtip ? (tap, click, keyboard; hover on a mouse). Written from minepoa
-# go.md and skill.md, the engine source and live /api/params (grade_quorum 4, settle_cap_per_close 2000, pending_ttl_epochs 16,
-# grading_pool_bp 1000, auto_epoch_seconds 21600). /about#epoch-card lists the same lines.
+# go.md and skill.md, the engine source and live /api/params (grade_quorum 4, panel_size 7, pending_ttl_epochs 16,
+# grading_pool_bp 1000, auto_epoch_seconds 21600). 1.26.257: {settle} and {panel} follow econ.py and /api/params. /about#epoch-card lists the same lines.
 METHOD = "/about#epoch-card"
 TIPS = (
     ("epoch", "Epoch", "An epoch is one round of mining, about 6 hours long. Answers, attests and seals land in the open epoch, and its close settles graded answers and pays the pool."),
-    ("close", "Closes in", "Estimated time left, 6 hours from the last close. Each close settles up to 2,000 pending answers, oldest first, and the rest carry over to the next one."),
+    ("close", "Closes in", "Estimated time left, 6 hours from the last close. {settle}"),
     ("timeline", "Timeline", "This epoch from its start to its estimated close, in your local time. Lit ticks are time already gone."),
     ("answers", "Answers", "Answers to this epoch's challenge so far, one per Agent. An answer pays only if its jury passes it, and one still short of quorum after 16 epochs expires unpaid."),
-    ("graders", "Graders", "Agents that sealed a grade this epoch. Each answer gets a jury of 9 graders, and community graders whose scores match the verdict share 10% of the pool."),
+    ("graders", "Graders", "Agents that sealed a grade this epoch. Each answer gets a jury of {panel} graders, and community graders whose scores match the verdict share 10% of the pool."),
     ("pool", "Pool", "The POA this epoch pays at its close: most to passing answers, 10% to graders whose scores match the verdict. Whatever isn't paid out is never issued, and POAScan shows it as burned."),
     ("live", "Last 24 min", "Every answer, attest and seal on the chain in the last 24 minutes, newest at the right. The number on each lane is its total for the window."),
     ("lane_a", "Answers lane", "One line per answer tx. Bright lines are final, dim ones are still collecting attests."),
     ("lane_t", "Attests", "An attest countersigns other txs after checking them, up to 100 in one tx. 5 attests make a tx final, and taller marks cover more txs."),
-    ("lane_s", "Seals", "A seal is one grader's score for an answer, kept sealed until the answer settles. 4 seals reach quorum, counted from its 9 drawn graders plus the network's trusted graders."),
+    ("lane_s", "Seals", "A seal is one grader's score for an answer, kept sealed until the answer settles. 4 seals reach quorum, counted from its {panel} drawn graders plus the network's trusted graders."),
     ("latest", "Latest", "The newest txs on the chain, one line at a time. Names open the Agent's LabLeak profile."),
 )
 TIP = {k: (t, x) for k, t, x in TIPS}
 
+SETTLE_CAP = "Each close settles up to {cap:,} pending answers, oldest first, and the rest carry over to the next one."
+SETTLE_ALL = "Each close settles every answer that reached quorum or expired; the rest carry over to the next one."
+
+def _panel():
+    from . import analytics as A
+    try: return int(A.params().get("panel_size") or 7)
+    except Exception: return 7
+
 def _live(x):
-    from . import netparams as NP   # 1.26.186: the pending TTL in the Answers line follows /api/params
+    from . import netparams as NP, econ as X   # 1.26.186: the pending TTL in the Answers line follows /api/params
+    try:
+        cap = X.settle_cap()
+        x = x.replace("{settle}", SETTLE_CAP.format(cap=cap) if cap else SETTLE_ALL).replace("{panel}", str(_panel()))
+    except Exception: x = x.replace("{settle}", SETTLE_ALL).replace("{panel}", "7")
     try: return NP.live_text(x)
     except Exception: return x
 

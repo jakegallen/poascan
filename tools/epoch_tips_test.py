@@ -22,8 +22,12 @@ check("each ? links its Method to /about#epoch-card", h.count('<a href="/about#e
 for k, t, x in BN.TIPS:
     s = [p for p in re.split(r"(?<=[.!?])\s+", x.strip()) if p]
     check(f"{t}: one or two sentences, no dashes, Agents not Accounts", 1 <= len(s) <= 2 and not re.search("[\u2013\u2014]", x) and "ccount" not in x)
-check("facts from the sources: 6 hours, quorum 4, jury of 9, 10% grading, 2,000 per close, 16 epoch TTL, 100 per attest, 5 attests final",
-      all(any(f in x for _, _, x in BN.TIPS) for f in ("6 hours", "4 seals", "9 graders", "9 drawn", "10%", "2,000", "16 epochs", "up to 100", "5 attests")))
+check("facts from the sources: 6 hours, quorum 4, 10% grading, 16 epoch TTL, 100 per attest, 5 attests final",
+      all(any(f in x for _, _, x in BN.TIPS) for f in ("6 hours", "4 seals", "10%", "16 epochs", "up to 100", "5 attests")))
+_lv = " ".join(BN._live(x) for _, _, x in BN.TIPS); _cap = __import__("poascan.econ", fromlist=["x"]).settle_cap()
+check("1.26.257: jury size from params panel_size, settle cap from econ.py (segment and epoch aware; no cap reads every answer)",
+      f"jury of {BN._panel()} graders" in _lv and f"its {BN._panel()} drawn" in _lv and "{" not in _lv
+      and ((f"settles up to {_cap:,} pending" in _lv) if _cap else ("every answer that reached quorum" in _lv)))
 check("the seal tip never says a sealed grade can be read", "sealed until the answer settles" in BN.TIP["lane_s"][1] and not re.search(r"\b(decode|read|reveal)", BN.TIP["lane_s"][1]))
 check("no referral codes in the tips", not re.search(r"poa1|ref=|invite", " ".join(x for _, _, x in BN.TIPS)))
 check("the bezel drawing stays hidden from screen readers, its ? does not", '<svg viewBox="0 0 712 22" preserveAspectRatio="none" aria-hidden="true">' in h

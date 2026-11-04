@@ -13,7 +13,7 @@ govv2.standing_changes (genesis import, plus established_after, minus establishe
             should be exactly the admitted set; Check says Match when they are, Differs when not.
 Finalized close records only: no pending row, seal or score is read."""
 import collections, hashlib, math
-from . import analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ
+from . import analytics as A, segments as SG, scoresort as SS, estfold as EF, closepause as CPZ, econ as X
 from .ui import E, card, stat, intc, agent, qtip
 
 METHOD = "/about#intake"
@@ -37,8 +37,25 @@ def _param_rule(p):
         return (int(f if f is not None else FLOOR), float(r if r is not None else RATE), int(fe) if fe is not None else None)
     except (TypeError, ValueError): return None
 
-def _cap(n, size, order, adm, rule):
-    """(cap, basis, draw_match) for one close. With intake params: from their from_epoch on, or, without one, whichever rule
+def _cap(n, size, order, adm, rule, seg=None):
+    """(cap, basis, draw_match) for one close. 1.26.257: the rule that close ran under, from econ_rules.json (segment 2:
+    max(5, ceil(10%)) to E35, max(25, ceil(25%)) from E36), the newest range overlaid with /api/params. An explicit
+    estab_intake_from_epoch in /api/params still wins from that close on."""
+    m = lambda c: set(order[:c]) == adm
+    if rule is None or rule[2] is None:
+        # the close's rule first (live params on the newest range), then the file's rule without params, then the engine
+        # default: an overlay with no from_epoch may not reach back to every close of the range
+        cs = []
+        for r in (X.at(n, seg), X.at(n, seg, live=False), dict(intake_floor=FLOOR, intake_rate=RATE)):
+            fl, rt = int(r["intake_floor"]), float(r["intake_rate"])
+            if (fl, rt) not in cs: cs.append((fl, rt))
+        res = [(cap_of(size, fl, rt), DEFAULT_BASIS if (fl, rt) == (FLOOR, RATE) else PARAM_BASIS) for fl, rt in cs]
+        hit = next(((c, b) for c, b in res if m(c)), None)
+        return (hit[0], hit[1], True) if hit else (res[0][0], res[0][1], False)
+    return _cap_params(n, size, order, adm, rule)
+
+def _cap_params(n, size, order, adm, rule):
+    """(cap, basis, draw_match) with intake params: from their from_epoch on, or, without one, whichever rule
     the draw confirms (params first)."""
     dflt = cap_of(size); m = lambda c: set(order[:c]) == adm
     if rule is None: return dflt, DEFAULT_BASIS, m(dflt)
@@ -88,7 +105,7 @@ def closes():
         elig = [a for a in dict.fromkeys(b.get("challenge_eligible") or []) if isinstance(a, str) and a not in est]
         adm_l = [a for a in dict.fromkeys(b.get("established_after") or []) if isinstance(a, str) and a not in est]
         adm = set(adm_l); order = sorted(elig, key=lambda a: _key(a, n)); rank = {a: i + 1 for i, a in enumerate(order)}
-        cap, basis, ok = _cap(n, size, order, adm, rule)
+        cap, basis, ok = _cap(n, size, order, adm, rule, seg); wl = X.waitlist(n, seg)
         rows = [dict(address=a, state="admitted" if a in adm else "not_admitted", draw=rank[a]) for a in order]
         rows += [dict(address=a, state="admitted_unlisted", draw=None) for a in adm_l if a not in rank]
         na = sum(1 for r in rows if r["state"] == "not_admitted")
@@ -96,13 +113,27 @@ def closes():
         audit = sl | set(b.get("ejected") or []) | set((b.get("audit") or {}).get("slashed") or [])
         r_ttl = sum(1 for a in rem if a not in audit)
         out.append(dict(close=n, close_ts=int(e.get("ts") or 0), established_before=size, eligible=len(elig), cap=cap, cap_basis=basis,
-                        admitted=len(adm), not_admitted=na, door="binding" if len(elig) > cap else "open",
+                        admitted=len(adm), not_admitted=na, waitlist_epochs=wl, waitlisted=na if wl else 0, door="binding" if len(elig) > cap else "open",
                         admit_rate=round(len(adm) / len(elig), 4) if elig else None, removed=len(rem), removed_ttl=r_ttl, removed_other=len(rem) - r_ttl,
                         net=len(adm) - len(rem),
                         check=("n/a" if not elig and not adm else "match" if ok else "differs"), **CPZ.fields_for(e), rows=rows))
         est.update(b.get("established_after") or [])
         est.difference_update(a for a in b.get("established_removed") or [] if not EF._pardoned(pardons, n, a, sl))
     return out
+
+def waitlist_of(a):
+    """{close, draw, waitlist_epochs, keeps_until} when `a` was eligible but not admitted at a close within the waitlist and
+    not admitted since (1.26.257, Proposal L's waitlist from E36). None otherwise."""
+    cs = closes()
+    if not cs: return None
+    last = cs[-1]["close"]
+    for c in reversed(cs):
+        if any(r["address"] == a and r["state"].startswith("admitted") for r in c["rows"]): return None
+        wl = c.get("waitlist_epochs") or 0
+        if not wl or c["close"] + wl <= last: continue
+        r = next((r for r in c["rows"] if r["address"] == a and r["state"] == "not_admitted"), None)
+        if r: return dict(close=c["close"], draw=r["draw"], waitlist_epochs=wl, keeps_until=c["close"] + wl)
+    return None
 
 COLS = [SS.Col("close", "Close", "num"), SS.Col("set", "Set", "num", "r dk"), SS.Col("eligible", "Eligible", "num", "r"), SS.Col("cap", "Cap", "num", "r"),
         SS.Col("admitted", "Admitted", "num", "r"), SS.Col("not_admitted", "Not admitted", "num", "r"), SS.Col("rate", "Rate", "num", "r dk"),
@@ -116,7 +147,7 @@ _V = {"close": lambda r: r["close"], "set": lambda r: r["established_before"], "
 ACOLS = [SS.Col("name", "Agent", "text"), SS.Col("draw", "Draw", "low", "r"), SS.Col("state", "State", "cat")]
 ASORTS = [(c.key, c.label) for c in ACOLS]
 _SO = {k: i for i, (k, _) in enumerate(STATES)}
-TIP = ("Set: established before the close. Eligible: challenge_eligible, not yet established. Cap: max(5, ceil(10% of Set)). "
+TIP = ("Set: established before the close. Eligible: challenge_eligible, not yet established. Cap: max(floor, ceil(rate x Set)) under that close's rule (segment 2: max(5, 10%) to E35, max(25, 25%) from E36). "
        "Admitted: new in established_after. Rate: Admitted over Eligible. TTL out: in established_removed and not slashed or ejected at that close (the TTL lapse). Other out: removed with a slash or ejection. Net: Admitted minus removed. Door: Binding when Eligible exceeds Cap. Check: the first Cap Agents in the draw order are exactly the Admitted.")
 DRAW_TIP = "Place in sha256('intake:' + address + ':' + close) order among the eligible. The first Cap places are admitted."
 
@@ -134,7 +165,8 @@ def agents(close, state="", by="draw", d="desc"):
 
 def _n(v): return f'<span class="num">{v:,}</span>' if v is not None else '<span class="dim">···</span>'
 def _q(qs, k, d=""): return ((qs or {}).get(k) or [d])[0]
-def _state(s):
+def _state(s, wl=0):
+    if s == "not_admitted" and wl: return f'<span class="tag warn" title="Eligible, not admitted. Keeps its place for {wl} closes.">Waitlist</span>'
     return {"admitted": '<span class="tag ok">Admitted</span>', "not_admitted": '<span class="tag warn">Eligible, not admitted</span>',
             "admitted_unlisted": '<span class="tag" title="In established_after without a challenge_eligible entry at this close">Admitted, not eligible</span>'}[s]
 def _pct(v): return f'{v * 100:.0f}%' if v is not None else '<span class="dim">···</span>'
@@ -163,9 +195,10 @@ def tab(qs, href, qsx):
     link = lambda k, dd: href("intake", **keep(sort=k if k != "close" else "", dir="asc" if dd == "asc" else "")) + "#intake"
     last = withe[-1] if withe else allc[-1]
     s = "".join([stat("Eligible", intc(last["eligible"]), tip=f'challenge_eligible at the E{last["close"]} close, not yet established'),
-                 stat("Cap", intc(last["cap"]), tip=f'Door at E{last["close"]}: max(5, ceil(10% of {last["established_before"]:,} established))'),
+                 stat("Cap", intc(last["cap"]), tip=f'Door at E{last["close"]}: {X.door_text(last["close"]).replace("of the set", "of " + format(last["established_before"], ",") + " established")}'),
                  stat("Admitted", intc(last["admitted"]), tip=f'New in established_after at E{last["close"]}'),
-                 stat("Not admitted", intc(last["not_admitted"]), tip=f'Eligible at E{last["close"]} but not admitted'),
+                 stat("Waitlist" if last.get("waitlist_epochs") else "Not admitted", intc(last["not_admitted"]),
+                      tip=f'Eligible at E{last["close"]} but not admitted' + (f'. Keeps its place for {last["waitlist_epochs"]} closes' if last.get("waitlist_epochs") else "")),
                  stat("TTL out", intc(last["removed_ttl"]), tip=f'Removed from Established at E{last["close"]} with no slash or ejection'),
                  _propl_flag()])
     T = lambda: qtip(TIP, METHOD, "About Intake", "hv")
@@ -192,7 +225,7 @@ def tab(qs, href, qsx):
     chips = (f'<a href="{href("intake", **ak(state=""))}#intake-list" class="chip {"on" if not st else ""}">All <small>{len(one["rows"]):,}</small></a>'
              + "".join(f'<a href="{href("intake", **ak(state=k))}#intake-list" class="chip {"on" if k == st else ""}">{t} <small>{cnt[k]:,}</small></a>' for k, t in STATES if cnt[k] or k == st))
     acols = [c._replace(tip=qtip(DRAW_TIP, METHOD, "About Draw", "hv")) if c.key == "draw" else c for c in ACOLS]
-    atr = "".join(f'<tr><td>{agent(r["address"], r["name"] or "")}</td><td class="r">{_n(r["draw"])}</td><td>{_state(r["state"])}</td></tr>' for r in cur)
+    atr = "".join(f'<tr><td>{agent(r["address"], r["name"] or "")}</td><td class="r">{_n(r["draw"])}</td><td>{_state(r["state"], one.get("waitlist_epochs"))}</td></tr>' for r in cur)
     atb = (SS.select(acols, aby, ad, alink) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(acols, aby, ad, alink)}</tr></thead>'
            f'<tbody>{atr or "<tr><td colspan=3 class=na>No Agents in this view.</td></tr>"}</tbody></table></div>')
     if pages > 1:
@@ -210,10 +243,10 @@ BASE = "https://poascan.io"
 def api(close=None, state="", sort="close", d="desc", asort="draw", adir="desc", limit=1000, offset=0):
     seg = dict(segment=SG.selected(), archived=SG.archived())
     common = dict(seg, source="close records (challenge_eligible, established_after, established_removed; minepoa's engine fold)", definitions=TIP,
-                  rule="cap = max(floor, ceil(rate x established before the close)), floor 5 and rate 0.10 unless /api/params sets estab_intake_floor and estab_intake_rate; "
+                  rule="cap = max(floor, ceil(rate x established before the close)) under the rule of that close (econ_rules.json, /about#econ: segment 2 floor 5 and rate 0.10 to E35, floor 25 and rate 0.25 from E36; the newest rule takes /api/params estab_intake_floor and estab_intake_rate); "
                        "admitted = the first cap eligible Agents in sha256('intake:' + address + ':' + close) order",
                   sources=[dict(SRC, note="Proposal L: the hardcoded door and the params that would replace it"), dict(post=1582, comment=6193, note="the ceil and the sha256 draw order")],
-                  method=BASE + METHOD, url=BASE + "/governance?tab=intake")
+                  method=BASE + METHOD, url=BASE + "/governance?tab=intake", rules=X.ranges())
     if close is None:
         rs = select(sort, d)
         return dict(common, close=None, sort=sort, dir=d, proposal_l=propl_state(), total=len(rs), offset=offset, limit=limit, rows=rs[offset:offset + limit])

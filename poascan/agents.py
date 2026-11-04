@@ -1,6 +1,6 @@
 """'The Agents' analytics. Model/harness = self-reported; operator families = estimated. Nothing is imputed."""
 import re, json, math, time, statistics, collections, csv, os, datetime as dt
-from . import db, analytics as A
+from . import db, analytics as A, econ as X
 from . import segments as _SG
 from .census_rules import M as CENSUS_M, LABEL as CENSUS_LABEL, KNOWN_ADDR
 
@@ -510,7 +510,7 @@ def established_history(addr):
     minepoa decides standing and publishes only the changes (basis.established_after / established_removed); hosted /me
     is the authority. Every count is over closes we have; window is the last estab_ttl closes up to each close."""
     ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
-    pp = A.params(); ttl = int(pp.get("estab_ttl") or 6)
+    pp = A.params(); ttl = X.estab_ttl()   # 1.26.257: the selected segment's current rule; each change reads its own close's TTL below
     ans = answerers(); rb = A.rewards_by_addr().get(addr, {})
     passed, settled, expired, seated = collections.Counter(), collections.Counter(), collections.Counter(), set()   # seated: closes where it held a grading seat
     for n, _, au, ok, jury, oc in settled_records():
@@ -522,7 +522,7 @@ def established_history(addr):
         if (b.get("graders_served", {}) or {}).get(addr): seated.add(n)
         ch = "added" if addr in (b.get("established_after") or []) else "removed" if addr in (b.get("established_removed") or []) else None
         if not ch: continue
-        w = range(n - ttl + 1, n + 1)
+        tn = X.estab_ttl(n); w = range(n - tn + 1, n + 1)
         changes.append(dict(epoch=n, close_ts=int(e.get("ts") or 0) or None, change=ch, answered=[k for k in w if addr in ans.get(k, ())],
                             passed=sum(passed[k] for k in w), settled=sum(settled[k] for k in w), seated=[k for k in w if k in seated]))
         listed = changes[-1]

@@ -1,6 +1,6 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
 import json, time, threading, statistics, collections, csv, os, re, datetime as dt
-from . import db, segments as S, closestore as CS
+from . import db, segments as S, closestore as CS, econ as _X
 
 _cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
 _inflight = {}                        # key -> Event while one thread recomputes it
@@ -267,25 +267,50 @@ def _epoch_pend():
         pprev = set(pend); prev = t
     return out
 
+def _f(v):
+    try: return float(v or 0)
+    except (TypeError, ValueError): return 0.0
+
+def correction_of(e):
+    """POA burned from locked balances by a correction recorded in a close (ballot 2464, E44). Reads any basis or top level
+    key with 'correction' in its name: a number, or a dict's total (or amount_total, burned). 0 when none. Never by hand."""
+    tot = 0.0
+    for src in (e, e.get("basis") or {}):
+        for k, v in src.items():
+            if "correction" not in k: continue
+            if isinstance(v, dict): v = next((v[x] for x in ("total", "amount_total", "burned", "total_burned", "amount") if x in v), None)
+            if isinstance(v, (int, float, str)): tot += _f(v)
+    return tot
+
 @cached("epoch_rows", 60)
 def epoch_rows():
     from . import closepause as _CP, outcome as _OC
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
-    pp = _epoch_pend()
-    for i, e in enumerate(epochs_raw()):
+    pp = _epoch_pend(); raw = epochs_raw(); from . import econ as _EC
+    for i, e in enumerate(raw):
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         unc = S.unconfirmed(int(e["epoch"]), seg)
-        pool = float(e.get("pool") or 0); m = sum(r); cum += m; cumc += 0.0 if unc else m; t = int(e["ts"])
+        pool = float(e.get("pool") or 0); m = sum(r); t = int(e["ts"])
+        # 1.26.257 carry (Proposal L, segment 2 E36 on): pool includes carry_in; what a close leaves unpaid is carry_out.
+        # It rolls into the next pool while carry is on (rolled: the next close's carry_in), otherwise it burns (carry_burned
+        # in the next record). burned = what this close leaves unpaid and does not roll. correction: a burn from locked
+        # balances recorded in the close (ballot 2464), taken off supply once the record carries it.
+        cin, cout, cb = _f(b.get("carry_in")), _f(b.get("carry_out")), _f(b.get("carry_burned"))
+        nxt = raw[i + 1].get("basis", {}) if i + 1 < len(raw) else None
+        rolled = (_f(nxt.get("carry_in")) if nxt is not None else (cout if _EC.at(int(e["epoch"]), seg).get("carry_cap_pools") else 0.0)) if cout else 0.0
+        corr = correction_of(e)
+        cum += m - corr; cumc += 0.0 if unc else m - corr
         q = pp[i]
         st = b.get("settled", []) or []
         # Dropped at close: in the previous close's pending, in neither this close's pending nor its settled list. Not
         # settled, graded or rejected; null for the first close (nothing to compare). (_epoch_pend)
         rs = sorted(r, reverse=True)
         out.append(dict(
-            epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=pool - m,
+            epoch=int(e["epoch"]), close_ts=t, gap_s=(t - prev) if prev else None, pool=pool, minted=m, burned=max(0.0, pool - m - rolled),
+            carry_in=cin, carry_out=cout, carry_rolled=rolled, carry_burned=cb, correction=corr,
             rewards_state="unconfirmed" if unc else "recorded",
-            burn_pct=(100 * (1 - m / pool)) if pool else None, cum_supply=cum, cum_supply_confirmed=cumc, paid=len(r),
+            burn_pct=(100 * max(0.0, pool - m - rolled) / pool) if pool else None, cum_supply=cum, cum_supply_confirmed=cumc, paid=len(r),
             challengers=len(e.get("challenges", {})), challenge_eligible=len(b.get("challenge_eligible", [])),
             attesters=len(b.get("attestations", {})), attestations=sum(b.get("attestations", {}).values()),
             median=statistics.median(r) if r else None, max=rs[0] if rs else None,
@@ -429,8 +454,9 @@ def supply_split():
     """Network spendable and locked over confirmed rewards, so spendable + locked is the carried supply (1.26.122)."""
     vest = int(params().get("vesting_epochs") or 100); n = open_gkey()
     sp = lk = 0.0
+    from . import correction as _CC   # 1.26.257: ballot 2464 comes off locked once the E44 record carries it
     for a, r in rewards_by_addr().items():
-        s, l = vest_split(r, n, vest); sp += s; lk += l
+        s, l = vest_split(r, n, vest); sp += s; lk += _CC.locked_after(a, l)
     with S.use(S.CURRENT): carried = minted_before()
     return dict(spendable=sp, locked=lk, vesting_epochs=vest, open_epoch=n, circulating_basis=S.carry_basis(),
                 locked_confirmed=S.carry_unlocked() is not None or not S.has_cut(), carried_supply=carried if S.has_cut() else None,
@@ -514,7 +540,7 @@ def established_fold():
     seg = S.selected()
     return F.fold(segment_closes(seg), F.imported(seg), params().get("slash_pardons"))
 
-STANDING_NOTE = ("minepoa's engine removes an established Agent at close L + estab_ttl + 1 (L + 7 with estab_ttl 6), where L is its last "
+STANDING_NOTE = ("minepoa's engine removes an established Agent at close L + estab_ttl + 1 (L + 27 with estab_ttl 26 from segment 2 E36, L + 7 before), where L is its last "
                  "challenge_eligible close in this segment, -1 when none (genesis import Agents start at -1). Grading seats and jury seats don't "
                  "keep standing. A slash or ejection can remove it sooner. Hosted /me is the authority.")
 
@@ -539,7 +565,7 @@ def established_expiry_est(a):
     out = dict(established_expires_epoch_est=None, established_expires_basis=None, last_challenge_eligible_epoch=L,
                established_expires_closes_left=None, established_expires_ts_est=None)
     if a not in est: return out
-    pp = params(); ttl = F.ttl_of(pp); Lr = -1 if L is None else L; n = F.drop_close(Lr, ttl); o = open_epoch(); cur = o.get("epoch")
+    pp = params(); ttl = _X.estab_ttl(); Lr = -1 if L is None else L; n = F.drop_close(Lr, ttl); o = open_epoch(); cur = o.get("epoch")
     if cur is None or n < cur: return out
     out.update(established_expires_epoch_est=n, established_expires_closes_left=n - cur + 1,
                established_expires_ts_est=int(o["est_close"] + (n - cur) * (o.get("period") or 21600)) if o.get("est_close") else None,

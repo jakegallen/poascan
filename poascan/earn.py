@@ -7,7 +7,7 @@ base URL and read the same payloads over HTTP. Rules come from minepoa's go.md a
 Read only: the check never asks for a key and never submits anything."""
 import datetime, json, os, re, threading, time, urllib.request
 from html import escape as E
-from . import outcome as OC
+from . import outcome as OC, econ as _X
 
 ROUTE = "/help"
 API = "/api/v1/earn/"
@@ -246,7 +246,7 @@ def check(a, inp, now=None):
     if not found:
         row("agent", "Agent", "bad", "Not found",
             "Check the address. It starts poa1 and is case sensitive. A new join shows here within a few minutes.", "/start")
-        return dict(address=a, found=False, history=[], grading=None, grades=None, ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline="Not found", tone="bad", items=items, open_epoch=open_ep, last_close=last_close,
+        return dict(address=a, found=False, history=[], grading=None, grades=None, ways=ways(), disclaimer=DISCLAIMER, segment=cur, headline="Not found", tone="bad", items=items, open_epoch=open_ep, last_close=last_close,
                     verdict=dict(title="Not found", reason="No Agent at this address in POAScan's archive.", step="Paste the address again from your agent. It is case sensitive.", href=None), specific=[])
 
     # 1 Agent
@@ -335,14 +335,16 @@ def check(a, inp, now=None):
         cl = st.get("established_expires_closes_left")
         row("established", "Established", "warn" if st.get("at_risk") else "ok", "Yes" + (f" · {cl} closes left" if cl is not None else ""),
             "Pass an answer before the buffer runs out. Each passed answer resets it.", f"/address/{a}#standing",
-            "Closes left: an estimate from the close records (last eligible close + 7). Hosted /me is the authority.")
+            f"Closes left: an estimate from the close records (last eligible close + {_X.estab_ttl() + 1}). Hosted /me is the authority.")
     else:
         ik = inp.get("intake") or {}; L = st.get("last_challenge_eligible_epoch")
         me = next((r for r in (ik.get("rows") or []) if r.get("address") == a), None); sm = ik.get("summary") or {}
         if me and me.get("state") == "not_admitted":
-            row("established", "Established", "warn", f"No · eligible at E{L}, not admitted",
-                f"Each close admits up to {sm.get('cap')} by draw. You drew {me.get('draw')} of {sm.get('eligible')}. Every passed answer is another draw.",
-                f"/governance?tab=intake&close={L}", "Cap: max(5, 10% of Established) per close. Draw: sha256 order from the close record.")
+            wl = _X.waitlist(L) if L is not None else 0
+            row("established", "Established", "warn", f"No · {'waitlisted' if wl else 'eligible'} at E{L}, not admitted",
+                f"Each close admits up to {sm.get('cap')} by draw. You drew {me.get('draw')} of {sm.get('eligible')}. "
+                + (f"The waitlist keeps your place for {wl} closes." if wl else "Every passed answer is another draw."),
+                f"/governance?tab=intake&close={L}", f"Cap: {_X.door_text(L)} per close. Draw: sha256 order from the close record.")
         else:
             row("established", "Established", "warn", "No", "A passed answer makes you eligible. Each close then admits a few by draw.", "/governance?tab=intake")
 
@@ -417,7 +419,7 @@ def check(a, inp, now=None):
     gts = gates(a, inp, landed, cnt, open_ep, now)
     grades = dict(passed=cnt["passed"], failed=cnt["failed"], expired_no_jury=cnt[OC.EXPIRED], pending=cnt["pending"] + cnt["awaiting_close"],
                   pass_rate=OC.rate(cnt["passed"], cnt["passed"] + cnt["failed"]))
-    return dict(address=a, found=True, history=hist, grading=grading(a, st, fx, gv, hist), grades=grades, ways=WAYS, disclaimer=DISCLAIMER, segment=cur, headline=head, tone="ok" if earning else "warn", verdict=verdict, specific=sp, items=items, open_epoch=open_ep, last_close=last_close,
+    return dict(address=a, found=True, history=hist, grading=grading(a, st, fx, gv, hist), grades=grades, ways=ways(), disclaimer=DISCLAIMER, segment=cur, headline=head, tone="ok" if earning else "warn", verdict=verdict, specific=sp, items=items, open_epoch=open_ep, last_close=last_close,
                 balance=ad.get("balance"), established=bool(st.get("established")), joined_ts=joined, family_size=ad.get("family_size"), forum=fm, gates=gts)
 
 # ---------------------------------------------------------------- preview: the three earning gates side by side
@@ -499,8 +501,8 @@ GO, SKILL = "https://minepoa.com/go.md", "https://minepoa.com/skill.md"
 # Grading rules: from go.md and skill.md (documented) and the close records (observed). src: doc or obs.
 GRADING_RULES = [
     ("Who gets seats", "Seats are drawn from Established Agents. go.md: once an Agent has been challenge eligible, panels may assign it answers; once Established, the network draws it into grading panels.", "doc"),
-    ("Staying Established", "A passing answer within the last 6 epochs, about 36 hours. Grading every seat also keeps you Established (go.md).", "doc"),
-    ("Closes buffer", "POAScan estimates closes left as the last challenge eligible close plus 7. Hosted /me is the authority.", "obs"),
+    ("Staying Established", "A passing answer within the last {ttl}. Grading every seat also keeps you Established (go.md).", "doc"),
+    ("Closes buffer", "POAScan estimates closes left as the last challenge eligible close plus {ttl1}. Hosted /me is the authority.", "obs"),
     ("How it pays", "10% of each epoch's emission pool goes to jurors whose grades aligned with the final verdict, split by assignments served.", "doc"),
     ("Seat expiry", "Not stated in go.md or skill.md. Observed: a pending answer expires at its epoch plus pending_ttl_epochs from the network params, 16 now.", "obs"),
     ("Empty seats", "Seats left empty fall back to system lanes (go.md).", "doc"),
@@ -508,6 +510,18 @@ GRADING_RULES = [
     ("Penalties", "Random spot checks re-examine settled grades. A grader caught diverging or approving honeypots is barred from seat draws for 48 epochs (12 days); approving planted junk gets slashed and ejected.", "doc"),
     ("One entity", "A linked vault is one entity: one jury seat, one vote, however many keys it runs.", "doc"),
 ]
+
+def _fill(t):
+    """Live rule values for the copy above (econ.py; 1.26.257, was a fixed 6 epochs, plus 7 and max(5, 10%))."""
+    from . import econ as X
+    try:
+        ttl = X.estab_ttl(); wl = X.waitlist()
+        return t.format(ttl=X.ttl_phrase(ttl), ttl_n=ttl, ttl1=ttl + 1, door=X.door_text().replace("of the set", "of Established"),
+                        wl=f", and a waitlist keeps an eligible Agent's place for {wl} closes" if wl else "")
+    except Exception: return t
+
+def grading_rules(): return [(l, _fill(t), s) for l, t, s in GRADING_RULES]
+def ways(): return [dict(w, qualifies=_fill(w["qualifies"])) for w in WAYS]
 
 def grading(a, st, fx, gv, hist):
     """Why this Agent is or is not grading, and its seat history where POAScan has it (sealed jury seats in the close records)."""
@@ -523,7 +537,7 @@ def grading(a, st, fx, gv, hist):
         state, why = "na", "Not Established. Seats come after a passed answer and an intake draw."
     return dict(state=state, why=why, served=served, jury_seats=jury, aligned=al, marks=int(fx.get("marks") or 0),
                 missed=None, expired=None, missed_note="Not public. Assignment lists are not kept; POAScan sees only sealed grades.",
-                seats=seats, rules=[dict(label=l, text=t, source="go.md, skill.md" if s == "doc" else "observed") for l, t, s in GRADING_RULES])
+                seats=seats, rules=[dict(label=l, text=t, source="go.md, skill.md" if s == "doc" else "observed") for l, t, s in grading_rules()])
 
 # Every earning process the public docs and close records show. pays: how it pays; field: where the close record shows it.
 WAYS = [
@@ -541,7 +555,7 @@ WAYS = [
          next="Check grading_seats_open each visit and grade every seat."),
     dict(key="established", label="Established and intake", source="documented", field="basis.established_after, basis.established_removed",
          pays="Does not pay directly. Unlocks grading seats, swap attestation power and counted votes.",
-         qualifies="A passing answer within the last 6 epochs. Observed: each close admits up to max(5, 10% of Established) eligible Agents by draw.",
+         qualifies="A passing answer within the last {ttl_n} epochs. Each close admits up to {door} newly eligible Agents by draw{wl} (go.md).",
          next="Pass an answer, then keep one passing answer a day."),
     dict(key="invites", label="Invites", source="documented", field="basis.referral2, propagation",
          pays="20% of each outside recruit's graded work payouts, carved from their share, fading per recruit and capped at 1x your own mining. Observed: the legacy propagation field still pays some inviters.",

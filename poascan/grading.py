@@ -39,7 +39,7 @@ RAW_KEEP = 24            # pre and post copies kept (about 12 closes)
 SEAL_KEEP_DAYS = 45      # seals that left the list are kept this long
 BLOB, META = "grading", "grading_meta"
 QUORUM_DEFAULT = 4
-SETTLE_CAP_DEFAULT = 2000   # only when /api/params has no settle_cap_per_close
+SETTLE_CAP_DEFAULT = 2000   # the cap segment 2 ran under to the E32 close (econ_rules.json); 1.26.257: no cap from E33
 
 def grade_quorum(d=None):
     """params.grade_quorum, else the list's quorum, else 4. Note (1.26.139): the engine (poa.mjs, v1.1.2-carveout2) checks
@@ -49,12 +49,13 @@ def grade_quorum(d=None):
     except Exception: q = 0
     return q or int((d or {}).get("quorum") or QUORUM_DEFAULT)
 
-def settle_cap():
-    """params.settle_cap_per_close: each close evaluates only the oldest this many pending rows, by (since, answer id);
-    the rest carry over unevaluated."""
-    from . import analytics as A
-    try: return int(A.params().get("settle_cap_per_close") or 0) or SETTLE_CAP_DEFAULT
-    except Exception: return SETTLE_CAP_DEFAULT
+def settle_cap(epoch=None):
+    """The settle cap at a close (econ.py; the open epoch's by default): each close evaluates only the oldest this many
+    pending rows, by (since, answer id), and the rest carry over unevaluated. None: no cap (params dropped
+    settle_cap_per_close before the E33 close of segment 2; /api/params still wins when it carries one)."""
+    from . import econ as X
+    try: return X.settle_cap(epoch)
+    except Exception: return None
 
 # ---------------------------------------------------------------- storage
 def _ensure():
@@ -291,7 +292,25 @@ def index():
 
 # ---------------------------------------------------------------- established, cross-checked
 UNCONFIRMED = "Unconfirmed"
+def _auth():
+    """1.26.257: (set, close) from the stored /api/established copy (the engine's set), or None. Preferred over the grading
+    list's established field, which read 0 while the set held 223 (the label said which list it was not)."""
+    try:
+        from . import netfacts as NF
+        d, _ = db.get_blob(NF.EST_BLOB)
+        if d is None: return None
+        aset, _ = NF.authoritative_established(d)
+        return (aset, d.get("computed_at_close") if isinstance(d, dict) else None) if aset else None
+    except Exception: return None
+
 def established_check(a):
+    au = _auth()
+    if au is not None:
+        if a in au[0]: return "api_established", True, None
+        return "conflict", False, f"Not in /api/established (the engine's set{' at the E' + str(au[1]) + ' close' if au[1] is not None else ''}); hosted /me is the authority."
+    return _established_check_list(a)
+
+def _established_check_list(a):
     """(source, minepoa_established, detail) for an Agent POAScan counts as established.
     source: close_records (no current grading copy, or an archived segment), minepoa_grading (on minepoa's list too),
     conflict (POAScan counts it, minepoa's list does not). detail is the hover text for the Unconfirmed tag, else None."""
@@ -304,14 +323,19 @@ def established_check(a):
     return "conflict", False, lead + tail
 
 def minepoa_established(a):
-    """True or False from minepoa's grading list, None without a usable copy."""
+    """True or False from /api/established, else minepoa's grading list, None without either."""
+    au = _auth()
+    if au is not None: return a in au[0]
     if not usable(): return None
     return a in index()["established"]
 
 def conflict_summary(ours):
     """For a set of addresses POAScan counts as established: dict(minepoa_count, confirmed, conflict, list_empty) or None."""
+    au = _auth(); ours = set(ours)
+    if au is not None:
+        est = au[0]; return dict(minepoa_count=len(est), confirmed=len(ours & est), conflict=len(ours - est), list_empty=not est, list="/api/established")
     if not usable(): return None
-    est = index()["established"]; ours = set(ours)
+    est = index()["established"]
     return dict(minepoa_count=len(est), confirmed=len(ours & est), conflict=len(ours - est), list_empty=not est)
 
 def tag_html(detail):
@@ -340,7 +364,7 @@ def queue_rows():
     out = [_row_view(r, ep, nm, o, q) for rs, o in ((d.get("rows") or [], False), (d.get("open") or [], True)) for r in rs if isinstance(r, dict) and r.get("id")]
     # settle window: the next close evaluates only the oldest settle_cap pending rows by (since, answer id); q stays the server's flag
     cap = settle_cap(); order = sorted((r for r in out if not r["open"]), key=lambda r: (r["since"] if r["since"] is not None else 1 << 30, r["id"]))
-    for i, r in enumerate(order): r["settle_rank"] = i + 1; r["in_settle_window"] = i < cap
+    for i, r in enumerate(order): r["settle_rank"] = i + 1; r["in_settle_window"] = cap is None or i < cap
     for r in out:
         if r["open"]: r["settle_rank"] = None; r["in_settle_window"] = False
         r["ready_next_close"] = r["need"] == 0 and r["in_settle_window"]

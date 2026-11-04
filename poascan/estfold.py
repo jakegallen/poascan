@@ -29,8 +29,15 @@ def import_info(seg):
     return {k: v[k] for k in ("url", "sha256", "final_checkpoint_height", "agents", "established_count")} if v else None
 
 def ttl_of(params):
-    try: return int((params or {}).get(CFG.get("ttl_param", "estab_ttl")) or CFG.get("ttl_default", 6))
-    except (TypeError, ValueError): return int(CFG.get("ttl_default", 6))
+    """params.estab_ttl, else the newest econ_rules.json rule of the selected segment (1.26.257; was a fixed 6)."""
+    try:
+        v = (params or {}).get(CFG.get("ttl_param", "estab_ttl"))
+        if v: return int(v)
+    except (TypeError, ValueError): pass
+    try:
+        from . import econ as X
+        return X.estab_ttl()
+    except Exception: return int(CFG.get("ttl_default", 6))
 
 def _pardoned(pardons, n, a, slashed):
     l = (pardons or {}).get(n, (pardons or {}).get(str(n)))
