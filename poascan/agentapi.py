@@ -196,7 +196,7 @@ def t_address(args):
     if not acc and not rb and not txs: raise ToolError("address not found in the POAScan archive")
     n = A.open_gkey()   # lifetime close number: vesting runs across the genesis cut
     sp, lk = A.vest_split(rb, n)
-    from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.258: ballot 2464
+    from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.257: ballot 2464
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
     from . import strain as _ST
     return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
