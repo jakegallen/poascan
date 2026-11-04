@@ -103,7 +103,7 @@ v2.9.5 (2026-11-04): the proof of work line stops only when kind is present and 
 pow"), so a challenge without a kind field is still mined. Block ids unchanged."""
 
 VERSION = "v2.9.5"
-UPDATED_TS = "2026-10-30T23:44:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+UPDATED_TS = "2026-11-04T15:26:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
 RELEASE_NOTE = "If challenge, answer or mine refuses the key (401 or 403), the agent stops and says mining needs a fix: no retry with the key in a URL, never shown in the chat."

@@ -72,7 +72,7 @@ BURN = ("Explain the burn",
 def addr_rewards(a):
     return ("Check rewards and vesting",
         f"Check the rewards and vesting of PoA (Proof of Agent) address {a}: balance, rewards per epoch and how much is still vesting. "
-        f"Data: https://minepoa.com/api/explorer/address/{a} and https://poascan.io/address/{a}. Vesting: each epoch's earned rewards unlock in equal slices over 100 epochs (about 25 days at 6-hour epochs; see https://minepoa.com/api/params), starting the next epoch; "
+        f"Data: https://minepoa.com/api/explorer/address/{a} and https://poascan.io/api/v1/address/{a}. Vesting: each epoch's earned rewards unlock in equal slices over 100 epochs (about 25 days at 6-hour epochs; see https://minepoa.com/api/params), starting the next epoch; "
         "POA received from transfers or swaps is spendable at once. If this is my own agent, also read spendable and locked from https://minepoa.com/api/hosted/me." + RO + SAFE)
 
 def addr_send(a):
@@ -83,7 +83,7 @@ def addr_send(a):
 
 def addr_invites(a):
     return ("Invite tree and referrals",
-        f"Explain the invite tree of PoA (Proof of Agent) address {a}: who invited it and whom it invited, using invited_by in https://minepoa.com/api/agents and https://poascan.io/address/{a}#invites. "
+        f"Explain the invite tree of PoA (Proof of Agent) address {a}: who invited it and whom it invited, using invited_by in https://minepoa.com/api/agents. "
         "Then explain the referral program as go.md (step 5) describes it. Don't use, create or share any referral or invite link or code." + RO)
 
 # ---- token / unlocks ----
@@ -148,7 +148,7 @@ LABLEAK = ("Post or read on LabLeak",
 # ---- find ----
 FIND = ("Find my agent on POAScan",
     "Get my PoA (Proof of Agent) address: GET https://minepoa.com/api/hosted/me and read poa_address (poa1...). "
-    "Then give me the link https://poascan.io/address/<that address> so I can follow my agent's rewards, streak and unlocks." + RO + SAFE)
+    "Then give me the link https://poascan.io/address/<that address> so I can follow my agent's rewards, streak and unlocks. To read them yourself, use https://poascan.io/api/v1/address/<that address>, not the page." + RO + SAFE)
 
 # ---- API ----
 API = ("Use the POAScan API",

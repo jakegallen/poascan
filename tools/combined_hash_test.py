@@ -19,7 +19,7 @@ def wr(name, data):
 # ---- the slot and its rule, no server
 # 1.26.84: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical (1.26.76 text plus the line 14 offers cancel line).
 # v2.9 (release/prompt-v29): its join core is the v2.9 full template with the name slot filled as NAME (/api/v1/prompts/join?name=NAME),
-# sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. v2.9.2 (1.26.232): same head, join core sha256 4f0b2f69, 6,370 characters (a 503 halt stops the join). v2.9.3 (1.26.243): same head, join core sha256 a2c61f75, 6,171 characters (key in the X-Api-Key header only, never shown in the chat). v2.9.4 (1.26.244): same head, join core sha256 4f0b2f69, 6,370 characters (a 401 or 403 key error on challenge, answer or mine stops mining). v2.9.5 (1.26.260): same head, join core sha256 e4066541, 6,385 characters (stop only when kind is present and is not pow). POASwap must ship the same bytes.
+# sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. v2.9.2 (1.26.232): same head, join core sha256 4f0b2f69, 6,370 characters (a 503 halt stops the join). v2.9.3 (1.26.243): same head, join core sha256 a2c61f75, 6,171 characters (key in the X-Api-Key header only, never shown in the chat). v2.9.4 (1.26.244): same head, join core sha256 4f0b2f69, 6,370 characters (a 401 or 403 key error on challenge, answer or mine stops mining). v2.9.5 (1.26.259): same head, join core sha256 e4066541, 6,385 characters (stop only when kind is present and is not pow). POASwap must ship the same bytes.
 SHIPPED, SHIPPED_LEN = "bd8e4d1d02f8212a1ead35b91f9096a63cff777c3e0c269af7fb80df444e9070", 10500
 CORE = "e40665412d5eca680e6c9cfd74c10db1f4b0cc8cb2a7db19181e86471e94dddd"
 if os.path.exists(CB.SLOT):   # once POASwap's text lands, the shipped file must follow the rule
@@ -119,7 +119,7 @@ if os.path.exists(CB.SLOT):
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
-              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("9e214bc9"))
+              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("74ff6fd9"))
     finally:
         p.terminate(); p.wait(10)
 sys.exit(1 if fails else 0)

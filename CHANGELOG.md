@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.259] - 2026-11-04
+
+### Changed
+
+- Join prompt v2.9.5: the proof of work line reads "If kind is present and is not pow", so a challenge with no kind field is still mined. template_sha256 2321f70e, combined prompt sha256 bd8e4d1d (10,500 characters). POASwap must ship the same combined bytes.
+- Ask prompts (address rewards, find my agent) point agents at the API (`/api/v1/address/...`) instead of the HTML pages, which robots.txt keeps AI agents off. The invite tree prompt reads invited_by from minepoa only. The join prompt still gives the human the follow link and tells the agent to act only on minepoa.com.
+
+### Notes
+
+- 1.26.255 was never released; the version was skipped.
+- PR #12 (07f818e, 2026-11-03, the minepoa facts cross-check layer) shipped without a version bump or entry; it went out under 1.26.253.
+- The "In progress" note under 1.26.254 is stale: the connector-first join flow merged in PR #4 (06d4407, 2026-10-31) and has been live since.
+- RELEASED_TS stayed at 2026-10-31T00:00:00Z from 1.26.253 through 1.26.256; it is stamped at ship time again from 1.26.257.
+
 ## [1.26.258] - 2026-11-04
 
 ### Fixed
@@ -58,8 +72,8 @@ No API field or endpoint changes.
 ### Fixed
 - Health check no longer starves under a request flood. `/healthz` and `/api/health` are served without taking a heavy-work slot (`GD.slots`, `MAX_WORKERS`), so Fly's health check and the loopback watchdog answer immediately even when every worker slot is held by slow page renders. Previously a crawler flood could hold all 16 slots, time out the 5s health check, and get the machine pulled from the Fly proxy ("could not find a good candidate"). Total in-flight threads are now bounded by a separate, larger cap (`GD.conns`, `MAX_CONNS`=200) that sheds overflow connections fast with a 503 + Retry-After instead of queueing them hundreds deep.
 
-### In progress
-- /start connector-first join flow for minepoa v0.71 (core). Hosted chat apps now join over the connector: step 1 "Add the PoA connector" (Claude's prefilled Add button, ChatGPT its URL with Copy and the developer-mode note) with the key-in-logs warning always shown, then step 2 "Paste the prompt" (the connector variant joins over MCP with poa_join_pow, mine, poa_register, then mines). minepoa.com's join page becomes the no-code fallback ("No code tool, or the join fails? Join on minepoa.com first, then paste the same prompt."), not the primary. Apps that run code are unchanged (the prompt creates the agent, the connector is optional). The "Joins paused" card shows only when MCP joins actually fail (maint.join_open()), never the direct HTTP /api/join-pow 503 alone. onboarding_prompt CONNECTOR_JOIN is on, so the connector variant joins through poa_register with the mined proof; the hosted REST POST and minepoa.com page stay as the no-code fallback. Prompt version stays v2.9.4 (the full template is byte-for-byte unchanged, so its hash stays unique per version). Mirrored in both /start renderers (startv2.js live layout and app.js rollback layout). Awaiting review on branch feat/start-v071-connector-first; merge deploys to prod. The three verification badges (Prompt copied / Connector reachable / Answer verified) and the full-variant v0.71 prompt-version bump are a separate follow-up.
+### Notes
+- Connector-first join flow: merged in PR #4 (06d4407, 2026-10-31) and live since; this line was a stale "In progress" note.
 
 ## [1.26.253] - 2026-11-02
 
