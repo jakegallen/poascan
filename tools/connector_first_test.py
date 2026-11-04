@@ -126,7 +126,7 @@ pm = unescape(S.go_block(by["muse"]))
 check("halted: the not supported panel has no join link (it points to apps that run code)", "npj" not in pm and "data-npjoin" not in pm)
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
 hf = S.hash_fields()
-check("the prompt is v2.9.4: template 438bec61, combined a7210d16", hf["template_sha256"].startswith("438bec61") and hf["combined_sha256"].startswith("a7210d16"))
+check("the prompt is v2.9.5: template 2321f70e, combined bd8e4d1d", hf["template_sha256"].startswith("2321f70e") and hf["combined_sha256"].startswith("bd8e4d1d"))
 check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.248"):js.index("1.26.248") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
