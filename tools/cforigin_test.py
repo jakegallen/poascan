@@ -1,7 +1,7 @@
 """Cloudflare-only origin guard (1.26.253): with POASCAN_CF_ONLY on, a request that reached the origin directly (a public
 Fly-Client-IP that is not a Cloudflare edge, e.g. a hit straight to poascan.fly.dev) is refused with a cheap 403 before any
 routing, DB or upstream work; a request through Cloudflare passes to normal handling; /healthz, a request with no
-Fly-Client-IP, and a loopback/private peer are never blocked; with the flag off the guard is a no-op. Stdlib only, no
+Fly-Client-IP, and an internal (loopback/private) Fly-Client-IP are never blocked (1.26.258: the socket peer is always the Fly proxy); with the flag off the guard is a no-op. Stdlib only, no
 network, no real database (db.q1 is stubbed to a recorder so a reject can be shown to touch it zero times and a pass-through
 to reach it). Usage: python3 tools/cforigin_test.py"""
 import email.message, os, sys
@@ -52,8 +52,12 @@ check("ON: a Cloudflare-edge Fly-Client-IP passes the guard", TH(fci=CF_IP).cf_o
 check("ON: no Fly-Client-IP (local/internal/health) passes the guard", TH(fci=None).cf_origin_blocked() is False)
 check("ON: /healthz is never blocked even from a public peer", TH(path="/healthz", fci=PUB_IP).cf_origin_blocked() is False)
 check("ON: /api/health is never blocked even from a public peer", TH(path="/api/health", fci=PUB_IP).cf_origin_blocked() is False)
-check("ON: a loopback socket peer passes even with a public-looking Fly-Client-IP", TH(fci=PUB_IP, peer=LOOPBACK).cf_origin_blocked() is False)
-check("ON: a private socket peer (10.x) passes", TH(fci=PUB_IP, peer="10.0.0.9").cf_origin_blocked() is False)
+# 1.26.258: on Fly the socket peer is always the proxy's private address, so the guard reads Fly-Client-IP, not the peer
+check("ON: a direct public hit through the Fly proxy (private peer 172.16.x) is blocked", TH(fci=PUB_IP, peer="172.16.5.2").cf_origin_blocked() is True)
+check("ON: a direct public hit through the Fly proxy (IPv6 fdaa:: peer) is blocked", TH(fci=PUB_IP, peer="fdaa:0:1::3").cf_origin_blocked() is True)
+check("ON: a direct public hit from a loopback peer is blocked too", TH(fci=PUB_IP, peer=LOOPBACK).cf_origin_blocked() is True)
+check("ON: Cloudflare through the Fly proxy (private peer) passes", TH(fci=CF_IP, peer="172.16.5.2").cf_origin_blocked() is False)
+check("ON: an internal Fly-Client-IP (10.x, fdaa::, loopback) passes", all(TH(fci=x, peer="172.16.5.2").cf_origin_blocked() is False for x in ("10.0.0.9", "fdaa:0:1::7", LOOPBACK)))
 
 # (b) a direct hit gets a cheap 403 with a tiny body, no-store, and touches NO DB
 h = drive(path="/", fci=PUB_IP)

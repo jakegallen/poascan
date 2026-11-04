@@ -24,9 +24,9 @@ def is_cloudflare(s):
     return bool(a) and any(a.version == n.version and a in n for n in _NETS)
 
 def is_internal(s):
-    """A socket peer that is not a public address: loopback, private, link-local, or not an address at all (local runs,
-    unknown peer). Used by the Cloudflare-only origin guard (server.py) to never block a Fly health check or an internal
-    request. Reuses the same parser as the Cloudflare check, so IPv4-mapped IPv6 peers resolve correctly."""
+    """An address that is not public: loopback, private, link-local, or not an address at all. Used by the Cloudflare-only
+    origin guard (server.py) on Fly-Client-IP (1.26.258; the socket peer is always the Fly proxy's private address) to never
+    block a Fly internal request. Reuses the same parser as the Cloudflare check, so IPv4-mapped IPv6 peers resolve correctly."""
     a = _addr(s)
     if a is None: return True
     return a.is_loopback or a.is_private or a.is_link_local

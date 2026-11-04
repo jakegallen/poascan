@@ -917,16 +917,17 @@ class H(BaseHTTPRequestHandler):
         enable at runtime with `fly secrets set POASCAN_CF_ONLY=on`) a request that reached the origin directly is
         refused here with a cheap 403, before any routing, DB or upstream work, so the direct flood is shed at near-zero
         cost (the 403 is tallied in memory by send(); no DB or upstream call is made on this path). The health check is
-        never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or a loopback/private
-        peer always passes. Only a Fly-Client-IP that is present and is NOT a Cloudflare edge, from a public peer, is
-        refused. Returns True after sending the 403, else False (let the request through)."""
+        never at risk: a request with no Fly-Client-IP, the /healthz (or /api/health) path, or an internal Fly-Client-IP
+        (loopback, private, link-local) always passes. Only a Fly-Client-IP that is public and NOT a Cloudflare edge is
+        refused. 1.26.258: the check reads Fly-Client-IP, not the socket peer. On Fly every request arrives from the
+        proxy's private address, so the old peer exemption let every direct poascan.fly.dev hit through (POASwap's
+        guard.py reads the header the same way). Returns True after sending the 403, else False (let the request through)."""
         if not cf_only_on(): return False
         fci = (self.headers.get("Fly-Client-IP") or "").strip()
         if not fci or CIP.is_cloudflare(fci): return False   # no edge header (local run, Fly internal, health) or a real Cloudflare edge: the normal path
         path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
         if path in ("/healthz", "/api/health"): return False   # never block a Fly or uptime health check, whatever its source address
-        peer = self.client_address[0] if self.client_address else ""
-        if CIP.is_internal(peer): return False   # loopback, private or link-local peer: Fly internal, not a public direct hit
+        if CIP.is_internal(fci): return False   # loopback, private or link-local client: Fly internal, not a public direct hit
         self.send(403, "Direct origin access is not allowed; use poascan.io\n", TXT, {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
         return True
     def key_guard(self):
