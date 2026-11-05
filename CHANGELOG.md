@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.263] - 2026-11-04
+
+### Fixed
+
+- Slot latch pins (minepoa v0.84-slotlatch-cc44, `/api/params` `slot_latch_overrides`, 4 slots). Where one author sent more than one tx on a pinned nonce, the fixed winner is tagged Pinned and any other archived tx on that author and nonce Superseded, with the winner linked. A superseded twin is left out of the address's sent count, its type counts and its grading seals, so nothing is counted twice; the tx itself still renders. Seen live: the late twin 2cac65df on nonce 526 of poa1EiqCA7.
+
+### Added
+
+- The tag shows on the tx page (Nonce row), the address History card and the tx list. `/api/v1/tx/<hash>`, the address tx rows and MCP `get_transaction` add `slot_latch` (state pinned or superseded, nonce, winner, height; null otherwise); address `coverage` adds `superseded`.
+
 ## [1.26.262] - 2026-11-04
 
 ### Added
