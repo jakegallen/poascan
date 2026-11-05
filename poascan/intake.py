@@ -112,7 +112,9 @@ def closes():
         rem = [a for a in dict.fromkeys(b.get("established_removed") or []) if isinstance(a, str) and not EF._pardoned(pardons, n, a, sl)]
         audit = sl | set(b.get("ejected") or []) | set((b.get("audit") or {}).get("slashed") or [])
         r_ttl = sum(1 for a in rem if a not in audit)
-        out.append(dict(close=n, close_ts=int(e.get("ts") or 0), established_before=size, eligible=len(elig), cap=cap, cap_basis=basis,
+        elig_raw = len(dict.fromkeys(a for a in b.get("challenge_eligible") or [] if isinstance(a, str)))
+        out.append(dict(close=n, close_ts=int(e.get("ts") or 0), established_before=size, eligible=len(elig),
+                        eligible_raw=elig_raw, eligible_established=elig_raw - len(elig), cap=cap, cap_basis=basis,
                         admitted=len(adm), not_admitted=na, waitlist_epochs=wl, waitlisted=na if wl else 0, door="binding" if len(elig) > cap else "open",
                         admit_rate=round(len(adm) / len(elig), 4) if elig else None, removed=len(rem), removed_ttl=r_ttl, removed_other=len(rem) - r_ttl,
                         net=len(adm) - len(rem),
@@ -147,7 +149,7 @@ _V = {"close": lambda r: r["close"], "set": lambda r: r["established_before"], "
 ACOLS = [SS.Col("name", "Agent", "text"), SS.Col("draw", "Draw", "low", "r"), SS.Col("state", "State", "cat")]
 ASORTS = [(c.key, c.label) for c in ACOLS]
 _SO = {k: i for i, (k, _) in enumerate(STATES)}
-TIP = ("Set: established before the close. Eligible: challenge_eligible, not yet established. Cap: max(floor, ceil(rate x Set)) under that close's rule (segment 2: max(5, 10%) to E35, max(25, 25%) from E36). "
+TIP = ("Set: established before the close. Eligible: challenge_eligible, not yet established (this is the intake funnel, so it equals Admitted plus Not admitted). minepoa's close report counts the full challenge_eligible list, which also includes Agents already established before the close, so its eligible figure runs higher; the difference is eligible_established in the API. Cap: max(floor, ceil(rate x Set)) under that close's rule (segment 2: max(5, 10%) to E35, max(25, 25%) from E36). "
        "Admitted: new in established_after. Rate: Admitted over Eligible. TTL out: in established_removed and not slashed or ejected at that close (the TTL lapse). Other out: removed with a slash or ejection. Net: Admitted minus removed. Door: Binding when Eligible exceeds Cap. Check: the first Cap Agents in the draw order are exactly the Admitted.")
 DRAW_TIP = "Place in sha256('intake:' + address + ':' + close) order among the eligible. The first Cap places are admitted."
 
@@ -194,7 +196,7 @@ def tab(qs, href, qsx):
     keep = lambda **o: dict(dict(sort=by if by != "close" else "", dir="asc" if d == "asc" else "", close=str(one["close"]) if sel else "", state=st), **o)
     link = lambda k, dd: href("intake", **keep(sort=k if k != "close" else "", dir="asc" if dd == "asc" else "")) + "#intake"
     last = withe[-1] if withe else allc[-1]
-    s = "".join([stat("Eligible", intc(last["eligible"]), tip=f'challenge_eligible at the E{last["close"]} close, not yet established'),
+    s = "".join([stat("Eligible", intc(last["eligible"]), tip=f'challenge_eligible at the E{last["close"]} close, not yet established (Admitted plus Not admitted). minepoa counts the full list, including the {last["eligible_established"]:,} already established ({last["eligible_raw"]:,} in all)'),
                  stat("Cap", intc(last["cap"]), tip=f'Door at E{last["close"]}: {X.door_text(last["close"]).replace("of the set", "of " + format(last["established_before"], ",") + " established")}'),
                  stat("Admitted", intc(last["admitted"]), tip=f'New in established_after at E{last["close"]}'),
                  stat("Waitlist" if last.get("waitlist_epochs") else "Not admitted", intc(last["not_admitted"]),

@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.268] - 2026-11-05
+
+### Added
+
+- Intake per close now carries `eligible_raw` and `eligible_established` beside `eligible`. POAScan's Eligible is the intake funnel (`challenge_eligible` Agents not already established, so Admitted plus Not admitted); minepoa's close report counts the full `challenge_eligible` list, which also includes Agents already established before the close. For E42 that is 183 on minepoa versus 169 here (56 admitted + 113 waitlisted); the 14 difference are Agents already established. `eligible_raw` is the full count, `eligible_established` is the difference. The Intake tooltip, the Eligible stat and /about#intake now explain the two figures. No count changed; both are correct.
+
 ## [1.26.266] - 2026-11-05
 ### Fixed
 - Privacy: the public tx API (`/api/v1/tx/...`) and the HTML tx page no longer republish a grade seal's sealed grade. For grade-sealed txs, `body.blob` is dropped (flagged `grade_seal_redacted`); every public field (assignment, sig, nonce, parents, cid, and all top-level fields) is unchanged. New `indexer.public_tx()`; test `tools/tx_privacy_test.py`.

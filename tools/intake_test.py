@@ -36,6 +36,8 @@ c = {r["close"]: r for r in IK.closes()}
 check("E0: admissions with nobody eligible read Differs", c[0]["eligible"] == 0 and c[0]["admitted"] == 60 and c[0]["check"] == "differs")
 check(f"E1: Set 60, Eligible 30 (already established Agents left out), Cap 6, Admitted 6, Not admitted 24, Binding ({ {k: v for k, v in c[1].items() if k != 'rows'} })",
       c[1]["established_before"] == 60 and c[1]["eligible"] == 30 and c[1]["cap"] == 6 and c[1]["admitted"] == 6 and c[1]["not_admitted"] == 24 and c[1]["door"] == "binding")
+check("E1: eligible_raw is the full challenge_eligible count (33), eligible_established the already established in it (3), eligible the funnel (30 = admitted + not_admitted)",
+      c[1]["eligible_raw"] == 33 and c[1]["eligible_established"] == 3 and c[1]["eligible"] == 30 and c[1]["eligible_raw"] == c[1]["eligible"] + c[1]["eligible_established"] and c[1]["eligible"] == c[1]["admitted"] + c[1]["not_admitted"])
 check("E1: the first Cap Agents in sha256('intake:' + address + ':' + close) order are the admitted: Match", c[1]["check"] == "match")
 rk = {r["address"]: r for r in c[1]["rows"]}
 check("E1: every eligible Agent has its draw place; admitted are places 1 to 6", sorted(r["draw"] for r in c[1]["rows"]) == list(range(1, 31)) and all(rk[a]["draw"] <= 6 and rk[a]["state"] == "admitted" for a in adm1))
@@ -93,7 +95,7 @@ for bad in ({"state": ["admitted"]}, {"close": ["1"], "state": ["x"]}, {"sort": 
     check(f"API 400 on {bad}", ok)
 check("API unknown close: found false", SV.governance_api("/api/governance/intake", {"close": ["99"]})["found"] is False)
 cs = SV.to_csv(d["rows"]); cs1 = SV.to_csv(d1["rows"])
-check("CSV: per close and per Agent rows, flat", cs.splitlines()[0].startswith("close,close_ts,established_before,eligible,cap") and cs.count("\n") == 5 and cs1.splitlines()[0].startswith("address,state,draw") and cs1.count("\n") == 25)
+check("CSV: per close and per Agent rows, flat", cs.splitlines()[0].startswith("close,close_ts,established_before,eligible,eligible_raw,eligible_established,cap") and cs.count("\n") == 5 and cs1.splitlines()[0].startswith("address,state,draw") and cs1.count("\n") == 25)
 src = open(os.path.join(ROOT, "poascan", "server.py")).read()
 check("CSV route takes the intake rows", '"/api/governance/intake", "/api/protocol")' in src)
 r = AG.TOOL_FN["get_intake"]({"close": 1, "state": "not_admitted"})
