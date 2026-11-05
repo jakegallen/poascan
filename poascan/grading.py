@@ -34,6 +34,7 @@ UPSTREAM_STALE_S = 7200  # 1.26.184: minepoa's own copy (as_of) older than this:
 GATE_SLACK_S = 120       # served copy within this of the stored as_of counts as the same copy
 MIN_FULL_S = 1200        # a changed copy outside the close windows is downloaded at most every 20 min
 FULL_MAX_S = 21600       # a full download at least every 6 h even when the header says unchanged
+RETIRED_RETRY_S = 21600  # 1.26.266: minepoa retired this list (2026-11-01); read it only every 6 h to catch a replacement
 AGE_HEADER = "X-Poa-Blob-Age-S"
 RAW_KEEP = 24            # pre and post copies kept (about 12 closes)
 SEAL_KEEP_DAYS = 45      # seals that left the list are kept this long
@@ -175,6 +176,10 @@ def job(now=None, get=None, force=False):
     try:
         d = get()
         if d is not None and d is not DEFERRED and not valid(d): raise I.Busy("unexpected shape")
+    except I.Retired:   # minepoa retired the list (200 {"retired": true}): a terminal state, not a failure; back off to 6 h
+        db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, err=None, retry=None, retired=now,
+                               next_at=now + RETIRED_RETRY_S + random.randint(0, JITTER_S)))
+        log.info("grading: upstream retired, next read in %ss", RETIRED_RETRY_S); return True
     except I.Busy as e:
         fails = int(m.get("fails") or 0) + 1; w = backoff(fails, getattr(e, "retry", None))
         db.put_blob(META, dict(m, fails=fails, last_err=now, err=str(e)[:120], retry=getattr(e, "retry", None), next_at=now + w))
@@ -200,7 +205,7 @@ def job(now=None, get=None, force=False):
     except Exception as e: log.warning("grading: raw copy failed (%s)", type(e).__name__)
     db.put_blob(BLOB, dict(compact(d), fetched_at=now))
     _cur.clear()
-    db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, last_full=now, deferred=None, full=int(m.get("full") or 0) + 1, err=None, retry=None, epoch=d.get("epoch"), as_of=d.get("as_of"),
+    db.put_blob(META, dict(m, fails=0, last_ok=now, last_check=now, last_full=now, deferred=None, full=int(m.get("full") or 0) + 1, err=None, retry=None, retired=None, epoch=d.get("epoch"), as_of=d.get("as_of"),
                            seals_added=added, seals_gone=gone, q_flipped=flipped, next_at=now + cadence(now, ct) + random.randint(-JITTER_S, JITTER_S)))
     return True
 
@@ -263,10 +268,23 @@ def stale(now=None):
     """True when no good check in STALE_S, minepoa's own copy is older than UPSTREAM_STALE_S, or there is no copy."""
     return stale_reason(now) is not None
 
+def retired_at():
+    """When minepoa's grading list was last seen retired ({"retired": true}, 2026-11-01), with no valid copy since; else
+    None. A later full download (a replacement) sets last_full past it and clears the state."""
+    m = meta(); r = m.get("retired")
+    if not r: return None
+    if (m.get("last_full") or 0) > int(r): return None
+    return int(r)
+
+def is_retired():
+    """True while minepoa's grading list is retired. Consumers show a plain Retired state instead of the stale last copy."""
+    return retired_at() is not None
+
 def usable():
-    """A copy exists and applies to what is shown: the current segment only (the list is the live network's)."""
+    """A copy exists and applies to what is shown: the current segment only (the list is the live network's), and the list
+    is not retired (1.26.266: a retired list's last copy is stale, so it is never shown as live data)."""
     from . import segments as SG
-    return current() is not None and not SG.archived()
+    return current() is not None and not SG.archived() and not is_retired()
 
 def index():
     """Per address lookups over the current copy, built once per read: q and raw seals per grader on pending rows, pending
@@ -381,7 +399,7 @@ def summary():
                 ready_next_close=sum(1 for r in qr if r["ready_next_close"]), at_quorum_queued=sum(1 for r in qr if r["queued_at_quorum"]), trusted_share=st.get("trusted_share"), by_need=st.get("by_need") or {},
                 grades_on_pending=st.get("grades_on_pending"), graders=st.get("graders_distinct"), open_answers=len(d.get("open") or []),
                 quorum=grade_quorum(d), epoch=ep, next_close_ts=ct, upstream_as_of=d.get("as_of"), fetched_at=d.get("fetched_at"),
-                checked_at=checked_at(), stale_reason=stale_reason(), stale=stale(), established_listed=len(d.get("established") or []))
+                checked_at=checked_at(), stale_reason=stale_reason(), stale=stale(), retired=is_retired(), established_listed=len(d.get("established") or []))
 
 def last_close_ts(d=None):
     d = d if d is not None else current()

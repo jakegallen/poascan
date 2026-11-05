@@ -816,6 +816,13 @@ def feeds():
         st = (min if mode == ["best"] else max)(states, key=FEED_RANK.get)
         got = got or seen
         out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
+    try:   # 1.26.266: minepoa retired /api/explorer/grading (2026-11-01). Show Retired, never Down, and never degraded.
+        from . import grading as GR
+        if GR.is_retired():
+            for f in out:
+                if f["label"] == "Grading list":
+                    f["state"] = "Retired"; f["retired"] = True; f["retired_at"] = GR.retired_at()
+    except Exception: pass
     from . import hosted as HO   # 1.26.127: swap order placement (the write check), Down when failing, Degraded when paused
     ws = HO.swap_route(now)      # 1.26.185: the one swap resolver; a stale last clear read is Down, never OK
     if ws["feed"]:
@@ -828,7 +835,7 @@ def feeds():
     fresh = bool(live) and now - max(live) <= LIVE_S
     moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S
     chain = "Live" if fresh and not stalled else "Stalled" if fresh else "Stale"
-    bad = [f["label"] for f in out if f["state"] != "OK"]
+    bad = [f["label"] for f in out if f["state"] not in ("OK", "Retired")]   # Retired is a terminal, healthy state, not a fault
     from . import routehealth as RH   # 1.26.220: the headline follows the core routes (mining, grading); the rest are listed
     rts = RH.routes(out, now); head, ok, core_bad, deg = RH.headline(chain, rts, out)
     return dict(state=head, chain=chain, feeds=out, not_ok=bad, ok=ok, routes=rts, core=list(RH.CORE), core_basis=RH.CORE_BASIS,
