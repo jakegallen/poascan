@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.270] - 2026-11-05
+
+### Added
+
+- Network params: `close_summary_from_epoch` (E28) is now listed beside Economics on the Network facts card and in the `/api/v1/governance/econ` params block, with a terse "Close summary from" label, read from minepoa's `/api/params`. minepoa exposes the epoch its close summaries start at; POAScan now surfaces it. (POAScan has no separate close-summary view, so there is no empty-summary case to suppress.)
+
 ## [1.26.269] - 2026-11-05
 
 ### Added
