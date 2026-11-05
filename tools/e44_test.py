@@ -27,6 +27,11 @@ reset()
 
 # record shapes
 cf = A.correction_of
+TT = 940522943.638388
+check("one correction named twice is not summed", abs(cf({"basis": {"carry_correction": {"total": TT, "rows": 92}, "carry_correction_total": TT}}) - TT) < 1e-3
+      and abs(cf({"carry_correction": TT, "basis": {"carry_correction": {"total_applied": TT}}}) - TT) < 1e-3)
+RW = {"poa1aa": 5.0, "poa1bb": 7.0}
+check("rows listed twice are not summed", A.correction_rows({"carry_correction": dict(RW), "basis": {"carry_correction_applied": dict(RW)}}) == RW)
 check("number and dict totals", cf({"basis": {"carry_correction": "940522943.638388"}}) == 940522943.638388 and cf({"basis": {"carry_correction": {"total_applied": "5", "applied": {A1: "2", A2: "3"}}}}) == 5)
 check("address map and rows sum", cf({"basis": {"carry_correction": {A1: "2", A2: "3.5"}}}) == 5.5 and cf({"carry_correction": [{"addr": A1, "applied": "1"}, {"address": A2, "amount": "2"}]}) == 3)
 check("nested applied map without a total", cf({"basis": {"carry_correction": {"from_epoch": 44, "table_sha256": "ab", "applied": {A1: {"applied": "4", "locked_at_close": "9"}}}}}) == 4)

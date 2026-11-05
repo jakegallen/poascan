@@ -306,22 +306,25 @@ def correction_of(e):
     """POA burned from locked balances by a correction recorded in a close (ballot 2464, E44). Reads any basis or top level
     key with 'correction' in its name: a number, a dict's total (total_applied, total, amount_total, burned), or the sum of
     its per address rows. A scalar under a boundary, hash or count key is skipped. 0 when none. Never by hand."""
-    tot = 0.0
+    # 1.26.265: one close carries one correction, often named more than once (a total and its rows, or top level and
+    # basis). Take the largest reading, never their sum, so the burn is not counted twice.
+    vals = [0.0]
     for k, v in _corr_items(e):
         if isinstance(v, bool): continue
         if isinstance(v, dict):
             t = next((v[x] for x in _CORR_TOTALS if x in v and isinstance(v[x], (int, float, str)) and not isinstance(v[x], bool)), None)
-            tot += _f(t) if t is not None else sum(correction_rows_of(v).values())
-        elif isinstance(v, list): tot += sum(correction_rows_of(v).values())
-        elif isinstance(v, (int, float, str)) and not _CORR_SKIP.search(k): tot += _f(v)
-    return tot
+            vals.append(_f(t) if t is not None else sum(correction_rows_of(v).values()))
+        elif isinstance(v, list): vals.append(sum(correction_rows_of(v).values()))
+        elif isinstance(v, (int, float, str)) and not _CORR_SKIP.search(k): vals.append(_f(v))
+    return max(vals)
 
 def correction_rows(e):
     """{address: amount} a close record lists for a correction (empty when it gives a total only, or none)."""
-    out = {}
-    for _, v in _corr_items(e):
-        for a, x in correction_rows_of(v).items(): out[a] = out.get(a, 0.0) + x
-    return out
+    best = {}
+    for _, v in _corr_items(e):   # 1.26.265: rows listed twice are one set; keep the fullest, never their sum
+        r = correction_rows_of(v)
+        if sum(r.values()) > sum(best.values()): best = r
+    return dict(best)
 
 @cached("epoch_rows", 60)
 def epoch_rows():
