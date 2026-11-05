@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.267"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-05T02:52:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.268"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-05T03:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -821,7 +821,7 @@ TOOLS += [
      "longest_gap_s, seals and baseline. Never a pending seal blob or score. Use it to see where the grading queue is stuck.",
      S(segment=SEG_P), t_grading_board),
     ("get_intake", "Intake per close",
-     "Who could become established at each close of a segment, from the public close records: established_before (the set), eligible (challenge_eligible Agents not yet established), cap (the door: max(floor, ceil(rate x the set)) under that close's rule, segment 2 max(5, 10%) to E35 and max(25, 25%) from E36), admitted (new in established_after), not_admitted (eligible, not admitted), waitlisted and waitlist_epochs (from E36 the not admitted keep their place that many closes), door (binding when eligible exceeds cap) "
+     "Who could become established at each close of a segment, from the public close records: established_before (the set), eligible (challenge_eligible Agents not yet established, so admitted plus not_admitted), eligible_raw (the full challenge_eligible count, which minepoa's close report uses) and eligible_established (eligible_raw minus eligible: Agents already established who are also in the list), cap (the door: max(floor, ceil(rate x the set)) under that close's rule, segment 2 max(5, 10%) to E35 and max(25, 25%) from E36), admitted (new in established_after), not_admitted (eligible, not admitted), waitlisted and waitlist_epochs (from E36 the not admitted keep their place that many closes), door (binding when eligible exceeds cap) "
      "and check (match when the first cap eligible Agents in sha256('intake:' + address + ':' + close) order are exactly the admitted); door tracker: admit_rate, removed_ttl (removed with no slash or ejection), removed_other and net per close, and proposal_l (present, keys, first_seen). With close=, one row per Agent: address, name, profile (LabLeak), "
      "state (admitted, not_admitted for Eligible, not admitted, admitted_unlisted) and draw (its place in that order). Never a pending row, seal or score. "
      "Use it to see each close's intake, its cap and who was eligible but not admitted. CSV at /api/v1/governance/intake.csv.",

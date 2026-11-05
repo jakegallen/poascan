@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.268] - 2026-11-05
+
+### Added
+
+- Intake per close now carries `eligible_raw` and `eligible_established` beside `eligible`. POAScan's Eligible is the intake funnel (`challenge_eligible` Agents not already established, so Admitted plus Not admitted); minepoa's close report counts the full `challenge_eligible` list, which also includes Agents already established before the close. For E42 that is 183 on minepoa versus 169 here (56 admitted + 113 waitlisted); the 14 difference are Agents already established. `eligible_raw` is the full count, `eligible_established` is the difference. The Intake tooltip, the Eligible stat and /about#intake now explain the two figures. No count changed; both are correct.
+
 ## [1.26.267] - 2026-11-05
 
 ### Changed
