@@ -70,7 +70,7 @@ import poascan.gradingview as GV
 src = open(os.path.join(ROOT, "poascan", "gradingview.py")).read()
 line = [l for l in src.splitlines() if "retired its grading list" in l]
 check("the grading page has a Retired message", bool(line))
-check("no em or en dash in the Retired copy", line and not any(d in line[0] for d in ("—", "–")))
+check("no em or en dash in the Retired copy", line and not any(d in line[0] for d in ("\u2014", "\u2013")))
 
 print("\n" + ("all ok" if not fails else f"{len(fails)} FAILED: " + ", ".join(fails)))
 sys.exit(1 if fails else 0)
