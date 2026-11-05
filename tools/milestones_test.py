@@ -147,7 +147,7 @@ for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 
 
 # ---------------- Supply chart and Milestones table ----------------
 s = 1.0e9
-for t in range(now - 14 * 86400, now, 900):   # 1.26.226: 14 days and the 30d range, so the Oct 22 reopening stays in range as the calendar moves
+for t in range(now - 31 * 86400, now, 900):   # 1.26.226: 14 days and the 30d range, so the Oct 22 reopening stays in range as the calendar moves; 2026-11-05: widened 14->31 so it covers the full 30d chart range (the marker aged past 14d)
     s += 0 if 1792609251 <= t < 1792708521 else 9000
     db.add_snap("status", {"agents_joined": 3000, "holders": 900, "supply": s, "txs": 5}, t)
 db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply') IS NULL OR json_extract(json,'$.supply') < 1e8)")
