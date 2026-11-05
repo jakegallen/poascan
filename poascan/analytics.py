@@ -774,6 +774,14 @@ FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Tx li
 FEED_ON_NEED = ("/api/epochs",)   # read only when a close record is missing: judged by its failures, like an on-view read
 FEED_IDLE_S = 3600                # an on-view read not tried for this long is idle: old failures no longer count
 FEED_RANK = {"OK": 0, "Degraded": 1, "Down": 2}
+STALE_FLOOR_S = 900   # 1.26.269: a feed whose last good read is older than max(this, 3x its interval) carries a stale tag with the age
+
+def feed_stale_s(last_ok, interval, now=None):
+    """Seconds a scheduled feed has gone without a good read, when that exceeds max(STALE_FLOOR_S, 3x interval); else None.
+    Surfaces a silent upstream stall (a feed last read a while ago) on /api/v1/health and the health page, with the age."""
+    if not last_ok or not interval: return None
+    now = now or time.time(); age = now - last_ok
+    return int(age) if age > max(STALE_FLOOR_S, 3 * interval) else None
 FEED_VIEW_DOWN = 5          # an on-view read (no schedule) with this many failures in a row is Down
 
 def _feed_state(r, every, now):
@@ -815,13 +823,18 @@ def feeds():
         states = [_feed_state(r, ev, now) for r, ev in got] or ["OK"]
         st = (min if mode == ["best"] else max)(states, key=FEED_RANK.get)
         got = got or seen
-        out.append(dict(label=label, state=st, last_ok=max((r["last_ok"] or 0) for r, _ in got) or None))
+        lo = max((r["last_ok"] or 0) for r, _ in got) or None
+        row = dict(label=label, state=st, last_ok=lo)
+        ss = feed_stale_s(lo, max((ev for _, ev in got if ev), default=0), now)   # 1.26.269: surface a silent upstream stall
+        if ss: row.update(stale=True, stale_s=ss)
+        out.append(row)
     try:   # 1.26.266: minepoa retired /api/explorer/grading (2026-11-01). Show Retired, never Down, and never degraded.
         from . import grading as GR
         if GR.is_retired():
             for f in out:
                 if f["label"] == "Grading list":
                     f["state"] = "Retired"; f["retired"] = True; f["retired_at"] = GR.retired_at()
+                    f.pop("stale", None); f.pop("stale_s", None)   # a retired feed is not stale; the 6 h read keeps last_ok fresh enough anyway
     except Exception: pass
     from . import hosted as HO   # 1.26.127: swap order placement (the write check), Down when failing, Degraded when paused
     ws = HO.swap_route(now)      # 1.26.185: the one swap resolver; a stale last clear read is Down, never OK

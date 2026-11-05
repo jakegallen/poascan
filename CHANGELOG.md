@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.269] - 2026-11-05
+
+### Added
+
+- Stale feed tag on the health view. When an upstream feed has had no good read for longer than max(15 minutes, 3x its normal interval), /api/v1/health and the health page now mark it Stale with how long it has been stale, so a silent stall (like the Nov 4 /api/networks timeout that recovered unseen) is visible. No banners, no external notifications. A Retired feed is never also tagged Stale.
+
 ## [1.26.268] - 2026-11-05
 
 ### Added
