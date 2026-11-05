@@ -107,6 +107,9 @@ def params_extra(p=None):
     if isinstance(sl, list):
         rows = [dict(author=r.get("author"), nonce=r.get("nonce"), txid=r.get("txid")) for r in sl if isinstance(r, dict)]
         out.append(dict(key="slot_latch_overrides", label="Slot latch pins", value=dict(count=len(rows), slots=rows), text=f"{len(rows)}"))
+    cs = p.get("close_summary_from_epoch") if isinstance(p, dict) else None   # 1.26.270: the epoch close summaries start at (E28); shown terse, no empty summary before it
+    if isinstance(cs, int) and not isinstance(cs, bool):
+        out.append(dict(key="close_summary_from_epoch", label="Close summary from", value=cs, text=f"E{cs}"))
     return out
 
 
