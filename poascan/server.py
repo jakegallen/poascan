@@ -743,16 +743,16 @@ def tx_api(tid):
     # its tx route is Halted or Down and the archive already has the tx. source names the copy, as_of when it was read.
     skip = not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))
     try:
-        d = I.get_tx_detail(tid, node=not skip)
+        d = I.public_tx(I.get_tx_detail(tid, node=not skip))
         if isinstance(d, dict) and d.get("id"): return dict(d, found=True, **tx_source(d), upstream_notice=None if d.get("final") else un(), slot_latch=_SL.for_detail(d))
         node = "not_found"
     except I.Missing: node = "not_found"
     except I.Limited as e:
-        a = archived_tx(tid)
+        a = I.public_tx(archived_tx(tid))
         if a: return dict(a, upstream_notice=un(), slot_latch=_SL.of(tid))
         raise TooMany(str(e), e.retry)
     except I.Busy: pass
-    a = archived_tx(tid)
+    a = I.public_tx(archived_tx(tid))
     if a: return dict(a, upstream_notice=un(), slot_latch=_SL.of(tid))
     n = un()
     if n and node != "not_found":
