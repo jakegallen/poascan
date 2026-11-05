@@ -1094,6 +1094,17 @@ def tx_source(d):
     lab = TX_SOURCE_LABEL.get(src, src).format(origin=d.get("served_origin") or "minepoa.com")
     return dict(source=src, source_label=lab, as_of=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(at))) if at else None)
 
+def public_tx(d):
+    """Redact a tx detail for PUBLIC output. A grade-sealed tx carries the sealed grade in body.blob; POAScan never
+    republishes it (hard rule: never publish a pending grade seal or score, and link_seal stores only the link, not the
+    blob). Drop body.blob and flag grade_seal_redacted; every public field (assignment, sig, nonce, parents, cid, ts,
+    and all top-level fields: status, amounts, slot, winner, timestamps) is left untouched. A no-op for other tx types."""
+    if not isinstance(d, dict) or d.get("type") != "grade-sealed": return d
+    b = d.get("body")
+    if isinstance(b, dict) and "blob" in b:
+        return dict(d, body={k: v for k, v in b.items() if k != "blob"}, grade_seal_redacted=True)
+    return d
+
 def route_open(rid="tx_lookup"):
     """1.26.219: False while POAScan's own probes have the route Halted or Down (routewatch.py); True otherwise."""
     try:

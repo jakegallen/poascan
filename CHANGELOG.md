@@ -11,6 +11,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.266] - 2026-11-05
+### Fixed
+- Privacy: the public tx API (`/api/v1/tx/...`) and the HTML tx page no longer republish a grade seal's sealed grade. For grade-sealed txs, `body.blob` is dropped (flagged `grade_seal_redacted`); every public field (assignment, sig, nonce, parents, cid, and all top-level fields) is unchanged. New `indexer.public_tx()`; test `tools/tx_privacy_test.py`.
+
 ## [1.26.265] - 2026-11-04
 
 ### Fixed
