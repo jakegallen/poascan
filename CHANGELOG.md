@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.264] - 2026-11-04
+
+### Fixed
+
+- Superseded tx page: the winner link on the Nonce row printed the short hash followed by the full hash. It now reads as a short hash (first 8, last 6), like other tx links.
+
 ## [1.26.263] - 2026-11-04
 
 ### Fixed
