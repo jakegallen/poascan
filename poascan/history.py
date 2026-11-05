@@ -1,7 +1,7 @@
 """Full address history from the archive (keyset paging) and grading assignments per grader from the close records."""
 import base64, collections, json, threading, time
 from . import db, analytics as A
-from . import segments as S, outcome as O
+from . import segments as S, outcome as O, slotlatch as _SL
 
 LIMIT_MAX = 200
 
@@ -48,32 +48,37 @@ def mark(rows):
     for r in rows:
         d = dict(r); n = d.get("segment") or S.CURRENT; c = carry_cutoff(n) if n != S.CURRENT else None
         d["carried_over"] = False if c is not None and d.get("ts") is not None and int(d["ts"]) > c else None
+        d["slot_latch"] = _SL.of(d.get("id"))   # 1.26.263: Pinned winner or Superseded twin on a pinned nonce slot, else null
         out.append(d)
     return out
 
 def type_counts(a):
     r = db.q("SELECT type, COUNT(*) AS n FROM (SELECT id, type FROM txs WHERE from_addr = ? UNION SELECT id, type FROM txs WHERE to_addr = ?) GROUP BY type ORDER BY n DESC", (a, a))
-    return {x["type"]: x["n"] for x in r}
+    out = {x["type"]: x["n"] for x in r}
+    for x in _SL.superseded_rows(a):   # 1.26.263: a superseded twin is not counted
+        if out.get(x["type"]): out[x["type"]] -= 1
+    return {k: v for k, v in out.items() if v > 0}
 
 def coverage(a):
     """What the archive holds for this address, and the evidence that it may hold less than the network."""
     g = db.q1("SELECT MIN(ts) AS t FROM txs") or {}
     s = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS lo, MAX(ts) AS hi FROM txs WHERE from_addr = ?", (a,)) or {}
     t = db.q1("SELECT COUNT(*) AS n FROM txs WHERE to_addr = ? AND (from_addr IS NULL OR from_addr != ?)", (a, a)) or {}
-    sent = s.get("n") or 0
+    sup = _SL.superseded_rows(a)   # 1.26.263: twins on a pinned nonce slot are not counted as sent
+    sent = (s.get("n") or 0) - len(sup)
     # 1.26.91: nonces restart at a genesis cut, so the nonce and its gap are per segment (never segment 1's 395 against
     # every tx sent in both). The top level keeps its fields for the current segment; by_segment has each one.
     by = {r["segment"]: r for r in db.q("SELECT segment, COUNT(*) AS n, MIN(ts) AS lo, MAX(ts) AS hi FROM txs WHERE from_addr = ? GROUP BY segment", (a,))}
     nz = {r["segment"]: r["m"] for r in db.q("SELECT t.segment AS segment, MAX(CAST(json_extract(d.json, '$.body.nonce') AS INTEGER)) AS m FROM txs t "
                                              "JOIN tx_detail d ON d.id = t.id WHERE t.from_addr = ? GROUP BY t.segment", (a,))}
     def one(n):
-        r = by.get(n) or {}; k = r.get("n") or 0; m = nz.get(n)
+        r = by.get(n) or {}; k = (r.get("n") or 0) - sum(1 for x in sup if (x["segment"] or S.CURRENT) == n); m = nz.get(n)
         return dict(segment=n, label=S.label(n), archived=n != S.CURRENT, indexed_sent=k, first_ts=r.get("lo"), last_ts=r.get("hi"), highest_nonce=m,
                     nonce_gap=(m - k) if m is not None and m > k else 0 if m is not None else None, complete=False if m is not None and m > k else None)
     segs = [one(n) for n in reversed(S.NUMBERS) if n == S.CURRENT or n in by]
     cur = segs[0]
     return dict(archive_start_ts=g.get("t"), indexed=sent + (t.get("n") or 0), indexed_sent=sent, first_ts=s.get("lo"), last_ts=s.get("hi"),
-                segment=S.CURRENT, highest_nonce=cur["highest_nonce"], nonce_gap=cur["nonce_gap"],
+                segment=S.CURRENT, highest_nonce=cur["highest_nonce"], nonce_gap=cur["nonce_gap"], superseded=len(sup),
                 complete=cur["complete"],    # never true: the newest bodies may not be archived, so the nonce is a lower bound
                 by_segment=segs,
                 note="Archive of the network's tx feed (newest 200, read every minute), its tx window and address reads; the network lists only an address's newest 100. "
@@ -190,6 +195,7 @@ def _assign_all(g):
             _acache.move_to_end(g); return hit[2], hit[3], hit[4]
     rows = db.q("SELECT t.id, t.ts, json_extract(d.json, '$.body.assignment') AS a FROM txs t LEFT JOIN tx_detail d ON d.id = t.id "
                 "WHERE t.from_addr = ? AND t.type = 'grade-sealed'", (g,))
+    rows = [x for x in rows if (_SL.of(x["id"]) or {}).get("state") != "superseded"]   # 1.26.263: a superseded twin's seal does not count
     seal_ts, seal_as = {}, {}
     for x in rows:
         seal_ts.setdefault(x["ts"], []).append(x["id"])

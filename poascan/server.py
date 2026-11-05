@@ -724,6 +724,8 @@ def chains_notice():
 def notices_notice():
     return I.halt_notice(I.NOTICES_TPL, data="last_known", as_of=I.last_ok("/api/notices"))
 
+from . import slotlatch as _SL   # 1.26.263: slot_latch on /api/v1/tx (pinned winner or superseded twin, else null)
+
 def tx_api(tid):
     """/api/v1/tx/<hash>: the node's detail when it answers, else POAScan's archive, else a JSON 404 with found false.
     A spent upstream budget or a busy node never turns an archived tx into an error. 1.26.89: while minepoa has the tx
@@ -736,16 +738,16 @@ def tx_api(tid):
     skip = not I.route_open("tx_lookup") and bool(db.q1("SELECT 1 AS x FROM txs WHERE id=?", (tid,)))
     try:
         d = I.get_tx_detail(tid, node=not skip)
-        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, **tx_source(d), upstream_notice=None if d.get("final") else un())
+        if isinstance(d, dict) and d.get("id"): return dict(d, found=True, **tx_source(d), upstream_notice=None if d.get("final") else un(), slot_latch=_SL.for_detail(d))
         node = "not_found"
     except I.Missing: node = "not_found"
     except I.Limited as e:
         a = archived_tx(tid)
-        if a: return dict(a, upstream_notice=un())
+        if a: return dict(a, upstream_notice=un(), slot_latch=_SL.of(tid))
         raise TooMany(str(e), e.retry)
     except I.Busy: pass
     a = archived_tx(tid)
-    if a: return dict(a, upstream_notice=un())
+    if a: return dict(a, upstream_notice=un(), slot_latch=_SL.of(tid))
     n = un()
     if n and node != "not_found":
         return dict(found=False, available=False, tx=tid, node="paused", source=None, upstream_notice=n, hint=I._ST.HALT_NONE + " Try again after retry_after_ts.")

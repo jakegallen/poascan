@@ -9,6 +9,7 @@ from . import views2 as V2
 from . import market as X   # swap data via the swap module's API: ≈$, market tile, price stats, tx swap rows
 from . import swap as SW   # only for the swap page's live fragment in the snapshot
 from . import views3 as V3
+from . import slotlatch as SL   # 1.26.263: slot latch pins
 from . import closepause as CPZ   # 1.26.192: Paused tag on close records that flag a halt
 from . import chartpop as CP   # the pop-out definitions (CP.TIPS) also titled on the Home cards
 from . import bench as BN
@@ -333,7 +334,7 @@ TX_COLS = _tx_cols()
 
 def tx_table(rows, nm, sort=None):
     return table([] if sort else ["Tx hash", "Type", "From", "To", "Amount", "Epoch", "Attest.", "Final", f"Time ({TZ})"],
-               [[tx_link(t["id"], (6, 4)), badge(t["type"]), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
+               [[tx_link(t["id"], (6, 4)), badge(t["type"]) + SL.tag(SL.of(t["id"])), addr_link(t["from_addr"], nm, (6, 4)), addr_link(t["to_addr"], nm, (6, 4)), E(t["amount"] or "···"),
                  "E" + E(str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))), dots(t["atts"], t["k"] or 5), seal(t["final"]), utc(t["ts"])] for t in rows], pri=(0, 1, 2), sort=sort)
 
 def live_rows(kind):
@@ -370,7 +371,7 @@ def tx(tid):
     if not d or not d.get("id"):
         if busy or paused: return tx_unavailable(tid, paused)
         return page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1.")), "/txs")
-    nm = names(); b = d.get("body") or {}
+    nm = names(); b = d.get("body") or {}; sl = SL.for_detail(d)   # 1.26.263: slot latch pin (Pinned or Superseded)
     parents = "".join(f'<div>{tx_link(p, (12, 10))}</div>' for p in b.get("parents", [])) or "···"
     cp = d.get("checkpointed") or {}
     ep = d.get("epoch") if d.get("epoch") is not None else b.get("epoch", G.epoch_of_ts(d.get("ts") or 0))
@@ -381,7 +382,7 @@ def tx(tid):
             ("Amount", E(d.get("amount") or "···")),
             ('<span title="Highest finalized (checkpointed) height that covers this transaction">Finalized height</span>',
              (f'<b class="mono">{cp.get("height"):,}</b>' if cp.get("height") else "···" if d.get("detail_source") else '<span class="na">not yet</span>')),
-            ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···")))), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>{_sig_badge(d)}')]
+            ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···"))) + SL.tag(sl) + (f' · winner {tx_link(sl["winner"], (8, 0))}' if sl and sl["state"] == "superseded" else "")), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>{_sig_badge(d)}')]
     if b.get("answer"): rows.append(("Answer", f'<blockquote>{E(b["answer"])}</blockquote>'))
     skip = ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")
     sw = X.tx_rows(b, nm) if b.get("offer") or b.get("proof") else []
@@ -896,7 +897,7 @@ def hist_rows(rows):
     def ep(t):
         n = t.get("segment") or SG.CURRENT; v = str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))
         return (f"S{n} " if SG.has_cut() and n != SG.CURRENT else "") + v
-    return "".join(f'<tr><td>{hlink(t["id"])} {seal(t["final"])}{seg_tx_tag(t)}</td><td>{badge(t["type"])}</td>'
+    return "".join(f'<tr><td>{hlink(t["id"])} {seal(t["final"])}{seg_tx_tag(t)}{SL.tag(t.get("slot_latch"))}</td><td>{badge(t["type"])}</td>'
                    f'<td class="r">{E(ep(t))}</td><td class="r">{rel_t(t["ts"])}</td></tr>' for t in rows)
 
 def rel_t(ts):
