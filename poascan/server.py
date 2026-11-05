@@ -458,8 +458,14 @@ _fci_seen = [False]
 # The AI crawler group additionally stays off the heavy per-entity HTML pages (/address/, /tx/): those are
 # what flooded the box, and the same data is available over the API (openapi.json, llms.txt, /mcp), which the
 # group's opening lines point at. Search engines (the * group) keep full access for indexing.
-ROBOTS = ("User-agent: *\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nCrawl-delay: 5\n\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
-          + "Allow: /api\nAllow: /openapi.json\nAllow: /llms.txt\nAllow: /\nDisallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nDisallow: /address/\nDisallow: /tx/\nCrawl-delay: 5\n\nSitemap: https://poascan.io/sitemap.xml\n")
+# Agents in, crawlers off the heavy pages. The deep per-item pages (/address/, /tx/) are an unbounded URL space that
+# crawl-storms overloaded the box with, so they are now Disallowed for EVERY user-agent (not just the named AI bots);
+# the bounded static pages stay crawlable. /api, /mcp and the discovery files are explicitly Allowed so agents use the
+# API/MCP instead of scraping. Real enforcement is at the Cloudflare edge; this is the polite layer.
+_RB = ("Allow: /api\nAllow: /mcp\nAllow: /openapi.json\nAllow: /llms.txt\nAllow: /.well-known/\nAllow: /\n"
+       "Disallow: /ws\nDisallow: /fragment/\nDisallow: /*sort=\nDisallow: /address/\nDisallow: /tx/\nCrawl-delay: 10\n")
+ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in AI_BOTS)
+          + _RB + "\nSitemap: https://poascan.io/sitemap.xml\n")
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 

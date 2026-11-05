@@ -46,8 +46,9 @@ def main():
         ai = rob.split("User-agent: GPTBot", 1)[-1]
         check("robots: AI crawlers are pointed at the API and kept off /address/ and /tx/",
               "Allow: /api" in ai and "Disallow: /address/" in ai and "Disallow: /tx/" in ai)
-        check("robots: the default (search-engine) group keeps full access to /address/ and /tx/",
-              "Disallow: /address/" not in rob.split("User-agent: GPTBot", 1)[0])
+        default = rob.split("User-agent: GPTBot", 1)[0]
+        check("robots: the default (all-crawler) group is also kept off /address/ and /tx/ (crawl-storm guard) and allows /mcp + /api",
+              "Disallow: /address/" in default and "Disallow: /tx/" in default and "Allow: /mcp" in default and "Allow: /api" in default)
     finally:
         p.terminate()
         try: p.wait(timeout=5)
