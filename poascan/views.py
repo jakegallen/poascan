@@ -667,9 +667,11 @@ def address(a):
     rsum = sum(rb.values()); est = a in A.established_set(); cvn = HI.coverage(a)
     vest_note = "Derived from per-epoch rewards × the 100-epoch vesting schedule (matches /api/hosted/me exactly on a test agent)."
     from . import rewardbasis as RB
-    rbs = RB.basis(bal, rsum, bb.get("as_of"), a, rb); rtag = RB.tag_text(rbs)   # 1.26.216: the balance is ahead of the held close records
+    cca = _CC.applied(a); rnet = rsum - cca   # 1.26.261: ballot 2464 burned cca from locked at E44, so the balance is that much under the reward sum
+    rbs = RB.basis(bal, rnet, bb.get("as_of"), a, rb); rtag = RB.tag_text(rbs)   # 1.26.216: the balance is ahead of the held close records
     if rtag: vest_note += f" <b>Balance is ahead of these figures by {full(rbs['balance_ahead_by'])} POA</b>: {E(rbs['reason'])}. Shown as of the close they stand at, not re-split."
-    elif bal is not None and abs(bal - rsum) > 0.01: vest_note += f" <b>Balance differs from reward sum by {full(bal - rsum)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
+    elif bal is not None and abs(bal - rnet) > 0.01: vest_note += f" <b>Balance differs from reward sum{' less the carry correction' if cca else ''} by {full(bal - rnet)} POA</b> (transfers or swaps; those are spendable immediately), so the split may be off."
+    if cca: vest_note += f" Ballot 2464 burned {full(cca)} POA of this Agent's locked at the E{_CC.CLOSE} close; spendable did not change."
     cen = p["census"]; fam = p["family"]
     ops = G.operators()
     # Address, balance, the split, total rewards, name and streak sit in the header; these rows add what the header does not.
@@ -1143,6 +1145,9 @@ def epoch(n):
     # Burned amount and burn share are one fact: the amount is a card, the share is in the header line. Paid Agents is in the header line too.
     s = "".join([stat("Pool", poa(r["pool"]) + X.usd_of(r["pool"])), stat("Minted", poa(r["minted"], mined=True) + X.usd_of(r["minted"])),
                  stat("Burned", f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"])}</span>' + X.usd_of(r["burned"]))]
+                + ([stat("Correction", f'<span class="num red" title="{full(r["correction"])} POA">{compact(r["correction"])}</span>',
+                         tip="Ballot 2464: burned from Agents' locked at this close. Spendable unchanged", flag_html=flag("Applied", "Ballot 2464 carry correction, applied at this close", tone="ok"))]
+                   if r.get("correction") else [])   # 1.26.261
                 + rew + [stat("Max reward", intc(r.get("paid_at_max", 0)), tip="Agents paid this close's top reward, from its rewards row"),
                  stat("Attestations", intc(r["attestations"])), stat("Attesters", intc(r["attesters"])),
                  stat("Slashed", f'<span class="num{" red" if unp > 0 else ""}">{r["slashed"]}</span>', tip="Graders slashed at this close; red when some were not pardoned"),

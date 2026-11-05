@@ -271,23 +271,64 @@ def _f(v):
     try: return float(v or 0)
     except (TypeError, ValueError): return 0.0
 
-def correction_of(e):
-    """POA burned from locked balances by a correction recorded in a close (ballot 2464, E44). Reads any basis or top level
-    key with 'correction' in its name: a number, or a dict's total (or amount_total, burned). 0 when none. Never by hand."""
-    tot = 0.0
+_CORR_TOTALS = ("total_applied", "applied_total", "total", "amount_total", "burned", "total_burned", "amount")
+_CORR_SKIP = re.compile(r"(?:from|until)_(?:epoch|ts)$|sha256$|_sha$|(?:^|_)(?:count|n|agents|accounts|rows|epoch|close|ts|note|source|reason)$")
+_CORR_ROWS = ("applied", "entries", "rows", "accounts", "agents", "per_account", "by_account")
+
+def correction_rows_of(v):
+    """{address: amount} from one correction value: an address map, a dict holding one under applied, entries or rows
+    (applied first), or a list of {addr, applied or amount} rows. Empty when the value names no address."""
+    out = {}
+    if isinstance(v, dict):
+        if any(isinstance(k, str) and k.startswith("poa1") for k in v):
+            for k, x in v.items():
+                if isinstance(k, str) and k.startswith("poa1"):
+                    out[k] = _f(next((x[y] for y in ("applied", "amount", "burned") if y in x), 0) if isinstance(x, dict) else x)
+            return out
+        for k in _CORR_ROWS:
+            if isinstance(v.get(k), (dict, list)):
+                out = correction_rows_of(v[k])
+                if out: return out
+        return out
+    if isinstance(v, list):
+        for r in v:
+            if not isinstance(r, dict): continue
+            a = next((r[y] for y in ("addr", "address", "account", "agent") if isinstance(r.get(y), str)), None)
+            if a and a.startswith("poa1"): out[a] = out.get(a, 0.0) + _f(next((r[y] for y in ("applied", "amount", "burned") if y in r), 0))
+    return out
+
+def _corr_items(e):
     for src in (e, e.get("basis") or {}):
         for k, v in src.items():
-            if "correction" not in k: continue
-            if isinstance(v, dict): v = next((v[x] for x in ("total", "amount_total", "burned", "total_burned", "amount") if x in v), None)
-            if isinstance(v, (int, float, str)): tot += _f(v)
+            if isinstance(k, str) and "correction" in k: yield k, v
+
+def correction_of(e):
+    """POA burned from locked balances by a correction recorded in a close (ballot 2464, E44). Reads any basis or top level
+    key with 'correction' in its name: a number, a dict's total (total_applied, total, amount_total, burned), or the sum of
+    its per address rows. A scalar under a boundary, hash or count key is skipped. 0 when none. Never by hand."""
+    tot = 0.0
+    for k, v in _corr_items(e):
+        if isinstance(v, bool): continue
+        if isinstance(v, dict):
+            t = next((v[x] for x in _CORR_TOTALS if x in v and isinstance(v[x], (int, float, str)) and not isinstance(v[x], bool)), None)
+            tot += _f(t) if t is not None else sum(correction_rows_of(v).values())
+        elif isinstance(v, list): tot += sum(correction_rows_of(v).values())
+        elif isinstance(v, (int, float, str)) and not _CORR_SKIP.search(k): tot += _f(v)
     return tot
+
+def correction_rows(e):
+    """{address: amount} a close record lists for a correction (empty when it gives a total only, or none)."""
+    out = {}
+    for _, v in _corr_items(e):
+        for a, x in correction_rows_of(v).items(): out[a] = out.get(a, 0.0) + x
+    return out
 
 @cached("epoch_rows", 60)
 def epoch_rows():
     from . import closepause as _CP, outcome as _OC
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
-    pp = _epoch_pend(); raw = epochs_raw(); from . import econ as _EC
+    pp = _epoch_pend(); raw = epochs_raw(); from . import econ as _EC, correction as _CC
     for i, e in enumerate(raw):
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         unc = S.unconfirmed(int(e["epoch"]), seg)
@@ -299,7 +340,7 @@ def epoch_rows():
         cin, cout, cb = _f(b.get("carry_in")), _f(b.get("carry_out")), _f(b.get("carry_burned"))
         nxt = raw[i + 1].get("basis", {}) if i + 1 < len(raw) else None
         rolled = (_f(nxt.get("carry_in")) if nxt is not None else (cout if _EC.at(int(e["epoch"]), seg).get("carry_cap_pools") else 0.0)) if cout else 0.0
-        corr = correction_of(e)
+        corr = correction_of(e) or _CC.implied(e, seg)   # 1.26.261: or the pinned table once params and the E44 record say it ran
         cum += m - corr; cumc += 0.0 if unc else m - corr
         q = pp[i]
         st = b.get("settled", []) or []

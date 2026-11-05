@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.261] - 2026-11-04
+
+### Fixed
+
+- Ballot 2464 at the E44 close (minepoa v0.84-slotlatch-cc44). The correction reads from the E44 record in any shape it takes: a total, an address map or per Agent rows. Boundary, hash and count keys are never read as amounts. When the record lands with no correction field while `/api/params` `carry_correction` names E44 and the pinned table (be455270), the correction reads Applied from that table (92 Agents, 940,522,943.638388 POA, shortfall 0 per LabLeak comment 15202); the state is kept if params later drop the key. Record rows win over the table.
+- The 92 locked balance drops are not errors: Locked comes off by each Agent's applied amount, and the address balance check compares the balance with the reward sum less that amount, so no "Balance differs" note. Spendable is unchanged.
+- Reconcile: Mined, Burned and Mint per close take the E44 burn off, so the supply step at E44 matches. While the E44 record is in with no field and no params match, a gap of exactly the pinned table reads Explained.
+
+### Changed
+
+- The Ballots card, the Agent timeline and the API read Applied (was Executed) once the E44 record lands, with the applied total. The E44 epoch page adds a Correction stat with an Applied tag. `/api/v1/governance` adds `carry_correction` (status, applied, applied_total, applied_agents, matches_table, params_match); `/api/v1/address/<a>` `carry_correction` adds `applied`, `scheduled` and `via`; Mint per close rows add `correction`.
+
 ## [1.26.260] - 2026-11-04
 
 ### Fixed

@@ -609,9 +609,10 @@ def _effect(b):
     """' · Burns 940.52M POA from 92 Agents' locked at the E44 close [Scheduled]' for a ballot with an effect on chain."""
     if b.get("effect") != "carry_correction": return ""
     from . import correction as CC
-    txt, word = CC.effect_text(); st = CC.status()["state"]
-    tag = {"executed": "ok", "scheduled": "est"}.get(st, "warn")
-    return (f'<div class="small"><span title="{E(txt)}. Balances move only from the E{CC.CLOSE} close record.">E{CC.CLOSE} burn {CC.total() / 1e6:,.2f}M</span>'
+    txt, word = CC.effect_text(); st = CC.status()["state"]; amt = CC.applied_total() if CC.done() else CC.total()
+    tag = {"executed": "ok", "applied": "ok", "scheduled": "est"}.get(st, "warn")
+    tip = f"{txt}. Spendable balances do not change." if CC.done() else f"{txt}. Balances move only from the E{CC.CLOSE} close record."
+    return (f'<div class="small"><span title="{E(tip)}">E{CC.CLOSE} burn {amt / 1e6:,.2f}M</span>'
             f' <span class="tag {tag}">{E(word)}</span></div>')
 
 def proposals(qs):
@@ -729,6 +730,7 @@ def api_overview():
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
                                     challenge_eligible=r["challenge_eligible"], paid=r["paid"], paused=r.get("paused", False), pause=r.get("pause")) for r in reversed(ep[-6:])],
                 ttl=NP.api_block(), pending_horizon=BASE + "/api/v1/governance/pending-horizon",
+                carry_correction=__import__("poascan.correction", fromlist=["x"]).api(),   # 1.26.261: ballot 2464, Scheduled then Applied
                 method=METHOD, url=_url("overview"))
 
 def api_at_risk(level=None, limit=1000, sort="level", d="desc"):
