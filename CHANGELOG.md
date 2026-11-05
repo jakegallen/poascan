@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.265] - 2026-11-04
+
+### Fixed
+
+- E44 correction (ballot 2464) read twice. The live E44 close names the correction in more than one place, and POAScan summed them: the close showed 1,881,045,887.28 POA, twice the 940,522,943.64 burned. One close carries one correction, so the largest reading is taken, never the sum, for the total and for the per Agent rows. Supply, the epoch page, the address balance check and reconciliation read the corrected figure.
+
 ## [1.26.264] - 2026-11-04
 
 ### Fixed
