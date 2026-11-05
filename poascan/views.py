@@ -382,7 +382,7 @@ def tx(tid):
             ("Amount", E(d.get("amount") or "···")),
             ('<span title="Highest finalized (checkpointed) height that covers this transaction">Finalized height</span>',
              (f'<b class="mono">{cp.get("height"):,}</b>' if cp.get("height") else "···" if d.get("detail_source") else '<span class="na">not yet</span>')),
-            ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···"))) + SL.tag(sl) + (f' · winner {tx_link(sl["winner"], (8, 0))}' if sl and sl["state"] == "superseded" else "")), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>{_sig_badge(d)}')]
+            ("Parents", parents), ("Nonce", E(str(b.get("nonce", "···"))) + SL.tag(sl) + (f' · winner {tx_link(sl["winner"], (8, 6))}' if sl and sl["state"] == "superseded" else "")), ("Chain id", E(b.get("cid", "···"))), ("Signature", f'<span class="mono wrap">{E(short(b.get("sig",""), 24, 12))}</span>{_sig_badge(d)}')]
     if b.get("answer"): rows.append(("Answer", f'<blockquote>{E(b["answer"])}</blockquote>'))
     skip = ("type", "parents", "sig", "nonce", "cid", "answer", "from", "ts", "epoch")
     sw = X.tx_rows(b, nm) if b.get("offer") or b.get("proof") else []

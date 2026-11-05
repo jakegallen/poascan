@@ -49,6 +49,7 @@ for t, word in ((WIN, ">Pinned<"), (TWIN, ">Superseded<")):
     try: r = V.tx(t); html = r[1] if isinstance(r, tuple) else r
     except Exception as e: html = "error " + type(e).__name__
     check(f"tx page {t[:8]}: {word.strip('><')} tag, no crash", word in html and (t != TWIN or f"/tx/{WIN}" in html))
+    if t == TWIN: check("tx page twin: the winner link is short", f">{WIN[:8]}\u2026{WIN[-6:]}<" in html and f">{WIN}<" not in html and f"\u2026{WIN}" not in html)
 api = SV.tx_api(TWIN)
 check("/api/v1/tx twin: superseded, winner named", api["slot_latch"]["state"] == "superseded" and api["slot_latch"]["winner"] == WIN)
 check("/api/v1/tx winner: pinned", SV.tx_api(WIN)["slot_latch"]["state"] == "pinned" and SV.tx_api(OTHER)["slot_latch"] is None)
