@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.262] - 2026-11-04
+
+### Added
+
+- minepoa v0.84-slotlatch-cc44 params keys `carry_correction` and `slot_latch_overrides` are listed on the Network facts card beside Economics: Carry correction (E44 · 92 Agents · 940.52M) and Slot latch pins (4). `/api/v1/governance/econ` adds `params`: carry_correction (from_epoch, agents, total, table_sha256, pinned_table) and slot_latch_overrides (count, slots). `/api/v1/params` already passes both through raw.
+
+### Notes
+
+- Checked against the live reads: the params with both keys are data, not a notice; the params change names the two keys with no boundary; the signed release's engine (d30ea55b) and params (6de5b2fc) hashes match `/api/network-facts`; server, worker and web client are unchanged from v0.83. tools/v084_params_test.py runs on those reads.
+
 ## [1.26.261] - 2026-11-04
 
 ### Fixed

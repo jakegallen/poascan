@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.261"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-04T23:52:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
+VERSION = "1.26.262"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-05T00:07:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1087,7 +1087,7 @@ def openapi():
                                         _p("sort", "seals_since_close order: seals (default), score or a Score part, name, counting, rate, pending or avg", {"type": "string", "enum": ["seals"] + PARTS5 + ["name", "counting", "rate", "pending", "avg"], "default": "seals"}, "query", False), DIRQ, SEGQ], oid="governanceGraders", tag="governance",
                                        desc="With a current copy of minepoa's grading list (seals_source minepoa_grading) the counts are exact and each row adds qual (seals that count toward quorum), qual_rate, pending_seals, minepoa_avg (mean jury score) and trusted_listed; upstream_as_of and fetched_at say when. Otherwise seals_source is archived_txs."),
         "/api/governance/econ": _op("Rules by close: estab_ttl, intake floor and rate, waitlist, settle cap and carry per epoch range of the segment", ANY, [],
-                                     desc="current (the open epoch's rule, live /api/params overlaid), ranges (from_epoch, to_epoch, values, source, live_keys, post) and changes (from_epoch, old and new per key). settle_cap null: no cap. carry_cap_pools 0: unallocated emission burns."),
+                                     desc="current (the open epoch's rule, live /api/params overlaid), ranges (from_epoch, to_epoch, values, source, live_keys, post) and changes (from_epoch, old and new per key). settle_cap null: no cap. carry_cap_pools 0: unallocated emission burns. params (1.26.262): carry_correction (from_epoch, agents, total, table_sha256, pinned_table) and slot_latch_overrides (count, slots) from /api/params; raw copies in /api/v1/params."),
         "/api/governance/intake": _op("Intake per close: eligible, cap, admitted and Eligible, not admitted, from the close records", ANY,
                                        [_p("close", "one close: its Agents (address, name, profile, state, draw)", {"type": "integer", "minimum": 0}, "query", False),
                                         _p("state", "with close: admitted, not_admitted or admitted_unlisted", {"type": "string", "enum": ["admitted", "not_admitted", "admitted_unlisted"]}, "query", False),

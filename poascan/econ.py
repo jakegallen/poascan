@@ -111,7 +111,8 @@ def changes(seg=None):
 
 def api_block(seg=None):
     seg = seg or SG.selected()
-    return dict(segment=seg, current=at(None, seg), ranges=ranges(seg), changes=changes(seg),
+    from . import netfacts as _NF   # 1.26.262: the v0.84 params keys, summarized (raw copies in /api/v1/params)
+    return dict(segment=seg, current=at(None, seg), ranges=ranges(seg), changes=changes(seg), params={x["key"]: x["value"] for x in _NF.params_extra()} if seg == SG.CURRENT else {},
                 note="Each close reads the range it fell in; the newest range takes /api/params where it carries the key. settle_cap null: no cap. carry_cap_pools 0: unallocated emission burns.",
                 method="https://poascan.io" + METHOD)
 
