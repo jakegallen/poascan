@@ -173,7 +173,7 @@ jobs:
         run: python tools/status_schema_test.py
       - name: Tx source (indexed copies first, minepoa.com on a miss, source and as-of on every answer)
         run: python tools/txsource_test.py
-      - name: Privacy: the tx API and tx page never republish a grade seal's sealed grade (body.blob stripped)
+      - name: Tx API and tx page never republish a grade seal (body.blob stripped, privacy)
         run: python tools/tx_privacy_test.py
       - name: Route health (six routes, mining and grading core; one degraded route never flips the headline)
         run: python tools/routehealth_test.py
