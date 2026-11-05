@@ -54,6 +54,10 @@ class Shed(Busy):
     good read in between do count as a failure (minepoa really busy)."""
 class Notice(Busy):
     """minepoa answered with a notice in place of data (strain.py). Nothing from it is stored; callers keep their last real copy."""
+class Retired(Busy):
+    """minepoa answered 200 with a retirement marker ({"retired": true}, strain.py): the endpoint is gone for good, not a
+    failure and not a stand-in. The caller shows a Retired state (never Down), stops counting it as degraded and backs off
+    hard. A later valid read (a replacement) clears it."""
 NOTICE_RETRY_S = _ei("POASCAN_NOTICE_RETRY_S", 300, 60)   # back-off floor after a notice response (polite to a strained endpoint)
 
 NOT_MODIFIED = object()            # fetch(..., cond=True) result when the node answered 304 to our If-None-Match
@@ -189,6 +193,9 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
                 raise Busy("non-JSON response (load page?)")
             data = _parse(path, raw); nraw = len(raw); raw = wire = None
         hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
+        if hit and hit.get("kind") == "retired":   # the endpoint answered that it is retired: not a failure, not a stand-in
+            _probe(ep, True, t0, "retired"); count(ep, 200); _ST.clear(path)
+            raise Retired("endpoint retired: " + ";".join(hit["signals"])[:120])
         if hit:
             _ST.record(path, hit, retry=NOTICE_RETRY_S); _probe(ep, False, t0, "notice"); count(ep, "notice")
             raise Notice("upstream notice instead of data: " + ";".join(hit["signals"])[:120], NOTICE_RETRY_S)

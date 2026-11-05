@@ -86,6 +86,7 @@ def queue_tab(qs, href, qsx):
     from . import horizon as HZ   # 1.26.186: expiry horizon per pending cohort, from close records (every segment)
     hz = HZ.card_html(qs, href)
     if SG.archived(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">The grading list is the live network\'s: shown for the current segment only.</p>')
+    if GR.is_retired(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">minepoa retired its grading list on 2026-11-01. A replacement is planned; the queue board above is from the close records.</p>')
     if not GR.usable(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is checked every 10 minutes.</p>')
     by = SS.page_sort(qs, dict(QUEUE_SORTS), "need"); d = SS.page_dir(qs)
     f = q1("need"); f = f if f in dict(QUEUE_FILTERS) else ""

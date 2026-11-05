@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.267] - 2026-11-05
+
+### Changed
+
+- Grading list: a Retired state. minepoa retired `GET /api/explorer/grading` on 2026-11-01, answering 200 with `{"retired": true}`. POAScan now reads that marker as Retired, not Down: the feed shows Retired on the health view and `/api/v1/health`, it no longer counts as degraded or flips the headline, and the read backs off to once every 6 hours instead of every 30 minutes. The settle queue and the queue board fall back to the close records with a plain Retired note, so no stale grading list numbers are shown. A later valid read (a replacement) clears the state on its own.
+
 ## [1.26.266] - 2026-11-05
 ### Fixed
 - Privacy: the public tx API (`/api/v1/tx/...`) and the HTML tx page no longer republish a grade seal's sealed grade. For grade-sealed txs, `body.blob` is dropped (flagged `grade_seal_redacted`); every public field (assignment, sig, nonce, parents, cid, and all top-level fields) is unchanged. New `indexer.public_tx()`; test `tools/tx_privacy_test.py`.

@@ -345,7 +345,7 @@ def status_page(title="Network upgrade"):
     from . import views
     return views.page(title, upgrade_body(), "/network")
 
-FEED_TAG = {"OK": "ok", "Partial": "warn", "Degraded": "warn", "Down": "bad", "Live": "ok", "Stalled": "warn", "Stale": "bad"}
+FEED_TAG = {"OK": "ok", "Partial": "warn", "Degraded": "warn", "Down": "bad", "Live": "ok", "Stalled": "warn", "Stale": "bad", "Retired": ""}
 
 def feeds_html(fd=None):
     """Health headline, chain state and one row per feed (OK, Degraded or Down, last OK), from A.feeds() like /api/health."""

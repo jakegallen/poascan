@@ -117,6 +117,8 @@ def status_cp(d):
 def detect(path, data, headers=None):
     """None for real data, else dict(signals=[...], text=raw notice text or ''). Pure: no state, no I/O."""
     tpl = template(path); sig = []; text = ""
+    if isinstance(data, dict) and data.get("retired") is True:   # a documented retirement marker ({"retired": true, "note": ...}); not strain, not a halt
+        return dict(signals=["retired"], text=_text_of(data.get("note") or data.get("message") or ""), endpoint=tpl, kind="retired")
     hd = {str(k).lower(): str(v) for k, v in (dict(headers or {})).items()}
     for name, rx in STRAIN_HEADERS:
         if name in hd and rx.search(hd[name]): sig.append("header:" + name)
@@ -151,6 +153,7 @@ def _halt_text(data):
     return None
 
 def is_halt(hit): return bool(hit) and hit.get("kind") == "halt"
+def is_retired(hit): return bool(hit) and hit.get("kind") == "retired"
 
 def strong(hit):
     """A hit that names a notice outright (header, strain key, system_notice text or strain wording), not shape alone."""
