@@ -371,6 +371,7 @@ def tx(tid):
     if not d or not d.get("id"):
         if busy or paused: return tx_unavailable(tid, paused)
         return page("Tx not found", card("Transaction", na(f"No transaction <code>{E(tid)}</code> on poa-mainnet-1.")), "/txs")
+    d = I.public_tx(d)   # drop the sealed grade (body.blob) before rendering the public tx page
     nm = names(); b = d.get("body") or {}; sl = SL.for_detail(d)   # 1.26.263: slot latch pin (Pinned or Superseded)
     parents = "".join(f'<div>{tx_link(p, (12, 10))}</div>' for p in b.get("parents", [])) or "···"
     cp = d.get("checkpointed") or {}
