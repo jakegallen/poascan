@@ -350,7 +350,10 @@ FEED_TAG = {"OK": "ok", "Partial": "warn", "Degraded": "warn", "Down": "bad", "L
 def feeds_html(fd=None):
     """Health headline, chain state and one row per feed (OK, Degraded or Down, last OK), from A.feeds() like /api/health."""
     fd = fd or A.feeds()
-    li = "".join(f'<li data-feed="{E(f["label"])}"><b>{E(f["label"])}</b><span class="tag {FEED_TAG[f["state"]]}">{f["state"]}</span>'
+    from .ui import dur
+    def _stale(f):   # 1.26.269: a feed with no good read in a while carries a stale tag with the age
+        return f' <span class="tag warn" title="No good read in {dur(f["stale_s"])}">Stale {dur(f["stale_s"])}</span>' if f.get("stale") else ""
+    li = "".join(f'<li data-feed="{E(f["label"])}"><b>{E(f["label"])}</b><span class="tag {FEED_TAG[f["state"]]}">{f["state"]}</span>{_stale(f)}'
                  f'<span class="fdt">{rel(f["last_ok"]) if f["last_ok"] else "never"}</span></li>' for f in fd["feeds"])
     head = (f'<div class="fdh"><span class="lbl">Health</span><span class="tag {FEED_TAG[fd["state"]]}" data-health="{fd["state"]}">{fd["state"]}</span>'
             f'<span class="lbl">Chain</span><span class="tag {FEED_TAG[fd["chain"]]}">{fd["chain"]}</span></div>')
