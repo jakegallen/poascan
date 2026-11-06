@@ -256,6 +256,16 @@ def main():
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/chain", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
+        # A6 (served-page acceptance scan): /start, /help, / and the join-prompt endpoint together carry no em or en dash and no key, token or guid in a URL.
+        _urlkey6 = _re.compile(r"[?&](?:key|token|guid|api_key|apikey)=(?!\s)", _re.I)
+        _never6 = _re.compile(r"\b(?:never|not|no|don't)\b[^.\n]{0,80}$", _re.I)
+        def _off6(t):
+            return [t[max(0, m.start() - 50):m.end() + 20].replace("\n", " ") for m in _urlkey6.finditer(t)
+                    if not _never6.search(t[max(0, m.start() - 120):m.start()])]
+        for _u6 in ("/start", "/help", "/", "/api/v1/prompts/join"):
+            _b6 = req(base + _u6)[1].decode("utf-8", "replace")
+            check(f"A6 {_u6}: no em or en dash", chr(0x2014) not in _b6 and chr(0x2013) not in _b6)
+            check(f"A6 {_u6}: no key, token or guid in a URL ({_off6(_b6)[:2]})", not _off6(_b6))
     finally:
         p.terminate(); p.wait(10)
     fixture_pages(check)
