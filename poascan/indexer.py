@@ -810,6 +810,10 @@ def job_epochs(force=False):
                 from . import htmlcache as _HC
                 _HC.note_close()   # 1.26.275: rebuild visitor pages in the background; the pin stays until each new render is stored
             except Exception: pass
+            try:
+                from . import chartpop as _CP
+                _CP.note_close()   # 1.26.276: republish chart pins after the close; the copy being read stays until each one is stored
+            except Exception: pass
     return wrote
 
 class _Spill:

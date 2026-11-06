@@ -51,10 +51,16 @@ for _c in _SG.cuts():
     _k = "genesis_cut" if _c["segment"] == 2 else f"genesis_cut_s{_c['segment']}"
     SEED.append((_k, _c["ts"], _c["label"], _tx(_c["txid"]) if _c.get("txid") else None,
                  f"segments.json: {_c['label']} at the start of segment {_c['segment']}" + (f" (notice {_c['notice_id']})" if _c.get("notice_id") else "")))
-    RELEVANT[_k] = expand(CFG.get("cut_charts") or ["chain"])
+    _cuts = CFG.get("cut_charts")   # [] means the cut is table only (1.26.276); a missing key keeps the old chain default
+    RELEVANT[_k] = expand(["chain"] if _cuts is None else _cuts)
 SEEDED = {k for k, *_ in SEED}
 # Keys that always get their own marker (never folded into a nearby group), so each real event stays labelled.
 SOLO = {"begins", "allclear", "grading_reopened", "ended", "genesis_cut", "s2_mining_reopened", "s2_first_join"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
+
+def on_chart(e):
+    """1.26.276: the genesis cut stays in the Milestones table. No chart or sparkline prints that label."""
+    if str(e.get("key") or "").startswith("genesis_cut"): return False
+    return e.get("label") != "Genesis cut"
 
 def charts_of(key):
     """The chart ids a milestone is drawn on (seeded: milestones.json; live: live_charts, route_charts; else none)."""
@@ -127,7 +133,7 @@ def events(chart=None):
     out = [dict(key=k, ts=t, label=l, url=u, source=s, charts=charts_of(k)) for k, t, l, u, s in SEED]
     for k, v in ((db.get_blob(BLOB)[0] or {}).get("events") or {}).items():
         if k not in SEEDED: out.append(dict(key=k, ts=v["ts"], label=v["label"], url=v.get("url"), source=v.get("src"), charts=charts_of(k)))
-    if chart is not None: out = [dict(e, label=CHART_LABELS.get(e["key"], {}).get(chart, e["label"])) for e in out if chart in e["charts"]]
+    if chart is not None: out = [dict(e, label=CHART_LABELS.get(e["key"], {}).get(chart, e["label"])) for e in out if chart in e["charts"] and on_chart(e)]
     return sorted(out, key=lambda e: (e["ts"], e["key"]))
 
 def group(evs, t0, t1, width=576, gap=64):
@@ -135,7 +141,7 @@ def group(evs, t0, t1, width=576, gap=64):
     marker at the first event's time, labelled with the group's most telling label only ("Mining reopened").
     Returns [(ts, label, url, title)], title listing every member for the hover tip."""
     span = max(1, t1 - t0); px = lambda t: width * (t - t0) / span
-    evs = [e for e in evs if t0 <= e["ts"] <= t1]; groups = []
+    evs = [e for e in evs if on_chart(e) and t0 <= e["ts"] <= t1]; groups = []
     for e in evs:
         if groups and e["key"] not in SOLO and px(e["ts"]) - px(groups[-1][0]["ts"]) < gap: groups[-1].append(e)
         else: groups.append([e])

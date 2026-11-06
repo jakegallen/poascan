@@ -25,6 +25,7 @@ for k in CP.CHARTS:
     for r in CP.ranges(k, time.time()) or []:
         p = CP.payload(k, r, 800); seen += 1
         if p.get("breaks"): check(f"pop-out {k} {r}: no breaks", False)
+        if any(m[1] == "Genesis cut" for m in p.get("marks") or []): check(f"pop-out {k} {r}: no Genesis cut label", False)
 check(f"pop-out: no chart sends a break, every key and range ({seen} payloads)", seen > 4 and not [f for f in fails if f.startswith("pop-out ")])
 check("chartpop has no break list left", not hasattr(CP, "BREAK_AT_CUT"))
 pts = [(cut - 7200, 5300), (cut - 3600, 5341), (cut + 9 * 3600, 4941), (cut + 10 * 3600, 4950)]
@@ -37,6 +38,7 @@ check("no caller passes breaks= to a chart", "breaks=" not in src.replace("break
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 check("app.js pop-out never splits the line", "d.breaks" not in js and "runs=[P]" in js)
 on = MS.charts_of("genesis_cut")
-check(f"the genesis cut stays a milestone on the charts it affects, sparklines included ({sorted(on)})",
-      all(c in on for c in ("agents", "holders", "joins", "active", "home-agents", "home-active", "home-holders")))
+check("the genesis cut is not a chart or sparkline label (1.26.276); the line stays continuous and the table keeps the event",
+      on == () and any(e["key"] == "genesis_cut" and e["label"] == "Genesis cut" for e in MS.events())
+      and not any(e["label"] == "Genesis cut" for c in ("agents", "holders", "joins", "active", "home-agents") for e in MS.events(c)))
 print("\n" + ("all passed" if not fails else f"{len(fails)} failed")); sys.exit(1 if fails else 0)

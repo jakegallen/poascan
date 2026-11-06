@@ -1087,7 +1087,7 @@ class H(BaseHTTPRequestHandler):
         p = self._path_only()
         return p.startswith("/address/") or p.startswith("/tx/")
     def _chart_ready(self):
-        """A pop-out chart already published. Served with no slot so a full heavy pool cannot blank it."""
+        """A pop-out series already published (any plot width; empty range shares the 7d pin). No slot, so a full pool cannot blank it."""
         if self._path_only() != "/fragment/chart": return False
         try:
             u = urllib.parse.urlparse(self.path)
@@ -1318,7 +1318,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/fragment/chart":   # chart pop-out data (chartpop.py): POAScan's own archive only, strict params
                 try: c, r, w = CP.parse(qs)
                 except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"Cache-Control": "no-store"})
-                hit = CP.last_good(c, r, w)   # 1.26.275: last good chart, any age, no slot when _chart_ready already passed
+                hit = CP.last_good(c, r, w)   # 1.26.276: last good for this series at any width, no slot when _chart_ready already passed
                 if hit is not None:
                     CP.refresh_bg(c, r, w)
                     return self.send(200, hit, "application/json", {"Cache-Control": "public, max-age=60"})
@@ -1533,6 +1533,8 @@ def main():
         if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
         if HC.ENABLED:   # 1.26.202: heavy pages re-rendered in the background before their cached copy expires
             __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
+        try: CP.start()   # 1.26.276: pin every chart and range off the request; a miss still builds on the first hit
+        except Exception as e: log.warning("chart warm: %s", type(e).__name__)
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))
     HUB.start()
     srv = Server((host, port), H)

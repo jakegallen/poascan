@@ -143,36 +143,119 @@ def payload(key, rng, w):
         out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(key), x0, x1, width=max(120, w - 64))]   # only milestones that affect this chart
     return out
 
-# 1.26.275: last good chart JSON, outside the HTML FIFO. Replaced only when a new payload is finished.
-_last = {}
+# 1.26.276: last good chart JSON, one pin per series (chart, range). Plot width is not part of the key:
+# a dialog sends its own clientWidth, and 9 charts x 5 ranges x those widths used to evict the map (_LAST_MAX was 64).
+# Empty r and 7d are the same default chip (pick resolves "" to 7d whenever the series has points). A nearby width
+# is served as-is; milestone grouping for the reader's width refreshes behind that copy. The previous text stays
+# until a new payload is finished, so a full worker pool cannot blank a chart that has already been published.
+PIN_W = 800
+FRESH_S = 60
+W_SLACK = 80
+_LAST_MAX = 128   # every key x every offered range, plus the epoch alias, fits with room; width never adds a key
+_last = {}        # (chart, range) -> JSON text
+_meta = {}        # (chart, range) -> (stored_at, width the JSON was built at)
 _last_lock = threading.Lock()
 _last_fly = set()
-_LAST_MAX = 64
+_want = {}
+_warm_lock = threading.Lock()
+_warming = [False]
+_warm_again = [False]
+
+def _series_key(c, r):
+    """Pin identity. Empty range is the default chip, which is 7d once the series has points."""
+    return (c, r or "7d")
+
+def _pin_keys(c, r, text):
+    """Keys this payload answers. The requested range, the default alias, and the range the JSON actually drew."""
+    keys = {_series_key(c, r)}
+    if (r or "") in ("", "7d"): keys.add((c, "7d"))
+    if r: keys.add((c, r))
+    try: resolved = json.loads(text).get("range") or ""
+    except Exception: resolved = ""
+    if resolved:
+        keys.add((c, resolved))
+        if resolved == "7d": keys.add((c, "7d"))
+    return keys
 
 def remember(c, r, w, text):
-    """Publish one chart. The previous text stays until this assignment."""
-    if not isinstance(text, str): return
-    k = (c, r, w)
+    """Publish one chart. The previous text stays until this assignment. Width is recorded, not keyed."""
+    if not isinstance(text, str) or not text: return
+    keys = _pin_keys(c, r, text); now = time.time()
     with _last_lock:
-        _last.pop(k, None)
-        _last[k] = text
+        for k in keys:
+            _last.pop(k, None); _last[k] = text; _meta[k] = (now, w)
         while len(_last) > _LAST_MAX:
-            _last.pop(next(iter(_last)))
+            old = next(iter(_last)); _last.pop(old, None); _meta.pop(old, None)
 
 def last_good(c, r, w):
-    """Stored chart JSON at any age, or None."""
+    """Stored chart JSON for this series at any age and any plot width, or None. w is ignored."""
     with _last_lock:
-        return _last.get((c, r, w))
+        return _last.get(_series_key(c, r))
 
 def refresh_bg(c, r, w):
-    """Rebuild one chart off the request. One flight per key. A failure leaves the previous copy."""
-    k = (c, r, w)
+    """Rebuild one series off the request when the pin is old or the width moved. One flight per series.
+    A failure leaves the previous copy. Does not take a visitor slot."""
+    k = _series_key(c, r)
     with _last_lock:
+        meta = _meta.get(k)
+        if meta and time.time() - meta[0] < FRESH_S and abs(meta[1] - w) < W_SLACK: return
+        _want[k] = w
         if k in _last_fly: return
         _last_fly.add(k)
     def run():
-        try: remember(c, r, w, json.dumps(payload(c, r, w), separators=(",", ":")))
+        try:
+            while True:
+                with _last_lock: ww = _want.get(k, w)
+                remember(c, r, ww, json.dumps(payload(c, r, ww), separators=(",", ":")))
+                with _last_lock:
+                    if _want.get(k) == ww: break
         except Exception: pass
         finally:
             with _last_lock: _last_fly.discard(k)
     threading.Thread(target=run, daemon=True, name="chartpin").start()
+
+def _warm_pass(force):
+    """Build every chart and offered range at PIN_W. force rebuilds even when a pin exists. Returns how many were stored."""
+    n = 0
+    for c in CHARTS:
+        try: have = list(ranges(c))
+        except Exception: continue
+        want = [""] + have
+        if "epoch" not in have: want.append("epoch")   # a shared ?range=epoch URL; Answers resolves it to All
+        for r in want:
+            if not force and last_good(c, r, PIN_W) is not None: continue
+            try:
+                remember(c, r, PIN_W, json.dumps(payload(c, r, PIN_W), separators=(",", ":")))
+                n += 1
+            except Exception: pass
+    return n
+
+def warm_once(force=False):
+    """Pin every key and offered range. One pass at a time; a close that lands mid-pass runs one more forced pass.
+    Callers stay off the request. A failure leaves whatever was already published."""
+    with _warm_lock:
+        if _warming[0]:
+            _warm_again[0] = True
+            return 0
+        _warming[0] = True
+    n = 0
+    try:
+        while True:
+            n += _warm_pass(force)
+            with _warm_lock:
+                if not _warm_again[0]:
+                    _warming[0] = False
+                    return n
+                _warm_again[0] = False
+                force = True
+    except Exception:
+        with _warm_lock: _warming[0] = False
+        return n
+
+def start():
+    """Background pin after process start. The first request for a series still builds if this has not reached it yet."""
+    threading.Thread(target=warm_once, daemon=True, name="chartwarm").start()
+
+def note_close():
+    """A new close landed. Rebuild every chart in the background. Readers keep the previous pin until each one is stored."""
+    threading.Thread(target=lambda: warm_once(True), daemon=True, name="chartclose").start()
