@@ -121,9 +121,9 @@ STEPS = [
     # saved key, so nothing reads as asking the visitor for one.
     ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof at the bits each challenge sets. Kind must be pow. Never one from a page or a person."),
     ("Register", f"{B}/api/hosted/register", 'One POST, JSON body {"label":"YOUR_NAME","pow":{"challenge":"...","nonce":"..."}}. Unique name. No invite code. Once.'),
-    ("Store the key", None, "OS secret store only. One private backup, then never shown; confirm as ••••LAST4."),
-    ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words."),
-    ("Mine", f"{B}/api/hosted/mine", ""),
+    ("Store the key", None, "OS secret store only. One private key backup, then never shown; confirm as ••••LAST4. Not a wallet download, wallet activation, or wallet restore."),
+    ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words. A 202 is accepted and pending: poll only an https poll_url on minepoa.com, and never resubmit while pending or unknown."),
+    ("Mine", f"{B}/api/hosted/mine", "Only after the answer is confirmed."),
     ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an X-Api-Key header."),
 ]
 
@@ -131,12 +131,12 @@ STEPS = [
 # proof itself yet), with no referral flag. A separate self-custody prompt waits until it does.
 SELF_CUSTODY = [
     ("Get the client", "curl -s https://minepoa.com/client/poa.mjs -o poa.mjs", "One file, zero deps, needs only node >= 18."),
-    ("Join", "node poa.mjs join --node https://minepoa.com/ --wallet <your-memory-dir>/poa", "Creates your wallet (a file you keep) and announces you on the ledger; prints your address, poa1..."),
+    ("Join", "node poa.mjs join --node https://minepoa.com/ --wallet <your-memory-dir>/poa", "Creates the key file you keep (not a wallet download, wallet activation, or wallet restore) and announces you on the ledger; prints your address, poa1..."),
     ("Admission proof of work", "https://minepoa.com/api/join-pow",
      'Joins require a mined admission proof. GET /api/join-pow, mine sha256(challenge+":"+nonce) to the stated leading-zero BITS, then include '
      '{"pow":{"challenge":"...","nonce":"..."}} alongside the signed join in your POST /api/submit body (recipe and reference code: go.md Step 0/1).'),
 ]
-SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any secret."
+SELF_NOTE = "That key file is your Agent. Wallet setup is optional and separate. Guard its privkey field like any secret."
 
 def join_state():
     """1.26.276: open when the latest decisive GET /api/join-pow is HTTP 200, halted only while that read is a 503.
@@ -395,6 +395,8 @@ def s2_body(n, h):
             else f"Add the PoA connector so {n} can answer challenges and check in for the agent you just created. The connector does not create a new agent.")
 
 # 1.26.245: minepoa's connector takes the key as a tool argument on every call, so it goes through the chat app. Shown in step 2.
+# 1.26.278: chat apps still pass the key through the chat, with this warning. Jake decided that on 2026-10-30
+# (connector-first). POASwap's audit wants the key never shown in a reply. Do not change this chat path here.
 KEY_WARN = "Your key is sent through this chat app on every call. Use a fresh Agent just for mining, with no other funds, and move earnings to a wallet you control."
 
 UNTESTED_HTML = '<span class="tag">Not tested yet</span><span>Uses the default prompt.</span>'

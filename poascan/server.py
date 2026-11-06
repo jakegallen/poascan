@@ -1077,6 +1077,9 @@ class H(BaseHTTPRequestHandler):
     def _is_snapshot(self):
         """Homepage live poll. Slot-exempt so Cloudflare can revalidate it while page renders hold the heavy pool."""
         return self._norm() in self.SNAPSHOT_PATHS
+    def _is_swap_status(self):
+        """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait."""
+        return self._norm() == "/api/swaps/status"
     def _is_moved(self):
         """A fixed 301 (including /status to Network Health). No worker: the redirect is a dict lookup."""
         p = self._path_only()
@@ -1151,7 +1154,7 @@ class H(BaseHTTPRequestHandler):
             try: GD.scrape.release()
             except ValueError: pass
     def _gated(self, fn):
-        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status(): return fn()
         path = self._path_only()
         if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
         if HC.ENABLED:
@@ -1168,6 +1171,22 @@ class H(BaseHTTPRequestHandler):
             finally: sem.release()
         if self._html_hit(): return fn()   # a copy landed while we waited
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+    def _swap_status_fast(self):
+        """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""
+        from .swap import hoststatus as SS
+        d = SS.serve()
+        m = AG._META[1]
+        gen = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        maint = dict((m or {}).get("maintenance") or {})
+        # POASwap reads these four. A stale or unknown copy must not stay open.
+        maint["active"] = bool(d.get("maintenance_active"))
+        maint["join_state"] = d.get("join_state") or "unknown"
+        maint["swap_route"] = d.get("swap_route")
+        if m: meta = dict(m, generated_at=gen, maintenance=maint)
+        else: meta = {"api_version": AG.VERSION, "stale": True, "generated_at": gen, "maintenance": maint}
+        d = dict(d, meta=meta, writes=d.get("writes"))
+        hd = {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store", "X-API-Version": AG.VERSION}
+        return self.send(200, json.dumps(d, default=str), "application/json", hd)
     def do_GET(self):
         try: return self._gated(self._get)
         finally: SG.reset()
@@ -1206,6 +1225,7 @@ class H(BaseHTTPRequestHandler):
         try:
             if path == "/ws":
                 return HUB.accept(self)
+            if path == "/api/swaps/status": return self._swap_status_fast()
             if path in ("/api/summary", "/api/live"):
                 m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
                 if isinstance(d, dict):

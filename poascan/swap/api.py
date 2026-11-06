@@ -147,7 +147,11 @@ def _fresh_age(d):
 ETAG_ROUTES = ("/api/swaps", "/api/swaps/price-history")   # list routes: unchanged data answers If-None-Match with 304
 
 def api(path, qs):
-    """(rows_or_obj, is_list) for a swap API path, or raises KeyError."""
+    """(rows_or_obj, is_list) for a swap API path, or raises KeyError.
+    /api/swaps/status is the pinned copy (1.26.278): no cache rebuild and no SQLite on this call."""
+    if path == "/api/swaps/status":
+        from . import hoststatus as SS
+        return SS.serve(), False
     data, is_list, _ = _cached(path)
     if path == "/api/swaps/status": data = _fresh_age(data)
     return data, is_list

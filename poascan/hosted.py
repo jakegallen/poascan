@@ -120,7 +120,8 @@ def checked_at():
 # WRITE_SLOW after WRITE_SAME identical results in a row. The request carries no key, no query string, no body and no
 # Authorization or signature header, so it is an invalid order that can never place an offer (go.md: placing one needs
 # key, amount, chain, asset, want_amount and to). A 4xx answer from the app (validation or auth) means the route is up:
-# open. A 503 with the halt text keeps the maintenance mapping: paused. Any other 5xx, a timeout or no answer: down.
+# open. A 503 with the halt text keeps the maintenance mapping: paused. Any other 5xx that answered: down.
+# A timeout or no answer is unknown (1.26.278): we could not check, so it is not a halt and not a failure.
 # Anything else (404, 429, edge pages): unknown, which keeps the last state.
 WRITE_BLOB, WRITE_PATH = "swap_writes", "/api/hosted/swap-offer"
 WRITE_EVERY, WRITE_JITTER, WRITE_SLOW, WRITE_SAME = 600, 60, 1800, 3
@@ -131,10 +132,12 @@ WRITE_GRACE = 300
 WRITE_STALE_S = WRITE_SLOW + WRITE_JITTER + WRITE_GRACE   # 2160 s (36 min)
 
 def write_classify(code, body=b""):
-    """open, paused, down or None (unknown) for one swap-offer probe answer."""
+    """open, paused, down, unknown, or None (keep the last state) for one swap-offer probe answer.
+    unknown: no answer (timeout). down: the route answered with a failure (5xx that is not the halt text)."""
     st = classify(code, body)
     if st: return st
-    if code is None or (isinstance(code, int) and code >= 500): return "down"
+    if code is None: return "unknown"
+    if isinstance(code, int) and code >= 500: return "down"
     return None
 
 def write_request():
@@ -163,13 +166,18 @@ def write_job(now=None, get=None, force=False):
     t0 = time.monotonic(); http = None
     try: http, body = get(); st = write_classify(http, body)
     except Exception as e:
-        st = "down"; body = b""
+        st = "unknown"; body = b""; http = None
         log.warning("hosted: swap-offer write check no answer (%s)", type(e).__name__)
     record(now, WRITE_PATH, str(int(http)) if http is not None else "timeout", t0, st is not None)
     same = st is not None and prev.get("state") == st and prev.get("http") == http
     streak = (prev.get("streak") or 1) + 1 if same else 1
     wait = (WRITE_SLOW if streak >= WRITE_SAME else WRITE_EVERY) + random.randint(-WRITE_JITTER, WRITE_JITTER)
-    if st is None:   # unknown: keep the last clear state, note the try
+    if st == "unknown":   # 1.26.278: a timeout is not a halt. Record unknown so a previous open cannot fail open.
+        d = dict(state="unknown", http=None, checked_at=now, since=now, streak=1, tried=now, tried_http=http,
+                 next_at=now + WRITE_EVERY + random.randint(-WRITE_JITTER, WRITE_JITTER))
+        db.put_blob(WRITE_BLOB, d)
+        return
+    if st is None:   # 404, 429, edge page: keep the last clear state, note the try
         d = dict(prev, tried=now, tried_http=http, next_at=now + WRITE_EVERY + random.randint(-WRITE_JITTER, WRITE_JITTER))
     else:
         d = dict(state=st, http=http, checked_at=now, since=prev.get("since") if prev.get("state") == st else now, streak=streak,
@@ -238,12 +246,13 @@ def grade_job(now=None, get=None, force=False):
 
 def _swap_read():
     """The newest clear read of /api/hosted/swap-offer: the write check (always on), or the maintenance route check when it
-    read the same path later (1.26.185). dict(state, http, checked_at, since) or {} when neither read it clearly."""
+    read the same path later (1.26.185). dict(state, http, checked_at, since) or {} when neither read it clearly.
+    unknown (a timeout) is kept so its age can go stale; it is not a halt."""
     w = db.get_blob(WRITE_BLOB)[0] or {}
     r = ((db.get_blob(BLOB)[0] or {}).get("routes") or {}).get("swap_offer") or {}
     if r.get("state") in ("open", "paused", "down") and r.get("checked") and r["checked"] > (w.get("checked_at") or 0):
         return dict(state=r["state"], http=None if r.get("slow_since") and r["state"] == "down" else r.get("code"), checked_at=r["checked"], since=r.get("since"), basis="route_check")
-    return dict(w, basis="write_check") if w.get("state") in ("open", "paused", "down") else {}
+    return dict(w, basis="write_check") if w.get("state") in ("open", "paused", "down", "unknown") and w.get("checked_at") else {}
 
 def writes(now=None):
     """{swap_offer: {state, http, checked_at, since, stale}} and swaps_writable (True open, False paused or down, None
@@ -275,7 +284,7 @@ def swap_route(now=None):
     now = now or time.time(); w, _ok = writes(now); s = w["swap_offer"]; basis = _swap_read().get("basis") or "write_check"
     probe = s["state"]; st = "unknown" if s["stale"] else probe
     disp = SWAP_DISPLAY[st]
-    feed = SWAP_FEED.get(st) or ("Down" if s["stale"] else None)
+    feed = None if st == "unknown" else SWAP_FEED.get(st)   # 1.26.278: a stale or unread probe is not Down
     return dict(state=st, display=disp, writable=None if st == "unknown" else st == "open", probe_state=probe, http=s["http"],
                 checked_at=s["checked_at"], since=s["since"], stale=s["stale"], feed=feed, label=SWAP_LABEL[st], basis=basis)
 

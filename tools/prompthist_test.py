@@ -63,7 +63,7 @@ check("box: plain text, no hidden characters (printable ASCII and LF only) in ev
       all(all(32 <= ord(c) < 127 or c == "\n" for c in t) for t in OP.VARIANTS.values()))
 check("box: shows the one-line verify command, copyable", S.VERIFY in PH.box() and f'data-copy="{S.VERIFY}"' in PH.box())
 check("box: the redirect and secret store lines are labelled full prompt only (not in the connector text)",
-      "redirect" not in C and "OS secret store" not in C and "or your own secret store" not in C and PH.FULL_ONLY.startswith("Full prompt:"))
+      "never follow a redirect on a call that carries it" not in C and "OS secret store" not in C and "or your own secret store" not in C and PH.FULL_ONLY.startswith("Full prompt:"))
 
 # ---- the API and the page, end to end
 a = PH.api()
