@@ -593,7 +593,8 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
  .catch(function(){unsk();b.disabled=false;b.textContent="Retry"})});
 /* chart pop-out: a stat or chart card with a chart ([data-chart]) opens a larger chart in a dialog. Data from /fragment/chart
    (POAScan's own archive, chartpop.py). ?chart=<key>&range=<range> opens it on load; the range follows in the URL by
-   replaceState and both params go on close. No entrance fade or transform: the dialog and its chart are visible from the first frame. */
+   replaceState and both params go on close. No entrance fade or transform: the dialog and its chart are visible from the first frame.
+   The series line may take a short glow and the fill may ease in. That is not an entrance fade. */
 /* chartq:begin (tools/chartpop_test.py runs cpParse and cpSearch in node) */
 var CPK=["mined","supply","circ","agents","joins","active","holders","txs","answers"],CPR=["24h","7d","30d","all","epoch"];
 function cpParse(search){var q;try{q=new URLSearchParams(search||"")}catch(e){return null}var c=q.getAll("chart"),r=q.getAll("range");

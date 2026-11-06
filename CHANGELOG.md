@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.277] - 2026-11-06
+
+### Fixed
+
+- Chart pop-outs load from a last-good copy of that series when the heavy pool is busy. The pin is the chart and the range (24h, 7d, 30d, All, Epoch), not the plot width, so a different dialog width still returns 200 and a full pool cannot blank a chart that has already been published. Empty range and 7d share the default pin. The first request after a process start still builds. Startup and each epoch close pin every chart and range in the background. Milestone grouping for the reader's width refreshes behind that copy. tools/lastgood_test.py.
+- The words "Genesis cut" are no longer drawn on Home sparklines or on any chart, including the pop-out. The line stays continuous. The event remains in the Milestones table. Signup surge stays removed.
+
+### Changed
+
+- Headline sparklines draw in once. The pop-out series line takes a short glow and the fill eases in. The dialog stays visible from the first frame. Reduced motion leaves both still.
+
 ## [1.26.276] - 2026-11-06
 
 ### Fixed

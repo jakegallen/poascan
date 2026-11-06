@@ -116,12 +116,52 @@ rew._gated(lambda: (ran.append(1), "RW")[1])
 ok(rew.sent == [503] and not ran and time.time() - t0 < 0.2, "an extra epoch rewards read 503s the same way")
 for _ in held_s: GD.scrape.release()
 
+# ---------------------------------------------------------------- 5b. chart pins are per series, not per width (1.26.277)
+import json as _json
+CP._last.clear(); CP._meta.clear(); CP._last_fly.clear(); CP._want.clear()
+CP.remember("agents", "", 800, '{"title":"Agents","range":"7d","pin":"AGENTS-CHART"}')
+ok(CP.last_good("agents", "", 1040) and "AGENTS-CHART" in CP.last_good("agents", "", 1040), "empty range hits the 7d pin at another width")
+ok(CP.last_good("agents", "7d", 200) and "AGENTS-CHART" in CP.last_good("agents", "7d", 390), "r=7d is that same pin")
+ok(CP.last_good("agents", "30d", 800) is None, "a different range is not the default pin")
+nkeys = len(CP._last)
+for w in range(200, 2400, 40):
+    CP.remember("agents", "7d", w, '{"title":"Agents","range":"7d","pin":"AGENTS-CHART"}')
+ok(len(CP._last) == nkeys and CP.last_good("agents", "", 1234) and "AGENTS-CHART" in CP.last_good("agents", "7d", 2400),
+   f"flooding widths does not add pins or drop the series ({len(CP._last)} keys)")
+for c in CP.CHARTS:
+    for r in CP.RANGES:
+        CP.remember(c, r, 800, _json.dumps({"c": c, "range": r, "pin": c + "-" + r}))
+ok(all(CP.last_good(c, r, w) and (c + "-" + r) in CP.last_good(c, r, w) for c in CP.CHARTS for r in CP.RANGES for w in (200, 840, 2400)),
+   "every key and offered range stays pinned at any width")
+ok(len(CP._last) <= CP._LAST_MAX, f"the pin map fits ({len(CP._last)} <= {CP._LAST_MAX})")
+real_payload, real_ranges = CP.payload, CP.ranges
+def _stub_payload(c, r, w):
+    return {"c": c, "range": "all" if r == "epoch" else (r or "7d"), "pts": [[1, 1], [2, 2]]}
+def _stub_ranges(c, now=None):
+    return ["24h", "7d", "30d", "all"] + (["epoch"] if CP.CHARTS[c]["epoch"] and c != "answers" else [])
+CP.payload, CP.ranges = _stub_payload, _stub_ranges
+CP._last.clear(); CP._meta.clear()
+n = CP.warm_once()
+ok(n >= len(CP.CHARTS) * 4, f"warm_once pins every chart and range ({n})")
+ok(all(CP.last_good(c, r, 900) for c in CP.CHARTS for r in ("", "24h", "7d", "30d", "all")), "warm covers the default chip and the four ranges")
+ok(CP.last_good("circ", "epoch", 500) and CP.last_good("answers", "epoch", 500), "warm pins Epoch, including the Answers alias")
+ok(CP.warm_once() == 0, "a second warm leaves fresh pins in place")
+CP.payload, CP.ranges = real_payload, real_ranges
+src_cp = open(os.path.join(ROOT, "poascan", "chartpop.py"), encoding="utf-8").read()
+src_sv = open(os.path.join(ROOT, "poascan", "server.py"), encoding="utf-8").read()
+ok("def note_close" in src_cp and "def start" in src_cp and "_last.clear" not in src_cp, "a close republishes chart pins and does not clear them first")
+ok("CP.start()" in src_sv and "_CP.note_close()" in src_ix, "startup warms charts and a close wakes the same republish")
+
 # ---------------------------------------------------------------- 5. FIFO full and both pools exhausted: / and the Agents chart are last-good, no slot
 HC._c.clear(); HC._bytes[0] = 0
+CP._last.clear(); CP._meta.clear(); CP._last_fly.clear(); CP._want.clear()
 age = time.time() - 10000   # far past CHEAP_STALE
 HC.put(HC.key("/", {}, seg, False), "<html>HOME-OLD</html>", now=age)
 HC.put(HC.key("/network", {"tab": ["health"]}, seg, False), "<html>HEALTH-OLD</html>", now=age)
-CP.remember("agents", "", 800, '{"title":"Agents","pin":"AGENTS-CHART"}')
+CP.remember("agents", "", 800, '{"title":"Agents","range":"7d","pin":"AGENTS-CHART"}')
+CP.remember("mined", "30d", 640, '{"title":"Total mined","range":"30d","pin":"MINED-30"}')
+CP.remember("active", "all", 400, '{"title":"Active Agents","range":"all","pin":"ACTIVE-ALL"}')
+CP.remember("joins", "24h", 800, '{"title":"Agents / hr","range":"24h","pin":"JOINS-24"}')
 chart_calls, page_calls = [], []
 def slow_payload(*a, **k):
     chart_calls.append(1); time.sleep(30); return {"title": "Agents", "pin": "REBUILT"}
@@ -164,6 +204,17 @@ ok(c == 200 and "HOME-OLD" in body and dt < 1.0, f"GET /?nocache=1 is the same p
 c, hd, body, dt = get("/fragment/chart?c=agents")
 ok(c == 200 and "AGENTS-CHART" in body and "Agents" in body and "REBUILT" not in body and dt < 1.0,
    f"GET /fragment/chart?c=agents serves last-good with the heavy pool full ({c}, {dt*1000:.0f} ms)")
+c, _, body, dt = get("/fragment/chart?c=agents&r=7d&w=1040")
+ok(c == 200 and "AGENTS-CHART" in body and "REBUILT" not in body and dt < 1.0,
+   f"7d at another width is the same pin ({c}, {dt*1000:.0f} ms)")
+c, _, body, dt = get("/fragment/chart?c=mined&r=30d&w=390")
+ok(c == 200 and "MINED-30" in body and dt < 1.0, f"mined 30d at 390px is last-good ({c}, {dt*1000:.0f} ms)")
+c, _, body, dt = get("/fragment/chart?c=active&r=all&w=200")
+ok(c == 200 and "ACTIVE-ALL" in body and dt < 1.0, f"active All at 200px is last-good ({c}, {dt*1000:.0f} ms)")
+c, _, body, dt = get("/fragment/chart?c=joins&r=24h&w=2400")
+ok(c == 200 and "JOINS-24" in body and dt < 1.0, f"joins 24h at 2400px is last-good ({c}, {dt*1000:.0f} ms)")
+c, _, body, dt = get("/fragment/chart?c=holders&r=24h&w=800")
+ok(c == 503 and dt < 1.0, f"a series that was never published still 503s when the pool is full ({c}, {dt*1000:.0f} ms)")
 c, hd, body, dt = get("/status")
 loc = hd.get("Location") or ""
 ok(c == 301 and "/network?tab=health" in loc and dt < 1.0, f"/status redirects with no slot ({c}, {loc}, {dt*1000:.0f} ms)")
