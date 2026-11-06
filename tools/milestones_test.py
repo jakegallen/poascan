@@ -90,7 +90,7 @@ from poascan import chartpop as CP
 check("every pop-out time chart with markers is a known chart id", all(k in MS.CHART_IDS for k, c in CP.CHARTS.items() if c["marks"]))
 check("every config event names its charts ([] = Milestones table only), with known ids or groups", all("charts" in e and MS.expand(e["charts"]) is not None for e in cfg["events"]))
 rel = {k: [e["key"] for e in MS.events(k)] for k in MS.CHART_IDS}
-check("Genesis cut stays in the Milestones table and is drawn on no chart (1.26.276)",
+check("Genesis cut stays in the Milestones table and is drawn on no chart (1.26.277)",
       "genesis_cut" in ev and ev["genesis_cut"]["label"] == "Genesis cut" and not any("genesis_cut" in v for v in rel.values())
       and MS.charts_of("genesis_cut") == () and all(MS.on_chart(e) or e["key"].startswith("genesis_cut") for e in MS.events()))
 check("hardening start on mining, grading and joining charts", all("begins" in rel[k] for k in ("mined", "supply", "circ", "txs", "gov-paid", "gov-queue", "gov-cover", "joins", "agents")) and "begins" not in rel["holders"])
@@ -101,7 +101,7 @@ check("First join only on Agents and Agents / hr", [k for k, v in rel.items() if
 check("Signup surge milestone removed (1.26.193): not seeded, on no chart, not in the Milestones table",
       "s2_signup_surge" not in ev and "s2_signup_surge" not in MS.SEEDED and not any("s2_signup_surge" in v for v in rel.values())
       and "Signup surge" not in [e["label"] for e in MS.events()] and "s2_signup_surge" not in MS.SOLO and "s2_signup_surge" not in MS.PRIORITY)
-check("Home sparklines: Agents, Active Agents and Holders draw no genesis cut label (1.26.276; Signup surge stays removed)",
+check("Home sparklines: Agents, Active Agents and Holders draw no genesis cut label (1.26.277; Signup surge stays removed)",
       MS.SPARK_IDS == ("home-agents", "home-active", "home-holders") and MS.events("home-agents") == []
       and MS.events("home-active") == [] and MS.events("home-holders") == []
       and not any("home-" + k in MS.charts_of("genesis_cut") for k in ("mined", "circ")))
@@ -120,7 +120,7 @@ check("sparkline does not draw a Genesis cut tick or label inside its span", "Ge
 check("sparkline without marks in its span is unchanged (plain svg)", UI.spark(_sp[:4], marks=MS.events("home-agents")) == UI.spark(_sp[:4]) and UI.spark(_sp[:4]).startswith('<svg class="spk"'))
 check("Grading reopened only on grading charts; Upgrade complete never on them (no two labels at one time)",
       [k for k, v in rel.items() if "grading_reopened" in v] == ["gov-est", "gov-paid", "gov-queue", "gov-cover"] and not any("ended" in rel[k] for k in ("gov-est", "gov-paid", "gov-queue", "gov-cover")))
-check(f"Holders carries its own step-ups, the E4 and E5 closes, and not the genesis cut label (1.26.276) ({rel['holders']})", sorted(rel["holders"]) == ["s2_e4_close", "s2_e5_close"])
+check(f"Holders carries its own step-ups, the E4 and E5 closes, and not the genesis cut label (1.26.277) ({rel['holders']})", sorted(rel["holders"]) == ["s2_e4_close", "s2_e5_close"])
 check("route reads, checkpoint, notices and the back signal are table only", not any(k in v for v in rel.values() for k in ("checkpoint", "notice", "paused", "grading_halted", "mining_reopened", "route:mining", "route:send")))
 check("labels are plain: no +N, no em or en dash, at most 24 characters, per chart too",
       all(len(e["label"]) <= 24 and not re.search(r"\+\d|[\u2013\u2014]", e["label"]) for k in MS.CHART_IDS for e in MS.events(k)))

@@ -771,7 +771,7 @@ def _marks(marks, X, x0, x1):
     svg, chips, leg, rows, n = [], [], [], [[], []], 0
     for i, m in sorted(ms, key=lambda im: im[1][0]):
         x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
-        if l == "Genesis cut": continue   # 1.26.276: the words are not a chart label; the line stays
+        if l == "Genesis cut": continue   # 1.26.277: the words are not a chart label; the line stays
         px = X(x) / VW; short = len(l) <= 4 and not url
         if not short: n += 1
         txt = l if short else str(n)

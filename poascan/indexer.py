@@ -812,7 +812,7 @@ def job_epochs(force=False):
             except Exception: pass
             try:
                 from . import chartpop as _CP
-                _CP.note_close()   # 1.26.276: republish chart pins after the close; the copy being read stays until each one is stored
+                _CP.note_close()   # 1.26.277: republish chart pins after the close; the copy being read stays until each one is stored
             except Exception: pass
     return wrote
 

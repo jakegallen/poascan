@@ -11,7 +11,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.276] - 2026-11-06
+## [1.26.277] - 2026-11-06
 
 ### Fixed
 

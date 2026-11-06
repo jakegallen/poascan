@@ -38,7 +38,7 @@ check("no caller passes breaks= to a chart", "breaks=" not in src.replace("break
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 check("app.js pop-out never splits the line", "d.breaks" not in js and "runs=[P]" in js)
 on = MS.charts_of("genesis_cut")
-check("the genesis cut is not a chart or sparkline label (1.26.276); the line stays continuous and the table keeps the event",
+check("the genesis cut is not a chart or sparkline label (1.26.277); the line stays continuous and the table keeps the event",
       on == () and any(e["key"] == "genesis_cut" and e["label"] == "Genesis cut" for e in MS.events())
       and not any(e["label"] == "Genesis cut" for c in ("agents", "holders", "joins", "active", "home-agents") for e in MS.events(c)))
 print("\n" + ("all passed" if not fails else f"{len(fails)} failed")); sys.exit(1 if fails else 0)

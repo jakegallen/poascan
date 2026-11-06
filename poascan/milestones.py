@@ -51,14 +51,14 @@ for _c in _SG.cuts():
     _k = "genesis_cut" if _c["segment"] == 2 else f"genesis_cut_s{_c['segment']}"
     SEED.append((_k, _c["ts"], _c["label"], _tx(_c["txid"]) if _c.get("txid") else None,
                  f"segments.json: {_c['label']} at the start of segment {_c['segment']}" + (f" (notice {_c['notice_id']})" if _c.get("notice_id") else "")))
-    _cuts = CFG.get("cut_charts")   # [] means the cut is table only (1.26.276); a missing key keeps the old chain default
+    _cuts = CFG.get("cut_charts")   # [] means the cut is table only (1.26.277); a missing key keeps the old chain default
     RELEVANT[_k] = expand(["chain"] if _cuts is None else _cuts)
 SEEDED = {k for k, *_ in SEED}
 # Keys that always get their own marker (never folded into a nearby group), so each real event stays labelled.
 SOLO = {"begins", "allclear", "grading_reopened", "ended", "genesis_cut", "s2_mining_reopened", "s2_first_join"} | {k for k, *_ in SEED if k.startswith("genesis_cut")}
 
 def on_chart(e):
-    """1.26.276: the genesis cut stays in the Milestones table. No chart or sparkline prints that label."""
+    """1.26.277: the genesis cut stays in the Milestones table. No chart or sparkline prints that label."""
     if str(e.get("key") or "").startswith("genesis_cut"): return False
     return e.get("label") != "Genesis cut"
 

@@ -116,7 +116,7 @@ rew._gated(lambda: (ran.append(1), "RW")[1])
 ok(rew.sent == [503] and not ran and time.time() - t0 < 0.2, "an extra epoch rewards read 503s the same way")
 for _ in held_s: GD.scrape.release()
 
-# ---------------------------------------------------------------- 5b. chart pins are per series, not per width (1.26.276)
+# ---------------------------------------------------------------- 5b. chart pins are per series, not per width (1.26.277)
 import json as _json
 CP._last.clear(); CP._meta.clear(); CP._last_fly.clear(); CP._want.clear()
 CP.remember("agents", "", 800, '{"title":"Agents","range":"7d","pin":"AGENTS-CHART"}')

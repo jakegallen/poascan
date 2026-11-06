@@ -189,7 +189,7 @@ def growth_data():
         if hit and agents[0][1] < th: ms.append((hit, f"{th//1000}k" if th % 1000 == 0 else f"{th/1000:g}k", "agents"))
     for r in rows: ms.append((r["close_ts"], _SG.ep_label(r["g"]), "close"))
     c = _SG.cut()
-    if c: ms.append((c["ts"], c["label"], "cut"))   # table only: charts and sparklines do not print this label (1.26.276)
+    if c: ms.append((c["ts"], c["label"], "cut"))   # table only: charts and sparklines do not print this label (1.26.277)
     t1 = _X.first_offer_ts()   # from /api/v1/swaps
     if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))

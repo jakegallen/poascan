@@ -143,7 +143,7 @@ def payload(key, rng, w):
         out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(key), x0, x1, width=max(120, w - 64))]   # only milestones that affect this chart
     return out
 
-# 1.26.276: last good chart JSON, one pin per series (chart, range). Plot width is not part of the key:
+# 1.26.277: last good chart JSON, one pin per series (chart, range). Plot width is not part of the key:
 # a dialog sends its own clientWidth, and 9 charts x 5 ranges x those widths used to evict the map (_LAST_MAX was 64).
 # Empty r and 7d are the same default chip (pick resolves "" to 7d whenever the series has points). A nearby width
 # is served as-is; milestone grouping for the reader's width refreshes behind that copy. The previous text stays
