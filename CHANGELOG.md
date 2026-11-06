@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.274] - 2026-11-06
+
+### Fixed
+
+- Inner pages and the homepage live snapshot stay up when the heavy pool is full. `/api/v1/health` was still taking a heavy slot because the `/api/v1` prefix is rewritten only after the slot check, so it 503'd while `/api/health` stayed 200. `/api/summary` and `/api/v1/summary` (the poll behind the homepage numbers) did the same: Cloudflare waited on that 503, then served a cached snapshot from hours earlier (max-age 30, no cap on serving it after an error), and the page jumped back to an old epoch. Both health paths are slot-exempt. The snapshot answers with no heavy slot. Its edge cache is 30 seconds, must revalidate, and `stale-if-error=0`, so a busy origin cannot put an old epoch back on the page. `/start`, `/help`, `/about` and `/agents` use the reserved slots and a stored copy the way `/` and `/chain` already do. Address, tx and epoch-record reads still shed 503. tools/visitor_slot_test.py.
+
 ## [1.26.273] - 2026-11-06
 
 ### Fixed

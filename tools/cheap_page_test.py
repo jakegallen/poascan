@@ -46,7 +46,7 @@ mb = HC.MAX_BYTES
 try:
     HC._c.clear(); HC._bytes[0] = 0
     HC.MAX_BYTES = 8000
-    k_old = HC.key("/about", {}, seg, False)
+    k_old = HC.key("/privacy", {}, seg, False)
     k_home = HC.key("/", {}, seg, False)
     k_chain = HC.key("/chain", {}, seg, False)
     HC.put(k_old, "OLD-PAGE", now=time.time())

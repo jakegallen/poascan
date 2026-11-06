@@ -34,15 +34,17 @@ ok(GD.MAX_CONNS >= GD.MAX_WORKERS and GD.MAX_CONNS >= 50, f"MAX_CONNS is well ab
 ok(hasattr(GD, "conns"), "a separate total-thread semaphore (GD.conns) exists")
 
 # ---------------------------------------------------------------- 2. path classification
-for p in ("/healthz", "/healthz/", "/api/health", "/api/health/"):
+for p in ("/healthz", "/healthz/", "/api/health", "/api/health/", "/api/v1/health", "/api/v1/health/"):
     ok(Stub(p)._is_health() is True, f"{p} is a health path (slot-exempt)")
-for p in ("/", "/address/poa1" + "A" * 40, "/tx/" + "ab" * 32, "/api/v1/status", "/api/summary"):
+ok(Stub("/api/v1/health")._is_health() == Stub("/api/health")._is_health() is True, "/api/v1/health is classified the same as /api/health")
+for p in ("/", "/address/poa1" + "A" * 40, "/tx/" + "ab" * 32, "/api/v1/status"):
     ok(Stub(p)._is_health() is False, f"{p} is a gated path (takes a worker slot)")
+ok(Stub("/api/summary")._is_health() is False and Stub("/api/summary")._is_snapshot() is True, "/api/summary is the live snapshot, not the health check")
 
 # ---------------------------------------------------------------- 3. with the only heavy slot held, health still passes, heavy sheds
 got = GD.slots.acquire(timeout=1); ok(got, "test acquired the single heavy slot (simulating a slow render in flight)")
 
-for p in ("/healthz", "/api/health"):
+for p in ("/healthz", "/api/health", "/api/v1/health"):
     called = []
     t0 = time.time()
     r = Stub(p)._gated(lambda: (called.append(1), "SERVED")[1])
