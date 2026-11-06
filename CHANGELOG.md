@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.275] - 2026-11-06
+
+### Fixed
+
+- Visitor pages stay up through an epoch close. On 2026-11-06 the epoch 51 close left `/healthz` at 200 while `GET /` returned 503: the warmed homepage lived in the 24 MB page cache, a copy older than 15 minutes was not served, and the four reserved slots were busy rebuilding. Warmed pages (home, Start, Help, About, Agents, chain, governance, network health) now sit outside that cache and are served at any age with no worker slot. `/fragment/chart` (the Agents chart and the other pop-outs) and `/status` (the redirect to Network Health) use that same last-good path, so a full heavy pool cannot answer "Chart did not load." Address, tx, and epoch record or rewards reads still take a heavy slot, but only three at once; a request past that cap sheds immediately, and a visitor no longer waits out a long minepoa read. A close rebuilds those pages in the background and publishes each new render when it is finished. It does not clear the copy visitors are reading. tools/lastgood_test.py.
+
 ## [1.26.274] - 2026-11-06
 
 ### Fixed

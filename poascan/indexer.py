@@ -805,6 +805,11 @@ def job_epochs(force=False):
         try:
             from . import guard as _G; _G.trim()   # 1.26.250: return the epochs parse/store peak to the OS now, not up to 60 s later (the per-close RSS ratchet)
         except Exception: pass
+        if wrote:
+            try:
+                from . import htmlcache as _HC
+                _HC.note_close()   # 1.26.275: rebuild visitor pages in the background; the pin stays until each new render is stored
+            except Exception: pass
     return wrote
 
 class _Spill:
@@ -960,7 +965,8 @@ def lang(t):
 # answered from the local archive and never reach this path; /address/<a> balance reads are cached 60 s per address
 # and fall back to the stored balance when the budget is spent.
 ONDEMAND_MAX = int(os.environ.get("POASCAN_ONDEMAND_MAX", "3"))
-ONDEMAND_TIMEOUT = float(os.environ.get("POASCAN_ONDEMAND_TIMEOUT", "8"))
+ONDEMAND_TIMEOUT = float(os.environ.get("POASCAN_ONDEMAND_TIMEOUT", "3"))   # 1.26.275: a visitor read gives up in 3 s (was 8) so it cannot hold a worker for 10 to 20 s
+VISITOR_WAIT = float(os.environ.get("POASCAN_VISITOR_WAIT", "2"))   # how long a second request waits on someone else's read, then answers from what is stored
 GLOBAL_RATE = float(os.environ.get("POASCAN_UPSTREAM_RATE", "0.25")); GLOBAL_BURST = int(os.environ.get("POASCAN_UPSTREAM_BURST", "20"))
 CLIENT_RATE = float(os.environ.get("POASCAN_UPSTREAM_CLIENT_RATE", "0.2")); CLIENT_BURST = int(os.environ.get("POASCAN_UPSTREAM_CLIENT_BURST", "20"))
 NEG_TTL = _ei("POASCAN_NEG_TTL", 600, 60); NEG_ERR_TTL = _ei("POASCAN_NEG_ERR_TTL", 300, 30); NEG_MAX = 5000
@@ -1121,7 +1127,7 @@ def get_tx_detail(tid, allow_fetch=True, bg=None, node=True):
         ev = _tx_inflight.get(tid); mine = ev is None
         if mine: ev = _tx_inflight[tid] = threading.Event()
     if not mine:                        # another request is fetching this tx: wait briefly, then use what is stored
-        ev.wait(ONDEMAND_TIMEOUT + 2)
+        ev.wait(VISITOR_WAIT)
         return get_tx_detail(tid, allow_fetch=False)
     fx = None
     try:

@@ -39,6 +39,11 @@ HEAVY_CAP = MAX_WORKERS - _reserve   # page/API renders and close ingest
 RESERVE_CAP = _reserve               # homepage and /chain only
 slots = threading.BoundedSemaphore(HEAVY_CAP)   # heavy-work cap; health and static never take it, close ingest takes only this
 cheap = threading.BoundedSemaphore(RESERVE_CAP) if RESERVE_CAP else None   # None when the process is too small for a reserve (tests)
+# 1.26.275: address, tx and epoch-record/rewards reads still take a heavy slot, but only this many at once.
+# A request past the cap sheds at once instead of sitting on a worker through a long minepoa wait.
+SCRAPE_MAX = int(os.environ.get("POASCAN_SCRAPE_MAX", "3"))
+SCRAPE_WAIT = float(os.environ.get("POASCAN_SCRAPE_WAIT", "0.05"))
+scrape = threading.BoundedSemaphore(max(1, SCRAPE_MAX))
 conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
 
 def close_acquire():

@@ -517,7 +517,7 @@ def address_read(a):
         if mine: threading.Thread(target=_addr_load_bg, args=(a, I.crawler()), daemon=True).start()
         return hit[1], None, hit[2]
     if not mine:                                      # someone else is fetching this address: wait for it
-        ev.wait(I.ONDEMAND_TIMEOUT + 2)
+        ev.wait(I.VISITOR_WAIT)   # 1.26.275: do not hold this request's worker for the whole upstream read
         with _addr_lock: hit2 = _addr_cache.get(a)
         if hit2 and hit2 is not hit: return hit2[1], None, hit2[2]
         return (hit[1] if hit else None), "upstream fetch failed", (hit[2] if hit else None)
