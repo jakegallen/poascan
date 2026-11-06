@@ -263,14 +263,24 @@ def _extra():
         return {}
 
 
-def build(now=None):
-    """Refresh the pin. Called off the request path. Returns the public body."""
-    now = time.time() if now is None else now
-    facts, extra = _facts(now), _extra()
+def _store(facts, extra, now):
     body = render(facts, extra, now, now)
     with _lock:
         _pin.update(facts=facts, extra=extra, built_at=now)
     return body
+
+
+def adopt(extra, now=None):
+    """Store a status body that was already built, so the next read is the pin."""
+    now = time.time() if now is None else now
+    if not isinstance(extra, dict): extra = {}
+    return _store(_facts(now), extra, now)
+
+
+def build(now=None):
+    """Refresh the pin. Called off the request path. Returns the public body."""
+    now = time.time() if now is None else now
+    return _store(_facts(now), _extra(), now)
 
 
 def _refresh():

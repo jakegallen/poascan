@@ -138,22 +138,20 @@ def _cached(path):
             _rc[path] = (time.time(), ver, (data, is_list, tag))
         return data, is_list, tag
 
-def _fresh_age(d):
-    """The status copy may be up to CACHE_TTL s old: its age field is recomputed per request."""
-    ok = H.fetch_log(C.SWAPS_EP).get("last_ok")
-    if d.get("last_good_read_age_s") is None or not ok: return d
-    return dict(d, last_good_read_age_s=int(time.time()) - int(ok))
-
 ETAG_ROUTES = ("/api/swaps", "/api/swaps/price-history")   # list routes: unchanged data answers If-None-Match with 304
 
 def api(path, qs):
     """(rows_or_obj, is_list) for a swap API path, or raises KeyError.
-    /api/swaps/status is the pinned copy (1.26.278): no cache rebuild and no SQLite on this call."""
+    /api/swaps/status is the pinned copy (1.26.278). The HTTP request path never calls this.
+    An in-process caller with no book on the pin yet gets one local build, then that copy is the pin."""
     if path == "/api/swaps/status":
         from . import hoststatus as SS
-        return SS.serve(), False
+        body = SS.serve()
+        if body.get("open_offers") is None:
+            data, is_list, _ = _cached(path)
+            return SS.adopt(data), False
+        return body, False
     data, is_list, _ = _cached(path)
-    if path == "/api/swaps/status": data = _fresh_age(data)
     return data, is_list
 
 def etag(path):
