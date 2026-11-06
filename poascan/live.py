@@ -28,15 +28,31 @@ class Hub:
         self.clients = {}            # sock -> bytearray (inbound buffer)
         self.pending = queue.Queue()  # sockets to register with the selector
         self.last_json = None; self.last_frame = None; self.last_at = 0
+        self._bg = False   # 1.26.275: one background refresh; readers keep last_json until it is replaced
         self.sel = selectors.DefaultSelector()
         self.sent = 0
         self.ip_of = {}; self.per_ip = {}   # sock -> client key, client key -> open sockets
 
     # ---- snapshot shared with the polling fallback ----
     def snapshot(self, max_age=PUMP_EVERY):
-        if self.last_json is None or time.time() - self.last_at > max_age:
+        """The last good snapshot. When one exists, a reader returns it at once and one refresh runs in the background.
+        The previous JSON stays until that refresh assigns the new one."""
+        if self.last_json is None:
             self._refresh()
+            return self.last_json
+        if time.time() - self.last_at > max_age:
+            self._kick()
         return self.last_json
+
+    def _kick(self):
+        with self.lock:
+            if self._bg: return
+            self._bg = True
+        def run():
+            try: self._refresh()
+            finally:
+                with self.lock: self._bg = False
+        threading.Thread(target=run, daemon=True, name="snap-refresh").start()
 
     def _refresh(self):
         data = self.snapshot_fn()

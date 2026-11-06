@@ -35,7 +35,7 @@ def caches():
         try: out[name] = fn()
         except Exception: out[name] = None
     from . import htmlcache as HC, analytics as A, views as V, og as OG, indexer as I
-    put("html", lambda: dict(entries=len(HC._c), bytes=HC._bytes[0], max_bytes=HC.MAX_BYTES))
+    put("html", lambda: dict(entries=len(HC._c), bytes=HC._bytes[0], pinned=len(HC._pin), max_bytes=HC.MAX_BYTES))
     put("analytics", lambda: dict(entries=len(A._cache), max=A.CACHE_MAX))
     put("address", lambda: dict(entries=len(V._addr_cache), max=V.ADDR_MAX))
     put("og", lambda: dict(entries=len(OG._CACHE), bytes=sum(len(v[1]) for v in list(OG._CACHE.values())), max=OG._MAX))

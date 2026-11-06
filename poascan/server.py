@@ -1059,6 +1059,8 @@ class H(BaseHTTPRequestHandler):
     SNAPSHOT_PATHS = ("/api/summary",)   # in-memory live snapshot the homepage polls; both /api and /api/v1
     CHEAP_PATHS = {"/", "/chain", "/chain/txs", "/start", "/help", "/about", "/agents"}
     CHEAP_STALE = 900   # a cheap page this many seconds old is still served when its slot is full (a close can run longer than the TTL)
+    # 1.26.275: address, tx, and one close's record or rewards. Still a heavy slot, but only SCRAPE_MAX at once.
+    _SCRAPE_RX = re.compile(r"^/api/(?:address(?:/|$)|tx(?:/|$)|epoch/\d+/(?:rewards|record)(?:\.csv)?$|epoch-records(?:\.csv)?$)")
     # Browser: do not keep the snapshot. Cloudflare: hold it 30 s, then revalidate, and never answer a 503 with an older copy
     # (a busy origin was leaving a many-hour stale epoch on the page). Cache-Control stays no-store, which other tests expect.
     SUMMARY_CDN = "public, max-age=30, must-revalidate, stale-if-error=0"
@@ -1075,6 +1077,23 @@ class H(BaseHTTPRequestHandler):
     def _is_snapshot(self):
         """Homepage live poll. Slot-exempt so Cloudflare can revalidate it while page renders hold the heavy pool."""
         return self._norm() in self.SNAPSHOT_PATHS
+    def _is_moved(self):
+        """A fixed 301 (including /status to Network Health). No worker: the redirect is a dict lookup."""
+        p = self._path_only()
+        return p in MOVED or p in MOVED_Q
+    def _is_scrape(self):
+        """Per-address, per-tx, and epoch record or rewards work, including the HTML page that triggers the same read."""
+        if self._SCRAPE_RX.match(self._norm()): return True
+        p = self._path_only()
+        return p.startswith("/address/") or p.startswith("/tx/")
+    def _chart_ready(self):
+        """A pop-out chart already published. Served with no slot so a full heavy pool cannot blank it."""
+        if self._path_only() != "/fragment/chart": return False
+        try:
+            u = urllib.parse.urlparse(self.path)
+            return CP.last_good(*CP.parse(urllib.parse.parse_qs(u.query))) is not None
+        except Exception:
+            return False
     def _is_free(self):
         """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
         p = self._path_only()
@@ -1104,6 +1123,7 @@ class H(BaseHTTPRequestHandler):
         if path.startswith("/api") or path in ("/mcp", "/ws") or path.startswith("/fragment/") or path.startswith("/ops/"): return False
         k = HC.key(path, qs, seg, bot); t = HC.ttl(path, qs) + HC.grace(path, qs)
         if HC.fresh(k, t): return True
+        if HC.is_warm(path, qs) and HC.last(k) is not None: return True   # 1.26.275: pinned last-good, any age, no slot
         return path in self.CHEAP_PATHS and HC.within(k, self.CHEAP_STALE) is not None
     def _mcp_light(self):
         """MCP handshake and tools/list take no heavy slot (1.26.273). Glama marks the connector Unhealthy after two
@@ -1116,10 +1136,24 @@ class H(BaseHTTPRequestHandler):
         if not getattr(self, "_mcp_read", False):
             self._mcp_read = True; self._mcp_raw = self.rfile.read(int(n))
         return AG.mcp_light(self._mcp_raw or b"")
+    def _scrape_gated(self, fn):
+        """One heavy slot, and only SCRAPE_MAX of these at once. Past the cap, shed without taking a worker."""
+        if not GD.scrape.acquire(timeout=GD.SCRAPE_WAIT):
+            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+        if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
+            try: GD.scrape.release()
+            except ValueError: pass
+            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+        try: return fn()
+        finally:
+            try: GD.slots.release()
+            except ValueError: pass
+            try: GD.scrape.release()
+            except ValueError: pass
     def _gated(self, fn):
-        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready(): return fn()
         path = self._path_only()
-        if self._html_hit(): return fn()   # fresh, or a usable / or /chain copy: no slot
+        if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
         if HC.ENABLED:
             try:
                 b = self._bits(); ev = HC.waiting(HC.key(b[0], b[1], b[2], b[3]))
@@ -1127,6 +1161,7 @@ class H(BaseHTTPRequestHandler):
             if ev is not None:
                 ev.wait(10)   # someone is already rendering this page; do not take a second slot to wait
                 if self._html_hit(): return fn()
+        if self._is_scrape(): return self._scrape_gated(fn)   # still a heavy slot, but a flood sheds at the cap
         sem = GD.cheap if (GD.cheap is not None and path in self.CHEAP_PATHS) else GD.slots
         if sem.acquire(timeout=GD.HEAVY_WAIT):
             try: return fn()
@@ -1280,10 +1315,16 @@ class H(BaseHTTPRequestHandler):
                 h = V.live_rows(qs.get("t", [""])[0])
                 if h is None: return self.send(404, "", "text/plain")
                 return self.send(200, h, extra={"Cache-Control": "no-store"})
-            if path == "/fragment/chart":   # chart pop-out data (chartpop.py): POAScan's own archive only, strict params, cached 60 s
+            if path == "/fragment/chart":   # chart pop-out data (chartpop.py): POAScan's own archive only, strict params
                 try: c, r, w = CP.parse(qs)
                 except ValueError as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"Cache-Control": "no-store"})
-                return self.send(200, json.dumps(CP.payload(c, r, w), separators=(",", ":")), "application/json", {"Cache-Control": "public, max-age=60"})
+                hit = CP.last_good(c, r, w)   # 1.26.275: last good chart, any age, no slot when _chart_ready already passed
+                if hit is not None:
+                    CP.refresh_bg(c, r, w)
+                    return self.send(200, hit, "application/json", {"Cache-Control": "public, max-age=60"})
+                body = json.dumps(CP.payload(c, r, w), separators=(",", ":"))
+                CP.remember(c, r, w, body)
+                return self.send(200, body, "application/json", {"Cache-Control": "public, max-age=60"})
             if path == "/fragment/upgrade":   # the live /upgrade view, refetched by app.js when the snapshot's upsig changes
                 if not MT.state()["active"]: return self.send(404, "", "text/plain")
                 return self.send(200, f'<div data-upview data-sig="{V2.upgrade_sig()}">{V2.upgrade_view()}</div>', extra={"Cache-Control": "no-store"})
@@ -1389,8 +1430,9 @@ class H(BaseHTTPRequestHandler):
                 try: return page(path, qs)
                 finally:
                     if bg: SG.reset()
+            stale = self.CHEAP_STALE if (path in self.CHEAP_PATHS or HC.is_warm(path, qs)) else 0   # a pin is served at any age inside render()
             html = HC.render(HC.key(path, qs, segment, crawler), HC.ttl(path, qs) + HC.grace(path, qs), rebuild,
-                             self.CHEAP_STALE if path in self.CHEAP_PATHS else 0)   # 1.26.202: rendered page cache; 1.26.272: stale cheap pages return now
+                             stale)   # 1.26.202: rendered page cache; 1.26.272: stale cheap pages return now; 1.26.275: pinned last-good has no age cap
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))

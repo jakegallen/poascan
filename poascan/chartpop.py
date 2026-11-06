@@ -5,7 +5,7 @@ GET /fragment/chart?c=<key>&r=<range>&w=<plot px>: JSON for one chart over one r
 (24h, 7d, 30d, All) plus Epoch where the data is per epoch. When the history is shorter than a range, that range shows all of it
 (no error, no empty state, no padding: a window never starts before the first real point). Upgrade milestones (milestones.py) are
 grouped with milestones.group at the reader's plot width, so the big chart uses the same grouping as Network > Charts."""
-import time
+import json, threading, time
 from . import analytics as A, db
 
 DAY = 86400
@@ -142,3 +142,37 @@ def payload(key, rng, w):
         x0, x1 = pts[0][0], pts[-1][0]
         out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(key), x0, x1, width=max(120, w - 64))]   # only milestones that affect this chart
     return out
+
+# 1.26.275: last good chart JSON, outside the HTML FIFO. Replaced only when a new payload is finished.
+_last = {}
+_last_lock = threading.Lock()
+_last_fly = set()
+_LAST_MAX = 64
+
+def remember(c, r, w, text):
+    """Publish one chart. The previous text stays until this assignment."""
+    if not isinstance(text, str): return
+    k = (c, r, w)
+    with _last_lock:
+        _last.pop(k, None)
+        _last[k] = text
+        while len(_last) > _LAST_MAX:
+            _last.pop(next(iter(_last)))
+
+def last_good(c, r, w):
+    """Stored chart JSON at any age, or None."""
+    with _last_lock:
+        return _last.get((c, r, w))
+
+def refresh_bg(c, r, w):
+    """Rebuild one chart off the request. One flight per key. A failure leaves the previous copy."""
+    k = (c, r, w)
+    with _last_lock:
+        if k in _last_fly: return
+        _last_fly.add(k)
+    def run():
+        try: remember(c, r, w, json.dumps(payload(c, r, w), separators=(",", ":")))
+        except Exception: pass
+        finally:
+            with _last_lock: _last_fly.discard(k)
+    threading.Thread(target=run, daemon=True, name="chartpin").start()

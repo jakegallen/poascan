@@ -66,7 +66,7 @@ c = get("/api/v1/health")
 check("API answers bypass the page cache and report it", c[0] in (200, 503) and '"page_cache"' in c[1] and "/api/health" not in calls)
 check("an unknown page stays a 404", get("/no-such-page")[0] == 404)
 # warmer: one pass fills the heavy pages without a request
-HC._c.clear(); calls.clear()
+HC._c.clear(); HC._pin.clear(); calls.clear()
 stop = threading.Event(); HC.WARM_EVERY = 0.2
 wt = threading.Thread(target=HC.warm_loop, args=(SV._warm_render, SV.SG.selected, stop), daemon=True); wt.start()
 for _ in range(100):
