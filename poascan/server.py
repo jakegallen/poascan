@@ -1053,14 +1053,28 @@ class H(BaseHTTPRequestHandler):
     # bounded upstream by GD.conns in Server.process_request.
     # 1.26.272: a usable copy of / or /chain (fresh, or under CHEAP_STALE) is served with no slot, including when the
     # reserve is full. A cache buster is not a different page, so it reuses that copy instead of rendering again.
+    # 1.26.274: /start, /help, /about and /agents use that same reserve. /api/v1/health is the same check as
+    # /api/health (the v1 prefix is rewritten only later, inside _get). /api/summary is the homepage live snapshot.
     HEALTH_PATHS = ("/healthz", "/api/health")
-    CHEAP_PATHS = {"/", "/chain", "/chain/txs"}   # reserve slots: a close and a crawl cannot take these
+    SNAPSHOT_PATHS = ("/api/summary",)   # in-memory live snapshot the homepage polls; both /api and /api/v1
+    CHEAP_PATHS = {"/", "/chain", "/chain/txs", "/start", "/help", "/about", "/agents"}
     CHEAP_STALE = 900   # a cheap page this many seconds old is still served when its slot is full (a close can run longer than the TTL)
+    # Browser: do not keep the snapshot. Cloudflare: hold it 30 s, then revalidate, and never answer a 503 with an older copy
+    # (a busy origin was leaving a many-hour stale epoch on the page). Cache-Control stays no-store, which other tests expect.
+    SUMMARY_CDN = "public, max-age=30, must-revalidate, stale-if-error=0"
     def _path_only(self):
         try: return urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
         except Exception: return "/"
+    def _norm(self, path=None):
+        """/api/v1/... is the same route as /api/... . Classification runs before _get rewrites the prefix."""
+        p = self._path_only() if path is None else path
+        if p == "/api/v1" or p.startswith("/api/v1/"): p = "/api" + p[len("/api/v1"):]
+        return p
     def _is_health(self):
-        return self._path_only() in self.HEALTH_PATHS
+        return self._norm() in self.HEALTH_PATHS
+    def _is_snapshot(self):
+        """Homepage live poll. Slot-exempt so Cloudflare can revalidate it while page renders hold the heavy pool."""
+        return self._norm() in self.SNAPSHOT_PATHS
     def _is_free(self):
         """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
         p = self._path_only()
@@ -1103,7 +1117,7 @@ class H(BaseHTTPRequestHandler):
             self._mcp_read = True; self._mcp_raw = self.rfile.read(int(n))
         return AG.mcp_light(self._mcp_raw or b"")
     def _gated(self, fn):
-        if self._is_health() or self._is_free() or self._mcp_light(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot(): return fn()
         path = self._path_only()
         if self._html_hit(): return fn()   # fresh, or a usable / or /chain copy: no slot
         if HC.ENABLED:
@@ -1162,7 +1176,9 @@ class H(BaseHTTPRequestHandler):
                 if isinstance(d, dict):
                     if path == "/api/summary": d["swaps"] = SC.status(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)
-                return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **{"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}))
+                hd = {"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}
+                if path == "/api/summary": hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
+                return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **hd))
             if path in SW.STATIC:   # the swap module's own assets, same URLs as before
                 f, ct = SW.STATIC[path]
                 return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})

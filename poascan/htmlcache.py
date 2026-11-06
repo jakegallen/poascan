@@ -18,12 +18,14 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators)$"), None, 300),
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
+WARM = ["/", "/start", "/help", "/about", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
 WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.272: query keys that change the rendered page. Anything else (nocache, a tracker) is not a different page.
 # / ignores the query entirely (home() does not read it). Dropping those keys is what lets ?nocache= reuse the canonical copy.
-CANON_QS = {"/": (), "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir")}
+CANON_QS = {"/": (), "/start": (), "/about": (), "/agents": (),
+            "/help": ("address", "sort", "dir"),
+            "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir")}
 _warm_set = set()
 
 _c, _bytes, _inflight, _lock = {}, [0], {}, threading.Lock()
