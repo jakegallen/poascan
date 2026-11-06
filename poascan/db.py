@@ -355,6 +355,29 @@ def _put_list(kind, obj):
             c.close()
     return True
 
+def put_file(kind, path):
+    """Store the exact bytes of a JSON file as a blob, in 1 MB copies (1.26.271). The close list is spilled to disk
+    while it is parsed, one close at a time, then copied here, so the parsed records and the text are not both in memory.
+    Same stored bytes _put_list writes. Always a BLOB, so closestore can read it back with blob I/O."""
+    n = os.path.getsize(path)
+    if n <= 0: raise ValueError("empty blob file")
+    with _wlock:
+        GEN[0] += 1
+        c = _big_conn()
+        try:
+            rid = c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,zeroblob(?))", (kind, int(time.time()), n)).lastrowid
+            with c.blobopen("blobs", "json", rid) as b, open(path, "rb") as f:
+                while True:
+                    w = f.read(BIG_ARG)
+                    if not w: break
+                    b.write(w)
+            c.commit()
+        except Exception:
+            c.rollback(); raise
+        finally:
+            c.close()
+    _bump(kind)
+
 def touch_blob(kind):
     """Move a blob's stored time without rewriting it (1.26.229: a close list re-read that brought nothing new)."""
     write("UPDATE blobs SET ts=? WHERE kind=?", (int(time.time()), kind))

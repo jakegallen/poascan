@@ -18,7 +18,7 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators)$"), None, 300),
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
+WARM = ["/", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
 WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 _warm_set = set()
@@ -48,6 +48,23 @@ def get(k, t, now=None):
         e = _c.get(k)
         if e and now - e[0] < t: stats["hit"] += 1; return e[1]
     return None
+
+def fresh(k, t, now=None):
+    """True when a copy is inside its TTL. Does not count a hit (the serve path counts it)."""
+    now = now or time.time()
+    with _lock:
+        e = _c.get(k)
+        return bool(e and now - e[0] < t)
+
+def age(k):
+    """Seconds since this key was stored, or None when there is no copy. Does not count a hit."""
+    with _lock:
+        e = _c.get(k)
+        return None if not e else time.time() - e[0]
+
+def waiting(k):
+    """The event a render of k is in flight on, or None. Callers wait without taking a serving slot."""
+    with _lock: return _inflight.get(k)
 
 def size(html):
     """Memory a page holds (1.26.234): sys.getsizeof, not len. A page with one character past U+00FF (an arrow, a

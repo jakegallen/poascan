@@ -152,23 +152,76 @@ def retag(kind):
         m = meta(kind); src = blob_src(kind)
         if m and src and m["src_len"] == src[1] and m["ver"] == VER: db.write("UPDATE close_meta SET src_ts=? WHERE kind=?", (src[0], kind))
 
+def _write_row(row):
+    """One close_rows insert on its own connection, so it can run while iter_blob still holds the read blob.
+    A changed close is written and dropped before the next one is parsed."""
+    c = db._big_conn()
+    try:
+        with db._wlock:
+            db.GEN[0] += 1
+            try:
+                c.execute("BEGIN IMMEDIATE"); c.execute(INS, db._clean(row)); c.commit()
+            except Exception:
+                c.rollback(); raise
+    finally:
+        c.close()
+
+def apply_sigs(kind, sigs):
+    """After the blob is stored: rewrite only the closes whose sha1 changed, then pend_ix and close_meta.
+    sigs is sha1(json.dumps(record)) per position, the same text sig_of stores. One close is parsed at a time."""
+    with _lock:
+        have = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))}
+        n = 0
+        for e in iter_blob(kind):
+            if have.get(n) != (sigs[n] if n < len(sigs) else None): _write_row(_row(kind, n, e))
+            n += 1
+        _finish(kind, blob_src(kind), n)
+
 def _index(kind):
     """pend_ix: for each answer, the runs of consecutive closes where its pending row is unchanged (rows grow with distinct
-    rows, not with closes times answers). Rebuilt from the rows, one close's pending at a time."""
-    c = db.conn(); out, run = [], {}
-    for r in c.execute("SELECT pos, pending FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):   # 1.26.236: one row at a time (fetchall held every close's pending text at once)
-        p = json.loads(r[1]) if r[1] else {}; p = p if isinstance(p, dict) else {}; pos = r[0]; nxt = {}
-        for t, v in p.items():
-            vt = json.dumps(v); o = run.get(t)
-            if o and o[1] == pos - 1 and o[2] == vt: o[1] = pos; nxt[t] = o
-            else:
-                if o: out.append((kind, t, o[0], o[1], o[2]))
-                nxt[t] = [pos, pos, vt]
-        for t, o in run.items():
-            if t not in nxt: out.append((kind, t, o[0], o[1], o[2]))
-        run = nxt
-    out += [(kind, t, o[0], o[1], o[2]) for t, o in run.items()]
-    db.write_tx([("DELETE FROM pend_ix WHERE kind=?", (kind,), False), ("INSERT OR REPLACE INTO pend_ix(kind, tx, pos0, pos1, v) VALUES(?,?,?,?,?)", out, True)])
+    rows, not with closes times answers). Rebuilt from the rows, one close's pending at a time.
+    1.26.271: completed runs spill to a temp file and insert in batches, so the JSON of every historical pending row
+    is not one Python list on top of the close just parsed."""
+    import os, tempfile
+    c = db.conn(); run = {}
+    fd, path = tempfile.mkstemp(prefix="poa-pend-", suffix=".jsonl"); os.close(fd)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            def emit(t, o): f.write(json.dumps([kind, t, o[0], o[1], o[2]], separators=(",", ":")) + "\n")
+            for r in c.execute("SELECT pos, pending FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):   # 1.26.236: one row at a time (fetchall held every close's pending text at once)
+                p = json.loads(r[1]) if r[1] else {}; p = p if isinstance(p, dict) else {}; pos = r[0]; nxt = {}
+                for t, v in p.items():
+                    vt = json.dumps(v); o = run.get(t)
+                    if o and o[1] == pos - 1 and o[2] == vt: o[1] = pos; nxt[t] = o
+                    else:
+                        if o: emit(t, o)
+                        nxt[t] = [pos, pos, vt]
+                for t, o in run.items():
+                    if t not in nxt: emit(t, o)
+                run = nxt
+            for t, o in run.items(): emit(t, o)
+        w = db._big_conn()
+        try:
+            with db._wlock:
+                db.GEN[0] += 1
+                try:
+                    w.execute("BEGIN IMMEDIATE")
+                    w.execute("DELETE FROM pend_ix WHERE kind=?", (kind,))
+                    buf = []
+                    with open(path, encoding="utf-8") as f:
+                        for line in f:
+                            buf.append(db._clean(tuple(json.loads(line))))
+                            if len(buf) >= 300:
+                                w.executemany("INSERT OR REPLACE INTO pend_ix(kind, tx, pos0, pos1, v) VALUES(?,?,?,?,?)", buf); buf.clear()
+                    if buf: w.executemany("INSERT OR REPLACE INTO pend_ix(kind, tx, pos0, pos1, v) VALUES(?,?,?,?,?)", buf)
+                    w.commit()
+                except Exception:
+                    w.rollback(); raise
+        finally:
+            w.close()
+    finally:
+        try: os.unlink(path)
+        except OSError: pass
 
 def migrate():
     """Startup: every segment's rows current with its blob (streamed; nothing to do once they are)."""

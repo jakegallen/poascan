@@ -1045,22 +1045,67 @@ class H(BaseHTTPRequestHandler):
         self.send(429, "Too many page requests. Please slow down; the JSON API at /api/v1 is the better fit for bulk reads.\n", TXT,
                   {"Retry-After": str(wait), "Cache-Control": "no-store"})
         return True
-    # 1.26.254: the heavy-work slot (GD.slots, MAX_WORKERS) is taken HERE, per request, once the method is dispatched,
-    # and NOT for the two health paths. Fly's /healthz check and the loopback watchdog therefore answer immediately even
-    # when every worker slot is held by slow /address renders under a crawler flood, so the machine is never pulled for
-    # a late health check. A gated request that cannot get a slot within HEAVY_WAIT is shed with a 503 + Retry-After
-    # rather than piling up. Total thread count is still bounded upstream by GD.conns in Server.process_request.
+    # 1.26.254: the heavy-work slot is taken HERE, per request, once the method is dispatched, and NOT for the health
+    # paths. 1.26.271: static files, favicons and marks take no slot either (a full heavy pool was 503ing CSS, JS and
+    # fonts, which paints a black page on a phone when the HTML is already cached). Homepage and /chain take the reserve
+    # (GD.cheap), which close ingest and heavy renders cannot fill. A cached HTML page is served with no slot. A gated
+    # request that cannot get its slot within HEAVY_WAIT is shed with a 503 + Retry-After. Total threads are still
+    # bounded upstream by GD.conns in Server.process_request.
     HEALTH_PATHS = ("/healthz", "/api/health")
+    CHEAP_PATHS = {"/", "/chain", "/chain/txs"}   # reserve slots: a close and a crawl cannot take these
+    CHEAP_STALE = 900   # a cheap page this many seconds old is still served when its slot is full (a close can run longer than the TTL)
+    def _path_only(self):
+        try: return urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        except Exception: return "/"
     def _is_health(self):
-        try: p = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        return self._path_only() in self.HEALTH_PATHS
+    def _is_free(self):
+        """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
+        p = self._path_only()
+        if p.startswith("/static/") or p.startswith("/mark/") or p.startswith("/hallmark/"): return True
+        return p in ROOT_FILES or p in ("/robots.txt", "/security.txt")
+    def _bits(self):
+        """(path, query without segment, segment, crawler) the HTML cache key is built from. Does not change request state."""
+        u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        seg = SG.selected()
+        if "segment" in qs:
+            try:
+                got = SG.parse((qs.pop("segment") or [""])[0])
+                if got is not None: seg = got
+            except ValueError: pass
+        ua = ""
+        try: ua = self.headers.get("User-Agent") or ""
+        except Exception: ua = ""
+        bot = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, ua) == "bot"
+        return path, qs, seg, bot
+    def _html_hit(self, stale_ok):
+        """A rendered page already in memory. stale_ok: a cheap page still inside CHEAP_STALE, for when its slot is full."""
+        if not HC.ENABLED: return False
+        try: path, qs, seg, bot = self._bits()
         except Exception: return False
-        return p in self.HEALTH_PATHS
+        if path.startswith("/api") or path in ("/mcp", "/ws") or path.startswith("/fragment/") or path.startswith("/ops/"): return False
+        k = HC.key(path, qs, seg, bot); t = HC.ttl(path, qs) + HC.grace(path, qs)
+        if HC.fresh(k, t): return True
+        if not stale_ok or path not in self.CHEAP_PATHS: return False
+        age = HC.age(k)
+        return age is not None and age < self.CHEAP_STALE
     def _gated(self, fn):
-        if self._is_health(): return fn()
-        if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
-            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
-        try: return fn()
-        finally: GD.slots.release()
+        if self._is_health() or self._is_free(): return fn()
+        path = self._path_only()
+        if self._html_hit(False): return fn()   # fresh cache: no slot
+        if HC.ENABLED:
+            try:
+                b = self._bits(); ev = HC.waiting(HC.key(b[0], b[1], b[2], b[3]))
+            except Exception: ev = None
+            if ev is not None:
+                ev.wait(10)   # someone is already rendering this page; do not take a second slot to wait
+                if self._html_hit(True): return fn()
+        sem = GD.cheap if (GD.cheap is not None and path in self.CHEAP_PATHS) else GD.slots
+        if sem.acquire(timeout=GD.HEAVY_WAIT):
+            try: return fn()
+            finally: sem.release()
+        if self._html_hit(True): return fn()   # stale homepage or /chain beats a 503
+        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
     def do_GET(self):
         try: return self._gated(self._get)
         finally: SG.reset()
@@ -1358,10 +1403,9 @@ class Server(ThreadingHTTPServer):
         super().__init__(*a, **k); self.detached = set()
     def process_request(self, request, client_address):
         # 1.26.254: bound TOTAL in-flight threads here (not heavy work) and shed the overflow fast instead of queueing
-        # it hundreds deep (a deep backlog just holds crawler connections open). The heavy-work cap (GD.slots, MAX_WORKERS)
-        # is taken inside the handler, so /healthz and /api/health never wait behind a flood of slow renders for a
-        # worker slot. That starvation (the health check timing out while every slot was held) is what tripped Fly's
-        # check and pulled the machine under a crawler flood.
+        # it hundreds deep (a deep backlog just holds crawler connections open). The heavy-work cap (GD.slots, HEAVY_CAP)
+        # is taken inside the handler, and SERVE_RESERVE slots (GD.cheap) stay for the homepage and /chain. /healthz,
+        # /api/health and /static never wait on either, so a full heavy pool cannot pull the machine or blank the page.
         if not GD.conns.acquire(timeout=GD.CONN_WAIT):
             try: self.shutdown_request(request)
             finally: return
