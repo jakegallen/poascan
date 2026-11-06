@@ -71,9 +71,9 @@ check("no upstream call in the series code", not any(w in fn for w in ("urlopen"
 p = CP.payload("active", "all", 800)
 check("pop-out: Active Agents, whole numbers from zero, all four ranges", p["title"] == "Active Agents" and p["fmt"] == "int" and p["y0"] and p["ranges"] == ["24h", "7d", "30d", "all"])
 check("pop-out: the same points as the Home sparkline", [x[0] for x in p["pts"]] == [int(t) for t, _ in ser])
-check(f"pop-out: no break at the genesis cut, its milestone instead ({p['breaks']})", p["breaks"] == [] and any(m[1] == "Genesis cut" for m in p["marks"]))
+check(f"pop-out: no break at the genesis cut, and no Genesis cut label ({p['breaks']}, {[m[1] for m in p['marks']]})", p["breaks"] == [] and not any(m[1] == "Genesis cut" for m in p["marks"]))
 ev = [e["key"] for e in MS.events("active")]
-check(f"milestones: the cut and mining pauses and reopenings only ({ev})", "genesis_cut" in ev and "s2_mining_reopened" in ev and "allclear" in ev and "begins" in ev
+check(f"milestones: mining pauses and reopenings, not a genesis cut label ({ev})", "genesis_cut" not in ev and "s2_mining_reopened" in ev and "allclear" in ev and "begins" in ev
       and not any(k in ev for k in ("s2_first_join", "grading_reopened", "ended")))
 check("milestone labels on this chart read Mining, not Joining", all(e["label"] != "Joining reopened" for e in MS.events("active")))
 tip = p.get("tip") or ""
@@ -91,6 +91,7 @@ card_html = k[k.index('data-chart="active"') - 40:] if 'data-chart="active"' in 
 check("Home: the Active Agents card opens the pop-out (data-chart=active, role=button)", 'data-chart="active" role="button"' in k and 'aria-haspopup="dialog"' in card_html)
 check("Home: all four headline cards open a chart", len(re.findall(r'data-chart="(mined|circ|agents|active)"', k)) == 4)
 check("Home: the card keeps its sparkline and live value", '<svg class="spk"' in card_html and 'data-live="active"' in card_html)
+check("Home sparklines do not print Genesis cut", ">Genesis cut<" not in home and "Genesis cut</span>" not in home)
 check("Home: the card label carries the same definition on hover, no sub-line", f'title="{CP.TIPS["active"][0]}"' in card_html and 'class="sub' not in card_html)
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 check("app.js: active is an allowed chart key with its title", '"active"' in re.search(r"var CPK=\[[^\]]*\]", js).group(0) and 'active:"Active Agents"' in js)

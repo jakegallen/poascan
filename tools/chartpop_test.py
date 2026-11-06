@@ -128,7 +128,11 @@ check("no share buttons (Jake's rule)", not re.search(r"share", blk, re.I) and "
 check("data comes from POAScan only", re.findall(r'fetch\("([^"?]+)', blk) == ["/fragment/chart"] and "minepoa" not in blk)
 cs = css[css.index("/* chart pop-out (app.js"):]
 cs_flat = re.sub(r"/\*.*?\*/", "", cs, flags=re.S)
-check("pop-out CSS has no entrance animation and no opacity 0 on content", "animation" not in cs_flat.replace("animation:none", "") and not re.search(r"\.(cpop|cp-in|cp-box|cpchart|cp-hd)[^{]*\{[^}]*opacity:\s*0(?![.\d])", cs_flat))
+check("pop-out dialog is visible from the first frame (no entrance fade, no opacity 0)",
+      not re.search(r"\.(cpop|cp-in|cp-box|cp-hd)[^{]*\{[^}]*animation:\s*(?!none)", cs_flat)
+      and not re.search(r"\.(cpop|cp-in|cp-box|cpchart|cp-hd)[^{]*\{[^}]*opacity:\s*0(?![.\d])", cs_flat))
+check("pop-out line may glow and the fill may ease in; reduced motion turns that off",
+      "cpglow" in cs and "cpfill" in cs and ".cpchart path{" in cs and "animation:none!important" in cs)
 check("phones: full screen, touch scrub on the plot", re.search(r"@media \(max-width:640px\)\{\s*\.cpop\{width:100%;height:100%", cs_flat) is not None and "touch-action:none" in cs_flat)
 check("watermark on the big chart (chartbox)", 'class="chartbox cp-box"' in blk)
 check("milestone labels: lanes above the plot with a background, plot top moves down, no labels near the x axis",

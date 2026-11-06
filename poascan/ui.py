@@ -659,6 +659,7 @@ def spark(points, n=40, marks=None):
     """Tiny trend line (no axes): the last n points, scaled to their own range, one continuous line (1.26.175: a straight
     segment between real points across a gap or genesis cut, never a break). marks: milestones drawn as a dashed tick with
     its terse label ([{ts, label}], milestones.events for a spark id), only those inside the line's span."""
+    marks = [m for m in (marks or []) if m.get("label") != "Genesis cut" and not str(m.get("key") or "").startswith("genesis_cut")]
     pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
     if len(pts) < 2: return ""
     if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
@@ -672,7 +673,7 @@ def spark(points, n=40, marks=None):
     shown = []   # 1.26.175: labels from the newest back; one closer than 40% to a shown label keeps its tick and a hover target only
     for x, m in sorted(mk, key=lambda p: -p[0]):
         if all(abs(x - y) >= 40 for y, _ in shown): shown.append((x, m))
-    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 24, 2:01 PM Genesis cut"): app.js fills the title
+    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 24, 2:01 PM Sample mark"): app.js fills the title
     # from data-ltt ({t:ts}); the UTC text stays as the no-script fallback
     ttl = lambda m: E(utc_text(m["ts"]) + " " + m["label"])
     ltt = lambda m: f'title="{ttl(m)}" data-ltt="{{t:{int(m["ts"])}}} {E(m["label"])}"'
@@ -770,6 +771,7 @@ def _marks(marks, X, x0, x1):
     svg, chips, leg, rows, n = [], [], [], [[], []], 0
     for i, m in sorted(ms, key=lambda im: im[1][0]):
         x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
+        if l == "Genesis cut": continue   # 1.26.277: the words are not a chart label; the line stays
         px = X(x) / VW; short = len(l) <= 4 and not url
         if not short: n += 1
         txt = l if short else str(n)

@@ -268,7 +268,7 @@ def home():
     why = hero_stale(); asof = A._ts(A.status().get("as_of")) or ""
     if why: h = dict(h, **{k: _hero_flag(h[k], why) for k in HERO_KEYS if k in h})
     from . import milestones as MS   # Home Total Agents sparkline: only milestones that name it (milestones.json spark_ids)
-    smk = {"accounts": MS.events("home-agents"), "active": MS.events("home-active"), "holders": MS.events("home-holders")}   # 1.26.175: the genesis cut ticks the sparklines it affects, no break
+    smk = {"accounts": MS.events("home-agents"), "active": MS.events("home-active"), "holders": MS.events("home-holders")}   # 1.26.277: no Genesis cut label on these lines
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("active", "active", "active")))
     more = pop(spark_in(h["holders"], sp.get("holders"), smk["holders"]), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out

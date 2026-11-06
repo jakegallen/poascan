@@ -20,6 +20,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - The PoA key backup is not a wallet download, wallet activation, or wallet restore. Wallet setup stays optional and separate. Apps that run code keep the key in an owner-only file and do not print it. Chat apps still pass the key through the chat with the existing warning.
 - /api/v1/swaps/status no longer builds on the request. It serves a pinned local copy with no heavy slot and no upstream wait, so a busy database cannot hold the caller for the 30 second SQLite timeout. Fields added beside the ones POASwap already reads: state, as_of, age_s, stale, stale_after_s (2160), write_ok, join, and swap_writes. meta.maintenance.active, join_state, meta.maintenance.swap_route and writes.swap_offer stay, and a stale or unknown copy is never open. Each new state is OK, DOWN, or UNKNOWN. DOWN is an upstream halt or failure. UNKNOWN is no answer or data older than stale_after_s. available is true only when write_ok is true. Mining does not use this endpoint. A timeout on the swap-offer write probe is unknown, not down. tools/swapstatus_test.py.
 
+## [1.26.277] - 2026-11-06
+
+### Fixed
+
+- Chart pop-outs load from a last-good copy of that series when the heavy pool is busy. The pin is the chart and the range (24h, 7d, 30d, All, Epoch), not the plot width, so a different dialog width still returns 200 and a full pool cannot blank a chart that has already been published. Empty range and 7d share the default pin. The first request after a process start still builds. Startup and each epoch close pin every chart and range in the background. Milestone grouping for the reader's width refreshes behind that copy. tools/lastgood_test.py.
+- The words "Genesis cut" are no longer drawn on Home sparklines or on any chart, including the pop-out. The line stays continuous. The event remains in the Milestones table. Signup surge stays removed.
+
+### Changed
+
+- Headline sparklines draw in once. The pop-out series line takes a short glow and the fill eases in. The dialog stays visible from the first frame. Reduced motion leaves both still.
+
 ## [1.26.276] - 2026-11-06
 
 ### Fixed

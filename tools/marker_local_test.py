@@ -13,11 +13,13 @@ def check(name, ok):
 from poascan import ui, milestones as MS, bench as BN
 T0 = 1792800000; SAMPLE = 1792981020   # Oct 26, 02:17 UTC (Oct 25, 7:17 PM PDT; Oct 26, 11:17 AM JST)
 pts = [(T0 + i * 3600, 100 + i) for i in range(60)] + [(SAMPLE + 3600 * k, 300 + k) for k in range(1, 30)]
-marks = [dict(ts=SAMPLE, label="Sample mark"), dict(ts=SAMPLE - 7200, label="Genesis cut")]   # close together: one label, one hover-only tick
+marks = [dict(ts=SAMPLE, label="Sample mark"), dict(ts=SAMPLE - 7200, label="Older mark")]   # close together: one label, one hover-only tick
 sp = ui.spark(pts, marks=marks)
 check("sparkline: UTC fallback on the title, the local template in data-ltt", 'title="Oct 26, 02:17 UTC Sample mark"' in sp and f'data-ltt="{{t:{SAMPLE}}} Sample mark"' in sp)
-check("sparkline: the hover-only tick carries the same", 'class="spkd"' in sp and f'data-ltt="{{t:{SAMPLE - 7200}}} Genesis cut"' in sp)
+check("sparkline: the hover-only tick carries the same", 'class="spkd"' in sp and f'data-ltt="{{t:{SAMPLE - 7200}}} Older mark"' in sp)
+check("sparkline: a Genesis cut mark is not drawn", "Genesis cut" not in ui.spark(pts, marks=[dict(ts=SAMPLE, key="genesis_cut", label="Genesis cut")]))
 gm = MS.group([dict(key="sample_mark", ts=SAMPLE, label="Sample mark", url=None), dict(key="genesis_cut", ts=T0 + 3600 * 20, label="Genesis cut", url="/segments")], pts[0][0], pts[-1][0])
+check("chart grouping drops the Genesis cut label and keeps the other mark", [x[1] for x in gm] == ["Sample mark"])
 ln = ui.line(pts, marks=gm)
 check("chart: milestone title text is the UTC fallback", "Oct 26, 02:17 UTC Sample mark" in ln and "<title>" in ln)
 S0 = 1793060990   # 00:29:50 UTC Oct 27 (5:29:50 PM PDT Oct 26)
@@ -36,7 +38,7 @@ except Exception:
     print("skip browser checks (Playwright not installed)")
 GET = """()=>{const o=[];document.querySelectorAll('.spkl,.spkd,.mkc,.mk title,.mkl [title],ol [title],[aria-label]').forEach(e=>{
  if(e.tagName.toLowerCase()==='title')o.push(['svg',e.textContent]);else{if(e.title)o.push(['title',e.title]);const a=e.getAttribute('aria-label');if(a&&/\\d:\\d/.test(a))o.push(['aria',a])}});
- return o.filter(x=>/Sample mark|Genesis cut/.test(x[1]))}"""
+ return o.filter(x=>/Sample mark|Older mark/.test(x[1]))}"""
 if sync_playwright:
     H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.path.join(tmp, "www"))
     class Q(H.func):
