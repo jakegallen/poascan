@@ -1051,6 +1051,8 @@ class H(BaseHTTPRequestHandler):
     # (GD.cheap), which close ingest and heavy renders cannot fill. A cached HTML page is served with no slot. A gated
     # request that cannot get its slot within HEAVY_WAIT is shed with a 503 + Retry-After. Total threads are still
     # bounded upstream by GD.conns in Server.process_request.
+    # 1.26.272: a usable copy of / or /chain (fresh, or under CHEAP_STALE) is served with no slot, including when the
+    # reserve is full. A cache buster is not a different page, so it reuses that copy instead of rendering again.
     HEALTH_PATHS = ("/healthz", "/api/health")
     CHEAP_PATHS = {"/", "/chain", "/chain/txs"}   # reserve slots: a close and a crawl cannot take these
     CHEAP_STALE = 900   # a cheap page this many seconds old is still served when its slot is full (a close can run longer than the TTL)
@@ -1077,34 +1079,34 @@ class H(BaseHTTPRequestHandler):
         try: ua = self.headers.get("User-Agent") or ""
         except Exception: ua = ""
         bot = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, ua) == "bot"
+        if path in self.CHEAP_PATHS: qs = HC.canon_qs(path, qs)   # ?nocache= and the like share the canonical page
         return path, qs, seg, bot
-    def _html_hit(self, stale_ok):
-        """A rendered page already in memory. stale_ok: a cheap page still inside CHEAP_STALE, for when its slot is full."""
+    def _html_hit(self):
+        """A rendered page already in memory. / and /chain also hit on a copy younger than CHEAP_STALE, so a full
+        reserve serves that copy instead of 503. The key uses the canonical query (a cache buster is not a miss)."""
         if not HC.ENABLED: return False
         try: path, qs, seg, bot = self._bits()
         except Exception: return False
         if path.startswith("/api") or path in ("/mcp", "/ws") or path.startswith("/fragment/") or path.startswith("/ops/"): return False
         k = HC.key(path, qs, seg, bot); t = HC.ttl(path, qs) + HC.grace(path, qs)
         if HC.fresh(k, t): return True
-        if not stale_ok or path not in self.CHEAP_PATHS: return False
-        age = HC.age(k)
-        return age is not None and age < self.CHEAP_STALE
+        return path in self.CHEAP_PATHS and HC.within(k, self.CHEAP_STALE) is not None
     def _gated(self, fn):
         if self._is_health() or self._is_free(): return fn()
         path = self._path_only()
-        if self._html_hit(False): return fn()   # fresh cache: no slot
+        if self._html_hit(): return fn()   # fresh, or a usable / or /chain copy: no slot
         if HC.ENABLED:
             try:
                 b = self._bits(); ev = HC.waiting(HC.key(b[0], b[1], b[2], b[3]))
             except Exception: ev = None
             if ev is not None:
                 ev.wait(10)   # someone is already rendering this page; do not take a second slot to wait
-                if self._html_hit(True): return fn()
+                if self._html_hit(): return fn()
         sem = GD.cheap if (GD.cheap is not None and path in self.CHEAP_PATHS) else GD.slots
         if sem.acquire(timeout=GD.HEAVY_WAIT):
             try: return fn()
             finally: sem.release()
-        if self._html_hit(True): return fn()   # stale homepage or /chain beats a 503
+        if self._html_hit(): return fn()   # a copy landed while we waited
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
     def do_GET(self):
         try: return self._gated(self._get)
@@ -1124,7 +1126,8 @@ class H(BaseHTTPRequestHandler):
         if path == AG.API_PREFIX: path = "/api"                                   # /api/v1 is canonical; /api/... stays as an alias
         elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
         # 1.26.91: ?segment=<n> reads an archived chain segment (segments.py); dropped from qs so routes that take no
-        # parameters still answer. Cache keys use the raw query, so each segment is cached apart.
+        # parameters still answer. Cache keys keep the remaining query, so each segment is cached apart.
+        # 1.26.272: / and /chain drop keys that do not change the page (see htmlcache.canon_qs) just before the render.
         if "segment" in qs:
             try: SG.set_selected(SG.parse((qs.pop("segment") or [""])[0]))
             except ValueError as e:
@@ -1347,7 +1350,20 @@ class H(BaseHTTPRequestHandler):
                 b = self.prep(json.dumps(data, default=str), "application/json")
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
-            html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs) + HC.grace(path, qs), lambda: page(path, qs))   # 1.26.202: rendered page cache
+            if path in self.CHEAP_PATHS:   # 1.26.272: ?nocache= and other unused keys share the canonical render
+                qs = HC.canon_qs(path, qs); V.REQ.qs = qs
+            caller = __import__("threading").current_thread(); segment, crawler = SG.selected(), bool(I.crawler())
+            def rebuild():
+                bg = __import__("threading").current_thread() is not caller   # a background refresh has its own segment
+                if bg:
+                    SG.reset()
+                    if segment is not None: SG.set_selected(segment)
+                    V.REQ.path, V.REQ.qs = path, qs; I.CLIENT.crawler = crawler; I.CLIENT.ip = "refresh"
+                try: return page(path, qs)
+                finally:
+                    if bg: SG.reset()
+            html = HC.render(HC.key(path, qs, segment, crawler), HC.ttl(path, qs) + HC.grace(path, qs), rebuild,
+                             self.CHEAP_STALE if path in self.CHEAP_PATHS else 0)   # 1.26.202: rendered page cache; 1.26.272: stale cheap pages return now
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))
