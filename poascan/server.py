@@ -888,7 +888,7 @@ class H(BaseHTTPRequestHandler):
             if n > 65536: return self.send(413, json.dumps(AG._err(None, -32600, "request too large")), "application/json", MCP_HDRS)
             pv = self.headers.get("MCP-Protocol-Version")
             if pv and pv not in AG.PROTOCOLS: return self.send(400, json.dumps(AG._err(None, -32600, "unsupported MCP-Protocol-Version")), "application/json", MCP_HDRS)
-            raw = self.rfile.read(n)
+            raw = self._mcp_raw if getattr(self, "_mcp_read", False) else self.rfile.read(n)   # _gated already read a light-or-heavy classify
             if KS.has_key(raw):   # MCP tools never take keys; refuse without echoing the request
                 log.warning("refused an MCP call with a key-shaped value (not logged)")
                 return self.send(400, json.dumps(AG._err(None, -32602, KS.WARN)), "application/json", dict(MCP_HDRS, **{"Cache-Control": "no-store"}))
@@ -1091,8 +1091,19 @@ class H(BaseHTTPRequestHandler):
         k = HC.key(path, qs, seg, bot); t = HC.ttl(path, qs) + HC.grace(path, qs)
         if HC.fresh(k, t): return True
         return path in self.CHEAP_PATHS and HC.within(k, self.CHEAP_STALE) is not None
+    def _mcp_light(self):
+        """MCP handshake and tools/list take no heavy slot (1.26.273). Glama marks the connector Unhealthy after two
+        failed hourly checks, and those checks are initialize plus tools/list. GET only answers 405. tools/call stays heavy.
+        The body is read once and kept for _post."""
+        if self._path_only() != "/mcp": return False
+        if getattr(self, "command", "GET") != "POST": return True
+        n = self.headers.get("Content-Length") or ""
+        if not n.isdigit() or int(n) > 65536: return True   # 411 or 413, no tool runs
+        if not getattr(self, "_mcp_read", False):
+            self._mcp_read = True; self._mcp_raw = self.rfile.read(int(n))
+        return AG.mcp_light(self._mcp_raw or b"")
     def _gated(self, fn):
-        if self._is_health() or self._is_free(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light(): return fn()
         path = self._path_only()
         if self._html_hit(): return fn()   # fresh, or a usable / or /chain copy: no slot
         if HC.ENABLED:

@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.272"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.273"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-05T04:17:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -928,6 +928,15 @@ def batch_size(raw):
     try: msg = json.loads(raw)
     except Exception: return 1
     return max(1, min(BATCH_MAX, len(msg))) if isinstance(msg, list) else 1
+
+def mcp_light(raw):
+    """True when this body cannot run a tool (1.26.273). Glama's hourly check opens a connection and lists tools:
+    initialize, tools/list, ping, and notifications do no archive work. tools/call, and any batch that contains one, is heavy.
+    An unparseable body is light too: the handler answers 400 and never calls a tool."""
+    try: msg = json.loads(raw or b"null")
+    except Exception: return True
+    msgs = msg if isinstance(msg, list) else [msg]
+    return not any(isinstance(m, dict) and m.get("method") == "tools/call" for m in msgs)
 
 def handle_mcp(raw):
     """raw: request body bytes. Returns (http_status, response_obj_or_None)."""
