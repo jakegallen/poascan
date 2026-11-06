@@ -12,9 +12,11 @@ Sources, per route (each a read another job already makes):
   route      also the always-on keyless grade route read (hosted.grade_job, 1.26.201, about every 15 min) for Grading
 A read is ok, halt (HTTP 503 with the halt text) or fail (5xx, timeout, no answer, a notice in place of data). 401, 404,
 429 and sheds are not route reads. Hysteresis: a route turns Halted (or Down, with no halt text) after BAD_N bad reads in
-a row, and back to Open after GOOD_N good reads in a row, so one failed or one good probe never flips it. 'since' is the
-first bad read of the run that turned it. Stored in the routewatch blob; public through state(), /api/v1/health,
-meta.maintenance.route_halts, MCP get_route_status, the header status note, Network > Health and /upgrade."""
+a row, and back to Open after GOOD_N good reads in a row, so one failed or one good probe never flips it. Joining is the
+exception (1.26.276): one HTTP 200 from GET /api/join-pow opens it, one HTTP 503 halt read halts that route only, and a
+timeout is not a read that flips it or keeps an older halt. 'since' is the first bad read of the run that turned it.
+Stored in the routewatch blob; public through state(), /api/v1/health, meta.maintenance.route_halts, MCP get_route_status,
+the header status note, Network > Health and /upgrade."""
 import time, logging
 from . import db
 
@@ -32,7 +34,9 @@ ROUTES = [
     ("swap_writes", "Swap writes", dict(writes=True)),
     ("tx_lookup", "Tx lookup", dict(fetch=("/api/explorer/tx/:id", "/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id (swaps)"))),
     ("address_lookup", "Address lookup", dict(fetch=("/api/explorer/address/:addr",))),
-    ("joining", "Joining", dict(fetch=("/api/join-pow",), halt_n=1)),   # 1.26.232: one 503 halt read is enough (minepoa asks for an hour between reads)
+    # 1.26.276: one HTTP 200 opens Joining. One 503 halt read still halts that route only. A timeout is not a halt and
+    # does not keep the Oct 30 latch (good_n=1, ignore_fail). Other routes keep BAD_N / GOOD_N.
+    ("joining", "Joining", dict(fetch=("/api/join-pow",), halt_n=1, good_n=1, ignore_fail=True)),
 ]
 LABEL = {i: l for i, l, _ in ROUTES}
 WORD = {"open": "Open", "halted": "Halted", "down": "Down", "unknown": "No read"}   # word is Degraded for a covered Tx lookup (state())
@@ -134,19 +138,27 @@ def _gap_obs(g, now, seen):
     out.append((now, "fail", "seal gap"))
     return out
 
-def step(r, ts, kind, src, halt_n=None):
-    """One read into a route's record (hysteresis). r: dict(state, since, bad, good, first_bad, halt_seen, as_of, last_ok_at, last_bad_at)."""
+def step(r, ts, kind, src, halt_n=None, good_n=None, ignore_fail=False):
+    """One read into a route's record (hysteresis). r: dict(state, since, bad, good, first_bad, halt_seen, as_of, last_ok_at, last_bad_at).
+    good_n overrides GOOD_N (Joining opens on one HTTP 200). ignore_fail: a timeout is not a route read (Joining)."""
+    if ignore_fail and kind == "fail":
+        # A timeout is not a 503. Touch as_of so the row does not go Stale, and leave state, bad and good alone.
+        if ts >= (r.get("as_of") or 0) - 3600:
+            r["as_of"] = max(r.get("as_of") or 0, ts); r.setdefault("sources", [])
+            if src not in r["sources"]: r["sources"] = sorted(set(r["sources"]) | {src})
+        return r
     if ts < (r.get("as_of") or 0) - 3600: return r   # far older than what we have: ignore
     if kind == "ok" and ts < (r.get("last_bad_at") or 0): return r   # sources arrive out of order: an older good read never breaks a newer bad run
     if kind != "ok" and ts < (r.get("last_ok_at") or 0): return r    # nor an older bad read a newer good run
     r["as_of"] = max(r.get("as_of") or 0, ts); r.setdefault("sources", [])
     if src not in r["sources"]: r["sources"] = sorted(set(r["sources"]) | {src})
     bad = r.get("state") in ("halted", "down")
+    gn = GOOD_N if good_n is None else good_n
     if kind == "ok":
         r["last_ok_at"] = max(r.get("last_ok_at") or 0, ts); r["bad"] = 0; r["first_bad"] = None; r["halt_seen"] = False
         if bad:
             r["good"] = (r.get("good") or 0) + 1
-            if r["good"] >= GOOD_N:
+            if r["good"] >= gn:
                 r.setdefault("ended", []).insert(0, dict(state=r["state"], since=r["since"], until=ts)); r["ended"] = r["ended"][:KEEP_ENDED]
                 r.update(state="open", since=ts, good=0)
         elif r.get("state") != "open": r.update(state="open", since=ts, good=0)
@@ -157,6 +169,38 @@ def step(r, ts, kind, src, halt_n=None):
         if r["state"] == "down" and kind == "halt": r["state"] = "halted"   # the halt text names it: same run, same since
     elif r["bad"] >= BAD_N or (halt_n and r["halt_seen"] and r["bad"] >= halt_n):
         r.update(state="halted" if r["halt_seen"] else "down", since=r["first_bad"])
+    return r
+
+def _joining_follow(r):
+    """Joining follows the latest decisive GET /api/join-pow in fetch_log (1.26.276).
+    One HTTP 503 whose text ends in ' halted', newer than last_ok, halts that route only.
+    One HTTP 200 at or after the current halt's since opens it. A later timeout does not
+    keep the old halt: fetch_log keeps the timeout text, and that is not a 503.
+    A 200 from before the halt began does not clear a 503 that is still the latest error."""
+    row = db.q1("SELECT last_ok, last_err, err FROM fetch_log WHERE endpoint=?", ("/api/join-pow",))
+    if not row: return r
+    lo, le = int(row["last_ok"] or 0), int(row["last_err"] or 0)
+    err = str(row["err"] or "")
+    r["sources"] = sorted(set(r.get("sources") or []) | {"/api/join-pow"})
+    if le and le > lo and err.endswith(" halted"):
+        if r.get("state") != "halted":
+            r.update(state="halted", since=le, bad=max(int(r.get("bad") or 0), 1), good=0, halt_seen=True, first_bad=r.get("first_bad") or le)
+        else:
+            r["halt_seen"] = True; r["good"] = 0
+        r["as_of"] = max(r.get("as_of") or 0, le); r["last_bad_at"] = max(r.get("last_bad_at") or 0, le)
+        return r
+    if not lo: return r
+    prev = r.get("state") or "unknown"
+    if prev == "open":
+        r["as_of"] = max(r.get("as_of") or 0, lo); r["last_ok_at"] = max(r.get("last_ok_at") or 0, lo)
+        return r
+    # Halted: only a 200 at or after this 503 run began clears it (a later timeout does not keep it).
+    # Down is timeouts, not a 503, so any 200 on the books opens it. Unknown: the 200 is the first decisive read.
+    if prev == "halted" and lo < (r.get("since") or 0): return r
+    if prev in ("halted", "down"):
+        r.setdefault("ended", []).insert(0, dict(state=prev, since=r.get("since"), until=lo)); r["ended"] = r["ended"][:KEEP_ENDED]
+    r.update(state="open", since=lo, good=0, bad=0, first_bad=None, halt_seen=False)
+    r["as_of"] = max(r.get("as_of") or 0, lo); r["last_ok_at"] = max(r.get("last_ok_at") or 0, lo)
     return r
 
 def job(now=None):
@@ -176,7 +220,8 @@ def job(now=None):
             obs += _gap_obs(g, now, seen)
         r = recs.get(rid) or dict(state="unknown")
         if src.get("seals"): r["gap"] = g
-        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s, src.get("halt_n"))
+        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s, src.get("halt_n"), src.get("good_n"), src.get("ignore_fail"))
+        if rid == "joining": r = _joining_follow(r)
         if src.get("seals") and r.get("state") == "down" and gap_level(g) == "down" and (r.get("since") or 0) > g["last_seal_at"]:
             r["since"] = g["last_seal_at"]   # a seal gap run: Down since the newest seal, even when a later route read broke the first bad read
         recs[rid] = r
@@ -230,7 +275,7 @@ def state(now=None):
     ts = [r["as_of_ts"] for r in out if r["as_of_ts"]]
     return dict(as_of=_iso(max(ts)) if ts else None, as_of_ts=max(ts) if ts else None, checked_at=_iso(d.get("ts")), routes=out,
                 halted=[r["id"] for r in out if r["state"] in ("halted", "down")],
-                rule=f"Halted or Down after {BAD_N} bad reads in a row (Joining: one halt read), Open after {GOOD_N} good reads in a row; Stale when the newest read is over {STALE_S // 3600} h old",
+                rule=f"Halted or Down after {BAD_N} bad reads in a row, Open after {GOOD_N} good reads in a row. Joining: one HTTP 503 halt read turns Halted, one HTTP 200 opens it, a timeout does not. Stale when the newest read is over {STALE_S // 3600} h old",
                 method="https://poascan.io/about#route-halts")
 
 def halted(now=None):

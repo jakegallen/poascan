@@ -39,4 +39,7 @@ M.join_halt = lambda: None
 M._surfaces = lambda: {"Joining": "paused"}
 check("operator or tracker pause: join_state_api paused, join_open false, join_pow_route not halted",
       M.join_state_api() == "paused" and M.join_open() is False and M.join_pow_route()["halted"] is False)
+M.http_join_open = lambda: True
+check("live HTTP 200: join_state_api open even when the tracker says paused",
+      M.join_state_api() == "open" and M.join_pow_route()["halted"] is False)
 sys.exit(1 if fails else 0)

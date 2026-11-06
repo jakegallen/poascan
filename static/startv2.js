@@ -108,7 +108,7 @@ function next(){if(busy)return;var v=i0.value.trim(),m=nameMsg(v);if(m){er0.text
 $("[data-sv-next]").addEventListener("click",next);i0.addEventListener("keydown",function(e){if(e.key=="Enter"){e.preventDefault();next()}});
 i0.addEventListener("input",function(){er0.hidden=true});
 var h0=location.hash.slice(1);render(BY[h0]||h0=="apps"?h0:"name");
-/* paused: POAScan's own join state every 5 min while visible (never minepoa); once it reads open the notice goes and the card renders again, buttons on */
+/* paused: POAScan's own join state every 5 min while visible (never minepoa). A live HTTP 200 (join.state not halted) clears the notice and turns copy buttons back on. A timeout is not a halt. */
 if(PZ())setInterval(function(){if(D.hidden)return;fetch("/api/v1/prompts/join",{cache:"no-store",credentials:"omit"}).then(function(r){return r.ok?r.json():null}).then(function(d){
  var s=d&&d.join&&d.join.state&&d.join.state.state;if(s&&s!="halted"&&PZ()){delete root.dataset.paused;$$(".sthalt",root).forEach(function(e){e.remove()});render(ST)}}).catch(function(){})},300000);
 /* the verification strip: three honest badges, POAScan's own /api/v1 reads only (never minepoa, never a key). 1 Prompt
