@@ -42,6 +42,18 @@ def ttl(path, qs):
 def key(path, qs, segment, crawler):
     return (path, tuple(sorted((k, tuple(v)) for k, v in (qs or {}).items())), segment, bool(crawler))
 
+# Query keys that legitimately vary a rendered page or an API answer. Anything else (a `?x=<n>` cache-buster) makes the
+# request bypass the cache entirely: it still renders, but is never stored, so it cannot evict a hot page. Sort/dir keys
+# may carry a per-table prefix (esort, qdir, ...), so those suffixes are allowed by shape.
+ALLOWED_Q = frozenset(("tab", "range", "page", "type", "state", "scope", "filter", "after", "cursor", "offset",
+                       "limit", "format", "address", "status", "include_expired", "kind", "name", "q", "sort", "dir"))
+def cacheable(qs):
+    """False when the query carries a key outside the allow-list, so a cache-buster neither evicts nor fills the cache."""
+    for k in (qs or {}):
+        if k in ALLOWED_Q or k.endswith("sort") or k.endswith("dir"): continue
+        return False
+    return True
+
 def get(k, t, now=None):
     now = now or time.time()
     with _lock:

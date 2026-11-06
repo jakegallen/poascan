@@ -1,6 +1,7 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
-import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
+import collections, itertools, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
 from . import db, strain as _ST, segments as _SG, fastindex as _FX
+from .clientip import limiter_key as _limiter_key
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
 UA = "POAScan-indexer/1.0 (+https://poascan.io; read-only)"
@@ -934,13 +935,16 @@ def crawler():
     return bool(getattr(CLIENT, "crawler", False))
 
 class Bucket:
-    """Token bucket; keyed buckets idle for 10 min are dropped (memory stays bounded)."""
+    """Token bucket; over CAP keys the oldest EVICT are dropped (bounded, oldest-first, like agentapi.Limiter; the dict's
+    insertion order is age order)."""
+    CAP = 5000; EVICT = 512
     def __init__(self, rate, burst):
         self.rate, self.burst, self.b, self.lock = rate, burst, {}, threading.Lock()
     def take(self, key=""):
         now = time.monotonic()
         with self.lock:
-            if len(self.b) > 5000: self.b = {k: v for k, v in self.b.items() if now - v[1] < 600}
+            if len(self.b) > self.CAP:
+                for k in list(itertools.islice(self.b, self.EVICT)): self.b.pop(k, None)   # oldest first, bounded slice (no whole-dict rebuild under the lock)
             tok, last = self.b.get(key, (self.burst, now)); tok = min(self.burst, tok + (now - last) * self.rate)
             if tok < 1: self.b[key] = (tok, now); return False, int((1 - tok) / self.rate) + 1
             self.b[key] = (tok - 1, now); return True, 0
@@ -1018,7 +1022,7 @@ def fetch_ondemand(path, endpoint, key):
         if w: deny(endpoint, "visitor_cap:recent"); raise Limited("read recently; the cached copy is current enough", w)
     ip = getattr(CLIENT, "ip", None)
     if ip:
-        ok, wait = CLIENT_BUDGET.take(ip)
+        ok, wait = CLIENT_BUDGET.take(_limiter_key(ip))   # /64-collapsed for IPv6 so one allocation cannot rotate addresses past the cap
         if not ok: deny(endpoint, "visitor_cap:client"); raise Limited("too many lookups of new ids; slow down", wait)
     if endpoint in EP_BUDGET:
         ok, wait = EP_BUDGET[endpoint].take()

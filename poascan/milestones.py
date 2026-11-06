@@ -10,7 +10,7 @@ Two sources, both public or POAScan's own:
   grading reopened, upgrade ended) is kept only once a second look at least CONFIRM_S later still shows it, so one
   odd read never adds a marker; the stored time is still the first sighting."""
 import json, os, time
-from . import db
+from . import db, clock as _CK
 
 BLOB = "upgrade_milestones"
 CONFIRM_S = 600
@@ -97,7 +97,7 @@ def _flags():
 
 def observe(now=None):
     """Add newly seen upgrade events to the stored list. Called by the indexer job; reads only POAScan's own data."""
-    now = int(now or time.time())
+    now = int(now or _CK.now())   # clock seam: real time in prod, a fixed epoch when a test pins poascan.clock.now
     st = db.get_blob(BLOB)[0] or {}; ev = dict(st.get("events") or {}); pend = dict(st.get("pending") or {}); changed = False
     for rid, since in _route_since().items():   # a route answering again: its first open read (never moved later)
         k = "route:" + rid

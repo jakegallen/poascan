@@ -4,6 +4,7 @@ from . import market as _X
 from html import escape as E
 from . import segments as _SG
 from . import db, analytics as A, agents as G
+from . import clock as _CK
 from .ui import *
 from . import prompts as PR
 from .ui import _ic
@@ -199,7 +200,7 @@ RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("30d", "30d", 30 * DAY), 
 def charts_body(rng=""):
     """Network → Charts (was /growth): small multiples over one shared range. Home shows the same series as sparklines."""
     rng = rng if rng in [k for k, _, _ in RANGES] else "7d"
-    span = dict((k, v) for k, _, v in RANGES)[rng]; now = time.time(); t0 = now - span if span else 0
+    span = dict((k, v) for k, _, v in RANGES)[rng]; now = _CK.now(); t0 = now - span if span else 0   # clock seam (milestones chart range): real time in prod, pinned by the milestones test
     g = growth_data(); cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
     xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
     from . import milestones as MS   # each chart carries only the milestones that affect its data (milestones.json), grouped so they stay readable at 390px
