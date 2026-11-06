@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.273] - 2026-11-06
+
+### Fixed
+
+- Glama's hourly MCP check no longer fails just because the site is busy. The check opens `/mcp` and lists tools. Those requests, plus ping and a GET (which only answers 405), were taking a heavy-work slot, so a full pool answered 503 `server busy` and the directory marked the connector Unhealthy. Handshake and tools/list now run without a slot. tools/call still takes one and sheds 503 when the pool is full. tools/mcp_probe_test.py.
+
 ## [1.26.272] - 2026-11-06
 
 ### Fixed
