@@ -13,7 +13,7 @@ def check(name, ok):
 
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "m.db"); os.environ["POA_BASE"] = "http://127.0.0.1:9"   # nothing listens: any upstream call would fail
 import fixture; fixture.seed()
-from poascan import db, milestones as MS, maint as M, clock as CK
+from poascan import db, milestones as MS, maint as M
 iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
 
 # ---------------- verified past events ----------------
@@ -146,14 +146,8 @@ for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 
     check(f"{r_} at 390px (Agents / hr): markers present, plain labels {[x[1] for x in gg]}", gg and all(not re.search(r"\+\d", x[1]) for x in gg) and "Genesis cut" in [x[1] for x in gg])
 
 # ---------------- Supply chart and Milestones table ----------------
-# Pin the chart clock to a fixed epoch two days after the last seeded event (late Oct 2026) and seed the supply snaps
-# relative to it, so the fixed Oct 21-24 markers stay inside the chart's 14d/30d window instead of rotting off it as the
-# real calendar advances (poascan.clock.now is the seam; prod uses real time). Only the chart range is pinned; the live
-# and completion sections above keep real time because maint expires notices against time.time().
-cn = int(max(ev[k]["ts"] for k in want)) + 2 * 86400
-CK.now = lambda: cn
 s = 1.0e9
-for t in range(cn - 14 * 86400, cn, 900):   # 14 days and the 30d range, so the Oct 22 reopening stays in range
+for t in range(now - 31 * 86400, now, 900):   # 1.26.226: 14 days and the 30d range, so the Oct 22 reopening stays in range as the calendar moves; 2026-11-05: widened 14->31 so it covers the full 30d chart range (the marker aged past 14d)
     s += 0 if 1792609251 <= t < 1792708521 else 9000
     db.add_snap("status", {"agents_joined": 3000, "holders": 900, "supply": s, "txs": 5}, t)
 db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply') IS NULL OR json_extract(json,'$.supply') < 1e8)")
@@ -168,7 +162,7 @@ agt = h[h.find(">Agents<"):h.find(">Holders")]
 check("Agents has no swap marker", "1st swap" not in agt)
 check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
 mls = h[h.find(">Milestones<"):]
-check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= cn - 7 * 86400))
+check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
 check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)
 h30 = V3.charts_body("30d"); mls30 = h30[h30.find(">Milestones<"):]   # 30d: the Oct 21 notice left the 7d range on Oct 28
 check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls30)
