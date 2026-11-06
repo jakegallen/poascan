@@ -453,9 +453,10 @@ function goInit(go){var card=go.closest("[data-pcard]");if(!card||go.dataset.goO
  function lab(a){var x=$(".gll",lb),y=$(".gls",lb);if(x)x.textContent=a[0];if(y)y.textContent=a[1]}
  function icon(i){$$("[data-gi]",go).forEach(function(s){s.hidden=s.dataset.gi!==i})}
  function rest(){var r=sel();clearTimeout(T);ARM=false;go.classList.remove("ok");lab(L0);icon(I0);if(ap)ap.hidden=!(r&&r.dataset.kind=="auto")}
- /* 1.26.243: joins paused (the section carries data-paused while POAScan reads minepoa's /api/join-pow as 503): every copy or
-    join button is off (data-pzoff). While paused, POAScan's own /api/v1/prompts/join is read every 5 min while the page is
-    visible (never minepoa); once it reads open, the notice and the paused lines go and the buttons come back on. */
+ /* 1.26.276: data-paused is set only while signups are paused and the live GET /api/join-pow is not HTTP 200.
+    Every copy or join button is then off (data-pzoff). While paused, POAScan's own /api/v1/prompts/join is read every
+    5 min while the page is visible (never minepoa); once join.state is not halted (a live HTTP 200), the notice goes
+    and the buttons come back on. A timeout is not a halt. */
  function PZ(){return card.dataset.paused=="1"}
  function pzOff(){if(!PZ())return;var pc=$("[data-copy-prompt]",card);if(pc&&!pc.hasAttribute("data-pzoff")){pc.setAttribute("data-pzoff","");pc.classList.add("off");pc.setAttribute("aria-disabled","true");pc.setAttribute("tabindex","-1")}}
  function unpause(){delete card.dataset.paused;$$(".sthalt,[data-pauseoff],[data-s1paused]",card).forEach(function(e){e.remove()});pzo=null;

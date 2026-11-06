@@ -139,8 +139,8 @@ SELF_CUSTODY = [
 SELF_NOTE = "Your wallet file is your Agent. Guard its privkey field like any secret."
 
 def join_state():
-    """1.26.232: open or paused, from POAScan's last /api/join-pow read (every 5 min at most; a 503 halt waits out its
-    Retry-After). Never a read per request."""
+    """1.26.276: open when the latest decisive GET /api/join-pow is HTTP 200, halted only while that read is a 503.
+    A timeout is not halted. Never a read per request (the indexer reads it at most every 5 min)."""
     from . import maint as M
     r = M.join_route() or {}
     h = r.get("state") == "halted"
@@ -372,17 +372,19 @@ def hosted(c): return c.get("tier") == "connector" and not (c.get("connector") o
 def s1_code(n): return f"Copy the prompt and paste it into {n}. This is the step that creates your PoA agent."
 def s2_head(n, h=False): return "1. Add the PoA connector" if h else f"2. Let {n} mine (optional)"
 S2_LABEL = ""
-# 1.26.247: joins are paused only when MCP joins actually fail (maint.join_open() false), never the direct HTTP /api/join-pow
-# 503 halt alone: the notice under step 1, step 1's line, and every copy or join button off with this note beside it. app.js
-# turns them back on when POAScan reads joins open.
+# 1.26.247: a 503 on GET /api/join-pow alone does not pause the card (MCP joins stay open).
+# 1.26.276: a live HTTP 200 clears the notice under step 1 and turns every copy or join button back on
+# (the app matrix included). app.js turns them back on when /api/v1/prompts/join reads the HTTP path open.
 PAUSED_S1 = "Signups are paused. Check back later."
 PAUSED_OFF = "Signups are paused. Check back later. Copy and open and Copy prompt are off until joins open again."
 def paused():
-    # 1.26.247 (minepoa v0.71): joins are paused only when the operator/tracker signal says so (join_open() false),
-    # which is the honest proxy for MCP joins actually failing. The direct HTTP /api/join-pow 503 halt is NOT a
-    # blanket pause (MCP joins work), so it no longer turns the /start card off. Fail open (not paused) on any read error.
+    # 1.26.247 (minepoa v0.71): a 503 on GET /api/join-pow alone is not a blanket pause (MCP joins work).
+    # 1.26.276: a live HTTP 200 clears the signup notice and turns copy and join buttons back on, even if an
+    # older halt or a tracker pause is still sitting there. Fail open (not paused) on any read error.
     from . import maint as M
-    try: return not M.join_open()
+    try:
+        if M.http_join_open(): return False
+        return not M.join_open()
     except Exception: return False
 OFF = ' class="off" aria-disabled="true" tabindex="-1" data-pzoff'
 def _off(html, on):
@@ -465,13 +467,10 @@ def go_block(c0):
 PAUSED = "New PoA signups are paused. Check back later. Existing balances and pending grades are safe."
 
 def join_halt_html():
-    """1.26.247 (minepoa v0.71): a terse paused state shown only when joins are actually paused, from the operator and
-    tracker signal (maint.join_open()), never from the direct HTTP /api/join-pow 503 halt alone. MCP joins
-    (poa_join_pow then poa_register on the connector) keep working while that one HTTP route is halted, so the card
-    stays on. Nothing is read per page view."""
-    from . import maint as M
+    """A terse paused state, only when paused() is true. A live HTTP 200 from GET /api/join-pow clears it
+    (1.26.276). A 503 on that one route does not show it while MCP joins are open (1.26.247). Nothing is read per page view."""
     try:
-        if M.join_open(): return ""
+        if not paused(): return ""
     except Exception:
         return ""
     tip = "Joining is paused by the operators or during a network pause. MCP joins resume when the operators reopen them."

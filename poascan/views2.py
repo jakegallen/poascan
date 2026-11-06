@@ -379,7 +379,7 @@ def _route_strip(rid, label, now):
 
 def routes_html(d=None):
     """1.26.188: Health, Routes: each watched route Open, Halted or Down (since when) or No read, from POAScan's existing probes
-    (routewatch.py: two bad reads in a row turn it, two good reads clear it). As of the newest read; a route read over 2 h ago is Stale."""
+    (routewatch.py: two bad reads in a row turn it, two good reads clear it; Joining opens on one HTTP 200 and a timeout does not keep an older halt). As of the newest read; a route read over 2 h ago is Stale."""
     from . import routewatch as RW
     d = d or RW.state(); now = time.time()
     def row(r):

@@ -764,8 +764,9 @@ EPOCHS_GAP_S = 1200
 
 JOIN_POW_S = 300   # 1.26.232: one keyless GET /api/join-pow at most every 5 min; a 503 halt backs off to its Retry-After (an hour now)
 def job_join_pow():
-    """Whether joining is open, for /start and /api/health (routewatch route "joining"). fetch() logs a 503 halt as
-    "HTTP 503 halted" in fetch_log; a good read keeps only kind and bits (never the challenge, which is single use)."""
+    """Whether the HTTP join path is open, for /start and /api/health (routewatch route "joining"). fetch() logs a 503 halt as
+    "HTTP 503 halted" in fetch_log and a timeout as a timeout, not a halt. 1.26.276: one HTTP 200 opens the route; a timeout
+    does not keep an older halt. A good read keeps only kind and bits (never the challenge, which is single use)."""
     try: d = fetch("/api/join-pow", timeout=20)
     except Exception: return
     if isinstance(d, dict):
