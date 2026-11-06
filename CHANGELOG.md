@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.271] - 2026-11-06
+
+### Fixed
+
+- Epoch close no longer takes the site down. On 2026-11-06 a close the size of E49/E50 (about 1,500 paid Agents) filled every heavy-work slot, and static files take that same slot, so uncached pages, CSS, JS and fonts answered 503 `server busy, retry shortly` while `/healthz` stayed 200. A phone with a cached page and no stylesheet paints black (`theme-color` is the ink background). Static files, favicons and marks are now served with no slot. The homepage and `/chain` use reserved slots that close ingest and heavy renders cannot take, and a page already rendered is served without waiting. Close ingest takes at most one heavy slot and writes the epochs list from a spill file, one close at a time, so the parsed history is not held in memory for the write. The homepage is warmed with the other heavy pages. The memory guard exits at 1,500 MB resident: the 860 MB cap was set for the old 1 GB VM, and the steady set was already there after a trim on the 2,048 MB machine. tools/close_pressure_test.py.
+
 ## [1.26.270] - 2026-11-05
 
 ### Added

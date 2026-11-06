@@ -168,6 +168,12 @@ def epochs_same(kind, rows):
     have = [r["sig"] for r in db.q("SELECT sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))]
     return len(have) == len(rows) and all(h == CS.sig_of(e) for h, e in zip(have, rows))   # the stored text is "[" + ", ".join of these
 
+def epochs_same_sigs(kind, sigs):
+    """True when sigs is the sha1 of json.dumps of each stored close, in order (the same text epochs_same compares)."""
+    if not CS.current(kind): return False
+    have = [r["sig"] for r in db.q("SELECT sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))]
+    return have == list(sigs)
+
 def epochs_retag(kind):
     """After db.touch_blob: keep the rows and the slim copy, under the blob's new stored time."""
     CS.retag(kind)

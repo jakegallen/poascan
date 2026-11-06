@@ -1,5 +1,5 @@
 """Polite poller for public minepoa.com endpoints. Read-only GETs only; never uses keys."""
-import collections, json, os, random, re, threading, time, urllib.request, urllib.error, glob, logging, zlib
+import collections, hashlib, json, os, random, re, shutil, tempfile, threading, time, urllib.request, urllib.error, glob, logging, zlib
 from . import db, strain as _ST, segments as _SG, fastindex as _FX
 
 BASE = os.environ.get("POA_BASE", "https://minepoa.com")
@@ -85,7 +85,7 @@ _WHOLE = object()
 STREAM_CHUNK = 256 * 1024
 EPOCHS_MAX_BODY = 512 * 1024 * 1024   # 1.26.229: the close list read as it arrives is never held whole, so MAX_BODY (96 MB) no
                                       # longer bounds memory for it; 63 MB on Oct 29 and ~6 MB more a close would hit 96 MB near E26
-def _read_closes(r, enc):
+def _read_closes(r, enc, sink=None):
     """/api/epochs read as it arrives (1.26.229): inflate, decode and parse one close at a time, sharing unchanged pending
     rows (analytics._Sharer), so the 18 MB gzip body, its 63 MB inflated bytes and their 63 MB text are never all held at
     once. Returns (records, wire bytes, inflated bytes), or (_WHOLE, wire, inflated) when the body is not a UTF-8 JSON
@@ -120,7 +120,7 @@ def _read_closes(r, enc):
         wire = b"".join(wires); return _WHOLE, wire, _decode(wire, enc) if z else wire
     mode[0] = "body"; wires.clear()
     ud = codecs.getincrementaldecoder("utf-8")("surrogatepass"); buf = ud.decode(head); pos = 1
-    dec = json.JSONDecoder(); ws = _A._ws.match; sh = _A._Sharer(); out = []; need = 0; state = "first"
+    dec = json.JSONDecoder(); ws = _A._ws.match; sh = _A._Sharer(); out = [] if sink is None else None; sample = []; need = 0; state = "first"
     while True:
         while True:   # consume what the buffer holds
             pos = ws(buf, pos).end()
@@ -133,14 +133,19 @@ def _read_closes(r, enc):
                     if eof: raise
                     need = 2 * (len(buf) - pos) + STREAM_CHUNK; break
                 if not eof and ws(buf, end).end() >= len(buf): need = 0; break   # its end must be followed by a visible , or ]
-                out.append(sh.add(v)); pos = end; need = 0; state = "sep"
+                v = sh.add(v)
+                if sink is None: out.append(v)
+                else:
+                    if not sample and isinstance(v, dict) and "epoch" in v: sample.append({"epoch": v.get("epoch")})   # strain check only; the record itself is not kept
+                    sink(v)
+                pos = end; need = 0; state = "sep"
             elif ch == "," and state == "sep": pos += 1; state = "elem"
             elif ch == "]" and state in ("sep", "first"):
                 pos = ws(buf, pos + 1).end()
                 while pos >= len(buf) and not eof:
                     b, eof = more(); buf = buf[pos:] + ud.decode(b, final=eof); pos = 0; pos = ws(buf, 0).end()
                 if pos < len(buf): raise json.JSONDecodeError("Extra data", buf, pos)
-                return out, nwire, nraw
+                return (out if sink is None else sample), nwire, nraw
             else: raise json.JSONDecodeError("Expecting ',' delimiter" if state == "sep" else "Expecting value", buf, pos)
         if eof: raise json.JSONDecodeError("Expecting value", buf, pos)
         b, eof = more(); buf = buf[pos:] + ud.decode(b, final=eof); pos = 0
@@ -152,7 +157,7 @@ def _parse(path, raw):
     from . import analytics as _A
     return _A.parse_closes(raw.decode(json.detect_encoding(raw), "surrogatepass"))
 
-def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
+def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None, epoch_sink=None):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
     Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
     returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): redirects are
@@ -181,7 +186,7 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None):
                          "ON CONFLICT(endpoint) DO UPDATE SET last_ok=excluded.last_ok, fails=0, next_at=0, run401=0", (ep, now))
                 return NOT_MODIFIED   # leaving the with block closes the connection before the body is read
             et = r.headers.get("ETag"); lm = r.headers.get("Last-Modified")
-            streamed = _read_closes(r, r.headers.get("Content-Encoding")) if path == "/api/epochs" else None
+            streamed = _read_closes(r, r.headers.get("Content-Encoding"), epoch_sink) if path == "/api/epochs" else None
             if streamed is None: wire = r.read(); raw = _decode(wire, r.headers.get("Content-Encoding"))
             elif streamed[0] is _WHOLE: wire, raw = streamed[1], streamed[2]
         if streamed is not None and streamed[0] is not _WHOLE:
@@ -779,36 +784,81 @@ def job_epochs(force=False):
     # EPOCHS_GAP_S whatever happens after (a read that stores nothing new, a failure, a count that never matches)
     r = db.q1("SELECT MAX(COALESCE(last_ok, 0), COALESCE(last_err, 0)) AS t FROM fetch_log WHERE endpoint='/api/epochs'")
     if not force and seeded and r and r["t"] and time.time() - r["t"] < EPOCHS_GAP_S: return False
-    d = fetch("/api/epochs", timeout=180, cond=True)
-    if isinstance(d, list) and d:
-        wrote = store_epochs(d)
-        d = None   # drop the ~51 MB list before handing freed heap back
+    # 1.26.271: the sink spills each close and drops it. A fetch that ignores epoch_sink (tests) still returns the list.
+    spill = _Spill(); d = None; held = False; wrote = False; did = False
+    try:
+        d = fetch("/api/epochs", timeout=180, cond=True, epoch_sink=spill.add)
+        if spill.n or (isinstance(d, list) and d):
+            from . import guard as _G
+            held = _G.close_acquire()   # heavy slot only; a full heavy pool does not block the store, and never takes a cheap slot
+            wrote = spill.finish() if spill.n else store_epochs(d); did = True
+        else:
+            return False
+    finally:
+        d = None
+        if held:
+            try:
+                from . import guard as _G; _G.slots.release()
+            except ValueError: pass
+        spill.clear()
+    if did:
         try:
             from . import guard as _G; _G.trim()   # 1.26.250: return the epochs parse/store peak to the OS now, not up to 60 s later (the per-close RSS ratchet)
         except Exception: pass
+    return wrote
+
+class _Spill:
+    """One close at a time onto a temp file per segment (1.26.271). The parsed list is not kept: a 1500 Agent close
+    is one record plus the file, not every close parsed at once on top of the text being written."""
+    def __init__(self):
+        self.dir = tempfile.mkdtemp(prefix="poa-epochs-"); self.parts = {}; self.n = 0
+    def add(self, e):
+        if not isinstance(e, dict): return
+        from . import keysafe as _KS
+        seg = _SG.of_record(e); p = self.parts.get(seg)
+        if p is None:
+            path = os.path.join(self.dir, "s%d.json" % seg)
+            f = open(path, "w", encoding="ascii"); f.write("[")
+            p = self.parts[seg] = {"f": f, "path": path, "sigs": [], "n": 0, "closed": False}
+        raw = json.dumps(e)   # same text sig_of and the blob store (default separators, ASCII)
+        sig = hashlib.sha1(raw.encode("utf-8", "surrogatepass")).hexdigest()
+        text = _KS.redact(raw)
+        if p["n"]: p["f"].write(", ")
+        p["f"].write(text); p["sigs"].append(sig); p["n"] += 1; self.n += 1
+    def close_files(self):
+        for p in self.parts.values():
+            if not p["closed"]: p["f"].write("]"); p["f"].close(); p["closed"] = True
+    def finish(self):
+        """Write each segment that changed. An archived segment is never shrunk. Returns whether a blob was rewritten."""
+        from . import analytics as _A, closestore as _CS
+        self.close_files(); wrote = False
+        for seg, p in self.parts.items():
+            kind = _SG.blob_kind(seg)
+            if seg != _SG.CURRENT:
+                m = _CS.meta(kind); old_n = int(m["n"]) if m else len(db.get_blob(kind)[0] or [])
+                if p["n"] <= old_n: continue
+            if _A.epochs_same_sigs(kind, p["sigs"]): db.touch_blob(kind); _A.epochs_retag(kind); continue
+            with _CS._lock:
+                db.put_file(kind, p["path"]); _CS.apply_sigs(kind, p["sigs"])
+            wrote = True
+        if _SG.CURRENT not in self.parts and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
         return wrote
-    return False
+    def clear(self):
+        try: self.close_files()
+        except Exception: pass
+        shutil.rmtree(self.dir, ignore_errors=True); self.parts = {}
 
 def store_epochs(d):
     """Split /api/epochs by segment (close time, segments.of_record) and store each segment's records in its own blob.
-    An archived segment's blob is written only when it gains records, never shrunk or replaced by another segment's."""
-    by = {}
-    for e in d:
-        if isinstance(e, dict): by.setdefault(_SG.of_record(e), []).append(e)
-    wrote = False
-    for n, rows in by.items():
-        kind = _SG.blob_kind(n)
-        if n != _SG.CURRENT:
-            old = db.get_blob(kind)[0] or []
-            if len(rows) <= len(old): continue
-        from . import analytics as _A
-        if _A.epochs_same(kind, rows): db.touch_blob(kind); _A.epochs_retag(kind); continue   # 1.26.229: unchanged, not rewritten
-        from . import closestore as _CS
-        with _CS._lock:   # 1.26.235: the blob (read by older builds) and its per close rows, written together
-            db.put_blob(kind, rows); _CS.write(kind, rows)
-        wrote = True
-    if _SG.CURRENT not in by and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
-    return wrote
+    An archived segment's blob is written only when it gains records, never shrunk or replaced by another segment's.
+    1.26.271: spilled one close at a time (the caller's list is still theirs; job_epochs passes a sink so it never builds one)."""
+    spill = _Spill()
+    try:
+        for e in d:
+            if isinstance(e, dict): spill.add(e)
+        return spill.finish()
+    finally:
+        spill.clear()
 
 def job_agents():
     d = fetch("/api/agents", timeout=120)

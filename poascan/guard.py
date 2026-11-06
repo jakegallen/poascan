@@ -1,7 +1,8 @@
 """Keeps the process answering. Three parts:
 
-1. A cap on request threads: the server holds at most MAX_WORKERS requests in flight; extra connections wait in
-   the listen backlog instead of each getting a thread (and its share of memory).
+1. A cap on request threads. Total threads are MAX_CONNS. Heavy page and API renders share HEAVY_CAP of the
+   MAX_WORKERS serving slots. SERVE_RESERVE slots stay for cheap pages (the homepage and /chain), so close ingest
+   and a crawl cannot take every slot. Static files and the health checks take none.
 2. A watchdog thread that requests /healthz over loopback through the same server. If it fails HANG_FAILS times
    in a row the process exits, so Fly restarts it instead of leaving a running-but-hung machine. A failure while the
    VM is CPU throttled (most of the interval was steal time: a shared vCPU out of burst credit) does not count toward
@@ -17,21 +18,33 @@
 import ctypes, gc, logging, os, threading, time, urllib.request
 
 log = logging.getLogger("guard")
-MAX_WORKERS = int(os.environ.get("POASCAN_MAX_WORKERS", "16"))   # heavy-work slots: concurrent page/API renders
+MAX_WORKERS = int(os.environ.get("POASCAN_MAX_WORKERS", "16"))   # serving slots in all (heavy renders plus the cheap reserve)
+SERVE_RESERVE = int(os.environ.get("POASCAN_SERVE_RESERVE", "4"))   # slots heavy renders and close ingest cannot take
 MAX_CONNS = int(os.environ.get("POASCAN_MAX_CONNS", "200"))   # total in-flight request threads (far above MAX_WORKERS so /healthz always gets a thread)
 CONN_WAIT = float(os.environ.get("POASCAN_CONN_WAIT", "0.5"))   # a new connection waits this long for a thread slot, then is shed (no deep backlog that holds crawler sockets open)
-HEAVY_WAIT = float(os.environ.get("POASCAN_HEAVY_WAIT", "2.0"))   # a gated (non-health) request waits this long for a heavy-work slot, then 503s with Retry-After
+HEAVY_WAIT = float(os.environ.get("POASCAN_HEAVY_WAIT", "2.0"))   # a gated request waits this long for its slot, then 503s with Retry-After
 HANG_FAILS = int(os.environ.get("POASCAN_HANG_FAILS", "4"))
 THROTTLED_FAILS = int(os.environ.get("POASCAN_THROTTLED_FAILS", "40"))   # about 10 minutes of throttled failures
 STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # share of CPU time that was steal over a check interval (1.26.82: 0.5 let 40 to 50% steal intervals count as hangs, so a throttled VM still restarted)
 CHECK_EVERY = 15
 RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "600"))
-RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "860"))   # 1 GB VM (1.26.162), ~950 MB usable; was 430 on 512 MB
+RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "1500"))   # 2048 MB VM (fly.toml memory 2gb). 1.26.162 set 860 for the 1 GB tier (~950 MB usable). On 2026-11-06 the steady set was ~860 MB after gc and malloc_trim, so that cap restarted a healthy process during a close. 1500 still exits well before the kernel OOM.
 TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
 GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
 
-slots = threading.BoundedSemaphore(MAX_WORKERS)   # heavy-work cap; taken inside the handler so health paths never wait on it
+# 1.26.271: leave at least one heavy slot when MAX_WORKERS is 1 (the slot tests). A full reserve on a one slot
+# process would give heavy work nothing to take.
+_reserve = min(max(0, SERVE_RESERVE), max(0, MAX_WORKERS - 1))
+HEAVY_CAP = MAX_WORKERS - _reserve   # page/API renders and close ingest
+RESERVE_CAP = _reserve               # homepage and /chain only
+slots = threading.BoundedSemaphore(HEAVY_CAP)   # heavy-work cap; health and static never take it, close ingest takes only this
+cheap = threading.BoundedSemaphore(RESERVE_CAP) if RESERVE_CAP else None   # None when the process is too small for a reserve (tests)
 conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
+
+def close_acquire():
+    """One heavy slot for close ingest. Never a reserved cheap slot: False when every heavy slot is already held,
+    and the reserve stays free for the homepage and /chain."""
+    return slots.acquire(blocking=False)
 state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0}
 
 try:
