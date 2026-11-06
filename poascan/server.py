@@ -445,6 +445,7 @@ NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP,
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
 OPS_LIMIT = AG.Limiter(0.2, 10)     # GET /ops/visits, /ops/network, /ops/internal, /ops/funnel and /ops/dashboard: per IP, in memory, apart from MCP
 CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in memory only (an agent sends two)
+SEARCH_LIMIT = AG.Limiter(0.5, 10)  # A3: GET /search and /api/v1/search, per IP, in memory. Each runs leading-wildcard LIKE scans; the MCP search tool is already rate-limited, so match it here for the REST/HTML paths.
 # GET /address/* and /tx/* HTML pages, per Fly-Client-IP, in memory only (a token bucket, dropped after 2 idle minutes).
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
@@ -1109,7 +1110,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
-                if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")
+                if (f != os.path.normpath(STATIC) and not f.startswith(os.path.normpath(STATIC) + os.sep)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")
                 ct = {".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2"}.get(os.path.splitext(f)[1]) or mimetypes.guess_type(f)[0] or "application/octet-stream"
                 return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path in ROOT_FILES:
@@ -1164,7 +1165,9 @@ class H(BaseHTTPRequestHandler):
             loc = moved(path, urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True) if path in MOVED_Q else qs)
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/search":
-                q = (qs.get("q", [""])[0] or "").strip()
+                ok, wait = SEARCH_LIMIT.allow(self.limiter_key())   # A3: same per-IP cap as the MCP search tool
+                if not ok: return self.send(429, "rate limited", "text/plain", {"Retry-After": str(wait), "Cache-Control": "no-store"})
+                q = (qs.get("q", [""])[0] or "").strip()[:120]   # A3: cap q (the /api path already caps at 120)
                 # counted: the outcome only (address, tx, epoch, list or none). The query is never counted, stored or logged.
                 cnt = lambda r: q and VS.COUNTER.event("search", r)
                 if re.match(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$", q): loc = "/address/" + q; cnt("address")
@@ -1270,8 +1273,12 @@ class H(BaseHTTPRequestHandler):
                     if etag in inm or etag.replace('W/', '') in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
+                if p == "/api/search":   # A3: same per-IP cap as the MCP search tool (leading-wildcard LIKE scans)
+                    ok, wait = SEARCH_LIMIT.allow(self.limiter_key())
+                    if not ok: return self.send(429, json.dumps({"error": "rate limited"}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Retry-After": str(wait), "Cache-Control": "no-store"})
+                mc = HC.cacheable(qs)   # a `?x=<n>` cache-buster bypasses the micro cache so it cannot evict hot entries
                 ck = (p, urllib.parse.urlsplit(self.path).query, fmt)
-                hit = _micro_get(ck)
+                hit = _micro_get(ck) if mc else None
                 if hit: return self.send(200, hit[0], "application/json", hit[1], pre=hit)
                 try: data, is_list = api(p, qs)
                 except NotFound as e: return self.send(404, json.dumps(dict({"error": str(e)}, **getattr(e, "extra", {}))), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=60"})
@@ -1300,9 +1307,13 @@ class H(BaseHTTPRequestHandler):
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
                 hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})
                 b = self.prep(json.dumps(data, default=str), "application/json")
-                if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
+                if not tag and p not in MICRO_SKIP and mc: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
-            html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs) + HC.grace(path, qs), lambda: page(path, qs))   # 1.26.202: rendered page cache
+            # 1.26.202: rendered page cache. A cache-buster (`?x=<n>`) renders but is not stored, so it cannot evict hot pages.
+            if HC.cacheable(qs):
+                html = HC.render(HC.key(path, qs, SG.selected(), I.crawler()), HC.ttl(path, qs) + HC.grace(path, qs), lambda: page(path, qs))
+            else:
+                html = page(path, qs)
             if isinstance(html, str) and SG.archived(): html = seg_links(html)
             elif isinstance(html, tuple) and len(html) == 2 and isinstance(html[1], str) and SG.archived(): html = (html[0], seg_links(html[1]))
             if html is None: return self.send(404, V.not_found(path=path))
