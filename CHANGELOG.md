@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.272] - 2026-11-06
+
+### Fixed
+
+- Homepage and /chain stay up when the reserved slots are busy. After 1.26.271 a query such as `?nocache=` was its own cache key, so each one took a reserved slot and rendered the same page again, and the 24 MB page cache could evict the warmed `/` and `/chain` copies. A cache buster now reuses the canonical page. Those warmed copies are not evicted to make room for other pages. A copy under 15 minutes old is served with no slot, and one background refresh runs when a slot is free. API sheds under a flood are unchanged. tools/cheap_page_test.py.
+
 ## [1.26.271] - 2026-11-06
 
 ### Fixed
