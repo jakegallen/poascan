@@ -34,8 +34,10 @@ def price():
     """/api/v1/price: the POA/USD reference from fills only."""
     return _call("/price") or dict(usd_per_poa=None, usd_per_1m_poa=None, shown=False, thin=None, sig_figs=None)
 def status():
-    """/api/v1/swaps/status: availability, open offers and market (market cap, FDV, trades, volume, last trade, best ask)."""
-    return _call("/swaps/status") or {}
+    """/api/v1/swaps/status: availability, open offers and market (market cap, FDV, trades, volume, last trade, best ask).
+    The live local book, so open_offers is the real count. An unread database returns {}."""
+    try: return _call("/swaps/status") or {}
+    except Exception: return {}
 def offers(status=None):
     """/api/v1/swaps: every offer, newest activity first; status filters one state (open, filled, cancelled, expired, delisted)."""
     rows = _call("/swaps") or []

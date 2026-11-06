@@ -140,6 +140,9 @@ def render(facts, extra, built_at, now):
     else:
         body["state"] = "unknown"
     body["message"] = message if message is not None else body.get("message")
+    # Keys the book and the upstream read own. Absent until that build runs, never omitted.
+    if "open_offers" not in body: body["open_offers"] = None
+    if "last_good_read" not in body: body["last_good_read"] = None
     body["swaps_writable"] = True if write_ok else (False if writes["state"] == "DOWN" and not stale else None)
     _legacy(body)
     return body
@@ -263,24 +266,14 @@ def _extra():
         return {}
 
 
-def _store(facts, extra, now):
+def build(now=None):
+    """Refresh the pin. Called off the request path. Returns the public body."""
+    now = time.time() if now is None else now
+    facts, extra = _facts(now), _extra()
     body = render(facts, extra, now, now)
     with _lock:
         _pin.update(facts=facts, extra=extra, built_at=now)
     return body
-
-
-def adopt(extra, now=None):
-    """Store a status body that was already built, so the next read is the pin."""
-    now = time.time() if now is None else now
-    if not isinstance(extra, dict): extra = {}
-    return _store(_facts(now), extra, now)
-
-
-def build(now=None):
-    """Refresh the pin. Called off the request path. Returns the public body."""
-    now = time.time() if now is None else now
-    return _store(_facts(now), _extra(), now)
 
 
 def _refresh():
