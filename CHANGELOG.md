@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.276] - 2026-11-06
+
+### Fixed
+
+- Joining follows a live HTTP 200 from GET https://minepoa.com/api/join-pow. One 200 opens the Joining route in route_halts, /api/health, meta.maintenance.join_pow_route and MCP get_route_status. It no longer stays Halted on the Oct 30 latch, which needed two good reads in a row and lost them whenever a timeout landed in between. A timeout is not a halt and does not keep that older halt. A 503 still halts that HTTP route only. MCP joins (poa_join_pow, then poa_register) stay a separate path, so a 503 or a timeout on the HTTP challenge is not every join path being closed. join_state reads open on that HTTP 200. The /start signup notice and the copy buttons (every app on the start card) clear once the live read is a 200. FAQ, llms.txt and get_onboarding_steps say the same. The pasted prompt stays v2.9.5. No new chart milestone. tools/joinhalt_test.py.
+
 ## [1.26.275] - 2026-11-06
 
 ### Fixed

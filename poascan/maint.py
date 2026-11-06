@@ -56,24 +56,34 @@ def join_state():
     """open or paused. Paused comes from the tracker, the manual switch, or join_quiet()."""
     return "paused" if not join_open() or join_quiet() else "open"
 
+def http_join_open():
+    """True when the latest decisive GET /api/join-pow is HTTP 200 (routewatch route joining is open).
+    1.26.276: one 200 opens it. A timeout does not keep an older halt. Unknown before the first 200."""
+    r = join_route()
+    return bool(r and r.get("state") == "open")
+
 def join_state_api():
     """The join_state API field (maintenance block of /api/v1/status, /summary, /swaps/status).
     1.26.247 (minepoa v0.71-mcpjoin): MCP joins are real (poa_join_pow, mine, poa_register on the connector at
-    https://minepoa.com/mcp). The direct HTTP GET /api/join-pow route answering 503 halted (join_halt()) is now
-    only that one route, not a blanket pause, so it no longer drives join_state to halted. join_state follows the
-    operator and tracker signal only (open or paused via join_open()/join_quiet()); the direct-route halt is a
-    separate, non-blocking signal reported in join_pow_route(). Copy keeps join_state()."""
+    https://minepoa.com/mcp). The direct HTTP GET /api/join-pow route answering 503 halted (join_halt()) is
+    only that one route, not a blanket pause, so it does not drive join_state to halted.
+    1.26.276: a live HTTP 200 (http_join_open()) reads open here too, so a tracker pause does not keep join_state
+    stuck after the HTTP path has answered 200. Otherwise join_state follows the operator and tracker signal
+    (open or paused via join_open()/join_quiet()). The HTTP route on its own is join_pow_route()."""
+    if http_join_open(): return "open"
     return join_state()
 
 def join_pow_route():
-    """1.26.247: the direct HTTP GET /api/join-pow route status on its own (minepoa halted it for API hardening).
-    halted is true while that one route answers 503; MCP joins (poa_join_pow, poa_register) are unaffected, so this
-    never reads as a blanket join pause. since_ts and as_of_ts come from join_halt() (routewatch, read every 5 min
-    at most, hourly while halted)."""
+    """The direct HTTP GET /api/join-pow route on its own.
+    1.26.276: halted is true only while the latest decisive read is an HTTP 503 halt. One HTTP 200 clears it,
+    including a halt latched on Oct 30. A timeout is not a 503 and does not keep that halt.
+    MCP joins (poa_join_pow, then poa_register) are a separate path, so a 503 here is never every join path.
+    since and as_of come from join_halt() (routewatch, the existing read, at most every 5 min)."""
     h = join_halt()
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if isinstance(t, (int, float)) else None
-    return dict(halted=bool(h), since=iso(h["since_ts"]) if h else None, as_of=iso(h["as_of_ts"]) if h else None,
-                note="direct HTTP GET /api/join-pow only; MCP joins (poa_join_pow then poa_register) are open on https://minepoa.com/mcp")
+    note = ("direct HTTP GET /api/join-pow is open (HTTP 200). MCP joins (poa_join_pow then poa_register) stay available on https://minepoa.com/mcp" if not h else
+            "direct HTTP GET /api/join-pow only. A 503 on this route is not every join path. MCP joins (poa_join_pow then poa_register) stay available on https://minepoa.com/mcp")
+    return dict(halted=bool(h), since=iso(h["since_ts"]) if h else None, as_of=iso(h["as_of_ts"]) if h else None, note=note)
 
 def join_route():
     """routewatch's "joining" route record (state, since_ts, as_of_ts), or None before the first read."""
