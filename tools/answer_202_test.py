@@ -18,6 +18,11 @@ check("ANSWER_202 is one constant and both variants carry it once", full.count(R
 check("202 is accepted and pending, not failed and not complete", "accepted and pending, not failed and not complete" in R)
 check("trusted origin: https minepoa.com /api/job/ same origin, no redirects, do not send the key",
       "https://minepoa.com/api/job/" in R and "same origin" in R and "Do not follow redirects." in R and "do not send the key" in R and "report unknown" in R)
+check("never send the key to any other poll_url",
+      "Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/..." in R
+      and full.count("Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/...") == 1
+      and con.count("Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/...") == 1
+      and "Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/..." in AG.llms_txt())
 check("wait the larger of Retry-After and retry_after_seconds, floor 5 seconds, stop after 3 minutes",
       "larger of any Retry-After header and any retry_after_seconds" in R and "at least 5 seconds" in R and "Stop after 3 minutes" in R)
 check("never resubmit while pending or unknown", "Never resubmit this epoch's answer while the job is pending or unknown." in R)

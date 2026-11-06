@@ -133,7 +133,7 @@ def main():
         check(f"swaps status -> {c}", c == 200 and {"available", "state", "last_good_read", "open_offers", "meta"} <= set(sw))
         check("swaps status: a cold or unknown write is not available and not coming soon",
               sw.get("state") in ("available", "upgrading", "unknown") and "coming soon" not in (sw.get("message") or "").lower()
-              and sw.get("stale_after_s") == 2160 and sw.get("available") is not True or sw.get("write_ok") is True
+              and sw.get("stale_after_s") == 1920 and sw.get("available") is not True or sw.get("write_ok") is True
               and (sw.get("available") is True or (sw.get("writes") or {}).get("swap_offer", {}).get("state") != "open"))
         c, b = req(base + "/api/v1/summary"); sm = json.loads(b).get("swaps") or {}
         check("summary swaps block", sm.get("state") in ("available", "upgrading", "unknown") and (sm.get("available") is not True or sm.get("write_ok") is True))

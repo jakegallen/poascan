@@ -95,7 +95,15 @@ def consistent(tag, r, t):
     from poascan.swap import hoststatus as SS
     SS.build()
     got = AG.TOOL_FN["get_swap_status"]({})
-    ok = ok and HO.writes(t)[1] is w and (got.get("swap_route") or {}).get("display") == d
+    # swaps/status ages the swap-offer probe at 1920s, tighter than hosted.WRITE_STALE_S (2160).
+    checked = r.get("checked_at")
+    probe_old = False
+    if checked:
+        import calendar
+        ts = calendar.timegm(time.strptime(checked, "%Y-%m-%dT%H:%M:%SZ"))
+        probe_old = time.time() - ts > SS.STALE_AFTER_S
+    want = "unknown" if probe_old else d
+    ok = ok and HO.writes(t)[1] is w and (got.get("swap_route") or {}).get("display") == want
     return ok
 bad = []
 db.put_blob(HO.WRITE_BLOB, {}); hb = db.get_blob(HO.BLOB)[0] or {}; hb.setdefault("routes", {}).pop("swap_offer", None); db.put_blob(HO.BLOB, hb)

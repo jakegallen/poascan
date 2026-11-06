@@ -4,18 +4,27 @@ The request path never reads SQLite and never calls minepoa.com. It returns the 
 copy, or an UNKNOWN body when none exists yet, and asks one background thread to refresh.
 A refresh that hangs does not block the response.
 
-stale_after_s is 2160 seconds (36 minutes). That is the longest gap the swap-offer write
-probe allows before a read is too old (hosted.WRITE_STALE_S: 30 min after repeated identical
-reads, plus jitter and grace). A probe or a copy older than that is UNKNOWN, not DOWN.
-DOWN is only an upstream answer that was a halt or a failure, and only while that answer
-is still fresh.
+Freshness follows the probe that produced each row, not the pin's build time.
+The pin is rebuilt every 20s. A pin older than PIN_STALE_S (300s) is a dead refresher:
+the whole copy is UNKNOWN, so it cannot keep serving open.
+stale_after_s is 1920s, the swap-offer write probe's steady gap. That probe runs every
+600s, plus or minus 60s, and every 1800s plus or minus 60s after three identical reads.
+The indexer notices the stored next_at on its 60s tick. 1800 + 60 + 60 = 1920. A 300s
+cutoff would mark that healthy probe UNKNOWN for most of each cycle. Join-pow and
+notices refresh every 300s, so those rows go UNKNOWN after JOIN_STALE_S (420s).
+A row older than its limit is UNKNOWN, not DOWN. DOWN is only a fresh halt or failure.
 
 Join clearance (route, notices, maintenance) is a separate block from swap write clearance.
 Neither fails open. Mining does not use this endpoint. Swap writes gate on write_ok.
 """
 import threading, time
 
-STALE_AFTER_S = 2160
+# Swap-offer steady state: WRITE_SLOW 1800 + WRITE_JITTER 60 + the 60s indexer tick.
+STALE_AFTER_S = 1920
+# join-pow and /api/notices are scheduled every 300s. 420s covers one late loop.
+JOIN_STALE_S = 420
+# The pin thread rebuilds every _REFRESH_S. Past this, the copy is not being refreshed.
+PIN_STALE_S = 300
 WRITE_ROUTES = ("swap_offer",)
 _REFRESH_S = 20
 
@@ -33,12 +42,15 @@ def _age(ts, now):
     return max(0, int(now - ts))
 
 
-def _row(kind, ts, now):
-    """One OK / DOWN / UNKNOWN row. Missing or too old is UNKNOWN, never DOWN."""
+def _row(kind, ts, now, limit):
+    """One OK / DOWN / UNKNOWN row. Missing or older than this probe's limit is UNKNOWN, never DOWN.
+    Returns (row, too_old). too_old is not part of the public row."""
     age = _age(ts, now)
-    if ts is None or age is None or age > STALE_AFTER_S or kind not in ("OK", "DOWN"):
-        return dict(state="UNKNOWN", as_of=_iso(ts), age_s=age)
-    return dict(state=kind, as_of=_iso(ts), age_s=age)
+    # No timestamp yet is UNKNOWN, not a stale copy of a real read.
+    too_old = age is not None and age > limit
+    if ts is None or age is None or too_old or kind not in ("OK", "DOWN"):
+        return dict(state="UNKNOWN", as_of=_iso(ts), age_s=age), too_old
+    return dict(state=kind, as_of=_iso(ts), age_s=age), False
 
 
 def _agg(rows):
@@ -81,33 +93,39 @@ def render(facts, extra, built_at, now):
     """Public body from stored facts. Pure: no database and no network."""
     now = now if now is not None else time.time()
     age = _age(built_at, now)
-    stale = built_at is None or age is None or age > STALE_AFTER_S
+    # A dead pin is stale on its own. Probe rows are judged by their own timestamps.
+    pin_stale = built_at is None or age is None or age > PIN_STALE_S
     if not facts:
         join, writes = _blank_join(), _blank_writes()
         write_ok = False
+        probe_stale = True
     else:
-        jr = _row(facts["join_route"]["kind"], facts["join_route"]["ts"], now)
+        jr, jr_old = _row(facts["join_route"]["kind"], facts["join_route"]["ts"], now, JOIN_STALE_S)
         jr["name"] = "joining"
-        nt = _row(facts["notices"]["kind"], facts["notices"]["ts"], now)
-        mt = _row(facts["maintenance"]["kind"], facts["maintenance"]["ts"], now)
+        nt, nt_old = _row(facts["notices"]["kind"], facts["notices"]["ts"], now, JOIN_STALE_S)
+        mt, mt_old = _row(facts["maintenance"]["kind"], facts["maintenance"]["ts"], now, PIN_STALE_S)
         jst, jas, jag = _agg([jr, nt, mt])
         join = dict(state=jst, as_of=jas, age_s=jag, route=jr, notices=nt, maintenance=mt)
         routes = {}
+        sw_old = False
         for name in WRITE_ROUTES:
             src = (facts.get("writes") or {}).get(name) or {"kind": "UNKNOWN", "ts": None}
-            routes[name] = _row(src["kind"], src["ts"], now)
+            routes[name], old = _row(src["kind"], src["ts"], now, STALE_AFTER_S)
+            sw_old = sw_old or old
             if src.get("probe"): routes[name]["probe"] = src["probe"]
         wst, was, wag = _agg(list(routes.values()))
         writes = dict(state=wst, as_of=was, age_s=wag, routes=routes)
-        write_ok = wst == "OK" and not stale
-    if stale:
+        probe_stale = jr_old or nt_old or mt_old or sw_old
+        write_ok = wst == "OK" and not pin_stale and not sw_old
+    if pin_stale:
         join, writes = _force_unknown(join), _force_unknown(writes)
         write_ok = False
+    stale = pin_stale or probe_stale
     flag = (facts or {}).get("flag_status")
-    available = bool(write_ok) and flag != "paused"
+    available = bool(write_ok) and flag != "paused" and not stale
     if writes["state"] == "DOWN":
         message = "Order placement is failing on the network."
-    elif not available:
+    elif not write_ok:
         message = "Swap write status is unknown. No write."
     else:
         message = None
@@ -121,7 +139,7 @@ def render(facts, extra, built_at, now):
         body["state"] = "upgrading"
     else:
         body["state"] = "unknown"
-    body["message"] = message if not available else body.get("message")
+    body["message"] = message if message is not None else body.get("message")
     body["swaps_writable"] = True if write_ok else (False if writes["state"] == "DOWN" and not stale else None)
     _legacy(body)
     return body
@@ -133,7 +151,7 @@ def _legacy(body):
     swap_route.state and writes.swap_offer.state are open only when that write route is OK and fresh."""
     offer = body["swap_writes"]["routes"]["swap_offer"]
     sw = offer["state"]
-    if body["stale"] or sw == "UNKNOWN":
+    if sw == "UNKNOWN":
         leg, writable = "unknown", None
     elif sw == "DOWN":
         leg, writable = ("paused" if offer.get("probe") == "paused" else "down"), False

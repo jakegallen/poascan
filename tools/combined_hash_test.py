@@ -11,7 +11,7 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-TS = "dcc06d894f6141f83561d4bd6f11cae6ca0f762e0d9072205d5dc922c703a253"
+TS = "ec1d76083f4a5f5abe87b1272ccab4c46e2104a013338e5c4809fe62ea028ad9"
 tmp = tempfile.mkdtemp()
 def wr(name, data):
     p = os.path.join(tmp, name); open(p, "wb").write(data); return p
@@ -20,15 +20,15 @@ def wr(name, data):
 # 1.26.84: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical (1.26.76 text plus the line 14 offers cancel line).
 # v2.9 (release/prompt-v29): its join core is the v2.9 full template with the name slot filled as NAME (/api/v1/prompts/join?name=NAME),
 # sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. v2.9.2 (1.26.232): same head, join core sha256 4f0b2f69, 6,370 characters (a 503 halt stops the join). v2.9.3 (1.26.243): same head, join core sha256 a2c61f75, 6,171 characters (key in the X-Api-Key header only, never shown in the chat). v2.9.4 (1.26.244): same head, join core sha256 4f0b2f69, 6,370 characters (a 401 or 403 key error on challenge, answer or mine stops mining). v2.9.5 (1.26.259): same head, join core sha256 e4066541, 6,385 characters (stop only when kind is present and is not pow). POASwap must ship the same bytes.
-SHIPPED, SHIPPED_LEN = "6f7c28d23b2b42aef9fe3ff346dc5739f29389153ce8a053d6f083af924393e9", 11980
-CORE = "975a919996c5ebfc87aa4bcb7a79eaa65974a657e482979a3b77229ef4aeaffe"
+SHIPPED, SHIPPED_LEN = "012b88bd1465dde703e960a31475fca465c5dd0ae79c861439aefaac4e944012", 12059
+CORE = "c31fda3d551b6c0fc6c6babcbbc6de411697fbe96159db1c4c1e43721a220cbd"
 if os.path.exists(CB.SLOT):   # once POASwap's text lands, the shipped file must follow the rule
     t, h, err = CB.load(CB.SLOT); raw = open(CB.SLOT, "rb").read()
     check("shipped combined_prompt.txt follows the rule (UTF-8, LF only, no BOM, at most one trailing LF, not empty)", err is None and h is not None)
-    check("shipped slot is the v2.9.6 combined text byte for byte: 11,980 characters, no trailing newline, sha256 6f7c28d2", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
+    check("shipped slot is the v2.9.6 combined text byte for byte: 12,059 characters, no trailing newline, sha256 012b88bd", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
     core = S.prompt("NAME", "full")
-    check("shipped text ends with the v2.9.6 join core (full template, name slot NAME, 7,865 characters, sha256 975a9199), once; pow on the connected join",
-          t.endswith(core) and t.count(core) == 1 and len(core) == 7865 and hashlib.sha256(core.encode()).hexdigest() == CORE
+    check("shipped text ends with the v2.9.6 join core (full template, name slot NAME, 7,944 characters, sha256 c31fda3d), once; pow on the connected join",
+          t.endswith(core) and t.count(core) == 1 and len(core) == 7944 and hashlib.sha256(core.encode()).hexdigest() == CORE
           and 'POST /api/join-connected, its JSON body with a "pow" you mined as in the join part' in t and "register?label=" not in t)
     check("shipped text: no em or en dash", not any(c in t for c in "\u2014\u2013"))
 else:
@@ -41,7 +41,7 @@ check("one trailing LF is dropped; the hash is of the text without it", CB.load(
 for nm, data, why in (("crlf", TXT.replace("\n", "\r\n").encode(), "CR newline"), ("bom", ("\ufeff" + TXT).encode(), "BOM"), ("empty", b"\n", "empty"),
                       ("blank", b"  \n\n", "empty"), ("two", (TXT + "\n\n").encode(), "more than one trailing newline"), ("latin1", "caf\xe9".encode("latin-1"), "not UTF-8")):
     check(f"bad file ({nm}) publishes nothing: {why}", CB.load(wr(nm + ".txt", data)) == (None, None, why))
-check("join prompt template_sha256 is v2.9.6 (dcc06d89)", S.template_sha256() == TS)
+check("join prompt template_sha256 is v2.9.6 (ec1d7608)", S.template_sha256() == TS)
 check("Dockerfile ships the slot with poascan/ (COPY poascan/ poascan/)", "COPY poascan/ poascan/" in open(os.path.join(ROOT, "Dockerfile")).read())
 check("CI runs this test", "python tools/combined_hash_test.py" in open(os.path.join(ROOT, ".github", "workflows", "deploy.yml")).read())
 check("no em or en dash in the module or this test", not any(c in open(os.path.join(ROOT, f), encoding="utf-8").read() for f in ("poascan/combined.py", "tools/combined_hash_test.py") for c in "\u2014\u2013"))
@@ -80,7 +80,7 @@ def common(tag, d):
     check(f"{tag}: OpenAPI documents combined_sha256 on JoinPrompt and /api/v1/prompts/combined", "combined_sha256" in oa["components"]["schemas"]["JoinPrompt"]["properties"]
           and "/api/v1/prompts/combined" in oa["paths"] and "CombinedPrompt" in oa["components"]["schemas"])
     check(f"{tag}: /api/v1/prompts/combined 200, /api alias identical, any parameter 400", d["comb"][0] == 200 and d["alias"] == d["comb"] and d["bad"] == 400)
-    check(f"{tag}: join prompt is v2.9.6 on the API (dcc06d89)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
+    check(f"{tag}: join prompt is v2.9.6 on the API (ec1d7608)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
 
 p, base = serve({"POASCAN_COMBINED_PROMPT": os.path.join(tmp, "none.txt")})   # absent, even once the shipped slot exists
 try:
@@ -119,7 +119,7 @@ if os.path.exists(CB.SLOT):
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
-              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("3d3dab8a"))
+              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("a730f1f5"))
     finally:
         p.terminate(); p.wait(10)
 sys.exit(1 if fails else 0)

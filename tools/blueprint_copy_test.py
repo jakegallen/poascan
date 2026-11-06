@@ -56,6 +56,6 @@ check("SAFE (1.26.244): X-Api-Key header only, never a key or token in a URL, 40
 check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
       and "X-Api-Key" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.9.6, dcc06d89", S.template_sha256() == "dcc06d894f6141f83561d4bd6f11cae6ca0f762e0d9072205d5dc922c703a253")
+check("join prompt v2.9.6, ec1d7608", S.template_sha256() == "ec1d76083f4a5f5abe87b1272ccab4c46e2104a013338e5c4809fe62ea028ad9")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)

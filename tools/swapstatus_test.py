@@ -35,7 +35,7 @@ check("cold: available false, write_ok false, stale, state unknown",
 check("cold: join and swap_writes are UNKNOWN, not DOWN",
       cold["join"]["state"] == "UNKNOWN" and cold["swap_writes"]["state"] == "UNKNOWN"
       and cold["swap_writes"]["routes"]["swap_offer"]["state"] == "UNKNOWN" and "DOWN" not in json.dumps(cold["swap_writes"]))
-check("stale_after_s is 2160 in the body", cold["stale_after_s"] == 2160 == SS.STALE_AFTER_S)
+check("stale_after_s is the swap probe gap, 1920", cold["stale_after_s"] == 1920 == SS.STALE_AFTER_S)
 check("cold legacy fields are present and not open",
       cold["writes"]["swap_offer"]["state"] == "unknown" and cold["swap_route"]["state"] == "unknown"
       and cold["join_state"] == "unknown" and cold["maintenance_active"] is True and cold["swaps_writable"] is None)
@@ -79,11 +79,11 @@ check("timeout after open: UNKNOWN, available false, not DOWN",
 check("timeout does not leave a stale open on the legacy fields",
       timed["writes"]["swap_offer"]["state"] == "unknown" and timed["swap_route"]["state"] == "unknown" and timed["swaps_writable"] is None)
 
-# stale copy: a stored DOWN must be served as UNKNOWN
+# stale copy: a stored DOWN must be served as UNKNOWN once the pin itself is too old to trust
 facts = {"join_route": {"kind": "DOWN", "ts": now}, "notices": {"kind": "OK", "ts": now},
          "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "DOWN", "ts": now}},
          "flag_status": "live", "flag_basis": "poaswap"}
-old = now - SS.STALE_AFTER_S - 50
+old = now - SS.PIN_STALE_S - 50
 stale = SS.render(facts, {"status": "live"}, old, now)
 check("stale copy: UNKNOWN not DOWN, available false, write_ok false",
       stale["stale"] is True and stale["available"] is False and stale["write_ok"] is False
@@ -91,6 +91,31 @@ check("stale copy: UNKNOWN not DOWN, available false, write_ok false",
       and stale["join"]["state"] == "UNKNOWN" and "DOWN" not in json.dumps(stale["swap_writes"]) + json.dumps(stale["join"])
       and stale["writes"]["swap_offer"]["state"] == "unknown" and stale["swap_route"]["state"] == "unknown"
       and stale["join_state"] == "unknown" and stale["maintenance_active"] is True and stale["swaps_writable"] is None)
+# A healthy steady-state swap probe (about 17 min) stays OK. One past 1920s does not.
+fresh_pin = {"join_route": {"kind": "OK", "ts": now}, "notices": {"kind": "OK", "ts": now},
+             "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "OK", "ts": now - 1000, "probe": "open"}},
+             "flag_status": "live"}
+held_ok = SS.render(fresh_pin, {"status": "live"}, now, now)
+check("swap probe inside 1920s stays OK on a fresh pin",
+      held_ok["stale"] is False and held_ok["write_ok"] is True and held_ok["swap_writes"]["routes"]["swap_offer"]["state"] == "OK"
+      and held_ok["writes"]["swap_offer"]["state"] == "open")
+aged = dict(fresh_pin, writes={"swap_offer": {"kind": "DOWN", "ts": now - SS.STALE_AFTER_S - 1, "probe": "down"}})
+aged_body = SS.render(aged, {"status": "live", "available": True}, now, now)
+check("swap probe older than 1920s is UNKNOWN, not DOWN, even on a fresh pin",
+      aged_body["stale"] is True and aged_body["write_ok"] is False and aged_body["available"] is False
+      and aged_body["swap_writes"]["routes"]["swap_offer"]["state"] == "UNKNOWN"
+      and aged_body["writes"]["swap_offer"]["state"] == "unknown")
+dead = SS.render(fresh_pin, {"status": "live"}, now - SS.PIN_STALE_S - 1, now)
+check("a pin older than 300s is UNKNOWN even when the probes were just read",
+      dead["stale"] is True and dead["write_ok"] is False and dead["available"] is False
+      and dead["swap_writes"]["state"] == "UNKNOWN" and dead["join"]["state"] == "UNKNOWN")
+join_old = {"join_route": {"kind": "OK", "ts": now - SS.JOIN_STALE_S - 1}, "notices": {"kind": "OK", "ts": now},
+            "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "OK", "ts": now, "probe": "open"}},
+            "flag_status": "live"}
+join_body = SS.render(join_old, {"status": "live"}, now, now)
+check("a join probe older than 420s is UNKNOWN and does not clear a fresh write",
+      join_body["join"]["state"] == "UNKNOWN" and join_body["join"]["route"]["state"] == "UNKNOWN"
+      and join_body["write_ok"] is True and join_body["stale"] is True and join_body["available"] is False)
 
 # fresh DOWN stays DOWN and overrides available even if the flag says live
 fresh = SS.render(facts, {"status": "live", "available": True}, now, now)
@@ -115,7 +140,7 @@ raw = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/swaps/status", tim
 dt = time.time() - t0
 got = json.loads(raw)
 m = got.get("meta", {}).get("maintenance") or {}
-check(f"full heavy pool ({held} slots): 200 in under 1s ({dt:.2f}s)", dt < 1 and got["stale_after_s"] == 2160 and "write_ok" in got and "swap_offer" in got["swap_writes"]["routes"])
+check(f"full heavy pool ({held} slots): 200 in under 1s ({dt:.2f}s)", dt < 1 and got["stale_after_s"] == 1920 and "write_ok" in got and "swap_offer" in got["swap_writes"]["routes"])
 check("http keeps meta.maintenance.active, join_state, swap_route and writes.swap_offer, and unknown is not open",
       "active" in m and m.get("join_state") == got.get("join_state") and (m.get("swap_route") or {}).get("state") == got["writes"]["swap_offer"]["state"]
       and got["writes"]["swap_offer"]["state"] in ("open", "paused", "down", "unknown")
