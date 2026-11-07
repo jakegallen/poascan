@@ -94,7 +94,6 @@ def consistent(tag, r, t):
     with SA._rc_lock: SA._rc.clear()   # the swaps/status copy is cached CACHE_TTL s
     from poascan.swap import hoststatus as SS
     got = AG.TOOL_FN["get_swap_status"]({})
-    # MCP get_swap_status reads the live book (hosted.WRITE_STALE_S). The HTTP pin is tighter and is covered in swapstatus_test.
     ok = ok and HO.writes(t)[1] is w and (got.get("swap_route") or {}).get("display") == d
     return ok
 bad = []
@@ -123,8 +122,9 @@ for name, (get, want) in READS.items():
 check(f"every state x read x age x basis: display == label.lower() == state word, writable and feed from state ({len(bad)} bad: {bad[:2]})", not bad)
 check("no display value outside open, paused, down, unknown", set(HO.SWAP_DISPLAY.values()) == {"open", "paused", "down", "unknown"} and set(HO.SWAP_DISPLAY) == set(HO.SWAP_LABEL))
 check("label is display capitalised for every state", all(HO.SWAP_LABEL[k] == HO.SWAP_DISPLAY[k].capitalize() for k in HO.SWAP_DISPLAY))
-check(f"stale after the longest cadence gap plus grace ({HO.WRITE_STALE_S}s = WRITE_SLOW {HO.WRITE_SLOW} + jitter {HO.WRITE_JITTER} + grace {HO.WRITE_GRACE})",
-      HO.WRITE_STALE_S == HO.WRITE_SLOW + HO.WRITE_JITTER + HO.WRITE_GRACE and HO.WRITE_SLOW + HO.WRITE_JITTER + 60 < HO.WRITE_STALE_S < 2 * HO.WRITE_SLOW)
+from poascan.swap import hoststatus as HS
+check(f"one freshness constant ({HO.WRITE_STALE_S}s = WRITE_SLOW {HO.WRITE_SLOW} + jitter {HO.WRITE_JITTER} + tick {HO.WRITE_GRACE}), shared with swaps/status",
+      HO.WRITE_STALE_S == HO.WRITE_SLOW + HO.WRITE_JITTER + HO.WRITE_GRACE == HS.STALE_AFTER_S == 1920 and HO.WRITE_STALE_S < 2 * HO.WRITE_SLOW)
 # the live case of Oct 27: Down since 14:22Z, read at 15:43:58Z, served at 16:15Z (31 min): inside the slow cadence, not stale
 probe(boom, t=int(time.time()) - 1870); r = HO.swap_route()
 check(f"timeout 31 min old (inside the cadence): stale false, display unknown, not down ({r['display']})", r["stale"] is False and r["display"] == "unknown" and r["state"] == "unknown")

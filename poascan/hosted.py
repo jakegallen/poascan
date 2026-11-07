@@ -125,11 +125,12 @@ def checked_at():
 # Anything else (404, 429, edge pages): unknown, which keeps the last state.
 WRITE_BLOB, WRITE_PATH = "swap_writes", "/api/hosted/swap-offer"
 WRITE_EVERY, WRITE_JITTER, WRITE_SLOW, WRITE_SAME = 600, 60, 1800, 3
-# 1.26.191: a clear read is stale once it is older than the longest gap the cadence allows (WRITE_SLOW + WRITE_JITTER,
-# so 31 min after 3 identical reads; 9 to 11 min otherwise) plus WRITE_GRACE (the 1 min indexer tick, the probe timeout
-# and a restart). Was 2 * WRITE_SLOW (60 min), which kept a missed check looking current for half an hour.
-WRITE_GRACE = 300
-WRITE_STALE_S = WRITE_SLOW + WRITE_JITTER + WRITE_GRACE   # 2160 s (36 min)
+# One freshness limit for this probe. The steady gap is WRITE_SLOW after three identical reads,
+# plus WRITE_JITTER, plus the 60s indexer tick. swap_route, writes, and /api/v1/swaps/status
+# (hoststatus.STALE_AFTER_S) all use WRITE_STALE_S, so label, feed, writable and stale agree.
+# Was WRITE_SLOW + jitter + 300 (2160). A 2130s failure still read fresh, so display stayed Down.
+WRITE_GRACE = 60
+WRITE_STALE_S = WRITE_SLOW + WRITE_JITTER + WRITE_GRACE   # 1920 s
 
 def write_classify(code, body=b""):
     """open, paused, down, unknown, or None (keep the last state) for one swap-offer probe answer.
