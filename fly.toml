@@ -37,7 +37,7 @@ kill_timeout = 10
     path = "/healthz"
     timeout = "5s"
 
-[[vm]]   # shared-cpu-4x 2 GB: the 1 GB tier OOMd under crawler-flood + slow RSS creep in the 2026-11-02 incident; the live machine was hot-scaled to 2 GB then, but fly.toml still said 1gb so every redeploy reset it (the 2026-11-04 relaunch did). Pin 2 GB here so deploys keep it.
-  cpu_kind = "shared"
+[[vm]]   # performance-4x 8 GB (2026-11-07): the shared-cpu-4x/2GB tier was CPU-throttled under the live join surge + crawler load, so heavy page renders held every slot and the scheduled feed refreshes (analytics.py) could not get a slot -> homepage tiles went STALE and heavy pages (network/governance/chain) shed 503. Dedicated performance CPUs remove the throttling; 8 GB is the performance-4x floor and gives warm-cache headroom. Pinned here so deploys keep it (the 2026-11-02 lesson: an API-only hot-scale gets reset on redeploy).
+  cpu_kind = "performance"
   cpus = 4
-  memory = "2gb"
+  memory = "8gb"
