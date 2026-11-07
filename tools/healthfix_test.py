@@ -135,6 +135,8 @@ check("hourly_retry is scheduled every 5 min", ("hourly_retry", I.job_hourly_ret
 from poascan import server as SV
 ah = SV.api("/api/health", {})[0]
 check("/api/health carries tx_reads (sheds, holds, budget)", set(ah["tx_reads"]) >= {"sheds", "path_hold", "tx_requests_last_min", "tx_per_min"} and ah["tx_reads"]["tx_per_min"] <= 30)
+# the deployed git SHA (from the GIT_SHA build-arg) rides on /api/health; null in a local or dev build, which is fine
+check("/api/health carries the commit field (git SHA; null without GIT_SHA)", "commit" in ah and (ah["commit"] is None or isinstance(ah["commit"], str)))
 check("tx_reads holds no tx id", UNKNOWN not in json.dumps(ah["tx_reads"]) and KNOWN not in json.dumps(ah["tx_reads"]))
 src = open(os.path.join(ROOT, "poascan", "indexer.py")).read()
 check("no em or en dash added in the new code", all(c not in src[src.index("health-fix 1026: shed"):src.index("_hold = [0.0]")] for c in "\u2013\u2014"))

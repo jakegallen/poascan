@@ -7,6 +7,10 @@ RUN pip install --no-cache-dir pillow==13.0.0
 ARG GEOIP_MONTH=unset
 COPY tools/geoip_fetch.py /tmp/geoip_fetch.py
 RUN mkdir -p data && echo "geoip month $GEOIP_MONTH" && python3 /tmp/geoip_fetch.py data/country.mmdb && rm /tmp/geoip_fetch.py
+# Deployed commit SHA, stamped by the deploy workflow (--build-arg GIT_SHA=...). Read by the server for /api/health.
+# Unset in local builds, which is fine: the health handler reports commit null then.
+ARG GIT_SHA=
+ENV GIT_SHA=$GIT_SHA
 COPY poascan/ poascan/
 COPY static/ static/
 COPY data/census.csv data/tools.json data/declared_families.json data/clients.json data/prompt_history.json data/

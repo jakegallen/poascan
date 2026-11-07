@@ -386,7 +386,7 @@ jobs:
       - name: Deploy to Fly.io
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then echo "::error::FLY_API_TOKEN secret is missing or empty"; exit 1; fi
-          flyctl deploy --remote-only --depot=false --config fly.toml -a poascan --build-arg GEOIP_MONTH="$(date -u +%Y-%m)"
+          flyctl deploy --remote-only --depot=false --config fly.toml -a poascan --build-arg GEOIP_MONTH="$(date -u +%Y-%m)" --build-arg GIT_SHA="$GITHUB_SHA"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Check the new build is serving
