@@ -150,27 +150,40 @@ for r_, sp_ in (("24h", 86400), ("7d", 7 * 86400), ("30d", 30 * 86400), ("all", 
     check(f"{r_} at 390px (Agents / hr): markers present, plain labels, no Genesis cut words {[x[1] for x in gg]}", gg and all(not re.search(r"\+\d", x[1]) for x in gg) and "Genesis cut" not in [x[1] for x in gg])
 
 # ---------------- Supply chart and Milestones table ----------------
-s = 1.0e9
-for t in range(now - 31 * 86400, now, 900):   # 1.26.226: 14 days and the 30d range, so the Oct 22 reopening stays in range as the calendar moves; 2026-11-05: widened 14->31 so it covers the full 30d chart range (the marker aged past 14d)
-    s += 0 if 1792609251 <= t < 1792708521 else 9000
-    db.add_snap("status", {"agents_joined": 3000, "holders": 900, "supply": s, "txs": 5}, t)
-db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply') IS NULL OR json_extract(json,'$.supply') < 1e8)")
-from poascan import views3 as V3
-h = V3.charts_body("30d")
-sup = h[h.find(">Supply<"):h.find(">Txs")]
-check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
-check("Supply has no table-only markers (route reads, checkpoint)", ">Checkpoint 33,463<" not in sup and "responding<" not in sup)
-hol = h[h.find(">Holders"):h.find(">Supply<")]
-check("Holders has no epoch close or swap markers", not re.search(r">(S\d+ )?E\d+<", hol) and "1st swap" not in hol)
-agt = h[h.find(">Agents<"):h.find(">Holders")]
-check("Agents has no swap marker", "1st swap" not in agt)
-check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
-mls = h[h.find(">Milestones<"):]
-check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
-check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)
-h30 = V3.charts_body("30d"); mls30 = h30[h30.find(">Milestones<"):]   # 30d: the Oct 21 notice left the 7d range on Oct 28
-check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls30)
-check("no em dash, no share button in the charts section", "\u2014" not in h and "share" not in h.lower())
+# Clock-deterministic (no date-rot): the markers are fixed Oct 2026 events, but the 30d chart window and the
+# synthetic supply seed were both relative to the wall clock, so the fixed "Mining reopened" marker aged out of
+# the rolling 30d range around 2026-11-20 and these assertions broke. Anchor "now" to a fixed reference derived
+# from the seeded events (not the wall clock) and freeze time.time so charts_body (which reads it internally) uses
+# the same reference. Test-only; no runtime change. Restored before the governance section below.
+REF = max(t for _, t, *_ in MS.SEED) + 12 * 86400   # ~12 days after the last seeded event: Oct markers stay well inside 30d
+_real_time = time.time
+time.time = lambda: float(REF)
+try:
+    now = int(REF)
+    s = 1.0e9
+    for t in range(now - 31 * 86400, now, 900):   # the full 30d chart range plus a day, relative to the fixed reference
+        s += 0 if 1792609251 <= t < 1792708521 else 9000
+        db.add_snap("status", {"agents_joined": 3000, "holders": 900, "supply": s, "txs": 5}, t)
+    db.write("DELETE FROM snaps WHERE kind='status' AND (json_extract(json,'$.supply') IS NULL OR json_extract(json,'$.supply') < 1e8)")
+    from poascan import views3 as V3
+    h = V3.charts_body("30d")
+    sup = h[h.find(">Supply<"):h.find(">Txs")]
+    check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
+    check("Supply has no table-only markers (route reads, checkpoint)", ">Checkpoint 33,463<" not in sup and "responding<" not in sup)
+    hol = h[h.find(">Holders"):h.find(">Supply<")]
+    check("Holders has no epoch close or swap markers", not re.search(r">(S\d+ )?E\d+<", hol) and "1st swap" not in hol)
+    agt = h[h.find(">Agents<"):h.find(">Holders")]
+    check("Agents has no swap marker", "1st swap" not in agt)
+    check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
+    mls = h[h.find(">Milestones<"):]
+    check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
+    check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)
+    h30 = V3.charts_body("30d"); mls30 = h30[h30.find(">Milestones<"):]   # 30d: the fixed Oct 21 notice sits inside 30d of the reference
+    check("hardening notice links its on-ledger tx", 'href="/tx/23bc1a34c81f4591046a62c29ae8f20a3f64b834df89ff8cf83861eef9c5eddb">Hardening notice<' in mls30)
+    check("no em dash, no share button in the charts section", "\u2014" not in h and "share" not in h.lower())
+finally:
+    time.time = _real_time
+    now = int(time.time())
 from poascan import governance as GV
 gh_ = GV.charts({})
 # the fixture's closes span the last 72 h, so from Oct 26 16:57 UTC on Grading reopened (Oct 23) sits before the first close and

@@ -147,6 +147,20 @@ both = SS.render(facts_j, {"status": "live"}, now, now)
 check("join DOWN and write OK stay separate: write_ok true, join DOWN",
       both["write_ok"] is True and both["available"] is True and both["join"]["state"] == "DOWN")
 
+# message split: a CONFIRMED flag pause says paused; an UNKNOWN or stale read says the read is stale, never paused.
+# Gating (write_ok, available) is unchanged; only the human-facing message differs.
+paused_facts = {"join_route": {"kind": "OK", "ts": now}, "notices": {"kind": "OK", "ts": now},
+                "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "OK", "ts": now, "probe": "open"}},
+                "flag_status": "paused", "flag_basis": "poaswap"}
+paused_body = SS.render(paused_facts, {"status": "paused"}, now, now)
+check("confirmed flag pause: message says paused, gating unchanged (write_ok true, available false)",
+      paused_body["message"] == "Swaps are paused. Check back soon." and paused_body["write_ok"] is True and paused_body["available"] is False)
+check("UNKNOWN or stale read: message says the read is stale, never paused (cold and stale bodies)",
+      cold["message"] == "Swap status unavailable (stale read)." and stale["message"] == "Swap status unavailable (stale read)."
+      and "paused" not in cold["message"].lower() and "paused" not in stale["message"].lower())
+check("fresh halt keeps the DOWN message, not the stale-read one",
+      fresh["message"] == "Order placement is failing on the network.")
+
 # full heavy pool: the HTTP route still answers quickly
 SS.build()
 srv = SV.Server(("127.0.0.1", 0), SV.H)

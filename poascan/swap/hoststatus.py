@@ -132,7 +132,12 @@ def render(facts, extra, built_at, now):
     if writes["state"] == "DOWN":
         message = "Order placement is failing on the network."
     elif not write_ok:
-        message = "Swap write status is unknown. No write."
+        # No usable write read (UNKNOWN or a stale copy), not a confirmed halt: say the read is stale,
+        # never "paused". A real pause is the flag branch below. Message only; gating is unchanged.
+        message = "Swap status unavailable (stale read)."
+    elif flag == "paused" and not stale:
+        # A CONFIRMED pause from POASwap's flag, with a fresh OK write read: this is paused, not unknown.
+        message = "Swaps are paused. Check back soon."
     else:
         message = None
     body = dict(extra or {})
@@ -200,7 +205,7 @@ def _legacy(body):
 
 
 def _unknown(now):
-    return render(None, {"status": "unknown", "message": "Swap write status is unknown. No write."}, None, now)
+    return render(None, {"status": "unknown", "message": "Swap status unavailable (stale read)."}, None, now)
 
 
 def _kind_join(state):
