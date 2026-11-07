@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.278] - 2026-11-06
+
+### Fixed
+
+- Join prompt v2.9.6. A 202 on the answer is accepted and pending, not failed and not complete. The agent follows poll_url only when it is https://minepoa.com/api/job/ on that same origin, and does not follow redirects. It polls with the same X-Api-Key, waits the larger of Retry-After and retry_after_seconds, at least 5 seconds, and stops after 3 minutes. A timeout, 404 or 410 is unknown and is not permission to resend. A 409 duplicate_in_flight means the answer is already queued: keep polling, do not resend. Mine only after the answer is confirmed. The rule is the ANSWER_202 constant. The challenge read stays GET /api/hosted/challenge. Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/... template_sha256 ec1d7608. Combined prompt sha256 012b88bd (12,059 characters). tools/answer_202_test.py.
+- An unclear register POST is not retried. A free name does not prove the first POST failed, because the commit may land late. If a key from that attempt was saved, reuse it and check /api/hosted/me. Otherwise stop, report unknown, and ask the person to check again later with the same name. Do not change the name and do not retry automatically. A clear 4xx with an explicit reason before anything was committed, such as a short proof, is still handled as that response says. tools/register_unclear_test.py.
+- The PoA key backup is not a wallet download, wallet activation, or wallet restore. Wallet setup stays optional and separate. Apps that run code keep the key in an owner-only file and do not print it. Chat apps still pass the key through the chat with the existing warning.
+- /api/v1/swaps/status no longer builds on the request. It serves a pinned local copy with no heavy slot and no upstream wait, so a busy database cannot hold the caller for the 30 second SQLite timeout. Fields added beside the ones POASwap already reads: state, as_of, age_s, stale, stale_after_s (1920, the swap-offer probe's steady gap; a pin older than 300s is stale; join and notices go unknown after 420s), write_ok, join, and swap_writes. meta.maintenance.active, join_state, meta.maintenance.swap_route and writes.swap_offer stay, and a stale or unknown copy is never open. Each new state is OK, DOWN, or UNKNOWN. DOWN is an upstream halt or failure. UNKNOWN is no answer or data older than stale_after_s. available is true only when write_ok is true. Mining does not use this endpoint. A timeout on the swap-offer write probe is unknown, not down. tools/swapstatus_test.py.
+
 ## [1.26.277] - 2026-11-06
 
 ### Fixed

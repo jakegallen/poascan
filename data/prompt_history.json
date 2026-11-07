@@ -50,6 +50,10 @@
     {"version": "v2.9.5", "released": "2026-11-04T15:26:00Z", "release": "1.26.259", "commit": "0d591cf",
      "changed": "The proof of work line stops only when kind is present and is not pow, so a challenge without a kind field is still mined.",
      "why": "\"If kind is not pow\" read as a stop when the field was missing.",
-     "template_sha256": "2321f70e4b4463ad4cf3e4a57b5a710e489054cd7f877ae5b5bf8a9160febae0", "hash": "published"}
+     "template_sha256": "2321f70e4b4463ad4cf3e4a57b5a710e489054cd7f877ae5b5bf8a9160febae0", "hash": "published"},
+    {"version": "v2.9.6", "released": "2026-11-06T23:40:00Z", "release": "1.26.278", "commit": "a01acda",
+     "changed": "A 202 on the answer is accepted and pending. Poll only an https://minepoa.com/api/job/ URL, with no redirects, and never send the key to any other poll_url. A 409 duplicate_in_flight stays queued. A timeout, 404 or 410 is unknown and is not permission to resend. An unclear register is never posted again, even if the name looks free.",
+     "why": "The answer route can return 202 with a job to poll. A register timeout can still commit later, so a second POST is not safe.",
+     "template_sha256": "ec1d76083f4a5f5abe87b1272ccab4c46e2104a013338e5c4809fe62ea028ad9", "hash": "published"}
   ]
 }

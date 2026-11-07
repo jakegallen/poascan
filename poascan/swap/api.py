@@ -147,7 +147,9 @@ def _fresh_age(d):
 ETAG_ROUTES = ("/api/swaps", "/api/swaps/price-history")   # list routes: unchanged data answers If-None-Match with 304
 
 def api(path, qs):
-    """(rows_or_obj, is_list) for a swap API path, or raises KeyError."""
+    """(rows_or_obj, is_list) for a swap API path, or raises KeyError.
+    In-process /api/swaps/status is the local book and the POASwap flag, so open_offers is the live count.
+    The HTTP request path does not use this: server.py serves the pinned clearance copy."""
     data, is_list, _ = _cached(path)
     if path == "/api/swaps/status": data = _fresh_age(data)
     return data, is_list

@@ -111,7 +111,7 @@ finally:
     M.join_open = _jo
 I.fetch = real
 p = OP.POW
-check("prompt v2.9.5", OP.VERSION == "v2.9.5")
+check("prompt v2.9.6", OP.VERSION == "v2.9.6")
 check("POW: a 503 stops with the exact line, no mining or retry", 'On a 503, stop without mining or retrying and tell me: Joins are paused. Check back later.' in p)
 check("POW still reads kind and bits from each challenge", "If kind is present and is not pow" in p and "bits" in p)
 full = S.prompt("NAME", "full")

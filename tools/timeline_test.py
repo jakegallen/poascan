@@ -16,8 +16,10 @@ db.put_blob("epochs", [{"epoch": 0, "ts": NOW - 5 * D, "rewards": {a: "0"}, "bas
                        {"epoch": 2, "ts": NOW - 3 * D, "rewards": {a: "40"}, "basis": {}},
                        {"epoch": 3, "ts": NOW - 2 * D, "rewards": {a: "5"}, "basis": {"established_removed": [a]}}])
 db.put_blob("status", {"epochs_closed": 4, "checkpoint_height": 10, "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW))})
+# The first two answers are more than one UTC day apart. A gap of exactly one day minus a minute
+# lands them on the same day when the clock is in the last minute of the UTC day.
 rows = [("a" * 64, "join", a, None, None, None, NOW - 6 * D, 1, seg), ("b" * 64, "challenge", a, None, None, 0, NOW - 6 * D + 60, 1, seg),
-        ("c" * 64, "challenge", a, None, None, 1, NOW - 5 * D, 1, seg), ("d" * 64, "grade-sealed", a, None, None, None, NOW - 5 * D + 9, 1, seg),
+        ("c" * 64, "challenge", a, None, None, 1, NOW - 5 * D + 120, 1, seg), ("d" * 64, "grade-sealed", a, None, None, None, NOW - 5 * D + 9, 1, seg),
         ("e" * 64, "transfer", ad(2), a, "3", None, NOW - 4 * D + 5, 1, seg), ("f" * 64, "challenge", a, None, None, 3, NOW - 3600, 1, seg)]
 db.write("INSERT INTO txs(id, type, from_addr, to_addr, amount, epoch, ts, final, segment) VALUES(?,?,?,?,?,?,?,?,?)", rows, many=True)
 db.write("INSERT INTO txs(id, type, from_addr, to_addr, amount, epoch, ts, final, segment, invited_by) VALUES(?,?,?,?,?,?,?,?,?,?)", ("9" * 64, "join", ad(3), None, None, None, NOW - 4 * D + 50, 1, seg, a))

@@ -50,18 +50,19 @@ t = nx; HO.write_job(now=t, get=g(401, b'{"error":"missing key"}')); w, ok = HO.
 check("open on 401: writable, back to 10 min", w["swap_offer"]["state"] == "open" and ok is True and 540 <= nx - t <= 660 and HO.current(t + 1)["swap_offer"]["state"] == "open")
 def boom(): raise TimeoutError("timed out")
 t = nx; HO.write_job(now=t, get=boom); w, ok = HO.writes(t + 1)
-check("timeout: down, http null", w["swap_offer"]["state"] == "down" and w["swap_offer"]["http"] is None and ok is False)
-check("hosted_routes swap_offer reads unknown (its enum) while writes say down, checked kept current", HO.current(t + 1)["swap_offer"]["state"] == "unknown" and HO.current(t + 1)["swap_offer"]["checked"] == t)
+check("timeout: unknown, not down, http null", w["swap_offer"]["state"] == "unknown" and w["swap_offer"]["http"] is None and ok is None)
+check("hosted_routes swap_offer is not updated by a timeout", "swap_offer" not in HO.current(t + 1) or HO.current(t + 1).get("swap_offer", {}).get("checked") != t)
 
 from poascan.swap import market as M
 import time as _t
-HO.write_job(now=int(_t.time()), get=boom, force=True)
+HO.write_job(now=T + 100000, get=boom, force=True)
 d = M._writes(dict(message="Swaps are live."))
-check("swaps/status: writes and swaps_writable, message says order placement is failing", d["writes"]["swap_offer"]["state"] == "down" and d["swaps_writable"] is False
-      and d["message"] == "Order placement is failing on the network.")
+check("swaps/status: a timeout is unknown, not a failing write",
+      d["writes"]["swap_offer"]["state"] == "unknown" and d["swaps_writable"] is None
+      and d.get("message") != "Order placement is failing on the network.")
 A._cache.clear(); fd = A.feeds(); row = [f for f in fd["feeds"] if f["label"] == "Swap writes"]
-check("health: Swap writes feed is Down", bool(row) and row[0]["state"] == "Down")
-HO.write_job(now=int(_t.time()), get=g(422, b'{"error":"bad request"}'), force=True); A._cache.clear()
+check("health: a timeout does not mark Swap writes Down", not row or row[0]["state"] != "Down")
+HO.write_job(now=T + 200000, get=g(422, b'{"error":"bad request"}'), force=True); A._cache.clear()
 d = M._writes(dict(message="Swaps are live."))
 check("open: message untouched, writable true, feed OK", d["message"] == "Swaps are live." and d["swaps_writable"] is True and [f for f in A.feeds()["feeds"] if f["label"] == "Swap writes"][0]["state"] == "OK")
 

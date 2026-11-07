@@ -61,9 +61,13 @@ check("second run halted: hosted mining halted since the first run", rec("hosted
 # ---- swap write check: Down after two failing reads
 def boom(): raise TimeoutError("timed out")
 HO.write_job(now=NOW - 900, get=boom, force=True); RW.job(NOW + 310)
-check("one swap write timeout: not down yet", rec("swap_writes")["state"] != "down")
+check("one swap write timeout: not down", rec("swap_writes")["state"] != "down")
 HO.write_job(now=NOW - 280, get=boom, force=True); RW.job(NOW + 320)
-check("two in a row: swap writes down since the first", rec("swap_writes")["state"] == "down" and rec("swap_writes")["since_ts"] == NOW - 900)
+check("two timeouts: still not down (a timeout is unknown, not a failure answer)", rec("swap_writes")["state"] != "down")
+def five02(): return 502, b"bad gateway"
+HO.write_job(now=NOW - 200, get=five02, force=True); RW.job(NOW + 330)
+HO.write_job(now=NOW - 100, get=five02, force=True); RW.job(NOW + 340)
+check("two failure answers: swap writes down", rec("swap_writes")["state"] == "down")
 
 # ---- the maintenance route check (grading)
 hb = db.get_blob(HO.BLOB)[0] or {}; rr = dict(hb.get("routes") or {})
