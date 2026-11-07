@@ -93,17 +93,9 @@ def consistent(tag, r, t):
     import importlib; SA = importlib.import_module("poascan.swap.api")
     with SA._rc_lock: SA._rc.clear()   # the swaps/status copy is cached CACHE_TTL s
     from poascan.swap import hoststatus as SS
-    SS.build()
     got = AG.TOOL_FN["get_swap_status"]({})
-    # swaps/status ages the swap-offer probe at 1920s, tighter than hosted.WRITE_STALE_S (2160).
-    checked = r.get("checked_at")
-    probe_old = False
-    if checked:
-        import calendar
-        ts = calendar.timegm(time.strptime(checked, "%Y-%m-%dT%H:%M:%SZ"))
-        probe_old = time.time() - ts > SS.STALE_AFTER_S
-    want = "unknown" if probe_old else d
-    ok = ok and HO.writes(t)[1] is w and (got.get("swap_route") or {}).get("display") == want
+    # MCP get_swap_status reads the live book (hosted.WRITE_STALE_S). The HTTP pin is tighter and is covered in swapstatus_test.
+    ok = ok and HO.writes(t)[1] is w and (got.get("swap_route") or {}).get("display") == d
     return ok
 bad = []
 db.put_blob(HO.WRITE_BLOB, {}); hb = db.get_blob(HO.BLOB)[0] or {}; hb.setdefault("routes", {}).pop("swap_offer", None); db.put_blob(HO.BLOB, hb)
