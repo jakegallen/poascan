@@ -50,7 +50,17 @@ def close_acquire():
     """One heavy slot for close ingest. Never a reserved cheap slot: False when every heavy slot is already held,
     and the reserve stays free for the homepage and /chain."""
     return slots.acquire(blocking=False)
-state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0}
+state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0}
+
+def telemetry():
+    """Cheap read of the memory guard and self-check counters for diagnostics (poascan's own, not an upstream probe).
+    trims/gcs: malloc_trim and full gc.collect() run counts. rss_mb: last resident size. rss_over: times RSS was seen
+    above RSS_EXIT_MB (a second in a row triggers a clean exit, which the restart counter then records on the next boot).
+    self_check_fails/throttled_fails: consecutive /healthz self-check misses (throttled ones do not force a restart)."""
+    s = state
+    return dict(trims=s["trims"], gcs=s["gcs"], rss_mb=s["rss_mb"], rss_exit_mb=RSS_EXIT_MB, rss_trim_mb=RSS_TRIM_MB,
+                rss_over=s.get("rss_over", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
+                steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP)
 
 try:
     _libc = ctypes.CDLL("libc.so.6"); _libc.malloc_trim.argtypes = [ctypes.c_size_t]
@@ -130,7 +140,7 @@ def _watch(port):
             trim(full); last_trim = now; m = rss_mb(); state["rss_mb"] = m
             if full: last_gc = now
         if m and m > RSS_EXIT_MB:
-            over += 1; log.warning("guard: resident memory %d MB over %d MB (%d)", m, RSS_EXIT_MB, over)
+            over += 1; state["rss_over"] = state.get("rss_over", 0) + 1; log.warning("guard: resident memory %d MB over %d MB (%d)", m, RSS_EXIT_MB, over)
             if over >= 2: _exit(f"resident memory {m} MB stayed over {RSS_EXIT_MB} MB")
         else: over = 0
         time.sleep(max(1, CHECK_EVERY - (time.time() - t0)))

@@ -29,6 +29,21 @@ ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": (
 log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
+# Process start/restart count, persisted in a DB blob on the Fly volume so it survives restarts (the guard exits the
+# process on a hang or an OOM, Fly restarts it, and the next boot bumps this). boot_at is this process's start time;
+# count/first_at are null until _record_start() runs at boot (tests that call api() directly never bump it).
+STARTS = {"count": None, "boot_at": STARTED, "first_at": None}
+
+def _record_start():
+    """Bump the persisted start counter once, at boot. Never raises."""
+    try:
+        prev = db.get_blob("proc_starts")[0] or {}
+        n = int(prev.get("count") or 0) + 1
+        first = prev.get("first_at") or STARTED
+        db.put_blob("proc_starts", {"count": n, "first_at": first, "last_at": STARTED})
+        STARTS.update(count=n, first_at=first)
+    except Exception as e:
+        log.warning("start counter: %s", type(e).__name__)
 
 NUM_RX = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
 def cell(v):
@@ -257,8 +272,13 @@ def api(path, qs):
         if d not in ("desc", "asc"): raise BadRequest("dir must be desc or asc")
         return V4.rows(t, so, d), True
     if path == "/api/status":
-        d = V2.status_data(); return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"],
-                                          segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), **V.joins_fields()), False
+        d = V2.status_data()
+        # diagnostics: POAScan's OWN serve/reliability signals, named apart from the upstream probe latency. The p50/p95
+        # in endpoints[] above are minepoa fetch latency; page_cache.self_render_ms is POAScan's own warm-render latency.
+        diag = dict(restarts=STARTS, mem_guard=GD.telemetry(), page_cache=HC.state(),
+                    note="endpoints[].p50/p95 are the upstream minepoa probe; page_cache.self_render_ms and page_cache.warm_paths are POAScan's own render latency and warm-set health")
+        return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"],
+                    segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), diagnostics=diag, **V.joins_fields()), False
     m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]
@@ -1535,6 +1555,7 @@ def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
+    _record_start()   # bump the persisted process start/restart counter (surfaced on /api/status diagnostics)
     VS.COUNTER.start()
     try: CK.start()   # when signup check-ins began (since_ts on /ops/funnel)
     except Exception as e: log.warning("check-in start: %s", type(e).__name__)
