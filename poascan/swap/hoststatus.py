@@ -7,10 +7,12 @@ A refresh that hangs does not block the response.
 Freshness follows the probe that produced each row, not the pin's build time.
 The pin is rebuilt every 20s. A pin older than PIN_STALE_S (300s) is a dead refresher:
 the whole copy is UNKNOWN, so it cannot keep serving open.
-stale_after_s is 1920s, the swap-offer write probe's steady gap. That probe runs every
-600s, plus or minus 60s, and every 1800s plus or minus 60s after three identical reads.
-The indexer notices the stored next_at on its 60s tick. 1800 + 60 + 60 = 1920. A 300s
-cutoff would mark that healthy probe UNKNOWN for most of each cycle. Join-pow and
+stale_after_s is hosted.WRITE_STALE_S (1920s): the swap-offer probe's steady gap.
+That probe runs every 600s, plus or minus 60s, and every 1800s plus or minus 60s after
+three identical reads. The indexer notices the stored next_at on its 60s tick.
+1800 + 60 + 60 = 1920. The same constant ages swap_route, so a read cannot be Down on
+one surface and unknown on another. A 300s cutoff would mark that healthy probe UNKNOWN
+for most of each cycle. Join-pow and
 notices refresh every 300s, so those rows go UNKNOWN after JOIN_STALE_S (420s).
 A row older than its limit is UNKNOWN, not DOWN. DOWN is only a fresh halt or failure.
 
@@ -18,9 +20,7 @@ Join clearance (route, notices, maintenance) is a separate block from swap write
 Neither fails open. Mining does not use this endpoint. Swap writes gate on write_ok.
 """
 import threading, time
-
-# Swap-offer steady state: WRITE_SLOW 1800 + WRITE_JITTER 60 + the 60s indexer tick.
-STALE_AFTER_S = 1920
+from ..hosted import WRITE_STALE_S as STALE_AFTER_S
 # join-pow and /api/notices are scheduled every 300s. 420s covers one late loop.
 JOIN_STALE_S = 420
 # The pin thread rebuilds every _REFRESH_S. Past this, the copy is not being refreshed.
