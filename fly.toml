@@ -37,7 +37,7 @@ kill_timeout = 10
     path = "/healthz"
     timeout = "5s"
 
-[[vm]]   # performance-4x 8 GB (2026-11-07): the shared-cpu-4x/2GB tier was CPU-throttled under the live join surge + crawler load, so heavy page renders held every slot and the scheduled feed refreshes (analytics.py) could not get a slot -> homepage tiles went STALE and heavy pages (network/governance/chain) shed 503. Dedicated performance CPUs remove the throttling; 8 GB is the performance-4x floor and gives warm-cache headroom. Pinned here so deploys keep it (the 2026-11-02 lesson: an API-only hot-scale gets reset on redeploy).
+[[vm]]   # performance-1x 2 GB (2026-11-07 PM): stepped down from performance-4x/8GB once the join surge passed and the 1.26.279 htmlcache WARM fix (#45) moved the heavy /network pages off the request path. performance-1x is the cheapest dedicated-CPU tier (no shared-CPU throttling, which was the cause of the Nov 7 503s + STALE tiles); one dedicated core plus the warm cache covers normal load. Step back up to performance-2x/4x if a sustained surge returns. Pinned here so deploys keep it (the 2026-11-02 lesson: an API-only hot-scale gets reset on redeploy).
   cpu_kind = "performance"
-  cpus = 4
-  memory = "8gb"
+  cpus = 1
+  memory = "2gb"
