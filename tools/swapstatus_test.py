@@ -117,6 +117,25 @@ check("a join probe older than 420s is UNKNOWN and does not clear a fresh write"
       join_body["join"]["state"] == "UNKNOWN" and join_body["join"]["route"]["state"] == "UNKNOWN"
       and join_body["write_ok"] is True and join_body["stale"] is True and join_body["available"] is False)
 
+# Notices are a MANDATORY security signal and stay FAIL-CLOSED (security review 2026-11-07): a stale
+# notices FETCH goes UNKNOWN and blocks join clearance, even when the last-known read was clear. We do
+# NOT degrade stale notices to last-known-clear, because during a notices outage minepoa could publish a
+# new critical pause we cannot see. A known-critical stays DOWN; the join route being OK is not enough.
+nt_stale_wasok = {"join_route": {"kind": "OK", "ts": now}, "notices": {"kind": "OK", "ts": now - SS.JOIN_STALE_S - 1},
+                  "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "OK", "ts": now, "probe": "open"}},
+                  "flag_status": "live"}
+nsw = SS.render(nt_stale_wasok, {"status": "live"}, now, now)
+check("stale notices (last read was clear) FAIL CLOSED: join UNKNOWN, not OK, even though route is OK",
+      nsw["join"]["state"] == "UNKNOWN" and nsw["join"]["route"]["state"] == "OK"
+      and nsw["join"]["notices"]["state"] == "UNKNOWN" and nsw["stale"] is True)
+check("stale notices + known critical FAIL CLOSED to UNKNOWN too (stale beats last kind): join blocks",
+      SS.render(dict(nt_stale_wasok, notices={"kind": "DOWN", "ts": now - SS.JOIN_STALE_S - 1}),
+                {"status": "live"}, now, now)["join"]["state"] == "UNKNOWN")
+nt_fresh_crit = dict(nt_stale_wasok, notices={"kind": "DOWN", "ts": now})
+nfc = SS.render(nt_fresh_crit, {"status": "live"}, now, now)
+check("FRESH critical notice blocks join as DOWN (route OK does not clear a live critical)",
+      nfc["join"]["state"] == "DOWN" and nfc["join"]["notices"]["state"] == "DOWN")
+
 # fresh DOWN stays DOWN and overrides available even if the flag says live
 fresh = SS.render(facts, {"status": "live", "available": True}, now, now)
 check("fresh halt facts: DOWN overrides available",
