@@ -17,9 +17,9 @@ def check(name, ok):
 
 # ---- module
 check("enabled by POASCAN_HTML_CACHE=1 even with the indexer off", HC.ENABLED)
-check("TTLs: Health 60, other Network tabs default, Governance 60, About 300, address 30, home 15",
-      (HC.ttl("/network", {"tab": ["health"]}), HC.ttl("/network", {"tab": ["token"]}), HC.ttl("/governance", {}), HC.ttl("/about", {}),
-       HC.ttl("/address/poa1x", {}), HC.ttl("/", {})) == (60, 15, 60, 300, 30, 15))
+check("TTLs: all Network tabs 60 (overview + health + token), Governance 60, About 300, address 30, home 15",
+      (HC.ttl("/network", {}), HC.ttl("/network", {"tab": ["health"]}), HC.ttl("/network", {"tab": ["token"]}), HC.ttl("/governance", {}), HC.ttl("/about", {}),
+       HC.ttl("/address/poa1x", {}), HC.ttl("/", {})) == (60, 60, 60, 60, 300, 30, 15))
 check("key: query order does not matter; crawler and segment kept apart",
       HC.key("/a", {"x": ["1"], "y": ["2"]}, None, False) == HC.key("/a", {"y": ["2"], "x": ["1"]}, None, False)
       and HC.key("/a", {}, None, True) != HC.key("/a", {}, None, False) and HC.key("/a", {}, 1, False) != HC.key("/a", {}, None, False))
@@ -40,6 +40,7 @@ for i in range(20): HC.put(HC.key(f"/e{i}", {}, None, False), "z" * 900, now=tim
 check("byte cap evicts the oldest", HC.state()["bytes"] <= 8000 and HC.get(HC.key("/e19", {}, None, False), 15) and not HC.get(HC.key("/e0", {}, None, False), 15))
 HC.MAX_BYTES = mb
 check("warmed pages get a grace past their TTL, others none", HC.grace("/network", {"tab": ["health"]}) == HC.WARM_GRACE > 0 and HC.grace("/network", {"tab": ["token"]}) == 0 and HC.grace("/privacy", {}) == 0)
+check("network overview is warmed (served pinned, no heavy slot, like health)", HC.is_warm("/network", {}) and HC.grace("/network", {}) == HC.WARM_GRACE > 0)
 check("address freshness window 300 s", V.ADDR_TTL == 300)
 
 # ---- through the server

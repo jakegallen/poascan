@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.279] - 2026-11-07
+
+### Fixed
+- Network tab (Overview) returned "server busy" (503) under load while other tabs worked. The default `/network` overview, the heaviest page on the site, was not in the warm set, so when its cache expired it re-rendered live and took a heavy slot that got shed under concurrency. Added `/network` (overview) to `WARM` so it serves from the background-warmed pin at any age with no heavy slot, the same way `/network?tab=health` already did; and gave every `/network` tab the 60s TTL (not just Health). No new requests or data changes.
+
 ## [1.26.278] - 2026-11-06
 
 ### Fixed

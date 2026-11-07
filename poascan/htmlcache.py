@@ -13,12 +13,12 @@ MAX_BYTES = int(os.environ.get("POASCAN_HTML_CACHE_BYTES", str(24 * 1024 * 1024)
 DEFAULT_TTL = 15
 # (path regex, query test or None, ttl s). First match wins.
 TTLS = [
-    (re.compile(r"^/network$"), lambda qs: (qs.get("tab") or [""])[0] == "health", 60),
+    (re.compile(r"^/network$"), None, 60),   # 1.26.x: all Network tabs (overview + health/charts/…) cache 60s, not just health
     (re.compile(r"^/governance$"), None, 60),
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators)$"), None, 300),
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/start", "/help", "/about", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
+WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
 WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.272: query keys that change the rendered page. Anything else (nocache, a tracker) is not a different page.
