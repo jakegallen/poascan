@@ -161,6 +161,8 @@ jobs:
         run: python tools/swapfields_test.py
       - name: Rendered page cache (per-path TTLs, single render per key, byte cap, background warmer for the heavy pages)
         run: python tools/htmlcache_test.py
+      - name: Reliability telemetry (memory-guard counters, process restart count, per-warm-path render health and POAScan's own render latency on /api/status, kept apart from the upstream probe)
+        run: python tools/reliability_telemetry_test.py
       - name: Earning gates (source and read time per value, Inferred marks, birth panel versus seated graders)
         run: python tools/earngates_test.py
       - name: Door tracker (admit rate, TTL out, Proposal L params flag)

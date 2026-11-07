@@ -33,6 +33,28 @@ _pin = {}   # 1.26.275: warmed visitor pages, outside the 24 MB FIFO, replaced o
 _close_due = [False]
 _wake = threading.Event()
 stats = dict(hit=0, miss=0, wait=0, warm=0, evict=0)
+# 1.26.x: per-warm-path reliability (poascan's OWN render, not an upstream probe). ok/fail counts, the last successful
+# render time (for last_warm_age_s) and its duration in ms. _warm_ms is a bounded recent sample for self-render p50/p95.
+warm_paths = {}
+_warm_ms = []
+_WARM_MS_MAX = 60
+
+def _warm_ok(u, secs):
+    ms = round(secs * 1000)
+    with _lock:
+        wp = warm_paths.setdefault(u, dict(ok=0, fail=0, last_ok=None, last_ms=None))
+        wp["ok"] += 1; wp["last_ok"] = time.time(); wp["last_ms"] = ms
+        _warm_ms.append(ms)
+        if len(_warm_ms) > _WARM_MS_MAX: del _warm_ms[0]
+
+def _warm_fail(u):
+    with _lock:
+        wp = warm_paths.setdefault(u, dict(ok=0, fail=0, last_ok=None, last_ms=None))
+        wp["fail"] += 1
+
+def _pctl(vals, q):
+    if not vals: return None
+    s = sorted(vals); return s[min(len(s) - 1, int(q * len(s)))]
 
 def _warm_pairs():
     if not _warm_set:
@@ -208,7 +230,16 @@ def render(k, t, fn, stale=0):
         ev.set()
 
 def state():
-    with _lock: return dict(stats, entries=len(_c), bytes=_bytes[0], pinned=len(_pin), enabled=ENABLED)
+    now = time.time()
+    with _lock:
+        wp = {u: dict(d, last_warm_age_s=(int(now - d["last_ok"]) if d["last_ok"] else None)) for u, d in warm_paths.items()}
+        ms = list(_warm_ms)
+        base = dict(stats, entries=len(_c), bytes=_bytes[0], pinned=len(_pin), enabled=ENABLED)
+    base["warm_total_paths"] = len(WARM)
+    base["warm_paths"] = wp
+    # poascan's OWN warm-render latency (distinct from the upstream minepoa probe p50/p95 on /api/status.endpoints)
+    base["self_render_ms"] = dict(p50=_pctl(ms, 0.5), p95=_pctl(ms, 0.95), n=len(ms))
+    return base
 
 def warm_once(render_path, seg=lambda: None, force=False):
     """One pass over WARM. force (after a close): rebuild every page and publish it when finished. The previous pin
@@ -227,9 +258,10 @@ def warm_once(render_path, seg=lambda: None, force=False):
                 if isinstance(h, str): put(k, h)
             else:
                 h = render(k, max(1, t - 5), lambda p=p, qs=qs: render_path(p, qs))
-            if isinstance(h, str): stats["warm"] += 1; n += 1
+            if isinstance(h, str): stats["warm"] += 1; n += 1; _warm_ok(u, time.time() - t0)
+            else: _warm_fail(u)
             log.debug("warm %s %.2fs", u, time.time() - t0)
-        except Exception as ex: log.warning("htmlcache: warm %s failed (%s)", u, type(ex).__name__)
+        except Exception as ex: _warm_fail(u); log.warning("htmlcache: warm %s failed (%s)", u, type(ex).__name__)
     return n
 
 def warm_loop(render_path, seg=lambda: None, stop=None):
