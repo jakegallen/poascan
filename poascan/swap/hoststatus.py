@@ -102,6 +102,12 @@ def render(facts, extra, built_at, now):
     else:
         jr, jr_old = _row(facts["join_route"]["kind"], facts["join_route"]["ts"], now, JOIN_STALE_S)
         jr["name"] = "joining"
+        # Notices are a MANDATORY security signal and stay FAIL-CLOSED: a stale notices fetch goes
+        # UNKNOWN (via _agg below), which blocks join clearance. We deliberately do NOT degrade a stale
+        # notices fetch to last-known-clear: during a notices-endpoint outage minepoa could publish a
+        # NEW critical pause/migration we cannot see, so "last we knew it was clear" is not safe for a
+        # security notice (reviewed 2026-11-07). A known-critical row stays DOWN, a never-read row stays
+        # UNKNOWN, and a transient false-"unknown" during an outage is the accepted, safe trade.
         nt, nt_old = _row(facts["notices"]["kind"], facts["notices"]["ts"], now, JOIN_STALE_S)
         mt, mt_old = _row(facts["maintenance"]["kind"], facts["maintenance"]["ts"], now, PIN_STALE_S)
         jst, jas, jag = _agg([jr, nt, mt])
