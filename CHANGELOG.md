@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.283] - 2026-11-09
+
+### Fixed
+- Swap offers kept disagreeing with POASwap while minepoa.com shed the per-tx read (`/api/explorer/tx/:id`, the `(swaps)` background read) that carries an offer's creation time and its cancel event. That read has been 503 shed since about Nov 4 (fails, then backs off for roughly 50 minutes), so offers showed a null `created_ts` and a cancel after expiry read `expired` for about 90 minutes until the fast index caught up. Three POAScan-side resilience fixes, each avoiding the shed read rather than retrying it harder, none touching the money or swap-write path:
+  - `created_ts` is backfilled from POAScan's own core `txs` table. An offer first learned from the upstream book (`swap.indexer.apply_book`) has no `created_ts` until the offer's own `swap-offer` detail is read; POAScan already holds that time as `txs.ts` for the offer id, so `backfill_offer_fields` (run each swap job) sets `created_ts` from the offer's OWN `swap-offer` tx, matched by exact id. It is never a guess: a tx of any other type, or no matching tx, leaves `created_ts` null, and `txs.ts` is the same ledger second the later body read would write, so finalizing the detail never changes it. `memo` is left for the real body read (the core `txs.memo` is only the fallback source, not trivially the offer's memo).
+  - A final `swap-cancel` now resolves its offer from the fast index. The core feed (including the fast-index sync) already marks the cancel final in `txs`; the swap ingest reads that cancel's signed body from the fast index or POAScan's stored copy only (`get_tx_detail(node=False)`), never the shed minepoa.com read, and resolves the offer to `cancelled` from `body.offer`. Correctness rules are preserved: only a `final` cancel resolves, a non-final one changes nothing, and a cancel after expiry still records the real cancel time (`cancelled_after_expiry` stays correct). A box with no fast index keeps the normal read unchanged.
+  - Address lookup no longer flaps to a scary Down on a lone upstream timeout. minepoa.com's address read is intermittently slow (measured about 12 s); a bare timeout is now read as a slow (degraded) read that never flips the route on its own, and only a sustained run of them (four in a row) reads Down, while a non-timeout failure answer still goes Down after two. An Address lookup outage the fast index can serve is shown Degraded (covered by the fast index), mirroring Tx lookup. A genuine sustained outage still surfaces.
+
 ## [1.26.282] - 2026-11-09
 
 ### Removed

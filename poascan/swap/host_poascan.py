@@ -50,6 +50,15 @@ def tx_marks(ids):
 def swap_tx_ids():
     """Swap txs the core indexer has archived, oldest first; the swap indexer reads each one's detail once."""
     return [r["id"] for r in _db.q("SELECT id FROM txs WHERE type LIKE 'swap-%' OR type='attest-fill' ORDER BY ts")]
+def fast_index_up():
+    """1.26.283: True when POAScan's fast index is configured. The swap ingest reads a final swap tx's signed body from it
+    (node=False) instead of the minepoa.com per-tx read that has been shed since Nov 4; a box with no fast index keeps the
+    normal read. Optional host hook: a host without a fast index omits it and the swap module falls back to the normal read."""
+    try:
+        from .. import fastindex as _FX
+        return bool(_FX.enabled())
+    except Exception:
+        return False
 
 # ---- upstream reads: the host's rate-limited, backed-off client for minepoa.com ----
 # fetch(path, timeout, endpoint, cond), get_tx_detail(txid, bg=SWAP_TX_EP), Busy (rate limit hit), Missing (unknown id), NOT_MODIFIED (304), UA

@@ -33,7 +33,10 @@ ROUTES = [
     ("path_actions", "Path actions", dict(pulse="path_actions")),
     ("swap_writes", "Swap writes", dict(writes=True)),
     ("tx_lookup", "Tx lookup", dict(fetch=("/api/explorer/tx/:id", "/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id (swaps)"))),
-    ("address_lookup", "Address lookup", dict(fetch=("/api/explorer/address/:addr",))),
+    # 1.26.283: minepoa's address read is intermittently slow (measured ~12 s), so a bare timeout is upstream slowness, not
+    # a 503. soft_timeout reads a lone/transient timeout as slow (does not flip), and only a sustained run (timeout_bad_n)
+    # reads Down, so the feed stops flapping to a scary Down. A non-timeout failure answer still goes Down after BAD_N.
+    ("address_lookup", "Address lookup", dict(fetch=("/api/explorer/address/:addr",), soft_timeout=True, timeout_bad_n=4)),
     # 1.26.276: one HTTP 200 opens Joining. One 503 halt read still halts that route only. A timeout is not a halt and
     # does not keep the Oct 30 latch (good_n=1, ignore_fail). Other routes keep BAD_N / GOOD_N.
     ("joining", "Joining", dict(fetch=("/api/join-pow",), halt_n=1, good_n=1, ignore_fail=True)),
@@ -41,15 +44,25 @@ ROUTES = [
 LABEL = {i: l for i, l, _ in ROUTES}
 WORD = {"open": "Open", "halted": "Halted", "down": "Down", "unknown": "No read"}   # word is Degraded for a covered Tx lookup (state())
 
-def _err_kind(err):
-    """halt, fail or None (not a route read) for one fetch_log error text."""
+def _timeout(err):
+    """True when a fetch_log error text is a bare upstream read timeout (minepoa.com slow), not a 503 halt or an HTTP status."""
+    e = str(err or "").lower()
+    return "timeout" in e or "timed out" in e
+
+def _err_kind(err, soft_timeout=False):
+    """halt, fail, slow or None (not a route read) for one fetch_log error text. 1.26.283: with soft_timeout a bare
+    upstream timeout reads 'slow' (a degraded read that never flips a route on its own) instead of 'fail', so an
+    intermittently slow minepoa.com does not flap the route to a scary Down; a sustained run still does (timeout_bad_n)."""
     e = str(err or "")
     if e.endswith(" halted"): return "halt"
     if e.startswith("HTTP 4"): return None   # 401 under load, 404 missing, 429 rate limit: not the route failing
+    if soft_timeout and _timeout(e): return "slow"
     return "fail"
 
-def _fetch_obs(keys, seen):
-    """New reads since the last pass, from fetch_log rows: [(ts, kind, source)]. seen holds each key's last row."""
+def _fetch_obs(keys, seen, soft_timeout=False, bad_cap=BAD_N):
+    """New reads since the last pass, from fetch_log rows: [(ts, kind, source)]. seen holds each key's last row.
+    soft_timeout maps a bare timeout to 'slow'; bad_cap caps the bad reads emitted per pass (raised for a soft-timeout
+    route so a sustained timeout run can still reach its higher threshold)."""
     out = []
     for k in keys:
         r = db.q1("SELECT last_ok, last_err, err, fails FROM fetch_log WHERE endpoint=?", (k,))
@@ -58,15 +71,15 @@ def _fetch_obs(keys, seen):
         p = seen.get(k)
         if p is None:   # first pass: take the row as it stands (its last good read, then its failure run after it)
             if lo: out.append((lo, "ok", k))
-            kd = _err_kind(r["err"]) if le > lo and fl else None
-            if kd: out += [(le, kd, k)] * min(fl, BAD_N)
+            kd = _err_kind(r["err"], soft_timeout) if le > lo and fl else None
+            if kd: out += [(le, kd, k)] * min(fl, bad_cap)
         else:
             plo, ple, pfl = p
             if lo > plo and lo >= le: out.append((lo, "ok", k))
             if le > ple and le > lo:
-                kd = _err_kind(r["err"])
+                kd = _err_kind(r["err"], soft_timeout)
                 n = fl - pfl if fl > pfl and lo <= plo else max(fl, 1)
-                if kd: out += [(le, kd, k)] * max(1, min(n, BAD_N))
+                if kd: out += [(le, kd, k)] * max(1, min(n, bad_cap))
         seen[k] = (lo, le, fl)
     return out
 
@@ -138,10 +151,12 @@ def _gap_obs(g, now, seen):
     out.append((now, "fail", "seal gap"))
     return out
 
-def step(r, ts, kind, src, halt_n=None, good_n=None, ignore_fail=False):
+def step(r, ts, kind, src, halt_n=None, good_n=None, ignore_fail=False, timeout_bad_n=None):
     """One read into a route's record (hysteresis). r: dict(state, since, bad, good, first_bad, halt_seen, as_of, last_ok_at, last_bad_at).
-    good_n overrides GOOD_N (Joining opens on one HTTP 200). ignore_fail: a timeout is not a route read (Joining)."""
-    if ignore_fail and kind == "fail":
+    good_n overrides GOOD_N (Joining opens on one HTTP 200). ignore_fail: a timeout is not a route read (Joining).
+    timeout_bad_n (1.26.283): a 'slow' read (a bare upstream timeout on a soft-timeout route) flips to Down only after this
+    many in a row, never on its own, so a transient slow read does not flap the route; a 'fail' answer still flips at BAD_N."""
+    if ignore_fail and kind in ("fail", "slow"):
         # A timeout is not a 503. Touch as_of so the row does not go Stale, and leave state, bad and good alone.
         if ts >= (r.get("as_of") or 0) - 3600:
             r["as_of"] = max(r.get("as_of") or 0, ts); r.setdefault("sources", [])
@@ -167,6 +182,8 @@ def step(r, ts, kind, src, halt_n=None, good_n=None, ignore_fail=False):
     r["bad"] = (r.get("bad") or 0) + 1; r["first_bad"] = r.get("first_bad") or ts; r["halt_seen"] = bool(r.get("halt_seen")) or kind == "halt"
     if bad:
         if r["state"] == "down" and kind == "halt": r["state"] = "halted"   # the halt text names it: same run, same since
+    elif kind == "slow":   # 1.26.283: a bare upstream timeout only reads Down in a sustained run, never on one transient read
+        if r["bad"] >= (timeout_bad_n or BAD_N): r.update(state="down", since=r["first_bad"])
     elif r["bad"] >= BAD_N or (halt_n and r["halt_seen"] and r["bad"] >= halt_n):
         r.update(state="halted" if r["halt_seen"] else "down", since=r["first_bad"])
     return r
@@ -212,7 +229,9 @@ def job(now=None):
         if src.get("pulse"): obs += _pulse_obs(src["pulse"], seen)
         if src.get("route"): obs += _route_obs(src["route"], seen)
         if src.get("writes"): obs += _writes_obs(seen)
-        if src.get("fetch"): obs += _fetch_obs(src["fetch"], seen)
+        if src.get("fetch"):
+            st_soft = bool(src.get("soft_timeout")); cap = max(BAD_N, src.get("timeout_bad_n") or 0) if st_soft else BAD_N
+            obs += _fetch_obs(src["fetch"], seen, soft_timeout=st_soft, bad_cap=cap)
         if src.get("seals"):
             obs += _seal_obs(seen)
             try: g = seal_gap(now)
@@ -220,7 +239,7 @@ def job(now=None):
             obs += _gap_obs(g, now, seen)
         r = recs.get(rid) or dict(state="unknown")
         if src.get("seals"): r["gap"] = g
-        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s, src.get("halt_n"), src.get("good_n"), src.get("ignore_fail"))
+        for ts, kd, s in sorted(o for o in obs if o[1]): r = step(r, ts, kd, s, src.get("halt_n"), src.get("good_n"), src.get("ignore_fail"), src.get("timeout_bad_n"))
         if rid == "joining": r = _joining_follow(r)
         if src.get("seals") and r.get("state") == "down" and gap_level(g) == "down" and (r.get("since") or 0) > g["last_seal_at"]:
             r["since"] = g["last_seal_at"]   # a seal gap run: Down since the newest seal, even when a later route read broke the first bad read
@@ -264,9 +283,9 @@ def state(now=None):
                         bad_reads=r.get("bad") or 0, good_reads=r.get("good") or 0,
                         last_ok_at=_iso(r.get("last_ok_at")), last_bad_at=_iso(r.get("last_bad_at")), sources=r.get("sources") or [],
                         ended=[dict(state=e["state"], since=_iso(e["since"]), until=_iso(e["until"])) for e in r.get("ended") or []]))
-    for r in out:   # 1.26.201: a Tx lookup outage the fast index answers for reads Degraded (state keeps the minepoa.com read)
-        r["covered_by"] = None
-        if r["id"] == "tx_lookup" and r["state"] in ("halted", "down"):
+    for r in out:   # 1.26.201: a Tx lookup outage the fast index answers for reads Degraded (state keeps the minepoa.com read).
+        r["covered_by"] = None   # 1.26.283: Address lookup too, since the fast index serves addresses from its indexed cache
+        if r["id"] in ("tx_lookup", "address_lookup") and r["state"] in ("halted", "down"):
             try:
                 from . import fastindex as FX
                 f = FX.feed(now) if FX.enabled() else None
@@ -275,7 +294,7 @@ def state(now=None):
     ts = [r["as_of_ts"] for r in out if r["as_of_ts"]]
     return dict(as_of=_iso(max(ts)) if ts else None, as_of_ts=max(ts) if ts else None, checked_at=_iso(d.get("ts")), routes=out,
                 halted=[r["id"] for r in out if r["state"] in ("halted", "down")],
-                rule=f"Halted or Down after {BAD_N} bad reads in a row, Open after {GOOD_N} good reads in a row. Joining: one HTTP 503 halt read turns Halted, one HTTP 200 opens it, a timeout does not. Stale when the newest read is over {STALE_S // 3600} h old",
+                rule=f"Halted or Down after {BAD_N} bad reads in a row, Open after {GOOD_N} good reads in a row. Joining: one HTTP 503 halt read turns Halted, one HTTP 200 opens it, a timeout does not. Address lookup: a bare upstream timeout is a slow read and only a sustained run of them reads Down, a failure answer still after {BAD_N}. Stale when the newest read is over {STALE_S // 3600} h old",
                 method="https://poascan.io/about#route-halts")
 
 def halted(now=None):
