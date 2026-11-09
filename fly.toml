@@ -13,6 +13,8 @@ kill_timeout = 10
   MALLOC_ARENA_MAX = "2"   # fewer glibc arenas: request threads stop fragmenting memory into per-thread pools
   MALLOC_MMAP_THRESHOLD_ = "131072"   # 1.26.234: a fixed threshold; glibc raised it after each big free, so 128 KB to 32 MB blocks (page text, JSON reads) landed in the heap and fragmented it
   MALLOC_TRIM_THRESHOLD_ = "131072"   # 1.26.234: hand free heap tops back sooner (the guard also trims every 60 s)
+  POASCAN_MAX_WORKERS = "6"   # 1.26.280: serving slots in all. The 16 (HEAVY_CAP 12) default was sized for the old multi-core box; on one dedicated core a dozen CPU-bound renders only slow each other (GIL + context thrash) and risk a watchdog restart loop. 6 total -> HEAVY_CAP 4, with the reserve below.
+  POASCAN_SERVE_RESERVE = "2"   # 1.26.280: slots kept for cheap pages (homepage, /chain) so heavy renders and close ingest cannot take every slot. With MAX_WORKERS 6 this leaves HEAVY_CAP 4.
 
 [[mounts]]
   source = "poascan_data"

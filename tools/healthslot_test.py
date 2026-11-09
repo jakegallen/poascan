@@ -25,7 +25,7 @@ def ok(c, m): print(("ok   " if c else "FAIL ") + m); c or fails.append(m)
 
 # ---- a stub handler: exercise _gated / _is_health without a socket (skip BaseHTTPRequestHandler.__init__) ----
 class Stub(S.H):
-    def __init__(self, path): self.path = path; self.sent = []
+    def __init__(self, path): self.path = path; self.sent = []; self.command = "GET"; self.headers = {}   # 1.26.280: _gated now runs the per-IP page limiter before the slot; no Fly-Client-IP header means it never limits (fail-open)
     def send(self, code, *a, **k): self.sent.append(code); return code
 
 # ---------------------------------------------------------------- 1. configuration
