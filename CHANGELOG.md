@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.285] - 2026-11-09
+
+### Added
+- `X-API-Commit` response header: the deployed git SHA, sent next to `X-API-Version` on API responses and listed in `Access-Control-Expose-Headers`. It equals `commit` on `/api/health`. Absent on a local build with no stamped SHA. Additive.
+
+### Fixed
+- Route health: a feed minepoa.com paused upstream (the 1.26.280 "Paused upstream" label) read as a bare `down` on the route rows, so `/api/health` listed Swaps as down while its feed said paused. It now reads `degraded` with the detail "Swap reads paused upstream". A real Down feed still reads down.
+- Persisted warm pins (1.26.284) are stamped with the build and reloaded only by the same build. A deploy no longer serves the previous build's HTML (old copy and asset links) until the warm loop catches up; an OOM or guard restart of the same build still reloads them. A blob written before this release is not reloaded once.
+- `/api/v1/txs` answers 400 for an `offset` past 10,000 instead of silently clamping it to 10,000, which served the wrong page. The error names the keyset cursor at `/api/v1/address/<a>/txs?cursor=`.
+- The combined prompt test's shipped check named the retired 9,572 character / `b534abc8` text; it now names the pinned 12,059 character / `012b88bd` text it actually asserts. No orphan prompt hash is left in the tests.
+- `RELEASED_TS` had stayed at the 1.26.279 ship time through 1.26.284; it is stamped again at ship time.
+
 ## [1.26.284] - 2026-11-09
 
 ### Changed

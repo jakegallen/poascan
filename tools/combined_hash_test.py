@@ -115,7 +115,7 @@ if os.path.exists(CB.SLOT):
     p, base = serve({})   # the slot as shipped in the image
     try:
         d = surfaces(base); c = json.loads(d["comb"][1])
-        check("shipped: /api/v1/prompts/combined available, text 9,572 characters, combined_sha256 b534abc8, same on /prompts/join, claude and MCP",
+        check("shipped: /api/v1/prompts/combined available, text 12,059 characters, combined_sha256 012b88bd, same on /prompts/join, claude and MCP",
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]

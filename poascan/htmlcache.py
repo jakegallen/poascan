@@ -30,6 +30,18 @@ PIN_PERSIST_EVERY = int(os.environ.get("POASCAN_PIN_PERSIST_EVERY", "180"))   # 
 PIN_PERSIST_MAX_BYTES = int(os.environ.get("POASCAN_PIN_PERSIST_BYTES", str(8 * 1024 * 1024)))   # total persisted cap (freshest pins kept)
 PIN_MAX_AGE_S = int(os.environ.get("POASCAN_PIN_MAX_AGE_S", "86400"))   # never reload a pin older than this (do not serve ancient HTML)
 _last_persist = [0.0]
+
+def _build_id():
+    """The build a rendered page belongs to: the deployed git SHA when stamped (GIT_SHA), else the API version. 1.26.285:
+    persisted pins carry it and load_pins() drops pins from another build, so a deploy never serves the previous build's
+    HTML (old copy, old asset links) after a restart; a plain OOM or guard restart of the same build still reloads them."""
+    sha = os.environ.get("GIT_SHA") or ""
+    if sha: return "sha:" + sha
+    try:
+        from . import agentapi as AG
+        return "v:" + AG.VERSION
+    except Exception:
+        return None
 # 1.26.272: query keys that change the rendered page. Anything else (nocache, a tracker) is not a different page.
 # / ignores the query entirely (home() does not read it). Dropping those keys is what lets ?nocache= reuse the canonical copy.
 # 1.26.280: extended to every cached page route. Each tuple is the exact set of parameters that page varies on; any other
@@ -374,7 +386,7 @@ def persist_pins(force=False):
         out.append({"k": _key_to_list(k), "ts": ts, "html": html}); total += nbytes
     try:
         from . import db
-        db.put_blob(PIN_BLOB, {"v": 1, "saved_at": now, "pins": out})
+        db.put_blob(PIN_BLOB, {"v": 1, "saved_at": now, "build": _build_id(), "pins": out})
     except Exception as ex:
         log.warning("htmlcache: persist pins failed (%s)", type(ex).__name__); return 0
     return len(out)
@@ -392,6 +404,8 @@ def load_pins():
     except Exception as ex:
         log.warning("htmlcache: load pins failed (%s)", type(ex).__name__); return 0
     if not isinstance(obj, dict) or not isinstance(obj.get("pins"), list): return 0
+    if obj.get("build") != _build_id():   # 1.26.285: pins from another build (or an unstamped older blob) are never served
+        log.info("htmlcache: persisted pins are from another build; not reloaded"); return 0
     now = time.time(); loaded = 0
     for e in obj["pins"]:
         if not isinstance(e, dict): continue
