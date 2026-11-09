@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.280] - 2026-11-09
+
+### Changed
+
+- When minepoa.com pauses a feed read (the Oct 2026 API hardening pause: HTTP 503 with "This endpoint is temporarily paused. ... balances ... are safe" and Retry-After 3600), the Network Health feeds list and the /chain page now read "Paused upstream" with the notice and a "balances safe" line, instead of a bare "Down" (Epochs) or "Degraded" (Close records) with no reason. Display only: indexer.fetch() already classified this body a halt (strain.py), stores nothing from it, keeps the last real records and backs off at least the Retry-After; the records still backfill the moment /api/epochs returns 200 again. A paused feed is not counted a POAScan fault in the headline or not_ok, matching how paused tx, notices and chains lookups already read. A plain 503 is still Down. tools/paused_upstream_test.py.
+
 ## [1.26.279] - 2026-11-07
 
 ### Fixed

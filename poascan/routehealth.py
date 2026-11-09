@@ -74,6 +74,6 @@ def headline(chain, rts, feed_rows):
     core_bad += [f["label"] for f in feed_rows if f["label"] in CORE_FEEDS and f["state"] != "OK"]   # POAScan's own live view of the chain
     deg = [r["label"] for r in rts if not r["core"] and r["state"] in ("degraded", "down")]
     covered = {"Tx lookup", "Swaps", "Swap writes", "Anchors"}
-    deg += [f["label"] for f in feed_rows if f["state"] not in ("OK", "Retired") and f.get("last_ok") and f["label"] not in covered and f["label"] not in deg]
+    deg += [f["label"] for f in feed_rows if f["state"] not in ("OK", "Retired", "Paused upstream") and f.get("last_ok") and f["label"] not in covered and f["label"] not in deg]
     state = "Degraded" if chain != "Live" else "Partial" if core_bad else "OK"
     return state, state == "OK", core_bad, deg

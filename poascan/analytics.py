@@ -805,6 +805,33 @@ def _iso_s(v):
     try: return int(dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()) if v else None
     except ValueError: return None
 
+# 1.26.280: minepoa's "temporarily paused" 503 (the Oct 2026 API hardening pause, Retry-After 3600) is already classified
+# as a halt by strain.py and logged "HTTP 503 halted" with next_at; indexer.halted() reads both the live record and that
+# durable row. A paused feed is shown "Paused upstream" with the notice, not a bare "Down"/"Degraded": display only, it
+# changes nothing about what is fetched, stored, gated or backed off, and clears the moment a real read lands.
+PAUSED_UPSTREAM = "Paused upstream"
+PAUSED_NOTE = "Paused upstream; balances safe"
+
+def _feed_paused(eps, now):
+    """The active upstream pause for one of a feed's endpoints (minepoa 503 'temporarily paused'), or None. Reads the
+    halt indexer.fetch() already recorded; makes no request. eps may carry a ' (...)' suffix, which is stripped."""
+    from . import indexer as I, strain as ST
+    for ep in eps or ():
+        h = I.halted(ST.template(ep.split(" (")[0]), now)
+        if h: return h
+    return None
+
+def _apply_paused(row, eps, now):
+    """Relabel a not-OK feed row as Paused upstream when minepoa has one of its endpoints paused. Returns the row."""
+    if row.get("state") != "OK":
+        pz = _feed_paused(eps, now)
+        if pz: row.update(state=PAUSED_UPSTREAM, paused_upstream=True, note=PAUSED_NOTE, upstream_notice=pz.get("text"))
+    return row
+
+def epochs_paused(now=None):
+    """True when minepoa has /api/epochs paused (503 'temporarily paused'); display only, makes no request. Used by /chain."""
+    return bool(_feed_paused(("/api/epochs",), now or time.time()))
+
 @cached("feeds", 15, light=True)   # cheap: never waits for a heavy slot
 def feeds():
     """Chain state, one row per upstream feed (label, state, last_ok) and the headline: OK only when every feed is OK,
@@ -818,7 +845,7 @@ def feeds():
             with S.use(S.CURRENT): have = len(epochs_raw()); ts = epochs_ts()
             if not isinstance(closed, (int, float)): continue
             st = "OK" if have >= closed else "Degraded"   # the count still shows (from /api/status); the record is missing
-            out.append(dict(label=label, state=st, last_ok=ts if have else None, served=have, closed=int(closed))); continue
+            out.append(_apply_paused(dict(label=label, state=st, last_ok=ts if have else None, served=have, closed=int(closed)), ("/api/epochs",), now)); continue
         every = lambda e: None if e in FEED_ON_NEED else I.EVERY.get(e)
         seen = [(rows[e], every(e)) for e in eps if e in rows]
         if not seen:
@@ -833,6 +860,7 @@ def feeds():
         row = dict(label=label, state=st, last_ok=lo)
         ss = feed_stale_s(lo, max((ev for _, ev in got if ev), default=0), now)   # 1.26.269: surface a silent upstream stall
         if ss: row.update(stale=True, stale_s=ss)
+        _apply_paused(row, eps, now)   # 1.26.280: minepoa paused this feed: show it, not a bare Down
         out.append(row)
     try:   # 1.26.266: minepoa retired /api/explorer/grading (2026-11-01). Show Retired, never Down, and never degraded.
         from . import grading as GR
@@ -854,7 +882,7 @@ def feeds():
     fresh = bool(live) and now - max(live) <= LIVE_S
     moved = cp_moved(); stalled = bool(moved) and now - moved >= LAG_CP_S
     chain = "Live" if fresh and not stalled else "Stalled" if fresh else "Stale"
-    bad = [f["label"] for f in out if f["state"] not in ("OK", "Retired")]   # Retired is a terminal, healthy state, not a fault
+    bad = [f["label"] for f in out if f["state"] not in ("OK", "Retired", PAUSED_UPSTREAM)]   # Retired is terminal-healthy; Paused upstream is an explained, data-safe upstream pause, not a POAScan fault
     from . import routehealth as RH   # 1.26.220: the headline follows the core routes (mining, grading); the rest are listed
     rts = RH.routes(out, now); head, ok, core_bad, deg = RH.headline(chain, rts, out)
     return dict(state=head, chain=chain, feeds=out, not_ok=bad, ok=ok, routes=rts, core=list(RH.CORE), core_basis=RH.CORE_BASIS,
