@@ -46,10 +46,24 @@ def job_swaps():
     except H.Busy as e:
         log.warning("/api/swaps: %s", e)
     ingest_events(now)
+    backfill_offer_fields(now)
     for r in H.q("SELECT s.offer_id, e.json AS body FROM swaps s JOIN swap_events e ON e.txid=s.fill_txid WHERE s.status='filled' AND (s.ext_ref IS NULL OR s.ext_ref='')"):
         try: ref = _ref(json.loads(r["body"]))   # local backfill, no upstream call
         except Exception: ref = None
         if ref: H.write("UPDATE swaps SET ext_ref=? WHERE offer_id=?", (ref, r["offer_id"]))
+
+def backfill_offer_fields(now=None):
+    """1.26.283: an offer first learned from the upstream book (apply_book) has no created_ts; that is set only in
+    ingest_swap_tx from the offer's own swap-offer tx detail, whose per-tx minepoa.com read has been shed since Nov 4.
+    POAScan already holds the creation time in its core txs table (txs.ts for the offer id), so backfill created_ts from
+    the offer's OWN swap-offer tx (exact id match) whenever it is null. This is never a guess: only a txs row that IS this
+    offer's swap-offer tx is used, and txs.ts is the same ledger second ingest_swap_tx would later write from the body, so
+    a later detail read does not change it. memo is deliberately NOT backfilled here: txs.memo is the tx's top-level memo,
+    only the fallback source for an offer's memo (the body's memo wins in ingest_swap_tx), so it is not trivially the same
+    value and is left for the real body read."""
+    now = int(now or time.time())
+    H.write("""UPDATE swaps SET created_ts=(SELECT t.ts FROM txs t WHERE t.id=swaps.offer_id AND t.type='swap-offer' AND t.ts IS NOT NULL),
+      updated=? WHERE created_ts IS NULL AND EXISTS(SELECT 1 FROM txs t WHERE t.id=swaps.offer_id AND t.type='swap-offer' AND t.ts IS NOT NULL)""", (now,))
 
 def apply_book(d, now):
     """One upstream book read: upsert listed offers (open, or expired past expires_ts), then handle the ones it lacks."""
@@ -82,12 +96,13 @@ def ingest_events(now):
     """Read each archived swap tx's detail once, then re-read the pending (non-final) ones until final; resolve offers."""
     known = {r["txid"]: r for r in H.q("SELECT txid, offer_id, final, checked, dropped, first_seen FROM swap_events")}
     ids = H.swap_tx_ids(); marks = H.tx_marks(ids); touched = set(); new = rech = 0
+    fx_up = H.fast_index_up() if hasattr(H, "fast_index_up") else False   # 1.26.283: a final swap tx's body can come from the fast index
     for tid in ids:
         k = known.get(tid)
         if k and (k["final"] or k["dropped"]): continue
+        m = marks.get(tid); final_mark = bool(m and m[1])   # the core feed (incl. the fast-index sync) already marks it final
         if k:   # pending: the explorer feed may already show it final (no upstream read), else re-read on schedule
-            m = marks.get(tid)
-            if m and m[1]:
+            if final_mark and k["offer_id"]:   # offer already linked: finalize and resolve with no detail read at all
                 H.write("UPDATE swap_events SET final=1, checked=? WHERE txid=?", (now, tid)); touched.add(k["offer_id"]); continue
             age = now - (k["first_seen"] or now); every = RECHECK_SLOW_S if age > SLOW_AFTER_S else RECHECK_S
             if k["checked"] and now - k["checked"] < every: continue
@@ -96,7 +111,19 @@ def ingest_events(now):
         else:
             if new >= NEW_PER_RUN: continue
             new += 1
-        try: d = H.get_tx_detail(tid, bg=H.SWAP_TX_EP)
+        try:
+            # 1.26.283: a swap tx the core feed already marks final (e.g. a new swap-cancel) has its signed body read from
+            # the fast index or POAScan's stored copy only (node=False), never the minepoa.com per-tx read that has been
+            # shed since Nov 4. That links the cancel to its body.offer and lets resolve() flip the offer without the shed
+            # read. Only when there is no fast index is the normal read (minepoa.com) used, so a box without one is
+            # unchanged. If the fast index is up but has not synced this body yet, wait for it rather than fall to the shed.
+            if final_mark and fx_up:
+                try: d = H.get_tx_detail(tid, bg=H.SWAP_TX_EP, node=False)
+                except H.Busy:
+                    if k: H.write("UPDATE swap_events SET checked=? WHERE txid=?", (now, tid))
+                    continue
+            else:
+                d = H.get_tx_detail(tid, bg=H.SWAP_TX_EP)
         except H.Missing:
             if k and now - (k["first_seen"] or now) >= DROP_AFTER_S:   # still unknown to the node an hour on: dropped
                 H.write("UPDATE swap_events SET dropped=1, checked=? WHERE txid=?", (now, tid)); touched.add(k["offer_id"])
