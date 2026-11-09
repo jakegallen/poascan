@@ -69,7 +69,8 @@ def qint(qs, k, default, lo, hi):
     if not INT_RX.match(v): raise BadRequest(f"{k} must be an integer from {lo} to {hi}")
     return max(lo, min(hi, int(v)))
 
-TXS_MAX, OFFSET_MAX = 1000, 10_000_000
+TXS_MAX, OFFSET_MAX = 1000, 10_000   # 1.26.280: a 10M OFFSET makes SQLite walk every skipped row (a cheap DoS); 10k is plenty for the API and deep paging uses the keyset cursor (/api/v1/address/<a>/txs?cursor=)
+TYPE_RX = re.compile(r"^[a-z][a-z-]{0,30}$")   # 1.26.280: tx type is a lowercase-hyphen token (e.g. grade-sealed); reject junk before it reaches the query (the value is already a bound parameter, so this is input hygiene, not injection defence)
 
 SWAP_STATUSES = ("open", "filled", "cancelled", "expired", "delisted", "refunded")
 def swap_filter(rows, qs):
@@ -104,6 +105,7 @@ def api(path, qs):
         s = V.summary_json(); return s, False
     if path == "/api/txs":
         lim = qint(qs, "limit", 100, 1, TXS_MAX); off = qint(qs, "offset", 0, 0, OFFSET_MAX); typ = qs.get("type", [""])[0]; ad = qs.get("addr", [""])[0]
+        if typ and not TYPE_RX.match(typ): raise BadRequest("type must be a tx type token (lowercase letters and hyphens)")
         w, a = [], []
         if typ: w.append("type=?"); a.append(typ)
         if ad: w.append("(from_addr=? OR to_addr=?)"); a += [ad, ad]
@@ -460,6 +462,14 @@ VS.API_SRC = lambda: AG.openapi()["paths"]; VS.MCP_TOOLS = frozenset(AG.TOOL_FN)
 from . import clients as _CL
 VS.PJOIN_KEYS = frozenset(_CL.ids()) | ST.INTERNAL_CLIENTS | {"none", "poaswap-server"}   # /api/v1/prompts/join fetches by registry client id (1.26.44), daily counts only
 AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, never the arguments
+# 1.26.280: register each page's valid tab values with the HTML cache (the source of truth stays in the view modules; no
+# import cycle). An unknown tab renders the default page, so the cache drops it and ?tab=random busters collapse onto the
+# default copy. census only branches on tab=journey; everything else renders the census overview.
+HC.register_tabs("/network", [k for k, _ in V.NET_TABS])
+HC.register_tabs("/governance", [k for k, _ in GV.TABS])
+HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
+HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
+HC.register_tabs("/agents/census", ["journey"])
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
@@ -1135,7 +1145,7 @@ class H(BaseHTTPRequestHandler):
         try: ua = self.headers.get("User-Agent") or ""
         except Exception: ua = ""
         bot = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, ua) == "bot"
-        if path in self.CHEAP_PATHS: qs = HC.canon_qs(path, qs)   # ?nocache= and the like share the canonical page
+        qs = HC.canon_qs(path, qs)   # 1.26.280: drop keys the page does not vary on so a cache buster shares the canonical key (a no-op for API and unlisted paths)
         return path, qs, seg, bot
     def _html_hit(self):
         """A rendered page already in memory. / and /chain also hit on a copy younger than CHEAP_STALE, so a full
@@ -1176,6 +1186,7 @@ class H(BaseHTTPRequestHandler):
     def _gated(self, fn):
         if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status(): return fn()
         path = self._path_only()
+        if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render
         if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
         if HC.ENABLED:
             try:
@@ -1235,7 +1246,7 @@ class H(BaseHTTPRequestHandler):
         V.REQ.path, V.REQ.qs = path, qs
         # 1.26.199: a crawler's page view is served from the archive; it never spends the on-demand minepoa.com or fast index budget
         I.CLIENT.crawler = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, self.headers.get("User-Agent") or "") == "bot"
-        if PAGE_LIMITED.match(path) and self.page_limited(): return
+        # 1.26.280: the per-IP page limiter now runs in _gated, before any heavy slot is taken (R2), not here.
         if path == "/ops/visits": return self.ops_visits(path, qs)
         if path == "/ops/network": return self.ops_network(path, qs)
         if path == "/ops/internal": return self.ops_internal(path, qs)
@@ -1426,7 +1437,7 @@ class H(BaseHTTPRequestHandler):
                     if etag in inm or etag.replace('W/', '') in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
-                ck = (p, urllib.parse.urlsplit(self.path).query, fmt)
+                ck = (p, _micro_ck(p, qs), fmt, SG.selected())   # 1.26.280: a canonical key, not the raw query, so ?x=random is not a fresh miss; SG.selected() keeps archived segments (?segment=) apart (it is popped from qs before here)
                 hit = _micro_get(ck)
                 if hit: return self.send(200, hit[0], "application/json", hit[1], pre=hit)
                 try: data, is_list = api(p, qs)
@@ -1458,8 +1469,7 @@ class H(BaseHTTPRequestHandler):
                 b = self.prep(json.dumps(data, default=str), "application/json")
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
-            if path in self.CHEAP_PATHS:   # 1.26.272: ?nocache= and other unused keys share the canonical render
-                qs = HC.canon_qs(path, qs); V.REQ.qs = qs
+            qs = HC.canon_qs(path, qs); V.REQ.qs = qs   # 1.26.280: every cached page drops keys it does not vary on so a buster reuses the canonical render (a no-op for unlisted paths); the key in _bits drops the same keys
             caller = __import__("threading").current_thread(); segment, crawler = SG.selected(), bool(I.crawler())
             def rebuild():
                 bg = __import__("threading").current_thread() is not caller   # a background refresh has its own segment
@@ -1496,6 +1506,14 @@ class H(BaseHTTPRequestHandler):
 MICRO_S = float(os.environ.get("POASCAN_API_MICRO_S", "30"))
 MICRO_MAX = 64; MICRO_MAX_BYTES = 1_500_000; MICRO_TOTAL_MAX = 16 * 1024 * 1024   # 1.26.252: ~30 s TTL plus a 16 MB total-bytes cap
 MICRO_SKIP = ("/api/health", "/api/search")
+# 1.26.280: the micro-cache key is canonical, not the raw query string, so a cache buster is not a guaranteed miss that
+# rebuilds and holds a heavy slot. Keys are sorted and empty values dropped (?a=1&b=2 and ?b=2&a=1 are one entry). Most
+# API routes 400 on an unknown parameter (an error is never cached), so they cannot be busted; the few that ignore extras
+# list their real parameters here, and anything else is dropped from the key (the response is identical either way).
+_MICRO_PARAMS = {"/api/txs": {"limit", "offset", "type", "addr", "format"}}
+def _micro_ck(p, qs):
+    keep = _MICRO_PARAMS.get(p)
+    return tuple(sorted((k, tuple(v)) for k, v in (qs or {}).items() if v and (keep is None or k in keep)))
 _micro = {}; _micro_lock = __import__("threading").Lock()
 def _micro_get(key):
     if MICRO_S <= 0: return None

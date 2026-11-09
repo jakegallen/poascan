@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.281] - 2026-11-09
+
+### Fixed
+- Governance Established tab timed out (503) on the one dedicated core and starved other API reads while it rendered. The established set check (`grading._auth`, the stored `/api/established` copy) ran a fresh SELECT plus `json.loads` of the whole blob and rebuilt a frozenset on every call, and the tab calls it once per established Agent, so the render was quadratic in the set size (minutes on a large set). `_auth` is now memoized per database write generation (and for at most `POASCAN_EST_MEMO_S` seconds), computed once per render and recomputed at once when a new `/api/established` blob lands, so a stale set is never served. The Established tab render drops from O(n squared) to O(n): a 5,000 row set measured 44s before and 2ms after.
+
+### Changed
+- Right sized the heavy request slots for the one core box. `POASCAN_MAX_WORKERS` (6) and `POASCAN_SERVE_RESERVE` (2) are now pinned in `fly.toml`, giving a heavy cap of 4 instead of the 12 that was sized for the old multi core machine, where a dozen CPU bound renders on one core only slowed each other and risked a watchdog restart loop.
+
+### Security
+- Closed cache buster holes that let one client hold every heavy render slot. The rendered page cache now canonicalizes the query for every page route (`/network`, `/governance`, `/agents/*` and the rest), not just a few cheap paths: only the parameters a page actually varies on survive and an unknown tab renders the default page, so `?x=random` and `?tab=random` reuse the canonical copy instead of forcing a fresh heavy render. The API micro cache key is canonical too (sorted, empty values dropped, archived segment kept apart), so an unknown query parameter is no longer a guaranteed miss.
+- The per IP page limiter now runs before a heavy slot is taken, so an over limit `/address` or `/tx` client never consumes a slot.
+- `/api/v1/txs` caps `offset` at 10,000 (a 10,000,000 offset made SQLite walk every skipped row) and rejects a malformed `type`; deep paging uses the keyset cursor at `/api/v1/address/<a>/txs`.
+
 ## [1.26.280] - 2026-11-09
 
 ### Changed

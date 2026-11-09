@@ -23,9 +23,24 @@ WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.272: query keys that change the rendered page. Anything else (nocache, a tracker) is not a different page.
 # / ignores the query entirely (home() does not read it). Dropping those keys is what lets ?nocache= reuse the canonical copy.
-CANON_QS = {"/": (), "/start": (), "/about": (), "/agents": (),
+# 1.26.280: extended to every cached page route. Each tuple is the exact set of parameters that page varies on; any other
+# key (?x=random, a utm_ tag) is dropped so the request reuses the canonical copy instead of forcing a fresh heavy render
+# that holds a slot. The sets are the real reads: /network -> views.network(tab, range); /governance -> the union over all
+# its tabs (sort/dir/filter/level/page/range plus the intake sub-table's close/state/asort/adir/apage); /agents/top ->
+# views4.leaderboard_page(tab) with sort/dir. A page that reads no query is (): the whole query is dropped.
+CANON_QS = {"/": (), "/start": (), "/about": (), "/privacy": (), "/agents": (), "/agents/operators": (),
             "/help": ("address", "sort", "dir"),
-            "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir")}
+            "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir"),
+            "/network": ("tab", "range", "esort", "edir", "isort", "idir"),
+            "/agents/top": ("tab", "sort", "dir"), "/agents/census": ("tab",), "/agents/community": ("tab",),
+            "/governance": ("tab", "sort", "dir", "filter", "level", "page", "range", "close", "state", "kind", "need",
+                            "carry", "csort", "cdir", "asort", "adir", "apage")}
+# 1.26.280: valid tab values per path, registered from the owning modules (server.py) so there is no import cycle and no
+# drift. An unknown tab renders the default page (the views coerce it), so it is dropped from the key too: ?tab=random1,
+# ?tab=random2 ... all collapse onto the default copy instead of each forcing its own render.
+_TAB_OK = {}
+def register_tabs(path, values):
+    _TAB_OK[path] = frozenset(v for v in values if isinstance(v, str))
 _warm_set = set()
 
 _c, _bytes, _inflight, _lock = {}, [0], {}, threading.Lock()
@@ -71,11 +86,16 @@ def grace(path, qs):
     return WARM_GRACE if (path, _qs_tuple(qs)) in _warm_pairs() else 0
 
 def canon_qs(path, qs):
-    """The query this page actually varies on. None when path is not one of the cheap pages (the query is kept)."""
+    """The query this page actually varies on. A path not in CANON_QS keeps its query unchanged (an API route, a dynamic
+    page). For a listed page, only the whitelisted keys survive and an unknown tab value is dropped (it renders the
+    default page), so a cache buster reuses the canonical copy."""
     keep = CANON_QS.get(path)
     if keep is None: return qs or {}
-    if not keep: return {}
-    return {k: qs[k] for k in qs if k in keep} if qs else {}
+    out = {k: qs[k] for k in qs if k in keep} if qs else {}
+    ok = _TAB_OK.get(path)
+    if ok is not None and "tab" in out and (out["tab"] or [""])[0] not in ok:
+        out = {k: v for k, v in out.items() if k != "tab"}
+    return out
 
 def is_warm(path, qs):
     """True for a warmed visitor URL (the canonical query only)."""
