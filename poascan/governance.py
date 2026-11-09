@@ -724,7 +724,7 @@ def api_overview():
                 grading=None if not gs else dict(pending=gs["pending"], at_quorum=gs["at_quorum"], ready_next_close=gs["ready_next_close"], at_quorum_queued=gs["at_quorum_queued"], settle_cap=gs["settle_cap"], trusted_share=gs["trusted_share"], by_need=gs["by_need"], quorum=gs["quorum"],
                                                  open_epoch=gs["epoch"], next_close_ts_est=gs["next_close_ts"], upstream_as_of=gs["upstream_as_of"], fetched_at=gs["fetched_at"], checked_at=gs["checked_at"], stale=gs["stale"], stale_reason=gs["stale_reason"],
                                                  queue=BASE + "/api/v1/governance/queue"),
-                counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+                counts={LEVEL_KEYS[k]: v for k, v in c.items()}, reference_epoch=d["open_epoch"], data_as_of_close=d["last_close"], stale_reason=A.close_lag(d["last_close"]), at_risk_window_closes=SD.AT_RISK_CLOSES,
                 graders=cal.get("graders_count"), agreement=cal.get("aligned_rate"),
                 est_payout=None if pe is None else dict(estimate=True, per_agent=pe["estimate"], basis_segment=pe["basis_segment"], basis_epochs=[b["epoch"] for b in pe["basis"]], method=pe["method"]),
                 latest_closes=[dict(epoch=r["epoch"], close_ts=r["close_ts"], established_added=r["established"], established_removed=r["established_removed"],
@@ -735,7 +735,7 @@ def api_overview():
 
 def api_at_risk(level=None, limit=1000, sort="level", d="desc"):
     rows, data = standing_select(LEVEL_IN[level] if level else "", sort, d); sc = scores()["rows"]
-    return dict(_seg(), reference_epoch=data["open_epoch"], estab_ttl=data["ttl"], last_close=data["last_close"], at_risk_window_closes=SD.AT_RISK_CLOSES,
+    return dict(_seg(), reference_epoch=data["open_epoch"], estab_ttl=data["ttl"], last_close=data["last_close"], data_as_of_close=data["last_close"], stale_reason=A.close_lag(data["last_close"]), at_risk_window_closes=SD.AT_RISK_CLOSES,
                 levels="at_risk: closes_left <= 2; watch: 3; safe: 4 or more; no_record: no challenge_eligible close in this segment; system: trusted or system grader",
                 counts={LEVEL_KEYS[k]: v for k, v in data["counts"].items()}, count=len(rows), sort=sort, dir=d,
                 rows=[dict(_std(r), **_sflat(parts_of(r["address"], sc))) for r in rows[:limit]],
@@ -772,7 +772,7 @@ def api_established(sort="score", filt="", limit=1000, offset=0, d="desc"):
     out = [dict(_std(r), **_sflat(r), added_epoch=r["since"], closes_held=r["held"], eligible_closes=r["eligible"], seals=r["seals"],
                 grading_seat_closes=r["seats"]) for r in rs[offset:offset + limit]]
     return dict(_seg(), established=len(rows), established_check=established_cross(), rule=ESTABLISHED_RULE, estab_ttl=data["ttl"],
-                genesis_import=EF.import_info(SG.selected()), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"],
+                genesis_import=EF.import_info(SG.selected()), sort=sort, dir=d, filter=filt or None, total=len(rs), offset=offset, limit=limit, reference_epoch=data["open_epoch"], data_as_of_close=data["last_close"], stale_reason=A.close_lag(data["last_close"]),
                 score_note="POAScan's own score, 0 to 100, 100 best; not an official minepoa grade. Method: " + BASE + SCORE_METHOD, rows=out,
                 url=_url("established", sort=sort if sort != "score" else "", dir="asc" if d == "asc" else "", filter=EST_FILTER_IN.get(filt, "") if filt else ""))
 

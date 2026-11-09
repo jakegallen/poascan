@@ -43,7 +43,7 @@ def horizon():
         x["expires_est_ts"] = (lts + (ex - lc) * period) if (lts and lc is not None and not arch) else None
         x["watched"] = bool(seg == WATCH["segment"] and ex in WATCH["closes"])
         x["state"] = "ended" if arch else ("expiring" if x["closes_left"] is not None and x["closes_left"] <= 0 else "open")
-    return dict(segment=seg, archived=arch, as_of_close=lc, as_of_close_ts=lts, open_epoch=cur, epoch_seconds=period,
+    return dict(segment=seg, archived=arch, as_of_close=lc, data_as_of_close=lc, stale_reason=A.close_lag(lc), as_of_close_ts=lts, open_epoch=cur, epoch_seconds=period,
                 ttl=ttl, ttl_source=t["source"], ttl_confirmed=t["confirmed"], ttl_stale=t["stale"], ttl_fallback=t["fallback"],
                 ttl_read=t, ttl_observed=obs, ttl_flags=[w for w, _ in NP.flags(t, obs)],
                 estab_ttl=NP.estab_ttl(seg), total=sum(x["pending"] for x in rows),

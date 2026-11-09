@@ -119,6 +119,8 @@ jobs:
         run: python tools/epochs_stream_test.py
       - name: Network Health says how old its data is (Data as of)
         run: python tools/dataasof_test.py
+      - name: Epoch-frozen endpoints carry data_as_of_close and a stale_reason when they lag the network close (board, cohorts, pending-by-epoch, pending-horizon, governance; additive, archived and unknown never flagged, meta.stale unchanged)
+        run: python tools/close_freshness_test.py
       - name: Joins paused test
         run: python tools/joinhalt_test.py
       - name: Memory caps test
@@ -161,6 +163,12 @@ jobs:
         run: python tools/swapfields_test.py
       - name: Rendered page cache (per-path TTLs, single render per key, byte cap, background warmer for the heavy pages)
         run: python tools/htmlcache_test.py
+      - name: Warm pins survive a restart (persisted to a SQLite blob and reloaded at boot before the warm loop; bounded size and age; oversized, too old or wrongly keyed entries skipped; original timestamp kept)
+        run: python tools/pin_persist_test.py
+      - name: Honest warm health (a warm pass records a success only when a render actually stored a new copy, not when it served a pin and fired a background refresh; telemetry shape kept)
+        run: python tools/warm_health_test.py
+      - name: Cold-start stampede guard (waiters serve any stored copy or wait once more on the single in-flight render instead of each rendering; a cold waiter with nothing stored still renders)
+        run: python tools/render_stampede_test.py
       - name: Reliability telemetry (memory-guard counters, process restart count, per-warm-path render health and POAScan's own render latency on /api/status, kept apart from the upstream probe)
         run: python tools/reliability_telemetry_test.py
       - name: Earning gates (source and read time per value, Inferred marks, birth panel versus seated graders)
@@ -283,6 +291,8 @@ jobs:
         run: python tools/flood_survival_test.py
       - name: Accuracy and resilience (grader counts from grade rows, Max reward from the rewards row, failed jobs retry soon, node counter restart explained, guard steal threshold)
         run: python tools/accuracy_test.py
+      - name: Watchdog tells CPU-busy from hung (a slow render while heavy slots are in use gets a longer self-check and counts toward BUSY_FAILS, not HANG_FAILS; a sustained busy run and a real hang both still exit; heavy_busy fails safe to no exemption)
+        run: python tools/busy_watchdog_test.py
       - name: Re-admission flag (back in established_after one close after removal, no eligibility record; history, standing state, address card)
         run: python tools/readmit_test.py
       - name: HTML page cache (weak ETag ignores what app.js recomputes, 304 on a match, 15 s browser and 30 s plus 15 s shared reuse, Vary once; /ops stays no-store)

@@ -25,6 +25,13 @@ CONN_WAIT = float(os.environ.get("POASCAN_CONN_WAIT", "0.5"))   # a new connecti
 HEAVY_WAIT = float(os.environ.get("POASCAN_HEAVY_WAIT", "2.0"))   # a gated request waits this long for its slot, then 503s with Retry-After
 HANG_FAILS = int(os.environ.get("POASCAN_HANG_FAILS", "4"))
 THROTTLED_FAILS = int(os.environ.get("POASCAN_THROTTLED_FAILS", "40"))   # about 10 minutes of throttled failures
+# 1.26.284 (S1): a legitimately slow render on the one dedicated core must not read as a hang. While heavy serving slots
+# are in use the self-check gets a longer timeout, and a miss counts toward a much larger BUSY_FAILS (about 10 minutes,
+# like THROTTLED_FAILS) rather than HANG_FAILS. A genuine hang still exits: stuck renders keep the slots busy, so
+# BUSY_FAILS is reached and the process restarts, just with more tolerance under heavy-but-live load.
+BUSY_FAILS = int(os.environ.get("POASCAN_BUSY_FAILS", "40"))
+HANG_SELF_TIMEOUT = float(os.environ.get("POASCAN_HANG_SELF_TIMEOUT", "10"))   # self-check timeout when no heavy render is in flight
+BUSY_SELF_TIMEOUT = float(os.environ.get("POASCAN_BUSY_SELF_TIMEOUT", "25"))   # longer timeout while heavy renders hold slots (a slow render must get time to answer)
 STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # share of CPU time that was steal over a check interval (1.26.82: 0.5 let 40 to 50% steal intervals count as hangs, so a throttled VM still restarted)
 CHECK_EVERY = 15
 RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "600"))
@@ -50,7 +57,17 @@ def close_acquire():
     """One heavy slot for close ingest. Never a reserved cheap slot: False when every heavy slot is already held,
     and the reserve stays free for the homepage and /chain."""
     return slots.acquire(blocking=False)
-state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0}
+
+def heavy_busy():
+    """Heavy serving slots in use right now (0..HEAVY_CAP): the heavy-work semaphore's occupancy, read under its own
+    condition lock. On any error (a different threading internal) it returns 0, which is the safe default: no exemption,
+    so the watchdog stays strict rather than ever going soft and never restarting."""
+    try:
+        with slots._cond:
+            return max(0, HEAVY_CAP - slots._value)
+    except Exception:
+        return 0
+state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "busy_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0}
 
 def telemetry():
     """Cheap read of the memory guard and self-check counters for diagnostics (poascan's own, not an upstream probe).
@@ -60,6 +77,7 @@ def telemetry():
     s = state
     return dict(trims=s["trims"], gcs=s["gcs"], rss_mb=s["rss_mb"], rss_exit_mb=RSS_EXIT_MB, rss_trim_mb=RSS_TRIM_MB,
                 rss_over=s.get("rss_over", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
+                busy_fails=s.get("busy_fails", 0), heavy_busy=heavy_busy(),
                 steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP)
 
 try:
@@ -101,14 +119,21 @@ def steal_share(a, b):
     if not a or not b or b[1] <= a[1]: return None
     return max(0.0, min(1.0, (b[0] - a[0]) / (b[1] - a[1])))
 
-def on_check(ok, steal):
-    """Update the failure counters for one self-check; returns the exit reason, or None to keep running."""
+def on_check(ok, steal, busy=0):
+    """Update the failure counters for one self-check; returns the exit reason, or None to keep running. busy is the
+    heavy-slot occupancy at the check: a miss while heavy renders are in flight counts toward BUSY_FAILS (a busy but
+    answering box is not a hang), not the small HANG_FAILS, but a sustained run still exits."""
     if ok:
-        state["fails"] = 0; state["throttled_fails"] = 0; state["last_ok"] = time.time(); return None
+        state["fails"] = 0; state["throttled_fails"] = 0; state["busy_fails"] = 0; state["last_ok"] = time.time(); return None
     if steal is not None and steal >= STEAL_THROTTLED:
         state["throttled_fails"] += 1
         log.warning("guard: /healthz self-check failed while CPU throttled (steal %d%%, %d in a row); not restarting", round(steal * 100), state["throttled_fails"])
         if state["throttled_fails"] >= THROTTLED_FAILS: return f"/healthz did not answer {THROTTLED_FAILS} checks in a row while throttled"
+        return None
+    if busy > 0:
+        state["busy_fails"] += 1
+        log.warning("guard: /healthz self-check failed while %d heavy render(s) in flight (%d in a row); not restarting yet", busy, state["busy_fails"])
+        if state["busy_fails"] >= BUSY_FAILS: return f"/healthz did not answer {BUSY_FAILS} checks in a row under heavy load"
         return None
     state["fails"] += 1
     if state["fails"] >= HANG_FAILS: return f"/healthz did not answer {HANG_FAILS} checks in a row"
@@ -124,14 +149,15 @@ def _watch(port):
     cpu = cpu_times()
     while True:
         t0 = time.time()
+        busy = heavy_busy()   # S1: heavy renders in flight -> a slow answer is not a hang
         try:
-            with urllib.request.urlopen(url, timeout=10) as r: ok = r.status == 200
+            with urllib.request.urlopen(url, timeout=(BUSY_SELF_TIMEOUT if busy > 0 else HANG_SELF_TIMEOUT)) as r: ok = r.status == 200
         except Exception:
             ok = False
         c = cpu_times(); st = steal_share(cpu, c); cpu = c; state["steal"] = st
         if not ok and not (st is not None and st >= STEAL_THROTTLED):
-            log.warning("guard: /healthz self-check failed (%d in a row, %.1fs)", state["fails"] + 1, time.time() - t0)
-        why = on_check(ok, st)
+            log.warning("guard: /healthz self-check failed (%.1fs, heavy_busy %d, fails %d/busy_fails %d)", time.time() - t0, busy, state["fails"], state["busy_fails"])
+        why = on_check(ok, st, busy)
         if why: _exit(why)
         m = rss_mb(); state["rss_mb"] = m
         now = time.time()

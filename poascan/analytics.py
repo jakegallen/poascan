@@ -60,6 +60,29 @@ def gini(x):
 
 def status(): return db.get_blob("status")[0] or {}
 def params(): return db.get_blob("params")[0] or {}
+
+def network_last_close():
+    """The newest closed epoch the network reports, from /api/status epochs_closed (which keeps advancing even while
+    /api/epochs is paused upstream). A fresh set of epoch records ends at this epoch. None when epochs_closed is unknown."""
+    v = status().get("epochs_closed")
+    try: return int(v) - 1
+    except (TypeError, ValueError): return None
+
+def data_close():
+    """The last close POAScan's epoch records currently reflect in the selected segment (an epoch number), or None.
+    When /api/epochs is paused upstream this stops advancing while network_last_close() keeps moving."""
+    rows = epoch_rows()
+    return int(rows[-1]["epoch"]) if rows else None
+
+def close_lag(dc):
+    """A short stale_reason for an epoch-frozen response whose data reflects close `dc` (an epoch number), or None when
+    the data is current, the segment is archived, or the network close is unknown. Additive only: it never changes
+    meta.stale. A fresh response has dc == network_last_close(), so no reason is set."""
+    if dc is None or S.archived(): return None
+    net = network_last_close()
+    if net is None or int(dc) >= net: return None
+    lag = net - int(dc)
+    return f"epoch records frozen at close E{int(dc)}; network has closed through E{net} ({lag} behind)"
 def networks():
     nw = db.get_blob("networks")[0] or {}
     for c in nw.get("chains", []):
@@ -964,7 +987,8 @@ def pending_by_epoch():
         x["expires_est_ts"] = int(last["ts"]) + (x["expires_close"] - int(last["epoch"])) * period if last and x["expires_close"] is not None else None
     tot = collections.Counter()
     for h in bl["hist"].values(): tot.update(h)
-    return dict(current_epoch=cur, as_of_close=int(last["epoch"]) if last else None, total=sum(x["pending"] for x in rows),
+    _dac = int(last["epoch"]) if last else None
+    return dict(current_epoch=cur, as_of_close=_dac, data_as_of_close=_dac, stale_reason=close_lag(_dac), total=sum(x["pending"] for x in rows),
                 stale_total=sum(x["pending"] for x in rows if x["stale"]), ttl_epochs=ttl,
                 ttl_source=tt["source"], ttl_confirmed=tt["confirmed"], ttl_stale=tt["stale"], merge_from_epoch=bl["merge_from"],
                 quorum=pr.get("grade_quorum"), epoch_seconds=period, seals_basis=bl["basis"], seals_exact=bl["exact"],

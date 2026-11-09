@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.284] - 2026-11-09
+
+### Changed
+- Reliability and consumer-freshness batch. Nothing here touches the money or swap-write path, the indexer fetch, or the epochs/swap logic.
+  - Warm pins now survive a restart (E5). The rendered-page pin set (`poascan/htmlcache.py`) was memory only, so every deploy or OOM restart served the heavy pages cold (multi-second, sometimes a timeout) until the warm loop repopulated, roughly a minute later. The current pins (each exact cache key to its rendered HTML and original timestamp) are now checkpointed to a small SQLite blob on the `/data` volume every few minutes, and reloaded into the pin set at boot, before the warm loop runs, so the first visitors after a restart get a warm (if slightly stale) copy at once. Bounded in total size and per pin, and never reloaded past a max age; a reloaded pin keeps its original timestamp, so it is still subject to the normal TTL and warm refresh (stale-while-revalidate re-renders it on the first hit) and its age stays honest. Each entry is validated on load and keyed exactly as the in-memory pin, so a reloaded page can only ever be served under its own key.
+  - Honest warm-health accounting (E3). `htmlcache.warm_once` recorded a per-path warm success even when `render()` returned an existing copy and only fired a background refresh, so `ok` and `last_ok` advanced without a render. A warm success is now recorded only when a render actually stored a new copy: either synchronously in `warm_once` (the stored timestamp advanced and nothing is carrying it in the background) or in the background refresh that does the store. The `warm_paths` and `self_render_ms` telemetry shape is unchanged; `last_warm_age_s` is now a true pin-age signal.
+  - Cold-start stampede guard (E4). In `htmlcache.render()`, waiters that timed out waiting for the single in-flight render used to each run the render themselves, turning N waiters into N parallel renders on the one core. Waiters now serve any stored copy at any age first, then wait once more on the single in-flight render, and render themselves only as a last resort when nothing is stored and no render is in flight, so a caller is never served nothing while the single-render-per-key intent holds.
+  - Watchdog tells CPU-busy from hung (S1). `poascan/guard.py` self-checks `/healthz` and exits after `HANG_FAILS` misses; the only exemption was high steal time, which never applies on the dedicated core. A legitimately slow render no longer reads as a hang: while heavy serving slots are in use the self-check gets a longer timeout, and a miss counts toward a much larger `BUSY_FAILS` (about ten minutes, like the throttled exemption) rather than `HANG_FAILS`. The watchdog is not disabled: a genuine hang keeps the slots busy, reaches `BUSY_FAILS` and still exits; the heavy-slot read falls back to no exemption on any error, so it can only ever make the watchdog stricter, never soft.
+
+### Added
+- `data_as_of_close` and `stale_reason` on the epoch-frozen JSON endpoints (`board`, `cohorts`, `pending-by-epoch`, `pending-horizon`, `governance/overview`, `governance/at-risk`, `governance/established`). When `/api/epochs` is paused upstream these responses are frozen at the last close they read while the network keeps closing epochs, and `meta.stale` stayed false, so an API consumer (such as POASwap) could not see the freeze. `data_as_of_close` is the close the data reflects; `stale_reason` is a short note set only when that close lags the network's `epochs_closed`, and is absent otherwise. Additive only: no existing field changes and `meta.stale` keeps its meaning.
+
 ## [1.26.283] - 2026-11-09
 
 ### Fixed

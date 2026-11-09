@@ -54,7 +54,8 @@ def _cohorts():
     for c in sorted(members):
         g = next(x for x in gate if x["close"] == c)
         out.append(dict(birth=c, answers=len(members[c]), gate_a=dict(eligible=g["eligible"], rate=g["rate"]), closes=tracks[c]))
-    return dict(as_of_close=int(E[-1]["epoch"]) if E else None, merge_from=merge, k=A.params().get("K"), cohorts=out, gate_a=gate, first_seen_late=len(late - set(born)))
+    _dac = int(E[-1]["epoch"]) if E else None
+    return dict(as_of_close=_dac, data_as_of_close=_dac, stale_reason=A.close_lag(_dac), merge_from=merge, k=A.params().get("K"), cohorts=out, gate_a=gate, first_seen_late=len(late - set(born)))
 
 def rows():
     """Flat rows for CSV: one per cohort and close."""
