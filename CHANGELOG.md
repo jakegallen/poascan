@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.286] - 2026-11-09
+
+### Fixed
+- A warmed page could sit stale for most of an hour under load: when its pin expired, `render()` served the old copy and its background refresh needed a cheap reserve slot, and when the reserve was full the refresh never started, so nothing replaced the pin (Network Health was 45+ minutes old on Nov 9 while one API client held the slots). The warm pass now renders a page itself once its copy is past TTL plus `WARM_GRACE` and no refresh is in flight, on the warmer's own thread like the close rebuild. Inside the grace window nothing extra renders. `page_cache.warm_direct` counts these.
+
+### Changed
+- `/agents/census` and `/agents/community` are warmed, and Community caches 300 s like Census. They rendered live on a visitor miss (about 9 s and 37 s on the one core, and Community's 15 s TTL made that most visits).
+- The deploy job verifies the build after liveness (`tools/deploy_verify.py`): `/api/health` commit and `X-API-Commit` equal the pushed SHA, the served combined prompt `.text` sha256 equals the repo slot and its pin, and the served join template sha256 equals the repo template. An em or en dash, or a key in a URL, served on `/`, `/start` or `/help` is a warning.
+
 ## [1.26.285] - 2026-11-09
 
 ### Added
