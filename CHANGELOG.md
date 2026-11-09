@@ -18,6 +18,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed
 - `/agents/census` and `/agents/community` are warmed, and Community caches 300 s like Census. They rendered live on a visitor miss (about 9 s and 37 s on the one core, and Community's 15 s TTL made that most visits).
+- Persisted warm pins from another build are reloaded at boot as already expired instead of dropped (1.26.285 dropped them, and the first minutes after that deploy went cold: `/chain` timed out at the edge). The warm pass replaces each one on its first round, and a restart of the same build keeps the original timestamps.
 - The deploy job verifies the build after liveness (`tools/deploy_verify.py`): `/api/health` commit and `X-API-Commit` equal the pushed SHA, the served combined prompt `.text` sha256 equals the repo slot and its pin, and the served join template sha256 equals the repo template. An em or en dash, or a key in a URL, served on `/`, `/start` or `/help` is a warning.
 
 ## [1.26.285] - 2026-11-09

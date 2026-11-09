@@ -3,8 +3,8 @@
    and the Swaps detail says paused upstream.
 2) X-API-Commit carries the deployed git SHA next to X-API-Version (and is exposed to CORS readers); /api/health commit
    equals it; with no GIT_SHA (a local build) the header is absent and commit is null.
-3) Persisted warm pins are stamped with the build and are not reloaded by a different build (a deploy never serves the
-   previous build's HTML); the same build still reloads them.
+3) Persisted warm pins are stamped with the build. A different build reloads them as already expired (1.26.286: boots
+   warm, the warm pass replaces them first); the same build keeps their timestamps.
 4) /api/v1/txs answers 400 for an offset past the cap instead of silently clamping it (a clamp served the wrong page).
 Usage: python3 tools/audit1109_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
@@ -36,11 +36,15 @@ os.environ["GIT_SHA"] = "a" * 40
 check("persist stamps the build", HC.persist_pins(force=True) >= 1 and db.get_blob(HC.PIN_BLOB)[0]["build"] == "sha:" + "a" * 40)
 HC._pin.clear(); HC._c.clear()
 os.environ["GIT_SHA"] = "b" * 40
-check("another build does not reload the pins", HC.load_pins() == 0 and HC.last(k) is None)
+t_net = HC.ttl("/network", {})
+check("another build reloads the pins as already expired, past TTL plus grace (boots warm, replaced first)",
+      HC.load_pins() == 1 and HC.last(k) == "<html>old build</html>" and HC.get(k, t_net) is None
+      and time.time() - HC._stored_ts(k) > t_net + HC.WARM_GRACE)
+HC._pin.clear(); HC._c.clear()
 os.environ["GIT_SHA"] = "a" * 40
-check("the same build reloads them (OOM or guard restart)", HC.load_pins() == 1 and HC.last(k) == "<html>old build</html>")
+check("the same build reloads them with their own timestamp (OOM or guard restart)", HC.load_pins() == 1 and HC.get(k, t_net) == "<html>old build</html>")
 blob = db.get_blob(HC.PIN_BLOB)[0]; blob.pop("build"); db.put_blob(HC.PIN_BLOB, blob); HC._pin.clear(); HC._c.clear()
-check("an unstamped blob (written before 1.26.285) is not reloaded", HC.load_pins() == 0)
+check("an unstamped blob (written before 1.26.285) reloads as expired", HC.load_pins() == 1 and HC.get(k, t_net) is None)
 os.environ.pop("GIT_SHA", None)
 
 # ---- 2) and 4) on a local server

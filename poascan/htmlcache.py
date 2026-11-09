@@ -32,9 +32,9 @@ PIN_MAX_AGE_S = int(os.environ.get("POASCAN_PIN_MAX_AGE_S", "86400"))   # never 
 _last_persist = [0.0]
 
 def _build_id():
-    """The build a rendered page belongs to: the deployed git SHA when stamped (GIT_SHA), else the API version. 1.26.285:
-    persisted pins carry it and load_pins() drops pins from another build, so a deploy never serves the previous build's
-    HTML (old copy, old asset links) after a restart; a plain OOM or guard restart of the same build still reloads them."""
+    """The build a rendered page belongs to: the deployed git SHA when stamped (GIT_SHA), else the API version. Persisted
+    pins carry it; load_pins() reloads another build's pins as already expired (1.26.286) so the warm pass replaces them
+    first, and a plain OOM or guard restart of the same build keeps their timestamps."""
     sha = os.environ.get("GIT_SHA") or ""
     if sha: return "sha:" + sha
     try:
@@ -404,8 +404,11 @@ def load_pins():
     except Exception as ex:
         log.warning("htmlcache: load pins failed (%s)", type(ex).__name__); return 0
     if not isinstance(obj, dict) or not isinstance(obj.get("pins"), list): return 0
-    if obj.get("build") != _build_id():   # 1.26.285: pins from another build (or an unstamped older blob) are never served
-        log.info("htmlcache: persisted pins are from another build; not reloaded"); return 0
+    # 1.26.286: pins from another build (or an unstamped older blob) are reloaded as already expired, past TTL plus grace,
+    # so a deploy still boots warm (1.26.285 dropped them and the first minutes after a deploy went cold: /chain timed out
+    # at the edge on Nov 9) but the warm pass replaces each one on its first round (warm_once renders a pin past grace
+    # itself). The same build keeps the original timestamps.
+    foreign = obj.get("build") != _build_id()
     now = time.time(); loaded = 0
     for e in obj["pins"]:
         if not isinstance(e, dict): continue
@@ -417,8 +420,9 @@ def load_pins():
         if nbytes > MAX_BYTES // 8: continue
         with _lock:
             if k not in _pin and k not in _c:   # never overwrite a copy rendered since boot
-                _pin[k] = (float(ts), html, nbytes); loaded += 1
-    if loaded: log.info("htmlcache: reloaded %d persisted pins", loaded)
+                t0 = float(ts) if not foreign else min(float(ts), now - ttl(k[0], dict(k[1])) - WARM_GRACE - 1)
+                _pin[k] = (t0, html, nbytes); loaded += 1
+    if loaded: log.info("htmlcache: reloaded %d persisted pins%s", loaded, " (another build: expired)" if foreign else "")
     return loaded
 
 def warm_loop(render_path, seg=lambda: None, stop=None):
