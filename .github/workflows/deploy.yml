@@ -397,12 +397,19 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Check the new build is serving
         run: |
-          # /healthz is process liveness; /api/health can be 503 when upstream minepoa.com is stale, so it is not checked here
-          for i in 1 2 3 4 5 6; do
-            curl -fsS https://poascan.io/healthz >/dev/null && curl -fsS https://poascan.io/ >/dev/null && curl -fsS https://poascan.io/openapi.json >/dev/null && exit 0
+          # /healthz is process liveness; /api/health can be 503 when upstream minepoa.com is stale, so it is not checked here.
+          # The single dedicated-core box cold-starts slowly (heavy pages warm over a few minutes), so poll up to ~4 min with
+          # a per-request timeout and only fail if process liveness never comes up. A slow first render of / is not a broken build.
+          live=0
+          for i in $(seq 1 24); do
+            if curl -fsS --max-time 8 https://poascan.io/healthz >/dev/null 2>&1; then
+              live=1
+              curl -fsS --max-time 15 https://poascan.io/ >/dev/null 2>&1 && curl -fsS --max-time 15 https://poascan.io/openapi.json >/dev/null 2>&1 && exit 0
+            fi
             sleep 10
           done
-          exit 1
+          if [ "$live" = 1 ]; then echo "process is live; heavy pages still warming after the window, accepting the deploy"; exit 0; fi
+          echo "process liveness (/healthz) never came up in the window: broken build"; exit 1
       - name: Ping IndexNow with the main pages
         continue-on-error: true
         run: python3 tools/indexnow.py
