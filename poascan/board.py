@@ -113,5 +113,6 @@ def card_html():
 
 def api():
     d = data()
-    return dict(d, method="https://poascan.io" + METHOD, url="https://poascan.io/governance?tab=queue#board",
+    return dict(d, data_as_of_close=d.get("last_close"), stale_reason=A.close_lag(d.get("last_close")),
+                method="https://poascan.io" + METHOD, url="https://poascan.io/governance?tab=queue#board",
                 note="Counts only. No pending seal blob or score is read. neutral_* are POAScan's replay of a proposed rule unless source says close record.")

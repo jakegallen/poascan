@@ -21,6 +21,15 @@ TTLS = [
 WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
 WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
+# 1.26.284 (E5): the pin set is kept only in memory, so every deploy or OOM restart serves heavy pages cold until the
+# warm loop repopulates. Persist the pins to a small SQLite blob on the /data volume and reload them at boot, before the
+# warm loop runs, so the first visitors after a restart get a warm (if slightly stale) copy at once. Bounded in size and
+# age; a reloaded pin keeps its original timestamp, so it is still subject to the normal TTL/warm refresh and telemetry.
+PIN_BLOB = "htmlcache_pins"
+PIN_PERSIST_EVERY = int(os.environ.get("POASCAN_PIN_PERSIST_EVERY", "180"))   # write the pins to SQLite at most this often
+PIN_PERSIST_MAX_BYTES = int(os.environ.get("POASCAN_PIN_PERSIST_BYTES", str(8 * 1024 * 1024)))   # total persisted cap (freshest pins kept)
+PIN_MAX_AGE_S = int(os.environ.get("POASCAN_PIN_MAX_AGE_S", "86400"))   # never reload a pin older than this (do not serve ancient HTML)
+_last_persist = [0.0]
 # 1.26.272: query keys that change the rendered page. Anything else (nocache, a tracker) is not a different page.
 # / ignores the query entirely (home() does not read it). Dropping those keys is what lets ?nocache= reuse the canonical copy.
 # 1.26.280: extended to every cached page route. Each tuple is the exact set of parameters that page varies on; any other
@@ -42,6 +51,7 @@ _TAB_OK = {}
 def register_tabs(path, values):
     _TAB_OK[path] = frozenset(v for v in values if isinstance(v, str))
 _warm_set = set()
+_warm_url_by = {}   # (path, qst) -> the WARM url string, so a stored render for a warm key can be attributed to its path
 
 _c, _bytes, _inflight, _lock = {}, [0], {}, threading.Lock()
 _pin = {}   # 1.26.275: warmed visitor pages, outside the 24 MB FIFO, replaced only by a finished render
@@ -75,8 +85,15 @@ def _warm_pairs():
     if not _warm_set:
         import urllib.parse
         for u in WARM:
-            p, _, q = u.partition("?"); _warm_set.add((p, tuple(sorted((k, tuple(v)) for k, v in urllib.parse.parse_qs(q).items()))))
+            p, _, q = u.partition("?"); pr = (p, tuple(sorted((k, tuple(v)) for k, v in urllib.parse.parse_qs(q).items())))
+            _warm_set.add(pr); _warm_url_by.setdefault(pr, u)
     return _warm_set
+
+def _warm_url(k):
+    """The WARM url string for a warm key (any segment, visitor or crawler), or None. Used to attribute a real render
+    (a put) to its warm path, so warm health advances only on an actual render (E3)."""
+    _warm_pairs()
+    return _warm_url_by.get((k[0], k[1]))
 
 def _qs_tuple(qs):
     return tuple(sorted((k, tuple(v)) for k, v in (qs or {}).items()))
@@ -157,6 +174,13 @@ def last(k):
         e = _entry(k)
         return None if not e else e[1]
 
+def _stored_ts(k):
+    """The stored copy's timestamp for k (pin or FIFO), or None. Used to tell a fresh render (the ts advanced) from a
+    served-stale copy, so warm health counts only a real new render (E3)."""
+    with _lock:
+        e = _entry(k)
+        return e[0] if e else None
+
 def waiting(k):
     """The event a render of k is in flight on, or None. Callers wait without taking a serving slot."""
     with _lock: return _inflight.get(k)
@@ -207,8 +231,11 @@ def _refresh(k, fn):
             ev.set(); return
     def run():
         try:
-            h = fn()
-            if isinstance(h, str): put(k, h)
+            t0 = time.time(); h = fn()
+            if isinstance(h, str):
+                put(k, h)
+                u = _warm_url(k)   # E3: a background render that actually stored a new copy is a real warm success
+                if u: _warm_ok(u, time.time() - t0)
         except Exception as ex:
             log.warning("htmlcache: refresh failed (%s)", type(ex).__name__)
         finally:
@@ -240,6 +267,18 @@ def render(k, t, fn, stale=0):
         if h is not None: return h
         old = last(k) if _pinned_key(k) else (within(k, stale) if stale else None)
         if old is not None: return old
+        # E4: the in-flight render exceeded the wait. Do NOT each render (N waiters -> N parallel renders on one core).
+        # Serve any stored copy at any age first; else wait once more on the single in-flight render; render here only
+        # as a last resort when nothing is stored and no render is in flight (so a caller is never served nothing).
+        any_copy = last(k)
+        if any_copy is not None: return any_copy
+        ev2 = waiting(k)
+        if ev2 is not None:
+            ev2.wait(10)
+            h = get(k, t)
+            if h is not None: return h
+            any_copy = last(k)
+            if any_copy is not None: return any_copy
         return fn()
     try:
         stats["miss"] += 1; h = fn()
@@ -275,14 +314,90 @@ def warm_once(render_path, seg=lambda: None, force=False):
             t0 = time.time()
             if force:
                 h = render_path(p, qs)   # do not return the old copy and call it done
-                if isinstance(h, str): put(k, h)
+                if isinstance(h, str):
+                    put(k, h); stats["warm"] += 1; n += 1; _warm_ok(u, time.time() - t0)   # a real render was stored
+                else: _warm_fail(u)
             else:
+                before = _stored_ts(k)
                 h = render(k, max(1, t - 5), lambda p=p, qs=qs: render_path(p, qs))
-            if isinstance(h, str): stats["warm"] += 1; n += 1; _warm_ok(u, time.time() - t0)
-            else: _warm_fail(u)
+                if isinstance(h, str):
+                    stats["warm"] += 1; n += 1
+                    # E3: record a warm success only when THIS call actually rendered and stored a new copy (the stored
+                    # ts advanced and no background refresh is now carrying it). A pinned page served stale while a
+                    # background refresh fires does not count here; that refresh records its own success in _refresh.
+                    if waiting(k) is None and (ts := _stored_ts(k)) is not None and ts != before:
+                        _warm_ok(u, time.time() - t0)
+                else: _warm_fail(u)
             log.debug("warm %s %.2fs", u, time.time() - t0)
         except Exception as ex: _warm_fail(u); log.warning("htmlcache: warm %s failed (%s)", u, type(ex).__name__)
     return n
+
+def _key_to_list(k):
+    """A warm key (path, qst, segment, crawler) as JSON-plain data. qst is kept exactly (sorted key -> value tuple)."""
+    path, qst, seg, crawler = k
+    return [path, [[kk, list(vv)] for kk, vv in qst], seg, bool(crawler)]
+
+def _key_from_list(x):
+    """Rebuild a warm key from _key_to_list output, EXACTLY as the in-memory key, or None when the shape is wrong
+    (so a reloaded pin can never be served under a different key)."""
+    try:
+        path, qst, seg, crawler = x
+        if not isinstance(path, str) or not isinstance(qst, list): return None
+        qt = tuple((str(kk), tuple(str(v) for v in vv)) for kk, vv in qst)
+        return (path, qt, seg, bool(crawler))
+    except Exception:
+        return None
+
+def persist_pins(force=False):
+    """Write the current pin set (its exact keys -> rendered HTML + original timestamp) to a small SQLite blob on the
+    /data volume, so a restart can serve warm (if slightly stale) copies before the warm loop repopulates. Rate limited
+    to PIN_PERSIST_EVERY. Bounded: an oversized pin is skipped and the total is capped at PIN_PERSIST_MAX_BYTES, freshest
+    pins kept first."""
+    if not ENABLED: return 0
+    now = time.time()
+    if not force and now - _last_persist[0] < PIN_PERSIST_EVERY: return 0
+    _last_persist[0] = now
+    with _lock:
+        items = sorted(_pin.items(), key=lambda it: it[1][0], reverse=True)   # freshest first
+    out, total = [], 0
+    for k, (ts, html, nbytes) in items:
+        if not isinstance(html, str) or nbytes > MAX_BYTES // 8: continue
+        if total + nbytes > PIN_PERSIST_MAX_BYTES: break
+        out.append({"k": _key_to_list(k), "ts": ts, "html": html}); total += nbytes
+    try:
+        from . import db
+        db.put_blob(PIN_BLOB, {"v": 1, "saved_at": now, "pins": out})
+    except Exception as ex:
+        log.warning("htmlcache: persist pins failed (%s)", type(ex).__name__); return 0
+    return len(out)
+
+def load_pins():
+    """Reload persisted pins into the pin set at boot, BEFORE the warm loop runs, so the first visitors after a restart
+    get a warm copy at once. Each entry is validated: a current WARM key only, a string body within the per-pin cap, and
+    not older than PIN_MAX_AGE_S. The key is rebuilt exactly, so a reloaded page is served like any pinned page
+    (stale-while-revalidate re-renders it on the first hit); the original timestamp is kept, so age and warm telemetry
+    stay honest. A copy this process already rendered is never clobbered."""
+    if not ENABLED: return 0
+    try:
+        from . import db
+        obj, _ = db.get_blob(PIN_BLOB)
+    except Exception as ex:
+        log.warning("htmlcache: load pins failed (%s)", type(ex).__name__); return 0
+    if not isinstance(obj, dict) or not isinstance(obj.get("pins"), list): return 0
+    now = time.time(); loaded = 0
+    for e in obj["pins"]:
+        if not isinstance(e, dict): continue
+        k = _key_from_list(e.get("k")); html = e.get("html"); ts = e.get("ts")
+        if k is None or not isinstance(html, str): continue
+        if not isinstance(ts, (int, float)) or now - ts > PIN_MAX_AGE_S: continue
+        if not _pinned_key(k): continue   # only a key that is still a warm page may be reloaded as a pin
+        nbytes = size(html)
+        if nbytes > MAX_BYTES // 8: continue
+        with _lock:
+            if k not in _pin and k not in _c:   # never overwrite a copy rendered since boot
+                _pin[k] = (float(ts), html, nbytes); loaded += 1
+    if loaded: log.info("htmlcache: reloaded %d persisted pins", loaded)
+    return loaded
 
 def warm_loop(render_path, seg=lambda: None, stop=None):
     """Background: re-render each WARM page when its copy is within WARM_EVERY s of its TTL. render_path(path, qs) -> html
@@ -293,5 +408,7 @@ def warm_loop(render_path, seg=lambda: None, stop=None):
             force = _close_due[0]
             if force: _close_due[0] = False
         warm_once(render_path, seg, force)
+        try: persist_pins()   # E5: checkpoint the warm pins to /data (rate limited), so a restart serves them warm
+        except Exception as ex: log.warning("htmlcache: persist pins failed (%s)", type(ex).__name__)
         _wake.wait(WARM_EVERY)
         _wake.clear()

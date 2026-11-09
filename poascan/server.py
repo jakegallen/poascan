@@ -1586,6 +1586,8 @@ def main():
         I.start(os.environ.get("POASCAN_SEED_DIR"))
         if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
         if HC.ENABLED:   # 1.26.202: heavy pages re-rendered in the background before their cached copy expires
+            try: HC.load_pins()   # 1.26.284 (E5): serve the previous run's warm pins at once, before the 60 s warm wait
+            except Exception as e: log.warning("htmlcache load pins: %s", type(e).__name__)
             __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
         try: CP.start()   # 1.26.277: pin every chart and range off the request; a miss still builds on the first hit
         except Exception as e: log.warning("chart warm: %s", type(e).__name__)
