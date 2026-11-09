@@ -15,10 +15,10 @@ DEFAULT_TTL = 15
 TTLS = [
     (re.compile(r"^/network$"), None, 60),   # 1.26.x: all Network tabs (overview + health/charts/…) cache 60s, not just health
     (re.compile(r"^/governance$"), None, 60),
-    (re.compile(r"^/(about|api|privacy|agents/census|agents/operators)$"), None, 300),
+    (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top"]
+WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/community"]   # 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.284 (E5): the pin set is kept only in memory, so every deploy or OOM restart serves heavy pages cold until the
@@ -57,7 +57,7 @@ _c, _bytes, _inflight, _lock = {}, [0], {}, threading.Lock()
 _pin = {}   # 1.26.275: warmed visitor pages, outside the 24 MB FIFO, replaced only by a finished render
 _close_due = [False]
 _wake = threading.Event()
-stats = dict(hit=0, miss=0, wait=0, warm=0, evict=0)
+stats = dict(hit=0, miss=0, wait=0, warm=0, evict=0, warm_direct=0)
 # 1.26.x: per-warm-path reliability (poascan's OWN render, not an upstream probe). ok/fail counts, the last successful
 # render time (for last_warm_age_s) and its duration in ms. _warm_ms is a bounded recent sample for self-render p50/p95.
 warm_paths = {}
@@ -327,6 +327,14 @@ def warm_once(render_path, seg=lambda: None, force=False):
                     # background refresh fires does not count here; that refresh records its own success in _refresh.
                     if waiting(k) is None and (ts := _stored_ts(k)) is not None and ts != before:
                         _warm_ok(u, time.time() - t0)
+                    elif waiting(k) is None and before is not None and _stored_ts(k) == before and time.time() - before > t + WARM_GRACE:
+                        # 1.26.286: render() served the old pin but its background refresh did not start (the cheap reserve
+                        # was full under load), so nothing would ever replace it: a warmed page sat 45+ minutes old on
+                        # Nov 9. The warmer is the page's owner, so it renders it here, on its own thread, as the close
+                        # rebuild (force) already does. Only past TTL plus grace, so a normal pass never double renders.
+                        t1 = time.time(); h2 = render_path(p, qs)
+                        if isinstance(h2, str): put(k, h2); stats["warm_direct"] += 1; _warm_ok(u, time.time() - t1)
+                        else: _warm_fail(u)
                 else: _warm_fail(u)
             log.debug("warm %s %.2fs", u, time.time() - t0)
         except Exception as ex: _warm_fail(u); log.warning("htmlcache: warm %s failed (%s)", u, type(ex).__name__)
