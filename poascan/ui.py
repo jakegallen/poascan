@@ -578,8 +578,7 @@ def layout(title, body, active="/", live=None, head=""):
         live = _A.freshness()
     full = SITE_TITLE if active == "/" and title in ("", "Proof of Agent explorer", SITE_TITLE) else f"{title} · POAScan"
     meta = head_meta(full, title)
-    from . import devdemo as _dd
-    return f'''<!doctype html><html lang="en"{_dd.html_attr()}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(full)}</title>{meta}
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
@@ -596,7 +595,7 @@ def layout(title, body, active="/", live=None, head=""):
 <main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
-<script src="/static/app.js?v={ASSET_V["app.js"]}" defer></script>{_dd.script()}</body></html>'''
+<script src="/static/app.js?v={ASSET_V["app.js"]}" defer></script></body></html>'''
 
 # 1.26.150: the CSS and JS cache keys are a hash of the file, so every deploy that changes one gets a new URL. The assets are served
 # immutable for a year under ?v=, and the hand-kept numbers (139 and 138) had not moved since Oct 20, so returning visitors could

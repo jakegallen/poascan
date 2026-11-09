@@ -1287,11 +1287,6 @@ class H(BaseHTTPRequestHandler):
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
                 if OG.ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
                 return self.send(404, "not found", TXT)
-            if path.startswith("/dev/"):   # dev only (devdemo.py): 404 unless POASCAN_DEV_DEMO=1 off Fly
-                from . import devdemo as DD
-                r = DD.route(path)
-                if not r: return self.send(404, "not found", TXT)
-                return self.send(r[0], r[1], r[2], {"Cache-Control": "no-store"})
             if path == "/healthz":   # answered by a request thread after a real DB read, so a hung server or locked DB fails it
                 db.q1("SELECT 1 AS x"); return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
             if path == "/robots.txt": return self.send(200, ROBOTS, TXT, {"Cache-Control": "public, max-age=3600"})

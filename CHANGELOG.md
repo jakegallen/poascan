@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.282] - 2026-11-09
+
+### Removed
+- Deleted the dev only Bench motion demo (`poascan/devdemo.py`, `poascan/devdemo.js`) and its `/dev/*` route. The demo replayed the Bench ticker on a local server with `?demo=motion` and was gated behind `POASCAN_DEV_DEMO=1` with a hard off switch on Fly (`FLY_APP_NAME`), so poascan.io never served the flag, the script or the seed: the module was unreachable in production (`/dev/*` already answered 404 there). The `ui.layout` import and the two render hooks it fed (`html_attr`, `script`) are gone with it, and `tools/bench_motion_test.py` drops the demo gate assertions while keeping the Bench motion coverage. No API, data or indexer surface changes. The client side `BM.demo` hook in `app.js` stays in place, now permanently inert.
+
 ## [1.26.281] - 2026-11-09
 
 ### Fixed

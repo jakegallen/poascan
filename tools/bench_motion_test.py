@@ -8,9 +8,8 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "t.db")
-os.environ.pop("POASCAN_DEV_DEMO", None)
 import fixture; fixture.seed()
-from poascan import db, bench as BN, views as V, devdemo as DD, ui
+from poascan import db, bench as BN, views as V, ui
 now = int(time.time()); A1 = "poa1" + "A" * 40
 db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?,?,?,?,?)",
          [("f0" * 32, "challenge", A1, now - 6, 1, 0), ("f1" * 32, "grade-sealed", A1, now - 40, 3, 1)], many=True)
@@ -27,21 +26,6 @@ check("bezel: a head and a glint over the ticks, the fill as --f", re.search(r'<
 check("the now line glow sits over the lanes", '<i class="nowg" aria-hidden="true"></i>' in h)
 snap = V.live_snapshot()
 check("snapshot last close carries settled (the close summary)", "settled" in snap["last"])
-# the demo is dev only
-check("demo off without POASCAN_DEV_DEMO", DD.ENABLED is False and DD.route("/dev/demo-seed") is None and DD.route("/dev/demo-motion.js") is None)
-ui.REQ.qs = {"demo": ["motion"]}; ui.REQ.path = "/"
-check("?demo=motion adds nothing while off", DD.html_attr() == "" and DD.script() == "")
-page = ui.layout("", "<p>x</p>", "/")
-check("page: no data-demo and no demo script while off", "data-demo" not in page and "/dev/" not in page)
-env = dict(os.environ, POASCAN_DEV_DEMO="1", FLY_APP_NAME="poascan")
-r = subprocess.run([sys.executable, "-c", "from poascan import devdemo as D; print(D.ENABLED)"], cwd=ROOT, env=env, capture_output=True, text=True)
-check("never on Fly, even with the flag set", r.stdout.strip() == "False")
-env.pop("FLY_APP_NAME")
-r = subprocess.run([sys.executable, "-c", "from poascan import devdemo as D, ui; ui.REQ.qs={'demo':['motion']}; print(D.ENABLED, D.html_attr(), D.script())"], cwd=ROOT, env=env, capture_output=True, text=True)
-check("local dev with the flag: the attribute and the script", r.stdout.startswith("True") and 'data-demo="motion"' in r.stdout and "/dev/demo-motion.js" in r.stdout)
-check("the demo script lives outside static/ (never served by /static/)", os.path.exists(os.path.join(ROOT, "poascan/devdemo.js")) and not os.path.exists(os.path.join(ROOT, "static/devdemo.js")))
-srv = open(os.path.join(ROOT, "poascan/server.py")).read()
-check("server: /dev/* answers 404 unless the demo is on", 'if path.startswith("/dev/"):' in srv and "DD.route(path)" in srv)
 # client rules
 js = open(os.path.join(ROOT, "static/app.js")).read()
 i = js.index("/* 1.26.145 Bench motion"); blk = js[i:js.index("/* apply a snapshot", i)]
