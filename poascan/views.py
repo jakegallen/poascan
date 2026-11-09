@@ -1074,8 +1074,9 @@ def epochs_page(qs=None):
     else:
         cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
-        unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet."
-        hist = (epochs_table(ep, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet.") if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
+        pz = " minepoa.com paused this list; balances safe." if A.epochs_paused() else ""   # 1.26.280: explain the gap when minepoa paused /api/epochs
+        unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet." + pz
+        hist = (epochs_table(ep, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet." + pz) if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
             unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
