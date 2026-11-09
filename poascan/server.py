@@ -29,6 +29,7 @@ ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": (
 log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
+COMMIT = os.environ.get("GIT_SHA") or None   # deployed git SHA (Dockerfile ENV from the deploy build-arg); None in local builds
 # Process start/restart count, persisted in a DB blob on the Fly volume so it survives restarts (the guard exits the
 # process on a hang or an OOM, Fly restarts it, and the next boot bumps this). boot_at is this process's start time;
 # count/first_at are null until _record_start() runs at boot (tests that call api() directly never bump it).
@@ -96,7 +97,7 @@ def api(path, qs):
         from . import hosted as _HO, routewatch as _RW
         return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], core=fd["core"], core_basis=fd["core_basis"], core_not_ok=fd["core_not_ok"], degraded=fd["degraded"],
                     routes=fd["routes"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
-                    txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), address_reads=dict(agent_list=V._roster_skips[0], read_path=V._roster_skips[1], agent_list_fresh_s=V.ROSTER_FRESH_S), started=STARTED, commit=os.environ.get("GIT_SHA") or None, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
+                    txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), address_reads=dict(agent_list=V._roster_skips[0], read_path=V._roster_skips[1], agent_list_fresh_s=V.ROSTER_FRESH_S), started=STARTED, commit=COMMIT, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
                     txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state(), page_cache=HC.state()), False
     if path == "/api/routes":   # 1.26.188: route halts from POAScan's existing probes (routewatch.py)
         from . import routewatch as _RW
@@ -104,6 +105,8 @@ def api(path, qs):
     if path == "/api/summary":
         s = V.summary_json(); return s, False
     if path == "/api/txs":
+        ov = (qs.get("offset") or [""])[0]
+        if INT_RX.match(ov or "") and int(ov) > OFFSET_MAX: raise BadRequest(f"offset must be at most {OFFSET_MAX}; page deeper with /api/v1/address/<a>/txs?cursor=")   # 1.26.285: never silently clamp (a clamp served the wrong page)
         lim = qint(qs, "limit", 100, 1, TXS_MAX); off = qint(qs, "offset", 0, 0, OFFSET_MAX); typ = qs.get("type", [""])[0]; ad = qs.get("addr", [""])[0]
         if typ and not TYPE_RX.match(typ): raise BadRequest("type must be a tx type token (lowercase letters and hyphens)")
         w, a = [], []
@@ -815,6 +818,10 @@ class H(BaseHTTPRequestHandler):
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and
               (ctype.startswith("text/") or "json" in ctype or "javascript" in ctype or "svg" in ctype or "manifest" in ctype))
         hdr = dict(extra or {})
+        if COMMIT and "X-API-Version" in hdr and "X-API-Commit" not in hdr:   # 1.26.285: the deployed git SHA next to the version
+            hdr["X-API-Commit"] = COMMIT
+            if "Access-Control-Expose-Headers" in hdr and "X-API-Commit" not in hdr["Access-Control-Expose-Headers"]:
+                hdr["Access-Control-Expose-Headers"] += ", X-API-Commit"
         if code == 200 and ctype.startswith("text/html") and "Cache-Control" not in hdr and not (self.path or "").startswith("/ops"):
             tag = page_etag(b)
             hdr.update({"ETag": tag, "Cache-Control": PAGE_CACHE, "Vary": "Accept-Encoding"})

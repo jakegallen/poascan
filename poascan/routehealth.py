@@ -17,7 +17,7 @@ CORE_BASIS = ("Mining and grading: an Agent earns only while answers can be subm
               "Tx lookup, assignments, swaps and anchors are listed on their own lines and do not change the headline.")
 LABELS = {"mining": "Mining", "grading": "Grading", "assignments": "Assignments", "tx_lookup": "Tx lookup", "swaps": "Swaps", "anchors": "Anchors"}
 RW_MAP = {"mining": "hosted_mining", "grading": "grading", "assignments": "assignments", "tx_lookup": "tx_lookup"}
-FEED_WORD = {"OK": "ok", "Degraded": "degraded", "Down": "down"}
+FEED_WORD = {"OK": "ok", "Degraded": "degraded", "Down": "down", "Paused upstream": "degraded"}   # 1.26.285: a minepoa paused read (1.26.280 feed label) is degraded, never a bare down
 
 def _row(rid, state, detail, as_of=None, served_by=None):
     return dict(id=rid, label=LABELS[rid], state=state, core=rid in CORE, detail=detail, as_of=as_of, served_by=served_by)
@@ -51,7 +51,9 @@ def routes(feed_rows, now=None):
     if sw == "unknown": out.append(_row("swaps", "unknown", "Swap reads not read yet"))
     elif sw == "ok" and ww in (None, "ok"): out.append(_row("swaps", "ok", "Reads and writes OK"))
     elif sw == "ok": out.append(_row("swaps", "degraded", f"Swap reads OK, swap writes {ww}"))
-    else: out.append(_row("swaps", sw, f"Swap reads {sw}" + (f", swap writes {ww}" if ww else "")))
+    else:
+        rd = "paused upstream" if (fr.get("Swaps") or {}).get("state") == "Paused upstream" else sw
+        out.append(_row("swaps", sw, f"Swap reads {rd}" + (f", swap writes {ww}" if ww else "")))
     an = fr.get("Anchors")
     out.append(_row("anchors", FEED_WORD.get(an["state"], "down") if an else "unknown", "Anchor list " + (an["state"].lower() if an else "not read yet"),
                     _iso(an.get("last_ok")) if an else None))
