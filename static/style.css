@@ -1711,7 +1711,8 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .credit a:hover b,.credit a:focus-visible b{color:var(--gold-hi)}
 /* ===== Chrome (UI/UX P2, 1.26.290): a blurred sticky header, card depth, one status dot for the header state and a dot for
    each Stale (or other) flag instead of a word tag. The word stays in the markup for screen readers and opens the same note. */
-header.top{background:color-mix(in srgb,var(--ink-1) 80%,transparent);-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3)}
+header.top{background:transparent;isolation:isolate}
+header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:color-mix(in srgb,var(--ink-1) 80%,transparent);-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3)}   /* the blur sits on a layer, not the header, so the fixed mobile menu keeps the viewport as its box */
 .card,.stat{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--white) 4%,transparent),0 1px 0 color-mix(in srgb,var(--black) 40%,transparent),0 14px 30px -20px color-mix(in srgb,var(--black) 80%,transparent)}
 .hdr #livepill>.pill{padding:0 2px;border:0;background:none;gap:7px;font-size:var(--t12);letter-spacing:.06em;color:var(--mute)}
 .hdr #livepill>.pill i{width:8px;height:8px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
