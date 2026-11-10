@@ -49,7 +49,7 @@ except Exception:
 STATE = """()=>{const c=document.querySelector('.cpop'),bx=c&&c.querySelector('.cp-box');if(!bx)return null;const sp=bx.querySelector('.cskel span'),
  er=bx.querySelector('.cp-err'),rb=er&&er.querySelector('[data-cpretry]'),R=e=>e.getBoundingClientRect(),cs=e=>getComputedStyle(e);
  return {open:c.hasAttribute('open'),text:bx.innerText.trim(),loading:!!sp&&R(sp).height>0&&cs(sp).visibility==='visible'&&cs(sp).color!=='rgba(0, 0, 0, 0)',
-  err:!!er,retry:!!rb&&R(rb).width>=44&&R(rb).height>=32,svg:!!bx.querySelector('.cpchart path'),chips:c.querySelectorAll('.cp-rng button').length,boxH:Math.round(R(bx).height)}}"""
+  err:!!er,retry:!!rb&&R(rb).width>=44&&R(rb).height>=32,svg:!!bx.querySelector('.chartbox.ck svg.chart path'),chips:c.querySelectorAll('.cp-rng button').length,boxH:Math.round(R(bx).height)}}"""
 if sync_playwright:
     def free_port():
         s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
@@ -93,7 +93,7 @@ if sync_playwright:
                     mode["m"] = "500"; pg.locator(".cp-err [data-cpretry]").click(); pg.wait_for_timeout(400); s2 = pg.evaluate(STATE)
                     check(f"{tag}: a 500 also ends in the retry state ({s2})", s2 and s2["err"] and s2["retry"])
                     mode["m"] = "ok"; pg.locator(".cp-err [data-cpretry]").click()
-                    try: pg.wait_for_selector(".cpop[open] .cpchart path", timeout=15000)
+                    try: pg.wait_for_selector(".cpop[open] .chartbox.ck svg.chart path", timeout=15000)
                     except Exception: pass
                     s3 = pg.evaluate(STATE)
                     check(f"{tag}: Retry draws the chart, or the fixture's terse No data line ({s3})", s3 and not s3["err"] and (s3["svg"] or s3["text"] == "No data for this range yet"))

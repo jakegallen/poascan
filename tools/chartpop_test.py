@@ -137,13 +137,17 @@ cs_flat = re.sub(r"/\*.*?\*/", "", cs, flags=re.S)
 check("pop-out dialog is visible from the first frame (no entrance fade, no opacity 0)",
       not re.search(r"\.(cpop|cp-in|cp-box|cp-hd)[^{]*\{[^}]*animation:\s*(?!none)", cs_flat)
       and not re.search(r"\.(cpop|cp-in|cp-box|cpchart|cp-hd)[^{]*\{[^}]*opacity:\s*0(?![.\d])", cs_flat))
-check("pop-out line may glow and the fill may ease in; reduced motion turns that off",
-      "cpglow" in cs and "cpfill" in cs and ".cpchart path{" in cs and "animation:none!important" in cs)
+_kits = {k: CP.payload(k, "", 800) for k in CP.CHARTS}
+check("1.26.310: every pop-out draws with the v2 chart kit (server markup from ui.line or ui.bars), app.js injects it",
+      all('class="chartbox ck"' in p["html"] for p in _kits.values() if p["pts"] or p["bars"]) and "box.innerHTML=d.html" in blk and "cpchart" not in blk)
+check("1.26.310: kit hover on every chart (data-tip items), bars for Answers and line for the rest",
+      all("data-tip=" in p["html"] for p in _kits.values() if p["pts"] or p["bars"]) and ('class="col"' in _kits["answers"]["html"] or not _kits["answers"]["bars"]))
+check("1.26.310: reduced motion turns the pop-out motion off", ".cp-box path{transition:none!important;animation:none!important}" in cs_flat)
 check("phones: full screen, touch scrub on the plot", re.search(r"@media \(max-width:640px\)\{\s*\.cpop\{width:100%;height:100%", cs_flat) is not None and "touch-action:none" in cs_flat)
-check("watermark on the big chart (chartbox)", 'class="chartbox cp-box"' in blk)
-check("milestone labels: lanes above the plot with a background, plot top moves down, no labels near the x axis",
-      "pt=8+20*ends.length+10" in blk and 'class="mkb"' in blk and "H-pb-8-(j%2)*14" not in blk and ".cpchart .mk .mkb{" in cs_flat)
-check("hover tip sits below the milestone label lanes, never over a label", 'tip.style.top=(ML.length?pt+4:10)+"px"' in blk)
+check("watermark on the big chart (the kit's chartbox inside the panel)", 'class="cp-box"' in blk and ".cp-box .chartbox::before{" in cs_flat and ".cp-box{position:relative;isolation:isolate" in cs_flat)
+check("bare: no milestone marks and no dash in any pop-out chart", all('class="mk' not in p["html"] and not p["marks"] and not re.search("[\u2013\u2014]", p["html"]) for p in _kits.values()) and "mkb" not in blk)
+check("hover: crosshair, tooltip and orb on the kit panel; touch scrub and arrow keys kept", '["xh","xt","xd"]' in blk and "setPointerCapture" in blk and '"ArrowLeft"' in blk)
+check("range switch is a segmented control", ".cp-rng .chip.on{color:var(--ink-0);background:linear-gradient" in cs_flat)
 check("reduced motion covered", "prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt" in cs_flat)
 check("no em or en dash in the pop-out code", not re.search("[\u2013\u2014]", blk + cs))
 

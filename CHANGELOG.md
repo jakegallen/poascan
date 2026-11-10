@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.310] - 2026-11-10
+
+### Changed
+- Chart pop-outs (the corner icon on Total mined, Agents, Active Agents, Holders, Supply, Txs, Answers and the rest) draw with the v2 chart kit: amber glow line, lit panel, 3D columns, nice y ticks, tidy date labels, value chip. Styled 24h, 7d, 30d, All switch; hover crosshair, tooltip and orb; touch scrub and arrow keys kept. Watermark kept, no marks, no gaps, reduced motion respected.
+- `/fragment/chart` adds an `html` field (additive).
+
 ## [1.26.309] - 2026-11-10
 
 ### Changed
