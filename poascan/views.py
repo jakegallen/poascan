@@ -744,9 +744,9 @@ def address(a):
         fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
         main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip())
                 + f'<nav class="chips fachips" aria-label="For agents"><span class="lbl">For agents</span>{fa}</nav>'
-                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a)
+                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
                 + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
-                + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
+                + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
     if not rsum: nav += f'<p class="ecnote"><a href="/help?address={E(a)}">No POA yet. Why am I not earning? →</a></p>'
     return page("Address " + short(a), head + nav + main, "/")
 
