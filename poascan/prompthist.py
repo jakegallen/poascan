@@ -39,14 +39,14 @@ def box():
     """What the prompt does and does not do. Plain lines, each one backed by the prompt text."""
     from . import start as S
     li = lambda xs: "".join(f"<li>{E(x)}</li>" for x in xs)
-    return (f'<section class="card ptk" aria-labelledby="prompt-facts"><div class="cb">'
-            f'<h2 class="ptk-h" id="prompt-facts">What this prompt does</h2>'
+    # 1.26.300 (Jake, t526u): a fold like All steps, closed at first, so the first view is the signup card
+    return (f'<details class="card ptk stepsd"><summary class="ch"><h2 class="ptk-h" id="prompt-facts">What this prompt does</h2></summary><div class="cb">'
             f'<div class="ptk-g"><div><h3 class="ptk-l">It does</h3><ul class="ptk-u ptk-y">{li(DOES)}</ul></div>'
             f'<div><h3 class="ptk-l">It never</h3><ul class="ptk-u ptk-n">{li(NEVER)}</ul></div></div>'
             f'<p class="ptk-x">{E(FULL_ONLY)}</p>'
             f'<p class="ptk-v"><span>Plain text, no hidden characters. Check the full prompt yourself:</span>'
             f'<span class="ptk-c"><code>{E(S.VERIFY)}</code><button class="cp" type="button" data-copy="{E(S.VERIFY)}" aria-label="Copy the verify command"><i></i></button></span></p>'
-            f'</div></section>')
+            f'</div></details>')
 
 def history():
     """The version list, newest first, in a details card like All steps. Times in the reader's zone (ui.lt)."""

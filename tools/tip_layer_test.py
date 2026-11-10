@@ -119,17 +119,24 @@ def run(base, p, w, h, mobile, kinds):
                 pg.evaluate(f"""()=>{{const s=document.querySelector('{sel} > summary');let c=s.parentElement;
                   while(c&&!(c.scrollWidth>c.clientWidth&&/auto|scroll/.test(getComputedStyle(c).overflowX)))c=c.parentElement;
                   if(c){{const a=s.getBoundingClientRect(),b=c.getBoundingClientRect();c.scrollLeft+=a.right-(b.right-8)}}}}""")
-                (s.tap if mobile else s.click)(timeout=3000)
+                # 1.26.300: a mouse click on the status pill opens Health, so at 1280 its note is opened by hover
+                (s.tap if mobile else s.hover if "spill" in q["k"] else s.click)(timeout=3000)
             except Exception as e:
                 check(f"{w}: {path} {q['k']} '{q['label']}': opens ({type(e).__name__})", False); bad += 1; continue
             pg.wait_for_timeout(180)
             r = pg.evaluate(f"()=>{{const d=document.querySelector('{sel}');return d&&d.open}}")
-            if not r: check(f"{w}: {path} {q['k']} '{q['label']}': open after a {'tap' if mobile else 'click'}", False); bad += 1; continue
+            if not r: check(f"{w}: {path} {q['k']} '{q['label']}': open after a {'tap' if mobile else 'hover' if 'spill' in q['k'] else 'click'}", False); bad += 1; continue
             res = pg.evaluate(PROBE, pg.locator(sel + " .qbox").first.element_handle())
             kinds.add("qtip " + q["k"].split("|")[0])
             if judge(f"{path} note {q['k']} '{q['label']}'", res): good += 1
             else: bad += 1
             pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
+            if not mobile and "spill" in q["k"]: pg.mouse.move(640, 790); pg.wait_for_timeout(60)   # leave the hovered pill
+        if path == "/" and not mobile:   # 1.26.300 (t524u): a click on the status pill goes to Health
+            pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
+            pg.mouse.move(0, 400); pg.locator("#livepill > summary").click(timeout=3000); pg.wait_for_timeout(1200)
+            check(f"{w}: a click on the status pill opens Health", "/network?tab=health" in pg.url)
+            pg.goto(base + path, wait_until="domcontentloaded", timeout=60000); pg.wait_for_timeout(400); pg.mouse.move(640, 790)
         # chart hover readouts (.xt) at the left edge, middle and right edge of up to 4 charts
         nch = pg.evaluate("()=>{let n=0;document.querySelectorAll('.chartbox').forEach((c,i)=>{const r=c.getBoundingClientRect();if(r.width&&r.height&&n<4){c.dataset.tc=n++}});return n}")
         for i in range(nch):

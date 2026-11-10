@@ -10,6 +10,7 @@ system_notice object and plain notice or message fields. When an exact sample ar
   balance_stale with balance_as_of and balance_source naming the last real copy.
 * Real shapes (as read live Oct 23, 2026, values replaced) and the node's unknown-id answers are not notices.
 Usage: python3 tools/strain_notice_test.py"""
+import re
 import json, os, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 os.environ["POASCAN_SEGMENTS"] = "1"   # one segment: the explorer serves the current state
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -118,11 +119,11 @@ check("job_live while backing off sends no status read and stores nothing", st2 
 html = ui.layout("Home", "<p>x</p>")
 check("no notice strip on any page, ever (1.26.176); the development banner is gone too (1.26.288)", 'id="ntbar"' not in html and 'class="ntbar' not in html and 'id="devbar"' not in html and not hasattr(ST, "banner") and not hasattr(ui, "_strain_bar"))
 pill = html[html.index('id="livepill"'):html.index("</details>", html.index('id="livepill"'))]
-check("the reason is one line in the header status note, terse; Live stays Live (1.26.220: not a core route)", f'<span class="sp-r">{ui.NOTICE_REASON}</span>' in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
+check("the note shows Notices as one checklist row (the sentence stays in reasons and on Health); Live stays Live (1.26.220: not a core route)", re.search(r'<li class="(warn|bad)"><i aria-hidden="true"></i><span>Notices</span><b>(Slow|Down)</b></li>', pill) and ui.NOTICE_REASON not in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
       and (lambda p: p["state"] == "live" and p["label"] == "Live" and ui.NOTICE_REASON in p["reasons"])(ui.status_pill({"state": "live", "label": "Live", "why": ""})))
 check("status note copy: no em or en dash", all(ch not in ui.NOTICE_REASON for ch in "\u2013\u2014"))
 from poascan import views as _V
-check("the live snapshot's note (app.js swaps it in) carries the same reason", ui.NOTICE_REASON in _V.pill()["pop"])
+check("the live snapshot's note (app.js swaps it in) carries the same row", "<span>Notices</span>" in _V.pill()["pop"] and ui.NOTICE_REASON in _V.pill()["reasons"])
 css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
 check("no notice strip CSS left", ".ntbar" not in css)
 AG._META[0] = 0; m = AG.meta()

@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.300] - 2026-11-10
+
+### Changed
+- The Built by @Jakegallen credit moved from a floating pill under the home cards into the footer row on every page: right aligned after the links on desktop, its own centered line on a phone. Muted like the links, gold on hover.
+- Footer: one row at the panel width and padding; links never underline.
+- Header status note: a compact checklist. A header with the state and the data age, one row per feed (dot, short name, OK, Slow, Down, Halted or Paused, not OK first, at most 10), then the read time and a Health link. The full sentences and since times stay on Health and in the API's reasons.
+- A mouse click on the status pill opens Health; a tap on a phone still opens the short note.
+- /start: What this prompt does is a fold like All steps, closed at first; the prompt text is unchanged (same template_sha256).
+
 ## [1.26.299] - 2026-11-10
 
 Slow-page P0: serving-path performance hardening on the one dedicated core. Read only, no indexer or data-write change. Every default is unchanged for a normal visitor.
