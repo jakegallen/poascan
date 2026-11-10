@@ -756,3 +756,24 @@ D.addEventListener("click",function(e){var q=e.target.closest&&e.target.closest(
 /* header status (1.26.169): keyboard focus on the dot opens its note like a hover; moving focus out of it closes what focus opened */
 D.addEventListener("focusin",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||q.open||!e.target.matches("summary:focus-visible"))return;shut(q);q.open=true;q.dataset.hv="1"});
 D.addEventListener("focusout",function(e){var q=e.target.closest&&e.target.closest("#livepill");if(!q||!q.dataset.hv||(e.relatedTarget&&q.contains(e.relatedTarget)))return;q.open=false;delete q.dataset.hv})})();
+/* 1.26.304 (Jake, rows and columns): a table or list over 20 rows shows 20 and a Show more button (20 more a click); no
+   script keeps every row. Two panels side by side end level: the taller one is capped at the shorter one's height (360 px
+   at least) and scrolls inside, so there is no empty void. Off under 900 px, where the panels stack. */
+(function(){var D=document,CAP=20;
+function rows(el){return el.tagName==="TBODY"?[].filter.call(el.children,function(r){return r.tagName==="TR"}):[].filter.call(el.children,function(r){return r.tagName==="LI"})}
+function apply(el){var r=rows(el),n=+(el.dataset.rcn||CAP),b=el._rcb;r.forEach(function(x,i){x.classList.toggle("rc-h",i>=n)});var left=r.length-n;
+ if(left>0){if(!b){b=D.createElement("button");b.type="button";b.className="rcmore";b.addEventListener("click",function(){el.dataset.rcn=(+(el.dataset.rcn||CAP))+CAP;apply(el);even()});
+  var at=el.tagName==="TBODY"?(el.closest(".tw")||el.closest("table")):el;at.parentNode.insertBefore(b,at.nextSibling);el._rcb=b}
+  b.textContent="Show more · "+left.toLocaleString()}else if(b){b.remove();el._rcb=null}}
+function rowcap(){[].slice.call(D.querySelectorAll("main table:not(.nocap) > tbody, main .card ul:not(.nocap):not(.chips), main .card ol:not(.nocap)")).forEach(function(el){
+ if(el.closest("nav,header,.qbox,.chartbox,.nocap"))return;if(rows(el).length<=CAP&&!el._rcb)return;
+ if(!el.dataset.rc){el.dataset.rc="1";new MutationObserver(function(){apply(el)}).observe(el,{childList:true})}apply(el)})}
+function even(){var on=window.innerWidth>900;[].slice.call(D.querySelectorAll("main .grid2")).forEach(function(g){
+ var k=[].filter.call(g.children,function(c){return c.offsetParent!==null});k.forEach(function(c){c.classList.remove("evcap");c.style.maxHeight=""});
+ if(!on||k.length!==2)return;g.classList.add("evm");var a=k[0].offsetHeight,b=k[1].offsetHeight;g.classList.remove("evm");
+ var t=a>b?k[0]:k[1],s=Math.max(Math.min(a,b),360);if(Math.max(a,b)-s<60)return;t.style.maxHeight=s+"px";t.classList.add("evcap")})}
+var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(even,150)});
+D.addEventListener("toggle",function(e){if(e.target.closest&&e.target.closest("main .grid2")){clearTimeout(tm);tm=setTimeout(even,60)}},true);
+function go(){rowcap();even();setTimeout(even,800)}
+if(D.readyState==="loading")D.addEventListener("DOMContentLoaded",go);else go();window.addEventListener("load",even);
+window.poaRows={cap:rowcap,even:even}})();
