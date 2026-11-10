@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.287] - 2026-11-09
+
+### Added
+- A shared API throttle for one User-Agent: `poa-dashboard/1.0` gets one token bucket across all of its IPs (about 1 request per second, burst 5; `POASCAN_UA_THROTTLE`, `POASCAN_UA_THROTTLE_RATE`, `POASCAN_UA_THROTTLE_BURST`). It sent about 9 requests a second over ~150 IPs, about 75% of API traffic, so no per-IP limit fired and it held the one core (about 23% of requests got 503). Over the budget an `/api` request gets a small JSON 429 with `Retry-After` and `Cache-Control: no-store`, decided before any serving slot, cache or upstream work. The exact string only: `minepoa-dashboard/1.0` and every other client are untouched, and health checks are never throttled. `/api/status` shows `diagnostics.mem_guard.ua_throttle` (throttled and allowed counts since boot).
+
 ## [1.26.286] - 2026-11-09
 
 ### Fixed

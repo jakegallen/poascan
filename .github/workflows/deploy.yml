@@ -173,6 +173,8 @@ jobs:
         run: python tools/warm_direct_test.py
       - name: Audit 1109 (Paused upstream reads degraded on routes, X-API-Commit equals /api/health commit, warm pins reload only for the same build, txs offset past the cap is a 400)
         run: python tools/audit1109_test.py
+      - name: Shared User-Agent API throttle (exact poa-dashboard/1.0 shares one bucket across IPs; 429 with Retry-After and no-store before any slot; others and health untouched; count on guard telemetry)
+        run: python tools/ua_throttle_test.py
       - name: Reliability telemetry (memory-guard counters, process restart count, per-warm-path render health and POAScan's own render latency on /api/status, kept apart from the upstream probe)
         run: python tools/reliability_telemetry_test.py
       - name: Earning gates (source and read time per value, Inferred marks, birth panel versus seated graders)

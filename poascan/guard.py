@@ -53,6 +53,30 @@ SCRAPE_WAIT = float(os.environ.get("POASCAN_SCRAPE_WAIT", "0.05"))
 scrape = threading.BoundedSemaphore(max(1, SCRAPE_MAX))
 conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
 
+# 1.26.287: one shared token bucket per throttled User-Agent, across every client IP. poa-dashboard/1.0 spread about
+# 9 requests a second over ~150 IPs (Nov 9), so a per-IP limit never fired and it held the one core. The match is the
+# exact User-Agent string (minepoa-dashboard/1.0 and everyone else are untouched). Checked in server._gated before any
+# slot, cache or upstream work, so an over-limit request costs a dict read and a small 429. Comma-separated list.
+UA_THROTTLE = tuple(x.strip() for x in os.environ.get("POASCAN_UA_THROTTLE", "poa-dashboard/1.0").split(",") if x.strip())
+UA_THROTTLE_RATE = float(os.environ.get("POASCAN_UA_THROTTLE_RATE", "1"))    # tokens per second, shared by all of that UA's IPs
+UA_THROTTLE_BURST = float(os.environ.get("POASCAN_UA_THROTTLE_BURST", "5"))  # bucket size
+_ua_lock = threading.Lock()
+_ua_bucket = {}   # ua -> (tokens, monotonic time of last update)
+ua_stats = {"throttled": 0, "allowed": 0}
+
+def ua_throttle(ua, now=None):
+    """0 when this request may go on, else the Retry-After seconds. Only an exact UA_THROTTLE match spends a token."""
+    if not ua or ua not in UA_THROTTLE: return 0
+    now = time.monotonic() if now is None else now
+    rate = max(UA_THROTTLE_RATE, 0.001); burst = max(UA_THROTTLE_BURST, 1.0)
+    with _ua_lock:
+        tok, last = _ua_bucket.get(ua, (burst, now))
+        tok = min(burst, tok + max(0.0, now - last) * rate)
+        if tok >= 1.0:
+            _ua_bucket[ua] = (tok - 1.0, now); ua_stats["allowed"] += 1; return 0
+        _ua_bucket[ua] = (tok, now); ua_stats["throttled"] += 1
+    return max(1, int((1.0 - tok) / rate + 0.999))
+
 def close_acquire():
     """One heavy slot for close ingest. Never a reserved cheap slot: False when every heavy slot is already held,
     and the reserve stays free for the homepage and /chain."""
@@ -73,12 +97,15 @@ def telemetry():
     """Cheap read of the memory guard and self-check counters for diagnostics (poascan's own, not an upstream probe).
     trims/gcs: malloc_trim and full gc.collect() run counts. rss_mb: last resident size. rss_over: times RSS was seen
     above RSS_EXIT_MB (a second in a row triggers a clean exit, which the restart counter then records on the next boot).
-    self_check_fails/throttled_fails: consecutive /healthz self-check misses (throttled ones do not force a restart)."""
+    self_check_fails/throttled_fails: consecutive /healthz self-check misses (throttled ones do not force a restart).
+    ua_throttle: the shared per-User-Agent API throttle (1.26.287); throttled counts its 429s since boot."""
     s = state
     return dict(trims=s["trims"], gcs=s["gcs"], rss_mb=s["rss_mb"], rss_exit_mb=RSS_EXIT_MB, rss_trim_mb=RSS_TRIM_MB,
                 rss_over=s.get("rss_over", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
                 busy_fails=s.get("busy_fails", 0), heavy_busy=heavy_busy(),
-                steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP)
+                steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP,
+                ua_throttle=dict(agents=list(UA_THROTTLE), rate=UA_THROTTLE_RATE, burst=UA_THROTTLE_BURST,
+                                 throttled=ua_stats["throttled"], allowed=ua_stats["allowed"]))
 
 try:
     _libc = ctypes.CDLL("libc.so.6"); _libc.malloc_trim.argtypes = [ctypes.c_size_t]
