@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.303] - 2026-11-10
+
+### Fixed
+- Chain History: a close from before the restart printed 'Oct 20)">' before its mark; its title now carries a plain date.
+- Cadence: no empty bar at the restart. The first close after it counts the time since the close before it.
+
 ## [1.26.302] - 2026-11-10
 
 ### Added
