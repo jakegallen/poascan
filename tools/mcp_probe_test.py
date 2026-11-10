@@ -77,7 +77,7 @@ info = json.loads(b).get("result", {}).get("serverInfo", {}) if c == 200 else {}
 ok(c == 200 and info.get("version") == AG.VERSION and dt < 0.5, f"initialize 200 while slots are full ({c}, {info.get('version')}, {dt*1000:.0f} ms)")
 c, b, dt = post("tools/list")
 tools = json.loads(b).get("result", {}).get("tools", []) if c == 200 else []
-ok(c == 200 and len(tools) == 53 and dt < 0.5, f"tools/list 200 with 53 tools while slots are full ({c}, {len(tools)}, {dt*1000:.0f} ms)")
+ok(c == 200 and len(tools) == 54 and dt < 0.5, f"tools/list 200 with 54 tools while slots are full ({c}, {len(tools)}, {dt*1000:.0f} ms)")
 c, b, dt = post("ping")
 ok(c == 200 and json.loads(b).get("result") == {} and dt < 0.5, f"ping 200 while slots are full ({c}, {dt*1000:.0f} ms)")
 c, b, dt = post("notifications/initialized", note=True)
