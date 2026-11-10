@@ -42,7 +42,7 @@ if sync_playwright:
             except Exception: time.sleep(.25)
         home = urllib.request.urlopen(base + "/", timeout=20).read().decode(); start = urllib.request.urlopen(base + "/start", timeout=20).read().decode()
         check("home and /start: no strip under the header", 'class="upstrip' not in home and 'class="upstrip' not in start)
-        check("dev banner stays", 'id="devbar"' in home and "System development in progress." in home)
+        check("dev banner removed (1.26.288)", 'id="devbar"' not in home and "System development in progress." not in home)
         hd = home[home.index('id="livepill"'):home.index("</details>", home.index('id="livepill"'))]
         check("header note names grading, Details to /upgrade, Health link", "Grading not yet confirmed. No recent seals." in hd and 'href="/upgrade">Details</a>' in hd and 'href="/network?tab=health">Health</a>' in hd)
         check("Graders Unconfirmed tag unchanged", '<span class="tag warn">Unconfirmed</span>' in home)

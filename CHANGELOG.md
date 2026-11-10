@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.288] - 2026-11-09
+
+UI/UX refinement, phase P0 (busy shell) plus two quick changes Jake asked for.
+
+### Changed
+- A human page that finds every slot held no longer gets the bare `server busy, retry shortly` text. It gets its last good stored copy (any page, up to a day old, served with no slot, `Cache-Control: no-store` and `X-POAScan-Copy: last-good`), or a small branded Busy page (503, `Retry-After: 3`, reloads itself, no script, no request). The API, MCP and data files keep the plain text 503 their clients parse.
+- The site-wide development banner is removed from every page.
+
+### Added
+- Home: one quiet credit pill under the last card, "Built by" with the X logo and @Jakegallen, linking https://x.com/Jakegallen in a new tab. Muted, gold on hover. No share button.
+
 ## [1.26.287] - 2026-11-09
 
 ### Added
