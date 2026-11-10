@@ -13,6 +13,12 @@ from . import intake as IK
 from . import settleage as SA
 
 TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("intake", "Intake"), ("settleage", "Settle age"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
+NAV_TABS = ("overview", "established", "at-risk", "payouts", "rules")   # 1.26.293 (UI/UX P4b): five tabs on the page; the rest still render at their URLs and live in the API
+GOV_PAGE = 50   # Established and At risk rows per page (the full lists are 3,000+ rows: the API and CSV carry them)
+AGENT_API = [("Queue", "queue", "/api/v1/governance/queue"), ("Settlement", "settlement", "/api/v1/governance/settlement"), ("Changes", "changes", "/api/v1/governance/standing-changes"),
+             ("Intake", "intake", "/api/v1/governance/intake"), ("Settle age", "settleage", "/api/v1/governance/settle-age"), ("Never established", "never", "/api/v1/governance/never-established"),
+             ("Graders", "graders", "/api/v1/governance/graders"), ("Directory", "directory", "/api/v1/governance/directory"), ("Forum", "forum", "/api/v1/forum"),
+             ("Proposals", "proposals", "/api/v1/governance/proposals"), ("Protocol", "protocol", "/api/v1/protocol"), ("Charts", "charts", "/api/v1/epochs")]
 LEVELS = [("risk", "At risk"), ("watch", "Watch"), ("safe", "Safe"), ("norecord", "No record"), ("system", "System")]
 AGENT_COL = SS.Col("name", "Agent", "text")   # header sorting (1.26.117): Agent sorts by name A to Z, unnamed Agents last
 LEVEL_ORDER = {k: i for i, (k, _) in enumerate(LEVELS)}
@@ -128,16 +134,32 @@ def overview():
     d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
     f2 = lambda v: pct(v) if v is not None else "···"
     s = "".join([stat("Established", intc(len(d["rows"])), tip=est_tip(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
-                 stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"), stat("Safe", intc(c["safe"])),
-                 stat("Graders", intc(cal.get("graders_count"))), stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats that agreed with the settled outcome, advisory")])
+                 stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"),
+                 stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats that agreed with the settled outcome, advisory")])
     risky = [r for r in d["rows"] if r["level"] in ("risk", "watch")]
     t = standing_table(risky, 8) if risky else '<p class="na">No established Agent is estimated to drop in the next 3 closes.</p>'
     last = [[_ep(r["epoch"]), intc(r["established"]), intc(r["established_removed"]), intc(r["challenge_eligible"]), intc(r["paid"])] for r in reversed(ep[-6:])]
     lt = table(["Close", "Added", "Removed", "Eligible", "Paid"], last) if last else '<p class="na">No closes in this segment yet.</p>'
-    return (f'<div class="stats six">{s}</div>' + GVW.stats_row() + '<div class="grid2">'
+    return (f'<div class="stats four">{s}</div>' + GVW.stats_row() + '<div class="grid2">'
             + card("At risk and Watch", t, f'<a class="more" href="{href("at-risk")}">All →</a>', cls="histc")
             + estimate_card() + "</div>"
-            + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>'))
+            + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>') + for_agents())
+
+def for_agents():
+    """Governance detail for agents: each former tab as its page link and its JSON endpoint (the pages still render)."""
+    li = "".join(f'<li><a href="{href(k)}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, k, u in AGENT_API)
+    return card("For agents", f'<ul class="fagents">{li}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
+
+def _pager(tab, kw, pg, pages, anchor):
+    if pages <= 1: return ""
+    return ('<div class="chips pager2">' + (f'<a class="chip" href="{href(tab, **kw(page=str(pg - 1) if pg > 2 else ""))}#{anchor}">Prev</a>' if pg > 1 else "")
+            + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href(tab, **kw(page=str(pg + 1)))}#{anchor}">Next</a>' if pg < pages else "") + "</div>")
+
+def _page_of(qs, n):
+    try: pg = max(1, int(_q(qs, "page", "1")))
+    except ValueError: pg = 1
+    pages = max(1, -(-n // GOV_PAGE)); pg = min(pg, pages)
+    return pg, pages, slice((pg - 1) * GOV_PAGE, pg * GOV_PAGE)
 
 def estimate_card():
     """Overview: the next close's Est. per Agent, labelled Estimate, with its basis closes (current segment; none in an archived one)."""
@@ -179,7 +201,9 @@ def at_risk(qs):
     # One segment (no cut): the two-close list as on the address page first. With a cut, standing starts fresh in each
     # segment, so the level chips on the one table are the at-risk view.
     top = "" if SG.has_cut() else V.at_risk_body(qs, href("at-risk"))
-    return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows, sort=by, d=d, link=link) + foot, links, cls="histc", id="standing")
+    pg, pages, sl = _page_of(qs, len(rows))
+    nav = _pager("at-risk", lambda **o: dict(dict(level=f, **keep), **o), pg, pages, "standing")
+    return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows[sl], sort=by, d=d, link=link) + nav + foot, links, cls="histc", id="standing")
 
 @A.close_memo("jury_series")
 def jury_series():
@@ -455,6 +479,7 @@ def established(qs):
     by = SS.page_sort(qs, dict(EST_SORTS), "score"); d = SS.page_dir(qs)
     f = _q(qs, "filter"); f = f if f in dict(EST_FILTERS) else ""
     rs, rows, data = established_select(by, f, d)
+    pg, pages, sl = _page_of(qs, len(rs))
     kw = lambda **o: dict(dict(sort=by if by != "score" else "", dir="asc" if d == "asc" else "", filter=f), **o)
     cnt = collections.Counter(r["level"] for r in rows); ng = sum(1 for r in rows if r["seats"] or r["seals"])
     fc = "".join(f'<a href="{href("established", **kw(filter=k))}#established" class="chip {"on" if k == f else ""}">{t}'
@@ -463,7 +488,7 @@ def established(qs):
     link = lambda k, dd: href("established", **kw(sort=k if k != "score" else "", dir="asc" if dd == "asc" else "")) + "#established"
     trs = "".join(f'<tr><td>{_agent(r, True)}</td>{score_cells(r)}<td class="r">{_lvl(r["level"])}</td><td class="r dk">{_ep(r["since"])}</td>'
                   f'<td class="r">{r["held"]:,}</td><td class="r dk">{r["eligible"]:,}</td><td class="r dk">{r["seals"]:,}</td>'
-                  f'<td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td></tr>' for r in rs)
+                  f'<td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td></tr>' for r in rs[sl])
     tb = (SS.select(est_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov est"><thead><tr>{SS.heads(est_cols(), by, d, link)}</tr></thead>'
           f'<tbody>{trs or "<tr><td colspan=12 class=na>No established Agents in this segment yet.</td></tr>"}</tbody></table></div>')
     q = qsx(sort=by if by != "score" else "", dir="asc" if d == "asc" else "", filter=LEVEL_KEYS.get(f, f))
@@ -471,7 +496,8 @@ def established(qs):
              f'<a class="more" href="/api/v1/governance/established{q}">API →</a>')
     foot = f'<p class="cov dim small">Reference E{data["open_epoch"]} · <a href="{href("rules")}#earn">Rules</a></p>' if data["open_epoch"] is not None else ""
     from . import carry as CY   # 1.26.209: genesis cut carry, per address, from records only
-    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div>' + tb + foot, links, cls="histc", id="established") + ("" if SG.archived() else CY.card_html(qs, href))
+    nav = _pager("established", kw, pg, pages, "established")
+    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div>' + tb + nav + foot, links, cls="histc", id="established") + ("" if SG.archived() else CY.card_html(qs, href))
 
 def charts(qs):
     rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
@@ -674,7 +700,7 @@ TITLES = {"overview": "Governance", "established": "Governance · Established", 
 
 def page(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
-    chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS)
+    chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS if k in NAV_TABS or k == tab)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
     body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "settlement": lambda q: GV2.settlement_tab(q, href, qsx), "changes": lambda q: GV2.changes_tab(q, href, qsx), "intake": lambda q: IK.tab(q, href, qsx), "settleage": lambda q: SA.tab(q, href, qsx), "never": lambda q: GV2.never_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
     return V.page(TITLES[tab], head + body, "/governance")
