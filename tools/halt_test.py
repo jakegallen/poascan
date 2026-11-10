@@ -80,8 +80,8 @@ try:
     n0 = len(HITS)
     c1, h1 = get("/tx/" + IDX)
     _pn = h1[h1.index('id="livepill"'):h1.index("</details>", h1.index('id="livepill"'))]
-    check("/tx/<indexed>: 200 with the indexed copy; no in-page note (1.26.181), the header status note carries the reason",
-          c1 == 200 and IDX in h1 and 'class="ntin' not in h1 and _re.search(r'<span class="sp-r">minepoa\.com paused tx(?:(?:, | and )[a-z ]+)* lookups\. Showing indexed data\.</span>', _pn) is not None)
+    check("/tx/<indexed>: 200 with the indexed copy; no in-page note (1.26.181), the header status note shows Tx lookup Halted",
+          c1 == 200 and IDX in h1 and 'class="ntin' not in h1 and "<span>Tx lookup</span><b>Halted</b>" in _pn)
     c2, h2 = get("/tx/" + NEW)
     check("/tx/<never indexed>: 200, the paused state, the txid and a retry link, no error wording",
           c2 == 200 and "Not available while minepoa.com has this lookup paused." in h2 and NEW in h2 and f'href="/tx/{NEW}"' in h2 and "Try again later" in h2

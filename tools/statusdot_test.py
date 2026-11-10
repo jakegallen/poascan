@@ -44,7 +44,7 @@ if sync_playwright:
         check("home and /start: no strip under the header", 'class="upstrip' not in home and 'class="upstrip' not in start)
         check("dev banner removed (1.26.288)", 'id="devbar"' not in home and "System development in progress." not in home)
         hd = home[home.index('id="livepill"'):home.index("</details>", home.index('id="livepill"'))]
-        check("header note names grading, Details to /upgrade, Health link", "Grading not yet confirmed. No recent seals." in hd and 'href="/upgrade">Details</a>' in hd and 'href="/network?tab=health">Health</a>' in hd)
+        check("header note names grading, Details to /upgrade, Health link", re.search(r'<li class="(warn|bad)"><i aria-hidden="true"></i><span>Grading</span><b>(Slow|Down)</b></li>', hd) and "No recent seals" not in hd and 'href="/upgrade">Details</a>' in hd and 'href="/network?tab=health">Health</a>' in hd)
         check("Graders Unconfirmed tag unchanged", '<span class="tag warn">Unconfirmed</span>' in home)
         check("no em or en dashes in the note", "\u2014" not in hd and "\u2013" not in hd)
         with sync_playwright() as p:

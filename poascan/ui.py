@@ -564,9 +564,51 @@ def status_pill(f):
     links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
-    pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{rhtml.get(r) or E(r)}</span>' for r in reasons)
-           + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>')
+    halted = {t.split(" halted")[0] for t in [x for x, _ in rl] + ([g] if g else []) if " halted" in t} | ({"Tx lookup"} if hr else set())
+    pop = _pill_pop(label, fdx, ts, links, f.get("fetched_at"), state, ur, halted)   # 1.26.300: a compact checklist; the sentences stay on Health
     return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
+
+# 1.26.300 (Jake, t524u): the header note is a short checklist, one row per feed with a dot and one word. The full reasons
+# (with since times) stay on the Health page and in status_pill()["reasons"] for the API.
+PILL_NAMES = {"Status": "Chain", "Tx list": "Transactions", "Address lookup": "Addresses", "Tx lookup": "Tx lookup", "Swaps": "Swaps",
+              "Swap writes": "Swap writes", "Networks": "Networks", "Notices": "Notices", "Epochs": "Epochs", "Close records": "Close records",
+              "Agents": "Agents", "Anchors": "Anchors"}
+PILL_WORD = {"ok": ("OK", "ok"), "degraded": ("Slow", "warn"), "stalled": ("Slow", "warn"), "stale": ("Slow", "warn"), "paused upstream": ("Paused", "warn"),
+             "paused": ("Paused", "warn"), "down": ("Down", "bad"), "halted": ("Halted", "bad")}
+
+def _age(ts):
+    if not ts: return ""
+    d = max(0, int(time.time() - int(ts)))
+    return "Data just now" if d < 60 else f"Data {d // 60}m old" if d < 3600 else f"Data {d // 3600}h old"
+
+def _pill_rows(fdx, state="live", halted=()):
+    """[(name, word, tone)] for the note: the chain, the core routes, then the feeds; not OK first, at most 10."""
+    if not fdx: return []
+    out, seen = [], set()
+    def add(name, st):
+        if not name or name in seen: return
+        w = PILL_WORD.get(str(st or "").lower())
+        if not w: return   # Retired and unknown states are left to Health
+        seen.add(name); out.append((name, w[0], w[1]))
+    for h in sorted(halted): add(PILL_NAMES.get(h, h), "halted")   # a halt outranks the route's own state
+    add("Chain", "down" if state == "stale" else "stalled" if state == "lag" or fdx.get("chain") != "Live" else "ok")
+    for r in fdx.get("routes") or []:
+        if r.get("core"): add({"Mining": "Mining", "Grading": "Grading"}.get(r["label"], r["label"]), r["state"])
+    for r in fdx.get("routes") or []:
+        if not r.get("core"): add(PILL_NAMES.get(r["label"], r["label"]), r["state"])
+    for r in fdx.get("feeds") or []:
+        lab = r.get("label") or ""
+        nm = "Fast index" if "index" in lab.lower() else PILL_NAMES.get(lab)
+        if nm and nm != "Chain": add(nm, r.get("state"))
+    rank = {"bad": 0, "warn": 1, "ok": 2}
+    return sorted(out, key=lambda x: rank[x[2]])[:10]
+
+def _pill_pop(label, fdx, ts, links, fetched, state, upgrade_line, halted=()):
+    rows = _pill_rows(fdx, state, halted)
+    head = f'<span class="sp-h"><b>{E(label)}</b><span class="sp-age">{E(_age(fetched))}</span></span>'
+    up = f'<span class="sp-r">{E(upgrade_line)}</span>' if upgrade_line else ""   # maintenance keeps its one line
+    lst = ('<ul class="sp-l">' + "".join(f'<li class="{t}"><i aria-hidden="true"></i><span>{E(n)}</span><b>{w}</b></li>' for n, w, t in rows) + '</ul>') if rows else ""
+    return head + up + lst + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>'
 
 def pill_html(live):
     p = status_pill(live)

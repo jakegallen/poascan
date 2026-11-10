@@ -115,8 +115,8 @@ check("og: Routes halted", OG._upgrade()[1] == "Routes halted" and "Upgrade comp
 p = U.status_pill(dict(state="live", label="Live", why="Live", fetched_at=NOW))
 check("header: Live turns Partial", p["state"] == "partial" and p["label"] == "Partial")
 check("header: one line per halted route with its start time", any(x.startswith("Tx lookup halted since ") for x in p["reasons"]) and any(x.startswith("Swap writes down since ") for x in p["reasons"]))
-check("header: the time is in the reader's zone with HH:MMZ without script, plus a probes as-of line",
-      re.search(r'Tx lookup halted since <time data-upts="\d+" datetime="[^"]+Z">\d\d:\d\dZ</time>\.', p["pop"]) is not None and "Probes as of <time data-upts=" in p["pop"])
+check("header (1.26.300 checklist): Tx lookup Halted row, the read time in HH:MMZ without script, no since times",
+      "<span>Tx lookup</span><b>Halted</b>" in p["pop"] and re.search(r'Updated <time data-upts="\d+" datetime="[^"]+Z">\d\d:\d\dZ</time>', p["pop"]) is not None and "since" not in p["pop"])
 
 # ---- Health: Routes card, Stale tag on an old read
 db.put_blob(RW.BLOB, dict(db.get_blob(RW.BLOB)[0], routes=dict(db.get_blob(RW.BLOB)[0]["routes"], path_actions=dict(state="open", since=NOW - 9 * 3600, as_of=NOW - 9 * 3600))))

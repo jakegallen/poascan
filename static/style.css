@@ -1922,3 +1922,13 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .fcredit b{font-weight:600;color:var(--bone-2);transition:color .2s}
 .fcredit:hover,.fcredit:focus-visible{color:var(--gold)}.fcredit:hover b,.fcredit:focus-visible b{color:var(--gold-hi)}
 @media(max-width:640px){footer.wrap.foot{flex-direction:column;align-items:stretch;padding:12px 16px 18px}.foot .fcredit{align-self:center;margin-top:6px}}
+/* header status note (1.26.300): a compact checklist, one row per feed */
+#livepill .sp-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px}#livepill .sp-h b{font-weight:600;color:var(--bone-hi)}
+#livepill .sp-age{font:500 var(--t12)/1 var(--ui);letter-spacing:0;text-transform:none;color:var(--mute)}
+#livepill .sp-l{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:2px;min-width:220px}
+#livepill .sp-l li{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:8px;padding:3px 0;border-bottom:var(--hair);font-size:var(--t13)}
+#livepill .sp-l li:last-child{border-bottom:0}
+#livepill .sp-l i{width:7px;height:7px;border-radius:50%;background:var(--verd);box-shadow:0 0 6px color-mix(in srgb,var(--verd) 60%,transparent)}
+#livepill .sp-l li.warn i{background:var(--gold);box-shadow:0 0 6px color-mix(in srgb,var(--gold) 60%,transparent)}
+#livepill .sp-l li.bad i{background:var(--ember);box-shadow:0 0 6px color-mix(in srgb,var(--ember) 60%,transparent)}
+#livepill .sp-l b{font-weight:600;font-size:var(--t12);color:var(--bone-2)}#livepill .sp-l li.warn b{color:var(--gold)}#livepill .sp-l li.bad b{color:var(--ember)}

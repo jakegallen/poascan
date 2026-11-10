@@ -740,7 +740,7 @@ def fixture_pages(check):
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
         _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
-              'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
+              'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "<span>Chain</span><b>Slow</b>" in _n and "Finalized height unchanged" not in _n[_n.index('id="livepill"'):_n.index("</details>", _n.index('id="livepill"'))] and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
         check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
               re.search(r'title="Read \d+m ago">Version<', _n) is not None
               and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
