@@ -35,7 +35,8 @@
 --glass:color-mix(in srgb,var(--white) 4%,transparent);--glass-edge:color-mix(in srgb,var(--white) 8%,transparent);
 --glow-gold:0 0 28px color-mix(in srgb,var(--gold) 16%,transparent);--glow-dot:0 0 0 2px color-mix(in srgb,currentColor 18%,transparent),0 0 10px currentColor;
 --hair:1px dashed color-mix(in srgb,var(--bone-1) 12%,transparent);
---num:600 var(--t14)/1.2 var(--ui)/* legacy names, kept as aliases so existing rules keep working */
+--num:600 var(--t14)/1.2 var(--ui);
+/* legacy names, kept as aliases so existing rules keep working */
 --bg:var(--ink-0);--card:var(--ink-2);--card2:var(--ink-3);--inset:var(--ink-1);--line:var(--rule);--line2:var(--rule-2);--row:var(--rule);
 --amber:var(--gold);--amber-d:var(--copper);--green:var(--verd);--red:var(--ember);
 --txt:var(--bone);--hi:var(--bone-hi);--dim:var(--bone-2);--mute:var(--bone-3);--lbl:var(--bone-3)}
