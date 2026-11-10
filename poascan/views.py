@@ -326,6 +326,14 @@ def upgrade_live():
     if not M.state()["active"]: return dict(routes=M.route_display() if M.complete() else {}, upsig="")   # /upgrade route tags stay live after completion
     return dict(routes=M.route_display(), upsig=V2.upgrade_sig())
 
+def _txs_behind():
+    """1.26.308: one terse line when POAScan's read of new txs is not current (the list would look complete otherwise)."""
+    try: f = next((x for x in A.feeds()["feeds"] if x.get("label") == "Tx list"), None)
+    except Exception: return ""
+    if not f or f.get("state") == "OK": return ""
+    t = f.get("last_ok")
+    return f'<p class="dim txbehind">Behind upstream: last tx read {_ui._ago(time.time() - t)} ago.</p>' if t else '<p class="dim txbehind">Behind upstream: no tx read yet.</p>'
+
 def txs(qs):
     pg_raw = (qs.get("page", ["1"])[0] or "1").strip(); typ = qs.get("type", [""])[0]; per = 50
     page_n = int(pg_raw) if pg_raw.isdigit() and len(pg_raw) <= 9 else 1   # not a page number: the first page
@@ -355,7 +363,7 @@ def txs(qs):
     pages = max(1, math.ceil(total / per))
     q = (f"&type={E(typ)}" if typ else "") + sq
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
-    body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
+    body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{_txs_behind()}{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
     return page("Transactions", '<div class="sechead"><h1 class="sr-only">Transactions</h1>' + chain_tabs("/chain/txs") + '</div>' + body, "/txs")
 
 def _tx_cols():

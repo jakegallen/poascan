@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.308] - 2026-11-10
+
+### Fixed
+- Transactions (/chain/txs) is warmed in the background and pinned like Home, so a visitor gets its last copy with no slot instead of the full page Busy card when the server is loaded. Filtered and paged views render as before.
+- Transactions says "Behind upstream: last tx read N ago." when POAScan's read of new txs is not current; nothing when it is.
+
 ## [1.26.307] - 2026-11-10
 
 ### Fixed
