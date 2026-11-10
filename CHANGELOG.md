@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.302] - 2026-11-10
+
+### Added
+- API in the top nav (and the phone menu). The /api page is generated from the routes this build serves: endpoints grouped as Chain, Agents, Governance, Token and Service, then the MCP tools. Each row has the method, the path, a one-line purpose, a copy button (a curl line, sample values filled from POAScan's own archive) and a Sample fold that loads the response only when opened. Tools show a tools/call body and their arguments.
+- Connect card: MCP URL, REST base, a copyable mcpServers snippet, the one-click client installs, openapi.json, llms.txt, mcp.json and the interactive reference. An Ask agent prompt. A short rate note: read-only, no keys, poll at most once a minute.
+- The For agents chips and cards across the site link to the API page.
+
 ## [1.26.301] - 2026-11-10
 
 One history: Segment 1 and Segment 2 read as one continuous chain everywhere. No data deleted; every figure comes from the close records POAScan already holds.
