@@ -107,17 +107,16 @@ check("Home sparklines: Agents, Active Agents and Holders draw no genesis cut la
       and not any("home-" + k in MS.charts_of("genesis_cut") for k in ("mined", "circ")))
 _m2 = [dict(ts=1000 + 60 * 3600, label="Older mark"), dict(ts=1000 + 88 * 3600, label="Sample mark")]
 _sv = UI.spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2) if "UI" in dir() else __import__("poascan.ui", fromlist=["x"]).spark([(1000 + i * 3600, i) for i in range(101)], marks=_m2)
-check("sparkline: two marks closer than 40% show the newest label; the older keeps its tick and a hover target", _sv.count('class="spkl') == 1 and "Sample mark</span>" in _sv
-      and _sv.count('class="spkd"') == 1 and "Older mark" in _sv and _sv.count('class="spkt"') == 2)
+check("sparkline is bare (UI/UX P3, Jake): marks draw no label, tick or hover target; the line is the same as without marks", _sv == __import__("poascan.ui", fromlist=["x"]).spark([(1000 + i * 3600, i) for i in range(101)]) and "spkl" not in _sv and "spkt" not in _sv and "Sample mark" not in _sv)
 _gc = __import__("poascan.ui", fromlist=["x"]).spark([(1000 + i * 3600, i) for i in range(101)], marks=[dict(ts=1000 + 60 * 3600, key="genesis_cut", label="Genesis cut"), dict(ts=1000 + 88 * 3600, label="Sample mark")])
-check("sparkline drops a Genesis cut label and tick and keeps the line and any other mark", "Genesis cut" not in _gc and "Sample mark</span>" in _gc and "<polyline" in _gc)
+check("sparkline drops a Genesis cut and every other mark and keeps the line", "Genesis cut" not in _gc and "Sample mark" not in _gc and 'class="sl"' in _gc)
 check("spark ids are not in any chart group (no group event lands on a sparkline)", not any(x in v for v in MS.GROUPS.values() for x in MS.SPARK_IDS))
 from poascan import ui as UI
 _GC = {e["key"]: e for e in MS.events()}["genesis_cut"]["ts"]
 _sp = [(_GC - 7200 + i * 900, 5000 + i) for i in range(16)]
 _sv = UI.spark(_sp, marks=MS.events("home-agents"))
-check("sparkline does not draw a Genesis cut tick or label inside its span", "Genesis cut" not in _sv and 'class="spkt"' not in _sv and _sv.startswith('<svg class="spk"'))
-check("sparkline without marks in its span is unchanged (plain svg)", UI.spark(_sp[:4], marks=MS.events("home-agents")) == UI.spark(_sp[:4]) and UI.spark(_sp[:4]).startswith('<svg class="spk"'))
+check("sparkline does not draw a Genesis cut tick or label inside its span", "Genesis cut" not in _sv and 'class="spkt"' not in _sv and _sv.startswith('<div class="spkw"'))
+check("sparkline without marks in its span is unchanged", UI.spark(_sp[:4], marks=MS.events("home-agents")) == UI.spark(_sp[:4]) and UI.spark(_sp[:4]).startswith('<div class="spkw"'))
 check("Grading reopened only on grading charts; Upgrade complete never on them (no two labels at one time)",
       [k for k, v in rel.items() if "grading_reopened" in v] == ["gov-est", "gov-paid", "gov-queue", "gov-cover"] and not any("ended" in rel[k] for k in ("gov-est", "gov-paid", "gov-queue", "gov-cover")))
 check(f"Holders carries its own step-ups, the E4 and E5 closes, and not the genesis cut label (1.26.277) ({rel['holders']})", sorted(rel["holders"]) == ["s2_e4_close", "s2_e5_close"])
@@ -168,13 +167,13 @@ try:
     from poascan import views3 as V3
     h = V3.charts_body("30d")
     sup = h[h.find(">Supply<"):h.find(">Txs")]
-    check("Supply chart carries the grouped markers as links", 'href="https://minepoa.com/lableak/#/post/1357"' in sup and ">Mining reopened<" in sup and not re.search(r"Mining reopened \+\d", sup) and "<title>" in sup)
+    check("Supply chart is bare (UI/UX P3, Jake): no milestone line, label or link on the chart; the table below keeps them", ">Mining reopened<" not in sup and 'class="mk' not in sup and "minepoa.com/lableak/#/post/1357" not in sup)
     check("Supply has no table-only markers (route reads, checkpoint)", ">Checkpoint 33,463<" not in sup and "responding<" not in sup)
     hol = h[h.find(">Holders"):h.find(">Supply<")]
     check("Holders has no epoch close or swap markers", not re.search(r">(S\d+ )?E\d+<", hol) and "1st swap" not in hol)
     agt = h[h.find(">Agents<"):h.find(">Holders")]
     check("Agents has no swap marker", "1st swap" not in agt)
-    check("the marked chart opens at its newest end at 390px", 'class="chartbox end"' in sup)
+    check("no chart is marked to open at its newest end (no milestones to scroll to)", 'class="chartbox end' not in sup)
     mls = h[h.find(">Milestones<"):]
     check("Milestones table lists every upgrade event in range", all(lab in mls for k, (t, lab) in want.items() if {e["key"]: e for e in MS.events()}[k]["ts"] >= now - 7 * 86400))
     check("table links the Oct 22 reopening to its post", re.search(r'href="https://minepoa\.com/lableak/#/post/1357"[^>]*>Mining reopened<', mls) is not None)

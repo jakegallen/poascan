@@ -11,6 +11,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.291] - 2026-11-09
+
+UI/UX refinement, phase P3: the chart kit. Jake: charts are what gets screenshotted and shared, so they should look like the analytics platforms, with the numbers on them, and bare.
+
+### Changed
+- Every chart is bare: no milestone line, label, chip or link on any chart or sparkline (Genesis cut and the home sparklines included). The pop-out sends `marks: []`. Lines stay continuous. The Milestones table keeps the events.
+- Line charts: a smooth monotone line (never overshoots a point) on its own layer with a glow and a soft drop shadow, a layered gradient area, a faint perspective floor, the latest value pinned at the line end, the high and low labelled when they are not the ends, and a headline (latest value, change over the span, the span).
+- Bar charts: extruded bars (lit top face, shaded side, a sheen on the front), the tallest bar labelled, the latest pinned on the axis, and a headline with the change against the bar before.
+- Axes land on round numbers (0, 500M, 1B, 1.5B) and tick labels drop trailing zeros; a series that never goes below zero never shows a negative tick.
+- Sparklines are smooth gradient paths with an end dot; horizontal bars have depth.
+- The whole chart frame: a lit panel (gradient, grain, vignette, bevel, top highlight), a header row with the big tabular headline, a change pill, the span and a glowing-dot legend, dashed hairline gridlines that fade at the edges, abbreviated ticks inside the plot, even date or epoch labels, a baseline glow; 3D columns with a floor reflection and a raised line with an underside and an endpoint orb.
+- Stat card figures use the same tabular numeric face as the chart headlines, ticks, chips and tips.
+- Hover crosshair and tooltip restyled; the tooltip stays inside the card. Gradient ids come from the chart geometry, so a page renders to the same bytes (ETags hold).
+- At 390 px the pinned value sits beside its point inside the card.
+
 ## [1.26.290] - 2026-11-09
 
 UI/UX refinement, phase P2: tokens and chrome.

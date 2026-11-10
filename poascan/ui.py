@@ -656,32 +656,22 @@ def stat(label, value, sub="", icon="", key=None, asof=None, tip=None, asof_text
         return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv fit{ku}"{k}>{value}</div>{a}</div>'
     return f'<div class="stat"><div class="sl">{icon}{label}</div><div class="sv"{k}>{value}</div>{a}</div>'
 
-def spark(points, n=40, marks=None):
-    """Tiny trend line (no axes): the last n points, scaled to their own range, one continuous line (1.26.175: a straight
-    segment between real points across a gap or genesis cut, never a break). marks: milestones drawn as a dashed tick with
-    its terse label ([{ts, label}], milestones.events for a spark id), only those inside the line's span."""
-    marks = [m for m in (marks or []) if m.get("label") != "Genesis cut" and not str(m.get("key") or "").startswith("genesis_cut")]
+def spark(points, n=48, marks=None):
+    """Tiny trend under a stat value (no axes): the last n points scaled to their own range, one continuous smooth line over a
+    gradient fill, and a glowing dot on the latest point. 1.26.291 (UI/UX P3): no milestone ticks or labels on any chart;
+    `marks` is accepted for compatibility and ignored."""
     pts = [(float(t), float(v)) for t, v in (points or []) if v is not None]
     if len(pts) < 2: return ""
     if len(pts) > n: step = len(pts) / n; pts = [pts[int(i * step)] for i in range(n)] + [pts[-1]]
     t0, t1 = pts[0][0], pts[-1][0]; lo = min(v for _, v in pts); hi = max(v for _, v in pts)
-    xs = lambda t: 100 * (t - t0) / ((t1 - t0) or 1); ys = lambda v: 22 - 20 * (v - lo) / ((hi - lo) or 1)
-    runs = [pts]
-    pl = "".join(f'<polyline points="{" ".join(f"{xs(t):.1f},{ys(v):.1f}" for t, v in r)}" vector-effect="non-scaling-stroke"/>' for r in runs if r)
-    mk = [(xs(m["ts"]), m) for m in (marks or []) if t0 <= m["ts"] <= t1]
-    if not mk: return f'<svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}</svg>'
-    tk = "".join(f'<line class="spkt" x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="24" vector-effect="non-scaling-stroke"/>' for x, _ in mk)
-    shown = []   # 1.26.175: labels from the newest back; one closer than 40% to a shown label keeps its tick and a hover target only
-    for x, m in sorted(mk, key=lambda p: -p[0]):
-        if all(abs(x - y) >= 40 for y, _ in shown): shown.append((x, m))
-    # 1.26.179: the hover reads in the visitor's zone in the one format ("Oct 24, 2:01 PM Sample mark"): app.js fills the title
-    # from data-ltt ({t:ts}); the UTC text stays as the no-script fallback
-    ttl = lambda m: E(utc_text(m["ts"]) + " " + m["label"])
-    ltt = lambda m: f'title="{ttl(m)}" data-ltt="{{t:{int(m["ts"])}}} {E(m["label"])}"'
-    lb = "".join((f'<span class="spkl{" r" if x > 50 else ""}" style="{"right" if x > 50 else "left"}:{(100 - x if x > 50 else x):.1f}%" '
-                  f'{ltt(m)}>{E(m["label"])}</span>') if any(m is q for _, q in shown) else
-                 f'<span class="spkd" style="left:{x:.1f}%" {ltt(m)} aria-label="{ttl(m)}"></span>' for x, m in mk)
-    return (f'<div class="spkw"><svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">{pl}{tk}</svg>{lb}</div>')
+    P = [(100 * (t - t0) / ((t1 - t0) or 1), 22 - 19 * (v - lo) / ((hi - lo) or 1)) for t, v in pts]
+    d = _smooth(P); gid = _gid("sg", d)
+    lx, ly = P[-1]
+    return (f'<div class="spkw"><svg class="spk" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">'
+            f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient></defs>'
+            f'<path class="sa" d="{d} L100,24 L0,24 Z" fill="url(#{gid})"/><path class="su" d="{d}" transform="translate(0 1.4)" vector-effect="non-scaling-stroke"/>'
+            f'<path class="sl" d="{d}" vector-effect="non-scaling-stroke"/></svg>'
+            f'<i class="sd" style="left:{lx:.1f}%;top:{100 * ly / 24:.1f}%"></i></div>')
 
 def spark_in(stat_html, points, marks=None):
     """Put a sparkline under a stat card's value (marks: milestone ticks, see spark)."""
@@ -747,117 +737,297 @@ VW, VH = 1000, 1000   # plot box in viewBox units; the SVG stretches to the CSS 
 
 def _f(v): return f"{v:.1f}".rstrip("0").rstrip(".")
 
-def _plot(svg_inner, overlay, height, top=0, tail="", yg=56):
-    st = f' style="--ch:{int(height)}px;--yg:{int(yg)}px' + (f';--mt:{top}px' if top else "") + '"'
-    return (f'<div class="chartbox"><div class="cvg{" tl" if top else ""}"{st}><div class="cvp">'
-            f'<svg class="chart" viewBox="0 0 {VW} {VH}" preserveAspectRatio="none" role="img" aria-hidden="true">{svg_inner}</svg>'
+def _gid(pre, key=""):
+    """An SVG gradient id from the chart's own geometry: the same render gives the same bytes (ETags hold), and two charts
+    that share an id share an identical gradient."""
+    import zlib
+    return f"{pre}{zlib.crc32(str(key).encode()) & 0xffffff:x}"
+
+def _smooth(P):
+    """Monotone cubic path through P (Fritsch-Carlson): smooth, never overshoots a point, so a flat run stays flat and a
+    cumulative line never dips. P is already in viewBox units; an affine stretch keeps the curve monotone."""
+    n = len(P)
+    if n < 3: return " ".join(f"{'M' if i == 0 else 'L'}{_f(x)},{_f(y)}" for i, (x, y) in enumerate(P))
+    dx = [P[i + 1][0] - P[i][0] for i in range(n - 1)]; m = [(P[i + 1][1] - P[i][1]) / (dx[i] or 1e-9) for i in range(n - 1)]
+    t = [m[0]] + [0.0] * (n - 2) + [m[-1]]
+    for i in range(1, n - 1):
+        if m[i - 1] * m[i] <= 0: t[i] = 0.0
+        else:
+            w1, w2 = 2 * dx[i] + dx[i - 1], dx[i] + 2 * dx[i - 1]
+            t[i] = (w1 + w2) / (w1 / m[i - 1] + w2 / m[i])
+    out = [f"M{_f(P[0][0])},{_f(P[0][1])}"]
+    for i in range(n - 1):
+        h = dx[i] / 3
+        out.append(f"C{_f(P[i][0] + h)},{_f(P[i][1] + h * t[i])} {_f(P[i + 1][0] - h)},{_f(P[i + 1][1] - h * t[i + 1])} {_f(P[i + 1][0])},{_f(P[i + 1][1])}")
+    return "".join(out)
+
+def _chg(a, b, fmt=None):
+    """Period change pill: +12.4% (green tint up), -3.1% (red tint down), 0.0% flat. From a start of 0 it reads the plain
+    rise (+26.9B) when a format is given; nothing when the start is missing."""
+    if a is None or b is None: return ""
+    if a == 0:
+        if not fmt or not b: return ""
+        return f'<span class="chg {"up" if b > 0 else "dn"}">{"+" if b > 0 else "-"}{E((compact3 if fmt in (compact, compact3) else fmt)(abs(b)))}</span>'
+    p = (b - a) / abs(a) * 100
+    c = "up" if p >= 0.05 else "dn" if p <= -0.05 else "eq"
+    t = "0.0%" if c == "eq" else f"{p:+.1f}%" if abs(p) < 1000 else f"{p:+,.0f}%"
+    return f'<span class="chg {c}">{t}</span>'
+
+def _period(x0, x1):
+    """Span of a time axis as a terse tag (7D, 30D, 18H); nothing for an epoch or index axis."""
+    if not (x0 > 1e9 and x1 > x0): return ""
+    s = x1 - x0
+    return f"{round(s / 86400)}D" if s >= 1.5 * 86400 else f"{max(1, round(s / 3600))}H"
+
+def _head(v, fmt, chg="", per="", side=""):
+    """The chart's headline row: the latest value big, the change pill and the span on the left; side (a legend) on the right."""
+    pr = f'<span class="chp">{E(per)}</span>' if per else ""
+    f = compact3 if fmt is compact else fmt   # the headline reads 3 figures (270K, 26.9B); the tip keeps the full value
+    sd = f'<span class="chs">{side}</span>' if side else ""
+    return f'<div class="chd"><b class="chv" title="{E(fmt(v))}">{E(f(v))}</b>{chg}{pr}{sd}</div>'
+
+def seg(items, cur=None):
+    """A segmented timeframe control (7D 30D ALL): items are (label, href), the current one marked. Plain links, so it works
+    without script and every view keeps its own URL."""
+    on = ' class="on" aria-current="true"'
+    return '<nav class="seg" aria-label="Range">' + "".join(f'<a href="{E(h)}"{on if l == cur else ""}>{E(l)}</a>' for l, h in items) + "</nav>"
+
+def _plot(svg_inner, overlay, height, top=0, tail="", yg=56, head="", layer="", grid="", yw=0):
+    """The chart panel. svg_inner: the data marks (the first SVG: app.js reads its data-tip groups for hover). grid: hairline
+    gridlines on their own SVG under the marks, faded toward both edges. layer: the line over the marks with a screen-space
+    bloom (style.css .chart.lnl), so the glow stays round although the plot is stretched. A perspective floor grid and a
+    baseline glow sit under everything. yg: the right gutter, as wide as the pinned value chip."""
+    st = f' style="--ch:{int(height)}px;--yg:{int(yg)}px' + (f';--yw:{int(yw)}px' if yw else "") + (f';--mt:{top}px' if top else "") + '"'
+    ly = (f'<svg class="chart lnl" viewBox="0 0 {VW} {VH}" preserveAspectRatio="none" aria-hidden="true">{layer}</svg>' if layer else "")
+    gr = (f'<svg class="chart gr" viewBox="0 0 {VW} {VH}" preserveAspectRatio="none" aria-hidden="true">{grid}</svg>' if grid else "")
+    return (f'<div class="chartbox ck">{head}<div class="cvg{" tl" if top else ""}{" yL" if yw else ""}"{st}><div class="cvp"><i class="floor" aria-hidden="true"></i><i class="base" aria-hidden="true"></i>'
+            f'<svg class="chart" viewBox="0 0 {VW} {VH}" preserveAspectRatio="none" role="img" aria-hidden="true">{svg_inner}</svg>{gr}{ly}'
             f'{overlay}</div></div>{tail}</div>')
 
-def _grid(ymin, ymax, fmt, n=4):
-    """Hairline gridlines and their y labels; also the gutter width (px) the longest label needs at 12px mono."""
-    g, lab, wl = [], [], 1
+def _nice(lo, hi, n=4):
+    """Round axis bounds so the gridlines land on round numbers (0, 500M, 1B, 1.5B rather than 393.61M). Tries 3 to 5
+    gridline gaps and the 1, 2, 2.5, 5 steps, and keeps the fit that wastes the least height. Returns (lo, hi, gaps)."""
+    span = (hi - lo) or abs(hi) or 1; best = None
+    for k in (4, 5, 3):
+        raw = span / k; m = 10 ** math.floor(math.log10(raw))
+        for q in (1, 2, 2.5, 5, 10):
+            st = q * m
+            if st < raw - 1e-12: continue
+            a = math.floor(lo / st + 1e-9) * st; b = math.ceil(hi / st - 1e-9) * st
+            kk = round((b - a) / st)
+            if kk > 5: continue
+            if kk < 3: break
+            w = (b - a) / span + (0.02 if kk != 4 else 0)
+            if best is None or w < best[0]: best = (w, a, b, kk)
+            break
+    if best is None: return lo, hi, n
+    return best[1], best[2], best[3]
+
+def _tk(fmt):
+    """Tick labels abbreviate and drop trailing zeros (2.5K, 1.2B, 450M, 0). A chart whose format carries a unit (12m, 45%)
+    keeps its own format."""
+    if fmt not in (compact, compact3):
+        try:
+            if not re.fullmatch(r"[\d,]+(\.\d+)?", fmt(1234.0)): return fmt
+        except Exception: return fmt
+    def f(v):
+        if abs(v) < 1e-9: return "0"
+        for div, suf in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+            if abs(v) >= div * 0.9995: return f"{v / div:.2f}".rstrip("0").rstrip(".") + suf
+        return f"{v:,.2f}".rstrip("0").rstrip(".")
+    return f
+
+def _grid(ymin, ymax, fmt, n=4, skip=None):
+    """Hairline gridlines (none on the floor line; the baseline glow is its own element) and the y labels: inside the plot,
+    right aligned, just above their line. The third value (gutter px) is kept for callers and is 0 now."""
+    g, lab = [], []; fmt = _tk(fmt)
     for i in range(n + 1):
         y = VH * i / n; v = ymax - (ymax - ymin) * i / n
-        g.append(f'<line x1="0" x2="{VW}" y1="{_f(y)}" y2="{_f(y)}" class="grid"/>')
-        t = fmt(v); wl = max(wl, len(t))
-        lab.append(f'<span class="yl{" o" if i % 2 else ""}" style="top:{100 * i / n:.2f}%">{E(t)}</span>')
-    return "".join(g), "".join(lab), 7.3 * wl + 14
+        if i < n: g.append(f'<line x1="0" x2="{VW}" y1="{_f(y)}" y2="{_f(y)}" class="grid"/>')
+        if skip and skip(i / n): continue
+        lab.append(f'<span class="yl{" o" if i % 2 and n >= 4 else ""}{" y0" if i == n else ""}" style="top:{100 * i / n:.2f}%">{E(fmt(v))}</span>')
+    return "".join(g), "".join(lab), 0
+
+def _xticks(x0, x1, n_max=6):
+    """Evenly spaced time ticks on round boundaries: days at 12:00 UTC (the same calendar day in every zone from UTC-11 to
+    UTC+11, so a reader-zone label never slips a day), or whole hours. Returns ([ts], kind) with kind "d" or "t"."""
+    span = x1 - x0
+    if span <= 0: return [], "d"
+    for step, kind in ((3600, "t"), (3 * 3600, "t"), (6 * 3600, "t"), (12 * 3600, "t"), (86400, "d"), (2 * 86400, "d"),
+                       (7 * 86400, "d"), (14 * 86400, "d"), (30 * 86400, "d"), (91 * 86400, "d")):
+        if span / step <= n_max:
+            off = 43200 if kind == "d" else 0
+            if step == 7 * 86400: t = x1 - ((x1 - off) % 86400)   # weekly: count back from the last day, so it is labelled
+            else: t = math.ceil((x0 - off) / step) * step + off
+            out = []
+            if step == 7 * 86400:
+                while t >= x0: out.append(t); t -= step
+                out.reverse()
+            else:
+                while t <= x1: out.append(t); t += step
+            return out, kind
+    return [x0, x1], "d"
+
+def _xlab(p, txt, attrs=""):
+    """One x tick label at p percent: centred on its tick, or start/end aligned at the plot's edges so it never spills."""
+    if p < 5: return f'<span class="xl l"{attrs}>{txt}</span>'
+    if p > 95: return f'<span class="xl r"{attrs}>{txt}</span>'
+    return f'<span class="xl c"{attrs} style="left:{p:.2f}%">{txt}</span>'
 
 def _marks(marks, X, x0, x1):
-    """Milestones: a dashed hairline in the plot, a chip above it (the label when it is short, else its number) and, for
-    numbered ones, a line in the legend under the chart that carries the link. Chips go in two rows so they never overlap
-    (sized for a 300px plot, the narrowest at 390px); one that fits neither row keeps its line and its legend entry."""
-    ms = [(i, m) for i, m in enumerate(marks or []) if x0 <= m[0] <= x1]
-    if not ms: return "", "", "", 0
-    svg, chips, leg, rows, n = [], [], [], [[], []], 0
-    for i, m in sorted(ms, key=lambda im: im[1][0]):
-        x, l = m[0], m[1]; url = m[2] if len(m) > 2 else None; tip = m[3] if len(m) > 3 else None
-        if l == "Genesis cut": continue   # 1.26.277: the words are not a chart label; the line stays
-        px = X(x) / VW; short = len(l) <= 4 and not url
-        if not short: n += 1
-        txt = l if short else str(n)
-        w = (7.2 * len(txt) + 12) / 300; a, b = px - w / 2, px + w / 2
-        row = next((r for r in (0, 1) if all(b + .01 < s or a - .01 > e for s, e in rows[r])), None)
-        svg.append(f'<g class="mk">{"<title>" + E(tip or l) + "</title>"}<line x1="{_f(X(x))}" x2="{_f(X(x))}" y1="0" y2="{VH}"/></g>')
-        if row is not None:
-            rows[row].append((a, b)); edge = " r" if px > .94 else " l" if px < .06 else ""
-            chips.append(f'<span class="mkc{edge}{" q2" if row else ""}" style="left:{100 * px:.2f}%" title="{E(tip or l)}">{E(txt)}</span>')
-        if not short:
-            ext = url and url.startswith("http")
-            lab = (f'<a href="{E(url)}"{" target=\"_blank\" rel=\"noopener noreferrer\"" if ext else ""}{(" title=\"" + E(tip) + "\"") if tip else ""}>{E(l)}</a>'
-                   if url else (f'<span title="{E(tip)}">{E(l)}</span>' if tip else E(l)))
-            leg.append(f'<li><b>{n}</b>{lab}</li>')
-    top = 22 if not rows[1] else 42
-    return "".join(svg), "".join(chips), (f'<ol class="mkleg">{"".join(leg)}</ol>' if leg else ""), top
+    """1.26.291 (UI/UX P3, Jake): charts are bare, so no milestone line, chip or legend is drawn on any chart. Kept as a
+    no-op so callers that still pass marks render the same chart."""
+    return "", "", "", 0
 
-def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None, xk="t"):
+def _tag(cls, x, y, txt, title=""):
+    """An HTML value label pinned to a plot point (x, y in viewBox units): .lv the latest value, a glass chip in the line's
+    color beside the plot; .ex a high or low callout on a hairline leader."""
+    t = f' title="{E(title)}"' if title else ""
+    return f'<span class="{cls}" style="left:{100 * x / VW:.2f}%;top:{100 * y / VH:.2f}%"{t}><b>{E(txt)}</b></span>'
+
+def _chipw(txt): return int(7.4 * len(txt) + 24)   # gutter for the pinned chip: 12px tabular figures plus padding and gap
+
+def _xidx(labels, n_max=6):
+    """Bar x labels: for epoch labels (E30) only round epochs (E30, E40) at even spacing; else every k-th label."""
+    nums = []
+    for l in labels:
+        m = re.fullmatch(r"E(\d+)", str(l)); nums.append(int(m.group(1)) if m else None)
+    if nums and all(v is not None for v in nums):
+        span = nums[-1] - nums[0]
+        for st in (1, 2, 5, 10, 20, 25, 50, 100, 250, 500):
+            if span / st <= n_max - 1: return [i for i, v in enumerate(nums) if v % st == 0]
+    n = len(labels); every = max(1, math.ceil(n / n_max))
+    return list(range(0, n, every))
+
+def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None, xk="t", head=True):
     """series: list of (xlabel, [v1, v2, ...]) or (xlabel, [v...], ts): with a ts the label and tip read in the reader's zone
-    (app.js; xk the kind, "t" for hourly buckets). Day buckets that are UTC days keep their plain label. Bars fit the card."""
+    (app.js; xk the kind, "t" for hourly buckets). Day buckets that are UTC days keep their plain label. Bars fit the card.
+    1.26.291 (UI/UX P3): 3D columns (an isometric extrusion: a lit front face, a darker side face, a top cap), a faint floor
+    reflection, the latest bar's value pinned as a glass chip, the tallest bar called out, round ticks inside the plot, and a
+    headline row (latest value, change against the bar before, the legend as glowing dots)."""
     tss = [s[2] if len(s) > 2 else None for s in series]; series = [(s[0], s[1]) for s in series]
     if not series: return chart_skel(640, height)
-    n = len(series); mx = ymax or max((sum(v) if stacked else max(v)) for _, v in series) or 1
+    n = len(series); mx0 = max((sum(v) if stacked else max(v)) for _, v in series) or 1; nk = 4
+    if ymax: mx = ymax
+    else: _, mx, nk = _nice(0, mx0 * 1.16)   # headroom for the tallest bar's callout
     cls = [series_cls(c) for c in colors] if len(series[0][1]) > 1 or legend else ["s-gold"]
-    step = VW / n; bw = step * (0.62 if n < 40 else 0.8)
-    g, ylab, yg = _grid(0, mx, fmt)
-    out = [g]
-    lw = 7.3 * max([len(str(lab)) for lab, _ in series] + [8 if any(tss) else 0]) + 12   # a local "8:00 AM" is longer than "15:00"   # x labels: as many as fit a 280px plot, the narrowest at 390px
-    every = max(1, math.ceil(n / max(2, int(280 / lw)))); xl = []
+    step = VW / n; bw = step * (0.52 if n < 40 else 0.64); dx = min(bw * 0.42, 20); dy = 8 * VH / max(height, 60)
+    g, ylab, _ = _grid(0, mx, fmt, nk)
+    gid = _gid("bs", series); gv = _gid("bv", series); gr = _gid("br", series)
+    out = [f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="b0"/><stop offset=".35" class="b1"/><stop offset="1" class="b2"/></linearGradient>'
+           f'<linearGradient id="{gv}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="v0"/><stop offset=".3" class="v1"/><stop offset="1" class="v2"/></linearGradient>'
+           f'<linearGradient id="{gr}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="r0"/><stop offset="1" class="r1"/></linearGradient></defs>']
+    xs_i = set(_xidx([l for l, _ in series], 7)); xl = []
+    tot = lambda vals: (sum(vals) if stacked else max(vals))
+    imax = max(range(n), key=lambda i: tot(series[i][1]))
+    poly = lambda pts: " ".join(f"{_f(x)},{_f(y)}" for x, y in pts)
+    rh = VH * 0.09   # reflection depth under the floor line
     for i, (lab, vals) in enumerate(series):
-        x = step * i + (step - bw) / 2; base = VH
+        x = step * i + (step - bw - dx) / 2; base = VH
         tip = E(str(lab)) + " · " + " · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))
-        top = VH - VH * ((sum(vals) if stacked else max(vals)) / mx)
+        top = VH - VH * (tot(vals) / mx)
         lz = (f' data-ts="{int(tss[i])}" data-tf="{xk}" data-tv="{" · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))}"'
               if tss[i] else "")
         out.append(f'<g class="col" data-tip="{tip}"{lz} data-cx="{_f(x + bw / 2)}" data-cy="{_f(top)}">')
+        segs = []
         if stacked:
             for j, v in enumerate(vals):
-                h = VH * (v / mx); base -= h
-                out.append(f'<rect x="{_f(x)}" y="{_f(base)}" width="{_f(bw)}" height="{_f(max(h, 0))}" class="{cls[j % len(cls)]}"/>')
+                h = VH * (v / mx); base -= h; segs.append((x, base, bw, max(h, 0), cls[j % len(cls)]))
         else:
             w2 = bw / len(vals)
             for j, v in enumerate(vals):
-                h = VH * (v / mx)
-                out.append(f'<rect x="{_f(x + j * w2)}" y="{_f(base - h)}" width="{_f(w2)}" height="{_f(max(h, 0))}" class="{cls[j % len(cls)]}"/>')
+                h = VH * (v / mx); segs.append((x + j * w2, base - h, w2, max(h, 0), cls[j % len(cls)]))
+        bot = [q for q in segs if q[3] > 0][:1]
+        if bot:
+            sx, _, sw, sh, c = bot[0]
+            out.append(f'<rect x="{_f(sx)}" y="{VH}" width="{_f(sw)}" height="{_f(min(rh, sh))}" class="{c} brf" style="fill:url(#{gr})"/>')
+        for j, (sx, sy, sw, sh, c) in enumerate(segs):
+            if sh <= 0: continue
+            out.append(f'<polygon class="{c} bsd" points="{poly([(sx + sw, sy), (sx + sw + dx, sy - dy), (sx + sw + dx, sy + sh - dy), (sx + sw, sy + sh)])}"/>'
+                       f'<rect x="{_f(sx)}" y="{_f(sy)}" width="{_f(sw)}" height="{_f(sh)}" class="{c} bf"/>'
+                       f'<rect x="{_f(sx)}" y="{_f(sy)}" width="{_f(sw)}" height="{_f(sh)}" class="bsh" style="fill:url(#{gv})"/>'
+                       f'<rect x="{_f(sx)}" y="{_f(sy)}" width="{_f(sw)}" height="{_f(sh)}" class="bsh" style="fill:url(#{gid})"/>')
+            last_top = stacked and j == len(segs) - 1 or not stacked
+            if last_top or (stacked and all(q[3] <= 0 for q in segs[j + 1:])):
+                out.append(f'<polygon class="{c} btp" points="{poly([(sx, sy), (sx + dx, sy - dy), (sx + sw + dx, sy - dy), (sx + sw, sy)])}"/>')
         out.append("</g>")
-        if i % every == 0:
-            p = 100 * (x + bw / 2) / VW
+        if i in xs_i:
+            p = 100 * (x + (bw + dx) / 2) / VW
             lz = f' data-lts="{int(tss[i])}" data-f="{xk}"' if tss[i] else ""
-            xl.append(f'<span class="xl c"{lz} style="left:{p:.2f}%">{E(str(lab))}</span>' if 6 < p < 94 else
-                      f'<span class="xl"{lz} style="{"left:0" if p <= 6 else "right:0"}">{E(str(lab))}</span>')
+            xl.append(_xlab(p, E(str(lab)), lz))
+    lv = series[-1][1]; lvt = (compact3 if fmt is compact else fmt)(tot(lv))   # the chip reads as the headline does
+    tags = _tag("lv b", VW, VH - VH * (tot(lv) / mx) - dy / 2, lvt)
+    if imax != n - 1:
+        xm = step * imax + (step - bw - dx) / 2 + (bw + dx) / 2
+        tags += _tag("ex hi", xm, VH - VH * (tot(series[imax][1]) / mx) - dy, fmt(tot(series[imax][1])))
     lg = ""
-    if legend: lg = '<div class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</div>"
-    return _plot("".join(out), ylab + "".join(xl), height, yg=yg) + lg
+    if legend: lg = '<span class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</span>"
+    hd = ""
+    if head:
+        cur = tot(lv); prev = tot(series[-2][1]) if n > 1 else None   # the bar's full height, as the pinned chip reads
+        hd = _head(cur, fmt, _chg(prev, cur) if prev is not None else "", _period(tss[0], tss[-1]) if tss[0] and tss[-1] else "", lg)
+    elif lg: hd = f'<div class="chd"><span class="chs">{lg}</span></div>'
+    yw = int(7 * max(len(_tk(fmt)(mx * k / nk)) for k in range(nk + 1)) + 12)   # bars read their scale on a left axis, clear of the columns
+    return _plot("".join(out), ylab + "".join(xl) + tags, height, yg=_chipw(lvt), head=hd, grid=g, yw=yw)
 
-def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, xk="dt"):
-    """marks: [(x, label)] or [(x, label, url, title)] milestone markers. proj_from: x after which the line is drawn dashed (projection).
-    One series, always gold, one continuous line (1.26.175: straight segments between real points, never a break)."""
+def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, xk="dt", head=True):
+    """One series, always gold, one continuous smooth line (never a break, never a milestone). proj_from: x after which
+    the line is drawn dashed (projection). `marks` is accepted and ignored (1.26.291, UI/UX P3: bare charts).
+    The plot: a raised ribbon (a thick glowing line over an offset darker underside), a multi-stop gradient area fading
+    into a perspective floor grid, a glowing endpoint orb, the latest value pinned as a glass chip, the high and low called
+    out on hairline leaders when they are not the ends, even date ticks, and a headline row."""
     pts = [(x, y) for x, y in points if y is not None]
     if len(pts) < 2: return chart_skel(640, height)
-    x0, x1 = pts[0][0], pts[-1][0]; ymin = min(y for _, y in pts) if y0 is None else y0; y1 = max(y for _, y in pts)
+    x0, x1 = pts[0][0], pts[-1][0]; lo = min(y for _, y in pts); hi = max(y for _, y in pts)
+    ymin = lo if y0 is None else y0; y1 = hi
+    if y0 is None and hi > lo: ymin = lo - (hi - lo) * 0.06
+    if lo >= 0 and ymin < 0: ymin = 0
     if y1 == ymin: y1 = ymin + 1
+    y1 += (y1 - ymin) * 0.1
+    a, b, nk = _nice(ymin, y1)
+    if y0 is None: ymin, y1 = a, b
+    else: y1 = ymin + (b - a) if a == ymin else _nice(ymin, y1)[1]; nk = nk if a == ymin else 4
     X = lambda x: VW * (x - x0) / ((x1 - x0) or 1); Y = lambda y: VH * (1 - (y - ymin) / (y1 - ymin))
     if proj_from is not None:
         a = [p for p in pts if p[0] <= proj_from]; b = [p for p in pts if p[0] >= proj_from]
         if a and b and a[-1] != b[0]: b = [a[-1]] + b
     else: a, b = pts, []
-    path = lambda ps: " ".join(f"{'M' if i == 0 else 'L'}{_f(X(x))},{_f(Y(y))}" for i, (x, y) in enumerate(ps))
-    g, ylab, yg = _grid(ymin, y1, fmt)
+    dr = a if len(a) <= 600 else a[::math.ceil(len(a) / 600)] + [a[-1]]
+    path = lambda ps: _smooth([(X(x), Y(y)) for x, y in ps])
+    cy = Y(lp0[1]) / VH if (lp0 := (([p for p in pts if p[0] <= proj_from] or pts) if proj_from is not None else pts)[-1]) else 0
+    g, ylab, _ = _grid(ymin, y1, fmt, nk, skip=lambda f: abs((f * height - 10) - cy * height) < 16)   # no tick label under the line end
     xl = xfmt or (lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M"))
-    # x ends and tips carry their time (data-lts, data-ts): app.js shows them in the reader's zone; xk "d" for day-scale charts
-    xs = f'<span class="xl l" data-lts="{int(x0)}" data-f="{xk}">{E(xl(x0))}</span><span class="xl r" data-lts="{int(x1)}" data-f="{xk}">{E(xl(x1))} UTC</span>'
-    msvg, chips, leg, top = _marks(marks, X, x0, x1)
+    # x ticks: evenly spaced round days (or hours) on a time axis, read in the reader's zone (data-lts); round steps else
+    if x0 > 1e9:
+        tk, kind = _xticks(x0, x1)
+        xs = "".join(_xlab(100 * X(t) / VW, E(xl(t)), f' data-lts="{int(t)}" data-f="{kind}"') for t in tk if 0 <= 100 * X(t) / VW <= 100)
+    else:
+        span = x1 - x0; st = next((q for q in (1, 2, 5, 10, 20, 25, 50, 100, 250, 500, 1000) if span / q <= 5), span or 1)
+        xs = "".join(_xlab(100 * X(v) / VW, E(xl(v))) for v in range(int(math.ceil(x0 / st) * st), int(x1) + 1, int(st)))
     step = max(1, len(pts) // 160)
     hp = lambda x, y: f'<g data-tip="{E(xl(x))} UTC · {E(fmt(y))}" data-ts="{int(x)}" data-tv="{E(fmt(y))}" data-cx="{_f(X(x))}" data-cy="{_f(Y(y))}"></g>'
     hit = "".join(hp(x, y) for x, y in pts[::step])
     if (len(pts) - 1) % step: hit += hp(*pts[-1])
     lp = a[-1] if a else pts[-1]
+    d = path(dr); ga, gb, gs = _gid("la", d), _gid("lb", d), _gid("ls", d)
+    defs = (f'<defs><linearGradient id="{ga}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="a0"/><stop offset=".3" class="a1"/><stop offset=".65" class="a2"/><stop offset="1" class="a3"/></linearGradient>'
+            f'<linearGradient id="{gb}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="h0"/><stop offset=".14" class="h1"/></linearGradient></defs>')
+    area = f'<path class="ar" d="{d} L{_f(X(dr[-1][0]))},{VH} L{_f(X(dr[0][0]))},{VH} Z" fill="url(#{ga})"/><path class="ar hl" d="{d} L{_f(X(dr[-1][0]))},{VH} L{_f(X(dr[0][0]))},{VH} Z" fill="url(#{gb})"/>'
     pb_ = f'<path d="{path(b)}" class="ln pj s-gold"/>' if len(b) > 1 else ""
     dot = f'<i class="ld s-gold" style="left:{100 * X(lp[0]) / VW:.2f}%;top:{100 * Y(lp[1]) / VH:.2f}%"></i>'
-    svg = f'{g}{msvg}<path d="{path(a)}" class="ln s-gold"/>{pb_}{hit}'
-    return _plot(svg, ylab + xs + chips + dot, height, top=top, tail=leg, yg=yg)
+    lvt = (compact3 if fmt is compact else fmt)(lp[1]); tags = _tag("lv", VW, Y(lp[1]), lvt)
+    ih = max(range(len(pts)), key=lambda i: pts[i][1]); il = min(range(len(pts)), key=lambda i: pts[i][1])
+    if 0 < ih < len(pts) - 1 and hi > lo and pts[ih][1] != pts[-1][1]: tags += _tag("ex hi", X(pts[ih][0]), Y(pts[ih][1]), fmt(pts[ih][1]))
+    if 0 < il < len(pts) - 1 and hi > lo and il != ih and pts[il][1] not in (pts[0][1], pts[-1][1]): tags += _tag("ex lo" + (" up" if Y(pts[il][1]) > .72 * VH else ""), X(pts[il][0]), Y(pts[il][1]), fmt(pts[il][1]))   # near the floor it reads above the point
+    hd = _head(lp[1], fmt, _chg(pts[0][1], lp[1], fmt), _period(x0, lp[0])) if head else ""
+    ud = 3.2 * VH / max(height, 60)   # the ribbon's underside: the same path 3 px lower, darker
+    lay = (f'<defs><linearGradient id="{gs}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="l0"/><stop offset=".7" class="l1"/><stop offset="1" class="l2"/></linearGradient></defs>'
+           f'<path d="{d}" class="lu s-gold" transform="translate(0 {_f(ud)})"/><path d="{d}" class="ln s-gold" stroke="url(#{gs})"/>{pb_}')
+    return _plot(f'{defs}{area}{hit}', ylab + xs + dot + tags, height, yg=_chipw(lvt), head=hd, layer=lay, grid=g)
 
 def hbars(items, total=None, color="gold", maxn=12):
+    """Horizontal bars as 3D extruded pills on an inset track (style.css .hbars.ck), the value and share at the end."""
     items = items[:maxn]; mx = max((v for _, v in items), default=1) or 1; tot = total or sum(v for _, v in items) or 1
     sc = series_cls(color)
-    rows = "".join(f'<div class="hb"><span class="hl" title="{E(str(k))}">{E(str(k))}</span><span class="hbar"><i class="{sc}" style="width:{100*v/mx:.1f}%"></i></span><span class="hv num">{v:,} <small>({100*v/tot:.1f}%)</small></span></div>' for k, v in items)
-    return f'<div class="hbars">{rows}</div>'
+    rows = "".join(f'<div class="hb"><span class="hl" title="{E(str(k))}">{E(str(k))}</span><span class="hbar"><i class="{sc}" style="width:{max(1.5, 100 * v / mx):.1f}%"></i></span><span class="hv num">{v:,} <small>({100 * v / tot:.1f}%)</small></span></div>' for k, v in items)
+    return f'<div class="hbars ck">{rows}</div>'
