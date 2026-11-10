@@ -156,6 +156,7 @@ try:
           and {r["segment"] for r in ja} == {1, 2} and all(r["url"].endswith("?segment=1") == (r["segment"] == 1) for r in ja))
     c, b, h = get("/api/epochs?from=0&limit=3"); check("?from= still pages the current segment", c == 200 and [r["epoch"] for r in json.loads(b)] == [0, 1, 2][:min(3, n2)] and "lifetime" not in json.loads(b)[0])
     c, b, h = get("/chain"); check("epoch list is one history: no toggle, no cut note, no archived label; both runs listed", c == 200 and "(archived)" not in b and 'class="chips segs' not in b and "cutnote" not in b and "Earlier history archived" not in b and 'href="/epoch/3?segment=1"' in b and 'href="/epoch/0"' in b)
+    c, b, h = get("/chain"); check("history: earlier rows carry a plain date title, no markup leaking into the row (1.26.303)", c == 200 and "before the restart (<" not in b and re.search(r'title="Epoch \d+, before the restart \([A-Z][a-z]{2} \d{1,2}\)"', b) is not None)
     c, b, h = get("/chain?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
     c, b, h = get("/epoch/14?segment=1"); check("earlier epoch page still opens (old links), no archived label", c == 200 and "(archived)" not in b)
     c, b, h = get("/network?tab=health"); check("health has no cut banner (1.26.301: one history)", c == 200 and "cutnote" not in b)

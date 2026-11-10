@@ -199,7 +199,8 @@ def nopay_tag(r):
 def _pre_title(r):
     """A close from before the Oct 24 restart repeats an epoch number; its link and title say which one."""
     n = r.get("segment")
-    return f' title="Epoch {r["epoch"]}, before the restart ({utc(r["close_ts"], "%b %d")})"' if n and n != SG.CURRENT else ""
+    # 1.26.303: a plain date (utc() returns markup, which broke the attribute and printed 'Oct 20)">' in the row)
+    return f' title="Epoch {r["epoch"]}, before the restart ({time.strftime("%b %-d", time.gmtime(int(r["close_ts"])))})"' if n and n != SG.CURRENT else ""
 
 def epochs_table(rows, link=True, qs=None, base=None):
     """Closes, newest first. qs and base: every header sorts the list (?sort=&dir=, server side; blanks last)."""
@@ -1117,7 +1118,9 @@ def epochs_page(qs=None):
     elif tab == "grading":
         inner = grading()
     else:
-        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in epa], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
+        # 1.26.303: the first close after the restart has no gap_s of its own; its gap is the time since the close before it, so no hole at the cut
+        gp = [r["gap_s"] or ((r["close_ts"] - epa[i - 1]["close_ts"]) if i and r.get("close_ts") and epa[i - 1].get("close_ts") else 0) for i, r in enumerate(epa)]
+        cad = bars([(f"E{r['epoch']}", [g / 3600 if g else 0]) for r, g in zip(epa, gp)], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         pz = " minepoa.com paused this list; balances safe." if A.epochs_paused() else ""   # 1.26.280: explain the gap when minepoa paused /api/epochs
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet." + pz
