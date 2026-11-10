@@ -1506,12 +1506,16 @@ def community_page(tab=""):
     body = {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
     return apage("Community · " + dict(COMMUNITY_TABS)[tab] if tab != "forum" else "Community", subtabs("/agents/community", COMMUNITY_TABS, tab) + body, "/agents/community")
 
-NET_TABS = [("overview", "Overview"), ("health", "Health"), ("anchors", "Anchors"), ("charts", "Charts"), ("records", "Records"), ("token", "Token")]
+NET_TABS = [("overview", "Overview"), ("charts", "Charts"), ("health", "Health"), ("anchors", "Anchors"), ("records", "Records"), ("token", "Token")]
+NET_NAV = ("overview", "charts", "health")   # 1.26.294 (UI/UX P6): three tabs on the page; Anchors, Records and Token still render at their URLs
+NET_AGENT_API = [("Anchors", "/network?tab=anchors", "/api/v1/anchors/timeline"), ("Records", "/network?tab=records", "/api/v1/epoch-records"), ("Token", "/network?tab=token", "/api/v1/unlocks"),
+                 ("Parameters and G0", "/about", "/api/v1/params"), ("Sybil signals", "/about#sybil", "/api/v1/agents/sybil"), ("Economics", "/governance?tab=rules", "/api/v1/governance/econ"),
+                 ("Health detail", "/network?tab=health", "/api/v1/health"), ("Reconciliation", "/network?tab=health", "/api/v1/reconcile")]
 
 def network(tab="", rng="", title=None):
     """Network: Overview, Health (was /status), Charts (was /growth) and Token (was /token, 1.26.96)."""
     tab = tab if tab in dict(NET_TABS) else "overview"
-    chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS)
+    chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS if k in NET_NAV or k == tab)
     head = f'<div class="sechead"><h1>Network</h1></div><nav class="chips atabs scroll" aria-label="Network">{chips}</nav>'
     if tab == "health":
         body = cut_note() + V2.status_body()
@@ -1532,34 +1536,16 @@ def network(tab="", rng="", title=None):
 def network_overview(head):
     """Network > Overview. Every card reads the live network (current segment): networks/status blobs, this segment's
     close records and anchors."""
-    ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}; p = A.params(); p_t = db.get_blob("params")[1]; st = A.status(); sy = A.sybil(); h = A.health()
+    nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
-    # Closes: our close records for this segment, else the live network's own count (the epoch list can trail a close)
-    closes = max([len(ep)] + [int(x) for x in (st.get("epochs_closed"), nw.get("epochs_closed")) if isinstance(x, (int, float))])
-    gaps = [r["gap_s"] for r in ep if r["gap_s"]]
-    cad = f'<span class="num">{sum(gaps)/len(gaps)/3600:.2f}h</span>' if closes >= 2 and gaps else '<span class="na" title="Needs 2 closes in this segment">-</span>'
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc.get("last") else None
-    sigs = [(x["s"], x["n"]) for x in anc["sigs"] if x.get("s")]
-    sig_v = " · ".join(E(s[4:] if s.startswith("sigs") and s[4:].isdigit() else s) for s, _ in sigs)
-    sig_t = "; ".join(f"{s} on {n} anchors" for s, n in sigs)
-    signers = f'<span class="clip" title="{E("Signatures per checkpoint anchor: " + sig_t)}">{sig_v}</span>' if sigs else '<span class="na">-</span>'
     cur = rel_.get("current") or {}
     ver = (f'<span class="mono ver" title="{E(cur["version"])}">{E(cur["version"])}</span>' if cur.get("version")
            else f'<span class="na" title="{E(rel_.get("note") or "No release manifest on the ledger yet")}">None yet</span>')
     lag_flag = flag("Behind", f"Finality lag at or above {A.LAG_BLOCKS:,} blocks") if lag >= A.LAG_BLOCKS else ""
-    lag_card = stat("Finality lag", intc(lag), tip=f"Blocks between the chain height and the finalized height. Flagged at {A.LAG_BLOCKS:,}", flag_html=lag_flag)
-    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"),
-                 lag_card,
-                 stat("Epoch cadence", cad, tip="Mean time between closes in this segment"), stat("Closes", intc(closes), tip="Epoch closes in this segment"),
-                 stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
-                 stat("Signers", signers), stat("K", intc(p.get("K")), asof=p_t),
-                 stat("Version", ver, asof=rel_t), stat("Releases", intc(len(rel_.get("history",[])))), V2.cp_stat()])
-    g0 = rel_.get("g0") or {}
-    dep = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in [
-        ("G0", addr_link(g0.get("addr"), names())), ("Powers", ", ".join(E(x) for x in g0.get("powers", [])) or "···"),
-        ("Trusted graders", len(p.get("trusted_graders", []))), ("System graders", len(p.get("system_grader_accounts", []))),
-        ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
-        ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"] if x.get("anchored_by")) or "···")])
+    # 1.26.294: four numbers; lag, cadence, closes, signers, K and releases are in /api/v1/summary, /params and /anchors
+    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", flag_html=V2.cp_flag() or lag_flag),
+                 stat("Last anchor", rel(last_anchor)), stat("Version", ver, asof=rel_t)])
     from . import protocolview as PV   # 1.26.142: client file hashes against the signed release (protocol.py)
     from . import signed as _SIG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
     vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
@@ -1567,23 +1553,9 @@ def network_overview(head):
                      if vn[x.get("version")] > 1 and x.get("txid") else "")
     rels = table(["Version", f"When ({TZ})", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{_SIG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
     al = table(["Height", "Chain", "Anchor tx", f"Anchored ({TZ})"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), (lt(iso_ts(a["anchored_at"]), "dts") if iso_ts(a.get("anchored_at")) else E(str(a.get("anchored_at") or "···")))] for a in A.anchors_latest(12)])
-    cap = sy["last_epoch_capped"]
-    syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [
-        ("Slot templates", pct(sy["slot"]/sy["sampled"]) if sy["sampled"] else "···"), ("Instruction echo", pct(sy["echo"]/sy["sampled"]) if sy["sampled"] else "···"),
-        ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
-        ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
-        ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
-    from . import netfacts as NF   # authoritative minepoa facts, cross checked against POAScan's own derivation (fails soft)
-    _nflog = __import__("logging").getLogger("poascan.views")
-    try: facts_card = NF.render_card()
-    except Exception as e: facts_card = ""; _nflog.warning("netfacts card: %s", type(e).__name__)
-    try: close_card = NF.render_close_card()
-    except Exception as e: close_card = ""; _nflog.warning("netfacts close card: %s", type(e).__name__)
-    try: expiry_card = NF.render_expiry_card()
-    except Exception as e: expiry_card = ""; _nflog.warning("netfacts expiry card: %s", type(e).__name__)
-    body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{facts_card}{close_card}</div>{expiry_card}
-<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>{_notices_card()}'''
+    fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in NET_AGENT_API)
+    body = f'''<div class="stats four netov">{s}</div>
+<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>{_notices_card()}{card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")}'''
     return page("Network", head + body, "/network")
 
 NOTICE_ROWS = 8
