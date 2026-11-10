@@ -1544,7 +1544,7 @@ def network_overview(head):
            else f'<span class="na" title="{E(rel_.get("note") or "No release manifest on the ledger yet")}">None yet</span>')
     lag_flag = flag("Behind", f"Finality lag at or above {A.LAG_BLOCKS:,} blocks") if lag >= A.LAG_BLOCKS else ""
     # 1.26.294: four numbers; lag, cadence, closes, signers, K and releases are in /api/v1/summary, /params and /anchors
-    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", flag_html=lag_flag),
+    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", flag_html=V2.cp_flag() or lag_flag),
                  stat("Last anchor", rel(last_anchor)), stat("Version", ver, asof=rel_t)])
     from . import protocolview as PV   # 1.26.142: client file hashes against the signed release (protocol.py)
     from . import signed as _SIG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)

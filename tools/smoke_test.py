@@ -741,7 +741,7 @@ def fixture_pages(check):
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
               'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
         check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
-              re.search(r'title="Read \d+m ago">K<', _n) is not None and re.search(r'title="Read \d+m ago">Version<', _n) is not None
+              re.search(r'title="Read \d+m ago">Version<', _n) is not None
               and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)

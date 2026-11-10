@@ -125,7 +125,7 @@ def live():
         c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]; hl = get("/network?tab=health")[1]
         check("Network: Token tab renders the token page under the Network chips", c == 200 and 'href="/network?tab=token" class="chip on"' in tk and "Proof of Agent" in tk
               and "Min-activity Agents" in tk and tk.count("<h1") == 1)
-        check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats six netov"' in ov and "Feeds</h2>" in hl)
+        check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats four netov"' in ov and "Feeds</h2>" in hl)
         # Agents sub-tabs no longer carry Graders or At risk
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
