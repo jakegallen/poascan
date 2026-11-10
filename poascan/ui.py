@@ -828,7 +828,7 @@ def _head(v, fmt, chg="", per="", side=""):
     pr = f'<span class="chspan">{E(per)}</span>' if per else ""
     f = compact3 if fmt is compact else fmt   # the headline reads 3 figures (270K, 26.9B); the tip keeps the full value
     sd = f'<span class="chs">{side}</span>' if side else ""
-    return f'<div class="chd"><b class="chv" title="{E(fmt(v))}">{E(f(v))}</b>{chg}{pr}{sd}</div>'
+    return f'<div class="chd"><b class="chv" title="{E(fmt(v))}">{E(f(v))}</b>{pr}{sd}</div>'   # 1.26.312 (Jake t530u): no change pill here; the change sits in the chart, under the value chip (_tag lvc)
 
 def seg(items, cur=None):
     """A segmented timeframe control (7D 30D ALL): items are (label, href), the current one marked. Plain links, so it works
@@ -923,11 +923,21 @@ def _marks(marks, X, x0, x1):
     no-op so callers that still pass marks render the same chart."""
     return "", "", "", 0
 
-def _tag(cls, x, y, txt, title=""):
+def _tag(cls, x, y, txt, title="", sub=""):
     """An HTML value label pinned to a plot point (x, y in viewBox units): .lv the latest value, a glass chip in the line's
-    color beside the plot; .ex a high or low callout on a hairline leader."""
+    color beside the plot; .ex a high or low callout on a hairline leader. sub: the period change (from _chg) as a quiet
+    line under the chip, inside the chart (1.26.312)."""
     t = f' title="{E(title)}"' if title else ""
-    return f'<span class="{cls}" style="left:{100 * x / VW:.2f}%;top:{100 * y / VH:.2f}%"{t}><b>{E(txt)}</b></span>'
+    if sub and y > .8 * VH: cls += " lvu"   # near the floor the change reads above the chip
+    return f'<span class="{cls}" style="left:{100 * x / VW:.2f}%;top:{100 * y / VH:.2f}%"{t}><b>{E(txt)}</b>{_lvc(sub)}</span>'
+
+def _lvc(pill):
+    """_chg's pill markup as the in chart change label: same class (up, dn, eq) and text, no pill."""
+    if not pill: return ""
+    return pill.replace('<span class="chg ', '<i class="lvc ', 1).replace("</span>", "</i>")
+
+def _subw(pill):
+    m = re.search(r">([^<]*)<", pill or ""); return int(6.2 * len(m.group(1)) + 26) if m else 0
 
 def _chipw(txt): return int(7.4 * len(txt) + 24)   # gutter for the pinned chip: 12px tabular figures plus padding and gap
 
@@ -1001,7 +1011,8 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
             lz = f' data-lts="{int(tss[i])}" data-f="{xk}"' if tss[i] else ""
             xl.append(_xlab(p, E(str(lab)), lz))
     lv = series[-1][1]; lvt = (compact3 if fmt is compact else fmt)(tot(lv))   # the chip reads as the headline does
-    tags = _tag("lv b", VW, VH - VH * (tot(lv) / mx) - dy / 2, lvt)
+    cg = (_chg(tot(series[-2][1]), tot(lv)) if n > 1 else "") if head else ""
+    tags = _tag("lv b", VW, VH - VH * (tot(lv) / mx) - dy / 2, lvt, sub=cg)
     if imax != n - 1:
         xm = step * imax + (step - bw - dx) / 2 + (bw + dx) / 2
         tags += _tag("ex hi", xm, VH - VH * (tot(series[imax][1]) / mx) - dy, fmt(tot(series[imax][1])))
@@ -1010,10 +1021,10 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     hd = ""
     if head:
         cur = tot(lv); prev = tot(series[-2][1]) if n > 1 else None   # the bar's full height, as the pinned chip reads
-        hd = _head(cur, fmt, _chg(prev, cur) if prev is not None else "", _period(tss[0], tss[-1]) if tss[0] and tss[-1] else "", lg)
+        hd = _head(cur, fmt, "", _period(tss[0], tss[-1]) if tss[0] and tss[-1] else "", lg)
     elif lg: hd = f'<div class="chd"><span class="chs">{lg}</span></div>'
     yw = int(7 * max(len(_tk(fmt)(mx * k / nk)) for k in range(nk + 1)) + 12)   # bars read their scale on a left axis, clear of the columns
-    return _plot("".join(out), ylab + "".join(xl) + tags, height, yg=_chipw(lvt), head=hd, grid=g, yw=yw)
+    return _plot("".join(out), ylab + "".join(xl) + tags, height, yg=max(_chipw(lvt), _subw(cg)), head=hd, grid=g, yw=yw)
 
 def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, proj_from=None, y0=None, xk="dt", head=True):
     """One series, always gold, one continuous smooth line (never a break, never a milestone). proj_from: x after which
@@ -1060,15 +1071,16 @@ def line(points, height=170, color="gold", fmt=compact, xfmt=None, marks=None, p
     area = f'<path class="ar" d="{d} L{_f(X(dr[-1][0]))},{VH} L{_f(X(dr[0][0]))},{VH} Z" fill="url(#{ga})"/><path class="ar hl" d="{d} L{_f(X(dr[-1][0]))},{VH} L{_f(X(dr[0][0]))},{VH} Z" fill="url(#{gb})"/>'
     pb_ = f'<path d="{path(b)}" class="ln pj s-gold"/>' if len(b) > 1 else ""
     dot = f'<i class="ld s-gold" style="left:{100 * X(lp[0]) / VW:.2f}%;top:{100 * Y(lp[1]) / VH:.2f}%"></i>'
-    lvt = (compact3 if fmt is compact else fmt)(lp[1]); tags = _tag("lv", VW, Y(lp[1]), lvt)
+    cg = _chg(pts[0][1], lp[1], fmt) if head else ""
+    lvt = (compact3 if fmt is compact else fmt)(lp[1]); tags = _tag("lv", VW, Y(lp[1]), lvt, sub=cg)
     ih = max(range(len(pts)), key=lambda i: pts[i][1]); il = min(range(len(pts)), key=lambda i: pts[i][1])
     if 0 < ih < len(pts) - 1 and hi > lo and pts[ih][1] != pts[-1][1]: tags += _tag("ex hi", X(pts[ih][0]), Y(pts[ih][1]), fmt(pts[ih][1]))
     if 0 < il < len(pts) - 1 and hi > lo and il != ih and pts[il][1] not in (pts[0][1], pts[-1][1]): tags += _tag("ex lo" + (" up" if Y(pts[il][1]) > .72 * VH else ""), X(pts[il][0]), Y(pts[il][1]), fmt(pts[il][1]))   # near the floor it reads above the point
-    hd = _head(lp[1], fmt, _chg(pts[0][1], lp[1], fmt), _period(x0, lp[0])) if head else ""
+    hd = _head(lp[1], fmt, "", _period(x0, lp[0])) if head else ""
     ud = 3.2 * VH / max(height, 60)   # the ribbon's underside: the same path 3 px lower, darker
     lay = (f'<defs><linearGradient id="{gs}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="l0"/><stop offset=".7" class="l1"/><stop offset="1" class="l2"/></linearGradient></defs>'
            f'<path d="{d}" class="lu s-gold" transform="translate(0 {_f(ud)})"/><path d="{d}" class="ln s-gold" stroke="url(#{gs})"/>{pb_}')
-    return _plot(f'{defs}{area}{hit}', ylab + xs + dot + tags, height, yg=_chipw(lvt), head=hd, layer=lay, grid=g)
+    return _plot(f'{defs}{area}{hit}', ylab + xs + dot + tags, height, yg=max(_chipw(lvt), _subw(cg)), head=hd, layer=lay, grid=g)
 
 def hbars(items, total=None, color="gold", maxn=12):
     """Horizontal bars as 3D extruded pills on an inset track (style.css .hbars.ck), the value and share at the end."""
