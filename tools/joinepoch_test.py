@@ -47,10 +47,10 @@ check(f"no epoch from minepoa, joined just before the cut: S1 E15 ({nv[Q]['joine
 
 def href(tab, **kw): return f"/governance?tab={tab}"
 html = GV2.never_tab({}, href, lambda **kw: "")
-check("chart labels earlier segments S1 E11, S1 E12, S1 E15; the current segment plain E1", all(x in html for x in ("S1 E11", "S1 E12", "S1 E15", ">E1<")) or all(x in html for x in ("S1 E11", "S1 E12", "S1 E15", "E1")))
+check("chart labels are plain E numbers (1.26.301: one history, no S1 prefix)", "S1 E" not in html and all(x in html for x in ("E11", "E12", "E15")))
 check("chart: every row is in it", sum(1 for r in nv.values() if r["joined_epoch"] is not None) == 4)
-i11, i12, i1 = html.find("S1 E11"), html.find("S1 E12"), html.find("S1 E15")
-check("chart bars ordered by segment then epoch", 0 <= i11 < i12 < i1)
+i11, i12, i15 = html.find("E11"), html.find("E12"), html.find("E15")
+check("chart bars ordered by segment then epoch", 0 <= i11 < i12 < i15)
 check("no en or em dashes", "\\u2013" not in html and "\\u2014" not in html and "\u2013" not in html and "\u2014" not in html)
 
 print(f"{len(fails)} failed" if fails else "all passed"); sys.exit(1 if fails else 0)

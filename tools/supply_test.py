@@ -85,7 +85,7 @@ check("v1 summary keeps circulating and locked as numbers, adds the basis", isin
 check("unlock rows carry the basis", all(r["basis"] == "carry_unlocked" for r in u))
 tb = V.token_body(); hl = V.headline()
 check("carry true: no bound tags on the Token tab or the home headline", not any(t in x for t in ("Lower bound", "Upper bound") for x in (tb, hl["circ"], hl["vest"])))
-check("about#segments: neutral carried balances note", "Carried balances unlocked at the genesis cut, per the operators" in V.seg_about())
+check("about#segments: one history note says balances carried over", "balances carried over" in V.seg_about() and "One history" in V.seg_about())
 cut["carry_unlocked"] = None; A._cache.clear()
 spn = A.supply_split(); tb = V.token_body()
 check("carry unset: bounds, unconfirmed", spn["circulating_basis"] == "unconfirmed" and spn["locked_confirmed"] is False and abs(spn["spendable"] + spn["locked"] - supply) < 1e-6)
