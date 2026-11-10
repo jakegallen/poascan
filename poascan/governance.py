@@ -148,7 +148,7 @@ def overview():
 def for_agents():
     """Governance detail for agents: each former tab as its page link and its JSON endpoint (the pages still render)."""
     li = "".join(f'<li><a href="{href(k)}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, k, u in AGENT_API)
-    return card("For agents", f'<ul class="fagents">{li}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
+    return card("For agents", f'<ul class="fagents">{li}</ul>', '<a class="more" href="/api#governance">API →</a>', id="for-agents")
 
 def _pager(tab, kw, pg, pages, anchor):
     if pages <= 1: return ""

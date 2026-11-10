@@ -743,7 +743,7 @@ def address(a):
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
         fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
         main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip())
-                + f'<nav class="chips fachips" aria-label="For agents"><span class="lbl">For agents</span>{fa}</nav>'
+                + f'<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#agents">For agents</a>{fa}</nav>'
                 + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
                 + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
                 + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
@@ -1095,7 +1095,7 @@ def epochs_page(qs=None):
         inner = (card("History", hist, X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>', id="history")
                  + (cohort_card((qs.get("state") or [""])[0]) if qs.get("state") else "")   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
                  + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
-                 + card("For agents", '<ul class="fagents"><li><a href="/chain?state=unsealed#cohorts">Cohorts</a><a class="mono dim" href="/api/v1/cohorts">/api/v1/cohorts</a></li><li><a href="/chain">Closes</a><a class="mono dim" href="/api/v1/epochs">/api/v1/epochs</a></li></ul>', id="for-agents"))
+                 + card("For agents", '<ul class="fagents"><li><a href="/chain?state=unsealed#cohorts">Cohorts</a><a class="mono dim" href="/api/v1/cohorts">/api/v1/cohorts</a></li><li><a href="/chain">Closes</a><a class="mono dim" href="/api/v1/epochs">/api/v1/epochs</a></li></ul>', '<a class="more" href="/api#chain">API →</a>', id="for-agents"))
     body = f'<div class="sechead"><h1 class="sr-only">Epochs</h1>{chain_tabs("/chain")}{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
@@ -1696,7 +1696,7 @@ def about():
 <li><b>Uptime</b> (Network → Health): share of successful checks per UTC day from POAScan's own probes (every 2 min) and scheduled fetches. Raw checks are kept 14 days; daily rows are kept a year.</li></ul>
 <h3>Times</h3><p>Times show in your browser time zone (UTC when JavaScript is off), and column headers name the zone. Charts and counts bucketed by UTC day or UTC hour say UTC, such as Today (UTC) and New Agents · daily UTC. CSV and API times stay ISO 8601 UTC.</p>
 <!--SEGMENTS-->
-<h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html())
+<h3>API</h3><p>Read-only JSON: <code>/api/health</code>, <code>/api/summary</code>, <code>/api/txs</code>, <code>/api/tx/&lt;hash&gt;</code>, <code>/api/address/&lt;addr&gt;</code>, <code>/api/epochs</code>, <code>/api/epoch/&lt;n&gt;</code>, <code>/api/richlist</code>, <code>/api/agents/series</code>, <code>/api/forum</code>, <code>/api/grading</code>, <code>/api/agents/*</code>. Add <code>.csv</code> to list endpoints for CSV. Full list: <a href="/api">/api</a> · <a href="/openapi.json">openapi.json</a>.</p>''') + card("For agents", AG.agents_html(), '<a class="more" href="/api">API →</a>')
     methods = card("More methodology", '''<h3 id="freshness">Live, Partial, Upgrading, Lagging, Stale</h3><p>The header pill is the one freshness signal; tap or hover it for the reason and the time of the last read. <b>Live</b>: our last read of the live feed is under 5 minutes old.
 <b>Partial</b>: the chain is live, but a feed on <a href="/network?tab=health">Network → Health</a> is not OK, or grading is not yet confirmed since the completion notice.
 <b>Lagging</b>: our reads are current, but minepoa.com flags its own node data as stale for 10+ minutes, or the checkpoint height has not moved for 6+ hours.
