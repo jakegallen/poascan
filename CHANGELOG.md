@@ -18,7 +18,7 @@ UI/UX refinement, phase P4: Home, and the chart theme as the site's design syste
 ### Changed
 - Site theme: the chart panel (layered gradient, grain, vignette, bevel, top highlight, deep shadow) is now a token set in `:root` (`--panel-bg`, `--panel-sh`, `--panel-hl`, `--glass`, `--hair`, `--glow-gold`) and every card, stat, table, the header and the footer read it. Figures use the one tabular numeric face; tables use dashed hairline rows; pills, chips and badges are glass; the active nav item and chip are lit gold; status dots glow.
 - Home: four numbers (Total mined, Agents, Active Agents, Holders) and one Supply chart. Circulating supply stays on /network Charts; Chain height and Finalized height stay on /network and in `/api/v1/summary`. The Graders card moves off Home (Governance has it). API shapes unchanged.
-- CI: the Chromium and WebKit install steps are capped at 5 minutes per try with 3 tries, so a hung download no longer times out the whole job.
+- CI: the Chromium and WebKit install steps are capped at 5 minutes per try with 3 tries, so a hung download no longer times out the whole job; the test job limit is 45 minutes (slow runners hit 25 three times on Nov 9).
 
 ## [1.26.291] - 2026-11-09
 

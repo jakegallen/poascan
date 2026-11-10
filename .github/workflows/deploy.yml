@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45   # 1.26.292: slow runners took 15+ minutes before the browser checks and hit 25 three times
     concurrency:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
