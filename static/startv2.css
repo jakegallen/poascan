@@ -143,3 +143,35 @@
 }
 @media (prefers-reduced-motion:reduce){.sv-card::before{transition:none}}
 .sv-pay{margin:4px 0 0;text-align:center;font:500 var(--t12)/1.4 var(--ui);color:var(--mute)}
+/* 1.26.313 (Jake t535u): Something else is a real dropdown button; every app has its mark */
+.sv-other{margin-top:14px}
+.sv-other summary.sv-osum{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;min-height:46px;padding:0 14px 0 16px;
+ border:1px solid var(--line2);border-radius:var(--r-md);background:linear-gradient(180deg,color-mix(in srgb,var(--ink-1) 80%,transparent),color-mix(in srgb,var(--ink-0) 70%,transparent));
+ color:var(--hi);font:600 var(--t14)/1 var(--ui);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--bone) 5%,transparent);transition:border-color var(--fast),background var(--fast)}
+.sv-other summary.sv-osum::after{content:none}
+.sv-other summary.sv-osum:hover{border-color:color-mix(in srgb,var(--gold) 45%,transparent)}
+.sv-other summary.sv-osum:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.sv-chev{display:inline-flex;width:18px;height:18px;color:var(--gold);transition:transform var(--fast) var(--ease)}.sv-chev svg{width:100%;height:100%}
+.sv-other[open] .sv-chev{transform:rotate(180deg)}
+.sv-other[open] summary.sv-osum{border-color:color-mix(in srgb,var(--gold) 45%,transparent);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.sv-other .sv-ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0;padding:10px;border:1px solid color-mix(in srgb,var(--gold) 45%,transparent);border-top:0;
+ border-radius:0 0 var(--r-md) var(--r-md);background:color-mix(in srgb,var(--ink-0) 60%,transparent)}
+.sv-other .sv-o{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--hi);font:500 var(--t13)/1.2 var(--ui);text-align:left;cursor:pointer}
+.sv-other .sv-o:hover,.sv-other .sv-o:focus-visible{border-color:var(--line2);background:color-mix(in srgb,var(--gold) 6%,var(--ink-1));outline:none}
+.sv-ol-l{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--ink-1) 80%,transparent);border:1px solid var(--line)}
+.sv-ol-l img{width:18px;height:18px;object-fit:contain}
+/* step 3: essentials in view, the rest behind Details */
+.sv-foot{gap:12px}
+.sv-ess{display:grid;gap:6px;justify-items:center}
+.sv-ess .stwal{margin:0;font:600 var(--t14)/1.2 var(--ui)}.sv-ess .sv-pay{margin:0}
+.sv-quiet{display:flex;justify-content:center;align-items:flex-start;gap:18px;flex-wrap:wrap;width:100%}
+.sv-quiet .sv-vf-chk{margin:0}.sv-quiet .sv-vf-chk[open],.sv-more[open]{flex-basis:100%}
+.sv-more summary{list-style:none;cursor:pointer;font:500 var(--t12)/1 var(--ui);color:var(--mute);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--mute) 40%,transparent);text-underline-offset:3px;padding:6px 0}
+.sv-more summary::-webkit-details-marker{display:none}.sv-more summary:hover,.sv-more[open] summary{color:var(--hi)}
+.sv-mi{display:grid;gap:10px;justify-items:center;margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:var(--r-md);background:color-mix(in srgb,var(--ink-0) 50%,transparent)}
+.sv-mi .sv-vf{margin:0;padding:0;border:0;justify-content:center}
+.sv-mi .sv-fb{margin:0;text-align:center}.sv-fbs:empty{display:none}
+.s2v[data-st="app"] .sv-mi .sv-vf{display:flex}
+@media (max-width:640px){.sv-other .sv-ol{grid-template-columns:repeat(2,minmax(0,1fr))}.sv-mi{padding:12px 10px}}
+@media (prefers-reduced-motion:reduce){.sv-chev,.sv-other summary.sv-osum{transition:none}}
+.sv-quiet>details:not([open]){flex:0 0 auto;width:auto}

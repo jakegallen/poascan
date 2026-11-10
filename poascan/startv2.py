@@ -31,9 +31,11 @@ CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 
 PEN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.2 12.8 5.5 6 12.3 3.4 12.6 3.7 10z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>'
 BACK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 
-def _logo(a):
-    return (f'<img src="/static/brands/{E(a["logo"])}?v=1" width="28" height="28" alt="" aria-hidden="true">' if a["logo"]
+def _logo(a, px=28):
+    return (f'<img src="/static/brands/{E(a["logo"])}?v=1" width="{px}" height="{px}" alt="" aria-hidden="true" loading="lazy">' if a["logo"]
             else f'<i class="mono" aria-hidden="true">{E(a["name"][:1])}</i>')
+
+CHEV = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 
 PRESELECT = "claude"
 
@@ -51,7 +53,7 @@ def body():
     apps = _apps(); sup = [a for a in apps if a["tier"] != "none"]; ns = [a for a in apps if a["tier"] == "none"]
     pz = S.paused()
     grid = "".join(_tile(a, i) for i, a in enumerate(sup))
-    other = "".join(f'<button type="button" class="sv-o" data-app="{E(a["id"])}">{E(a["name"])}</button>' for a in ns)
+    other = "".join(f'<button type="button" class="sv-o" data-app="{E(a["id"])}"><span class="sv-ol-l">{_logo(a, 20)}</span><span>{E(a["name"])}</span></button>' for a in ns)
     tpl = (f'<pre hidden data-sv-tpl="full">{E(OP.VARIANTS["full"])}</pre><pre hidden data-sv-tpl="connector">{E(OP.VARIANTS["connector"])}</pre>')
     data = json.dumps(dict(apps=apps, join=S.JOIN_URL, mcp=S.MCP, alts=["claude-code", "cursor", "grok-bot"], slot=OP.SLOT,
                            warn=S.KEY_WARN, paused=pz), separators=(",", ":")).replace("</", "<\\/")
@@ -66,24 +68,27 @@ def body():
             f'<button type="button" class="sv-btn sv-go" data-app="{PRESELECT}">Continue with {E(next(a["name"] for a in apps if a["id"] == PRESELECT))}</button>'
             f'<div class="sv-key" aria-hidden="true"><span class="sv-b sv-bc">{GLYPH_CODE}<i class="sv-live"></i></span>Runs code'
             f'<span class="sv-b sv-bp">{GLYPH_PLUG}</span>Chat + connector</div>'
-            f'<details class="sv-other"><summary>Something else</summary><div class="sv-ol">{other}</div></details></div>')
+            f'<details class="sv-other"><summary class="sv-osum"><span>Something else</span><i class="sv-chev" aria-hidden="true">{CHEV}</i></summary><div class="sv-ol">{other}</div></details></div>')
     panel = (f'<div class="sv-panel" data-sv-panel hidden aria-live="polite">'
              f'<div class="sv-ph"><button type="button" class="sv-back" data-sv-back aria-label="All apps">{BACK}</button>'
              f'<span class="sv-pl" data-sv-logo></span><b data-sv-app></b><span class="sv-ptag" data-sv-tag></span></div>'
              f'<div data-sv-body></div></div>')
-    foot = (f'<div class="sv-foot" data-sv-foot hidden>{S.notice()}{S.phash()}'
-            f'<details class="sv-view"><summary>View prompt</summary>' + pbox(f'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">{E(S.prompt("YOUR_NAME"))}</pre>') + '</details>' + S.HELP_LINE
-            + S.WALLET_LINK + f'<p class="sv-pay">{E(S.PAY)}</p></div>')   # 1.26.311: the payment rule sits with the wallet link
-    # the verification strip: three honest badges. Prompt copied is client state; Network open mirrors POAScan's own
-    # route health for hosted mining; Answer verified reads the public ledger for a challenge tx on a poa1 the person
-    # pastes. POAScan's own /api/v1 reads only, never a key, never a minepoa.com fetch. New sv-vf prefix only.
-    strip = (f'<div class="sv-vf" data-sv-vf role="group" aria-label="Verification" aria-live="polite">'
+    # 1.26.313 (Jake t535u): step 3 keeps the essentials in view (the wallet link, the payment rule, Check my Agent as a quiet
+    # link); the status chips, the template note, the hash chips with Verify, View prompt, the stuck line and the minepoa.com
+    # fallback (app.js moves it into data-sv-fb) sit behind one quiet Details toggle. Every element stays in the page.
+    chips = (f'<div class="sv-vf" data-sv-vf role="group" aria-label="Verification" aria-live="polite">'
              f'<span class="sv-vf-b" data-sv-vf-b="copied"><span class="sv-vf-i">{CHECK}</span>Prompt copied</span>'
              f'<span class="sv-vf-b" data-sv-vf-b="network"><span class="sv-vf-i">{CHECK}</span>Network open</span>'
-             f'<span class="sv-vf-b" data-sv-vf-b="answer" title="Lights when the public ledger shows your answer. Indexing can lag."><span class="sv-vf-i">{CHECK}</span>Answer verified</span>'
-             f'<details class="sv-vf-chk"><summary>Check my Agent</summary><label class="sr-only" for="sv-vf-a">poa1 address</label>'
-             f'<input id="sv-vf-a" data-sv-vf-addr type="text" placeholder="poa1 address, never a key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="verbatim" maxlength="66">'
-             f'<span class="sv-vf-msg" data-sv-vf-msg></span></details></div>')
+             f'<span class="sv-vf-b" data-sv-vf-b="answer" title="Lights when the public ledger shows your answer. Indexing can lag."><span class="sv-vf-i">{CHECK}</span>Answer verified</span></div>')
+    chk = (f'<details class="sv-vf-chk"><summary>Check my Agent</summary><label class="sr-only" for="sv-vf-a">poa1 address</label>'
+           f'<input id="sv-vf-a" data-sv-vf-addr type="text" placeholder="poa1 address, never a key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="verbatim" maxlength="66">'
+           f'<span class="sv-vf-msg" data-sv-vf-msg></span></details>')
+    foot = (f'<div class="sv-foot" data-sv-foot hidden><div class="sv-ess">' + S.WALLET_LINK + f'<p class="sv-pay">{E(S.PAY)}</p></div>'
+            f'<div class="sv-quiet">{chk}<details class="sv-more" data-sv-more><summary>Details</summary><div class="sv-mi">'
+            f'{chips}<div class="sv-fbs" data-sv-fb></div>{S.notice()}{S.phash()}'
+            f'<details class="sv-view"><summary>View prompt</summary>' + pbox(f'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">{E(S.prompt("YOUR_NAME"))}</pre>') + '</details>' + S.HELP_LINE
+            + '</div></details></div></div>')
+    strip = ""
     return (f'<div class="s2v" data-sv data-st="name" data-svname="{E(name)}"{" data-paused=\"1\"" if pz else ""}>'
             f'<section class="sv-card">{hero}{S.join_halt_html()}{namescr}{pick}{panel}{strip}{foot}</section>'
             f'{tpl}<script type="application/json" data-sv-json>{data}</script>'

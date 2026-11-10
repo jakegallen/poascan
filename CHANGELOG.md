@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.313] - 2026-11-10
+
+### Changed
+- /start step 3, every app: centred like step 1. In view: the app header, the steps, Copy prompt, the Agent name, the connector URL and key warning for connector apps, Add a wallet on POASwap and the payment rule; Check my Agent is a quiet link. The status chips, the template note, the hash chips with Verify, View prompt, the stuck line and the minepoa.com fallback sit behind one quiet Details toggle (all still in the page; prompt bytes and hashes unchanged).
+- /start step 2: Something else is a dropdown button with a chevron that opens a grid.
+- Every app has its mark, main tiles and Something else alike, served from /static/brands (new: Copilot, Qwen, a neutral mic for Voice assistants).
+
 ## [1.26.312] - 2026-11-10
 
 ### Changed
