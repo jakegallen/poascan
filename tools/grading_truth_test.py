@@ -56,7 +56,7 @@ check("header: Live turns Partial, the note names grading and links /upgrade and
 check("header note: Updated time in the reader's zone (data-upts)", f'<time data-upts="{LIVE["fetched_at"]}"' in s and "Updated" in s)
 p2 = pl(dict(LIVE, state="partial", label="Partial", why="Chain live. Not OK: Networks"))
 check("header: a feed not OK and grading both listed", p2["reasons"][0] == "Feed not OK: Networks." and p2["reasons"][-1] == "Grading not yet confirmed. No recent seals.")
-check("header: the live snapshot pill carries the note", "pop" in V.pill() and "Grading not yet confirmed" in V.pill()["pop"])
+check("header: the live snapshot pill carries a Grading row (1.26.300 checklist; the sentence stays in reasons)", "<span>Grading</span>" in V.pill()["pop"] and any("Grading not yet confirmed" in r for r in V.pill()["reasons"]))
 h = V2.upgrade_body()
 check("/upgrade: per notice title, Not yet confirmed group", "Upgrade complete per notice" in h and "Not yet confirmed" in h and 'data-grp="grading"' in h)
 wk = h.split('data-grp="working"', 1)[1].split("</ul>", 1)[0]
@@ -102,7 +102,7 @@ check("halted: open_epoch grading_halted true, basis probe, no notice id", o["gr
 t = V.graders_tile(o)
 check("halted: graders tile Halted tag, tooltip names the live read", '<span class="tag warn">Halted</span>' in t and "live read" in t)
 s = pl()["pop"]
-check("halted: header note says Grading halted", pl()["state"] == "partial" and "Grading halted. Mining open." in s and not hasattr(V, "upgrade_strip"))
+check("halted: header note says Grading halted", pl()["state"] == "partial" and "<span>Grading</span><b>Halted</b>" in s and any("Grading halted. Mining open." in r for r in pl()["reasons"]) and not hasattr(V, "upgrade_strip"))
 check("halted: pool payouts paused", M.pool_payouts() == "paused")
 check("halted: /upgrade Halted group", 'data-grp="grading"><h2><i></i>Halted</h2>' in V2.upgrade_body())
 db.put_blob(P.BLOB, {"groups": {"Grading": "paused"}, "seen": ["Grading"], "ok": True, "ts": DONE["issued_ts"] - 600})

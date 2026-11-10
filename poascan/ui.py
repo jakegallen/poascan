@@ -402,7 +402,7 @@ def _footer():
     cur = req_path(); ext = lambda h: h.startswith("http")
     row = '<span class="fsep" aria-hidden="true">·</span>'.join(
         f'<a href="{h}"' + (' target="_blank" rel="noopener noreferrer"' if ext(h) else "") + f'>{t}</a>' for h, t in FOOT if h.split("#")[0] != cur)
-    return f'<footer class="wrap foot"><nav class="frow" aria-label="Footer">{row}</nav></footer>'
+    return f'<footer class="wrap foot"><nav class="frow" aria-label="Footer">{row}</nav>{CREDIT}</footer>'
 
 _H1 = re.compile(r'<h1>([^<]{1,60})</h1>')
 def _quiet_h1(body, active):
@@ -431,8 +431,10 @@ SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noop
 # 1.26.288: the site-wide development banner (1.26.69) is gone, on Jake's call. Home carries one quiet credit instead: a muted
 # pill under the last card that turns gold on hover, linking Jake's X profile in a new tab. One element per view, no share button.
 X_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>'
-CREDIT = ('<div class="credit"><a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer" aria-label="Built by @Jakegallen on X">'
-          f'Built by {X_LOGO}<b>@Jakegallen</b></a></div>')
+# 1.26.300: the credit moved from a floating pill under the home cards into the footer row (every page): right aligned on
+# desktop, its own centered line on a phone. Muted like the footer links, gold on hover.
+CREDIT = ('<a class="fcredit" href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer" aria-label="Built by @Jakegallen on X">'
+          f'<span>Built by</span>{X_LOGO}<b>@Jakegallen</b></a>')
 
 # Header status (1.26.169): the dot and word open a small note (the qtip pattern: tap, click, keyboard, mouse hover) with what
 # drives the state, the read time in the reader's zone, and links. Grading not confirmed after the completion notice turns a
@@ -562,9 +564,51 @@ def status_pill(f):
     links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
-    pop = (f'<span class="sp-h">{E(label)}</span>' + "".join(f'<span class="sp-r">{rhtml.get(r) or E(r)}</span>' for r in reasons)
-           + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>')
+    halted = {t.split(" halted")[0] for t in [x for x, _ in rl] + ([g] if g else []) if " halted" in t} | ({"Tx lookup"} if hr else set())
+    pop = _pill_pop(label, fdx, ts, links, f.get("fetched_at"), state, ur, halted)   # 1.26.300: a compact checklist; the sentences stay on Health
     return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
+
+# 1.26.300 (Jake, t524u): the header note is a short checklist, one row per feed with a dot and one word. The full reasons
+# (with since times) stay on the Health page and in status_pill()["reasons"] for the API.
+PILL_NAMES = {"Status": "Chain", "Tx list": "Transactions", "Address lookup": "Addresses", "Tx lookup": "Tx lookup", "Swaps": "Swaps",
+              "Swap writes": "Swap writes", "Networks": "Networks", "Notices": "Notices", "Epochs": "Epochs", "Close records": "Close records",
+              "Agents": "Agents", "Anchors": "Anchors"}
+PILL_WORD = {"ok": ("OK", "ok"), "degraded": ("Slow", "warn"), "stalled": ("Slow", "warn"), "stale": ("Slow", "warn"), "paused upstream": ("Paused", "warn"),
+             "paused": ("Paused", "warn"), "down": ("Down", "bad"), "halted": ("Halted", "bad")}
+
+def _age(ts):
+    if not ts: return ""
+    d = max(0, int(time.time() - int(ts)))
+    return "Data just now" if d < 60 else f"Data {d // 60}m old" if d < 3600 else f"Data {d // 3600}h old"
+
+def _pill_rows(fdx, state="live", halted=()):
+    """[(name, word, tone)] for the note: the chain, the core routes, then the feeds; not OK first, at most 10."""
+    if not fdx: return []
+    out, seen = [], set()
+    def add(name, st):
+        if not name or name in seen: return
+        w = PILL_WORD.get(str(st or "").lower())
+        if not w: return   # Retired and unknown states are left to Health
+        seen.add(name); out.append((name, w[0], w[1]))
+    for h in sorted(halted): add(PILL_NAMES.get(h, h), "halted")   # a halt outranks the route's own state
+    add("Chain", "down" if state == "stale" else "stalled" if state == "lag" or fdx.get("chain") != "Live" else "ok")
+    for r in fdx.get("routes") or []:
+        if r.get("core"): add({"Mining": "Mining", "Grading": "Grading"}.get(r["label"], r["label"]), r["state"])
+    for r in fdx.get("routes") or []:
+        if not r.get("core"): add(PILL_NAMES.get(r["label"], r["label"]), r["state"])
+    for r in fdx.get("feeds") or []:
+        lab = r.get("label") or ""
+        nm = "Fast index" if "index" in lab.lower() else PILL_NAMES.get(lab)
+        if nm and nm != "Chain": add(nm, r.get("state"))
+    rank = {"bad": 0, "warn": 1, "ok": 2}
+    return sorted(out, key=lambda x: rank[x[2]])[:10]
+
+def _pill_pop(label, fdx, ts, links, fetched, state, upgrade_line, halted=()):
+    rows = _pill_rows(fdx, state, halted)
+    head = f'<span class="sp-h"><b>{E(label)}</b><span class="sp-age">{E(_age(fetched))}</span></span>'
+    up = f'<span class="sp-r">{E(upgrade_line)}</span>' if upgrade_line else ""   # maintenance keeps its one line
+    lst = ('<ul class="sp-l">' + "".join(f'<li class="{t}"><i aria-hidden="true"></i><span>{E(n)}</span><b>{w}</b></li>' for n, w, t in rows) + '</ul>') if rows else ""
+    return head + up + lst + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>'
 
 def pill_html(live):
     p = status_pill(live)
@@ -594,7 +638,7 @@ def layout(title, body, active="/", live=None, head=""):
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
-<main class="wrap">{body}{CREDIT if active == "/" and 'class="hsearch' in body else ""}</main>
+<main class="wrap">{body}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
 <script src="/static/app.js?v={ASSET_V["app.js"]}" defer></script></body></html>'''
