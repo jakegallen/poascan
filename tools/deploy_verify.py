@@ -36,18 +36,29 @@ for i in range(24):
 check(f"/api/health commit is this build ({SHA[:12]}), saw {str(seen)[:12]}", bool(SHA) and seen == SHA)
 check("X-API-Commit header on /api/health is this build", {k.lower(): v for k, v in hhd.items()}.get("x-api-commit") == SHA)
 
+def get_json(path, tries=12):
+    """A JSON body from path, retried while the single machine is still cold after the deploy (a 503 "server busy" text,
+    an edge error page or a timeout), up to about 2 minutes. Returns (status, body or None)."""
+    st = None
+    for i in range(tries):
+        try:
+            st, hd, b = get(path)
+            if st == 200: return st, json.loads(b)
+        except Exception as e: st = type(e).__name__
+        time.sleep(10)
+    return st, None
+
 # 2) served prompt bytes equal the repo
 from poascan import combined as CB, start as S
-try:
-    st, hd, b = get("/api/v1/prompts/combined"); d = json.loads(b); t = d.get("text") or ""
-    srv = hashlib.sha256(t.encode()).hexdigest()
+st, d = get_json("/api/v1/prompts/combined")
+if d is None: check(f"combined prompt readable (last answer {st})", False)
+else:
+    t = d.get("text") or ""; srv = hashlib.sha256(t.encode()).hexdigest()
     check(f"served combined .text sha256 {srv[:8]} equals the repo slot {str(CB.SHA256)[:8]} and the advertised combined_sha256",
           CB.SHA256 is not None and srv == CB.SHA256 == d.get("combined_sha256") and t == CB.TEXT)
-except Exception as e: check(f"combined prompt readable ({type(e).__name__})", False)
-try:
-    st, hd, b = get("/api/v1/prompts/join"); d = json.loads(b)
-    check(f"served join template_sha256 equals the repo template {S.template_sha256()[:8]}", d.get("template_sha256") == S.template_sha256())
-except Exception as e: check(f"join prompt readable ({type(e).__name__})", False)
+st, d = get_json("/api/v1/prompts/join")
+if d is None: check(f"join prompt readable (last answer {st})", False)
+else: check(f"served join template_sha256 equals the repo template {S.template_sha256()[:8]}", d.get("template_sha256") == S.template_sha256())
 
 # 3) served copy scan, warnings only
 KEYURL = re.compile(r"[?&](?:key|api_key|token|guid)=(?!YOUR_|KEY\b|\{)[A-Za-z0-9_\-]{8,}")
