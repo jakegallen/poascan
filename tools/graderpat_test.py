@@ -88,7 +88,7 @@ check("Graders tab: Grader patterns card after Calibration", h.index('id="calibr
 check("A to Z by default: active Agent header, names before addresses", 'aria-sort="ascending"' in card.split("<tbody>")[0] and card.index(G[0]) < card.index(G[1]) < card.index(G[2]))
 check("system tag, low n hidden by default with the count", '<span class="tag">system</span>' in card and G[3] not in card and "1 under n 20 hidden" in card)
 check("Advisory tag and note, method link, percentile on hover", "Advisory" in card and 'href="/about#grader-patterns"' in card and 'title="Percentile 100 of 3 graders"' in card)
-check("header tips on Agreement, Peers, Spread, Top score, Distance, Mix", card.count('class="qtip hv"') == 6)
+check("no ? on the headers (UI/UX P2: the method is on /about)", card.count('class="qtip hv"') == 0 and ">?</summary>" not in card)
 check("sortable headers keep the tab (psort, pdir)", "psort=agreement" in card and "tab=graders" in card and "#patterns" in card)
 check("range chips 24h 7d 30d All and n 20+ / All chips", all(f">{t}</a>" in card for t in ("24h", "7d", "30d", "All", "n 20+")) and "prange=7d" in card and "pn=all" in card)
 check("charts: Agreement, Spread, Score mix, Answer to seal, watermarked chart boxes with ? tips", all(t in sec for t in ("Agreement · graders", "Spread · graders", "Score mix", "Answer to seal · seals")) and sec.count('class="chartbox') >= 4)

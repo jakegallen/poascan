@@ -183,7 +183,7 @@ def run(base, p, w, h, mobile, kinds):
                 if judge(f"{path} grader patterns note {i} '{res.get('text')}'", res): good += 1; gp_ok += 1
                 else: bad += 1
                 pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
-            check(f"{w}: Grader patterns: {gp_ok} of {len(ids)} notes topmost and inside (4 chart ?, plus 6 header ? at 1280, 2 at 390)", len(ids) >= (6 if mobile else 10) and gp_ok == len(ids))
+            check(f"{w}: Grader patterns: {gp_ok} of {len(ids)} notes topmost and inside (4 chart ?, plus 6 header ? at 1280, 2 at 390)", gp_ok == len(ids))   # UI/UX P2: no ? left on the cards
             if gp_ok and gp_ok == len(ids): kinds.add("grader patterns")
         # Expiry horizon (1.26.186): every ? and every Stale or Unconfirmed tag on the horizon card (Queue tab)
         if "tab=queue" in path:
@@ -207,7 +207,7 @@ def run(base, p, w, h, mobile, kinds):
                 if judge(f"{path} wallet note {i} '{res.get('text')}'", res): good += 1; wb_ok += 1
                 else: bad += 1
                 pg.keyboard.press("Escape"); pg.wait_for_timeout(60)
-            check(f"{w}: {path}: wallet binding {wb_ok} of {len(ids)} notes topmost and inside", len(ids) >= 2 and wb_ok == len(ids))
+            check(f"{w}: {path}: wallet binding {wb_ok} of {len(ids)} notes topmost and inside", len(ids) >= 1 and wb_ok == len(ids))   # UI/UX P2: the binding tag stays, the ? tips are gone
             if wb_ok and wb_ok == len(ids): kinds.add("wallet binding")
         # Route halts (routewatch): the Stale tag on a Health Routes row, opened on its own
         if "tab=health" in path:
@@ -224,7 +224,7 @@ def run(base, p, w, h, mobile, kinds):
         # Intake (1.26.189): the Cap ? on the per close table and the Draw ? on the Agents table
         if "tab=intake" in path:
             ok_, n_ = every_note(pg, "#intake details.qtip, #intake-list details.qtip", "ik", mobile, judge, path, w)
-            check(f"{w}: Intake: {ok_} of {n_} notes topmost and inside (Cap ?, Draw ?)", n_ >= 2 and ok_ == n_)
+            check(f"{w}: Intake: {ok_} of {n_} notes topmost and inside (Cap ?, Draw ?)", ok_ == n_)   # UI/UX P2: the Cap and Draw ? are gone (method on /about); any note left must still sit on top
             if n_ and ok_ == n_: kinds.add("intake")
         check(f"{w}: {path}: {good} notes topmost and inside the viewport, {bad} not", bad == 0)
     b.close()
@@ -248,7 +248,7 @@ if sync_playwright:
             for w, h, mob in ((390, 844, True), (1280, 900, False)):
                 n = run(base, p, w, h, mob, kinds)
                 check(f"{w}: opened {n} notes", n >= 30)
-        for k in ("qtip qtip", "qtip qtip sflag", "qtip qtip hv spill", "qtip qtip hv btip", "chart readout", "ask dialog", "grader patterns", "expiry horizon", "wallet binding", "routes stale", "intake"):
+        for k in ("qtip qtip sflag", "qtip qtip hv spill", "chart readout", "ask dialog", "expiry horizon", "wallet binding", "routes stale"):   # UI/UX P2: no ? tips left to cover
             check(f"covered: {k} ({sorted(kinds)})" if k not in kinds else f"covered: {k}", k in kinds)
     finally:
         srv.terminate()

@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.290] - 2026-11-09
+
+UI/UX refinement, phase P2: tokens and chrome.
+
+### Changed
+- No "?" icons on any page or on the chart pop-out. Every note's Method link pointed at /about, which keeps the methodology.
+- The header state reads as one status dot with a quiet label (Live, Lagging, Partial, Stale); the note opens on hover, tap or focus as before.
+- Stale and the other stat flags are a small colored dot beside the label instead of a word tag. The word stays for screen readers and in the note.
+- The sticky header is blurred over the page; cards and stat cards have a soft depth shadow.
+
 ## [1.26.289] - 2026-11-09
 
 UI/UX refinement, phase P1: API gaps, all additive. Every default is unchanged.

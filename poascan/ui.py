@@ -121,8 +121,9 @@ def qtip(text, method_href, label, cls=""):
     """A tap, click and keyboard tooltip (details/summary, no hover only): a ? button that opens a short note with a Method link.
     The note is fixed to the viewport so table scroll boxes never clip it; app.js closes it on Escape or an outside tap.
     cls "hv" also opens it on a mouse hover; leaving closes what the hover opened, a click pins it."""
-    return (f'<details class="qtip{" " + cls if cls else ""}"><summary aria-label="{E(label)}" title="{E(label)}">?</summary>'
-            f'<span class="qbox" role="note">{E(text)} <a href="{E(method_href)}">Method</a></span></details>')
+    # 1.26.290 (UI/UX P2): no "?" icons anywhere. Methodology lives on /about (each note's Method link pointed there), so a
+    # tip renders nothing; callers keep passing their text so the notes stay greppable next to the numbers they explain.
+    return ""
 
 def name_link(name, pid=None, cls="fname"):
     """Agent display name -> LabLeak profile (new tab). Plain text when there is no LabLeak public id."""
