@@ -1838,7 +1838,7 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
 .chartbox.ck .cvp>.chart:not(.lnl):not(.gr){filter:drop-shadow(0 10px 12px color-mix(in srgb,var(--black) 55%,transparent))}
 /* crosshair and tooltip: glass, same numeric face */
 .ck .xh{width:1px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--gold-hi) 80%,transparent) 18%,color-mix(in srgb,var(--gold-hi) 80%,transparent) 82%,transparent);z-index:3}
-.ck .xt{z-index:5;padding:8px 11px;border-radius:var(--r-md);background:color-mix(in srgb,var(--ink-1) 86%,transparent);border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line2));
+.ck .xt{z-index:5;transition:none;padding:8px 11px;border-radius:var(--r-md);background:color-mix(in srgb,var(--ink-1) 86%,transparent);border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line2));
  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--white) 7%,transparent),0 18px 36px -14px color-mix(in srgb,var(--black) 95%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font:500 var(--t12)/1.35 var(--nf);color:var(--bone-hi)}
 .ck .xd{width:12px;height:12px;margin:-6px 0 0 -6px;background:radial-gradient(circle at 35% 30%,var(--mark-glint),var(--gold-hi) 45%,var(--gold));box-shadow:0 0 0 3px var(--ink-1),0 0 14px 3px color-mix(in srgb,var(--gold) 70%,transparent);z-index:4}
 /* sparklines: glow and a small extrusion */
