@@ -1200,20 +1200,35 @@ class H(BaseHTTPRequestHandler):
         if not getattr(self, "_mcp_read", False):
             self._mcp_read = True; self._mcp_raw = self.rfile.read(int(n))
         return AG.mcp_light(self._mcp_raw or b"")
+    def _ip_key(self):
+        """R2 (1.26.291): the per-IP concurrency key for the heavy gate. Fly address only (Cloudflare aware), the /64 for
+        IPv6. None without a Fly address (local runs, the CI tests), which ip_heavy_acquire never gates."""
+        try:
+            ip = CIP.proxied(self.headers)
+            return CIP.limiter_key(ip) if ip else None
+        except Exception:
+            return None
     def _scrape_gated(self, fn):
-        """One heavy slot, and only SCRAPE_MAX of these at once. Past the cap, shed without taking a worker."""
-        if not GD.scrape.acquire(timeout=GD.SCRAPE_WAIT):
+        """One heavy slot, and only SCRAPE_MAX of these at once. Past the cap, shed without taking a worker. R2: a client
+        already at its per-IP heavy cap sheds here too, before the scrape and heavy semaphores."""
+        ipk = self._ip_key()
+        if not GD.ip_heavy_acquire(ipk):
             return self._shed()
-        if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
-            try: GD.scrape.release()
-            except ValueError: pass
-            return self._shed()
-        try: return fn()
+        try:
+            if not GD.scrape.acquire(timeout=GD.SCRAPE_WAIT):
+                return self._shed()
+            if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
+                try: GD.scrape.release()
+                except ValueError: pass
+                return self._shed()
+            try: return fn()
+            finally:
+                try: GD.slots.release()
+                except ValueError: pass
+                try: GD.scrape.release()
+                except ValueError: pass
         finally:
-            try: GD.slots.release()
-            except ValueError: pass
-            try: GD.scrape.release()
-            except ValueError: pass
+            GD.ip_heavy_release(ipk)
     def _ua_throttled(self):
         """1.26.287: True after a cheap 429 for an API request from a throttled User-Agent over its shared budget
         (guard.ua_throttle, one bucket across all of its IPs). Runs first in _gated: no slot, cache, DB or upstream work.
@@ -1243,9 +1258,21 @@ class H(BaseHTTPRequestHandler):
                 if self._html_hit(): return fn()
         if self._is_scrape(): return self._scrape_gated(fn)   # still a heavy slot, but a flood sheds at the cap
         sem = GD.cheap if (GD.cheap is not None and path in self.CHEAP_PATHS) else GD.slots
-        if sem.acquire(timeout=GD.HEAVY_WAIT):
-            try: return fn()
-            finally: sem.release()
+        if sem is not GD.slots:   # the cheap reserve (homepage, /chain) is never per-IP gated: those pages must always serve
+            if sem.acquire(timeout=GD.HEAVY_WAIT):
+                try: return fn()
+                finally: sem.release()
+            if self._html_hit(): return fn()
+            return self._shed()
+        ipk = self._ip_key()   # R2: a heavy page past the client's per-IP cap sheds before it takes a slot
+        if not GD.ip_heavy_acquire(ipk):
+            return self._shed()
+        try:
+            if sem.acquire(timeout=GD.HEAVY_WAIT):
+                try: return fn()
+                finally: sem.release()
+        finally:
+            GD.ip_heavy_release(ipk)
         if self._html_hit(): return fn()   # a copy landed while we waited
         return self._shed()
     def _html_shed_ok(self):

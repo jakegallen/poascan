@@ -42,7 +42,17 @@ GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect(
 # 1.26.271: leave at least one heavy slot when MAX_WORKERS is 1 (the slot tests). A full reserve on a one slot
 # process would give heavy work nothing to take.
 _reserve = min(max(0, SERVE_RESERVE), max(0, MAX_WORKERS - 1))
-HEAVY_CAP = MAX_WORKERS - _reserve   # page/API renders and close ingest
+# S2 (1.26.291): HEAVY_CAP is normally MAX_WORKERS minus the cheap reserve (prod: 6 - 2 = 4, right-sized for one core).
+# POASCAN_HEAVY_CAP overrides it directly when set, clamped to [1, MAX_WORKERS], so the heavy cap can be lowered for the
+# one dedicated core without re-deriving MAX_WORKERS and SERVE_RESERVE. Unset keeps the derived value (no change).
+def _heavy_cap():
+    base = MAX_WORKERS - _reserve
+    raw = (os.environ.get("POASCAN_HEAVY_CAP") or "").strip()
+    if not raw: return base
+    try: v = int(raw)
+    except ValueError: return base
+    return max(1, min(MAX_WORKERS, v))
+HEAVY_CAP = _heavy_cap()          # page/API renders and close ingest
 RESERVE_CAP = _reserve               # homepage and /chain only
 slots = threading.BoundedSemaphore(HEAVY_CAP)   # heavy-work cap; health and static never take it, close ingest takes only this
 cheap = threading.BoundedSemaphore(RESERVE_CAP) if RESERVE_CAP else None   # None when the process is too small for a reserve (tests)
@@ -52,6 +62,45 @@ SCRAPE_MAX = int(os.environ.get("POASCAN_SCRAPE_MAX", "3"))
 SCRAPE_WAIT = float(os.environ.get("POASCAN_SCRAPE_WAIT", "0.05"))
 scrape = threading.BoundedSemaphore(max(1, SCRAPE_MAX))
 conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
+
+# R2 (1.26.291): a per-IP concurrency gate IN FRONT of the heavy slot. The per-IP PAGE_LIMIT (server.py) is a rate limit
+# (a burst of requests a second); it does not stop one IP from holding several heavy slots AT ONCE, which starves other
+# visitors on the one core. This caps the heavy requests a single client (clientip.of, Cloudflare aware) may run at the
+# same time: past the cap the request is shed before it takes a slot, a cache render or an upstream read. A client that
+# sends no Fly address (local runs, the CI tests) is never gated. This is the per-IP gate only; the shared token bucket
+# (R1) is a separate, out-of-scope concern.
+IP_HEAVY_MAX = int(os.environ.get("POASCAN_IP_HEAVY_MAX", "2"))   # heavy requests one client IP may hold at once (0 or less turns it off)
+_ip_heavy = {}   # ip key -> count of heavy requests in flight
+_ip_heavy_lock = threading.Lock()
+ip_heavy_stats = {"shed": 0, "admitted": 0, "peak": 0}
+
+def ip_heavy_acquire(ip):
+    """True when this client may take a heavy slot now, and its in-flight count is reserved. False when the client is
+    already at IP_HEAVY_MAX (the caller sheds without a slot). A falsy ip (no Fly address) is always admitted and not
+    tracked, so local runs and health paths are untouched. Pair every True with ip_heavy_release(ip)."""
+    if not ip or IP_HEAVY_MAX <= 0: return True
+    with _ip_heavy_lock:
+        n = _ip_heavy.get(ip, 0)
+        if n >= IP_HEAVY_MAX:
+            ip_heavy_stats["shed"] += 1
+            return False
+        _ip_heavy[ip] = n + 1
+        ip_heavy_stats["admitted"] += 1
+        if n + 1 > ip_heavy_stats["peak"]: ip_heavy_stats["peak"] = n + 1
+        return True
+
+def ip_heavy_release(ip):
+    """Release one in-flight heavy request for this client. A no-op for a falsy ip or an untracked key (never negative)."""
+    if not ip or IP_HEAVY_MAX <= 0: return
+    with _ip_heavy_lock:
+        n = _ip_heavy.get(ip, 0)
+        if n <= 1: _ip_heavy.pop(ip, None)
+        else: _ip_heavy[ip] = n - 1
+
+def ip_heavy_inflight():
+    """Clients with a heavy request in flight right now (diagnostics)."""
+    with _ip_heavy_lock:
+        return len(_ip_heavy)
 
 # 1.26.287: one shared token bucket per throttled User-Agent, across every client IP. poa-dashboard/1.0 spread about
 # 9 requests a second over ~150 IPs (Nov 9), so a per-IP limit never fired and it held the one core. The match is the
@@ -105,7 +154,9 @@ def telemetry():
                 busy_fails=s.get("busy_fails", 0), heavy_busy=heavy_busy(),
                 steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP,
                 ua_throttle=dict(agents=list(UA_THROTTLE), rate=UA_THROTTLE_RATE, burst=UA_THROTTLE_BURST,
-                                 throttled=ua_stats["throttled"], allowed=ua_stats["allowed"]))
+                                 throttled=ua_stats["throttled"], allowed=ua_stats["allowed"]),
+                ip_heavy=dict(max=IP_HEAVY_MAX, inflight=ip_heavy_inflight(), shed=ip_heavy_stats["shed"],
+                              admitted=ip_heavy_stats["admitted"], peak=ip_heavy_stats["peak"]))
 
 try:
     _libc = ctypes.CDLL("libc.so.6"); _libc.malloc_trim.argtypes = [ctypes.c_size_t]

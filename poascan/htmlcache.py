@@ -49,8 +49,13 @@ def _build_id():
 # that holds a slot. The sets are the real reads: /network -> views.network(tab, range); /governance -> the union over all
 # its tabs (sort/dir/filter/level/page/range plus the intake sub-table's close/state/asort/adir/apage); /agents/top ->
 # views4.leaderboard_page(tab) with sort/dir. A page that reads no query is (): the whole query is dropped.
-CANON_QS = {"/": (), "/start": (), "/about": (), "/privacy": (), "/agents": (), "/agents/operators": (),
-            "/help": ("address", "sort", "dir"),
+# A1 (1.26.291): the remaining static page routes join the map. /index.html (home ignores the query), /join and
+# /onboarding (the same start page as /start, read no query), /unlocks, /upgrade and /swaps (read no query) all collapse
+# to (). /wallet reads only ?address (walletview.page). Dynamic id routes (/tx/<h>, /address/<a>, /epoch/<n>) stay off the
+# map by design: they key on the path, not the query, and take the scrape path.
+CANON_QS = {"/": (), "/index.html": (), "/start": (), "/join": (), "/onboarding": (), "/about": (), "/privacy": (),
+            "/unlocks": (), "/upgrade": (), "/swaps": (), "/agents": (), "/agents/operators": (),
+            "/help": ("address", "sort", "dir"), "/wallet": ("address",),
             "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir"),
             "/network": ("tab", "range", "esort", "edir", "isort", "idir"),
             "/agents/top": ("tab", "sort", "dir"), "/agents/census": ("tab",), "/agents/community": ("tab",),
