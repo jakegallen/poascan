@@ -1913,3 +1913,9 @@ header.top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height
 .adetail,.txraw{margin:0 0 16px}.adetail>summary,.txraw>summary{list-style:none;cursor:pointer;display:inline-flex;margin-bottom:12px}
 .adetail>summary::-webkit-details-marker,.txraw>summary::-webkit-details-marker{display:none}
 .txraw{margin-top:12px;border-top:var(--hair);padding-top:12px}
+/* /about index (UI/UX P9): a sticky list of the sections beside the text; a chip row on phones */
+.aboutw{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;align-items:start}
+.aindex{position:sticky;top:90px;display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:var(--r);background:var(--panel-bg);border:1px solid var(--panel-edge);box-shadow:var(--panel-sh);max-height:calc(100vh - 110px);overflow:auto}
+.aindex a{color:var(--bone-2);font-size:var(--t13);padding:6px 8px;border-radius:var(--r-md);text-decoration:none}
+.aindex a:hover{color:var(--gold-hi);background:var(--glass)}.aindex .atop{margin-top:6px;border-top:var(--hair);border-radius:0;color:var(--bone-3)}
+@media (max-width:900px){.aboutw{display:block}.aindex{position:static;flex-direction:row;overflow-x:auto;max-height:none;margin-bottom:16px;padding:8px;scrollbar-width:none}.aindex a{white-space:nowrap;flex:none}}
