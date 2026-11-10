@@ -76,7 +76,7 @@ function chatPanel(a){var f=D.createDocumentFragment(),ol=el("ol","sv-tml");
  var s2=step(2,"Paste the prompt",[pb]);
  f.appendChild(ol);
  var fb=el("p","sv-fb"),jl='<a class="sv-fblink" href="'+esc(J.join)+'" target="_blank" rel="noopener noreferrer">Join on minepoa.com</a>';
- fb.innerHTML="No code tool, or the join fails? "+jl+" first, then paste the same prompt.";off(fb.querySelector("a"));f.appendChild(fb);
+ fb.innerHTML="No code tool, or the join fails? "+jl+" first, then paste the same prompt.";off(fb.querySelector("a"));var sl=$("[data-sv-fb]");if(sl){sl.innerHTML="";sl.appendChild(fb)}else f.appendChild(fb);   /* 1.26.313: behind Details */
  return f}
 function nonePanel(a){var f=D.createDocumentFragment();f.appendChild(el("p","sv-no",esc(a.name)+" can't run an Agent yet. Use one of these:"));
  var g=el("div","sv-alts");J.alts.forEach(function(id){var x=BY[id],b=el("button","sv-t sv-full",'<span class="sv-tl">'+logo(x)+'</span><span class="sv-tn">'+esc(x.name)+'</span>');b.type="button";b.dataset.app=id;g.appendChild(b)});
@@ -84,7 +84,7 @@ function nonePanel(a){var f=D.createDocumentFragment();f.appendChild(el("p","sv-
 /* morph: View Transitions where supported (the tile logo flies into the panel head), else a CSS fade and lift */
 function morph(fn){if(!RM&&D.startViewTransition)D.startViewTransition(fn);else fn()}
 function parent(st){return BY[st]?"apps":"name"}
-function render(st){ST=st;var a=BY[st]||null;CUR=a;var rt=$("[data-sv]");if(rt)rt.dataset.st=a?"app":st;n0.hidden=st!="name";pick.hidden=st!="apps";panel.hidden=!a;foot.hidden=!a||a.tier=="none";
+function render(st){ST=st;var a=BY[st]||null;CUR=a;var sl0=$("[data-sv-fb]");if(sl0)sl0.innerHTML="";var rt=$("[data-sv]");if(rt)rt.dataset.st=a?"app":st;n0.hidden=st!="name";pick.hidden=st!="apps";panel.hidden=!a;foot.hidden=!a||a.tier=="none";
  if(st=="apps"){pick.classList.remove("in");void pick.offsetWidth;pick.classList.add("in");var c=$(".sv-go",pick);if(c)c.focus({preventScroll:true})}
  if(st=="name"&&i0)i0.focus({preventScroll:true});
  if(!a)return;

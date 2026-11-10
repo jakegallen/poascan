@@ -47,7 +47,8 @@ BRAND = {"ChatGPT": "openai.svg", "Codex": "openai.svg", "Claude": "claude.svg",
          "DeepSeek": "deepseek.svg", "Le Chat": "mistral.svg", "HuggingChat": "huggingface.svg", "MiniMax": "minimax.svg",
          "OpenRouter": "openrouter.svg", "Cursor": "cursor.svg", "VS Code": "vscode.png", "VS Code Insiders": "vscode-insiders.png",
          "Kiro": "kiro.svg", "Trae": "trae.svg", "Goose": "goose.svg", "LM Studio": "lmstudio.svg", "Cherry Studio": "cherry.png",
-         "Windsurf": "windsurf.svg", "Cline": "cline.svg", "Zed": "zed.svg"}
+         "Windsurf": "windsurf.svg", "Cline": "cline.svg", "Zed": "zed.svg",
+         "Copilot": "copilot.png", "Qwen": "qwen.svg", "Voice assistants": "mic.svg"}   # 1.26.313: every app has a mark
 
 def label(n):
     """Logo then name, for every option button and row."""

@@ -185,7 +185,7 @@ if sync_playwright:
                     d = pg.evaluate("""()=>{const b=document.querySelector('[data-sv-body]'),t=b.innerText.toLowerCase(),v=e=>!!e&&!!(e.offsetWidth||e.offsetHeight);
                         return {copied:window.__c.length,btns:[...b.querySelectorAll('.sv-btn')].filter(v).map(e=>e.innerText.trim()),warn:v(b.querySelector('.sv-warn'))?b.querySelector('.sv-warn').innerText:'',
                                 url:(b.querySelector('.sv-url code')||{}).textContent||'',note:[...b.querySelectorAll('.sv-note')].map(e=>e.innerText).join('|'),mcp:t.includes('mcp add')||t.includes('run this once'),
-                                empty:[...b.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,fb:(b.querySelector('.sv-fb')||{}).innerText||'',head:document.querySelector('[data-sv-app]').textContent,hash:location.hash}}""")
+                                empty:[...b.querySelectorAll('code')].filter(e=>v(e)&&!e.textContent.trim()).length,fb:(document.querySelector('[data-sv-more] [data-sv-fb] .sv-fb')||{}).textContent||'',head:document.querySelector('[data-sv-app]').textContent,hash:location.hash}}""")
                     if c["tier"] == "full":
                         good = (d["copied"] == 0 and d["btns"] == ["Copy prompt"] + (["Open " + c["name"]] if c["open"] else []) and not d["warn"] and not d["mcp"]
                                 and d["note"] == (c.get("note") or "") and d["head"] == c["name"] and d["hash"] == "#" + c["id"])

@@ -22,6 +22,7 @@ From [simple-icons](https://github.com/simple-icons/simple-icons) 16.35.0 (CC0 1
 | windsurf.svg | Windsurf | #EDE6D6 |
 | cline.svg | Cline | #EDE6D6 |
 | zed.svg | Zed Industries | #EDE6D6 |
+| qwen.svg | QWen | #6950EF |
 
 From each product's own site or repo:
 
@@ -35,5 +36,7 @@ From each product's own site or repo:
 | kiro.svg | kiro.dev icon.svg |
 | goose.svg | block/goose documentation/static/img/goose.svg (Apache-2.0), fill set to #EDE6D6 |
 | cherry.png | cherry-ai.com favicon, 48px |
+| copilot.png | copilot.microsoft.com favicon (res.cdn.office.net favicon-copilot-brand-refresh), 48px |
+| mic.svg | POAScan's own neutral microphone glyph for Voice assistants, #EDE6D6 |
 
 Monogram fallbacks: none.

@@ -22,4 +22,17 @@ check("card centred on the page", ".s2v{min-height:calc(100dvh - 190px);display:
 check("chips hidden on the name and app steps", '.s2v[data-st="name"] .sv-vf,.s2v[data-st="apps"] .sv-vf{display:none}' in css)
 check("step state follows render, anchors open the folds", 'rt.dataset.st=a?"app":st' in js and "[data-sv-below]" in js)
 check("phones: own padding", "@media (max-width:640px){\n .s2v{min-height:calc(100dvh - 230px)" in css)
+# 1.26.313 (Jake t535u): step 3 essentials in view, the rest behind one Details toggle; Something else a real dropdown; every app has a mark
+ft = b[b.find('data-sv-foot hidden'):]; more = ft[ft.find("data-sv-more"):]
+check("step 3: wallet link and payment rule in view, before Check my Agent and Details", ft.find("Add a wallet on POASwap") < ft.find("Check my Agent") < ft.find(">Details<") and ft.find(S.PAY) < ft.find("Check my Agent"))
+check("step 3: chips, template note, hash chips with Verify, View prompt, stuck line and the fallback slot sit behind Details",
+      all(x in more for x in ('data-sv-vf-b="copied"', "data-pnote", "Verify", "View prompt", "If it got stuck", "data-sv-fb", "data-sv-pre")))
+check("step 3: the minepoa.com fallback is moved behind Details", 'var sl=$("[data-sv-fb]")' in js)
+check("step 2: Something else is a dropdown button with a chevron", '<summary class="sv-osum"><span>Something else</span><i class="sv-chev"' in b and ".sv-other[open] .sv-chev{transform:rotate(180deg)}" in css)
+from poascan.startv2 import _apps
+ap = _apps()
+check("every app, main tiles and Something else, has a local mark", all(a["logo"] and os.path.exists(os.path.join(ROOT, "static", "brands", a["logo"])) for a in ap))
+check("Something else entries show their mark", all(f'/static/brands/{a["logo"]}' in b[b.find("sv-ol"):] for a in ap if a["tier"] == "none"))
+check("marks are served from our own static files", "/static/brands/" in b and not re.search(r'<img[^>]+src="https?://', b))
+
 print("\nall passed" if not fails else f"\n{len(fails)} failed"); sys.exit(1 if fails else 0)
