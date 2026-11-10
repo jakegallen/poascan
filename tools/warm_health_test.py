@@ -21,7 +21,9 @@ check("the test path is a warm key", HC._pinned_key(k))
 
 # Case A: a pinned but expired copy, with the background refresh unable to get a slot -> render() returns the old copy
 # and stores nothing. warm_once must NOT record a success (no new render happened).
-HC.put(k, "<html>old</html>", now=time.time() - 1000)   # expired pin
+# 1.26.286: inside the grace window (past TTL, not past TTL plus WARM_GRACE). Past grace the warmer now renders the page
+# itself (tools/warm_direct_test.py), which is a real render and is counted.
+HC.put(k, "<html>old</html>", now=time.time() - (HC.ttl("/warma", {}) + HC.WARM_GRACE - 20))   # expired pin, inside grace
 _cheap = GD.cheap
 GD.cheap = threading.BoundedSemaphore(1); GD.cheap.acquire()   # no reserve slot: the background refresh is a no-op
 HC.warm_once(rp, force=False)
