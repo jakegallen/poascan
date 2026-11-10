@@ -17,6 +17,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Token tab (/network?tab=token) is warmed in the background like Health, so it serves its copy with no slot. After 1.26.304 it had no copy yet and, under the API burst, every visit got the busy page.
 - /api and /api/reference are rendered on their own thread at start and every 4 minutes, so the first copy after a deploy needs no slot (it was answering the plain busy line).
 
+## [1.26.305] - 2026-11-10
+
+### Changed
+- Every table or list over 20 rows shows 20 and a Show more button (20 more a click, the count left on the button). Without script every row shows.
+- Two panels side by side end level: the taller one is capped at its neighbour's height (360 px at least) and scrolls inside, so there is no empty void (for example Network's Recent releases beside Latest anchors). Off under 900 px, where panels stack.
+
 ## [1.26.304] - 2026-11-10
 
 ### Changed

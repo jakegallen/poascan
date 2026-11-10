@@ -1932,6 +1932,13 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 #livepill .sp-l li.warn i{background:var(--gold);box-shadow:0 0 6px color-mix(in srgb,var(--gold) 60%,transparent)}
 #livepill .sp-l li.bad i{background:var(--ember);box-shadow:0 0 6px color-mix(in srgb,var(--ember) 60%,transparent)}
 #livepill .sp-l b{font-weight:600;font-size:var(--t12);color:var(--bone-2)}#livepill .sp-l li.warn b{color:var(--gold)}#livepill .sp-l li.bad b{color:var(--ember)}
+/* rows and columns (1.26.305): 20 rows then Show more; side by side panels end level */
+.rc-h{display:none!important}
+.rcmore{display:flex;align-items:center;justify-content:center;width:100%;margin:10px 0 0;min-height:36px;padding:8px 14px;background:transparent;border:var(--hair);border-radius:var(--r-md);color:var(--gold);font:600 var(--t12)/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:border-color .2s,color .2s}
+.rcmore:hover,.rcmore:focus-visible{border-color:var(--gold);color:var(--gold-hi)}
+.grid2.evm{align-items:start}
+.evcap{display:flex;flex-direction:column;overflow:hidden}.evcap>.cb{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+@media (prefers-reduced-motion:reduce){.rcmore{transition:none}}
 /* API page (1.26.302): grouped endpoints and tools, copy, sample folds */
 .apin{color:var(--bone-2);font-size:var(--t13);margin:-4px 0 12px}
 .apijump{margin:0 0 16px;gap:8px;flex-wrap:wrap}
