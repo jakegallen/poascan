@@ -128,14 +128,17 @@ def render(facts, extra, built_at, now):
         write_ok = False
     stale = pin_stale or probe_stale
     flag = (facts or {}).get("flag_status")
-    available = bool(write_ok) and flag != "paused" and not stale
+    # 1.26.314 (POASwap): swaps are available when the order placement read is open and fresh (write_ok already needs a
+    # fresh pin and a fresh write row) and POASwap has not paused them. A stale join route or notices read is a join fact,
+    # it no longer makes swaps read unavailable or unknown.
+    available = bool(write_ok) and flag != "paused"
     if writes["state"] == "DOWN":
         message = "Order placement is failing on the network."
     elif not write_ok:
         # No usable write read (UNKNOWN or a stale copy), not a confirmed halt: say the read is stale,
         # never "paused". A real pause is the flag branch below. Message only; gating is unchanged.
         message = "Swap status unavailable (stale read)."
-    elif flag == "paused" and not stale:
+    elif flag == "paused":
         # A CONFIRMED pause from POASwap's flag, with a fresh OK write read: this is paused, not unknown.
         message = "Swaps are paused. Check back soon."
     else:
@@ -155,6 +158,9 @@ def render(facts, extra, built_at, now):
     if "open_offers" not in body: body["open_offers"] = None
     if "last_good_read" not in body: body["last_good_read"] = None
     body["swaps_writable"] = True if write_ok else (False if writes["state"] == "DOWN" and not stale else None)
+    # 1.26.314: halted join, join PoW and tx lookup routes live here (POAScan's probes, with since and as_of), not in
+    # maintenance_active, so nothing is lost and a halted join route does not stop trading.
+    body["halted_routes"] = list((facts or {}).get("halted_routes") or [])
     _legacy(body)
     return body
 
@@ -173,9 +179,11 @@ def _legacy(body):
         leg, writable = "open", True
     checked = offer.get("as_of")
     # stale means the read is too old to trust. A fresh halt or failure stays stale false.
-    leg_stale = bool(body["stale"] or sw == "UNKNOWN")
+    sw_stale = not body["write_ok"] and sw == "OK"   # an OK row that write_ok refused (old pin or old write read)
+    if sw_stale: leg, writable = "unknown", None
+    leg_stale = bool(sw_stale or sw == "UNKNOWN")
     def honest(obj):
-        return isinstance(obj, dict) and obj.get("state") == leg and not (leg == "open" and body["stale"])
+        return isinstance(obj, dict) and obj.get("state") == leg and not (leg == "open" and sw_stale)
     prev_w = body.get("writes") if isinstance(body.get("writes"), dict) else {}
     prev_offer = prev_w.get("swap_offer") if isinstance(prev_w.get("swap_offer"), dict) else None
     if honest(prev_offer):
@@ -198,8 +206,13 @@ def _legacy(body):
         body["join_state"] = "paused"
     else:
         body["join_state"] = "open"
-    maint_unknown = body["stale"] or body["join"]["maintenance"]["state"] != "OK"
-    body["maintenance_active"] = bool(maint_unknown or body["join"]["maintenance"]["state"] == "DOWN")
+    # active true means stop. 1.26.314 (POASwap): with swap writes open and fresh it is false; halted routes are listed in
+    # halted_routes. Otherwise fail closed as before: a stale copy or a maintenance row that is not OK reads active.
+    if body["write_ok"]:
+        body["maintenance_active"] = False
+    else:
+        maint_unknown = body["stale"] or body["join"]["maintenance"]["state"] != "OK"
+        body["maintenance_active"] = bool(maint_unknown or body["join"]["maintenance"]["state"] == "DOWN")
     if "status" not in body: body["status"] = "unknown"
     return body
 
@@ -262,8 +275,15 @@ def _facts(now):
             flag_status, flag_basis = flg.get("status"), flg.get("basis")
     except Exception:
         pass
+    halted_routes = []
+    try:
+        from .. import routewatch as RW
+        for r in RW.halted(now) or []:
+            halted_routes.append(dict(id=r.get("id"), label=r.get("label"), state=r.get("state"), since=r.get("since"), as_of=r.get("as_of")))
+    except Exception:
+        halted_routes = []
     return dict(join_route=join_route, notices=notices, maintenance=maintenance, writes=writes,
-                flag_status=flag_status, flag_basis=flag_basis)
+                flag_status=flag_status, flag_basis=flag_basis, halted_routes=halted_routes)
 
 
 def _extra():

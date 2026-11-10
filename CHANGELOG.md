@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.314] - 2026-11-10
+
+### Fixed
+- `/api/v1/swaps/status`: with the swap write read open and fresh, `maintenance_active` and `meta.maintenance.active` are false and `available` and `state` read available. A stale or halted join route no longer stops trading (POASwap's step 1 stops on maintenance.active). Joins still fail closed: `join_state` and `join` are unchanged.
+
+### Added
+- `halted_routes` (top level and `meta.maintenance.halted_routes`): routes Halted or Down per POAScan's probes (joining, tx lookup and the like) with since and as_of, so nothing is lost. Additive.
+
 ## [1.26.313] - 2026-11-10
 
 ### Changed
