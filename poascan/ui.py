@@ -949,7 +949,8 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     1.26.291 (UI/UX P3): 3D columns (an isometric extrusion: a lit front face, a darker side face, a top cap), a faint floor
     reflection, the latest bar's value pinned as a glass chip, the tallest bar called out, round ticks inside the plot, and a
     headline row (latest value, change against the bar before, the legend as glowing dots)."""
-    tss = [s[2] if len(s) > 2 else None for s in series]; series = [(s[0], s[1]) for s in series]
+    tss = [s[2] if len(s) > 2 else None for s in series]; raw = [list(s[1]) for s in series]
+    series = [(s[0], [0 if v is None else v for v in s[1]]) for s in series]   # 1.26.310: a missing value draws no column and its tip reads ···
     if not series: return chart_skel(640, height)
     n = len(series); mx0 = max((sum(v) if stacked else max(v)) for _, v in series) or 1; nk = 4
     if ymax: mx = ymax
@@ -968,9 +969,9 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     rh = VH * 0.09   # reflection depth under the floor line
     for i, (lab, vals) in enumerate(series):
         x = step * i + (step - bw - dx) / 2; base = VH
-        tip = E(str(lab)) + " · " + " · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))
+        tip = E(str(lab)) + " · " + " · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(raw[i]))
         top = VH - VH * (tot(vals) / mx)
-        lz = (f' data-ts="{int(tss[i])}" data-tf="{xk}" data-tv="{" · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(vals))}"'
+        lz = (f' data-ts="{int(tss[i])}" data-tf="{xk}" data-tv="{" · ".join((E(legend[j]) + " " if legend and j < len(legend) else "") + fmt(v) for j, v in enumerate(raw[i]))}"'
               if tss[i] else "")
         out.append(f'<g class="col" data-tip="{tip}"{lz} data-cx="{_f(x + bw / 2)}" data-cy="{_f(top)}">')
         segs = []

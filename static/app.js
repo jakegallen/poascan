@@ -616,7 +616,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  function when(ts,long){var z=tzn();return ltf(ts,"dt")+(z?" "+z:"")}
  function build(){cp=D.createElement("dialog");cp.className="cpop";cp.setAttribute("aria-labelledby","cp-t");cp.setAttribute("aria-modal","true");
   cp.innerHTML='<div class="cp-in"><div class="cp-hd"><h2 id="cp-t"></h2><span class="cp-q"></span><span class="cp-now num"></span><button type="button" class="jm-x cp-x" aria-label="Close" data-cpclose>'+XSVG+'</button></div>'
-   +'<div class="chips cp-rng" role="group" aria-label="Range"></div><div class="chartbox cp-box" tabindex="0" role="group" aria-roledescription="chart"></div>'
+   +'<div class="chips cp-rng" role="group" aria-label="Range"></div><div class="cp-box" tabindex="0" role="group" aria-roledescription="chart"></div>'
    +'<div class="legend cp-lg" hidden></div><p class="sr-only" aria-live="polite"></p></div>';
   D.body.appendChild(cp);box=$(".cp-box",cp);rng=$(".cp-rng",cp);ttl=$("#cp-t",cp);now=$(".cp-now",cp);lg=$(".cp-lg",cp);live=$("p[aria-live]",cp);cq=$(".cp-q",cp);
   /* the chart's ? (qtip pattern: tap, click or keyboard; a mouse hover opens it too and leaving closes what the hover opened).
@@ -632,14 +632,14 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
   cp.addEventListener("keydown",function(e){if(e.key!=="Tab")return;var f=$$("button,[tabindex='0']",cp).filter(function(x){return !x.disabled&&x.getClientRects().length});if(!f.length)return;
    var i=f.indexOf(D.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}});
   /* hover, touch scrub (the box takes the gesture: touch-action none) and arrow keys */
-  function mv(e){if(!geo)return;var r=box.getBoundingClientRect();at(near(e.clientX-r.left),false)}
+  function mv(e){if(!geo)return;var r=geo.b.getBoundingClientRect();at(near(e.clientX-r.left),false)}
   box.addEventListener("pointermove",mv);
   box.addEventListener("pointerdown",function(e){if(e.pointerType!=="mouse"&&box.setPointerCapture)try{box.setPointerCapture(e.pointerId)}catch(_){}mv(e)});
   box.addEventListener("pointerleave",function(e){if(e.pointerType==="mouse")hide()});
   box.addEventListener("keydown",function(e){if(!geo)return;var n=geo.n,k=e.key,i=idx<0?n-1:idx;
    if(k==="ArrowLeft")i=Math.max(0,i-1);else if(k==="ArrowRight")i=Math.min(n-1,i+1);else if(k==="Home")i=0;else if(k==="End")i=n-1;else return;e.preventDefault();at(i,true)});
   box.addEventListener("blur",function(){if(idx>=0&&!box.matches(":hover"))hide()});
-  W.addEventListener("resize",function(){if(!cp.open||!data)return;clearTimeout(rT);rT=setTimeout(function(){var w=box.clientWidth;if(Math.abs(w-svgW)>80)load(cur.c,cur.r);else draw()},150)})}
+  W.addEventListener("resize",function(){if(!cp.open||!data)return;clearTimeout(rT);rT=setTimeout(function(){svgW=box.clientWidth;hide();fit()},150)})}
  function open(c,r,op){if(!cp)build();opener=op||D.activeElement;if(D.body.classList.contains("navopen")&&typeof navOpen==="function")navOpen(false);
   if(!cp.open){if(cp.showModal)cp.showModal();else cp.setAttribute("open","");D.documentElement.classList.add("jmlock")}
   var x=$(".cp-x",cp);try{x.focus({preventScroll:true,focusVisible:false})}catch(_){x.focus()}load(c,r)}
@@ -666,52 +666,31 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  function chips(){rng.innerHTML="";data.ranges.forEach(function(k){var b=D.createElement("button");b.type="button";b.className="chip"+(k===data.range?" on":"");b.dataset.r=k;b.textContent=CPL[k]||k;b.setAttribute("aria-pressed",k===data.range?"true":"false");rng.appendChild(b)});
   rng.hidden=data.ranges.length<2}
  function esc2(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
- function draw(){var d=data;if(!d)return;var Wd=Math.max(200,Math.round(box.clientWidth)),H=Math.max(180,Math.round(box.clientHeight)),bars=d.kind==="bars",
-   vals=bars?[].concat.apply([],d.bars.map(function(b){return b[2]})):d.pts.map(function(p){return p[1]});svgW=Wd;idx=-1;
-  if(!vals.length||(!bars&&d.pts.length<2)){box.innerHTML='<div class="naBox">No data for this range yet</div>';geo=null;return}
-  var lo=d.y0?0:Math.min.apply(null,vals),hi=Math.max.apply(null,vals);if(hi===lo)hi=lo+1;if(d.fmt!=="c"){lo=Math.floor(lo);hi=lo+4*Math.max(1,Math.ceil((hi-lo)/4))}   /* whole-number ticks for counts */
-  var yl=[0,1,2,3,4].map(function(i){var v=lo+(hi-lo)*i/4;return d.fmt==="c"?c3(v):Math.round(v).toLocaleString("en-US")}),
-   pl=Math.max(36,Math.max.apply(null,yl.map(function(s){return s.length}))*7.4+14),pr=12,pt=14,pb=26,mob=Wd<560,
-   Y=function(v){return pt+(H-pt-pb)*(1-(v-lo)/(hi-lo))},o=[];
-  /* upgrade milestone labels sit in lanes above the plot, so they never cover the line, each other or the axis labels.
-     Each label is centred on its line and kept inside the plot; one that fits no lane keeps its line and its title. */
-  var ML=[];if(!bars&&d.marks&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
-   d.marks.forEach(function(m){var mx=pl+(Wd-pl-pr)*(m[0]-mt0)/((mt1-mt0)||1),lw=Math.round(m[1].length*cw+14),x0=Math.max(pl+2,Math.min(Wd-pr-lw-2,mx-lw/2)),ln=-1;
-    for(var q=0;q<4;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:ltx(m[2]||m[1])})});
-   pt=8+20*ends.length+10}
-  o.push('<svg class="cpchart" viewBox="0 0 '+Wd+' '+H+'" width="'+Wd+'" height="'+H+'" aria-hidden="true"><defs><linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+d.color+'" stop-opacity=".22"/><stop offset="1" stop-color="'+d.color+'" stop-opacity="0"/></linearGradient></defs>');
-  for(var i=0;i<5;i++){var gy=Y(lo+(hi-lo)*i/4);o.push('<line x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" class="grid"/><text x="'+(pl-8)+'" y="'+(gy+4).toFixed(1)+'" class="ax" text-anchor="end">'+yl[i]+'</text>')}
-  if(bars){var n=d.bars.length,step=(Wd-pl-pr)/n,bw=Math.max(2,step*.62),k=d.bars[0][2].length,cols=d.colors.length?d.colors:[d.color],every=Math.max(1,Math.ceil(n/Math.max(1,Math.floor((Wd-pl)/(mob?44:56))))),cx=[];
-   d.bars.forEach(function(b,j){var x=pl+step*j+(step-bw)/2,w2=bw/k;o.push('<g class="col">');b[2].forEach(function(v,m){var h=(H-pt-pb)*((v-lo)/(hi-lo));o.push('<rect x="'+(x+m*w2).toFixed(1)+'" y="'+(H-pb-h).toFixed(1)+'" width="'+w2.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" fill="'+cols[m%cols.length]+'"/>')});o.push("</g>");
-    cx.push(x+bw/2);if(j%every===0)o.push('<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-8)+'" class="ax" text-anchor="middle">'+esc2(b[0])+'</text>')});
-   geo={n:n,x:cx,y:d.bars.map(function(b){return Y(Math.max.apply(null,b[2]))})};
-   var lb=d.bars[n-1];now.textContent=d.legend.length?"":fv(lb[2][0]);
-   lg.hidden=!d.legend.length;lg.innerHTML=d.legend.map(function(l,m){return '<span><i style="background:'+cols[m%cols.length]+'"></i>'+esc2(l)+'</span>'}).join("")}
-  else{var P=d.pts,t0=P[0][0],t1=P[P.length-1][0],X=function(t){return pl+(Wd-pl-pr)*(t-t0)/((t1-t0)||1)},long=t1-t0>36*3600,
-    runs=[P];
-   /* 1.26.175: one continuous line, a straight segment between real points across any gap or genesis cut (never a break) */
-   var pa=runs.map(function(r){return r.map(function(p,j){return (j?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)}).join("")}).join("");
-   runs.forEach(function(r){if(r.length<2)return;var rp=r.map(function(p,j){return (j?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)}).join("");
-    o.push('<path d="'+rp+"L"+X(r[r.length-1][0]).toFixed(1)+","+(H-pb)+"L"+X(r[0][0]).toFixed(1)+","+(H-pb)+'Z" fill="url(#cpg)"/>')});
-   /* upgrade milestones, grouped on the server with milestones.group at this plot width (the Network > Charts rule) */
-   ML.forEach(function(m){var ly=8+20*m.ln;
-    o.push('<g class="mk"><title>'+esc2(m.ti)+'</title><line x1="'+m.mx.toFixed(1)+'" x2="'+m.mx.toFixed(1)+'" y1="'+(m.ln<0?pt:ly+17)+'" y2="'+(H-pb)+'"/>'+
-     (m.ln<0?'':'<rect class="mkb" x="'+m.x0.toFixed(1)+'" y="'+ly+'" width="'+m.w+'" height="17" rx="4"/><text x="'+(m.x0+7).toFixed(1)+'" y="'+(ly+12.5)+'" class="ax mkl">'+esc2(m.t)+'</text>')+'</g>')});
-   o.push('<path d="'+pa+'" fill="none" stroke="'+d.color+'" stroke-width="2" stroke-linejoin="round"/>');
-   var nt=Math.max(2,Math.min(7,Math.floor((Wd-pl)/(long?96:110))));
-   for(i=0;i<nt;i++){var tt=t0+(t1-t0)*i/(nt-1),dd=new Date(tt*1000),lab=long?dtf({month:"short",day:"numeric"},dd)+" "+dtf({hour:"numeric"},dd).replace(/\s/g,"").toLowerCase():dtf({hour:"numeric",minute:"2-digit"},dd);
-    o.push('<text x="'+X(tt).toFixed(1)+'" y="'+(H-8)+'" class="ax" text-anchor="'+(i===0?"start":i===nt-1?"end":"middle")+'">'+esc2(lab)+'</text>')}
-   geo={n:P.length,x:P.map(function(p){return X(p[0])}),y:P.map(function(p){return Y(p[1])}),long:long};now.textContent=fv(P[P.length-1][1]);lg.hidden=true}
-  o.push('<circle class="cp-dot" r="4" cx="-20" cy="-20" fill="'+d.color+'"/></svg>');
-  box.innerHTML=o.join("")+'<i class="xh"></i><div class="xt" aria-hidden="true"></div>';xh=$(".xh",box);tip=$(".xt",box);xh.style.top=pt+"px";tip.style.top=(ML.length?pt+4:10)+"px";   /* the tip sits below the milestone label lanes, never over a label */
+ /* 1.26.310: the pop-out draws with the v2 chart kit. The server sends the kit's markup (chartpop.kit_html: ui.line or
+    ui.bars, the same glow line, lit panel, 3D columns, nice ticks and value chip as the cards); this fits it to the
+    dialog height and adds the hover: crosshair, tooltip and orb, touch scrub and arrow keys. Bare: no marks, no gaps. */
+ function draw(){var d=data;if(!d)return;svgW=Math.round(box.clientWidth);idx=-1;geo=null;now.textContent="";lg.hidden=true;
+  if(!d.html){box.innerHTML='<div class="naBox">No data for this range yet</div>';return}
+  box.innerHTML=d.html;var b=$(".chartbox",box);if(!b)return;lt(box);
+  ["xh","xt","xd"].forEach(function(c){var e=D.createElement(c==="xt"?"div":"i");e.className=c;e.setAttribute("aria-hidden","true");b.appendChild(e)});
+  xh=$(".xh",b);tip=$(".xt",b);fit();
   box.setAttribute("aria-label",d.title+", "+(CPL[d.range]||d.range)+". Arrow keys read values.")}
+ function fit(){var b=$(".chartbox",box),cv=b&&$(".cvg",b);if(!cv)return;
+  var p=$(".cvp",b)||cv,cs=getComputedStyle(box),pad=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom),used=b.offsetHeight-p.offsetHeight,
+   h=Math.max(150,Math.floor(box.clientHeight-pad-used-2));cv.style.setProperty("--ch",h+"px");geom()}
+ function geom(){var b=$(".chartbox",box),svg=b&&$("svg.chart",b);if(!svg){geo=null;return}var it=$$("[data-tip]",svg);if(!it.length){geo=null;return}
+  var r=svg.getBoundingClientRect(),br=b.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,sy=r.height/vb.height;
+  geo={n:it.length,b:b,it:it,top:r.top-br.top,h:r.height,x:it.map(function(e){return +e.dataset.cx*sx+(r.left-br.left)}),
+   y:it.map(function(e){return e.dataset.cy!=null&&!e.classList.contains("col")?(r.top-br.top)+(+e.dataset.cy)*sy:null})}}
  function near(px){var x=geo.x,lo2=0,hi2=x.length-1;while(hi2-lo2>1){var m=(lo2+hi2)>>1;if(x[m]<px)lo2=m;else hi2=m}return Math.abs(x[lo2]-px)<=Math.abs(x[hi2]-px)?lo2:hi2}
- function at(i,say){if(!geo||!data)return;idx=i;var px=geo.x[i],t,s,sep=svgW<560?"\n":" \u00b7 ";
-  if(data.kind==="bars"){var b=data.bars[i];s=b[0]+" \u00b7 "+(data.legend.length?b[2].map(function(v,m){return data.legend[m]+" "+fv(v)}).join(" \u00b7 "):fv(b[2][0]))+sep+when(b[1],true);
-   $$(".col",box).forEach(function(g,j){g.classList.toggle("on",j===i)});box.classList.add("bh")}
-  else{var p=data.pts[i];s=fv(p[1])+sep+when(p[0],geo.long);var dot=$(".cp-dot",box);dot.setAttribute("cx",px.toFixed(1));dot.setAttribute("cy",geo.y[i].toFixed(1))}
-  tip.textContent=s;xh.style.left=px+"px";var w=tip.offsetWidth/2,bw=box.clientWidth;tip.style.left=Math.max(w+4,Math.min(bw-w-4,px))+"px";box.classList.add("hov");if(say)live.textContent=s.replace("\n"," \u00b7 ")}
- function hide(){idx=-1;if(box){box.classList.remove("hov","bh");$$(".col.on",box).forEach(function(g){g.classList.remove("on")});var dot=box&&$(".cp-dot",box);if(dot){dot.setAttribute("cx","-20");dot.setAttribute("cy","-20")}}}
+ function at(i,say){if(!geo||!data)return;idx=i;var b=geo.b,px=geo.x[i],s,sep=svgW<560?"\n":" \u00b7 ",q=geo.it[i].dataset,xd=$(".xd",b);
+  if(data.kind==="bars"&&data.bars[i]){var c=data.bars[i];s=c[0]+" \u00b7 "+(data.legend.length?c[2].map(function(v,m){return data.legend[m]+" "+fv(v)}).join(" \u00b7 "):fv(c[2][0]))+sep+when(c[1],true)}
+  else s=(q.tv||"")+(data.unit?" "+data.unit:"")+sep+when(+q.ts,true);
+  geo.it.forEach(function(g,j){g.classList.toggle("on",j===i)});
+  tip.textContent=s;xh.style.left=px+"px";xh.style.top=geo.top+"px";xh.style.height=geo.h+"px";tip.style.top=(geo.top+6)+"px";
+  if(xd){if(geo.y[i]!=null){xd.style.display="";xd.style.left=px+"px";xd.style.top=geo.y[i]+"px"}else xd.style.display="none"}
+  var w=tip.offsetWidth/2,bw=b.clientWidth;tip.style.left=Math.max(w+4,Math.min(bw-w-4,px))+"px";b.classList.add("hov");if(say)live.textContent=s.replace("\n"," \u00b7 ")}
+ function hide(){idx=-1;if(geo&&geo.b){geo.b.classList.remove("hov");geo.it.forEach(function(g){g.classList.remove("on")})}}
  /* openers: any [data-chart] (a stat card is a role=button, a chart card body or its Expand button); links inside keep working */
  D.addEventListener("click",function(e){var t=e.target.closest&&e.target.closest("[data-chart]");if(!t||CPK.indexOf(t.dataset.chart)<0||(cp&&cp.contains(t)))return;
   var a=e.target.closest("a,button,input,summary,select,textarea");if(a&&a!==t&&t.contains(a))return;e.preventDefault();open(t.dataset.chart,t.dataset.chartRange||"",t)});

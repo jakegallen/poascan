@@ -119,6 +119,27 @@ def _thin(pts, n=MAX_PTS):
     return [pts[int(i * step)] for i in range(n)] + [pts[-1]]
 
 
+KIT_H = 320   # the plot height the kit is drawn at; the dialog sets its own (app.js, --ch)
+
+def _kfmt(fmt):
+    from . import ui as U
+    if fmt == "c": return U.compact
+    return lambda v: "···" if v is None else f"{int(round(v)):,}"
+
+def kit_html(out):
+    """1.26.310: the pop-out draws with the v2 chart kit (ui.line, ui.bars), the same glow line, lit panel, 3D columns,
+    nice ticks and value chip as the cards. Server rendered, so every chart on the site reads alike; app.js adds the hover.
+    No milestone marks, no gaps (ui.line runs one continuous line)."""
+    from . import ui as U
+    f = _kfmt(out["fmt"])
+    if out["kind"] == "bars":
+        if not out["bars"]: return ""
+        ser = [(b[0], b[2]) for b in out["bars"]]
+        two = len(out["legend"]) > 1
+        return U.bars(ser, height=KIT_H, colors=("gold", "steel") if two else ("gold",), fmt=f, legend=out["legend"] or None, stacked=not two)
+    if len(out["pts"]) < 2: return ""
+    return U.line([(t, v) for t, v in out["pts"]], height=KIT_H, fmt=f, y0=0 if out["y0"] else None, xk="dt")
+
 @A.cached("chartpop", 60)
 def payload(key, rng, w):
     cfg = CHARTS[key]; now = time.time(); have = ranges(key, now); r = pick(rng, have)
@@ -134,11 +155,13 @@ def payload(key, rng, w):
         out.update(kind="bars", bars=[[SG.ep_label(e), int(t), [None if v is None else round(v, 6) for v in vals]] for e, t, vals in rows])
         if key == "answers": out.update(legend=["Answered", "Paid"], colors=["#FFB000", "#8FA3B8"])
         else: out.update(legend=[], colors=[cfg["color"]])
+        out["html"] = kit_html(out)
         return out
     pts = [(int(t), v) for t, v in series(key, r) if v is not None]
     if SPAN[r]: pts = window(pts, now - SPAN[r])
     pts = _thin(pts)
     out["pts"] = [[t, round(float(v), 6)] for t, v in pts]
+    out["html"] = kit_html(out)
     # 1.26.175: breaks stays [] (kept for API shape): every line runs continuously across a gap or genesis cut, marked by its milestone
     if False and cfg["marks"] and len(pts) > 1:   # 1.26.291 (UI/UX P3, Jake): every chart is bare, no milestone on any chart; "marks" stays [] in the JSON
         from . import milestones as MS

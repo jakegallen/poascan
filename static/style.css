@@ -1344,42 +1344,37 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .cp-hd{display:flex;align-items:center;gap:14px;min-width:0}
 .cp-hd h2{font:600 var(--t14)/1.2 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--hi);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-now{margin-left:auto;font:500 var(--t20)/1 var(--mono);color:var(--amber);white-space:nowrap}
-.cp-hd .cp-x{margin-left:0}
+
 /* the chart's ? (chartpop.TIPS): the note opens under the title, inside the dialog, at every width */
 .cp-hd{position:relative}.cp-q:empty{display:none}.cp-q{display:flex;flex:none}
 .cp-hd .cp-tip{margin-left:-6px}
 .cp-hd .cp-tip .qbox{position:absolute;left:0;top:calc(100% + 8px);transform:none;width:min(340px,100%)}
-.cp-rng{margin:0;flex-wrap:nowrap}.cp-rng[hidden]{display:none}
-.cp-rng .chip{cursor:pointer;background:none;font-family:var(--ui);min-width:52px;justify-content:center}
-.cp-rng .chip.on{background:color-mix(in srgb,var(--gold) 8%,transparent)}
-.chartbox.cp-box{height:min(58vh,480px);overflow:hidden;touch-action:none;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--inset);outline-offset:3px;user-select:none;-webkit-user-select:none}
-.cp-box::before{width:min(440px,46%)}
+/* 1.26.310: a segmented range switch (24h 7d 30d All) and the v2 chart kit in the panel (chartpop.kit_html) */
+.cp-rng{margin:0;flex-wrap:nowrap;align-self:flex-start;display:inline-flex;gap:2px;padding:3px;border-radius:999px;border:1px solid var(--line2);
+ background:linear-gradient(180deg,color-mix(in srgb,var(--ink-0) 70%,transparent),color-mix(in srgb,var(--ink-1) 90%,transparent));box-shadow:inset 0 1px 2px color-mix(in srgb,var(--black) 55%,transparent)}
+.cp-rng[hidden]{display:none}
+.cp-rng .chip{cursor:pointer;background:none;border:0;border-radius:999px;font:600 var(--t12)/1 var(--ui);letter-spacing:.04em;color:var(--bone-3);min-width:52px;min-height:30px;padding:0 12px;justify-content:center;font-variant-numeric:tabular-nums;transition:color var(--fast),background var(--fast)}
+.cp-rng .chip:hover{color:var(--hi)}
+.cp-rng .chip.on{color:var(--ink-0);background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 60%,transparent),0 4px 14px -4px color-mix(in srgb,var(--gold) 70%,transparent),inset 0 1px 0 color-mix(in srgb,var(--bone) 40%,transparent)}
+.cp-box{position:relative;isolation:isolate;height:min(58vh,480px);padding:14px 16px 6px;border:1px solid var(--line);border-radius:var(--r-lg);background:radial-gradient(90% 70% at 50% 0%,color-mix(in srgb,var(--gold) 7%,transparent),transparent 70%),var(--inset);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--bone) 6%,transparent),0 18px 40px -24px color-mix(in srgb,var(--black) 80%,transparent);overflow:hidden;touch-action:none;outline-offset:3px;user-select:none;-webkit-user-select:none;display:flex;flex-direction:column}
+.cp-box>.chartbox{flex:none;margin:0}
+.cp-box .chartbox::before{width:min(440px,46%)}
 .cp-box .skel,.cp-box .naBox{height:100%;margin:0}
 /* 1.26.157: the pop-out's loading line is visible (the still skeleton alone read as an empty panel) and a failed load is a terse retry state */
 .cp-box .cskel span{color:var(--bone-3);font:500 var(--t13) var(--ui)}
 .cp-box .cp-err{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;color:var(--bone-3)}
 .cp-err .chip{cursor:pointer;background:none;font-family:var(--ui);min-height:36px;min-width:72px;justify-content:center}
-.cpchart{display:block;width:100%;height:100%;overflow:visible}
-.cpchart .grid{stroke:var(--rule);stroke-width:1}.cpchart .ax{fill:var(--bone-3);font:400 var(--t12) var(--mono)}
-.cpchart .mk line{stroke:var(--gold-edge);stroke-dasharray:3 3}.cpchart .mk .mkb{fill:color-mix(in srgb,var(--gold) 7%,transparent);stroke:color-mix(in srgb,var(--gold-edge) 70%,transparent);stroke-width:1}.cpchart .mk .mkl{fill:var(--amber);font-size:var(--t12)}
-.cpchart .cp-dot{stroke:var(--inset);stroke-width:2;pointer-events:none}
-/* 1.26.277: the line is drawn in full from the first frame. A short glow and a fill ease add motion; they do not hide the dialog. */
-.cpchart path[fill="none"]{animation:cpglow .9s cubic-bezier(.3,.7,.2,1) both}
-.cpchart path[fill^="url"]{animation:cpfill .7s cubic-bezier(.3,.7,.2,1) both}
-@keyframes cpglow{0%{filter:none}40%{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--gold) 55%,transparent))}100%{filter:none}}
-@keyframes cpfill{from{opacity:.45}to{opacity:1}}
-.cp-box .xh{bottom:26px;top:14px}
-.cp-box .xt{top:10px;white-space:pre;text-align:center;line-height:1.45}
+.cp-box .xt{white-space:pre;text-align:center;line-height:1.45}
 .cp-lg{margin:0}.cp-lg[hidden]{display:none}
+.cp-now:empty{display:none}
+.cp-hd .cp-x{margin-left:auto}
 @media (max-width:640px){
  .cpop{width:100%;height:100%;max-width:100%;max-height:100%;margin:0;inset:0;border:0;border-radius:0}
  .cp-in{padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));gap:10px}
- .cp-now{font-size:var(--t16)}
- .cp-rng{gap:6px}.cp-rng .chip{flex:1 1 0;min-width:0;max-width:76px;padding:4px 6px}
- .chartbox.cp-box{flex:1;height:auto;min-height:260px}
- .cpchart .mk .mkl{font-size:var(--t12)}
+ .cp-rng{align-self:stretch}.cp-rng .chip{flex:1 1 0;min-width:0;padding:0 6px}
+ .cp-box{flex:1;height:auto;min-height:300px}
 }
-@media (prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt,.cp-rng .chip,.cpchart path{transition:none!important;animation:none!important;filter:none}}
+@media (prefers-reduced-motion:reduce){.cpt .cpi,.cp-box .xh,.cp-box .xt,.cp-rng .chip,.cp-box path{transition:none!important;animation:none!important}}
 /* v2.4 /start: connector step (1) above the prompt step (2); no-path panel instead of a prompt */
 .gorow[hidden],.nopath[hidden],.gon[hidden],.stkey[hidden],.stview[hidden]{display:none}
 .gocrow{margin-bottom:10px}
