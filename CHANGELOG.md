@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.298] - 2026-11-10
+
+### Fixed
+- /about index: a section title with an ampersand showed `&amp;` (escaped twice).
+
 ## [1.26.297] - 2026-11-09
 
 UI/UX refinement, phase P9: /about index.

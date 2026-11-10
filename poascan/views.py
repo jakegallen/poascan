@@ -1744,7 +1744,8 @@ def about_index(body):
     import re as _re
     items, seen = [], set()
     def tag(m):
-        t = _re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        import html as _h
+        t = _h.unescape(_re.sub(r"<[^>]+>", "", m.group(2))).strip()   # 1.26.298: titles arrive escaped (&amp;); E() escapes once
         k = "s-" + (_re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-") or "x")
         if not t or k in seen: return m.group(0)
         seen.add(k); items.append((k, t)); return f'{m.group(1)}<h2 id="{k}">{m.group(2)}</h2>'
