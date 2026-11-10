@@ -781,7 +781,7 @@ def _period(x0, x1):
 
 def _head(v, fmt, chg="", per="", side=""):
     """The chart's headline row: the latest value big, the change pill and the span on the left; side (a legend) on the right."""
-    pr = f'<span class="chp">{E(per)}</span>' if per else ""
+    pr = f'<span class="chspan">{E(per)}</span>' if per else ""
     f = compact3 if fmt is compact else fmt   # the headline reads 3 figures (270K, 26.9B); the tip keeps the full value
     sd = f'<span class="chs">{side}</span>' if side else ""
     return f'<div class="chd"><b class="chv" title="{E(fmt(v))}">{E(f(v))}</b>{chg}{pr}{sd}</div>'
@@ -790,7 +790,7 @@ def seg(items, cur=None):
     """A segmented timeframe control (7D 30D ALL): items are (label, href), the current one marked. Plain links, so it works
     without script and every view keeps its own URL."""
     on = ' class="on" aria-current="true"'
-    return '<nav class="rng" aria-label="Range">' + "".join(f'<a href="{E(h)}"{on if l == cur else ""}>{E(l)}</a>' for l, h in items) + "</nav>"
+    return '<nav class="ckrng" aria-label="Range">' + "".join(f'<a href="{E(h)}"{on if l == cur else ""}>{E(l)}</a>' for l, h in items) + "</nav>"
 
 def _plot(svg_inner, overlay, height, top=0, tail="", yg=56, head="", layer="", grid="", yw=0):
     """The chart panel. svg_inner: the data marks (the first SVG: app.js reads its data-tip groups for hover). grid: hairline
