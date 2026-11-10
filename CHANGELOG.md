@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.305] - 2026-11-10
+
+### Changed
+- Every table or list over 20 rows shows 20 and a Show more button (20 more a click, the count left on the button). Without script every row shows.
+- Two panels side by side end level: the taller one is capped at its neighbour's height (360 px at least) and scrolls inside, so there is no empty void (for example Network's Recent releases beside Latest anchors). Off under 900 px, where panels stack.
+
 ## [1.26.304] - 2026-11-10
 
 ### Changed
