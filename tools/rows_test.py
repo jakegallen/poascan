@@ -1,4 +1,4 @@
-"""Rows and columns (1.26.304): a table or list over 20 rows shows 20 and a Show more button that adds 20 a click until
+"""Rows and columns (1.26.305): a table or list over 20 rows shows 20 and a Show more button that adds 20 a click until
 none are left; up to 20 rows get no button; a second side by side panel taller than its neighbour is capped at the
 neighbour's height (360 px at least) and scrolls inside, so the pair ends level; under 900 px nothing is capped.
 Usage: python3 tools/rows_test.py"""
