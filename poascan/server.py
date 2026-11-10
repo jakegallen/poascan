@@ -473,6 +473,18 @@ HC.register_tabs("/governance", [k for k, _ in GV.TABS])
 HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
 HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
 HC.register_tabs("/agents/census", ["journey"])
+# 1.26.288 (P0): the page a human gets when every slot is held and no copy of the page is stored. Self-contained (no
+# DB, no render, no request), reloads itself; the API and MCP keep the plain text 503 their clients parse.
+BUSY_HTML = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+             '<meta http-equiv="refresh" content="6"><meta name="robots" content="noindex"><title>Busy · POAScan</title>'
+             '<link rel="icon" href="/static/favicon.svg"><style>html{background:#0B0A08;color:#EFE7D6;font:15px/1.5 system-ui,sans-serif}'
+             'body{min-height:100vh;display:grid;place-items:center;margin:0;background:radial-gradient(900px 420px at 50% -120px,rgba(255,176,0,.12),transparent 70%),#0B0A08}'
+             '.c{text-align:center;padding:40px 28px;border:1px solid #272219;border-radius:16px;background:linear-gradient(180deg,#15130E,#100E0A);'
+             'box-shadow:0 24px 48px -24px rgba(0,0,0,.9);max-width:340px;margin:16px}.l{font:600 13px system-ui;letter-spacing:.16em}.l b{color:#FFB000}'
+             'h1{font:400 40px/1.1 Georgia,serif;color:#F6F0E2;margin:18px 0 6px}.d{display:inline-flex;align-items:center;gap:8px;color:#B9AF99;font-size:13px}'
+             '.d:before{content:"";width:8px;height:8px;border-radius:50%;background:#FFB000}a{color:#FFB000;text-decoration:none;font:600 11px system-ui;letter-spacing:.12em}'
+             'p{margin:18px 0 0}</style></head><body><div class="c"><div class="l">POA<b>SCAN</b></div><h1>Busy</h1>'
+             '<span class="d">Reloading</span><p><a href="/api">API</a></p></div></body></html>')
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
@@ -1179,11 +1191,11 @@ class H(BaseHTTPRequestHandler):
     def _scrape_gated(self, fn):
         """One heavy slot, and only SCRAPE_MAX of these at once. Past the cap, shed without taking a worker."""
         if not GD.scrape.acquire(timeout=GD.SCRAPE_WAIT):
-            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+            return self._shed()
         if not GD.slots.acquire(timeout=GD.HEAVY_WAIT):
             try: GD.scrape.release()
             except ValueError: pass
-            return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+            return self._shed()
         try: return fn()
         finally:
             try: GD.slots.release()
@@ -1223,6 +1235,25 @@ class H(BaseHTTPRequestHandler):
             try: return fn()
             finally: sem.release()
         if self._html_hit(): return fn()   # a copy landed while we waited
+        return self._shed()
+    def _html_shed_ok(self):
+        """A GET for a human page (not the API, MCP, a fragment, ops, static or a data file)."""
+        if getattr(self, "command", "GET") != "GET": return False
+        p = self._path_only()
+        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/")): return False
+        return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
+    def _shed(self):
+        """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never
+        cached at the edge) or the small branded busy page; the API, MCP and data files keep the plain text 503."""
+        if self._html_shed_ok():
+            h = None
+            if HC.ENABLED:
+                try:
+                    b = self._bits(); k = HC.key(b[0], b[1], b[2], b[3]); a = HC.age(k)
+                    if a is not None and a <= HC.PIN_MAX_AGE_S: h = HC.last(k)
+                except Exception: h = None
+            if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
+            return self.send(503, BUSY_HTML, extra={"Retry-After": "3", "Cache-Control": "no-store"})
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
     def _swap_status_fast(self):
         """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""

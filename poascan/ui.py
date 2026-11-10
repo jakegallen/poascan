@@ -427,10 +427,11 @@ SWAP_BTN = (f'<a class="swaplink" href="{POASWAP_URL}" target="_blank" rel="noop
 # Non-home pages: the header pill hides while maintenance is on (the home strip carries Upgrading), so a small amber dot to /upgrade
 # keeps the status visible there. Same source as the strip and the API pill (analytics.freshness state "up"); hidden otherwise.
 
-# Site-wide development banner (1.26.69): the first thing in <body>, in normal flow above the sticky header, so it scrolls away and
-# never covers content or the header. Same look as POASwap's top banner (.devbar, amber tint); like POASwap's it has no dismiss button.
-DEV_BANNER = ('<div class="devbar" id="devbar" role="note"><div class="wrap devbar-in"><p><b>System development in progress.</b> '
-              'Follow <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">@Jakegallen</a> for updates.</p></div></div>')
+# 1.26.288: the site-wide development banner (1.26.69) is gone, on Jake's call. Home carries one quiet credit instead: a muted
+# pill under the last card that turns gold on hover, linking Jake's X profile in a new tab. One element per view, no share button.
+X_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>'
+CREDIT = ('<div class="credit"><a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer" aria-label="Built by @Jakegallen on X">'
+          f'Built by {X_LOGO}<b>@Jakegallen</b></a></div>')
 
 # Header status (1.26.169): the dot and word open a small note (the qtip pattern: tap, click, keyboard, mouse hover) with what
 # drives the state, the read time in the reader's zone, and links. Grading not confirmed after the completion notice turns a
@@ -583,7 +584,7 @@ def layout(title, body, active="/", live=None, head=""):
 <meta name="referrer" content="no-referrer">
 <link rel="preload" href="/static/fonts/instrumentsans-latin-a64857.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/newsreader-latin-54fd93.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/static/fonts/plexmono400-latin-08949f.woff2" as="font" type="font/woff2" crossorigin>
 <style>html,body{{background:#0B0A08;color:#EFE7D6}}</style><link rel="stylesheet" href="/static/style.css?v={ASSET_V["style.css"]}">{head}<script>document.documentElement.className="js"</script></head><body{' class="home"' if active == "/" and 'class="hsearch' in body else ""}>
-{DEV_BANNER}<header class="top"><div class="wrap hdr">
+<header class="top"><div class="wrap hdr">
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
@@ -592,7 +593,7 @@ def layout(title, body, active="/", live=None, head=""):
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>
 </div></header>
-<main class="wrap">{body}</main>
+<main class="wrap">{body}{CREDIT if active == "/" and 'class="hsearch' in body else ""}</main>
 {_footer()}
 {_join.shell(start=active == "/start")}{_join.ask_modal()}
 <script src="/static/app.js?v={ASSET_V["app.js"]}" defer></script></body></html>'''

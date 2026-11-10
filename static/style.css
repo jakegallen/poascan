@@ -1433,14 +1433,6 @@ code.brk{overflow-wrap:anywhere}
 .sigsev{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--line2);border-radius:var(--r-sm);font:600 var(--t12)/15px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);vertical-align:1px}
 .sigsev.action{color:var(--amber);border-color:color-mix(in srgb,var(--gold) 35%,transparent)}.sigsev.critical{color:var(--red);border-color:color-mix(in srgb,var(--ember) 45%,transparent)}
 .sigl{display:block;margin-top:3px;line-height:1}.sigl .sigsev{margin-left:0}
-/* 1.26.69: site-wide development banner above the sticky header (ui.DEV_BANNER), normal flow, not dismissible. Same look as POASwap's .devbar */
-.devbar{border-bottom:1px solid color-mix(in srgb,var(--gold-mid) 38%,transparent);background:linear-gradient(90deg,color-mix(in srgb,var(--gold-mid) 20%,transparent),color-mix(in srgb,var(--gold-mid) 10%,transparent))}
-.devbar-in{display:flex;align-items:center;justify-content:center;padding-top:7px;padding-bottom:7px}
-.devbar p{margin:0;color:var(--gold-pale);font-size:var(--t13);line-height:1.4;text-align:center;text-wrap:balance}
-.devbar b{color:var(--gold-hi);font-weight:600;letter-spacing:.02em}
-.devbar a{color:var(--gold-hi);font-weight:600;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--gold-hi) 45%,transparent);text-underline-offset:2px}
-.devbar a:hover,.devbar a:focus-visible{color:var(--gold-pale);text-decoration-color:currentColor}
-@media (max-width:640px){.devbar-in{padding-top:6px;padding-bottom:6px}.devbar p{font-size:var(--t12)}}
 
 
 /* 1.26.91 genesis cut: segment toggle, cut note, segment tag on epoch pages */
@@ -1709,3 +1701,11 @@ table.hz tr.hw td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
 .aref-out{margin:10px 0 0;padding:11px 13px;background:var(--ink-0);border:1px solid var(--line);border-radius:var(--r-sm);font:400 var(--t12)/1.5 var(--mono);color:var(--txt);white-space:pre-wrap;word-break:break-word;max-height:28rem;overflow:auto}
 .aref-note{color:var(--mute);font-size:var(--t13)}
 .aref-err{color:var(--ember-pale)}
+
+/* 1.26.288: home credit, a quiet pill under the last home card (muted, gold on hover); the dev banner is gone */
+.credit{display:flex;justify-content:center;margin:12px 0 0}
+.credit a{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--rule);background:color-mix(in srgb,var(--ink-2) 70%,transparent);color:var(--bone-3);font-size:var(--t12);letter-spacing:.04em;text-decoration:none;transition:color .2s,border-color .2s,box-shadow .2s}
+.credit a svg{width:13px;height:13px;fill:currentColor;flex:none}
+.credit a b{font-weight:600;color:var(--bone-2);transition:color .2s}
+.credit a:hover,.credit a:focus-visible{color:var(--gold);border-color:var(--gold-edge);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 10%,transparent)}
+.credit a:hover b,.credit a:focus-visible b{color:var(--gold-hi)}

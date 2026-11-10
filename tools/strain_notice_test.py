@@ -116,7 +116,7 @@ check("job_live while backing off sends no status read and stores nothing", st2 
 
 # banner and meta
 html = ui.layout("Home", "<p>x</p>")
-check("no notice strip on any page, ever (1.26.176): the development banner stays", 'id="ntbar"' not in html and 'class="ntbar' not in html and 'id="devbar"' in html and not hasattr(ST, "banner") and not hasattr(ui, "_strain_bar"))
+check("no notice strip on any page, ever (1.26.176); the development banner is gone too (1.26.288)", 'id="ntbar"' not in html and 'class="ntbar' not in html and 'id="devbar"' not in html and not hasattr(ST, "banner") and not hasattr(ui, "_strain_bar"))
 pill = html[html.index('id="livepill"'):html.index("</details>", html.index('id="livepill"'))]
 check("the reason is one line in the header status note, terse; Live stays Live (1.26.220: not a core route)", f'<span class="sp-r">{ui.NOTICE_REASON}</span>' in pill and ui.NOTICE_REASON == "minepoa.com sent a notice instead of data. Showing the last real data."
       and (lambda p: p["state"] == "live" and p["label"] == "Live" and ui.NOTICE_REASON in p["reasons"])(ui.status_pill({"state": "live", "label": "Live", "why": ""})))
