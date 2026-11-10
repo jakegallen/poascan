@@ -113,9 +113,29 @@ join_old = {"join_route": {"kind": "OK", "ts": now - SS.JOIN_STALE_S - 1}, "noti
             "maintenance": {"kind": "OK", "ts": now}, "writes": {"swap_offer": {"kind": "OK", "ts": now, "probe": "open"}},
             "flag_status": "live"}
 join_body = SS.render(join_old, {"status": "live"}, now, now)
-check("a join probe older than 420s is UNKNOWN and does not clear a fresh write",
-      join_body["join"]["state"] == "UNKNOWN" and join_body["join"]["route"]["state"] == "UNKNOWN"
-      and join_body["write_ok"] is True and join_body["stale"] is True and join_body["available"] is False)
+# 1.26.314 (POASwap): a stale join probe is a join fact. It keeps join UNKNOWN (fail closed for joins) but no longer stops
+# trading: with the swap write read open and fresh, swaps are available and maintenance_active is false.
+check("a join probe older than 420s is UNKNOWN for joins, and swaps with a fresh open write stay available",
+      join_body["join"]["state"] == "UNKNOWN" and join_body["join"]["route"]["state"] == "UNKNOWN" and join_body["join_state"] == "unknown"
+      and join_body["write_ok"] is True and join_body["stale"] is True and join_body["available"] is True and join_body["state"] == "available"
+      and join_body["maintenance_active"] is False and join_body["swaps_writable"] is True and join_body["swap_route"]["writable"] is True)
+# the live case on Nov 10 3:15 PM PT: join route halted and an hour old, notices fresh, writes open
+hr = [{"id": "joining", "label": "Joining", "state": "halted", "since": "2026-11-07T04:47:29Z", "as_of": "2026-11-10T22:15:02Z"},
+      {"id": "tx_lookup", "label": "Tx lookup", "state": "down", "since": "2026-11-09T10:00:00Z", "as_of": "2026-11-10T23:00:00Z"}]
+live = dict(join_old, join_route={"kind": "DOWN", "ts": now - 3552}, halted_routes=hr)
+lb = SS.render(live, {"status": "live", "message": "Swaps are live."}, now, now)
+check("1.26.314: writes open: available, state available, maintenance_active false, halted routes listed apart",
+      lb["available"] is True and lb["state"] == "available" and lb["maintenance_active"] is False and lb["write_ok"] is True
+      and lb["swaps_writable"] is True and lb["halted_routes"] == hr and lb["message"] == "Swaps are live.")
+wd = dict(live, writes={"swap_offer": {"kind": "DOWN", "ts": now, "probe": "paused"}})
+wb = SS.render(wd, {"status": "live"}, now, now)
+check("1.26.314: writes paused: not available, swaps_writable false", wb["available"] is False and wb["swaps_writable"] is False and wb["halted_routes"] == hr)
+wo = dict(live, writes={"swap_offer": {"kind": "OK", "ts": now - SS.STALE_AFTER_S - 1, "probe": "open"}})
+ob = SS.render(wo, {"status": "live"}, now, now)
+check("1.26.314: an old write read still fails closed: unknown, maintenance_active true",
+      ob["available"] is False and ob["maintenance_active"] is True and ob["swaps_writable"] is None and ob["swap_route"]["writable"] is None)
+nf = dict(live); nf.pop("halted_routes")
+check("1.26.314: halted_routes is always a list", SS.render(nf, {"status": "live"}, now, now)["halted_routes"] == [] and SS.render(None, {}, None, now)["halted_routes"] == [])
 
 # Notices are a MANDATORY security signal and stay FAIL-CLOSED (security review 2026-11-07): a stale
 # notices FETCH goes UNKNOWN and blocks join clearance, even when the last-known read was clear. We do

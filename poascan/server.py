@@ -1327,6 +1327,7 @@ class H(BaseHTTPRequestHandler):
         maint["active"] = bool(d.get("maintenance_active"))
         maint["join_state"] = d.get("join_state") or "unknown"
         maint["swap_route"] = d.get("swap_route")
+        maint["halted_routes"] = d.get("halted_routes") or []   # 1.26.314: halted routes, apart from active
         if m: meta = dict(m, generated_at=gen, maintenance=maint)
         else: meta = {"api_version": AG.VERSION, "stale": True, "generated_at": gen, "maintenance": maint}
         d = dict(d, meta=meta, writes=d.get("writes"))
