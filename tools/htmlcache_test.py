@@ -42,6 +42,13 @@ HC.MAX_BYTES = mb
 check("warmed pages get a grace past their TTL, others none", HC.grace("/network", {"tab": ["health"]}) == HC.WARM_GRACE > 0 and HC.grace("/network", {"tab": ["token"]}) == HC.WARM_GRACE and HC.grace("/network", {"tab": ["holders"]}) == 0 and HC.grace("/privacy", {}) == 0)
 check("network overview is warmed (served pinned, no heavy slot, like health)", HC.is_warm("/network", {}) and HC.grace("/network", {}) == HC.WARM_GRACE > 0)
 check("address freshness window 300 s", V.ADDR_TTL == 300)
+check("1.26.308: the Transactions list is warmed (a pinned copy, never the full page Busy card)", HC.is_warm("/chain/txs", {}) and HC.grace("/chain/txs", {}) == HC.WARM_GRACE and not HC.is_warm("/chain/txs", {"type": ["grade"]}))
+from poascan import analytics as _A
+_f0 = _A.feeds
+_A.feeds = lambda: {"feeds": [{"label": "Tx list", "state": "Down", "last_ok": time.time() - 1500}]}
+_bh = V._txs_behind(); _A.feeds = lambda: {"feeds": [{"label": "Tx list", "state": "OK", "last_ok": time.time()}]}
+_ok = V._txs_behind(); _A.feeds = _f0
+check("1.26.308: one terse line when the tx read is behind, none when current", _bh.startswith('<p class="dim txbehind">Behind upstream: last tx read') and "ago." in _bh and _ok == "" and not any(c in _bh for c in "\u2014\u2013"))
 
 # ---- through the server
 def _no(*a, **k): raise I.Busy("no upstream in tests")
