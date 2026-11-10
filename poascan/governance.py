@@ -122,6 +122,7 @@ def standing_table(rows, limit=None, sort=None, d="desc", link=None):
             f'<tbody>{trs or "<tr><td colspan=12 class=na>No established Agents in this segment yet.</td></tr>"}</tbody></table></div>')
 
 def seg_chips(tab):
+    return ""   # 1.26.301: one history, no segment toggle
     if not SG.has_cut(): return ""
     cur = SG.selected(); out = []
     for n in reversed(SG.NUMBERS):

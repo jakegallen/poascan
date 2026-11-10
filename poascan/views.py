@@ -196,13 +196,18 @@ def nopay_tag(r):
         return ' <span class="tag warn" title="No answer reached the grading quorum; nothing was paid">No payout</span>'
     return ""
 
+def _pre_title(r):
+    """A close from before the Oct 24 restart repeats an epoch number; its link and title say which one."""
+    n = r.get("segment")
+    return f' title="Epoch {r["epoch"]}, before the restart ({utc(r["close_ts"], "%b %d")})"' if n and n != SG.CURRENT else ""
+
 def epochs_table(rows, link=True, qs=None, base=None):
     """Closes, newest first. qs and base: every header sorts the list (?sort=&dir=, server side; blanks last)."""
     from . import scoresort as SS
     by = SS.q(qs, "sort", "epoch"); by = by if by in EPOCH_SORTS else "epoch"; d = SS.page_dir(qs)
-    rs = SS.sort_rows(list(rows), lambda r: r.get(by), "num", d, tie=lambda r: -r["epoch"])
+    rs = SS.sort_rows(list(rows), lambda r: r.get("g", r["epoch"]) if by == "epoch" else r.get(by), "num", d, tie=lambda r: -r.get("g", r["epoch"]))
     lk = SS.link_fn(base, "epoch", "#history", **({"segment": str(SG.selected())} if SG.archived() else {})) if base else None
-    return table([], [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk">{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
+    return table([], [[f'<a href="{A.epoch_href(r)}" class="mono hallk"{_pre_title(r)}>{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
                    num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
 
@@ -904,12 +909,12 @@ def seg_tx_tag(t):
     if not SG.has_cut() or n == SG.CURRENT: return ""
     if t.get("carried_over") is False:
         return f'<span class="ep tag warn" title="After {E(SG.BY_N[n]["label"].lower())}\'s final anchored checkpoint">Not carried over</span>'
-    return f'<span class="ep tag">{E(SG.BY_N[n]["label"])}</span>'
+    return ""   # 1.26.301: one history; no segment tag on earlier txs
 
 def hist_rows(rows):
     def ep(t):
         n = t.get("segment") or SG.CURRENT; v = str(t["epoch"] if t["epoch"] is not None else G.epoch_of_ts(t["ts"]))
-        return (f"S{n} " if SG.has_cut() and n != SG.CURRENT else "") + v
+        return v   # 1.26.301: one history, no S1 prefix
     return "".join(f'<tr><td>{hlink(t["id"])} {seal(t["final"])}{seg_tx_tag(t)}{SL.tag(t.get("slot_latch"))}</td><td>{badge(t["type"])}</td>'
                    f'<td class="r">{E(ep(t))}</td><td class="r">{rel_t(t["ts"])}</td></tr>' for t in rows)
 
@@ -1049,7 +1054,8 @@ def live_hero():
             f'<div><span class="lbl">Pool</span><b>{poa(o["pool"], dec=2)}</b></div></div></section>')
 
 def cut_note(link_seg1=True):
-    """The genesis cut in one line (segments.py), or "" with no cut."""
+    """1.26.301: one history, no cut banner (the restart is told once on /about)."""
+    return ""
     c = SG.cut()
     if not c: return ""
     seg1 = ' <a href="/chain?segment=1">Segment 1</a>' if link_seg1 else ""
@@ -1063,8 +1069,8 @@ def chain_tabs(cur):
     return '<nav class="chips" aria-label="Chain">' + "".join(f'<a href="{h}" class="chip {"on" if h == cur else ""}"{" aria-current=\"page\"" if h == cur else ""}>{t}</a>' for h, t in CHAIN_TABS) + "</nav>"
 
 def seg_tabs(base="/chain"):
-    """Current segment and archived segment chips (a toggle), or "" with no cut."""
-    if not SG.has_cut(): return ""
+    """1.26.301: one history, no segment toggle (?segment= still works for old links and the API)."""
+    return ""
     cur = SG.selected()
     return ('<nav class="chips segs" aria-label="Segment">' + "".join(
         f'<a href="{base}{"" if n == SG.CURRENT else "?segment=" + str(n)}" class="chip {"on" if n == cur else ""}"{" aria-current=\"page\"" if n == cur else ""}>{E(SG.label(n))}</a>'
@@ -1075,8 +1081,8 @@ def epochs_page(qs=None):
     ?segment=1 shows an archived segment's closes only (no open epoch, queue or grading: those belong to the live segment)."""
     if SG.archived(): return epochs_archived()
     qs = qs or {}; tab = (qs.get("tab") or [""])[0]; tab = tab if tab in dict(EP_TABS) else ("closed" if not qs.get("state") else "closed")
-    ep = A.epoch_rows(); pend = A.pending_by_epoch()
-    cnt = {"closed": max(len(ep), int(A.status().get("epochs_closed") or 0) if not SG.archived() else 0), "pending": pend.get("total")}
+    ep = A.epoch_rows(); pend = A.pending_by_epoch(); epa = A.epoch_rows_all()   # 1.26.301: History and Cadence span every segment
+    cnt = {"closed": len(epa) - len(ep) + max(len(ep), int(A.status().get("epochs_closed") or 0) if not SG.archived() else 0), "pending": pend.get("total")}
     chips = "".join(f'<a href="/chain{"" if k == "closed" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}'
                     + (f' <span class="dim">{cnt[k]:,}</span>' if cnt.get(k) is not None else "") + '</a>' for k, t in EP_TABS)
     if tab == "pending":
@@ -1084,11 +1090,11 @@ def epochs_page(qs=None):
     elif tab == "grading":
         inner = grading()
     else:
-        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
+        cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in epa], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         pz = " minepoa.com paused this list; balances safe." if A.epochs_paused() else ""   # 1.26.280: explain the gap when minepoa paused /api/epochs
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet." + pz
-        hist = (epochs_table(ep, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet." + pz) if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
+        hist = (epochs_table(epa, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet." + pz) if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
             unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
@@ -1100,31 +1106,16 @@ def epochs_page(qs=None):
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
 def seg_about():
-    """/about#segments, from the segments config."""
+    """/about#segments (1.26.301): one history. The Oct 24 restart is told here once, tersely; pages show no division."""
     if not SG.has_cut(): return ""
-    cs = SG.cuts()
-    def one(c):
-        a = SG.BY_N[c["from_segment"]]; n = SG.BY_N[c["segment"]]
-        arc = f' (<a href="{E(c["archive_url"])}" rel="noopener noreferrer">archive ↗</a>)' if c.get("archive_url") else ""
-        return (f'{E(n["label"])} (chain <code>{E(n.get("chain_id") or "")}</code>) began at {utc(c["ts"], "%Y-%m-%d %H:%M")}'
-                + (f', continuing from checkpoint h{c["from_height"]} of {E(a["label"])}' if c.get("from_height") is not None else "")
-                + f'; {E(a["label"])} is kept as <code>{E(a.get("chain_id") or "")}</code>{arc}.')
+    c = SG.cuts()[-1]; a = SG.BY_N[c["from_segment"]]
+    arc = f' (<a href="{E(c["archive_url"])}" rel="noopener noreferrer">archive</a>)' if c.get("archive_url") else ""
     uc = SG.unconfirmed_list()
-    ucs = (" Rewards of " + ", ".join(f'{E(SG.BY_N[x["segment"]]["label"])} E{x["epoch"]}' for x in uc)
-           + " read <b>Unconfirmed</b> (API <code>rewards_state</code>): they are in the close record but not in the supply the next segment carried, so no total that includes them is shown as settled.") if uc else ""
-    exs = SG.source_segment("explorer")
-    exp = (f" minepoa.com's explorer address reads serve {E(SG.BY_N[exs]['label'])}'s final state, so an address page uses the agent list (current segment) when it "
-           f"has the address, and otherwise labels the explorer balance <b>As of checkpoint</b> (<code>balance_as_of_checkpoint</code>, <code>balance_stale</code> true).") if exs != SG.CURRENT else ""
-    return (f'<h3 id="segments">Segments</h3><p>{" ".join(one(c) for c in cs)} Balances carried over.{" Carried balances unlocked at the genesis cut, per the operators, so rewards from earlier segments count as spendable and only rewards since the cut vest." if SG.carry_unlocked() is True else ""} Segment boundaries, start heights and per segment '
-            'flags are configuration (<code>poascan/segments.json</code>), not code. Epoch numbers, heights and nonces restart in each segment, so every epoch, checkpoint '
-            'and nonce is read with its segment: Segment 1 E3 and Segment 2 E3 are different closes. A transaction belongs to the segment whose time span holds it; an '
-            "anchor belongs to the earlier segment if it is that segment's final anchored root or was anchored before the boundary. The epoch list, epoch pages, open "
-            'epoch, pending queue, standing expiry and reconcile counters follow the current segment; add <code>?segment=1</code> to a page or API call (or '
-            '<code>segment: 1</code> to an MCP tool) to read an earlier one. Lifetime figures (rewards, vesting, established standing) span all segments in close order. '
-            'Address pages and <code>coverage</code> show the nonce per segment, so a nonce that restarts is not a gap. A transaction from an earlier segment is tagged '
-            "with it; one timestamped after that segment's final anchored checkpoint is tagged <b>Not carried over</b> (API <code>carried_over</code> false), since the next segment continued from that checkpoint. "
-            'Swap offers still open at a boundary read <b>Refunded</b> with <code>refund_basis</code> naming the boundary notice; <code>refund_txid</code> stays null unless a refund tx is public. '
-            'In the API, <code>rewards_by_epoch</code> keeps lifetime keys and <code>rewards_by_segment</code> gives segment and epoch.' + ucs + exp + '</p>')
+    ucs = (" Rewards of the earlier E" + ", E".join(str(x["epoch"]) for x in uc) + " read <b>Unconfirmed</b>: in the close record, not in the carried supply.") if uc else ""
+    return (f'<h3 id="segments">One history</h3><p>On {utc(c["ts"], "%b %d, %Y")} the chain restarted epoch numbers, heights and nonces at checkpoint '
+            f'h{c.get("from_height")}; balances carried over. The earlier run is kept as <code>{E(a.get("chain_id") or "")}</code>{arc}. POAScan shows both runs as one '
+            'history in close order: totals, charts and lists span both and count each close once. An earlier close keeps its own epoch number, so its link adds '
+            '<code>?segment=1</code>. The API and MCP still take <code>segment</code> to read one run.' + ucs + '</p>')
 
 def epochs_archived():
     """An archived segment's closes: History and Cadence from its own close records, labelled, read only."""
@@ -1253,7 +1244,7 @@ def agents_top_row(npd):
 
 def agents_overview():
     ep = A.epoch_rows(); f = G.funnel(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
-    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
+    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in A.epoch_rows_all()], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
     fun = funnel_html(f["overall"])
     t5 = lambda items: '<ol class="t5">' + "".join(f'<li>{addr_link(a, nm, (6, 4))}<span class="num">{v}</span></li>' for a, v in items) + "</ol>"
     top = t5((a, compact3(v)) for a, v, n in e["top"][:5])

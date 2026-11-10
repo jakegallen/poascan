@@ -96,6 +96,10 @@ def selected():
     """The segment this thread reads (?segment=, an MCP segment argument), else the current one."""
     return getattr(_ctx, "n", None) or CURRENT
 
+def explicit():
+    """True when this request named a segment (?segment=, an MCP argument); 1.26.301 lists span every segment otherwise."""
+    return getattr(_ctx, "n", None) is not None
+
 def set_selected(n):
     _ctx.n = n if n in BY_N else None
 
@@ -117,7 +121,7 @@ def parse(v):
 def archived(n=None): return (n or selected()) != CURRENT
 
 def label(n=None):
-    n = n or selected(); return BY_N[n]["label"] + (" (archived)" if n != CURRENT else "")
+    n = n or selected(); return BY_N[n]["label"]   # 1.26.301: one history on every page; no "(archived)" tag
 
 def of_ts(ts):
     """The segment a tx, answer or snapshot with this UTC time belongs to (None or 0: the current one)."""
@@ -236,7 +240,7 @@ def cuts(): return [dict(c) for c in CUTS]
 
 def ep_label(g):
     """A lifetime close number as a label: E3 in the current segment, S1 E3 in an archived one."""
-    n, k = split_gkey(g); return f"E{k}" if n == CURRENT else f"S{n} E{k}"
+    n, k = split_gkey(g); return f"E{k}"   # 1.26.301: one history; ep_href keeps the earlier run's ?segment=
 
 def ep_href(g):
     n, k = split_gkey(g); return f"/epoch/{k}" + ("" if n == CURRENT else f"?segment={n}")

@@ -228,6 +228,21 @@ def api(path, qs):
         a = qs.get("address", [""])[0]
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
         return RC.for_address(a, qint(qs, "limit", 50, 1, 200)), True
+    if path == "/api/epochs" and not SG.explicit() and not (qs.get("from") or [""])[0]:
+        # 1.26.301 (one history): without ?segment= the list is every close across the restart, oldest first by close time;
+        # each row adds segment and lifetime (unique). ?segment=<n> keeps one segment and ?from= still pages the current one.
+        rows = []
+        for n in SG.NUMBERS:
+            with SG.use(n):
+                hx = {x["epoch"]: x for x in RR.index()}; sq = "" if n == SG.CURRENT else f"?segment={n}"
+                rows += [dict(r, segment=n, lifetime=SG.gkey(r["epoch"], n), record_sha256=(hx.get(r["epoch"]) or {}).get("sha256"),
+                              record_bytes=(hx.get(r["epoch"]) or {}).get("bytes"), url=f'{AG.BASE}/epoch/{r["epoch"]}{sq}',
+                              record_url=f'{AG.BASE}{AG.API_PREFIX}/epoch/{r["epoch"]}/record{sq}',
+                              rewards_url=f'{AG.BASE}{AG.API_PREFIX}/epoch/{r["epoch"]}/rewards{sq}') for r in A.epoch_rows()]
+        rows.sort(key=lambda r: (r.get("close_ts") or 0, r["lifetime"]))
+        if (qs.get("latest") or [""])[0]: rows = rows[-qint(qs, "latest", 10, 1, 1000):]
+        if (qs.get("limit") or [""])[0]: rows = rows[:qint(qs, "limit", 1000, 1, 1000)]
+        return rows, True
     if path == "/api/epochs":   # 1.26.199: ?from=<epoch>&limit=<n> pages the closes (ascending); without them, every close as before
         rows = A.epoch_rows()
         if (qs.get("latest") or [""])[0]:   # 1.26.221: the newest n closes (ascending)
@@ -1529,7 +1544,7 @@ class H(BaseHTTPRequestHandler):
                     if etag in inm or etag.replace('W/', '') in inm or "*" in inm: return self.send(304, b"", "application/json", hd)
                     if fmt == "csv": return self.send(200, to_csv(body["rows"]), "text/csv; charset=utf-8", dict(hd, **{"Content-Disposition": 'attachment; filename="api_agents_view.csv"'}))
                     return self.send(200, json.dumps(dict(body, meta=m), default=str), "application/json", hd)
-                ck = (p, _micro_ck(p, qs), fmt, SG.selected())   # 1.26.280: a canonical key, not the raw query, so ?x=random is not a fresh miss; SG.selected() keeps archived segments (?segment=) apart (it is popped from qs before here)
+                ck = (p, _micro_ck(p, qs), fmt, SG.selected(), SG.explicit())   # 1.26.280: a canonical key, not the raw query, so ?x=random is not a fresh miss; SG.selected() keeps archived segments (?segment=) apart (it is popped from qs before here)
                 hit = _micro_get(ck)
                 if hit: return self.send(200, hit[0], "application/json", hit[1], pre=hit)
                 try: data, is_list = api(p, qs)

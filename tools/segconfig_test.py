@@ -161,7 +161,7 @@ print(json.dumps(dict(co=co, html=html, b1=b1, b2=b2, b3=b3, rs=[rs.get(11), rs.
 check("tags: run", out is not None)
 if out:
     check("tags: segment 1 tx after the final anchored checkpoint is not carried over", out["co"]["a2"] == [1, False] and out["co"]["a1"] == [1, None] and out["co"]["a3"] == [2, None])
-    check("tags: Not carried over and Segment 1 tags on the address history", out["html"].count("Not carried over") == 1 and ">Segment 1<" in out["html"])
+    check("tags: Not carried over tag, no Segment 1 tag (1.26.301) on the address history", out["html"].count("Not carried over") == 1 and ">Segment 1<" not in out["html"])
     check("balance: explorer-only copy is stale, as of checkpoint from networks", out["b1"]["stale"] is True and out["b1"]["as_of_checkpoint"] == h and out["b1"]["segment"] == 1)
     check("balance: agent list copy (current segment) wins when present", out["b2"]["source"] == "agents" and out["b2"]["balance"] == "5.000000" and out["b2"]["stale"] is False)
     check("balance: agent row last seen before the boundary is stale, labelled with its segment", out["b3"]["stale"] is True and out["b3"]["segment"] == 1 and out["b3"]["label"] == "As of Segment 1")
