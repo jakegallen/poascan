@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.311] - 2026-11-10
+
+### Changed
+- /start: the Start mining PoA card is the one focus, centred on the page. What this prompt does, All steps and Prompt history stay in the page with the same bytes and anchors, hidden (a link to their anchor opens them). The status chips show once an app is chosen; Check my Agent is a quiet link. The payment rule sits with the wallet link. Card polish: lit edge, glow, depth.
+
 ## [1.26.310] - 2026-11-10
 
 ### Changed

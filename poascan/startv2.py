@@ -73,7 +73,7 @@ def body():
              f'<div data-sv-body></div></div>')
     foot = (f'<div class="sv-foot" data-sv-foot hidden>{S.notice()}{S.phash()}'
             f'<details class="sv-view"><summary>View prompt</summary>' + pbox(f'<pre class="pc-text jm-p sv-pre" data-sv-pre tabindex="0">{E(S.prompt("YOUR_NAME"))}</pre>') + '</details>' + S.HELP_LINE
-            + S.WALLET_LINK + '</div>')
+            + S.WALLET_LINK + f'<p class="sv-pay">{E(S.PAY)}</p></div>')   # 1.26.311: the payment rule sits with the wallet link
     # the verification strip: three honest badges. Prompt copied is client state; Network open mirrors POAScan's own
     # route health for hosted mining; Answer verified reads the public ledger for a challenge tx on a poa1 the person
     # pastes. POAScan's own /api/v1 reads only, never a key, never a minepoa.com fetch. New sv-vf prefix only.
@@ -81,12 +81,15 @@ def body():
              f'<span class="sv-vf-b" data-sv-vf-b="copied"><span class="sv-vf-i">{CHECK}</span>Prompt copied</span>'
              f'<span class="sv-vf-b" data-sv-vf-b="network"><span class="sv-vf-i">{CHECK}</span>Network open</span>'
              f'<span class="sv-vf-b" data-sv-vf-b="answer" title="Lights when the public ledger shows your answer. Indexing can lag."><span class="sv-vf-i">{CHECK}</span>Answer verified</span>'
-             f'<div class="sv-vf-chk"><label for="sv-vf-a">Check my Agent</label>'
+             f'<details class="sv-vf-chk"><summary>Check my Agent</summary><label class="sr-only" for="sv-vf-a">poa1 address</label>'
              f'<input id="sv-vf-a" data-sv-vf-addr type="text" placeholder="poa1 address, never a key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="verbatim" maxlength="66">'
-             f'<span class="sv-vf-msg" data-sv-vf-msg></span></div></div>')
-    return (f'<div class="s2v" data-sv data-svname="{E(name)}"{" data-paused=\"1\"" if pz else ""}>'
+             f'<span class="sv-vf-msg" data-sv-vf-msg></span></details></div>')
+    return (f'<div class="s2v" data-sv data-st="name" data-svname="{E(name)}"{" data-paused=\"1\"" if pz else ""}>'
             f'<section class="sv-card">{hero}{S.join_halt_html()}{namescr}{pick}{panel}{strip}{foot}</section>'
-            f'{tpl}<script type="application/json" data-sv-json>{data}</script>{S.below()}</div>')
+            f'{tpl}<script type="application/json" data-sv-json>{data}</script>'
+            # 1.26.311 (Jake t532u): the card is the one focus. What this prompt does, All steps and Prompt history stay in
+            # the page (same bytes, same routes and anchors) but are hidden; a link to one of their anchors opens them.
+            f'<div class="sv-below" data-sv-below hidden>{S.below()}</div></div>')
 
 def page(page_fn):
     from . import ui as U

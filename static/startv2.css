@@ -121,3 +121,25 @@
  .sv-btn{flex-basis:100%}.sv-btn.sv-sm{flex-basis:auto}
 }
 @media (prefers-reduced-motion:reduce){.s2v *,.s2v *::before,.s2v *::after{animation:none!important;transition:none!important}}
+/* 1.26.311 (Jake t532u): the card is the single focus, centred on the page. The folds below stay in the page, hidden.
+   The verification chips show once an app is chosen; Check my Agent is a quiet link that opens its field. */
+.s2v{min-height:calc(100dvh - 190px);display:flex;flex-direction:column;justify-content:center;padding:24px 0}
+.s2v>.sv-card{width:100%}
+.sv-below[hidden]{display:none}
+.sv-card{padding:36px 40px 32px;border-color:color-mix(in srgb,var(--gold) 22%,var(--line2));
+ background:radial-gradient(90% 60% at 50% -10%,color-mix(in srgb,var(--gold) 11%,transparent),transparent 62%),radial-gradient(60% 40% at 100% 100%,color-mix(in srgb,var(--gold) 4%,transparent),transparent 70%),linear-gradient(180deg,var(--card2),var(--card));
+ box-shadow:0 1px 0 color-mix(in srgb,var(--mark-hi) 9%,transparent) inset,0 0 0 1px color-mix(in srgb,var(--gold) 5%,transparent),0 40px 90px -40px color-mix(in srgb,var(--black) 90%,transparent),0 0 80px -30px color-mix(in srgb,var(--gold) 28%,transparent)}
+.sv-card::before{content:"";position:absolute;left:12%;right:12%;top:0;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--gold-hi) 70%,transparent),transparent);pointer-events:none}
+.s2v[data-st="name"] .sv-vf,.s2v[data-st="apps"] .sv-vf{display:none}
+.sv-vf-chk{display:block;margin-left:auto}
+.sv-vf-chk summary{list-style:none;cursor:pointer;font:500 var(--t12)/1 var(--ui);color:var(--mute);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--mute) 40%,transparent);text-underline-offset:3px;padding:6px 0}
+.sv-vf-chk summary::-webkit-details-marker{display:none}
+.sv-vf-chk summary:hover,.sv-vf-chk[open] summary{color:var(--hi)}
+.sv-vf-chk[open]{width:100%;margin-left:0}
+.sv-vf-chk input{display:block;margin-top:8px;width:100%}
+@media (max-width:640px){
+ .s2v{min-height:calc(100dvh - 230px);padding:12px 0}
+ .sv-card{padding:24px 18px 22px}
+}
+@media (prefers-reduced-motion:reduce){.sv-card::before{transition:none}}
+.sv-pay{margin:4px 0 0;text-align:center;font:500 var(--t12)/1.4 var(--ui);color:var(--mute)}

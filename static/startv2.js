@@ -84,7 +84,7 @@ function nonePanel(a){var f=D.createDocumentFragment();f.appendChild(el("p","sv-
 /* morph: View Transitions where supported (the tile logo flies into the panel head), else a CSS fade and lift */
 function morph(fn){if(!RM&&D.startViewTransition)D.startViewTransition(fn);else fn()}
 function parent(st){return BY[st]?"apps":"name"}
-function render(st){ST=st;var a=BY[st]||null;CUR=a;n0.hidden=st!="name";pick.hidden=st!="apps";panel.hidden=!a;foot.hidden=!a||a.tier=="none";
+function render(st){ST=st;var a=BY[st]||null;CUR=a;var rt=$("[data-sv]");if(rt)rt.dataset.st=a?"app":st;n0.hidden=st!="name";pick.hidden=st!="apps";panel.hidden=!a;foot.hidden=!a||a.tier=="none";
  if(st=="apps"){pick.classList.remove("in");void pick.offsetWidth;pick.classList.add("in");var c=$(".sv-go",pick);if(c)c.focus({preventScroll:true})}
  if(st=="name"&&i0)i0.focus({preventScroll:true});
  if(!a)return;
@@ -141,3 +141,6 @@ if(vfA){vfA.addEventListener("input",function(){vfStop();vf("answer",false);vfN=
   if(a&&!VRX.test(a)){vfMsg("That is not a poa1 address.");return}vfMsg("");if(VRX.test(a)&&VF.copied)vfKick()});
  vfA.addEventListener("keydown",function(e){if(e.key=="Enter"){e.preventDefault();if(VF.copied)vfKick();else vfMsg("Copy the prompt first, then check.")}})}
 })();
+/* 1.26.311: the folds under the card are hidden; a link to one of their anchors (#prompt-history, #self-custody, #prompt-facts) shows them */
+(function(){var b=document.querySelector("[data-sv-below]");if(!b)return;function show(){var h=location.hash.slice(1),t=h&&document.getElementById(h);if(t&&b.contains(t)){b.hidden=false;var d=t.closest("details");if(d)d.open=true;t.scrollIntoView()}}
+ show();window.addEventListener("hashchange",show)})();
