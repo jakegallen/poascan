@@ -1282,6 +1282,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("window", job_window, 600, "/api/txs"),
     ("meta", job_meta, META_S, None),
     ("epochs", job_epochs, 300, "/api/epochs"),
+    ("close_pending", lambda: __import__("poascan.closepend", fromlist=["x"]).run(), 600, "/api/close-report?epoch"),   # 1.26.307: a close counted by /api/status with no record in /api/epochs: its archived close report, at most 2 per run
     ("join_pow", job_join_pow, JOIN_POW_S, "/api/join-pow"),   # 1.26.232: joins open or halted (routewatch "joining")
     ("agents", job_agents, 900, "/api/agents"),
     ("hourly", job_hourly_meta, 3600, None),

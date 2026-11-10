@@ -202,13 +202,16 @@ def _pre_title(r):
     # 1.26.303: a plain date (utc() returns markup, which broke the attribute and printed 'Oct 20)">' in the row)
     return f' title="Epoch {r["epoch"]}, before the restart ({time.strftime("%b %-d", time.gmtime(int(r["close_ts"])))})"' if n and n != SG.CURRENT else ""
 
-def epochs_table(rows, link=True, qs=None, base=None):
+def epochs_table(rows, link=True, qs=None, base=None, pend=None):
     """Closes, newest first. qs and base: every header sorts the list (?sort=&dir=, server side; blanks last)."""
     from . import scoresort as SS
     by = SS.q(qs, "sort", "epoch"); by = by if by in EPOCH_SORTS else "epoch"; d = SS.page_dir(qs)
     rs = SS.sort_rows(list(rows), lambda r: r.get("g", r["epoch"]) if by == "epoch" else r.get(by), "num", d, tie=lambda r: -r.get("g", r["epoch"]))
     lk = SS.link_fn(base, "epoch", "#history", **({"segment": str(SG.selected())} if SG.archived() else {})) if base else None
-    return table([], [[f'<a href="{A.epoch_href(r)}" class="mono hallk"{_pre_title(r)}>{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
+    na_ = '<span class="dim">···</span>'
+    pend = [] if (by != "epoch" or d != "desc" or pend is None) else list(reversed(pend))   # 1.26.307: closes with no record yet, on top in the default order
+    prow = [[f'<span class="mono" title="{E(PEND_TIP)}">E{r["epoch"]}</span>', f'<span class="tag warn" title="{E(PEND_TIP)}">RECORD PENDING</span>', utc(r["close_ts"]), na_, _step_cell(r), na_, na_, na_] for r in pend]
+    return table([], prow + [[f'<a href="{A.epoch_href(r)}" class="mono hallk"{_pre_title(r)}>{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
                    poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
                    num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
 
@@ -221,17 +224,37 @@ def raw_fields(extra):
     return (inline + f'<details class="raw"><summary>Show raw JSON · {len(extra)} field{"s" if len(extra) != 1 else ""}{cut}</summary>'
             f'<pre class="wrappre">{E(raw[:20000])}</pre></details>')
 
-def home_epochs(ep):
+def home_epochs(ep, with_pending=True):
     """Closes on Home: when, Agents paid, minted, burned and the pour (the pool split, minted gold against burned slag)."""
-    rows = list(reversed(ep[-6:]))
+    from . import closepend as CPD
+    pend = list(reversed(CPD.rows()))[:6] if with_pending else []   # 1.26.307: closes counted with no record yet, newest first
+    rows = list(reversed(ep[-(6 - len(pend)):])) if len(pend) < 6 else []
     def pour(r):
         pool = float(r.get("pool") or 0); m = 100 * float(r.get("minted") or 0) / pool if pool else 0
         t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
         return f'<span class="mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
+    na_ = '<span class="dim">···</span>'
+    prow = [[f'<a href="/chain#history" class="mono" title="{E(PEND_TIP)}">E{r["epoch"]}</a> <span class="tag warn" title="{E(PEND_TIP)}">Record pending</span>', utc(r["close_ts"], "%b %d %H:%M"), na_,
+             _step_cell(r), na_, ""] for r in pend]
     return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burned", "Pour"],
-               [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>' + nopay_tag(r), utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
+               prow + [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>' + nopay_tag(r), utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
                  f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>',
                  f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"], 1)}</span>', pour(r)] for r in rows], cls="closes", pri=(0, 2, 3, 5))
+
+def _pend_tip():
+    """1.26.307: Token totals are close records only; say which closes they leave out."""
+    from . import closepend as CPD
+    sp = CPD.span()
+    return f" {sp} closed with no record published yet, so not in this total." if sp else ""
+
+PEND_TIP = "Closed. minepoa.com has not published this close's record (its /api/epochs list is halted), so Paid, Minted and Burned are not known yet. Close time from its close report."
+
+def _step_cell(r):
+    """1.26.307: a pending close's Minted cell: the node's supply step across the close when POAScan has reads on both sides."""
+    st = r.get("supply_step")
+    if st is None: return '<span class="dim">···</span>'
+    t = f"Node supply changed by {full(st)} POA across this close (POAScan's /api/status reads). The record's mint is not published yet."
+    return f'<span class="num dim" title="{E(t)}">{"+" if st >= 0 else ""}{compact(st, 1)}</span>'
 
 def home_graders(n=5):
     """Graders on Home: the most aligned jurors with at least 10 settled seats (agents.graders, cached 300 s)."""
@@ -350,7 +373,7 @@ def live_rows(kind):
     """/fragment/rows: the newest rows of a live table as bare <tr>s, from the local archive (no upstream call).
     The client asks only after a WS snapshot shows a new tx or close, and keeps only rows it does not have."""
     if kind == "txs": h = tx_table(db.q("SELECT * FROM txs ORDER BY ts DESC LIMIT 10"), names())
-    elif kind == "closes-home": h = home_epochs(A.epoch_rows())
+    elif kind == "closes-home": h = home_epochs(A.epoch_rows(), with_pending=False)   # live rows are records only
     elif kind == "closes": h = epochs_table(A.epoch_rows()[-5:])
     else: return None
     m = re.search(r"<tbody>(.*)</tbody>", h, re.S); return m.group(1) if m else ""
@@ -1027,8 +1050,8 @@ def token_body(h2=False):
     mrow = "".join([stat("Market cap", mcap, tip=mtip) if mcap else "",
                      stat("Last trade · 1M POA", (X._pfmt(lt["per_1m_poa"], lt["asset"]) + ltd) if lt else '<span class="na">···</span>', "", ICON_SWAP, "swap_last"),
                      stat("Best ask · 1M POA", X._pfmt(ba["per_1m_poa"], ba["asset"]) if ba else '<span class="na">···</span>', "", ICON_SWAP, "swap_ask"),
-                     stat("Minted at closes", poa(mint_t, mined=True), tip=f"POA issued at {len(er)} closes, both runs. Closes not carried over at the restart are left out."),
-                     stat("Burned at closes", poa(burn_t), tip="Pool not issued at those closes. No holder balance is destroyed.")])
+                     stat("Minted at closes", poa(mint_t, mined=True), tip=f"POA issued at {len(er)} closes, both runs. Closes not carried over at the restart are left out." + _pend_tip()),
+                     stat("Burned at closes", poa(burn_t), tip="Pool not issued at those closes. No holder balance is destroyed." + _pend_tip())])
     top = h["rows"][:20]
     holders_t = table(["#", "Agent", "Amount", "% of supply"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*float(r["balance"] or 0)/sup:.2f}%' if sup else f'{100*r["share"]:.2f}%'] for r in top], pri=(0, 1, 2), usd=(2,))
     fa = "".join(f'<a class="chip" href="{u}">{t}</a>' for t, u in (("Rich list", "/api/v1/richlist"), ("Price", "/api/v1/price"), ("Market", "/api/v1/swaps/status"), ("Supply", "/api/v1/summary"), ("MCP get_rich_list", "/api#mcp")))
@@ -1124,7 +1147,8 @@ def epochs_page(qs=None):
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         pz = " minepoa.com paused this list; balances safe." if A.epochs_paused() else ""   # 1.26.280: explain the gap when minepoa paused /api/epochs
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet." + pz
-        hist = (epochs_table(epa, qs=qs, base="/chain") + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet." + pz) if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
+        from . import closepend as CPD
+        hist = (epochs_table(epa, qs=qs, base="/chain", pend=CPD.rows()) + (note((f"E{len(ep)} to E{nc - 1} closed. Records" if nc - len(ep) > 1 else f"E{len(ep)} closed. Record") + " not listed by /api/epochs yet." + pz) if nc > len(ep) else "")) if ep or not SG.has_cut() else na(
             unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
