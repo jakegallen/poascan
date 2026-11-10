@@ -1093,7 +1093,9 @@ def epochs_page(qs=None):
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
         inner = (card("History", hist, X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>', id="history")
-                 + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
+                 + (cohort_card((qs.get("state") or [""])[0]) if qs.get("state") else "")   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
+                 + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
+                 + card("For agents", '<ul class="fagents"><li><a href="/chain?state=unsealed#cohorts">Cohorts</a><a class="mono dim" href="/api/v1/cohorts">/api/v1/cohorts</a></li><li><a href="/chain">Closes</a><a class="mono dim" href="/api/v1/epochs">/api/v1/epochs</a></li></ul>', id="for-agents"))
     body = f'<div class="sechead"><h1 class="sr-only">Epochs</h1>{chain_tabs("/chain")}{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
@@ -1237,25 +1239,33 @@ def health_card():
                  stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
     return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>', '<a class="more" href="/about#real">Method →</a>')
 
+AGENTS_API = [("Is it real", "/about#real", "/api/v1/agents/health"), ("Operators", "/agents/operators", "/api/v1/clusters"), ("Originality", "/about#real", "/api/v1/agents/originality"),
+              ("Cohorts", "/chain", "/api/v1/cohorts"), ("Retention", "/about#real", "/api/v1/agents/retention"), ("Census", "/agents/census", "/api/v1/agents/census")]
+
+def agents_top_row(npd):
+    """1.26.296 (UI/UX P8): four numbers. The analyst stats (operators, fan-out, inviters, disclosure, originality, diversity,
+    newcomer success, earnings per paid Agent) are in the API, listed in For agents."""
+    st = A.status(); aa = A.active_agents(); est = len(A.established_set()); run, ser = 0, []
+    for r in A.epoch_rows(): run += (r["established"] or 0) - (r["established_removed"] or 0); ser.append((r["close_ts"], run))
+    new = npd[-1]["new_agents"] if npd else None
+    return ('<div class="stats four">' + stat("Agents", intc(st.get("agents_joined"))) + stat("Active Agents", intc(aa["active_agents"]) if aa else "···")
+            + stat("New today", intc(max(0, new)) if new is not None else "···") + spark_in(stat("Established", intc(est)), ser) + '</div>')
+
 def agents_overview():
-    ep = A.epoch_rows(); f = G.funnel(); nc = G.newcomers(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
+    ep = A.epoch_rows(); f = G.funnel(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
     mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
     fun = funnel_html(f["overall"])
-    dist = table(["Epoch", "Paid", "Mean", "Median", "Common payouts"],
-                 [[f'E{x["epoch"]}', x["n"], num(x["mean"]), num(x["median"]), " · ".join(f'{compact(a)} ×{c}' for a, c in x["dist"])] for x in e["per_epoch"]])
     t5 = lambda items: '<ol class="t5">' + "".join(f'<li>{addr_link(a, nm, (6, 4))}<span class="num">{v}</span></li>' for a, v in items) + "</ol>"
     top = t5((a, compact3(v)) for a, v, n in e["top"][:5])
     tg = t5((g, f"{n:,}") for g, n in gr["served"][:5])
     ls = sorted(st.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:5]
     tsr = t5((a, f"{b}") for a, (b, c) in ls)
-    newc = (f'<div class="big">{pct(nc["rate"]) if nc["rate"] is not None else "···"}</div>'
-            f'<div class="minis"><div><span class="lbl">New joins · 7d</span>{nc["observed_joins"]:,}</div><div><span class="lbl">Paid</span>{nc["observed_paid"]:,}</div>'
-            f'<div><span class="lbl">Network paid</span>{pct(nc["network_rate"])}</div></div>')
     npd = G.new_per_day()
     newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
-    body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
-<div class="grid2">{card("Newcomer success", newc)}{card("Earnings per paid agent", dist + note("Most epochs pay nearly everyone the same capped amount."))}</div>
+    fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in AGENTS_API)
+    body = agents_top_row(npd) + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
 {card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>', '<a class="more" href="/agents/top?tab=richlist">Rankings →</a>')}'''
+    body += card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
     return apage("The Agents", body, "/agents")
 
 def funnel_html(stages):
