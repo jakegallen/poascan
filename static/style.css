@@ -1949,3 +1949,9 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .apik{display:flex;align-items:center;gap:10px;padding:6px 0;min-width:0}.apik .lbl{width:44px;flex:none}.apik code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apisn{position:relative;margin:8px 0}.apisn .cp{position:absolute;top:8px;right:8px}
 @media(max-width:640px){.apil{grid-template-columns:1fr}}
+/* 1.26.312 (Jake t530u): the period change reads inside the chart, a quiet line under the value chip, not a pill by the headline */
+.lv .lvc{position:absolute;left:0;top:100%;margin-top:5px;font:600 10.5px/1 var(--nf);font-style:normal;letter-spacing:.02em;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--bone-3);text-shadow:0 1px 6px color-mix(in srgb,var(--ink-0) 90%,transparent)}
+.lv .lvc.up{color:color-mix(in srgb,var(--verd-hi) 82%,var(--bone-2))}
+.lv .lvc.dn{color:color-mix(in srgb,var(--ember-pale) 85%,var(--bone-2))}
+.lv .lvc.up::before{content:"▲";font-size:7px;margin-right:3px;vertical-align:1px;opacity:.8}.lv .lvc.dn::before{content:"▼";font-size:7px;margin-right:3px;vertical-align:1px;opacity:.8}
+.lv.lvu .lvc{top:auto;bottom:100%;margin:0 0 5px}

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.312] - 2026-11-10
+
+### Changed
+- Charts: the green or red change pill beside a headline number (Home cards, pop-outs) is gone. The period change now reads inside the chart, a quiet label under the value chip at the end point (above it near the floor).
+
 ## [1.26.311] - 2026-11-10
 
 ### Changed
