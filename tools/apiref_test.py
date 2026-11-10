@@ -54,14 +54,23 @@ def main():
         try: p.wait(timeout=5)
         except Exception: p.kill()
 
+    os.environ["POASCAN_DB"] = env["POASCAN_DB"]   # the in-process checks read the same test DB the server made
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     from poascan import agentapi as _AG
     n = [0]
     def _r(): n[0] += 1; return "<p>x</p>"
     _AG._DOC.pop("t", None); h1 = _AG.doc_page("t", _r); h2 = _AG.doc_page("t", _r)
     check("1.26.303: the API page is rendered once and then served from memory (slot free when ready)", h1 == h2 == "<p>x</p>" and n[0] == 1 and _AG.doc_ready("t") and not _AG.doc_ready("nope"))
+    import threading as _th
+    from poascan import server as _SV
+    _AG._DOC.clear(); _st = _th.Event(); _st.set()
+    try: _SV._doc_warm(stop=_st, every=0, first=0)
+    except Exception as e: print("doc warm raised", type(e).__name__)
+    check("1.26.306: /api and /api/reference are rendered off the request (docwarm), so the first copy after a deploy needs no slot",
+          _AG.doc_ready("api") and _AG.doc_ready("reference") and "Connect" in _AG._DOC["api"][1])
     print(("all passed" if not FAILS else f"{len(FAILS)} failure(s)"))
     sys.exit(1 if FAILS else 0)
 
 if __name__ == "__main__":
     main()
+
