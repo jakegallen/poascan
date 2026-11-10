@@ -1,6 +1,6 @@
 """Development banner removed (1.26.288, Jake's call) and the home credit. No page carries the devbar markup or its CSS;
-home has exactly one quiet credit pill (X logo plus @Jakegallen, x.com/Jakegallen in a new tab with rel noopener noreferrer,
-never @jakegallen_), under the main content and above the footer; no other page carries it; no share button; no em or en
+every page carries exactly one quiet credit in the footer row (1.26.300; X logo plus @Jakegallen, x.com/Jakegallen in a new
+tab with rel noopener noreferrer, never @jakegallen_), none inside main and no floating pill; no share button; no em or en
 dash; join prompt unchanged. Usage: python3 tools/devbar_test.py"""
 import os, re, socket, subprocess, sys, tempfile, time, urllib.request, json
 import os as _os, time as _time; _os.environ.setdefault("POASCAN_MAINT_STARTED", str(int(_time.time()) - 86400))
@@ -13,7 +13,7 @@ css = re.sub(r"/\*.*?\*/", "", open(os.path.join(ROOT, "static", "style.css"), e
 ui = open(os.path.join(ROOT, "poascan", "ui.py"), encoding="utf-8").read()
 check("no devbar CSS left", ".devbar" not in css)
 check("no DEV_BANNER in the layout", "DEV_BANNER" not in ui and "System development in progress" not in ui)
-check("credit CSS present, muted with a gold hover", ".credit a{" in css and "color:var(--bone-3)" in css.split(".credit a{")[1].split("}")[0] and ".credit a:hover" in css)
+check("credit CSS present, muted with a gold hover, no pill", ".foot .fcredit{" in css and "color:var(--mute)" in css.split(".foot .fcredit{")[1].split("}")[0] and ".fcredit:hover" in css and ".credit" not in css)
 check("cache key follows the file (style.css?v= is its hash since 1.26.150)", 'style.css?v={ASSET_V["style.css"]}' in ui)
 CRED = '<a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer" aria-label="Built by @Jakegallen on X">'
 tmp = tempfile.mkdtemp(); s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); base = f"http://127.0.0.1:{port}"
@@ -28,15 +28,12 @@ try:
     for p in ("/", "/start", "/address/poa1" + "A" * 40, "/chain", "/about", "/upgrade", "/network", "/governance"):
         h = get(p); body = h[h.index("<body"):]; body = body[body.index(">") + 1:]
         check(f"{p}: no dev banner", 'devbar' not in h and "System development in progress" not in h and body.lstrip().startswith('<header class="top">'))
-        n = h.count('class="credit"')
-        if p == "/":
-            i = h.find('class="credit"')
-            check("/: one credit, inside main, above the footer", n == 1 and i < h.index("</main>") < h.index("<footer"))
-            seg = h[i:h.index("</div>", i)]
-            check("/: credit links x.com/Jakegallen in a new tab, X logo, @Jakegallen", CRED in seg and "<svg" in seg and "<b>@Jakegallen</b>" in seg and "jakegallen_" not in seg.lower())
-            check("/: no dashes and no share in the credit", "\u2014" not in seg and "\u2013" not in seg and "share" not in seg.lower())
-        else:
-            check(f"{p}: no credit", n == 0)
+        n = h.count('class="fcredit"')
+        i = h.find('class="fcredit"')
+        check(f"{p}: one credit, in the footer, not in main", n == 1 and h.index("<footer") < i < h.index("</footer>") and 'class="credit"' not in h)
+        seg = h[i:h.index("</a>", i)]
+        check(f"{p}: credit links x.com/Jakegallen in a new tab, X logo, @Jakegallen", CRED.replace('<a href', '<a class="fcredit" href') in h and "<svg" in seg and "<b>@Jakegallen</b>" in seg and "jakegallen_" not in seg.lower())
+        check(f"{p}: no dashes and no share in the credit", "\u2014" not in seg and "\u2013" not in seg and "share" not in seg.lower())
     j = json.loads(get("/api/v1/prompts/join")); check("join prompt is v2.9.6 (ec1d7608)", j.get("template_sha256", "").startswith("ec1d7608"))
 finally:
     srv.terminate(); srv.wait(10)

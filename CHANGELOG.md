@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.300] - 2026-11-10
+
+### Changed
+- The Built by @Jakegallen credit moved from a floating pill under the home cards into the footer row on every page: right aligned after the links on desktop, its own centered line on a phone. Muted like the links, gold on hover.
+- Footer: one row at the panel width and padding; links never underline.
+
 ## [1.26.299] - 2026-11-10
 
 Slow-page P0: serving-path performance hardening on the one dedicated core. Read only, no indexer or data-write change. Every default is unchanged for a normal visitor.
