@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.297] - 2026-11-09
+
+UI/UX refinement, phase P9: /about index.
+
+### Changed
+- /about has a sticky index of its sections beside the text (a scrolling chip row on phones) and a Top link. Every existing anchor (`#sybil`, `#established`, `#real` and the rest) still lands where it did.
+
 ## [1.26.296] - 2026-11-09
 
 UI/UX refinement, phase P8: Agents and Chain.

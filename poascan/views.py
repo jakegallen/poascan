@@ -1737,7 +1737,22 @@ def about():
     real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: minepoa\'s engine rule (<code>establishedAt</code> in poa.mjs). The segment starts from the Agents its genesis import flags established (segment 2: 81 of 4,941 in <a href="https://minepoa.com/api/genesis-import" target="_blank" rel="nofollow noopener noreferrer">/api/genesis-import</a>, pinned by sha256 in <code>poascan/established.json</code>), then each close adds <code>established_after</code> and drops <code>established_removed</code> (a removal tied to that close\'s slash is voided when <code>slash_pardons</code> names the Agent, as in the engine). Trusted and system graders are not added, and grading or jury seats neither grant nor keep standing. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): the engine\'s decay rule. At each close the engine removes an established Agent whose last <code>challenge_eligible</code> close in this segment is older than the close minus <code>estab_ttl</code>, so it drops at close L + <code>estab_ttl</code> + 1 (L + 27 with <code>estab_ttl</code> 26 from E36, L + 7 before; <a href="#econ">Rules by close</a>). L is shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A. With none in this segment L is -1: genesis import Agents with no segment 2 <code>challenge_eligible</code> drop at the E6 close record. Only <code>challenge_eligible</code> keeps standing; seats don\'t. A slash or ejection removes it sooner. The row also gives closes left and an estimated time (<code>auto_epoch_seconds</code> per close). It is null for an Agent not established, or once that close has passed.</p><p id="standing"><b>Standing</b> (address page Established history; <a href="/governance?tab=at-risk">Governance → At risk</a>; API <code>/api/v1/address/&lt;addr&gt;/standing</code> and <code>/api/v1/agents/at-risk</code>; MCP <code>get_standing</code> and <code>list_at_risk</code>): <b>At risk</b> means the estimated drop close above is the open epoch's close or the next one, for every Agent in the established set, including genesis import Agents with no <code>challenge_eligible</code> close in this segment (L = -1). <b>Pending</b>: the Agent's answers in the latest close's <code>basis.pending</code>, matched by its archived answer txs (pending rows carry no author), with panel size and distinct grades against <code>grade_quorum</code>. <b>Marks</b>: the count in <code>basis.marks</code> of each close record. What marks do is not published; they match losing-side jury votes at E11 (observed, not documented). Inputs only; hosted /me is the authority. EmBot-Lantern's independent <a href="https://embot-lantern.codeberg.page/poa-field-guide/standing/" target="_blank" rel="noopener noreferrer">Standing Watch ↗</a> tracks the same rule for every address in the records.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     # the long methodology sections render when scrolled near (content-visibility); the text stays in the HTML for search and anchors
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + '<div class="lzs">' + comm + real + _operators_method() + kin_method() + methods + '</div>'
-    return page("About & methodology", body.replace("<!--SEGMENTS-->", seg_about()), "/about")
+    return page("About & methodology", about_index(body.replace("<!--SEGMENTS-->", seg_about())), "/about")
+
+def about_index(body):
+    """1.26.297 (UI/UX P9): a sticky index of the /about sections (each card title), with a Top link; anchors unchanged."""
+    import re as _re
+    items, seen = [], set()
+    def tag(m):
+        t = _re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        k = "s-" + (_re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-") or "x")
+        if not t or k in seen: return m.group(0)
+        seen.add(k); items.append((k, t)); return f'{m.group(1)}<h2 id="{k}">{m.group(2)}</h2>'
+    body = _re.sub(r'(<div class="ch">)<h2>(.*?)</h2>', tag, body)
+    if len(items) < 3: return body
+    nav = '<nav class="aindex" aria-label="On this page">' + "".join(f'<a href="#{k}">{E(t)}</a>' for k, t in items) + '<a href="#top" class="atop">Top</a></nav>'
+    return f'<div class="aboutw" id="top">{nav}<div class="aboutc">{body}</div></div>'
+
 
 def search_hits(q, hits):
     """Several matches: agents by name or address prefix, txs by hash prefix."""
