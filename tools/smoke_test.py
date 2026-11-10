@@ -481,7 +481,8 @@ def cohorts(base, check):
     check("Gate A: challenge_eligible over answers born at that close", g[7]["eligible"] == 2 and g[7]["answers"] == 9 and g[7]["rate"] == round(2 / 9, 4) and c7["gate_a"]["eligible"] == 2 and d["k"] == 5)
     c, h, b = reqh(base + "/api/v1/cohorts.csv")
     check("cohorts CSV: one row per cohort and close", c == 200 and b.decode().count("\n") == 1 + sum(len(x["closes"]) for x in cs))
-    pg = req(base + "/chain")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
+    pg0 = req(base + "/chain")[1].decode(); check("/chain: Cohorts moved to For agents (1.26.296)", 'id="cohorts"' not in pg0 and "/api/v1/cohorts" in pg0)
+    pg = req(base + "/chain?state=unsealed")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
     card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
     check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
           ">Challenge share<" in card and "Gate A" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200

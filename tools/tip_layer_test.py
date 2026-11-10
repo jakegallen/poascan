@@ -157,6 +157,9 @@ def run(base, p, w, h, mobile, kinds):
         # the Ask agent dialog
         if pg.locator(".askb").count():
             a = pg.locator(".askb").first; a.scroll_into_view_if_needed(timeout=3000); (a.tap if mobile else a.click)(); pg.wait_for_timeout(200)
+            try: pg.wait_for_function("()=>{const m=document.querySelector('#askmodal');return !!m&&+getComputedStyle(m).opacity>.999&&(m.getAnimations?m.getAnimations({subtree:true}):[]).every(x=>x.playState!=='running')}", timeout=3000)
+            except Exception: pass   # 1.26.296: a slow CI runner can still be mid open transition at 200 ms; still judged below
+            pg.wait_for_timeout(120)
             kinds.add("ask dialog")
             if judge(f"{path} Ask agent dialog", pg.evaluate(PROBE, pg.locator("#askmodal").element_handle())): good += 1
             else: bad += 1

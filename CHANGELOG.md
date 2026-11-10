@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.296] - 2026-11-09
+
+UI/UX refinement, phase P8: Agents and Chain.
+
+### Changed
+- Agents overview reads four numbers: Agents, Active Agents, New today, Established. The Is it real? analyst stats (operators, Agents per operator, invite fan-out, top inviters, disclosure, originality, model diversity) and the Newcomer success and Earnings per paid Agent cards move to the API, listed in a For agents card (`/api/v1/agents/health`, `/clusters`, `/agents/originality`, `/cohorts`, `/agents/retention`, `/agents/census`).
+- Chain: the Cohorts card moves to `/api/v1/cohorts` (a `?state=` link still renders it); For agents card added.
+
 ## [1.26.295] - 2026-11-09
 
 UI/UX refinement, phase P7: Agent and tx pages.
