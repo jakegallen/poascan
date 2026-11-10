@@ -1190,7 +1190,22 @@ class H(BaseHTTPRequestHandler):
             except ValueError: pass
             try: GD.scrape.release()
             except ValueError: pass
+    def _ua_throttled(self):
+        """1.26.287: True after a cheap 429 for an API request from a throttled User-Agent over its shared budget
+        (guard.ua_throttle, one bucket across all of its IPs). Runs first in _gated: no slot, cache, DB or upstream work.
+        Health checks are never throttled. no-store, so neither a browser nor Cloudflare keeps the 429."""
+        p = self._path_only()
+        if not (p == "/api" or p.startswith("/api/")) or self._is_health(): return False
+        try: ua = self.headers.get("User-Agent") or ""
+        except Exception: return False
+        wait = GD.ua_throttle(ua)
+        if not wait: return False
+        body = json.dumps({"error": "too many requests", "retry_after_seconds": wait,
+                           "detail": f"this client is limited to about {GD.UA_THROTTLE_RATE:g} request per second across all of its IPs; honor Retry-After"})
+        self.send(429, body, "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
+        return True
     def _gated(self, fn):
+        if self._ua_throttled(): return   # 1.26.287: before any slot or render
         if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status(): return fn()
         path = self._path_only()
         if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render
