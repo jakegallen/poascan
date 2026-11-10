@@ -270,18 +270,21 @@ def home():
     from . import milestones as MS   # Home Total Agents sparkline: only milestones that name it (milestones.json spark_ids)
     smk = {"accounts": MS.events("home-agents"), "active": MS.events("home-active"), "holders": MS.events("home-holders")}   # 1.26.277: no Genesis cut label on these lines
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
-                   for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("active", "active", "active")))
-    more = pop(spark_in(h["holders"], sp.get("holders"), smk["holders"]), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
+                   for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
+    # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
+    sup_pts = [(t, v) for t, v in (sp.get("mined") or []) if v is not None]
+    from . import ui as _U
+    supc = card(ICON_PICK + "Supply", _U.line(sup_pts, height=220, fmt=compact, xk="d", xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d")) if len(sup_pts) > 1 else skel(2),
+                '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc")
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
 <section class="stats four kpis" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section>
-<section class="stats three kstats kmore krow" aria-label="Holders and heights">{more}</section>
+{supc}
 <div class="grid2 hgrid">
 {card(ICON_FEED + 'Assay line', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed">{feed_rows(16)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
 <div class="side">
 {card(ICON_CUBE + "Closes", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', '<a href="/chain" class="more">Full list →</a>')}
-{card(ICON_SEAL + "Graders", home_graders(), '<a href="/governance?tab=graders" class="more">All graders →</a>', cls="hgr")}
 {card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}
 </div>
 </div>

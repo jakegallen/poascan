@@ -64,7 +64,10 @@ if sync_playwright:
                                   0 < r["top"] <= r["hb"] + 2 and r["top"] >= r["hb"] - 2 and r["bottom"] <= 740 + 1 and r["hdrh"].endswith("px") and int(r["hdrh"][:-2]) > 0)
                             check(f"{tag}: every nav link is visible and clickable ({r['shown']} of {r['links']})", r["links"] >= 3 and r["shown"] == r["links"])
                             if r["href"]:
-                                pg.locator(f"#nav a[href='{r['href']}']").first.tap(); pg.wait_for_load_state("domcontentloaded"); pg.wait_for_timeout(300)
+                                pg.locator(f"#nav a[href='{r['href']}']").first.tap()
+                                try: pg.wait_for_url(lambda u: u.split("?")[0].rstrip("/").endswith(r["href"].split("?")[0].rstrip("/")), wait_until="domcontentloaded", timeout=8000)
+                                except Exception: pass   # 1.26.292: a cold WebKit on CI can take longer than 300 ms to start the navigation; still fails below if it never navigates
+                                pg.wait_for_timeout(300)
                                 check(f"{tag}: a tap on {r['href']} navigates", pg.url.split("?")[0].rstrip("/").endswith(r["href"].split("?")[0].rstrip("/")))
                             check(f"{tag}: no page errors {errs}", not errs)
                             ctx.close()
