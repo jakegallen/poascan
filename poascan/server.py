@@ -265,7 +265,16 @@ def api(path, qs):
         cs = dict(G.cluster_signals()); sg = qs.get("signal", [""])[0]
         if sg: cs["groups"] = [g for g in cs["groups"] if g["signal"] == sg]
         return cs, False
+    if path == "/api/agents/sybil":   # 1.26.289 (UI/UX P1): the /network Sybil signals card as data, counts only
+        if set(qs) - {"format"}: raise BadRequest("unknown parameter: " + ", ".join(sorted(set(qs) - {"format"})))
+        return A.sybil_public(), False
     if path == "/api/uptime":
+        inc = (qs.get("incidents") or [""])[0]
+        if inc not in ("", "0", "1"): raise BadRequest("incidents must be 1 or 0")
+        if inc == "1":   # 1.26.289 (UI/UX P1): the Incidents 14d list on /network?tab=health; default unchanged (daily rows)
+            d = V2.status_data(); ep = qs.get("endpoint", [""])[0]
+            rows = [dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]]
+            return ([r for r in rows if r["what"] == ep or ep in str(r["what"])] if ep else rows), True
         rows = V2.uptime_rows(); ep = qs.get("endpoint", [""])[0]
         return ([r for r in rows if r["endpoint"] == ep] if ep else rows), True
     if path == "/api/unlocks": return V3.unlocks_api(), True
@@ -275,7 +284,10 @@ def api(path, qs):
         so = (qs.get("sort") or [""])[0]; d = (qs.get("dir") or ["desc"])[0]
         if so and so not in V4.sorts(t): raise BadRequest("sort must be one of " + ", ".join(x for x in V4.sorts(t) if x))
         if d not in ("desc", "asc"): raise BadRequest("dir must be desc or asc")
-        return V4.rows(t, so, d), True
+        out = V4.rows(t, so, d)
+        if qs.get("limit") or qs.get("offset"):   # 1.26.289 (UI/UX P1): optional paging; without it every row as before
+            off = qint(qs, "offset", 0, 0, OFFSET_MAX); out = out[off:off + qint(qs, "limit", len(out) or 1, 1, 5000)]
+        return out, True
     if path == "/api/status":
         d = V2.status_data()
         # diagnostics: POAScan's OWN serve/reliability signals, named apart from the upstream probe latency. The p50/p95
@@ -528,7 +540,7 @@ MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/grow
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
 def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
-GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "sort", "dir"}, "/api/governance/payouts": set(),
+GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "offset", "sort", "dir"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
            "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"},
            "/api/governance/grade-history": {"addr", "sort", "dir", "limit", "offset"},
@@ -563,7 +575,7 @@ def governance_api(path, qs):
         lv = one("level")
         if lv is not None and lv not in GV.LEVEL_IN: raise BadRequest("level must be one of " + ", ".join(GV.LEVEL_IN))
         so, d = sd(GV.RISK_SORTS, "level")
-        return GV.api_at_risk(lv, num("limit", 1000, 1, 5000), so, d)
+        return GV.api_at_risk(lv, num("limit", 1000, 1, 5000), so, d, num("offset", 0, 0, 10 ** 6))
     if path == "/api/governance/established":
         so, d = sd(GV.EST_SORTS, "score")
         return GV.api_established(so, pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6), d)
@@ -1316,7 +1328,12 @@ class H(BaseHTTPRequestHandler):
                     if path == "/api/summary": d["swaps"] = SC.status(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)
                 hd = {"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}
-                if path == "/api/summary": hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
+                lite = path == "/api/summary" and (qs.get("lite") or [""])[0] == "1"
+                if lite and isinstance(d, dict):   # 1.26.289 (UI/UX P1): numbers only, no rendered HTML; never stored at the edge, so the default copy is never the lite one
+                    for k in ("cards", "frags", "feed"): d.pop(k, None)
+                    if isinstance(d.get("pill"), dict): d["pill"] = {k: v for k, v in d["pill"].items() if k != "pop"}
+                    d["lite"] = True
+                if path == "/api/summary" and not lite: hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **hd))
             if path in SW.STATIC:   # the swap module's own assets, same URLs as before
                 f, ct = SW.STATIC[path]

@@ -733,12 +733,12 @@ def api_overview():
                 carry_correction=__import__("poascan.correction", fromlist=["x"]).api(),   # 1.26.261: ballot 2464, Scheduled then Applied
                 method=METHOD, url=_url("overview"))
 
-def api_at_risk(level=None, limit=1000, sort="level", d="desc"):
+def api_at_risk(level=None, limit=1000, sort="level", d="desc", offset=0):
     rows, data = standing_select(LEVEL_IN[level] if level else "", sort, d); sc = scores()["rows"]
     return dict(_seg(), reference_epoch=data["open_epoch"], estab_ttl=data["ttl"], last_close=data["last_close"], data_as_of_close=data["last_close"], stale_reason=A.close_lag(data["last_close"]), at_risk_window_closes=SD.AT_RISK_CLOSES,
                 levels="at_risk: closes_left <= 2; watch: 3; safe: 4 or more; no_record: no challenge_eligible close in this segment; system: trusted or system grader",
-                counts={LEVEL_KEYS[k]: v for k, v in data["counts"].items()}, count=len(rows), sort=sort, dir=d,
-                rows=[dict(_std(r), **_sflat(parts_of(r["address"], sc))) for r in rows[:limit]],
+                counts={LEVEL_KEYS[k]: v for k, v in data["counts"].items()}, count=len(rows), sort=sort, dir=d, offset=offset, limit=limit,
+                rows=[dict(_std(r), **_sflat(parts_of(r["address"], sc))) for r in rows[offset:offset + limit]],
                 rule="drop close = last challenge_eligible epoch + estab_ttl + 1 (observed, not official)", estimate=True, method=METHOD + "#lapse", url=_url("at-risk"))
 
 def _sflat(p): return dict(score=p.get("score"), **{"score_" + k: p.get(k) for k in SS.SUBS})

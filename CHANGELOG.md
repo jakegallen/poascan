@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.289] - 2026-11-09
+
+UI/UX refinement, phase P1: API gaps, all additive. Every default is unchanged.
+
+### Added
+- `/api/v1/agents/sybil` and the MCP tool `sybil_signals`: the Sybil signals card on /network as data (answer-sample flags and rates, answer families, capped payees, invited Agents and inviters, "web" labels, shared external wallets, anchor-linked Agents). Counts only, no addresses. Method anchor `/about#sybil`.
+- `offset` on `/api/v1/governance/at-risk` and on the MCP tool `list_governance_standing`; the response carries `offset` and `limit`.
+- `limit` and `offset` on `/api/v1/leaderboard/{tab}`. Without them every row, as before.
+- `/api/v1/uptime?incidents=1`: the 14 day incident list (start, end, what, fails). Without it the daily rows, as before.
+- `/api/v1/summary?lite=1`: the snapshot without rendered HTML (`cards`, `frags`, `feed`, `pill.pop`), marked `lite: true` and never stored at the edge. The default snapshot is unchanged (app.js and POASwap read it).
+- OpenAPI and llms.txt list the new route and parameters.
+
 ## [1.26.288] - 2026-11-09
 
 UI/UX refinement, phase P0 (busy shell) plus two quick changes Jake asked for.

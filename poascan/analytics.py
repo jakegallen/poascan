@@ -725,6 +725,19 @@ def sybil():
                 last_epoch_capped=(last["ceiling_capped"], last["paid"]) if last else None,
                 web_labels=(census() or {}).get("web"))
 
+def sybil_public():
+    """1.26.289 (UI/UX P1): the Sybil signals card on /network as data (/api/v1/agents/sybil, MCP sybil_signals). Counts
+    only, the same numbers the card shows: no inviter or wallet address. sybil() is cached like the card's own read, so this adds no scan."""
+    sy = sybil(); n = sy["sampled"] or 0; cap = sy["last_epoch_capped"]
+    r = lambda k: round(k / n, 4) if n else None
+    out = dict(sampled_answers=n, slot_templates=sy["slot"], slot_template_rate=r(sy["slot"]), instruction_echo=sy["echo"], instruction_echo_rate=r(sy["echo"]),
+               answer_families=sy["families"], answer_family_members=sy["families_members"], sample_first=sy["first"], sample_last=sy["last"],
+               capped_payees=dict(capped=cap[0], paid=cap[1]) if cap else None, invited_agents=sy["invited"], inviters=sy["inviter_count"] or 0,
+               top5_inviter_counts=[x["n"] for x in sy["inviters"]], web_labels=sy["web_labels"], shared_external_wallets=len(sy["shared_ext"]),
+               anchor_linked_agents=len(sy["anchor_linked"]),
+               note="measurements that can have innocent explanations; not a verdict on any Agent", method="https://poascan.io/about#sybil")
+    return out
+
 def tx_counts():
     r = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS first, MAX(ts) AS last, MIN(first_seen) AS since FROM txs")
     r["by_type"] = db.q("SELECT type, COUNT(*) AS n FROM txs GROUP BY type ORDER BY n DESC")
