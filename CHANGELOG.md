@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.294] - 2026-11-09
+
+UI/UX refinement, phase P6: Network slim.
+
+### Changed
+- Network shows three tabs: Overview, Charts, Health. Anchors, Records and Token still render at their URLs (old links keep working).
+- Overview reads four numbers: Chain height, Finalized height (flagged Behind when finality lags), Last anchor, Version. The G0 dependency, Sybil signals, network facts, close and expiry cards and the finality lag, cadence, closes, anchored, signers, K and releases cards move to the API; a For agents card lists each page and its endpoint (`/api/v1/params`, `/agents/sybil`, `/anchors/timeline`, `/epoch-records`, `/unlocks`, `/governance/econ`, `/health`, `/reconcile`). The overview renders less, so it is cheaper on the one core.
+
 ## [1.26.293] - 2026-11-09
 
 UI/UX refinement, phase P5: Governance slim.
