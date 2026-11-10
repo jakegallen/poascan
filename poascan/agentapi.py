@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.302"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-10T16:05:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.303"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-10T16:40:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1726,6 +1726,19 @@ def api_groups():
             a = tag_of.get((o.get("tags") or ["meta"])[0], "service")
             g[a][1].append((meth.upper(), path, _purpose(o.get("summary")), _fill(path, o, ex) if meth == "get" else None))
     return [(a, t, rows) for a, (t, rows) in g.items() if rows]
+
+_DOC = {}   # 1.26.303: name -> (ts, html) for the /api and /api/reference HTML pages
+DOC_TTL, DOC_MAX = 300, 3600
+
+def doc_page(name, render):
+    """The page from memory when younger than DOC_TTL, else rendered and stored. The routes it lists change only with a build."""
+    hit = _DOC.get(name)
+    if hit and time.time() - hit[0] < DOC_TTL: return hit[1]
+    h = render(); _DOC[name] = (time.time(), h); return h
+
+def doc_ready(name):
+    """True when a copy under DOC_MAX old is stored: the server may serve it without a slot (doc_page refreshes it past DOC_TTL)."""
+    hit = _DOC.get(name); return bool(hit) and time.time() - hit[0] < DOC_MAX
 
 def api_page(page, card):
     from . import ui as U, prompts as PR
