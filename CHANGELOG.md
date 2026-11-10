@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.307] - 2026-11-10
+
+### Fixed
+- Closes stopped at E57: minepoa.com's /api/epochs has answered 503 halted since Nov 8 12:18 AM PT, while /api/status kept counting closes. Each close past the last record is now read from its archived close report (/api/close-report?epoch=N, once per close, at most 2 a run every 10 minutes; the newest comes from the hourly read). Home Closes and Chain History list them on top as Record pending, with close time from the report and Paid, Minted and Burned blank until the record is published. Minted shows the node's supply step across the close when POAScan has status reads on both sides.
+- Token: Minted at closes and Burned at closes say which closes have no record yet.
+
+### Added
+- /api/v1/epochs?pending=1 (additive): appends those closes with record "pending", close_ts and the settled split from the report, reward fields null and supply_step. The default list is unchanged.
+
 ## [1.26.306] - 2026-11-10
 
 ### Fixed

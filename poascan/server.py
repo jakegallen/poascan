@@ -239,6 +239,9 @@ def api(path, qs):
                               record_bytes=(hx.get(r["epoch"]) or {}).get("bytes"), url=f'{AG.BASE}/epoch/{r["epoch"]}{sq}',
                               record_url=f'{AG.BASE}{AG.API_PREFIX}/epoch/{r["epoch"]}/record{sq}',
                               rewards_url=f'{AG.BASE}{AG.API_PREFIX}/epoch/{r["epoch"]}/rewards{sq}') for r in A.epoch_rows()]
+        if (qs.get("pending") or [""])[0] in ("1", "true"):   # 1.26.307 (additive): closes counted by /api/status with no record yet (record "pending", reward fields null)
+            from . import closepend as _CPD
+            rows += [dict(r, url=f'{AG.BASE}/chain#history', record_url=None, rewards_url=None) for r in _CPD.rows()]
         rows.sort(key=lambda r: (r.get("close_ts") or 0, r["lifetime"]))
         if (qs.get("latest") or [""])[0]: rows = rows[-qint(qs, "latest", 10, 1, 1000):]
         if (qs.get("limit") or [""])[0]: rows = rows[:qint(qs, "limit", 1000, 1, 1000)]
