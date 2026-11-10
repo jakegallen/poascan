@@ -11,6 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.293] - 2026-11-09
+
+UI/UX refinement, phase P5: Governance slim.
+
+### Changed
+- Governance shows five tabs: Overview, Established, At risk, Payouts, Rules. Queue, Settlement, Changes, Intake, Settle age, Never established, Graders, Directory, Forum, Proposals, Protocol and Charts still render at their URLs (old links keep working) and are listed with their JSON endpoints in a For agents card on Overview.
+- Overview reads four numbers: Established, At risk, Watch, Agreement.
+- Established and At risk show 50 rows per page with Prev and Next; the full lists stay in the API and CSV (unchanged).
+- The active header nav item is a calm glass tab with a gold underline instead of a solid gold pill.
+
 ## [1.26.292] - 2026-11-09
 
 UI/UX refinement, phase P4: Home, and the chart theme as the site's design system. Jake: the rest of the platform should look like the charts.

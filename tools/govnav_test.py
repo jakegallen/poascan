@@ -135,8 +135,10 @@ def live():
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
-        check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Graders", "Directory", "Forum", "Proposals", "Charts", "Rules")))
+        check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Agreement"))
+              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Rules"))
+              and g.count('class="chip') - g.count('class="chip on') >= 4 and 'id="for-agents"' in g
+              and all(f'>{x}</a>' in g for x in ("Graders", "Directory", "Forum", "Proposals", "Charts")))   # 1.26.293: five tabs, the rest in For agents
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
