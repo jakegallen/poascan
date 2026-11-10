@@ -117,6 +117,12 @@ from poascan import views as V
 home = V.home()["body"] if isinstance(V.home(), dict) else str(V.home())
 for k in ("mined", "agents", "active", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
 check("home: no Agents / hr opener (Active Agents card since 1.26.116)", 'data-chart="joins"' not in home)
+check("home 1.26.309: Answers per epoch card (v2 bars) opens the answers pop-out; the Supply line that repeated Total mined is gone",
+      ">Answers per epoch<" in home and 'class="cpw" data-chart="answers"' in home and 'class="cpx" data-chart="answers"' in home
+     
+      and '"Supply"' not in home and ">Supply<" not in home and 'class="chartbox' in home[home.find(">Answers per epoch<"):])
+_ans = home[home.find(">Answers per epoch<"):]; _ans = _ans[:_ans.find("</section>")]
+check("home 1.26.309: the card has no em or en dash and no milestone marks", not re.search("[\u2013\u2014]", _ans) and 'class="mk' not in _ans)
 net = str(V.network("charts", "7d"))
 for k in ("agents", "holders", "supply", "txs", "answers"): check(f"Network > Charts: {k} card opens the pop-out (card and Expand button)", f'class="cpw" data-chart="{k}"' in net and f'class="cpx" data-chart="{k}"' in net)
 tok = str(V.token())

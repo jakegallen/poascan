@@ -83,8 +83,11 @@ def series(key, rng=""):
         if rng == "epoch": return [(e, t, [v]) for (e, t), (_, v) in zip(closes, u["past"])]
         return u["past"] + [(time.time(), u["now"])]
     if key == "answers":
-        cl = dict(_epoch_closes())
-        return [(k, cl.get(k) or time.time(), [a, max(0, p)]) for k, a, p in g["per_ep"]]
+        # 1.26.309: a close with no record yet (closepend.py) takes its report time and no Paid figure, not a zero
+        from . import closepend as CPD
+        cl = dict(_epoch_closes()); rec = set(cl)
+        for r in CPD.rows(): cl.setdefault(r["lifetime"], r["close_ts"])
+        return [(k, cl.get(k) or time.time(), [a, max(0, p) if k in rec else None]) for k, a, p in g["per_ep"]]
     raise KeyError(key)
 
 def ranges(key, now=None):
@@ -128,7 +131,7 @@ def payload(key, rng, w):
         rows = series(key, "epoch")
         if SPAN.get(r): rows = window(rows, now - SPAN[r], lambda x: x[1])
         from . import segments as SG
-        out.update(kind="bars", bars=[[SG.ep_label(e), int(t), [round(v, 6) for v in vals]] for e, t, vals in rows])
+        out.update(kind="bars", bars=[[SG.ep_label(e), int(t), [None if v is None else round(v, 6) for v in vals]] for e, t, vals in rows])
         if key == "answers": out.update(legend=["Answered", "Paid"], colors=["#FFB000", "#8FA3B8"])
         else: out.update(legend=[], colors=[cfg["color"]])
         return out

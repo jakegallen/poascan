@@ -265,6 +265,21 @@ def home_graders(n=5):
                  [[addr_link(a, nm, (6, 4)), intc(k), f'<span class="rate" aria-hidden="true"><i style="width:{r * 100:.0f}%"></i></span><span class="num">{r * 100:.1f}%</span>']
                   for a, k, al, r, *_ in g], cls="grs")
 
+HOME_EPOCHS = 40
+
+def home_answers():
+    """1.26.309: Home's wide chart, Answers per closed epoch (answer txs in POAScan's archive by epoch, both runs as one
+    history), v2 bars. It replaced the Supply line, which repeated Total mined. POASwap fills are too few to chart (6 in
+    total, the last on Oct 21), so trading is not the series yet. The open epoch is left out: it is still filling."""
+    from . import ui as _U
+    o = A.open_epoch().get("epoch"); g = V3.growth_data()
+    cur = SG.gkey(o, SG.CURRENT) if o is not None else None
+    rows = [(k, a) for k, a, _p in g["per_ep"] if cur is None or k < cur][-HOME_EPOCHS:]
+    ser = [(SG.ep_label(k), [a]) for k, a in rows]
+    body = _U.bars(ser, height=220, colors=("gold",), fmt=lambda v: f"{int(round(v)):,}", legend=None) if len(ser) > 1 else skel(2)
+    return card(ICON_FEED + "Answers per epoch", f'<div class="cpw" data-chart="answers">{body}</div>',
+                _U.pop_btn("answers", "Answers per epoch") + '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc ansc")
+
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
@@ -301,10 +316,7 @@ def home():
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
     # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
-    sup_pts = [(t, v) for t, v in (sp.get("mined") or []) if v is not None]
-    from . import ui as _U
-    supc = card(ICON_PICK + "Supply", _U.line(sup_pts, height=220, fmt=compact, xk="d", xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d")) if len(sup_pts) > 1 else skel(2),
-                '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc")
+    supc = home_answers()   # 1.26.309 (Jake t531u): the Supply line repeated Total mined; Answers per epoch instead
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
