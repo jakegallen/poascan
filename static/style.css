@@ -22,11 +22,20 @@
 --r-sm:4px;--r-md:8px;--r-lg:12px;--r-pill:999px;--r:var(--r-lg);
 --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
 --sh-1:0 1px 0 color-mix(in srgb,var(--black) 40%,transparent);--sh-2:0 12px 32px color-mix(in srgb,var(--black) 50%,transparent);
---ui:"Instrument Sans","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;--fig:"Newsreader",Georgia,"Times New Roman",serif;
+--ui:"Instrument Sans","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;--fig:var(--ui);--fig-serif:"Newsreader",Georgia,"Times New Roman",serif;
 --t12:12px;--t13:13px;--t14:14px;--t16:16px;--t20:20px;--t28:28px;--t40:40px;--t64:64px;
 --fig-xl:40px;--fig-l:28px;--fig-m:20px;
 --lh-tight:1.15;--lh:1.5;--track-label:.08em;--fast:160ms;--state:240ms;--draw:600ms;--ease:cubic-bezier(.2,.7,.2,1);
-/* legacy names, kept as aliases so existing rules keep working */
+/* site theme (UI/UX P4, 1.26.292): the chart kit surfaces as tokens; cards, stats, tables, header, footer and charts read these */
+--panel-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+--panel-bg:radial-gradient(120% 80% at 0% 0%,color-mix(in srgb,var(--gold) 6%,transparent),transparent 55%),radial-gradient(90% 70% at 100% 100%,color-mix(in srgb,var(--gold) 4%,transparent),transparent 60%),var(--panel-grain),linear-gradient(180deg,color-mix(in srgb,var(--ink-3) 92%,var(--white)) 0,var(--ink-2) 38%,var(--ink-1) 100%);
+--panel-edge:color-mix(in srgb,var(--rule-2) 80%,transparent);
+--panel-sh:inset 0 1px 0 color-mix(in srgb,var(--white) 9%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--white) 2.5%,transparent),inset 0 -24px 48px -24px color-mix(in srgb,var(--black) 55%,transparent),0 1px 0 color-mix(in srgb,var(--black) 50%,transparent),0 24px 48px -24px color-mix(in srgb,var(--black) 90%,transparent),0 2px 6px color-mix(in srgb,var(--black) 35%,transparent);
+--panel-hl:linear-gradient(90deg,transparent,color-mix(in srgb,var(--gold-hi) 38%,transparent),transparent);
+--glass:color-mix(in srgb,var(--white) 4%,transparent);--glass-edge:color-mix(in srgb,var(--white) 8%,transparent);
+--glow-gold:0 0 28px color-mix(in srgb,var(--gold) 16%,transparent);--glow-dot:0 0 0 2px color-mix(in srgb,currentColor 18%,transparent),0 0 10px currentColor;
+--hair:1px dashed color-mix(in srgb,var(--bone-1) 12%,transparent);
+--num:600 var(--t14)/1.2 var(--ui)/* legacy names, kept as aliases so existing rules keep working */
 --bg:var(--ink-0);--card:var(--ink-2);--card2:var(--ink-3);--inset:var(--ink-1);--line:var(--rule);--line2:var(--rule-2);--row:var(--rule);
 --amber:var(--gold);--amber-d:var(--copper);--green:var(--verd);--red:var(--ember);
 --txt:var(--bone);--hi:var(--bone-hi);--dim:var(--bone-2);--mute:var(--bone-3);--lbl:var(--bone-3)}
@@ -1838,7 +1847,7 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
 .chartbox.ck .cvp>.chart:not(.lnl):not(.gr){filter:drop-shadow(0 10px 12px color-mix(in srgb,var(--black) 55%,transparent))}
 /* crosshair and tooltip: glass, same numeric face */
 .ck .xh{width:1px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--gold-hi) 80%,transparent) 18%,color-mix(in srgb,var(--gold-hi) 80%,transparent) 82%,transparent);z-index:3}
-.ck .xt{z-index:5;padding:8px 11px;border-radius:var(--r-md);background:color-mix(in srgb,var(--ink-1) 86%,transparent);border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line2));
+.ck .xt{z-index:5;transition:none;padding:8px 11px;border-radius:var(--r-md);background:color-mix(in srgb,var(--ink-1) 86%,transparent);border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line2));
  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--white) 7%,transparent),0 18px 36px -14px color-mix(in srgb,var(--black) 95%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font:500 var(--t12)/1.35 var(--nf);color:var(--bone-hi)}
 .ck .xd{width:12px;height:12px;margin:-6px 0 0 -6px;background:radial-gradient(circle at 35% 30%,var(--mark-glint),var(--gold-hi) 45%,var(--gold));box-shadow:0 0 0 3px var(--ink-1),0 0 14px 3px color-mix(in srgb,var(--gold) 70%,transparent);z-index:4}
 /* sparklines: glow and a small extrusion */
@@ -1866,3 +1875,30 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
 /* stat figures read in the chart kit's tabular numeric face (same as headlines, ticks, chips and tips) */
 .sv,.sv .num,.sv>time,.sv .na{font-family:var(--ui);font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 .sv{color:var(--bone-hi);text-shadow:0 0 28px color-mix(in srgb,var(--gold) 16%,transparent)}
+/* panels: cards, stats, hero */
+.card,.stat{background:var(--panel-bg);border-color:var(--panel-edge);box-shadow:var(--panel-sh);isolation:isolate}
+.card::after,.stat::before{content:"";position:absolute;left:12%;right:12%;top:0;height:1px;pointer-events:none;border-radius:var(--r-pill);background:var(--panel-hl)}
+.card:hover,.stat:hover{border-color:color-mix(in srgb,var(--gold) 26%,transparent);box-shadow:var(--panel-sh),0 0 0 1px color-mix(in srgb,var(--gold) 6%,transparent)}
+.ch{border-bottom:var(--hair)}
+.ch h2{color:var(--bone-1);letter-spacing:.1em}
+/* numbers: one tabular face, big and bright */
+.sv,.sv .num,.big,.hero .sv,td,.num{font-family:var(--ui);font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.sv,.big{font-weight:600;letter-spacing:-.02em;color:var(--bone-hi);text-shadow:var(--glow-gold)}
+.hero .sv,.hero .big{color:var(--bone-hi)}
+/* tables: hairline rows, glass header */
+th{background:transparent;color:var(--bone-3);border-bottom:1px solid color-mix(in srgb,var(--bone-1) 14%,transparent)}
+td{border-bottom:var(--hair)}
+tbody tr:hover td{background:color-mix(in srgb,var(--gold) 4%,transparent)}
+/* header and footer: the same lit glass */
+header.top::before{background:linear-gradient(180deg,color-mix(in srgb,var(--ink-2) 86%,transparent),color-mix(in srgb,var(--ink-1) 78%,transparent))}
+header.top{border-bottom:1px solid var(--panel-edge);box-shadow:0 10px 30px -18px color-mix(in srgb,var(--black) 90%,transparent)}
+header.top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;background:var(--panel-hl);opacity:.6}
+.nav a.on{color:var(--on-gold);background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 2px 10px -2px color-mix(in srgb,var(--gold) 60%,transparent),inset 0 1px 0 color-mix(in srgb,var(--white) 35%,transparent)}
+.nav a:hover:not(.on){color:var(--bone-hi);background:var(--glass)}
+.foot{border-top:var(--hair);background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--ink-1) 70%,transparent))}
+/* glass pills, chips, badges; glowing status dots */
+.chip,.pill,.badge{background:var(--glass);border-color:var(--glass-edge);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--white) 5%,transparent)}
+.chip.on{color:var(--on-gold);border-color:transparent;background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 2px 10px -2px color-mix(in srgb,var(--gold) 60%,transparent)}
+.pill i,.sflag>summary.tag{box-shadow:var(--glow-dot)}
+.joinbtn{background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 6px 22px -8px color-mix(in srgb,var(--gold) 80%,transparent),inset 0 1px 0 color-mix(in srgb,var(--white) 40%,transparent)}
+@media (prefers-reduced-motion:reduce){.card,.stat{transition:none}}
