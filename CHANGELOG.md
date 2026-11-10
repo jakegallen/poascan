@@ -11,6 +11,19 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.301] - 2026-11-10
+
+One history: Segment 1 and Segment 2 read as one continuous chain everywhere. No data deleted; every figure comes from the close records POAScan already holds.
+
+### Changed
+- No segment toggles, Genesis cut banner or archived labels on Chain, Agents, agent pages, Network charts, Governance or Home.
+- Epoch tables list every close from both runs in close time order. Each close keeps its published epoch number; a close from before the restart links to its page with ?segment=1 and its title gives the date, so rows stay unique and links stay right.
+- Charts and agent stats span both runs with no gap or marker at the restart. Supply already continues across it (cum_supply), so nothing is counted twice.
+- /about: one short One history section (restart date, checkpoint, balances carried over, ?segment=1 for the earlier records).
+
+### Added
+- /api/v1/epochs without ?segment= lists every close across both segments, oldest first; each row adds segment and lifetime (unique). ?segment=<n> still returns one segment, and ?from= still pages the current one.
+
 ## [1.26.300] - 2026-11-10
 
 ### Changed

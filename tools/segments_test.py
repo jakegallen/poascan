@@ -149,6 +149,12 @@ try:
     check("/api/epoch/9 is not closed in segment 2 (404 with segment)", c == 404 and json.loads(b).get("segment") == 2)
     c, b, h = get("/api/epoch/0?segment=7"); check("bad segment is a 400", c == 400)
     c, b, h = get("/api/epochs?segment=1"); check("/api/epochs?segment=1 lists 15", c == 200 and len(json.loads(b)) == 15)
+    c, b, h = get("/api/epochs?segment=2"); n2 = len(json.loads(b)) if c == 200 else -1
+    c, b, h = get("/api/epochs"); ja = json.loads(b) if c == 200 else []
+    check("/api/epochs without ?segment= is one history (1.26.301): both segments, oldest first, lifetime unique, earlier links keep ?segment=1",
+          len(ja) == 15 + n2 and [r["close_ts"] for r in ja] == sorted(r["close_ts"] for r in ja) and len({r["lifetime"] for r in ja}) == len(ja)
+          and {r["segment"] for r in ja} == {1, 2} and all(r["url"].endswith("?segment=1") == (r["segment"] == 1) for r in ja))
+    c, b, h = get("/api/epochs?from=0&limit=3"); check("?from= still pages the current segment", c == 200 and [r["epoch"] for r in json.loads(b)] == [0, 1, 2][:min(3, n2)] and "lifetime" not in json.loads(b)[0])
     c, b, h = get("/chain"); check("epoch list is one history: no toggle, no cut note, no archived label; both runs listed", c == 200 and "(archived)" not in b and 'class="chips segs' not in b and "cutnote" not in b and "Earlier history archived" not in b and 'href="/epoch/3?segment=1"' in b and 'href="/epoch/0"' in b)
     c, b, h = get("/chain?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
     c, b, h = get("/epoch/14?segment=1"); check("earlier epoch page still opens (old links), no archived label", c == 200 and "(archived)" not in b)

@@ -96,6 +96,10 @@ def selected():
     """The segment this thread reads (?segment=, an MCP segment argument), else the current one."""
     return getattr(_ctx, "n", None) or CURRENT
 
+def explicit():
+    """True when this request named a segment (?segment=, an MCP argument); 1.26.301 lists span every segment otherwise."""
+    return getattr(_ctx, "n", None) is not None
+
 def set_selected(n):
     _ctx.n = n if n in BY_N else None
 
