@@ -398,7 +398,10 @@ def tx(tid):
     extra = {k: v for k, v in b.items() if k not in skip}
     if extra: rows.append(("Fields", raw_fields(extra)))
     rows = [(k, v) for k, v in rows if not _empty(v)]
-    kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
+    # 1.26.295 (UI/UX P7): hash, time, parties, amount and the answer up top; the protocol fields behind Raw
+    _kv = lambda rr: "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rr)
+    raw = [r for r in rows if r[0] in ("Parents", "Nonce", "Chain id", "Signature", "Fields") or "Finalized height" in r[0]]
+    kv = _kv([r for r in rows if r not in raw]) + (f'<details class="txraw"><summary class="chip">Raw</summary>{_kv(raw)}<p class="cov dim small"><a href="/api/v1/tx/{E(tid)}">/api/v1/tx/{E(tid)}</a></p></details>' if raw else "")
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
     ts_ = I.tx_source(d)   # 1.26.219: which copy this page shows and when it was read
     kv += (f'<p class="cov dim small">Source: {E(ts_["source_label"])}' + (f' · as of {lt(d.get("served_as_of"), "dt")}' if d.get("served_as_of") else "")
@@ -650,6 +653,8 @@ def _addr_not_found(a):
             + NF_LINKS.format(a=E(a)))
     return 404, page("Address not found", '<div class="sechead"><h1>Address</h1></div>' + card("Not found", body, cls="nfc"), "/")
 
+AGENT_API_CHIPS = [("Profile", ""), ("Standing", "/standing"), ("Timeline", "/timeline"), ("Assignments", "/assignments"), ("Governance", "/governance"), ("Txs", "/txs")]   # 1.26.295 (UI/UX P7)
+
 def address(a):
     if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
     d, err, at = address_read(a); nm = names()
@@ -736,8 +741,12 @@ def address(a):
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
-        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip()) + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
-                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
+        fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
+        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip())
+                + f'<nav class="chips fachips" aria-label="For agents"><span class="lbl">For agents</span>{fa}</nav>'
+                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a)
+                + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
+                + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
     if not rsum: nav += f'<p class="ecnote"><a href="/help?address={E(a)}">No POA yet. Why am I not earning? →</a></p>'
     return page("Address " + short(a), head + nav + main, "/")
 
