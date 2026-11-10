@@ -37,7 +37,7 @@ check("sparkline: one line path through every real point (none made up): one M, 
 src = "".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(ROOT, "poascan", "*.py")))
 check("no caller passes breaks= to a chart", "breaks=" not in src.replace("breaks=[])", ""))
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check("app.js pop-out never splits the line", "d.breaks" not in js and "runs=[P]" in js)
+check("app.js pop-out never splits the line", "d.breaks" not in js and "box.innerHTML=d.html" in js)   # 1.26.310: the kit line from the server
 on = MS.charts_of("genesis_cut")
 check("the genesis cut is not a chart or sparkline label (1.26.277); the line stays continuous and the table keeps the event",
       on == () and any(e["key"] == "genesis_cut" and e["label"] == "Genesis cut" for e in MS.events())

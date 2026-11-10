@@ -169,7 +169,7 @@ if out:
     check("rewards: S1 E12 and E14 unconfirmed, E11 and E13 recorded", out["rs"] == ["recorded", "unconfirmed", "recorded", "unconfirmed"] and out["g12"] is True)
     check("pop-out: no chart breaks at a boundary (1.26.175)", out["brk"] is None)
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check("pop-out: app.js draws one continuous line, never reading breaks", "d.breaks" not in js and "runs.push([])" not in js and "runs=[P]" in js)
+check("pop-out: app.js draws one continuous line, never reading breaks", "d.breaks" not in js and "runs.push([])" not in js and "box.innerHTML=d.html" in js)   # 1.26.310: the server kit line (ui.line) is one continuous path
 
 print("all segment config checks passed" if not fails else f"{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)
