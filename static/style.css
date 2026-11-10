@@ -1731,7 +1731,7 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
    ticks, a baseline glow, one tabular numeric face for every number, glass chips, callouts on hairline leaders, 3D columns,
    a raised line ribbon over a perspective floor, extruded pills and sparklines. Bare: no milestone on any chart. ---------- */
 .ck{--c:var(--gold);--nf:var(--ui);--tick:color-mix(in srgb,var(--bone-1) 72%,transparent)}
-.ck,.ck .yl,.ck .xl,.ck .xt,.chv,.chg,.lv,.ex,.seg,.hbars.ck .hv{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.ck,.ck .yl,.ck .xl,.ck .xt,.chv,.chg,.lv,.ex,.rng,.hbars.ck .hv{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 /* the panel: a chart card sits like a lit glass panel */
 .card:has(.chartbox.ck),.card:has(.hbars.ck){isolation:isolate;border-color:color-mix(in srgb,var(--rule-2) 80%,transparent);
  background:
@@ -1762,12 +1762,12 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
 .ck .legend,.chd .legend{font:500 var(--t12)/1 var(--nf);color:var(--bone-2)}
 .chd .legend i,.ck .legend i{width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:0;box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 18%,transparent),0 0 10px 1px color-mix(in srgb,var(--c) 60%,transparent)}
 /* segmented timeframe control (glass) */
-.seg{display:inline-flex;gap:2px;padding:3px;border-radius:var(--r-pill);border:1px solid color-mix(in srgb,var(--white) 7%,transparent);
+.rng{display:inline-flex;gap:2px;padding:3px;border-radius:var(--r-pill);border:1px solid color-mix(in srgb,var(--white) 7%,transparent);
  background:linear-gradient(180deg,color-mix(in srgb,var(--white) 5%,transparent),color-mix(in srgb,var(--white) 1.5%,transparent));
  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--white) 6%,transparent),0 6px 16px -8px color-mix(in srgb,var(--black) 80%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.seg a{font:600 11px/1 var(--nf);letter-spacing:.08em;color:var(--bone-3);padding:6px 11px;border-radius:var(--r-pill);text-decoration:none;transition:color var(--fast),background var(--fast)}
-.seg a:hover{color:var(--bone-hi)}
-.seg a.on{color:var(--on-gold);background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 2px 10px -2px color-mix(in srgb,var(--gold) 70%,transparent),inset 0 1px 0 color-mix(in srgb,var(--white) 35%,transparent)}
+.rng a{font:600 11px/1 var(--nf);letter-spacing:.08em;color:var(--bone-3);padding:6px 11px;border-radius:var(--r-pill);text-decoration:none;transition:color var(--fast),background var(--fast)}
+.rng a:hover{color:var(--bone-hi)}
+.rng a.on{color:var(--on-gold);background:linear-gradient(180deg,var(--gold-hi),var(--gold));box-shadow:0 2px 10px -2px color-mix(in srgb,var(--gold) 70%,transparent),inset 0 1px 0 color-mix(in srgb,var(--white) 35%,transparent)}
 /* plot space: soft light pool, perspective floor grid that converges and fades, hairline grid faded at both edges, baseline glow */
 .ck .cvp{border-radius:var(--r-md)}
 .ck .cvp::after{content:"";position:absolute;inset:-10% -2% 0;pointer-events:none;z-index:-1;border-radius:inherit;
@@ -1860,7 +1860,7 @@ header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-event
 .hbars.ck .hbar i::after{content:"";position:absolute;left:6px;right:6px;top:2px;height:3px;border-radius:var(--r-pill);background:linear-gradient(90deg,color-mix(in srgb,var(--white) 30%,transparent),color-mix(in srgb,var(--white) 5%,transparent))}
 .hbars.ck .hv{font:600 var(--t12)/1 var(--nf);color:var(--bone-hi)}.hbars.ck .hv small{color:var(--bone-3);font-weight:500;margin-left:4px}
 .hbars.ck .hl{color:var(--bone-1)}
-@media (max-width:640px){.chv{font-size:26px}.chd{margin-bottom:12px;gap:8px}.chs{margin-left:0;flex-basis:100%}.ck .floor{height:44%}.seg a{padding:6px 9px}
+@media (max-width:640px){.chv{font-size:26px}.chd{margin-bottom:12px;gap:8px}.chs{margin-left:0;flex-basis:100%}.ck .floor{height:44%}.rng a{padding:6px 9px}
  .lv{margin-left:8px}.lv b{padding:4px 6px}}
 @media (prefers-reduced-motion:reduce){.ck .ld::after{animation:none;display:none}.cvp>.chart.lnl{animation:none!important;clip-path:none!important}}
 /* stat figures read in the chart kit's tabular numeric face (same as headlines, ticks, chips and tips) */

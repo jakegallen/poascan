@@ -790,7 +790,7 @@ def seg(items, cur=None):
     """A segmented timeframe control (7D 30D ALL): items are (label, href), the current one marked. Plain links, so it works
     without script and every view keeps its own URL."""
     on = ' class="on" aria-current="true"'
-    return '<nav class="seg" aria-label="Range">' + "".join(f'<a href="{E(h)}"{on if l == cur else ""}>{E(l)}</a>' for l, h in items) + "</nav>"
+    return '<nav class="rng" aria-label="Range">' + "".join(f'<a href="{E(h)}"{on if l == cur else ""}>{E(l)}</a>' for l, h in items) + "</nav>"
 
 def _plot(svg_inner, overlay, height, top=0, tail="", yg=56, head="", layer="", grid="", yw=0):
     """The chart panel. svg_inner: the data marks (the first SVG: app.js reads its data-tip groups for hover). grid: hairline
