@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.291] - 2026-11-10
+
+Slow-page P0: serving-path performance hardening on the one dedicated core. Read only, no indexer or data-write change. Every default is unchanged for a normal visitor.
+
+### Changed
+- E1: the authoritative established set (`grading._auth`) is memoized once per database generation, not per call. It still recomputed mid-scan whenever the 20 s ceiling passed while the generation had not moved; on a large established set that was repeated work during one render. A write bumps `db.GEN` and invalidates at once, so a stale set is never served. `POASCAN_EST_MEMO_S` still turns the memo off (<= 0) for tests.
+- S2: `HEAVY_CAP` (the heavy serving-slot cap) can be set directly with `POASCAN_HEAVY_CAP`, clamped to `[1, POASCAN_MAX_WORKERS]`. Unset keeps the derived value (`POASCAN_MAX_WORKERS` minus the cheap reserve; prod stays 4). This lets the heavy cap be lowered for one core without re-deriving the worker and reserve counts.
+- A1: the remaining static page routes join `CANON_QS` so a cache-busting query collapses to one canonical cache entry and one heavy render: `/index.html`, `/join`, `/onboarding`, `/unlocks`, `/upgrade`, `/swaps` (all read no query) and `/wallet` (reads only `address`).
+
+### Added
+- R2: a per-IP concurrency gate in front of the heavy slot. A single client IP (resolved with `clientip`, Cloudflare aware; the /64 for IPv6) may hold at most `POASCAN_IP_HEAVY_MAX` heavy requests at once (default 2); past that the request sheds before it takes a slot, a cache render or an upstream read, so one IP cannot occupy every heavy slot and starve other visitors. A request with no Fly address (local runs, tests) is never gated. This is the per-IP gate only; the existing per-IP `PAGE_LIMIT` is a rate limit and the shared token bucket is separate. `guard.telemetry()` reports `ip_heavy`.
+
 ## [1.26.290] - 2026-11-09
 
 UI/UX refinement, phase P2: tokens and chrome.

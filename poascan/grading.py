@@ -310,22 +310,24 @@ def index():
 
 # ---------------------------------------------------------------- established, cross-checked
 UNCONFIRMED = "Unconfirmed"
-EST_MEMO_S = float(os.environ.get("POASCAN_EST_MEMO_S", "20"))   # one established/standing/directory build asks it once per row
-_AUTH_MEMO = [0.0, False, -1]   # time, value (False before the first compute), db.GEN at compute
+EST_MEMO_S = float(os.environ.get("POASCAN_EST_MEMO_S", "20"))   # one established/standing/directory build asks it once per row; <= 0 turns the memo off (tests)
+_AUTH_MEMO = [0.0, False, -1]   # time of the last compute, value (False before the first compute), db.GEN at compute
 
 def _auth():
     """1.26.257: (set, close) from the stored /api/established copy (the engine's set), or None. Preferred over the grading
     list's established field, which read 0 while the set held 223 (the label said which list it was not).
-    Memoized per db write generation and for at most EST_MEMO_S seconds (1.26.280): established_check(),
-    minepoa_established() and conflict_summary() call it once PER agent row, and the callers iterate the whole agent set
-    (the established and directory tabs, standing, profile, scores), so a bare SELECT + json.loads of the whole blob and a
-    fresh frozenset on every call made the established tab O(n^2) (minutes on a large set). A new /api/established blob (or
-    any db write) bumps db.GEN and is seen at once, so a stale set is never served; the value is an immutable
-    (frozenset, close) tuple, safe to share."""
+    E1 (1.26.291): computed once per db write generation, not per call. established_check(), minepoa_established() and
+    conflict_summary() call it once PER agent row, and the callers iterate the whole agent set (the established and
+    directory tabs, standing, profile, scores), so a bare SELECT + json.loads of the whole blob and a fresh frozenset on
+    every call made the established tab O(n^2) (minutes on a large set). The memo is keyed on db.GEN alone: a new
+    /api/established blob (or any db write) bumps db.GEN and is seen at once, so the value is recomputed exactly once for
+    that generation and a stale set is never served (1.26.280 also kept a 20 s ceiling, which recomputed mid-scan on a
+    large set while the generation had not moved; that extra work is gone). The value is an immutable (frozenset, close)
+    tuple, safe to share. POASCAN_EST_MEMO_S <= 0 turns the memo off for tests."""
     if EST_MEMO_S <= 0: return _auth_compute()
-    t = time.time(); m = _AUTH_MEMO; g = db.GEN[0]
-    if m[1] is not False and m[2] == g and 0 <= t - m[0] < EST_MEMO_S: return m[1]
-    v = _auth_compute(); m[0], m[1], m[2] = t, v, g
+    m = _AUTH_MEMO; g = db.GEN[0]
+    if m[1] is not False and m[2] == g: return m[1]
+    v = _auth_compute(); m[0], m[1], m[2] = time.time(), v, g
     return v
 
 def _auth_clear(): _AUTH_MEMO[1] = False   # for a state change that is not a db write (tests)
