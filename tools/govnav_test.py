@@ -107,8 +107,8 @@ def live():
         home = get("/")[1]
         nav = home[home.index('<nav class="nav" id="nav">'):]; nav = nav[:nav.index("</nav>")]
         links = re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', nav)
-        check(f"nav is Chain, Agents, Network, Governance {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance"]
-              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance"])
+        check(f"nav is Chain, Agents, Network, Governance, API (1.26.302) {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance", "API"]
+              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance", "/api"])
         check("About is in the footer, not the nav", 'href="/about"' not in nav and re.search(r'<footer.*href="/about"', home, re.S) is not None)
         def active(u):
             b = get(u)[1]; n = b[b.index('<nav class="nav" id="nav">'):]; n = n[:n.index("</nav>")]

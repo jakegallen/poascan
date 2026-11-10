@@ -676,7 +676,7 @@ def fixture_pages(check):
         site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
         paths = sorted(set(nav + site))
         bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
-        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 4 and len(paths) > 30 and not bad)
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 5 and len(paths) > 30 and not bad)
         g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
         op = req(base + "/agents/operators")[1]
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))

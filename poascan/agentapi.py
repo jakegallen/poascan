@@ -1,15 +1,15 @@
 """Agent-native access: OpenAPI spec, llms.txt, /.well-known/mcp.json, the /api page and a stateless MCP server
 (Streamable HTTP, JSON-RPC over POST /mcp). Python stdlib only. Every tool reads POAScan's own archive (SQLite and
 in-process caches); none of them calls minepoa.com."""
-import decimal, json, os, re, time, threading, collections, itertools
+import decimal, json, os, re, time, threading, collections, itertools, urllib.parse
 from html import escape as E
 from . import kin as KN
 from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.301"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-10T15:45:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.302"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-10T16:05:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1667,24 +1667,102 @@ def agents_html():
             f'Spec: <a href="/openapi.json">openapi.json</a> · Guide: <a href="/llms.txt">llms.txt</a> · <a href="/api">API index</a>.</p>'
             + OC.html("poascan", MCP_URL))
 
-def api_page(page, card):
-    spec = openapi(); rows = []
+# 1.26.302 (Jake, t525u): the API page. Generated from the real routes (openapi()) and MCP tools (TOOLS), grouped, each with
+# method, path, a one-line purpose, a copy button (a curl line) and a sample fold that app.js fills on open (one same-origin GET,
+# only when a reader opens it). Path values in samples come from POAScan's own archive (latest close, top holder, latest tx).
+API_GROUPS = [("explorer", "Chain", "chain"), ("agents", "Agents", "agents"), ("governance", "Governance", "governance"),
+              ("forum", "Governance", "governance"), ("token", "Token", "token"), ("meta", "Service", "service")]
+API_ASK = ("Use the POAScan API",
+           "Use POAScan's read-only API to answer my questions about Proof of Agent. Endpoints: https://poascan.io/openapi.json. "
+           "MCP server: https://poascan.io/mcp. Start with https://poascan.io/api/v1/summary. Cache results, poll at most once a minute, "
+           "and name the endpoints you used. Don't submit anything.")
+_EXS = {"ts": 0, "v": {}}
+
+def _examples():
+    """{param: value} for sample URLs, from the local archive only; refreshed every 5 minutes."""
+    if time.time() - _EXS["ts"] < 300 and _EXS["v"]: return _EXS["v"]
+    v = {}
+    try:
+        from . import analytics as A
+        ep = A.epoch_rows(); v["n"] = str(ep[-1]["epoch"]) if ep else "0"
+    except Exception: v["n"] = "0"
+    try:
+        r = db.q1("SELECT addr FROM accounts ORDER BY balance DESC LIMIT 1")
+        if r: v["address"] = v["agent"] = r["addr"]
+    except Exception: pass
+    try:
+        r = db.q1("SELECT id FROM txs ORDER BY ts DESC LIMIT 1")
+        if r: v["hash"] = r["id"]
+        r = db.q1("SELECT id FROM txs WHERE type='answer' ORDER BY ts DESC LIMIT 1")
+        if r: v["txid"] = r["id"]
+    except Exception: pass
+    _EXS.update(ts=time.time(), v=v); return v
+
+def _purpose(t):
+    t = re.sub(r"^\s*\d+\.\d+\.\d+[a-z]?:\s*", "", str(t or "")).replace("\u2014", ",").replace("\u2013", " to ")
+    t = re.split(r"(?<=[a-z0-9)])\. ", t)[0].rstrip(".")
+    if len(t) > 110: t = t[:107].rsplit(" ", 1)[0].rstrip(",;:") + "..."
+    return t
+
+def _fill(path, op, ex):
+    """The path with sample values, or None when a value can not be filled honestly."""
+    out = path
+    for prm in re.findall(r"\{(\w+)\}", path):
+        val = ex.get(prm)
+        if val is None:
+            sch = next((x.get("schema") or {} for x in op.get("parameters") or [] if x.get("name") == prm), {})
+            val = (sch.get("enum") or [None])[0]
+        if val is None: return None
+        out = out.replace("{" + prm + "}", urllib.parse.quote(str(val), safe=""))
+    return out
+
+def api_groups():
+    """[(anchor, title, [(method, path, purpose, sample_path or None)])] in spec order."""
+    from collections import OrderedDict
+    spec = openapi(); ex = _examples(); g = OrderedDict((a, (t, [])) for _, t, a in API_GROUPS)
+    tag_of = {k: a for k, _, a in API_GROUPS}
     for path, ops in spec["paths"].items():
         for meth, o in ops.items():
-            p = E(path)
-            link = f'<a href="{p}">{p}</a>' if meth == "get" and "{" not in path else p
-            rows.append(f'<tr><td class="mono">{meth.upper()}</td><td class="mono">{link}</td><td>{E(o["summary"])}</td></tr>')
-    tbl = f'<div class="tw"><table class="t"><thead><tr><th>Method</th><th>Path</th><th>Returns</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
-    tools = "".join(f'<tr><td class="mono">{E(n)}</td><td>{E(d)}</td></tr>' for n, _, d, _, _ in TOOLS)
-    body = ('<div class="sechead"><h1>API</h1></div>'
-            + card("For agents", agents_html())
-            + card("Endpoints",
-                   '<p>No auth. JSON by default; add <code>.csv</code> to list endpoints. Cache results and poll at most once a minute. '
-                   'Please use these endpoints rather than crawling the pages. <a href="/api/reference">Browse and try every endpoint in the interactive reference</a>.</p>' + tbl,
-                   '<a class="more" href="/api/reference">interactive reference →</a>')
-            + card(f"MCP tools · {len(TOOLS)}", f'<div class="tw"><table class="t"><thead><tr><th>Tool</th><th>Returns</th></tr></thead><tbody>{tools}</tbody></table></div>',
-                   '<a class="more" href="/.well-known/mcp.json">mcp.json →</a>'))
-    return page("API", body, "/about")
+            a = tag_of.get((o.get("tags") or ["meta"])[0], "service")
+            g[a][1].append((meth.upper(), path, _purpose(o.get("summary")), _fill(path, o, ex) if meth == "get" else None))
+    return [(a, t, rows) for a, (t, rows) in g.items() if rows]
+
+def api_page(page, card):
+    from . import ui as U, prompts as PR
+    groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)
+    def row(m, path, purpose, smp):
+        url = BASE + (smp or path)
+        cp = U.copy(f"curl -s '{url}'") if smp else U.copy(url)
+        fold = (f'<details class="apis" data-src="{E(smp)}"><summary>Sample</summary><pre class="apip" tabindex="0">Opens on demand.</pre></details>' if smp else "")
+        return (f'<li class="apir"><div class="apih"><span class="apim">{m}</span><code class="apipath">{E(path)}</code>{cp}</div>'
+                f'<p class="apid">{E(purpose)}</p>{fold}</li>')
+    jump = "".join(f'<a class="chip" href="#{a}">{E(t)}</a>' for a, t in [("connect", "Connect")] + [(a, t) for a, t, _ in groups] + [("mcp", "MCP tools")])
+    snip = json.dumps({"mcpServers": {"poascan": {"url": MCP_URL}}}, indent=2)
+    connect = (f'<div class="apik"><span class="lbl">MCP</span><code>{E(MCP_URL)}</code>{U.copy(MCP_URL)}</div>'
+               f'<div class="apik"><span class="lbl">REST</span><code>{E(BASE + API_PREFIX)}</code>{U.copy(BASE + API_PREFIX)}</div>'
+               f'<div class="apisn"><pre class="apip" tabindex="0">{E(snip)}</pre>{U.copy(snip)}</div>'
+               f'<p class="dim small">Streamable HTTP. Spec: <a href="/openapi.json">openapi.json</a> · <a href="/llms.txt">llms.txt</a> · '
+               f'<a href="/.well-known/mcp.json">mcp.json</a> · <a href="/api/reference">Interactive reference</a></p>')
+    from . import oneclick as OC
+    body = ('<div class="sechead"><h1>API</h1>' + PR.ask([API_ASK]) + '</div>'
+            + '<p class="apin">Read-only. No keys. JSON; add <code>.csv</code> to lists. Cache and poll at most once a minute; bursts over 20 requests in 10 s get a 429.</p>'
+            + f'<nav class="chips apijump" aria-label="Sections">{jump}</nav>'
+            + card("Connect", connect + OC.html("poascan", MCP_URL), id="connect"))
+    for a, t, rows in groups:
+        body += card(f"{t} · {len(rows)}", '<ul class="apil">' + "".join(row(*r) for r in rows) + "</ul>", id=a)
+    def trow(name, title, desc, schema):
+        call = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": {}}}, indent=2)
+        req = [k for k in (schema or {}).get("required") or []]
+        args = ", ".join(sorted((schema or {}).get("properties") or {}))
+        return (f'<li class="apir"><div class="apih"><span class="apim">MCP</span><code class="apipath">{E(name)}</code>{U.copy(name)}</div>'
+                f'<p class="apid">{E(_purpose(desc))}</p>'
+                f'<details class="apis"><summary>Call</summary><pre class="apip" tabindex="0">{E(call)}</pre>'
+                + (f'<p class="dim small">Arguments: {E(args)}' + (f'. Required: {E(", ".join(req))}' if req else "") + '</p>' if args else "")
+                + '</details></li>')
+    body += card(f"MCP tools · {len(TOOLS)}", '<ul class="apil">' + "".join(trow(n, t, d, sc) for n, t, d, sc, _ in TOOLS) + "</ul>",
+                 '<a class="more" href="/.well-known/mcp.json">mcp.json →</a>', id="mcp")
+    body += f'<p class="dim small">{nrest} endpoints and {len(TOOLS)} tools, generated from the routes this build serves (v{VERSION}).</p>'
+    return page("API", body, "/api")
 
 def reference_page(page, card):
     """Interactive API reference: /openapi.json rendered client-side into grouped,
@@ -1702,5 +1780,5 @@ def reference_page(page, card):
                      '<a href="/openapi.json">openapi.json</a>.</noscript></div>',
                    '<a class="more" href="/api">API index →</a>')
             + '<script src="/static/apiref.js" defer></script>')
-    return page("API reference", body, "/about")
+    return page("API reference", body, "/api")
 
