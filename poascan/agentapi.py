@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.300"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-10T15:05:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.301"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-10T15:45:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1063,7 +1063,7 @@ def openapi():
         "/api/receipt/{hash}": _op("Answer receipt for one answer (challenge) tx", {"$ref": "#/components/schemas/Receipt"}, [_p("hash", "64-hex answer tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getReceipt", tag="agents",
                                    desc="Built from the archived tx, close records (basis.pending, basis.settled, rewards) and cached grade-sealed txs. Unknown fields are null. An unknown tx is a JSON 404 with found false; a tx that is not an answer is a 404 with found true and answer false. Method: https://poascan.io/about#receipts"),
         "/api/receipts": _op("Answer receipts for an address's recent answers, newest first", ROWS, [_p("address", "poa1 address", {"type": "string"}, "query"), _p("limit", "1 to 200", {"type": "integer", "default": 50, "minimum": 1, "maximum": 200}, "query", False)], True, oid="listReceipts", tag="agents"),
-        "/api/epochs": _op("Every epoch close in a segment: pool, minted, burned, grading", ROWS, [SEGQ, _p("from", "1.26.199: closes from this epoch on (ascending)", {"type": "integer", "minimum": 0}, "query", False),
+        "/api/epochs": _op("Every epoch close, both segments as one history by close time (each row has segment and lifetime); ?segment=<n> for one segment: pool, minted, burned, grading", ROWS, [SEGQ, _p("from", "1.26.199: closes from this epoch on (ascending)", {"type": "integer", "minimum": 0}, "query", False),
                            _p("limit", "1.26.199: at most this many closes (1 to 1000)", {"type": "integer", "minimum": 1, "maximum": 1000}, "query", False),
                            _p("latest", "1.26.221: the newest n closes, ascending (1 to 1000); not with from", {"type": "integer", "minimum": 1, "maximum": 1000}, "query", False)], csv=True, oid="listEpochs", desc="About 20 KB for a whole segment; latest, from and limit page it. Served from POAScan's stored close records (cached; minepoa.com's full list is read once per new close, never per request). Each row: epoch, close_ts, minted, paid, graders, settled and the rest below, plus url (the close's page), record_url (the full close record) and rewards_url (per Agent rewards, 1.26.221). Rows carry record_sha256 and record_bytes (1.26.200: the sha256 and size of the close record at /api/v1/epoch/{n}/record, so a close can be checked without the full file), segment, paused (true when the close record flags overlapped_halt or lists a halt or maintenance window; false while it carries neither) and pause (null, or overlapped_halt, windows [{start_ts, end_ts}] and fields; /about#paused-closes). Without ?segment the current segment's closes (empty right after a genesis cut); ?segment=1 for segment 1."),
         "/api/epoch/{n}": _op("One epoch close with per-address rewards", params=[_p("n", "epoch number in the segment", {"type": "integer"}), SEGQ], oid="getEpoch"),

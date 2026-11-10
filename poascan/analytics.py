@@ -356,6 +356,22 @@ def correction_rows(e):
     return dict(best)
 
 @cached("epoch_rows", 60)
+def epoch_rows_all():
+    """1.26.301 (one history): every segment's closes, oldest first by close time, each tagged with its segment and its
+    lifetime close number (g, unique across segments). Each segment's rows come from its own close records (local data,
+    no upstream read), so nothing is counted twice; cum_supply already continues across the restart."""
+    out = []
+    for n in S.NUMBERS:
+        with S.use(n):
+            out += [dict(r, segment=n, g=S.gkey(r["epoch"], n)) for r in epoch_rows()]
+    out.sort(key=lambda r: (r["close_ts"], r["g"]))
+    return out
+
+def epoch_href(r):
+    """/epoch/<n>, with ?segment= for a close before the restart (its number repeats)."""
+    n = r.get("segment") or S.CURRENT
+    return f"/epoch/{r['epoch']}" + ("" if n == S.CURRENT else f"?segment={n}")
+
 def epoch_rows():
     from . import closepause as _CP, outcome as _OC
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""

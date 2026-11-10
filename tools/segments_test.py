@@ -83,7 +83,10 @@ check("open epoch is segment 2 E2", o["epoch"] == 2 and o["segment"] == 2)
 with SG.use(1): check("open epoch ignores ?segment=1", A.open_epoch()["epoch"] == 2)
 rb = A.rewards_by_addr()
 check("lifetime rewards span both segments (S1 E14, S2 E0)", float(rb[X][14]) == 10 and float(rb[X][15]) == 7)
-check("lifetime close labels", SG.ep_label(14) == "S1 E14" and SG.ep_label(15) == "E0" and SG.ep_href(3) == "/epoch/3?segment=1")
+check("lifetime close labels (1.26.301: plain E numbers, earlier links keep ?segment=1)", SG.ep_label(14) == "E14" and SG.ep_label(15) == "E0" and SG.ep_href(3) == "/epoch/3?segment=1")
+ra = A.epoch_rows_all()
+check("one history: both segments in close order, each close once (unique g)", len(ra) == 15 + len(A.epoch_rows()) and [r["close_ts"] for r in ra] == sorted(r["close_ts"] for r in ra) and len({r["g"] for r in ra}) == len(ra))
+check("one history: earlier closes link with ?segment=1, current ones plain", A.epoch_href(ra[3]) == "/epoch/3?segment=1" and A.epoch_href(ra[-1]) == f"/epoch/{ra[-1]['epoch']}")
 # 1.26.251: the Rising tab's First paid cell renders the segment-local label, not the raw lifetime key (segment 2 close 8 is key 23)
 from poascan import views4 as V4
 _rc = V4._cell("ep", 23)
@@ -146,10 +149,16 @@ try:
     check("/api/epoch/9 is not closed in segment 2 (404 with segment)", c == 404 and json.loads(b).get("segment") == 2)
     c, b, h = get("/api/epoch/0?segment=7"); check("bad segment is a 400", c == 400)
     c, b, h = get("/api/epochs?segment=1"); check("/api/epochs?segment=1 lists 15", c == 200 and len(json.loads(b)) == 15)
-    c, b, h = get("/chain"); check("epoch list has the segment toggle and cut note", c == 200 and "Segment 1 (archived)" in b and "Segment 2 began at h44003 of segment 1. Earlier history archived." in b)
+    c, b, h = get("/api/epochs?segment=2"); n2 = len(json.loads(b)) if c == 200 else -1
+    c, b, h = get("/api/epochs"); ja = json.loads(b) if c == 200 else []
+    check("/api/epochs without ?segment= is one history (1.26.301): both segments, oldest first, lifetime unique, earlier links keep ?segment=1",
+          len(ja) == 15 + n2 and [r["close_ts"] for r in ja] == sorted(r["close_ts"] for r in ja) and len({r["lifetime"] for r in ja}) == len(ja)
+          and {r["segment"] for r in ja} == {1, 2} and all(r["url"].endswith("?segment=1") == (r["segment"] == 1) for r in ja))
+    c, b, h = get("/api/epochs?from=0&limit=3"); check("?from= still pages the current segment", c == 200 and [r["epoch"] for r in json.loads(b)] == [0, 1, 2][:min(3, n2)] and "lifetime" not in json.loads(b)[0])
+    c, b, h = get("/chain"); check("epoch list is one history: no toggle, no cut note, no archived label; both runs listed", c == 200 and "(archived)" not in b and 'class="chips segs' not in b and "cutnote" not in b and "Earlier history archived" not in b and 'href="/epoch/3?segment=1"' in b and 'href="/epoch/0"' in b)
     c, b, h = get("/chain?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
-    c, b, h = get("/epoch/14?segment=1"); check("archived epoch page", c == 200 and "Segment 1 (archived)" in b)
-    c, b, h = get("/network?tab=health"); check("health shows Genesis cut", c == 200 and "Genesis cut" in b)
+    c, b, h = get("/epoch/14?segment=1"); check("earlier epoch page still opens (old links), no archived label", c == 200 and "(archived)" not in b)
+    c, b, h = get("/network?tab=health"); check("health has no cut banner (1.26.301: one history)", c == 200 and "cutnote" not in b)
     c, b, h = get(f"/address/{X}"); check("address page shows per-segment nonce", c == 200 and ">S2 3</span>" in b and ">S1 395</span>" in b)
     c, b, h = get(f"/api/address/{X}/txs"); j = (json.loads(b) if c == 200 else {}).get("coverage") or {}
     check("coverage API: current nonce and by_segment", c == 200 and j.get("highest_nonce") == 3 and j.get("segment") == 2 and len(j.get("by_segment", [])) == 2)

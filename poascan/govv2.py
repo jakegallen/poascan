@@ -329,7 +329,7 @@ def never_tab(qs, href, qsx):
     s = "".join([stat("Agents", intc(total)), stat("Never established", intc(len(rows))),
                  stat("Share", f'<span class="num">{100 * len(rows) / total:.1f}%</span>' if total else "···"), stat("With answers", intc(sum(1 for r in rows if r["answers"])), tip="Answered at least once this segment")])
     by_ep = collections.Counter((r["joined_segment"] or SG.CURRENT, r["joined_epoch"]) for r in rows if r["joined_epoch"] is not None)
-    ep_l = lambda k: f"E{k[1]}" if k[0] == SG.CURRENT else f"S{k[0]} E{k[1]}"
+    ep_l = lambda k: f"E{k[1]}"   # 1.26.301: one history
     ch = bars([(ep_l(k), [v]) for k, v in sorted(by_ep.items())[-30:]], height=150, colors=("steel",), fmt=lambda z: f"{z:,.0f}", legend=["Never established, by join epoch"]) if by_ep else ""
     trs = "".join(f'<tr><td>{agent(r["address"], r["name"] or "")}</td><td class="r">{lt(r["joined_ts"], "d") if r["joined_ts"] else "<span class=dim>···</span>"}</td>'
                   f'<td class="r">{_n(r["answers"])}</td><td class="r dk">{_n(r["closes_paid"])}</td><td class="r dk">{lt(r["last_ts"], "d") if r["last_ts"] else "<span class=dim>···</span>"}</td>'
