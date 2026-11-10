@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.295] - 2026-11-09
+
+UI/UX refinement, phase P7: Agent and tx pages.
+
+### Changed
+- Agent page Overview: the score and rewards first, then a For agents chip row (Profile, Standing, Timeline, Assignments, Governance, Txs, each its `/api/v1/address/{a}` endpoint) and the wallet binding card. Profile, Swaps, Answers and Invites fold under Details; the Established card stays open (it carries the Unconfirmed tag).
+- Tx page: hash, time, parties, amount and the answer up top; Finalized height, Parents, Nonce, Chain id, Signature and other fields fold under Raw with the `/api/v1/tx/{h}` link.
+
 ## [1.26.294] - 2026-11-09
 
 UI/UX refinement, phase P6: Network slim.
