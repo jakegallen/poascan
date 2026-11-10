@@ -81,7 +81,7 @@ check("a cut inside an hour: that hour has no point (the line breaks there), the
       not any(t == C for t, _ in js) and min(t for t, _ in js if t > C) == C + H and max(t for t, _ in js if t < C) == C - H)
 from poascan import ui as U
 sv = U.spark([(t, v) for t, v in hj])
-check("sparkline runs across the cut: one polyline (1.26.175)", sv.count("<polyline") == 1)
+check("sparkline runs across the cut: one line path, one M (1.26.175; a smooth path since UI/UX P3)", sv.count('class="sl"') == 1 and re.search(r'class="sl" d="([^"]+)"', sv).group(1).count("M") == 1)
 
 # ---------------- DB read ----------------
 now = int(time.time())

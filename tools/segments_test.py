@@ -1,3 +1,4 @@
+import re
 """Genesis cut (1.26.91, poascan/segments.py): migration of a 1.26.89 database, the segment boundary and per-segment reads.
 Temp database, no network: the node is http://127.0.0.1:9 (refused). Usage: python3 tools/segments_test.py"""
 import json, os, shutil, socket, sqlite3, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -116,7 +117,7 @@ check("reconcile Closes: 2 in segment 2 against epochs_closed 2", bool(ep_row) a
 
 from poascan import ui as U
 svg = U.line([(CUT - 7200, 5300), (CUT - 3600, 5341), (CUT + 600, 4941), (CUT + 1800, 4950)])
-check("chart line runs across the cut in one path (1.26.175, no break)", svg.count(" M") + svg.count('"M') == 1 and U.line([(1, 1), (2, 2), (3, 3)]).count("M") == 1)
+check("chart line runs across the cut in one path (1.26.175, no break)", svg.count('class="ln ') == 1 and all(d.count("M") == 1 for d in re.findall(r' d="([^"]+)"', svg)) and U.line([(1, 1), (2, 2), (3, 3)]).count('class="ln ') == 1)
 pts = [(CUT - 3600 * 5, 5000), (CUT - 600, 5341), (CUT + 600, 4941), (CUT + 3000, 4960)]
 db.write("DELETE FROM snaps WHERE kind='status'")
 for t, a in pts: db.write("INSERT INTO snaps(kind, ts, json) VALUES('status', ?, ?)", (t, json.dumps({"agents_joined": a})))

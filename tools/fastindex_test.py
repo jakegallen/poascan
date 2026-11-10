@@ -207,7 +207,7 @@ def main():
     b = AV.body({"range": ["all"]})
     check("page: range chips 24h, 7d, 30d, All", all(f'>{n}</a>' in b for n in ("24h", "7d", "30d", "All")))
     check("page: sortable headers with aria-sort", 'aria-sort=' in b and 'class="hsb"' in b and "sortsel" in b)
-    check("page: Mismatch flag, explorer links, chart in a chartbox (watermark) with one path", "Mismatch" in b and "https://solscan.io/tx/SOL100" in b and 'class="chartbox"' in b and b.count('class="ln s-gold"') == 1)
+    check("page: Mismatch flag, explorer links, chart in a chartbox (watermark) with one path", "Mismatch" in b and "https://solscan.io/tx/SOL100" in b and 'class="chartbox' in b and b.count('class="ln s-gold"') == 1)
     check("page: no share button, no em or en dash", "share" not in b.lower() and "\u2014" not in b and "\u2013" not in b)
     c = V.network("anchors"); c = c[1] if isinstance(c, tuple) else c
     check("Network has an Anchors tab", 'href="/network?tab=anchors" class="chip on"' in c)
