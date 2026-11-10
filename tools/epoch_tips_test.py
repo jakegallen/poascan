@@ -17,8 +17,9 @@ db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?
 h = V.tracker_html()
 labels = re.findall(r'<details class="qtip hv btip"><summary aria-label="About ([^"]+)"', h)
 want = ["Epoch", "Closes in", "Timeline", "Answers", "Graders", "Pool", "Last 24 min", "Answers lane", "Attests", "Seals", "Latest"]
-check(f"every term on the card has its ? {labels}", sorted(labels) == sorted(want))
-check("each ? links its Method to /about#epoch-card", h.count('<a href="/about#epoch-card">Method</a>') == len(want))
+ab = __import__("poascan.bench", fromlist=["x"]).about_html()
+check(f"no ? on the card (UI/UX P2) {labels}", labels == [] and ">?</summary>" not in h)
+check("every card term is explained on /about#epoch-card", 'id="epoch-card"' in ab and all(f"<b>{w}</b>" in ab for w in want))
 for k, t, x in BN.TIPS:
     s = [p for p in re.split(r"(?<=[.!?])\s+", x.strip()) if p]
     check(f"{t}: one or two sentences, no dashes, Agents not Accounts", 1 <= len(s) <= 2 and not re.search("[\u2013\u2014]", x) and "ccount" not in x)

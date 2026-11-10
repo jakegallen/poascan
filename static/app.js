@@ -660,7 +660,8 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
    try{history.replaceState(history.state,"",location.pathname+cpSearch(location.search,c,d.range)+location.hash)}catch(_){}})
   .catch(fail)}
  /* a one line definition from the server (chartpop.TIPS) with its Method link */
- function qt(d){if(!d.tip){cq.innerHTML="";return}if($("details",cq))return;
+ function qt(d){cq.innerHTML="";return;   /* 1.26.290 (UI/UX P2): no "?" on the pop-out either; the method is on /about */
+  if(!d.tip){cq.innerHTML="";return}if($("details",cq))return;
   cq.innerHTML='<details class="qtip cp-tip"><summary aria-label="About '+esc2(d.title)+'">?</summary><span class="qbox" role="note">'+esc2(d.tip)+(d.method?' <a href="'+esc2(d.method)+'">Method</a>':"")+'</span></details>'}
  function chips(){rng.innerHTML="";data.ranges.forEach(function(k){var b=D.createElement("button");b.type="button";b.className="chip"+(k===data.range?" on":"");b.dataset.r=k;b.textContent=CPL[k]||k;b.setAttribute("aria-pressed",k===data.range?"true":"false");rng.appendChild(b)});
   rng.hidden=data.ranges.length<2}

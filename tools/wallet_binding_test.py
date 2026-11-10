@@ -63,7 +63,7 @@ def main():
     check("card: Vault link and Wallet link rows", ">Vault link<" in h and ">Wallet link<" in h)
     check("card: Ask agent prompts, read-only check and payment line", "data-ask=" in h and "Never send payment outside the network." in h.replace("&#x27;", "'"))
     check("card: API link and Check another wallet", f"/api/v1/wallet/{L1}" in h and 'href="/wallet"' in h)
-    check("card: ? tips present", h.count('class="qtip"') >= 3)
+    check("card: no ? tips (UI/UX P2)", h.count('class="qtip"') == 0 and ">?</summary>" not in h)
     hu = WV.binding_card(U1)
     check("card: unlinked recent warning tag", "Joined 5 hours ago, no wallet link" in hu and 'tag warn' in hu and "tag\">NO" in hu)
     page = SV.page("/address/" + L1, {}) if False else V.address(L1)

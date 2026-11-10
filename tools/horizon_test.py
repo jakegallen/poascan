@@ -71,8 +71,8 @@ check("estab_ttl 26 is read too", NP.estab_ttl()["value"] == 26 and h2["estab_tt
 check("pending-by-epoch follows the param with its source", A.pending_by_epoch()["ttl_epochs"] == 26 and A.pending_by_epoch()["ttl_source"] == "/api/params pending_ttl_epochs")
 rl = GV.rules()
 check("Rules: lapse text follows estab_ttl (L + 27)", "L + 27" in rl and "estab_ttl is 26 in /api/params estab_ttl" in rl)
-check("maint state, the epoch card tip and the /upgrade prompt follow the param",
-      M._ttl() == 26 and "after 26 epochs" in BN.tip("answers") and "last 26 epochs" in NP.live_text("pending grades last 16 epochs"))
+check("maint state, the epoch card term (on /about) and the /upgrade prompt follow the param",
+      M._ttl() == 26 and "after 26 epochs" in BN._live(BN.TIP["answers"][1]) and "last 26 epochs" in NP.live_text("pending grades last 16 epochs"))
 
 # 4. no param: fallback 16, Stale and Unconfirmed
 seed({"auto_epoch_seconds": 21600})

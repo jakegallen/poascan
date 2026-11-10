@@ -168,8 +168,8 @@ def live():
         # 1.26.108 Established tab and Score
         import json as J
         c, es, _ = get("/governance?tab=established")
-        check("Established tab: count in the header, Score column with a tap and keyboard tooltip, sort and filter chips", c == 200 and re.search(r"Established · \d+", es) is not None
-              and '<details class="qtip"><summary aria-label="About Score"' in es and "Not an official ranking." in es and 'href="/about#score">Method</a>' in es
+        check("Established tab: count in the header, Score column with no ? (UI/UX P2: the method is on /about), sort and filter chips", c == 200 and re.search(r"Established · \d+", es) is not None
+              and 'class="qtip"' not in es and ">?</summary>" not in es
               and all(f'>{x}<i class="ha"' in es for x in ("Score", "Held", "Agent", "Level", "Added", "Eligible", "Seals", "Left")) and 'class="tag score"' in es and "\u2014" not in es)
         check("Established: names link to LabLeak, addresses to the Agent page", ('aname" href="https://minepoa.com/lableak/' in es or "fname" not in es) and 'href="/address/' in es)
         check("Established: sort and filter keep each other", get("/governance?tab=established&sort=name&filter=graders")[0] == 200
@@ -201,9 +201,9 @@ def live():
             if "forum" in u and "No authors" in hi: continue
             th = lambda h, lab: re.search(r'<th[^>]*aria-sort="(\w+)"><a class="hsb" href="([^"]+)"[^>]*>' + lab + r'<i class="ha"', h)
             s1, g1 = th(hi, "Score"), th(gr_, "Grading")
-            check(f"{u}: header sort: Score descending, click flips to ascending; Grading ascending; Score ? outside the link; phone sort menu; no chip rows",
+            check(f"{u}: header sort: Score descending, click flips to ascending; Grading ascending; no Score ?; phone sort menu; no chip rows",
                   s1 is not None and s1.group(1) == "descending" and f"{dk}=asc" in s1.group(2) and g1 is not None and g1.group(1) == "ascending" and f"{dk}=asc" not in g1.group(2)
-                  and re.search(r'Score<i class="ha" aria-hidden="true">↓</i></a><details class="qtip">', hi) is not None and '<label class="sortsel">' in hi
+                  and 'Score<i class="ha" aria-hidden="true">↓</i></a>' in hi and ">?</summary>" not in hi and '<label class="sortsel">' in hi
                   and all(f'>{t}<i class="ha"' in hi for t in ("Standing", "Grading", "Forum", "Consistency"))
                   and "Top first</a>" not in hi and "Bottom first</a>" not in hi and 'class="chips sortchips"' not in hi and "\u2014" not in hi and "\u2013" not in hi)
         lo = get("/governance?tab=established&sort=forum&dir=asc&filter=safe")[1]
@@ -231,9 +231,9 @@ def live():
         check("Rankings Load more: bad sort 400", get("/fragment/lb?tab=richlist&offset=0&sort=x")[0] == 400)
         # 1.26.109 per-Agent governance: address page tab, API, MCP
         c, ag, _ = get(f"/address/{A1}?tab=governance")
-        check("Agent page: Governance tab with Score, four parts, tooltip, Standing, Grading and Forum", c == 200 and f'href="/address/{A1}?tab=governance" class="chip on"' in ag
+        check("Agent page: Governance tab with Score, four parts, no ?, Standing, Grading and Forum", c == 200 and f'href="/address/{A1}?tab=governance" class="chip on"' in ag
               and all(f">{x}<" in ag for x in ("Score", "Standing", "Grading", "Forum", "Consistency", "Closes held", "Seals", "Jury aligned", "Posts", "Ballot comments", "Votes"))
-              and '<details class="qtip"><summary aria-label="About Score"' in ag and "\u2014" not in ag and "\u2013" not in ag)
+              and ">?</summary>" not in ag and "\u2014" not in ag and "\u2013" not in ag)
         check("Agent page: Governance tab sits in the address tabs", f'href="/address/{A1}?tab=governance"' in get(f"/address/{A1}")[1])
         c, b, _ = get(f"/api/v1/address/{A1}/governance"); aj = J.loads(b) if c == 200 else {}
         check(f"API agent governance: score, parts, facts {aj.get('score')} {aj.get('score_parts')}", c == 200 and 0 <= aj.get("score", -1) <= 100 and set(aj.get("score_parts", {})) == {"standing", "grading", "forum", "consistency"}

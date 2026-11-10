@@ -63,7 +63,7 @@ def tip(k):
 def about_html():
     """The /about section the card's Method links point to: the same lines as the tooltips."""
     li = "".join(f"<li><b>{E(t)}</b>: {E(_live(x))}</li>" for _, t, x in TIPS)
-    return (f'<h3 id="epoch-card">Epoch card</h3><p>The live Epoch card on Home. Each ? on it opens one of these lines. Counts come from POAScan\'s '
+    return (f'<h3 id="epoch-card">Epoch card</h3><p>The live Epoch card on Home. Counts come from POAScan\'s '
             f'own tx archive; the rules come from minepoa go.md and skill.md, the engine and <code>/api/params</code>.</p><ul>{li}</ul>')
 
 def score_rows(now=None):

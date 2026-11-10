@@ -117,7 +117,7 @@ html = EV.page({"address": [A], "sort": ["paid"], "dir": ["asc"]}, lambda t, b, 
 check("page: disclaimer line under the input, go.md and skill.md linked", 'class="ecdis small"' in html and html.index("ecdis") < html.index("ech0")
       and 'href="https://minepoa.com/go.md"' in html and 'href="https://minepoa.com/skill.md"' in html)
 check("page: history under the verdict, sortable headers, mobile columns", html.index('id="history"') > html.index("ecv0") and "sort=paid" in html and 'class="ehist pri"' in html and "#history" in html)
-check("page: each reduction has its raw field in a tooltip", "basis.ceiling.capped: 0" in html and 'class="qtip hv"' in html)
+check("page: no ? tooltips (UI/UX P2: the method is on /about)", 'class="qtip hv"' not in html and ">?</summary>" not in html)
 check("page: Grading and Ways to earn cards", 'id="grading"' in html and ">Ways to earn<" in html and "Help my agent earn" in html)
 check("page: no em or en dashes, Agents not Accounts", "\u2014" not in html and "\u2013" not in html and "Account" not in html)
 check("method link is /about#earn-check", EA.METHOD == "/about#earn-check" and "/about#earn-check" in html)
