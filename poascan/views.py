@@ -1001,13 +1001,37 @@ def token_body(h2=False):
     chart = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("gold", "ember"))
     halv = int(p.get("halving_epochs") or 720); e0 = float(p.get("E0") or 1e9); per = int(p.get("auto_epoch_seconds") or 21600)
     sched = table(["Range", "Pool / epoch", "Days"], [[f"{i*halv}-{(i+1)*halv-1}", poa(e0 / 2**i), f"{halv*per/86400:.0f}"] for i in range(4)])
-    rich = table(["#", "Agent", "Balance", "Share"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*r["share"]:.2f}%'] for r in h["rows"][:10]], pri=(0, 1, 2), usd=(2,))
     g = V3.growth_data(); u = V3.unlock_data(); circ = u["past"] + [(time.time(), u["now"])]
     cum = {r["close_ts"]: r["cum_supply_confirmed"] for r in ep}   # 1.26.122: carried supply, so Locked continues across the cut
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
-    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"), pop(spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]), "holders"),
-                     pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"]), flag_html=A.carry_flag("circ")), circ), "circ"), spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"]), flag_html=A.carry_flag("locked")), locked),
-                     stat("Median holder", num(h["median"]) + X.usd_of(h["median"]))])
+    # 1.26.304 (Jake, t523u): the token's numbers in one row. Price from POASwap (last trade, best ask, in their own asset);
+    # USD only when the guarded reference is shown (fills only, /about#market). Market cap is price x circulating: in USD with
+    # the guarded price, else in the last trade's asset. Minted and burned are summed over every close in one history,
+    # leaving out the closes not carried over at the restart, so nothing is counted twice.
+    from . import swapclient as SC; from .views2 import ICON_SWAP
+    mk = SC.status().get("market") or {}; pr = SC.price(); lt, ba = mk.get("last_trade"), mk.get("best_ask")
+    circ_v = float(sp["spendable"] or 0)
+    ltd = (f' <span class="dim small">{time.strftime("%b %-d", time.localtime(int(mk["last_fill_ts"])))}</span>' if lt and mk.get("last_fill_ts") else "")
+    mcap, mtip = None, None
+    if pr.get("shown") and pr.get("usd_per_poa"):
+        mcap = f'<span class="num">{X.money(pr["usd_per_poa"] * circ_v, pr.get("sig_figs") or 3)}</span>'; mtip = "Reference price x circulating. Method: /about#market."
+    elif lt and lt.get("per_1m_poa"):
+        mcap = f'<span class="num">{num(lt["per_1m_poa"] * circ_v / 1e6)}</span> <span class="unit">{E(lt.get("asset") or "")}</span>'
+        mtip = "Last trade x circulating, in the asset it traded for. No USD while the reference price is withheld."
+    er = [r for r in A.epoch_rows_all() if not SG.unconfirmed(r["epoch"], r["segment"])]
+    mint_t = sum(float(r.get("minted") or 0) for r in er); burn_t = sum(float(r.get("burned") or 0) for r in er)
+    stats = "".join([pop(spark_in(stat("Total supply", poa(sup, mined=True) + X.usd_of(sup)), g["supply"]), "supply"),
+                     pop(spark_in(stat("Circulating", poa(sp["spendable"]) + X.usd_of(sp["spendable"]), flag_html=A.carry_flag("circ")), circ), "circ"),
+                     spark_in(stat("Locked", poa(sp["locked"]) + X.usd_of(sp["locked"]), flag_html=A.carry_flag("locked")), locked),
+                     pop(spark_in(stat("Holders", intc(st.get("holders"))), g["holders"]), "holders")])
+    mrow = "".join([stat("Market cap", mcap, tip=mtip) if mcap else "",
+                     stat("Last trade · 1M POA", (X._pfmt(lt["per_1m_poa"], lt["asset"]) + ltd) if lt else '<span class="na">···</span>', "", ICON_SWAP, "swap_last"),
+                     stat("Best ask · 1M POA", X._pfmt(ba["per_1m_poa"], ba["asset"]) if ba else '<span class="na">···</span>', "", ICON_SWAP, "swap_ask"),
+                     stat("Minted at closes", poa(mint_t, mined=True), tip=f"POA issued at {len(er)} closes, both runs. Closes not carried over at the restart are left out."),
+                     stat("Burned at closes", poa(burn_t), tip="Pool not issued at those closes. No holder balance is destroyed.")])
+    top = h["rows"][:20]
+    holders_t = table(["#", "Agent", "Amount", "% of supply"], [[r["rank"], addr_link(r["addr"], names(), (6, 4)), poa(r["balance"], mined=True, dec=2), f'{100*float(r["balance"] or 0)/sup:.2f}%' if sup else f'{100*r["share"]:.2f}%'] for r in top], pri=(0, 1, 2), usd=(2,))
+    fa = "".join(f'<a class="chip" href="{u}">{t}</a>' for t, u in (("Rich list", "/api/v1/richlist"), ("Price", "/api/v1/price"), ("Market", "/api/v1/swaps/status"), ("Supply", "/api/v1/summary"), ("MCP get_rich_list", "/api#mcp")))
     c = A.concentration(); ma = c["min_activity"]
     gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"
     conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20))
@@ -1015,11 +1039,14 @@ def token_body(h2=False):
     conc += f'<div><span class="lbl">Min-activity Agents</span><span class="num">{ma["agents"]:,}</span> <span class="dim small">{pct(ma["share_of_supply"], 1)}</span></div></div>'
 
     body = f'''<div class="tokhead card"><div>{LOGO_MARK}</div><div><{"h2" if h2 else "h1"}>Proof of Agent · <span class="mono">POA</span></{"h2" if h2 else "h1"}></div><span class="sp"></span>{X.usd_src()}</div>
-<div class="stats eight">{stats}{X.price_stats_html()}</div>
+<div class="stats eight">{stats}</div>
+<div class="stats {"five" if mcap else "eight"}">{mrow}</div>
+<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#token">For agents</a>{fa}</nav>
+{card("Top holders", holders_t + f'<p class="dim small">Median holder {num(h["median"])} POA.</p>', X.usd_toggle() + PR.ask([PR.TOKEN]) + '<a class="more" href="/agents/top">Rich list →</a>', id="holders")}
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {V3.unlock_section()}
-<div class="grid2">{card("Concentration", conc + '<div class="minihd" title="The 10 largest balances">Leaders</div>' + rich, X.usd_toggle() + '<a class="more" href="/agents/top">Rich list →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
+<div class="grid2">{card("Concentration", conc , X.usd_toggle() + '<a class="more" href="/agents/top">Rich list →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
     return body
 
 COHORT_LABEL = {"unsealed": "Unsealed", "sealed": "Sealed", "passed": "Passed", "failed": "Failed", "expired_no_jury": "Expired, no jury", "vanished": "Dropped"}
