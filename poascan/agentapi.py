@@ -1727,6 +1727,19 @@ def api_groups():
             g[a][1].append((meth.upper(), path, _purpose(o.get("summary")), _fill(path, o, ex) if meth == "get" else None))
     return [(a, t, rows) for a, (t, rows) in g.items() if rows]
 
+_DOC = {}   # 1.26.303: name -> (ts, html) for the /api and /api/reference HTML pages
+DOC_TTL, DOC_MAX = 300, 3600
+
+def doc_page(name, render):
+    """The page from memory when younger than DOC_TTL, else rendered and stored. The routes it lists change only with a build."""
+    hit = _DOC.get(name)
+    if hit and time.time() - hit[0] < DOC_TTL: return hit[1]
+    h = render(); _DOC[name] = (time.time(), h); return h
+
+def doc_ready(name):
+    """True when a copy under DOC_MAX old is stored: the server may serve it without a slot (doc_page refreshes it past DOC_TTL)."""
+    hit = _DOC.get(name); return bool(hit) and time.time() - hit[0] < DOC_MAX
+
 def api_page(page, card):
     from . import ui as U, prompts as PR
     groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)

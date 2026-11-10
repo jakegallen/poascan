@@ -16,6 +16,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Fixed
 - Chain History: a close from before the restart printed 'Oct 20)">' before its mark; its title now carries a plain date.
 - Cadence: no empty bar at the restart. The first close after it counts the time since the close before it.
+- /api and /api/reference: rendered once, then served from memory for 5 minutes (and with no serving slot while a copy under an hour old is held), so an API burst no longer answers the API page with the plain busy line.
 
 ## [1.26.302] - 2026-11-10
 
