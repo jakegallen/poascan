@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45   # 1.26.292: slow runners took 15+ minutes before the browser checks and hit 25 three times
     concurrency:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
@@ -356,6 +356,8 @@ jobs:
           sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99poascan > /dev/null
       - name: Install Playwright and Chromium (pinned, headless shell only) for the header render check
+        # a slow apt mirror can take 10+ minutes here; the job limit is 45 minutes (killing apt mid install broke the retries)
+        timeout-minutes: 20
         run: |
           python -m pip install --disable-pip-version-check -q playwright==1.64.1
           python -m playwright install --with-deps --only-shell chromium
@@ -376,6 +378,7 @@ jobs:
           CI: "true"
         run: python tools/tip_layer_test.py
       - name: Install WebKit (pinned Playwright) for the mobile menu check
+        timeout-minutes: 20
         run: python -m playwright install --with-deps webkit
       - name: Mobile menu at 360 and 390 px (opens under the header with visible, clickable links on a fresh load and after scrolling; Chromium and WebKit)
         env:

@@ -34,17 +34,17 @@ db.write("INSERT OR IGNORE INTO anchors(height,chain,tx,state_root,anchored_by,m
 html = V.network_overview("")
 cards = dict((re.sub("<[^>]+>", "", a).strip(), b) for a, b in re.findall(r'<div class="sl">(.*?)</div><div class="sv"[^>]*>(.*?)</div>', html))
 txt = lambda k: re.sub("<[^>]+>", "", cards.get(k, "")).strip()
-check("stats grid carries netov (rows size to content)", 'class="stats six netov"' in html)
+check("stats grid carries netov, four numbers (1.26.294)", 'class="stats four netov"' in html and all(k in html for k in ("Chain height", "Finalized height", "Last anchor", "Version")))
 css = open(os.path.join(ROOT, "static", "style.css")).read()
 check("CSS: .stats.netov rows auto, clip class", ".stats.netov{grid-auto-rows:auto}" in css and ".netov .sv .clip{" in css)
 check(f"Chain height from the live chain ({txt('Chain height')})", txt("Chain height") == "2,912")
 check(f"Finalized height from the live chain ({txt('Finalized height')})", txt("Finalized height") == "2,415")
-check(f"Finality lag 497, not flagged ({txt('Finality lag')})", txt("Finality lag") == "497" and "Behind" not in html)
-check(f"Closes from /api/status when no close record yet ({txt('Closes')})", txt("Closes") == "1")
-check(f"Epoch cadence is a plain dash under 2 closes ({txt('Epoch cadence')!r})", txt("Epoch cadence") == "-")
-check(f"Signers: 5, not the genesis memo ({txt('Signers')!r})", txt("Signers") == "5" and "genesis-seg2" not in cards.get("Signers", "") and 'title="' in cards.get("Signers", ""))
+check("Finality lag 497: no flag on Finalized height", "Behind" not in html)
+# 1.26.294: check(f"Closes from /api/status when no close record yet ({t (card cut; the value is in /api/v1/summary, /params, /anchors)
+# 1.26.294: check(f"Epoch cadence is a plain dash under 2 closes ({txt(' (card cut; the value is in /api/v1/summary, /params, /anchors)
+# 1.26.294: check(f"Signers: 5, not the genesis memo ({txt('Signers')!r} (card cut; the value is in /api/v1/summary, /params, /anchors)
 check(f"Version fallback None yet with the note as title ({txt('Version')!r})", txt("Version") == "None yet" and "G0 ceremony" in cards.get("Version", ""))
-check(f"Anchored counts segment 2 heights only ({txt('Anchored')})", txt("Anchored") == "6")
+# 1.26.294: check(f"Anchored counts segment 2 heights only ({txt('Anchor (card cut; the value is in /api/v1/summary, /params, /anchors)
 check("no em or en dash on the page", "\u2014" not in html and "\u2013" not in html)
 db.put_blob("networks", dict(NW, chains=[NW["chains"][0], dict(NW["chains"][1], height=5000, checkpoint_height=2415)]))
 A._cache.clear() if hasattr(A, "_cache") else None
@@ -267,8 +267,8 @@ check("Active Agents is not the Agents total or the open epoch Answers", "Active
 home = V.home() if callable(getattr(V, "home", None)) else ""
 home = home if isinstance(home, str) else str(home)
 m = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S); k = m.group(1) if m else ""
-check("Home headline row: Total mined, Circulating supply, Agents, Active Agents; no sub-line",
-      re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k) == ["Total mined", "Circulating supply", "Agents", "Active Agents"] and 'class="sub' not in k and "Agents / hr" not in k)
+check("Home headline row: Total mined, Agents, Active Agents, Holders; no sub-line",
+      re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k) == ["Total mined", "Agents", "Active Agents", "Holders"] and 'class="sub' not in k and "Agents / hr" not in k)
 check("live payload: active is a whole number", V.live_snapshot()["nums"]["active"] == [3, "int"] and "joins_hr" not in V.live_snapshot()["nums"])
 jf = V.joins_fields(); w = jf["active_agents_window"]
 check("API: active_agents with its window", jf["active_agents"] == 3 and w["basis"] == "distinct_answerers" and w["start_ts"] == aa["start_ts"] and w["kind"] == aa["window"])

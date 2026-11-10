@@ -219,7 +219,7 @@ def charts_body(rng=""):
     up = [e for e in MS.events() if e["ts"] >= t0]; sp = cut(g["supply"])   # up: every event, for the Milestones table
     um = mk("supply", sp)
     sc = line(sp, height=H, color="gold", fmt=compact, xfmt=xf, y0=0, marks=um)
-    end = lambda h, m: h.replace('<div class="chartbox', '<div class="chartbox end', 1) if m else h   # 390px: a marked chart opens at its newest end
+    end = lambda h, m: h   # UI/UX P3: charts are bare, so none opens scrolled to a milestone end
     ac, hc, sc = end(ac, any(len(x) > 2 for x in am)), end(hc, em), end(sc, um)
     tp = [(r["h"], r["n"]) for r in g["hour"][:-1] if r["h"] >= t0]
     tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)

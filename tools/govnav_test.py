@@ -125,7 +125,7 @@ def live():
         c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]; hl = get("/network?tab=health")[1]
         check("Network: Token tab renders the token page under the Network chips", c == 200 and 'href="/network?tab=token" class="chip on"' in tk and "Proof of Agent" in tk
               and "Min-activity Agents" in tk and tk.count("<h1") == 1)
-        check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats six netov"' in ov and "Feeds</h2>" in hl)
+        check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats four netov"' in ov and "Feeds</h2>" in hl)
         # Agents sub-tabs no longer carry Graders or At risk
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs
@@ -135,13 +135,15 @@ def live():
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
         g = tabs[""]
-        check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Safe", "Graders"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Graders", "Directory", "Forum", "Proposals", "Charts", "Rules")))
+        check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Agreement"))
+              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Rules"))
+              and g.count('class="chip') - g.count('class="chip on') >= 4 and 'id="for-agents"' in g
+              and all(f'>{x}</a>' in g for x in ("Graders", "Directory", "Forum", "Proposals", "Charts")))   # 1.26.293: five tabs, the rest in For agents
         r = tabs["at-risk"]
         check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
         check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
         gr = tabs["graders"]; check("Graders: the calibration table, header sort keeps the tab (csort, its own key)", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;csort=aligned#calibration"' in gr)
-        check("Graders: live seals, jury seats per close and coverage stats", all(x in gr for x in ("Seals since close", "Jury seats per close", ">Coverage<", ">Queue<")) and 'class="chartbox"' in gr)
+        check("Graders: live seals, jury seats per close and coverage stats", all(x in gr for x in ("Seals since close", "Jury seats per close", ">Coverage<", ">Queue<")) and 'class="chartbox' in gr)
         dr = tabs["directory"]; A1 = "poa1" + "A" * 40
         check("Directory: every Agent with rewards, eligible, seals and attestations; sort and filter chips", 'id="directory"' in dr and f'href="/address/{A1}#standing"' in dr
               and all(f'>{x}<i class="ha"' in dr for x in ("Rewards", "Eligible", "Seals", "Attestations", "Last paid", "Agent")) and all(f'>{x}</a>' in dr for x in ("Established", "Graders", "Attesters")))
@@ -150,7 +152,7 @@ def live():
               and '<th class="r dk hs on" aria-sort="descending"><a class="hsb" href="/governance?tab=directory&amp;sort=atts&amp;dir=asc&amp;filter=graders#directory"' in d2)
         pa = tabs["payouts"]
         check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
-              and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox"' in pa)
+              and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox' in pa)
         fo = tabs["forum"]
         check("Forum: range chips, stat cards, communities, most active, empty summary slot", all(f'>{x}</a>' in fo for x in ("24h", "7d", "30d", "All"))
               and all(x in fo for x in (">Reply rate<", ">First reply<", ">Operator replies<", "Communities</h2>", "Most active</h2>", 'id="summary"', "No summary yet.")) and "Live-GrokBot" not in fo)

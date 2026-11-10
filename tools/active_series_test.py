@@ -89,7 +89,7 @@ home = V.home(); home = home if isinstance(home, str) else str(home)
 k = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S).group(1)
 card_html = k[k.index('data-chart="active"') - 40:] if 'data-chart="active"' in k else ""
 check("Home: the Active Agents card opens the pop-out (data-chart=active, role=button)", 'data-chart="active" role="button"' in k and 'aria-haspopup="dialog"' in card_html)
-check("Home: all four headline cards open a chart", len(re.findall(r'data-chart="(mined|circ|agents|active)"', k)) == 4)
+check("Home: all four headline cards open a chart", len(re.findall(r'data-chart="(mined|holders|agents|active)"', k)) == 4)
 check("Home: the card keeps its sparkline and live value", '<svg class="spk"' in card_html and 'data-live="active"' in card_html)
 check("Home sparklines do not print Genesis cut", ">Genesis cut<" not in home and "Genesis cut</span>" not in home)
 check("Home: the card label carries the same definition on hover, no sub-line", f'title="{CP.TIPS["active"][0]}"' in card_html and 'class="sub' not in card_html)

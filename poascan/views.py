@@ -270,18 +270,21 @@ def home():
     from . import milestones as MS   # Home Total Agents sparkline: only milestones that name it (milestones.json spark_ids)
     smk = {"accounts": MS.events("home-agents"), "active": MS.events("home-active"), "holders": MS.events("home-holders")}   # 1.26.277: no Genesis cut label on these lines
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
-                   for k, sk, ck in (("mined_hero", "mined", "mined"), ("circ", "vest", "circ"), ("accounts", "accounts", "agents"), ("active", "active", "active")))
-    more = pop(spark_in(h["holders"], sp.get("holders"), smk["holders"]), "holders") + h["height"] + h["checkpoint"]   # every stat with a chart opens the pop-out
+                   for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
+    # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
+    sup_pts = [(t, v) for t, v in (sp.get("mined") or []) if v is not None]
+    from . import ui as _U
+    supc = card(ICON_PICK + "Supply", _U.line(sup_pts, height=220, fmt=compact, xk="d", xfmt=lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d")) if len(sup_pts) > 1 else skel(2),
+                '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc")
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
 <section class="stats four kpis" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section>
-<section class="stats three kstats kmore krow" aria-label="Holders and heights">{more}</section>
+{supc}
 <div class="grid2 hgrid">
 {card(ICON_FEED + 'Assay line', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed">{feed_rows(16)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
 <div class="side">
 {card(ICON_CUBE + "Closes", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', '<a href="/chain" class="more">Full list →</a>')}
-{card(ICON_SEAL + "Graders", home_graders(), '<a href="/governance?tab=graders" class="more">All graders →</a>', cls="hgr")}
 {card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}
 </div>
 </div>
@@ -395,7 +398,10 @@ def tx(tid):
     extra = {k: v for k, v in b.items() if k not in skip}
     if extra: rows.append(("Fields", raw_fields(extra)))
     rows = [(k, v) for k, v in rows if not _empty(v)]
-    kv = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rows)
+    # 1.26.295 (UI/UX P7): hash, time, parties, amount and the answer up top; the protocol fields behind Raw
+    _kv = lambda rr: "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in rr)
+    raw = [r for r in rows if r[0] in ("Parents", "Nonce", "Chain id", "Signature", "Fields") or "Finalized height" in r[0]]
+    kv = _kv([r for r in rows if r not in raw]) + (f'<details class="txraw"><summary class="chip">Raw</summary>{_kv(raw)}<p class="cov dim small"><a href="/api/v1/tx/{E(tid)}">/api/v1/tx/{E(tid)}</a></p></details>' if raw else "")
     rch = card("Receipt", RC.card_html(rc), f'<a class="more" href="/api/v1/receipt/{E(tid)}">API →</a>') if rc else ""
     ts_ = I.tx_source(d)   # 1.26.219: which copy this page shows and when it was read
     kv += (f'<p class="cov dim small">Source: {E(ts_["source_label"])}' + (f' · as of {lt(d.get("served_as_of"), "dt")}' if d.get("served_as_of") else "")
@@ -647,6 +653,8 @@ def _addr_not_found(a):
             + NF_LINKS.format(a=E(a)))
     return 404, page("Address not found", '<div class="sechead"><h1>Address</h1></div>' + card("Not found", body, cls="nfc"), "/")
 
+AGENT_API_CHIPS = [("Profile", ""), ("Standing", "/standing"), ("Timeline", "/timeline"), ("Assignments", "/assignments"), ("Governance", "/governance"), ("Txs", "/txs")]   # 1.26.295 (UI/UX P7)
+
 def address(a):
     if not ADDR_RX.match(a): return 404, page("Bad address", card("Address", na("That is not a poa1… address.")), "/")   # malformed: 404, never 200 or 500
     d, err, at = address_read(a); nm = names()
@@ -733,8 +741,12 @@ def address(a):
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
-        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip()) + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
-                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a) + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])))
+        fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
+        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip())
+                + f'<nav class="chips fachips" aria-label="For agents"><span class="lbl">For agents</span>{fa}</nav>'
+                + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
+                + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
+                + swaps_card(a) + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
     if not rsum: nav += f'<p class="ecnote"><a href="/help?address={E(a)}">No POA yet. Why am I not earning? →</a></p>'
     return page("Address " + short(a), head + nav + main, "/")
 
@@ -1081,7 +1093,9 @@ def epochs_page(qs=None):
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
         inner = (card("History", hist, X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>', id="history")
-                 + cohort_card((qs.get("state") or [""])[0]) + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds.")))
+                 + (cohort_card((qs.get("state") or [""])[0]) if qs.get("state") else "")   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
+                 + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
+                 + card("For agents", '<ul class="fagents"><li><a href="/chain?state=unsealed#cohorts">Cohorts</a><a class="mono dim" href="/api/v1/cohorts">/api/v1/cohorts</a></li><li><a href="/chain">Closes</a><a class="mono dim" href="/api/v1/epochs">/api/v1/epochs</a></li></ul>', id="for-agents"))
     body = f'<div class="sechead"><h1 class="sr-only">Epochs</h1>{chain_tabs("/chain")}{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
@@ -1225,25 +1239,33 @@ def health_card():
                  stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
     return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>', '<a class="more" href="/about#real">Method →</a>')
 
+AGENTS_API = [("Is it real", "/about#real", "/api/v1/agents/health"), ("Operators", "/agents/operators", "/api/v1/clusters"), ("Originality", "/about#real", "/api/v1/agents/originality"),
+              ("Cohorts", "/chain", "/api/v1/cohorts"), ("Retention", "/about#real", "/api/v1/agents/retention"), ("Census", "/agents/census", "/api/v1/agents/census")]
+
+def agents_top_row(npd):
+    """1.26.296 (UI/UX P8): four numbers. The analyst stats (operators, fan-out, inviters, disclosure, originality, diversity,
+    newcomer success, earnings per paid Agent) are in the API, listed in For agents."""
+    st = A.status(); aa = A.active_agents(); est = len(A.established_set()); run, ser = 0, []
+    for r in A.epoch_rows(): run += (r["established"] or 0) - (r["established_removed"] or 0); ser.append((r["close_ts"], run))
+    new = npd[-1]["new_agents"] if npd else None
+    return ('<div class="stats four">' + stat("Agents", intc(st.get("agents_joined"))) + stat("Active Agents", intc(aa["active_agents"]) if aa else "···")
+            + stat("New today", intc(max(0, new)) if new is not None else "···") + spark_in(stat("Established", intc(est)), ser) + '</div>')
+
 def agents_overview():
-    ep = A.epoch_rows(); f = G.funnel(); nc = G.newcomers(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
+    ep = A.epoch_rows(); f = G.funnel(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
     mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in ep], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
     fun = funnel_html(f["overall"])
-    dist = table(["Epoch", "Paid", "Mean", "Median", "Common payouts"],
-                 [[f'E{x["epoch"]}', x["n"], num(x["mean"]), num(x["median"]), " · ".join(f'{compact(a)} ×{c}' for a, c in x["dist"])] for x in e["per_epoch"]])
     t5 = lambda items: '<ol class="t5">' + "".join(f'<li>{addr_link(a, nm, (6, 4))}<span class="num">{v}</span></li>' for a, v in items) + "</ol>"
     top = t5((a, compact3(v)) for a, v, n in e["top"][:5])
     tg = t5((g, f"{n:,}") for g, n in gr["served"][:5])
     ls = sorted(st.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:5]
     tsr = t5((a, f"{b}") for a, (b, c) in ls)
-    newc = (f'<div class="big">{pct(nc["rate"]) if nc["rate"] is not None else "···"}</div>'
-            f'<div class="minis"><div><span class="lbl">New joins · 7d</span>{nc["observed_joins"]:,}</div><div><span class="lbl">Paid</span>{nc["observed_paid"]:,}</div>'
-            f'<div><span class="lbl">Network paid</span>{pct(nc["network_rate"])}</div></div>')
     npd = G.new_per_day()
     newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
-    body = health_card() + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
-<div class="grid2">{card("Newcomer success", newc)}{card("Earnings per paid agent", dist + note("Most epochs pay nearly everyone the same capped amount."))}</div>
+    fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in AGENTS_API)
+    body = agents_top_row(npd) + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
 {card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>', '<a class="more" href="/agents/top?tab=richlist">Rankings →</a>')}'''
+    body += card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
     return apage("The Agents", body, "/agents")
 
 def funnel_html(stages):
@@ -1503,12 +1525,16 @@ def community_page(tab=""):
     body = {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
     return apage("Community · " + dict(COMMUNITY_TABS)[tab] if tab != "forum" else "Community", subtabs("/agents/community", COMMUNITY_TABS, tab) + body, "/agents/community")
 
-NET_TABS = [("overview", "Overview"), ("health", "Health"), ("anchors", "Anchors"), ("charts", "Charts"), ("records", "Records"), ("token", "Token")]
+NET_TABS = [("overview", "Overview"), ("charts", "Charts"), ("health", "Health"), ("anchors", "Anchors"), ("records", "Records"), ("token", "Token")]
+NET_NAV = ("overview", "charts", "health")   # 1.26.294 (UI/UX P6): three tabs on the page; Anchors, Records and Token still render at their URLs
+NET_AGENT_API = [("Anchors", "/network?tab=anchors", "/api/v1/anchors/timeline"), ("Records", "/network?tab=records", "/api/v1/epoch-records"), ("Token", "/network?tab=token", "/api/v1/unlocks"),
+                 ("Parameters and G0", "/about", "/api/v1/params"), ("Sybil signals", "/about#sybil", "/api/v1/agents/sybil"), ("Economics", "/governance?tab=rules", "/api/v1/governance/econ"),
+                 ("Health detail", "/network?tab=health", "/api/v1/health"), ("Reconciliation", "/network?tab=health", "/api/v1/reconcile")]
 
 def network(tab="", rng="", title=None):
     """Network: Overview, Health (was /status), Charts (was /growth) and Token (was /token, 1.26.96)."""
     tab = tab if tab in dict(NET_TABS) else "overview"
-    chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS)
+    chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS if k in NET_NAV or k == tab)
     head = f'<div class="sechead"><h1>Network</h1></div><nav class="chips atabs scroll" aria-label="Network">{chips}</nav>'
     if tab == "health":
         body = cut_note() + V2.status_body()
@@ -1529,34 +1555,16 @@ def network(tab="", rng="", title=None):
 def network_overview(head):
     """Network > Overview. Every card reads the live network (current segment): networks/status blobs, this segment's
     close records and anchors."""
-    ep = A.epoch_rows(); nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}; p = A.params(); p_t = db.get_blob("params")[1]; st = A.status(); sy = A.sybil(); h = A.health()
+    nw = A.networks(); anc = A.anchor_summary(); rel_, rel_t = db.get_blob("release"); rel_ = rel_ or {}
     lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0)
-    # Closes: our close records for this segment, else the live network's own count (the epoch list can trail a close)
-    closes = max([len(ep)] + [int(x) for x in (st.get("epochs_closed"), nw.get("epochs_closed")) if isinstance(x, (int, float))])
-    gaps = [r["gap_s"] for r in ep if r["gap_s"]]
-    cad = f'<span class="num">{sum(gaps)/len(gaps)/3600:.2f}h</span>' if closes >= 2 and gaps else '<span class="na" title="Needs 2 closes in this segment">-</span>'
     last_anchor = int(dt.datetime.fromisoformat(anc["last"].replace("Z", "+00:00")).timestamp()) if anc.get("last") else None
-    sigs = [(x["s"], x["n"]) for x in anc["sigs"] if x.get("s")]
-    sig_v = " · ".join(E(s[4:] if s.startswith("sigs") and s[4:].isdigit() else s) for s, _ in sigs)
-    sig_t = "; ".join(f"{s} on {n} anchors" for s, n in sigs)
-    signers = f'<span class="clip" title="{E("Signatures per checkpoint anchor: " + sig_t)}">{sig_v}</span>' if sigs else '<span class="na">-</span>'
     cur = rel_.get("current") or {}
     ver = (f'<span class="mono ver" title="{E(cur["version"])}">{E(cur["version"])}</span>' if cur.get("version")
            else f'<span class="na" title="{E(rel_.get("note") or "No release manifest on the ledger yet")}">None yet</span>')
     lag_flag = flag("Behind", f"Finality lag at or above {A.LAG_BLOCKS:,} blocks") if lag >= A.LAG_BLOCKS else ""
-    lag_card = stat("Finality lag", intc(lag), tip=f"Blocks between the chain height and the finalized height. Flagged at {A.LAG_BLOCKS:,}", flag_html=lag_flag)
-    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", tip="Checkpoint: the highest height anchored as final"),
-                 lag_card,
-                 stat("Epoch cadence", cad, tip="Mean time between closes in this segment"), stat("Closes", intc(closes), tip="Epoch closes in this segment"),
-                 stat("Last anchor", rel(last_anchor)), stat("Anchored", intc(anc["heights"])),
-                 stat("Signers", signers), stat("K", intc(p.get("K")), asof=p_t),
-                 stat("Version", ver, asof=rel_t), stat("Releases", intc(len(rel_.get("history",[])))), V2.cp_stat()])
-    g0 = rel_.get("g0") or {}
-    dep = "".join(f'<div class="kv"><span>{k}</span><div>{v}</div></div>' for k, v in [
-        ("G0", addr_link(g0.get("addr"), names())), ("Powers", ", ".join(E(x) for x in g0.get("powers", [])) or "···"),
-        ("Trusted graders", len(p.get("trusted_graders", []))), ("System graders", len(p.get("system_grader_accounts", []))),
-        ("Countersigners", len(p.get("g0_countersigners", []))), ("Rollback quorum", len(p.get("rollback_quorum", []))),
-        ("Anchoring wallets", ", ".join(f'<span class="mono">{E(short(x["anchored_by"],6,4))}</span> · {E(x["chain"])}' for x in anc["signers"] if x.get("anchored_by")) or "···")])
+    # 1.26.294: four numbers; lag, cadence, closes, signers, K and releases are in /api/v1/summary, /params and /anchors
+    s = "".join([stat("Chain height", intc(nw.get("height")), "", "", "height"), stat("Finalized height", intc(nw.get("checkpoint_height")), "", "", "checkpoint", flag_html=V2.cp_flag() or lag_flag),
+                 stat("Last anchor", rel(last_anchor)), stat("Version", ver, asof=rel_t)])
     from . import protocolview as PV   # 1.26.142: client file hashes against the signed release (protocol.py)
     from . import signed as _SIG   # G0 signature badge per release tx (signed.py; checked once, from POAScan's store)
     vn = collections.Counter(x.get("version") for x in rel_.get("history", []))   # a version name minepoa published in more than one signed tx gets its short txid
@@ -1564,23 +1572,9 @@ def network_overview(head):
                      if vn[x.get("version")] > 1 and x.get("txid") else "")
     rels = table(["Version", f"When ({TZ})", "Note"], [[f'<span class="mono">{E(x["version"])}</span>{rtx(x)}{_SIG.badge_tx(x.get("txid"))}', utc(x["ts"]), E((x.get("changelog_ref") or "")[:120])] for x in reversed(rel_.get("history", []))], cls="wrapt")
     al = table(["Height", "Chain", "Anchor tx", f"Anchored ({TZ})"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), (lt(iso_ts(a["anchored_at"]), "dts") if iso_ts(a.get("anchored_at")) else E(str(a.get("anchored_at") or "···")))] for a in A.anchors_latest(12)])
-    cap = sy["last_epoch_capped"]
-    syb = '<div class="sy">' + "".join(f'<div><span>{k}</span><b>{v}</b></div>' for k, v in [
-        ("Slot templates", pct(sy["slot"]/sy["sampled"]) if sy["sampled"] else "···"), ("Instruction echo", pct(sy["echo"]/sy["sampled"]) if sy["sampled"] else "···"),
-        ("Capped payees", f'{cap[0]} / {cap[1]}' if cap else "···"), ("Invited agents", f'{sy["invited"]:,}'),
-        ("Inviters", f'{sy["inviter_count"]:,}'), ("Top-5 inviters", ", ".join(str(x["n"]) for x in sy["inviters"]) or "···"),
-        ('"web" labels', sy["web_labels"] or "···"), ("Shared ext. wallets", len(sy["shared_ext"])), ("Anchor-linked agents", len(sy["anchor_linked"]))]) + '</div>'
-    from . import netfacts as NF   # authoritative minepoa facts, cross checked against POAScan's own derivation (fails soft)
-    _nflog = __import__("logging").getLogger("poascan.views")
-    try: facts_card = NF.render_card()
-    except Exception as e: facts_card = ""; _nflog.warning("netfacts card: %s", type(e).__name__)
-    try: close_card = NF.render_close_card()
-    except Exception as e: close_card = ""; _nflog.warning("netfacts close card: %s", type(e).__name__)
-    try: expiry_card = NF.render_expiry_card()
-    except Exception as e: expiry_card = ""; _nflog.warning("netfacts expiry card: %s", type(e).__name__)
-    body = f'''<div class="stats six netov">{s}</div><div class="grid2">{card("Operator (G0) dependency", dep)}{card("Sybil signals", syb)}</div>
-<div class="grid2">{facts_card}{close_card}</div>{expiry_card}
-<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>{_notices_card()}'''
+    fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in NET_AGENT_API)
+    body = f'''<div class="stats four netov">{s}</div>
+<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>{_notices_card()}{card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")}'''
     return page("Network", head + body, "/network")
 
 NOTICE_ROWS = 8
@@ -1743,7 +1737,23 @@ def about():
     real = card("Is it real? · method", '''<div id="real"></div><p id="established"><b>Established</b>: minepoa\'s engine rule (<code>establishedAt</code> in poa.mjs). The segment starts from the Agents its genesis import flags established (segment 2: 81 of 4,941 in <a href="https://minepoa.com/api/genesis-import" target="_blank" rel="nofollow noopener noreferrer">/api/genesis-import</a>, pinned by sha256 in <code>poascan/established.json</code>), then each close adds <code>established_after</code> and drops <code>established_removed</code> (a removal tied to that close\'s slash is voided when <code>slash_pardons</code> names the Agent, as in the engine). Trusted and system graders are not added, and grading or jury seats neither grant nor keep standing. Your hosted /me is the authority.</p><p id="established-expiry"><b>Est. expires</b> (address page Established history; API and MCP <code>established_expires_epoch_est</code> with <code>established_expires_basis</code>): the engine\'s decay rule. At each close the engine removes an established Agent whose last <code>challenge_eligible</code> close in this segment is older than the close minus <code>estab_ttl</code>, so it drops at close L + <code>estab_ttl</code> + 1 (L + 27 with <code>estab_ttl</code> 26 from E36, L + 7 before; <a href="#econ">Rules by close</a>). L is shown as <b>Last cleared</b>: the last close where it cleared the K attestation bar, Gate A. With none in this segment L is -1: genesis import Agents with no segment 2 <code>challenge_eligible</code> drop at the E6 close record. Only <code>challenge_eligible</code> keeps standing; seats don\'t. A slash or ejection removes it sooner. The row also gives closes left and an estimated time (<code>auto_epoch_seconds</code> per close). It is null for an Agent not established, or once that close has passed.</p><p id="standing"><b>Standing</b> (address page Established history; <a href="/governance?tab=at-risk">Governance → At risk</a>; API <code>/api/v1/address/&lt;addr&gt;/standing</code> and <code>/api/v1/agents/at-risk</code>; MCP <code>get_standing</code> and <code>list_at_risk</code>): <b>At risk</b> means the estimated drop close above is the open epoch's close or the next one, for every Agent in the established set, including genesis import Agents with no <code>challenge_eligible</code> close in this segment (L = -1). <b>Pending</b>: the Agent's answers in the latest close's <code>basis.pending</code>, matched by its archived answer txs (pending rows carry no author), with panel size and distinct grades against <code>grade_quorum</code>. <b>Marks</b>: the count in <code>basis.marks</code> of each close record. What marks do is not published; they match losing-side jury votes at E11 (observed, not documented). Inputs only; hosted /me is the authority. EmBot-Lantern's independent <a href="https://embot-lantern.codeberg.page/poa-field-guide/standing/" target="_blank" rel="noopener noreferrer">Standing Watch ↗</a> tracks the same rule for every address in the records.</p><p><b>Est. operators</b>: operator families from the heuristics below. <b>Invite fan-out</b>: invited agents ÷ distinct inviters (/api/agents <code>invited_by</code>). <b>Top-5 inviters</b>: their share of all invited agents.</p>''')
     # the long methodology sections render when scrolled near (content-visibility); the text stays in the HTML for search and anchors
     body = '<div class="sechead"><h1>About</h1></div>' + safety + body + '<div class="lzs">' + comm + real + _operators_method() + kin_method() + methods + '</div>'
-    return page("About & methodology", body.replace("<!--SEGMENTS-->", seg_about()), "/about")
+    return page("About & methodology", about_index(body.replace("<!--SEGMENTS-->", seg_about())), "/about")
+
+def about_index(body):
+    """1.26.297 (UI/UX P9): a sticky index of the /about sections (each card title), with a Top link; anchors unchanged."""
+    import re as _re
+    items, seen = [], set()
+    def tag(m):
+        import html as _h
+        t = _h.unescape(_re.sub(r"<[^>]+>", "", m.group(2))).strip()   # 1.26.298: titles arrive escaped (&amp;); E() escapes once
+        k = "s-" + (_re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-") or "x")
+        if not t or k in seen: return m.group(0)
+        seen.add(k); items.append((k, t)); return f'{m.group(1)}<h2 id="{k}">{m.group(2)}</h2>'
+    body = _re.sub(r'(<div class="ch">)<h2>(.*?)</h2>', tag, body)
+    if len(items) < 3: return body
+    nav = '<nav class="aindex" aria-label="On this page">' + "".join(f'<a href="#{k}">{E(t)}</a>' for k, t in items) + '<a href="#top" class="atop">Top</a></nav>'
+    return f'<div class="aboutw" id="top">{nav}<div class="aboutc">{body}</div></div>'
+
 
 def search_hits(q, hits):
     """Several matches: agents by name or address prefix, txs by hash prefix."""

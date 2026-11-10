@@ -81,7 +81,7 @@ check("a cut inside an hour: that hour has no point (the line breaks there), the
       not any(t == C for t, _ in js) and min(t for t, _ in js if t > C) == C + H and max(t for t, _ in js if t < C) == C - H)
 from poascan import ui as U
 sv = U.spark([(t, v) for t, v in hj])
-check("sparkline runs across the cut: one polyline (1.26.175)", sv.count("<polyline") == 1)
+check("sparkline runs across the cut: one line path, one M (1.26.175; a smooth path since UI/UX P3)", sv.count('class="sl"') == 1 and re.search(r'class="sl" d="([^"]+)"', sv).group(1).count("M") == 1)
 
 # ---------------- DB read ----------------
 now = int(time.time())
@@ -107,7 +107,7 @@ try:
     m = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S)
     k = m.group(1) if m else ""
     labels = re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k)
-    check(f"headline row: Total mined, Circulating supply, Agents, Active Agents {labels}", labels == ["Total mined", "Circulating supply", "Agents", "Active Agents"])
+    check(f"headline row (1.26.292): Total mined, Agents, Active Agents, Holders {labels}", labels == ["Total mined", "Agents", "Active Agents", "Holders"])
     check("Active Agents value is live (data-live=active); no Agents / hr card (1.26.116)", re.search(r'data-live="active"><span class="num"', k) is not None and "joins_hr" not in k)
     check("no sub-line, share button or 'Accounts' in the row", len(re.findall(r'class="stat[ "]', k)) == 4 and not any(x in k for x in ('class="sub', "share", "Share", "Accounts", "asof")))
     css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
@@ -117,7 +117,7 @@ try:
     from poascan import views as V
     lc = V.live_snapshot()["cards"]
     check("live cards: circ (home) has no USD; vest (token page) keeps it", 'class="usd"' not in lc.get("circ", "x usd") and 'data-live="circ"' in lc["circ"] and 'class="usd"' in lc["vest"])
-    check("Holders and heights stay on the home page", all(f'data-live="{x}"' in home for x in ("holders", "height", "checkpoint")))
+    check("Holders on the home page; heights moved to /network (1.26.292)", 'data-live="holders"' in home and 'data-live="height"' not in home)
     ab = get("/about"); sec = ab[ab.index('id="home"'):] if 'id="home"' in ab else ""; sec = sec[:sec.index("</ul>")] if sec else ""
     check("/about#home explains all four and the API join rate", all(x in sec for x in ("Total mined", "Circulating supply", "<b>Agents</b>", "<b>Active Agents</b>", "agent_joins_per_hour", "2 h", "1 h")))
     for u in ("/api/v1/summary", "/api/v1/status"):

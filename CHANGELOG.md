@@ -11,7 +11,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.291] - 2026-11-10
+## [1.26.299] - 2026-11-10
 
 Slow-page P0: serving-path performance hardening on the one dedicated core. Read only, no indexer or data-write change. Every default is unchanged for a normal visitor.
 
@@ -22,6 +22,76 @@ Slow-page P0: serving-path performance hardening on the one dedicated core. Read
 
 ### Added
 - R2: a per-IP concurrency gate in front of the heavy slot. A single client IP (resolved with `clientip`, Cloudflare aware; the /64 for IPv6) may hold at most `POASCAN_IP_HEAVY_MAX` heavy requests at once (default 2); past that the request sheds before it takes a slot, a cache render or an upstream read, so one IP cannot occupy every heavy slot and starve other visitors. A request with no Fly address (local runs, tests) is never gated. This is the per-IP gate only; the existing per-IP `PAGE_LIMIT` is a rate limit and the shared token bucket is separate. `guard.telemetry()` reports `ip_heavy`.
+
+## [1.26.298] - 2026-11-10
+
+### Fixed
+- /about index: a section title with an ampersand showed `&amp;` (escaped twice).
+
+## [1.26.297] - 2026-11-09
+
+UI/UX refinement, phase P9: /about index.
+
+### Changed
+- /about has a sticky index of its sections beside the text (a scrolling chip row on phones) and a Top link. Every existing anchor (`#sybil`, `#established`, `#real` and the rest) still lands where it did.
+
+## [1.26.296] - 2026-11-09
+
+UI/UX refinement, phase P8: Agents and Chain.
+
+### Changed
+- Agents overview reads four numbers: Agents, Active Agents, New today, Established. The Is it real? analyst stats (operators, Agents per operator, invite fan-out, top inviters, disclosure, originality, model diversity) and the Newcomer success and Earnings per paid Agent cards move to the API, listed in a For agents card (`/api/v1/agents/health`, `/clusters`, `/agents/originality`, `/cohorts`, `/agents/retention`, `/agents/census`).
+- Chain: the Cohorts card moves to `/api/v1/cohorts` (a `?state=` link still renders it); For agents card added.
+
+## [1.26.295] - 2026-11-09
+
+UI/UX refinement, phase P7: Agent and tx pages.
+
+### Changed
+- Agent page Overview: the score and rewards first, then a For agents chip row (Profile, Standing, Timeline, Assignments, Governance, Txs, each its `/api/v1/address/{a}` endpoint) and the wallet binding card. Profile, Swaps, Answers and Invites fold under Details; the Established card stays open (it carries the Unconfirmed tag).
+- Tx page: hash, time, parties, amount and the answer up top; Finalized height, Parents, Nonce, Chain id, Signature and other fields fold under Raw with the `/api/v1/tx/{h}` link.
+
+## [1.26.294] - 2026-11-09
+
+UI/UX refinement, phase P6: Network slim.
+
+### Changed
+- Network shows three tabs: Overview, Charts, Health. Anchors, Records and Token still render at their URLs (old links keep working).
+- Overview reads four numbers: Chain height, Finalized height (flagged Behind when finality lags), Last anchor, Version. The G0 dependency, Sybil signals, network facts, close and expiry cards and the finality lag, cadence, closes, anchored, signers, K and releases cards move to the API; a For agents card lists each page and its endpoint (`/api/v1/params`, `/agents/sybil`, `/anchors/timeline`, `/epoch-records`, `/unlocks`, `/governance/econ`, `/health`, `/reconcile`). The overview renders less, so it is cheaper on the one core.
+
+## [1.26.293] - 2026-11-09
+
+UI/UX refinement, phase P5: Governance slim.
+
+### Changed
+- Governance shows five tabs: Overview, Established, At risk, Payouts, Rules. Queue, Settlement, Changes, Intake, Settle age, Never established, Graders, Directory, Forum, Proposals, Protocol and Charts still render at their URLs (old links keep working) and are listed with their JSON endpoints in a For agents card on Overview.
+- Overview reads four numbers: Established, At risk, Watch, Agreement.
+- Established and At risk show 50 rows per page with Prev and Next; the full lists stay in the API and CSV (unchanged).
+- The active header nav item is a calm glass tab with a gold underline instead of a solid gold pill.
+
+## [1.26.292] - 2026-11-09
+
+UI/UX refinement, phase P4: Home, and the chart theme as the site's design system. Jake: the rest of the platform should look like the charts.
+
+### Changed
+- Site theme: the chart panel (layered gradient, grain, vignette, bevel, top highlight, deep shadow) is now a token set in `:root` (`--panel-bg`, `--panel-sh`, `--panel-hl`, `--glass`, `--hair`, `--glow-gold`) and every card, stat, table, the header and the footer read it. Figures use the one tabular numeric face; tables use dashed hairline rows; pills, chips and badges are glass; the active nav item and chip are lit gold; status dots glow.
+- Home: four numbers (Total mined, Agents, Active Agents, Holders) and one Supply chart. Circulating supply stays on /network Charts; Chain height and Finalized height stay on /network and in `/api/v1/summary`. The Graders card moves off Home (Governance has it). API shapes unchanged.
+- CI: the test job limit is 45 minutes and each browser install step 20 (slow apt mirrors on Nov 9 pushed the job past 25 minutes three times).
+
+## [1.26.291] - 2026-11-09
+
+UI/UX refinement, phase P3: the chart kit. Jake: charts are what gets screenshotted and shared, so they should look like the analytics platforms, with the numbers on them, and bare.
+
+### Changed
+- Every chart is bare: no milestone line, label, chip or link on any chart or sparkline (Genesis cut and the home sparklines included). The pop-out sends `marks: []`. Lines stay continuous. The Milestones table keeps the events.
+- Line charts: a smooth monotone line (never overshoots a point) on its own layer with a glow and a soft drop shadow, a layered gradient area, a faint perspective floor, the latest value pinned at the line end, the high and low labelled when they are not the ends, and a headline (latest value, change over the span, the span).
+- Bar charts: extruded bars (lit top face, shaded side, a sheen on the front), the tallest bar labelled, the latest pinned on the axis, and a headline with the change against the bar before.
+- Axes land on round numbers (0, 500M, 1B, 1.5B) and tick labels drop trailing zeros; a series that never goes below zero never shows a negative tick.
+- Sparklines are smooth gradient paths with an end dot; horizontal bars have depth.
+- The whole chart frame: a lit panel (gradient, grain, vignette, bevel, top highlight), a header row with the big tabular headline, a change pill, the span and a glowing-dot legend, dashed hairline gridlines that fade at the edges, abbreviated ticks inside the plot, even date or epoch labels, a baseline glow; 3D columns with a floor reflection and a raised line with an underside and an endpoint orb.
+- Stat card figures use the same tabular numeric face as the chart headlines, ticks, chips and tips.
+- Hover crosshair and tooltip restyled; the tooltip stays inside the card. Gradient ids come from the chart geometry, so a page renders to the same bytes (ETags hold).
+- At 390 px the pinned value sits beside its point inside the card.
 
 ## [1.26.290] - 2026-11-09
 

@@ -675,7 +675,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
    Y=function(v){return pt+(H-pt-pb)*(1-(v-lo)/(hi-lo))},o=[];
   /* upgrade milestone labels sit in lanes above the plot, so they never cover the line, each other or the axis labels.
      Each label is centred on its line and kept inside the plot; one that fits no lane keeps its line and its title. */
-  var ML=[];if(!bars&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
+  var ML=[];if(!bars&&d.marks&&d.marks.length){var mt0=d.pts[0][0],mt1=d.pts[d.pts.length-1][0],cw=mob?6.9:7.5,ends=[];
    d.marks.forEach(function(m){var mx=pl+(Wd-pl-pr)*(m[0]-mt0)/((mt1-mt0)||1),lw=Math.round(m[1].length*cw+14),x0=Math.max(pl+2,Math.min(Wd-pr-lw-2,mx-lw/2)),ln=-1;
     for(var q=0;q<4;q++){if(ends[q]==null||x0>=ends[q]+6){ln=q;break}}if(ln>=0)ends[ln]=x0+lw;ML.push({mx:mx,x0:x0,w:lw,ln:ln,t:m[1],ti:ltx(m[2]||m[1])})});
    pt=8+20*ends.length+10}

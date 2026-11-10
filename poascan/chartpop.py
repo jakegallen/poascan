@@ -137,7 +137,7 @@ def payload(key, rng, w):
     pts = _thin(pts)
     out["pts"] = [[t, round(float(v), 6)] for t, v in pts]
     # 1.26.175: breaks stays [] (kept for API shape): every line runs continuously across a gap or genesis cut, marked by its milestone
-    if cfg["marks"] and len(pts) > 1:
+    if False and cfg["marks"] and len(pts) > 1:   # 1.26.291 (UI/UX P3, Jake): every chart is bare, no milestone on any chart; "marks" stays [] in the JSON
         from . import milestones as MS
         x0, x1 = pts[0][0], pts[-1][0]
         out["marks"] = [[t, l, ti] for t, l, _u, ti in MS.group(MS.events(key), x0, x1, width=max(120, w - 64))]   # only milestones that affect this chart

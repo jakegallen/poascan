@@ -481,7 +481,8 @@ def cohorts(base, check):
     check("Gate A: challenge_eligible over answers born at that close", g[7]["eligible"] == 2 and g[7]["answers"] == 9 and g[7]["rate"] == round(2 / 9, 4) and c7["gate_a"]["eligible"] == 2 and d["k"] == 5)
     c, h, b = reqh(base + "/api/v1/cohorts.csv")
     check("cohorts CSV: one row per cohort and close", c == 200 and b.decode().count("\n") == 1 + sum(len(x["closes"]) for x in cs))
-    pg = req(base + "/chain")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
+    pg0 = req(base + "/chain")[1].decode(); check("/chain: Cohorts moved to For agents (1.26.296)", 'id="cohorts"' not in pg0 and "/api/v1/cohorts" in pg0)
+    pg = req(base + "/chain?state=unsealed")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
     card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
     check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
           ">Challenge share<" in card and "Gate A" in card and ">+0<" in card and 'class="chip on">Unsealed<' in card and 'class="chip on">Passed<' in p2 and p3[0] == 200
@@ -741,7 +742,7 @@ def fixture_pages(check):
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
               'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "Finalized height unchanged 8h" in _n and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
         check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
-              re.search(r'title="Read \d+m ago">K<', _n) is not None and re.search(r'title="Read \d+m ago">Version<', _n) is not None
+              re.search(r'title="Read \d+m ago">Version<', _n) is not None
               and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)

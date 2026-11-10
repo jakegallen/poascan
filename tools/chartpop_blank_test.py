@@ -33,8 +33,9 @@ try:
     body = V.home(); body = body if isinstance(body, str) else str(body)
     kp = body[body.find('class="stats four kpis"'):]; kp = kp[:kp.find("</section>")]
     check("stale live read: all four headline numbers carry Stale", kp.count("hstale") == 4 and "Last read 15m ago" in kp and 'data-stale="1"' in body)
-    km = body[body.find('class="stats three kstats'):]; km = km[:km.find("</section>")]
-    check("stale live read: Holders carries Stale too", km.count("hstale") == 1)
+    # 1.26.292: Holders is one of the four headline numbers (the second stat row is gone)
+    check("stale live read: Holders carries Stale too", "Holders" in kp and kp.count("hstale") == 4)
+    check("stale live read: no second stat row", 'class="stats three kstats' not in body)
 finally:
     A.freshness = _f
 
