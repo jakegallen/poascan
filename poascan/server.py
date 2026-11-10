@@ -1680,6 +1680,17 @@ def _warm_render(p, qs):
     SG.reset(); V.REQ.path, V.REQ.qs = p, qs; I.CLIENT.crawler = False; I.CLIENT.ip = "warm"
     return page(p, qs)
 
+def _doc_warm(stop=None, every=240, first=15):
+    """1.26.306: render /api and /api/reference on this thread, then again every 4 minutes. Before, the first copy after a
+    deploy needed a heavy slot, and under an API storm none came free, so /api served the plain busy line."""
+    time.sleep(first)
+    while True:
+        for name, fn in (("api", lambda: AG.api_page(V.page, V.card)), ("reference", lambda: AG.reference_page(V.page, V.card))):
+            try: AG._DOC[name] = (time.time(), fn())
+            except Exception as e: log.warning("doc warm %s: %s", name, type(e).__name__)
+        if stop is not None and stop.is_set(): return
+        time.sleep(every)
+
 def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
@@ -1705,6 +1716,7 @@ def main():
             try: HC.load_pins()   # 1.26.284 (E5): serve the previous run's warm pins at once, before the 60 s warm wait
             except Exception as e: log.warning("htmlcache load pins: %s", type(e).__name__)
             __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
+            __import__("threading").Thread(target=_doc_warm, daemon=True, name="docwarm").start()   # 1.26.306: /api pages rendered off the request
         try: CP.start()   # 1.26.277: pin every chart and range off the request; a miss still builds on the first hit
         except Exception as e: log.warning("chart warm: %s", type(e).__name__)
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))

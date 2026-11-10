@@ -18,8 +18,9 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/community"]   # 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/start", "/help", "/about", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/community"]   # 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
+# 1.26.306: /network?tab=token warmed too; a new tab with no pin could not get a slot under an API storm and served the busy page
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.284 (E5): the pin set is kept only in memory, so every deploy or OOM restart serves heavy pages cold until the
 # warm loop repopulates. Persist the pins to a small SQLite blob on the /data volume and reload them at boot, before the

@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.306] - 2026-11-10
+
+### Fixed
+- Token tab (/network?tab=token) is warmed in the background like Health, so it serves its copy with no slot. After 1.26.304 it had no copy yet and, under the API burst, every visit got the busy page.
+- /api and /api/reference are rendered on their own thread at start and every 4 minutes, so the first copy after a deploy needs no slot (it was answering the plain busy line).
+
 ## [1.26.304] - 2026-11-10
 
 ### Changed
