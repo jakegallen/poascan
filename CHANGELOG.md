@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.304] - 2026-11-10
+
+### Changed
+- Token page: Total supply, Circulating, Locked and Holders, then the market row: Market cap (price x circulating; in USD only with the guarded reference price, else in the last trade's asset), Last trade with its date and Best ask from POASwap in their own asset, Minted at closes and Burned at closes (every close in one history, closes not carried over at the restart left out).
+- Top holders: 20 rows with rank, Agent (name to LabLeak), amount and percent of total supply, the median holder, an Ask agent prompt and the rich list link.
+- For agents chips: /api/v1/richlist, /api/v1/price, /api/v1/swaps/status, /api/v1/summary and MCP get_rich_list, with For agents linking to the API page's Token group.
+
 ## [1.26.302] - 2026-11-10
 
 ### Added

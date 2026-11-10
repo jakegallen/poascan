@@ -1003,7 +1003,7 @@ def token_body(h2=False):
     g = V3.growth_data(); u = V3.unlock_data(); circ = u["past"] + [(time.time(), u["now"])]
     cum = {r["close_ts"]: r["cum_supply_confirmed"] for r in ep}   # 1.26.122: carried supply, so Locked continues across the cut
     locked = [(t, cum[t] - c) for t, c in u["past"] if t in cum] + [(time.time(), sp["locked"])]
-    # 1.26.303 (Jake, t523u): the token's numbers in one row. Price from POASwap (last trade, best ask, in their own asset);
+    # 1.26.304 (Jake, t523u): the token's numbers in one row. Price from POASwap (last trade, best ask, in their own asset);
     # USD only when the guarded reference is shown (fills only, /about#market). Market cap is price x circulating: in USD with
     # the guarded price, else in the last trade's asset. Minted and burned are summed over every close in one history,
     # leaving out the closes not carried over at the restart, so nothing is counted twice.
