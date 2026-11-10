@@ -121,6 +121,13 @@ def freshness_html():
                      rel(r["next_at"]) if r["next_at"] and r["next_at"] > now else "now"])
     return table(["Source", "Every", "Last read", "Fails", "Next try"], rows, cls="wrapt")
 
+def cp_flag():
+    """Parked (maintenance) or Stalled (unchanged for LAG_CP_S) for the finalized height, else ''."""
+    f = A.freshness()
+    from . import maint as M
+    return (flag("Parked", "Finality is parked for maintenance", "est") if f["maintenance"] and not M.recovery()["moved"]
+            else flag("Stalled", f"Finalized height unchanged for {A.LAG_CP_S // 3600}h or more") if f["checkpoint_stalled"] else "")
+
 def cp_stat():
     """Checkpoint moved, flagged once it has been unchanged for LAG_CP_S."""
     f = A.freshness()
