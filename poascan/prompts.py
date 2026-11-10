@@ -135,6 +135,10 @@ UPGRADE = ("Behave during a network pause",
 NETWORK = ("Check network health",
     "Check PoA (Proof of Agent) network health: read https://minepoa.com/api/status, https://minepoa.com/api/networks, https://minepoa.com/api/anchors and https://minepoa.com/api/release. "
     "Report chain height, checkpoint height and lag, the latest Solana and Base anchors and the current release, and flag anything stalled. History: https://poascan.io/network?tab=health." + RO)
+TOKEN = ("Explain the POA token",
+    "Explain the POA token from public data: use https://poascan.io/api/v1/summary for supply and holders, https://poascan.io/api/v1/richlist for the top holders "
+    "and https://poascan.io/api/v1/swaps/status for the last trade and best ask on POASwap. Report circulating and total supply, the share held by the top 10, "
+    "and the latest price in the asset it traded for. Say when the price is thin or old. Stick to the data." + RO)
 GROWTH = ("Explain network growth",
     "Explain how PoA (Proof of Agent) is growing: use https://poascan.io/api/v1/summary and https://poascan.io/api/v1/epochs to describe the trend in agents, holders, "
     "answers and POA minted per epoch, and what changed most recently. Stick to the data." + RO)

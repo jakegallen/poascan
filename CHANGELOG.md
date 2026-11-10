@@ -17,6 +17,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - Every table or list over 20 rows shows 20 and a Show more button (20 more a click, the count left on the button). Without script every row shows.
 - Two panels side by side end level: the taller one is capped at its neighbour's height (360 px at least) and scrolls inside, so there is no empty void (for example Network's Recent releases beside Latest anchors). Off under 900 px, where panels stack.
 
+## [1.26.304] - 2026-11-10
+
+### Changed
+- Token page: Total supply, Circulating, Locked and Holders, then the market row: Market cap (price x circulating; in USD only with the guarded reference price, else in the last trade's asset), Last trade with its date and Best ask from POASwap in their own asset, Minted at closes and Burned at closes (every close in one history, closes not carried over at the restart left out).
+- Top holders: 20 rows with rank, Agent (name to LabLeak), amount and percent of total supply, the median holder, an Ask agent prompt and the rich list link.
+- For agents chips: /api/v1/richlist, /api/v1/price, /api/v1/swaps/status, /api/v1/summary and MCP get_rich_list, with For agents linking to the API page's Token group.
+
+## [1.26.303] - 2026-11-10
+
+### Fixed
+- Chain History: a close from before the restart printed 'Oct 20)">' before its mark; its title now carries a plain date.
+- Cadence: no empty bar at the restart. The first close after it counts the time since the close before it.
+- /api and /api/reference: rendered once, then served from memory for 5 minutes (and with no serving slot while a copy under an hour old is held), so an API burst no longer answers the API page with the plain busy line.
+
 ## [1.26.302] - 2026-11-10
 
 ### Added

@@ -1153,6 +1153,10 @@ class H(BaseHTTPRequestHandler):
     def _is_snapshot(self):
         """Homepage live poll. Slot-exempt so Cloudflare can revalidate it while page renders hold the heavy pool."""
         return self._norm() in self.SNAPSHOT_PATHS
+    def _is_doc_ready(self):
+        """1.26.303: the /api and /api/reference HTML pages, once rendered, are served from memory with no slot (an API storm was
+        answering them with the plain text busy line)."""
+        p = self._norm(); return p in ("/api", "/api/reference") and AG.doc_ready("api" if p == "/api" else "reference")
     def _is_swap_status(self):
         """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait."""
         return self._norm() == "/api/swaps/status"
@@ -1260,7 +1264,7 @@ class H(BaseHTTPRequestHandler):
         return True
     def _gated(self, fn):
         if self._ua_throttled(): return   # 1.26.287: before any slot or render
-        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_doc_ready(): return fn()
         path = self._path_only()
         if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render
         if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
@@ -1424,8 +1428,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(AG.ai_catalog(), indent=1), "application/ai-catalog+json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
-            if path == "/api": return self.send(200, AG.api_page(V.page, V.card))
-            if path == "/api/reference": return self.send(200, AG.reference_page(V.page, V.card))
+            if path == "/api": return self.send(200, AG.doc_page("api", lambda: AG.api_page(V.page, V.card)))
+            if path == "/api/reference": return self.send(200, AG.doc_page("reference", lambda: AG.reference_page(V.page, V.card)))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
             if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/network?tab=health"})
             # the raw query: ?segment= was taken out of qs above, and a moved list URL keeps it

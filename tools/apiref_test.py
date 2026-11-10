@@ -54,6 +54,12 @@ def main():
         try: p.wait(timeout=5)
         except Exception: p.kill()
 
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    from poascan import agentapi as _AG
+    n = [0]
+    def _r(): n[0] += 1; return "<p>x</p>"
+    _AG._DOC.pop("t", None); h1 = _AG.doc_page("t", _r); h2 = _AG.doc_page("t", _r)
+    check("1.26.303: the API page is rendered once and then served from memory (slot free when ready)", h1 == h2 == "<p>x</p>" and n[0] == 1 and _AG.doc_ready("t") and not _AG.doc_ready("nope"))
     print(("all passed" if not FAILS else f"{len(FAILS)} failure(s)"))
     sys.exit(1 if FAILS else 0)
 
