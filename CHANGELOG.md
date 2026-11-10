@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.309] - 2026-11-10
+
+### Changed
+- Home: the wide Supply chart repeated Total mined, so it is replaced by Answers per epoch, v2 bars of answer txs per closed epoch (last 40). Its corner icon opens the Answers pop-out. POASwap fills are too few to chart (6 in total, last on Oct 21).
+
+### Fixed
+- Answers pop-out: closes with no record yet (E58 onward) take their close report time and show no Paid figure instead of 0.
+
 ## [1.26.308] - 2026-11-10
 
 ### Fixed
