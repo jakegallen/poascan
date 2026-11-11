@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.315] - 2026-11-10
+
+### Changed
+- `/api/v1/txs`: a micro-cache hit (the default first page, or any identical query) is served without a heavy slot, the same way `/api/summary` and `/api/swaps/status` are. Cache-Control is `public, max-age=15, s-maxage=30, stale-while-revalidate=15, stale-if-error=60`. The default key is filled at boot. Response bytes and shape are unchanged.
+
 ## [1.26.314] - 2026-11-10
 
 ### Fixed

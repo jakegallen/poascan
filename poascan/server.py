@@ -1143,6 +1143,9 @@ class H(BaseHTTPRequestHandler):
     # Browser: do not keep the snapshot. Cloudflare: hold it 30 s, then revalidate, and never answer a 503 with an older copy
     # (a busy origin was leaving a many-hour stale epoch on the page). Cache-Control stays no-store, which other tests expect.
     SUMMARY_CDN = "public, max-age=30, must-revalidate, stale-if-error=0"
+    # 1.26.315: the txs list is identical for every client of the same query. Cloudflare may cache it 30 s,
+    # serve stale while revalidating, and keep a stale copy for 60 s if origin is 503.
+    TXS_CDN = "public, max-age=15, s-maxage=30, stale-while-revalidate=15, stale-if-error=60"
     def _path_only(self):
         try: return urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
         except Exception: return "/"
@@ -1163,6 +1166,31 @@ class H(BaseHTTPRequestHandler):
     def _is_swap_status(self):
         """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait."""
         return self._norm() == "/api/swaps/status"
+    def _txs_micro_parts(self):
+        """(p, qs, fmt, selected, explicit) for /api/txs JSON, else None. Matches the micro-cache key _get uses,
+        without changing this thread's segment."""
+        if getattr(self, "command", "GET") != "GET": return None
+        try:
+            u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
+        except Exception:
+            return None
+        if path == AG.API_PREFIX: path = "/api"
+        elif path.startswith(AG.API_PREFIX + "/"): path = "/api/" + path[len(AG.API_PREFIX) + 1:]
+        fmt = "csv" if path.endswith(".csv") else (qs.get("format") or ["json"])[0]
+        p = path[:-4] if path.endswith(".csv") else path
+        if p != "/api/txs" or fmt == "csv": return None
+        n = None
+        if "segment" in qs:
+            try: n = SG.parse((qs.pop("segment") or [""])[0])
+            except ValueError: return None
+            if n not in SG.BY_N: n = None
+        return (p, qs, fmt, n or SG.CURRENT, n is not None)
+    def _txs_micro_hit(self):
+        """True when this GET is /api/v1/txs (or /api/txs) and the micro cache already has this exact query."""
+        parts = self._txs_micro_parts()
+        if not parts: return False
+        p, qs, fmt, selected, explicit = parts
+        return _micro_get((p, _micro_ck(p, qs), fmt, selected, explicit)) is not None
     def _is_moved(self):
         """A fixed 301 (including /status to Network Health). No worker: the redirect is a dict lookup."""
         p = self._path_only()
@@ -1267,7 +1295,7 @@ class H(BaseHTTPRequestHandler):
         return True
     def _gated(self, fn):
         if self._ua_throttled(): return   # 1.26.287: before any slot or render
-        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_doc_ready(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_doc_ready() or self._txs_micro_hit(): return fn()
         path = self._path_only()
         if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render
         if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
@@ -1580,7 +1608,7 @@ class H(BaseHTTPRequestHandler):
                         from . import horizon as _HZ; rows = _HZ.csv_rows(rows)
                     name = p.strip("/").replace("/", "_") + ".csv"
                     return self.send(200, to_csv(rows), "text/csv; charset=utf-8", dict(mh, **{"Content-Disposition": f'attachment; filename="{name}"', "Access-Control-Allow-Origin": "*"}))
-                hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=15"})
+                hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": (self.TXS_CDN if p == "/api/txs" else "max-age=15")})
                 b = self.prep(json.dumps(data, default=str), "application/json")
                 if not tag and p not in MICRO_SKIP: _micro_put(ck, b, hd)
                 return self.send(200, b, "application/json", hd)
@@ -1616,8 +1644,9 @@ class H(BaseHTTPRequestHandler):
             except Exception: pass
 
 # API micro cache (1.26.81): the same JSON answer is served for MICRO_S seconds, so a client polling /api/v1/txs or
-# swap detail several times a second costs one build, one plainjson/redact pass and one gzip. Within the 15 s the
-# responses already allow clients to cache (Cache-Control max-age=15); meta.generated_at is the build time.
+# swap detail several times a second costs one build, one plainjson/redact pass and one gzip. 1.26.315: a hit on
+# /api/v1/txs is served before a heavy slot is taken; that route also sends TXS_CDN so the edge can reuse it.
+# meta.generated_at is the build time.
 MICRO_S = float(os.environ.get("POASCAN_API_MICRO_S", "30"))
 MICRO_MAX = 64; MICRO_MAX_BYTES = 1_500_000; MICRO_TOTAL_MAX = 16 * 1024 * 1024   # 1.26.252: ~30 s TTL plus a 16 MB total-bytes cap
 MICRO_SKIP = ("/api/health", "/api/search")
@@ -1695,10 +1724,23 @@ def _doc_warm(stop=None, every=240, first=15):
         if stop is not None and stop.is_set(): return
         time.sleep(every)
 
+def warm_txs_micro():
+    """Fill the default /api/txs JSON micro-cache key (no query). Called at boot so pollers do not wait on a heavy slot."""
+    p, qs, fmt = "/api/txs", {}, "json"
+    data, _is_list = api(p, qs)
+    m = AG.meta(); mh = AG.meta_headers(m)
+    hd = dict(mh, **{"Access-Control-Allow-Origin": "*", "Cache-Control": H.TXS_CDN})
+    b = H.prep(json.dumps(data, default=str), "application/json")
+    ck = (p, _micro_ck(p, qs), fmt, SG.selected(), SG.explicit())
+    _micro_put(ck, b, hd)
+    return ck, b, hd
+
 def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
     db.init()
+    try: warm_txs_micro()
+    except Exception as e: log.warning("txs micro warm: %s", type(e).__name__)
     _record_start()   # bump the persisted process start/restart counter (surfaced on /api/status diagnostics)
     VS.COUNTER.start()
     try: CK.start()   # when signup check-ins began (since_ts on /ops/funnel)

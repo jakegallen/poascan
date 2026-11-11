@@ -81,6 +81,8 @@ jobs:
         run: python tools/close_pressure_test.py
       - name: Cheap page cache (a cache buster on / reuses the canonical homepage; eviction keeps warmed / and /chain; a full cheap pool still serves that copy)
         run: python tools/cheap_page_test.py
+      - name: Txs list micro cache (default and identical-query hits skip the heavy slot, TXS_CDN, boot warm, bytes unchanged)
+        run: python tools/txs_micro_test.py
       - name: MCP probe slot (initialize, tools/list, ping and GET /mcp answer with the heavy pool full; tools/call still sheds 503)
         run: python tools/mcp_probe_test.py
       - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; an address read and tools/call still shed)
