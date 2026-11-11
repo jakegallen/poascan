@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.316] - 2026-11-11
+
+### Fixed
+- MCP discovery files (`/.well-known/mcp.json`, `/mcp/server-card`, `/.well-known/ai-catalog.json`, `/.well-known/agent-card.json` and their aliases) are served without a heavy slot, the same way the MCP handshake and tools/list have been since 1.26.273. Under load they were answering "server busy", and `/mcp/server-card` was getting the HTML Busy page. Response bytes are unchanged.
+
 ## [1.26.315] - 2026-11-10
 
 ### Changed

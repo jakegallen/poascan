@@ -1,6 +1,6 @@
 """MCP directory probes do not take a heavy slot (1.26.273). Glama checks a connector hourly by opening an MCP
-connection and listing tools. When every heavy slot is held, initialize, tools/list, ping and GET /mcp still answer
-their normal statuses. tools/call still sheds 503, and once a slot is free it runs (the body was already read to classify).
+connection and listing tools. When every heavy slot is held, initialize, tools/list, ping, GET /mcp and the discovery
+JSON (mcp.json, server-card, ai-catalog, agent-card) still answer their normal statuses. tools/call still sheds 503, and once a slot is free it runs (the body was already read to classify).
 Run: python3 tools/mcp_probe_test.py (temp db, in-process, no network)."""
 import json, os, sys, tempfile, threading, time, urllib.error, urllib.request
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -84,6 +84,17 @@ c, b, dt = post("notifications/initialized", note=True)
 ok(c == 202 and dt < 0.5, f"notifications/initialized 202 while slots are full ({c}, {dt*1000:.0f} ms)")
 c, b, dt = get("/mcp", {"Accept": "text/event-stream", "User-Agent": "Glama-health"})
 ok(c == 405 and dt < 0.5 and b"server busy" not in b, f"GET /mcp is 405, not 503, while slots are full ({c}, {dt*1000:.0f} ms)")
+for path, pred in (
+    ("/.well-known/mcp.json", lambda d: d.get("url") == "https://poascan.io/mcp" and len(d.get("tools") or []) == 54),
+    ("/mcp/server-card", lambda d: d.get("version") == AG.VERSION and d.get("name") == "io.github.jakegallen/poascan"),
+    ("/.well-known/ai-catalog.json", lambda d: (d.get("entries") or [{}])[0].get("type") == "application/mcp-server-card+json"),
+    ("/.well-known/agent-card.json", lambda d: d.get("version") == AG.VERSION),
+):
+    c, b, dt = get(path, {"Accept": "application/json", "User-Agent": "Glama-health"})
+    body = {}
+    try: body = json.loads(b)
+    except Exception: pass
+    ok(c == 200 and pred(body) and dt < 0.5, f"GET {path} 200 while slots are full ({c}, {dt*1000:.0f} ms)")
 ran.clear()
 c, b, dt = post("tools/call", {"name": "get_swap_status", "arguments": {}})
 ok(c == 503 and b"server busy" in b and "tools/call" not in ran and dt >= 0.25,
