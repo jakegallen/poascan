@@ -1195,11 +1195,20 @@ class H(BaseHTTPRequestHandler):
             return CP.last_good(*CP.parse(urllib.parse.parse_qs(u.query))) is not None
         except Exception:
             return False
+    # 1.26.317: MCP discovery JSON is built from in-memory constants (no archive work). Under load these
+    # were taking a heavy slot and answering "server busy", which breaks directory probes that fetch the
+    # manifest or server card. Glama's hourly check is initialize plus tools/list (slot-exempt since 1.26.273).
+    MCP_DISCOVERY = frozenset({
+        "/.well-known/mcp.json", "/mcp/server-card",
+        "/.well-known/mcp/server-card.json", "/.well-known/mcp-server-card",
+        "/.well-known/agent-card.json", "/.well-known/agent.json",
+        "/.well-known/ai-catalog.json", "/.well-known/mcp/catalog.json",
+    })
     def _is_free(self):
         """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
         p = self._path_only()
         if p.startswith("/static/") or p.startswith("/mark/") or p.startswith("/hallmark/"): return True
-        return p in ROOT_FILES or p in ("/robots.txt", "/security.txt")
+        return p in ROOT_FILES or p in ("/robots.txt", "/security.txt") or p in self.MCP_DISCOVERY
     def _bits(self):
         """(path, query without segment, segment, crawler) the HTML cache key is built from. Does not change request state."""
         u = urllib.parse.urlparse(self.path); path = u.path.rstrip("/") or "/"; qs = urllib.parse.parse_qs(u.query)
@@ -1333,7 +1342,7 @@ class H(BaseHTTPRequestHandler):
         """A GET for a human page (not the API, MCP, a fragment, ops, static or a data file)."""
         if getattr(self, "command", "GET") != "GET": return False
         p = self._path_only()
-        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/")): return False
+        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/")): return False
         return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
     def _shed(self):
         """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never

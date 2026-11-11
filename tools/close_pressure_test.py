@@ -39,19 +39,22 @@ ok("close_acquire" in open(os.path.join(ROOT, "poascan", "indexer.py"), encoding
 
 # ---------------------------------------------------------------- 2. classification
 for p in ("/healthz", "/api/health", "/static/style.css", "/static/fonts/instrumentsans-latin-a64857.woff2",
-          "/static/app.js", "/favicon.ico", "/apple-touch-icon.png", "/site.webmanifest", "/mark/abc.svg"):
+          "/static/app.js", "/favicon.ico", "/apple-touch-icon.png", "/site.webmanifest", "/mark/abc.svg",
+          "/.well-known/mcp.json", "/mcp/server-card", "/.well-known/ai-catalog.json", "/.well-known/agent-card.json"):
     st = Stub(p)
     ok(st._is_health() or st._is_free(), f"{p} takes no heavy slot")
 ok(Stub("/")._is_free() is False and Stub("/")._path_only() in SV.H.CHEAP_PATHS, "/ is a cheap page (reserve), not a free file")
 ok(Stub("/chain")._path_only() in SV.H.CHEAP_PATHS, "/chain is a cheap page")
 ok(Stub("/address/poa1" + "A" * 40)._is_free() is False and Stub("/address/poa1" + "A" * 40)._path_only() not in SV.H.CHEAP_PATHS,
    "an address page stays on the heavy pool")
+ok(Stub("/mcp/server-card")._html_shed_ok() is False, "/mcp/server-card sheds as a data file, not the HTML busy page")
 
 # ---------------------------------------------------------------- 3. heavy pool full: static and health do not wait, cheap still runs, heavy 503s
 held = []
 while GD.slots.acquire(blocking=False): held.append(1)
 ok(len(held) == GD.HEAVY_CAP, f"test holds every heavy slot ({len(held)})")
-for p in ("/healthz", "/api/health", "/static/style.css", "/static/fonts/instrumentsans-latin-a64857.woff2", "/favicon.ico"):
+for p in ("/healthz", "/api/health", "/static/style.css", "/static/fonts/instrumentsans-latin-a64857.woff2", "/favicon.ico",
+          "/.well-known/mcp.json", "/mcp/server-card", "/.well-known/ai-catalog.json"):
     called = []
     t0 = time.time()
     r = Stub(p)._gated(lambda: (called.append(1), "SERVED")[1])
