@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.316] - 2026-11-11
+
+### Fixed
+- Sitemap and robots.txt agree: `/sitemap.xml` lists only allowed, indexable URLs (static routes and every epoch close). `/address/` and `/tx/` stay disallowed for crawlers and are no longer in the sitemap (they are heavy and scrapers hit them).
+- A search crawler that would have been shed with the Busy card now gets the visitor last-good copy of the same page when one is in memory (the warmer stores the visitor key). If there is no copy, Googlebot gets the Busy page as 503 with Retry-After 60, never as 200 or 403.
+
+
 ## [1.26.315] - 2026-11-10
 
 ### Changed
