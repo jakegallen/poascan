@@ -55,6 +55,20 @@ ok(code == 503 and body == B and hd.get("Retry-After") == "3" and hd.get("Cache-
 r = Req("/network?tab=charts"); r._gated(lambda: "X")
 code, body, ctype, hd = r.sent[-1]
 ok(code == 503 and body == B and ctype.startswith("text/html"), f"a page with no copy gets the busy page ({code})")
+# 1.26.316: a crawler reuses the visitor last-good copy instead of getting the Busy card
+k3 = HC.key("/agents/operators", {}, seg, False)
+HC.put(k3, "<html>OPS-COPY</html>", now=time.time() - 3600)
+r = Req("/agents/operators"); r.headers = {"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"}
+ran = []
+r._gated(lambda: (ran.append(1), "X")[1])
+code, body, ctype, hd = r.sent[-1]
+ok(code == 200 and "OPS-COPY" in body and not ran, f"Googlebot is served the visitor last-good copy ({code})")
+ok(hd.get("Cache-Control") == "no-store" and hd.get("X-POAScan-Copy") == "last-good", "Googlebot last-good is no-store and labelled")
+# no copy: Busy is 503 with a longer Retry-After, never 200 or 403
+r = Req("/network?tab=charts"); r.headers = {"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"}
+r._gated(lambda: "X")
+code, body, ctype, hd = r.sent[-1]
+ok(code == 503 and body == B and hd.get("Retry-After") == "60" and hd.get("Cache-Control") == "no-store", f"Googlebot with no copy gets Busy as 503 Retry-After 60 ({code})")
 # API, MCP, files keep the text
 for p in ("/api/v1/address/poa1" + "D" * 40, "/api/v1/epochs", "/openapi-gpt.json", "/llms-full.txt", "/fragment/rows"):
     r = Req(p); r._gated(lambda: "X")

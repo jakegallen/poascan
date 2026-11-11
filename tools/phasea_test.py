@@ -1,5 +1,4 @@
-"""Phase A of the Oct 28 audit (1.26.201 on): the /about Disclosure names no other project; the sitemap lists at most 200
-ranked addresses and robots.txt sets a crawl delay and keeps sorted copies out; /upgrade's Release row links the changelog;
+"""Phase A of the Oct 28 audit (1.26.201 on): the /about Disclosure names no other project; the sitemap lists static routes and epoch closes (no /address/ or /tx/, which robots.txt disallows) and robots.txt sets a crawl delay and keeps sorted copies out; /upgrade's Release row links the changelog;
 llms.txt and OpenAPI say /api/v1/health is a 503 whenever ok is false; MCP get_epoch_rewards pages a close's rewards; the
 Health Endpoints and Incidents tables, Chain Transactions, Census Snapshots and the Unlock calendar sort by header.
 In-process server, temp database, no request leaves the box. Usage: python3 tools/phasea_test.py"""
@@ -42,11 +41,11 @@ check("no Plus1 in /about, llms.txt, OpenAPI, /api, MCP or any page source", "pl
 
 # ---- sitemap and robots
 st, sm = get("/sitemap.xml")
-addrs = re.findall(r"<loc>https://poascan.io/address/([^<]+)</loc>", sm)
-check(f"sitemap: at most {SV.SITEMAP_ADDRS} addresses, no repeats ({len(addrs)})", 0 < len(addrs) <= SV.SITEMAP_ADDRS and len(addrs) == len(set(addrs)))
-top = [r["addr"] for r in A.holders()["rows"][:min(100, SV.SITEMAP_ADDRS)]]
-check("sitemap: the largest holders come first", addrs[:len(top)] == top[:len(addrs)])
-check("sitemap_addrs(cap) honours the cap", len(SV.sitemap_addrs(3)) <= 3)
+locs = re.findall(r"<loc>([^<]+)</loc>", sm)
+blocked = [u for u in locs if SV.sitemap_blocked(u.replace("https://poascan.io", ""))]
+check("sitemap: no robots.txt-disallowed URLs (/address/, /tx/, sort=, /fragment/, /ws)", not blocked and "/address/" not in sm and "/tx/" not in sm and "sort=" not in sm)
+check("sitemap: static routes and epoch closes are listed", st == 200 and "https://poascan.io/chain" in locs and "https://poascan.io/start" in locs and any("/epoch/" in u for u in locs))
+check("sitemap_blocked: /address and sort= are blocked, /chain is not", SV.sitemap_blocked("/address/poa1abc") and SV.sitemap_blocked("/chain/txs?sort=epoch") and not SV.sitemap_blocked("/chain"))
 st, rb = get("/robots.txt")
 check("robots.txt: Crawl-delay and no sorted copies in both groups", rb.count("Crawl-delay: 10") == 2 and rb.count("Disallow: /*sort=") == 2 and "Sitemap: https://poascan.io/sitemap.xml" in rb)
 

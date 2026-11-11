@@ -532,7 +532,7 @@ _fci_seen = [False]
 # 1.26.201: Crawl-delay 5 s in every group, and sorted copies of a table (?sort=, ?esort=) are not crawled (bots were 76k page views a day; Bing, Yandex and several AI crawlers honour it)
 # The AI crawler group additionally stays off the heavy per-entity HTML pages (/address/, /tx/): those are
 # what flooded the box, and the same data is available over the API (openapi.json, llms.txt, /mcp), which the
-# group's opening lines point at. Search engines (the * group) keep full access for indexing.
+# group's opening lines point at. Since 1.26.248 / PR #26, /address/ and /tx/ are Disallowed for every user-agent, including search engines.
 # Agents in, crawlers off the heavy pages. The deep per-item pages (/address/, /tx/) are an unbounded URL space that
 # crawl-storms overloaded the box with, so they are now Disallowed for EVERY user-agent (not just the named AI bots);
 # the bounded static pages stay crawlable. /api, /mcp and the discovery files are explicitly Allowed so agents use the
@@ -676,41 +676,28 @@ def moved(path, qs):
     return MOVED.get(path)
 V.ROUTES = STATIC_ROUTES
 _SITEMAP = [0, ""]
-SITEMAP_ADDRS = 200   # 1.26.201: was the top 500 holders, which brought crawlers to 16k address views a day
+# 1.26.316: the sitemap lists only robots-allowed, indexable URLs (static routes and every epoch close).
+# /address/ and /tx/ stay Disallowed in robots.txt because those pages are heavy and scrapers hit them, so they
+# must not appear in the sitemap. A future change to make Agent profiles indexable would allow /address/ in
+# robots.txt first, then add a capped list here.
 
-def sitemap_addrs(cap=None):
-    """1.26.201: the addresses worth a crawl, ranked: the top 100 holders, then the Agents paid in the newest close by
-    reward (active now), deduplicated, at most SITEMAP_ADDRS. Each listed address page is served from the archive to a
-    crawler, so the list only steers which pages get indexed."""
-    cap = cap or SITEMAP_ADDRS; out, seen = [], set()
-    def add(a):
-        if a and a not in seen and len(out) < cap: seen.add(a); out.append(a)
-    try:
-        for r in A.holders()["rows"][:100]: add(r["addr"])
-    except Exception: pass
-    try:
-        ep = A.epoch_rows()
-        if ep:
-            rw = A.epoch_detail(ep[-1]["epoch"]).get("rewards") or {}
-            def amt(v):
-                try: return float(v)
-                except (TypeError, ValueError): return 0.0
-            for a, _ in sorted(rw.items(), key=lambda kv: (-amt(kv[1]), kv[0])): add(a)
-    except Exception: pass
-    try:
-        for r in A.holders()["rows"][100:]: add(r["addr"])
-    except Exception: pass
-    return out
+def sitemap_blocked(path):
+    """True when robots.txt would keep a crawler off this path or query (Disallow: /ws, /fragment/, /address/, /tx/, /*sort=)."""
+    route, _, query = (path or "").partition("?")
+    if route == "/ws" or route.startswith("/ws/"): return True
+    if route.startswith("/fragment/") or route.startswith("/address/") or route.startswith("/tx/"): return True
+    return "sort=" in query
 
 def sitemap():
-    """Static routes, every epoch close and at most SITEMAP_ADDRS addresses (sitemap_addrs). Rebuilt at most every 10 min."""
+    """Static routes and every epoch close. Rebuilt at most every 10 min. Never lists a robots.txt-disallowed URL."""
     if time.time() - _SITEMAP[0] < 600 and _SITEMAP[1]: return _SITEMAP[1]
     base = "https://poascan.io"; ep = A.epoch_rows(); day = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t or time.time()))
     last = day(max([r["close_ts"] or 0 for r in ep] or [0]) or None)
-    urls = [(base + p, last) for p in STATIC_ROUTES] + [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
-    urls += [(f"{base}/address/{a}", last) for a in sitemap_addrs()]
+    urls = [(base + p, last) for p in STATIC_ROUTES if not sitemap_blocked(p)]
+    urls += [(f"{base}/epoch/{r['epoch']}", day(r["close_ts"])) for r in ep]
+    urls = [(u, d) for u, d in urls if not sitemap_blocked(u[len(base):] if u.startswith(base) else u)]
     body = "".join(f"<url><loc>{E(u)}</loc><lastmod>{d}</lastmod></url>" for u, d in urls)
-    _SITEMAP[:] = [time.time(), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>\n"]
+    _SITEMAP[:] = [time.time(), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + '</urlset>\n']
     return _SITEMAP[1]
 
 UI.JSONLD_HOOK = FQ.jsonld
@@ -1228,17 +1215,34 @@ class H(BaseHTTPRequestHandler):
         bot = not (path == "/api" or path.startswith("/api/") or path == "/mcp") and VS.kind(path, ua) == "bot"
         qs = HC.canon_qs(path, qs)   # 1.26.280: drop keys the page does not vary on so a cache buster shares the canonical key (a no-op for API and unlisted paths)
         return path, qs, seg, bot
+    def _is_search_crawler(self):
+        """Google, Bing and a few other search crawlers. Used only to set a longer Retry-After on a true 503."""
+        try: ua = self.headers.get("User-Agent") or ""
+        except Exception: return False
+        lo = ua.lower()
+        return any(s in lo for s in ("googlebot", "google-inspection", "adsbot-google", "google-read-aloud", "bingbot", "bingpreview", "yandexbot", "duckduckbot", "applebot"))
+    def _html_keys(self, path, qs, seg, bot):
+        """Cache keys to try for this request. A crawler also reuses the visitor pin, because the warmer renders
+        the visitor key and a bot-only miss was shedding Googlebot with 503 while a fresh human copy sat in memory."""
+        keys = [HC.key(path, qs, seg, bot)]
+        if bot:
+            visitor = HC.key(path, qs, seg, False)
+            if visitor != keys[0]: keys.append(visitor)
+        return keys
     def _html_hit(self):
         """A rendered page already in memory. / and /chain also hit on a copy younger than CHEAP_STALE, so a full
-        reserve serves that copy instead of 503. The key uses the canonical query (a cache buster is not a miss)."""
+        reserve serves that copy instead of 503. The key uses the canonical query (a cache buster is not a miss).
+        1.26.316: a crawler also hits the visitor copy of the same path."""
         if not HC.ENABLED: return False
         try: path, qs, seg, bot = self._bits()
         except Exception: return False
         if path.startswith("/api") or path in ("/mcp", "/ws") or path.startswith("/fragment/") or path.startswith("/ops/"): return False
-        k = HC.key(path, qs, seg, bot); t = HC.ttl(path, qs) + HC.grace(path, qs)
-        if HC.fresh(k, t): return True
-        if HC.is_warm(path, qs) and HC.last(k) is not None: return True   # 1.26.275: pinned last-good, any age, no slot
-        return path in self.CHEAP_PATHS and HC.within(k, self.CHEAP_STALE) is not None
+        t = HC.ttl(path, qs) + HC.grace(path, qs)
+        for k in self._html_keys(path, qs, seg, bot):
+            if HC.fresh(k, t): return True
+            if HC.is_warm(path, qs) and HC.last(k) is not None: return True   # 1.26.275: pinned last-good, any age, no slot
+            if path in self.CHEAP_PATHS and HC.within(k, self.CHEAP_STALE) is not None: return True
+        return False
     def _mcp_light(self):
         """MCP handshake and tools/list take no heavy slot (1.26.273). Glama marks the connector Unhealthy after two
         failed hourly checks, and those checks are initialize plus tools/list. GET only answers 405. tools/call stays heavy.
@@ -1333,16 +1337,22 @@ class H(BaseHTTPRequestHandler):
         return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
     def _shed(self):
         """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never
-        cached at the edge) or the small branded busy page; the API, MCP and data files keep the plain text 503."""
+        cached at the edge) or the small branded busy page; the API, MCP and data files keep the plain text 503.
+        1.26.316: a crawler reuses the visitor last-good copy. Search crawlers get Retry-After 60 when there is no copy,
+        so Googlebot is not told to retry in 3 seconds. The Busy card is only sent as 503, never 200 or 403."""
         if self._html_shed_ok():
             h = None
             if HC.ENABLED:
                 try:
-                    b = self._bits(); k = HC.key(b[0], b[1], b[2], b[3]); a = HC.age(k)
-                    if a is not None and a <= HC.PIN_MAX_AGE_S: h = HC.last(k)
+                    path, qs, seg, bot = self._bits()
+                    for k in self._html_keys(path, qs, seg, bot):
+                        a = HC.age(k)
+                        if a is not None and a <= HC.PIN_MAX_AGE_S:
+                            h = HC.last(k); break
                 except Exception: h = None
             if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
-            return self.send(503, BUSY_HTML, extra={"Retry-After": "3", "Cache-Control": "no-store"})
+            retry = "60" if self._is_search_crawler() else "3"
+            return self.send(503, BUSY_HTML, extra={"Retry-After": retry, "Cache-Control": "no-store"})
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
     def _swap_status_fast(self):
         """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""
