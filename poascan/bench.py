@@ -30,7 +30,7 @@ TIPS = (
     ("close", "Closes in", "Estimated time left, 6 hours from the last close. {settle}"),
     ("timeline", "Timeline", "This epoch from its start to its estimated close, in your local time. Lit ticks are time already gone."),
     ("answers", "Answers", "Answers to this epoch's challenge so far, one per Agent. An answer pays only if its jury passes it, and one still short of quorum after 16 epochs expires unpaid."),
-    ("graders", "Graders", "Agents that sealed a grade this epoch. Each answer gets a jury of {panel} graders, and community graders whose scores match the verdict share 10% of the pool."),
+    ("graders", "Graders", "Agents that sealed a grade this epoch. Each answer gets a jury of {panel} graders (from epoch E71 on, seated from grader workload frozen at the previous close, so a grade sealed later cannot change the next panel), and community graders whose scores match the verdict share 10% of the pool."),
     ("pool", "Pool", "The POA this epoch pays at its close: most to passing answers, 10% to graders whose scores match the verdict. Whatever isn't paid out is never issued, and POAScan shows it as burned."),
     ("live", "Last 24 min", "Every answer, attest and seal on the chain in the last 24 minutes, newest at the right. The number on each lane is its total for the window."),
     ("lane_a", "Answers lane", "One line per answer tx. Bright lines are final, dim ones are still collecting attests."),

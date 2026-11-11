@@ -82,6 +82,7 @@ def _yn(v, known=True):
 def _h(s): return f"{s / 3600:.1f} h"
 
 TIP = ("Birth panel: the answer has a panel listed in the close record (set when it is born). Any seal: its grades list is not empty. "
+       "From epoch E71 on, a panel is seated from grader workload frozen at the previous close, so a grade sealed later cannot change the next panel. "
        "Counts only; no seal blob or score is read.")
 NTIP = ("POAScan's replay of a proposed rule, until a close record carries neutral_answer and neutral_grading itself. "
         "Answer: longest gap between answer txs over 3 h, or under 20 answer txs. Grading: seal txs under 25% of the median of the last 3 closes that were neither.")
