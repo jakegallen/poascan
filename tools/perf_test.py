@@ -61,7 +61,7 @@ try:
     db.write("INSERT INTO txs(id, type, from_addr, ts) VALUES('n1', 'transfer', ?, ?)", ("poa1" + "N" * 40, now))
     c2, b2, h2 = get(base + "/api/v1/txs?limit=5")
     check("micro: a repeat within the window is the same answer", c1 == c2 == 200 and b1 == b2 and "n1" not in b2)
-    check("micro: headers kept (meta headers, CORS, max-age=15)", h2.get("X-API-Version") == h1.get("X-API-Version") and h2.get("Access-Control-Allow-Origin") == "*" and h2.get("Cache-Control") == "max-age=15")
+    check("micro: headers kept (meta headers, CORS, TXS_CDN)", h2.get("X-API-Version") == h1.get("X-API-Version") and h2.get("Access-Control-Allow-Origin") == "*" and h2.get("Cache-Control") == "public, max-age=15, s-maxage=30, stale-while-revalidate=15, stale-if-error=60")
     c3, b3, _ = get(base + "/api/v1/txs?limit=6")
     check("micro: another query string is its own entry", c3 == 200)
     cg, bg, hg = get(base + "/api/v1/txs?limit=5", gz=True)
