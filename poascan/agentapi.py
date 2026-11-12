@@ -829,7 +829,8 @@ TOOLS += [
      "(coverage) and any seal; answers one qualified seal short of quorum (at 3 of 4); answers expiring at the next close and within 2 and 3 closes; and per close neutral_answer and neutral_grading "
      "(POAScan's replay of a proposed rule unless source is close record: answer gap over 3 h or under 20 answer txs; seal txs under 25% of the median of the last 3 normal closes) with answers, "
      "longest_gap_s, seals and baseline. Never a pending seal blob or score. Use it to see where the grading queue is stuck. "
-     "From epoch E71 on, a panel is seated from grader workload frozen at the previous close, so a grade sealed later cannot change the next panel.",
+     "From epoch E71 on, a panel is seated from grader workload frozen at the previous close, so a grade sealed later cannot change the next panel. "
+     "answer_sort is read-only context from minepoa's official Answer Sort tool (https://minepoa.com/tools/answer-sort/): measurements, not verdicts, cross-author sentence families with build_id, as_of_close, the multi-author share and the top families (members, authors, shared sentence). Counts and sentence overlaps only, no scores or verdicts; cached per close. It is context only and never changes a grade, a reward or any on-chain value.",
      S(segment=SEG_P), t_grading_board),
     ("get_intake", "Intake per close",
      "Who could become established at each close of a segment, from the public close records: established_before (the set), eligible (challenge_eligible Agents not yet established, so admitted plus not_admitted), eligible_raw (the full challenge_eligible count, which minepoa's close report uses) and eligible_established (eligible_raw minus eligible: Agents already established who are also in the list), cap (the door: max(floor, ceil(rate x the set)) under that close's rule, segment 2 max(5, 10%) to E35 and max(25, 25%) from E36), admitted (new in established_after), not_admitted (eligible, not admitted), waitlisted and waitlist_epochs (from E36 the not admitted keep their place that many closes), door (binding when eligible exceeds cap) "
@@ -1135,7 +1136,7 @@ def openapi():
                                        oid="governanceBoard", tag="governance",
                                        desc="bands: band, pending, birth_panel, any_seal, coverage (by closes waited at the last close). at_three_record (3 graders in the close record), grading_list.at_three and at_quorum (minepoa's grading list, checked every 10 min), "
                                             "expiring.next_close, within_2, within_3 (entry epoch + pending TTL). closes: close, answers, longest_gap_s, seals, baseline, neutral_answer, neutral_grading, grading_known, source (POAScan replay or close record). "
-                                            "rule carries the replay's thresholds. Never a pending seal blob or score."),
+                                            "rule carries the replay's thresholds. Never a pending seal blob or score. answer_sort: read-only context from minepoa's Answer Sort tool (measurements, not verdicts: cross-author sentence families, counts and overlaps only), cached per close; never a grade input."),
         "/api/governance/pending-horizon": _op("Expiry horizon per pending cohort, with the pending TTL and where it was read", ANY,
                                        [_p("sort", "row order", {"type": "string", "enum": ["cohort", "pending", "no_seal", "expires", "left", "in"], "default": "cohort"}, "query", False), DIRQ, SEGQ], True,
                                        oid="governancePendingHorizon", tag="governance",
