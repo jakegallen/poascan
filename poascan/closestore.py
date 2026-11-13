@@ -360,54 +360,46 @@ def migrate():
 # ---------------------------------------------------------------- reads
 def ver(kind): return _ver[kind]
 
-class Close(dict):
-    """A slim close record plus where its row is (kind, pos, ppos), so pending_of, settled_of and full_close find
-    the close even after a newer copy replaced it.
+class Basis(dict):
+    """basis of a cached slim close without its settled list in memory (1.26.328). "settled" still reads as a key:
+    b.get("settled"), b["settled"], "settled" in b, items(), keys(), iteration, dict(b) and json.dumps(b) load it from
+    the close row through the 2-close settled LRU. Any other key is a plain dict read, so walking every close for
+    graders_served, challenge_eligible, marks and the like never parses a stored slim (1.26.327 re-parsed the whole
+    slim of every close on each e.get("basis"), about 112 MB of JSON per walk)."""
+    __slots__ = ("src",)   # (kind, pos, index of settled among the stored basis keys)
 
-    1.26.327: the cached copy does not keep basis.settled (the large jury list). e.get("basis") / e["basis"] still
-    returns that list from the close row (a 2-close LRU). Other keys stay on the dict as before. Readers that walk
-    the dict itself (items, json.dumps of the cached object) will not see settled; use get or full_close.
-    """
+    def _st(self): return settled(self.src[0], self.src[1])
+    def __contains__(self, k): return k == "settled" or dict.__contains__(self, k)
+    def __getitem__(self, k): return self._st() if k == "settled" else dict.__getitem__(self, k)
+    def get(self, k, default=None): return self._st() if k == "settled" else dict.get(self, k, default)
+    def __len__(self): return dict.__len__(self) + 1
+    def keys(self):
+        ks = list(dict.keys(self)); ks.insert(min(self.src[2], len(ks)), "settled"); return ks
+    def __iter__(self): return iter(self.keys())
+    def items(self):
+        it = list(dict.items(self)); it.insert(min(self.src[2], len(it)), ("settled", self._st())); return it
+    def values(self): return [v for _, v in self.items()]
+    def copy(self): return dict(self.items())
+    def __eq__(self, o): return dict(self.items()) == (dict(o.items()) if isinstance(o, dict) else o)
+    __hash__ = None
+    def __repr__(self): return "Basis(%r)" % (dict(dict.items(self)),)
+    def __reduce__(self): return (dict, (self.items(),))
+
+class Close(dict):
+    """A slim close record plus where its row is (kind, pos, ppos), so pending_of and full_close find the close even
+    after a newer copy replaced it. 1.26.328: basis is a Basis, which keeps settled on disk until a reader asks for it."""
     __slots__ = ("loc",)
 
-    def _basis(self):
-        b = dict.get(self, "basis")
-        if not isinstance(b, dict):
-            return b
-        if "settled" in b:
-            return b
-        x = getattr(self, "loc", None)
-        if not x:
-            return b
-        out = dict(b)
-        st = settled(x[0], x[1])
-        if st is not None:
-            out["settled"] = st
-        return out
-
-    def __getitem__(self, k):
-        if k == "basis":
-            if "basis" not in self:
-                raise KeyError(k)
-            return self._basis()
-        return dict.__getitem__(self, k)
-
-    def get(self, k, default=None):
-        if k == "basis":
-            if "basis" not in self:
-                return default
-            return self._basis()
-        return dict.get(self, k, default)
-
 def slim(kind):
-    """[slim record (Close)] of one segment, in stored order. basis.settled is omitted from the cached copy."""
+    """[slim record (Close)] of one segment, in stored order. basis.settled stays on disk (Basis) until read."""
     out = []
     for r in db.q("SELECT pos, ppos, slim FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):
         v = json.loads(r["slim"])
         if isinstance(v, dict):
             b = v.get("basis")
             if isinstance(b, dict) and "settled" in b:
-                v["basis"] = {k: val for k, val in b.items() if k != "settled"}
+                keys = list(b); nb = Basis((k, val) for k, val in b.items() if k != "settled")
+                nb.src = (kind, r["pos"], keys.index("settled")); v["basis"] = nb
             v = Close(v); v.loc = (kind, r["pos"], r["ppos"], _ver[kind])
         out.append(v)
     return out

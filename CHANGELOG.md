@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.328] - 2026-11-13
+
+### Fixed
+- Memory after boot on 1.26.327. Every `e.get("basis")` on a cached close re-read and parsed that close's whole stored slim to put `basis.settled` back, and only two were kept, so each walk of every close for a small key (graders served, challenge eligible, marks) parsed about 112 MB of JSON, many times a minute and on several threads at once. `basis` is now a dict that keeps settled on the close row until a reader asks for `settled`; other keys are plain reads. `dict()`, `items()` and `json.dumps` of it still carry settled in its stored place. The settled-by-author list is built once per close (was every 120 s) and keeps only grader and aligned per jury seat, shared across seats. Prompt hashes unchanged.
+
 ## [1.26.327] - 2026-11-13
 
 ### Fixed
