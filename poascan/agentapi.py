@@ -488,7 +488,16 @@ def _recon():
                 per_close=[p for p in d["per_close"] if p["state"] != "no_reads"], method=BASE + "/about#reconcile")
 
 def t_swap_status(args):
-    d = dict(SC.trading_status()); u = _swap_url(d); st = d.get("status") or ("live" if d.get("available") else "unknown")
+    d = dict(SC.status())
+    # 1.26.320: additive bot snapshot from the pinned clearance body. Do not overwrite
+    # status, available, url, message or state; those stay the POASwap flag + market copy
+    # that the MCP note and FAQ already use.
+    tr = SC.trading_status() or {}
+    if isinstance(tr, dict):
+        for k in ("chain", "swap_writes_up", "last_incident", "write_ok", "swap_writes",
+                  "maintenance_active", "halted_routes", "join", "join_state", "gate"):
+            if k in tr: d[k] = tr[k]
+    u = _swap_url(d); st = d.get("status") or ("live" if d.get("available") else "unknown")
     d["note"] = (f"Swaps are live on minepoa.com. POAScan only reads: offers are on {u} and every swap runs through the network's own flow (go.md SWAPS)."
                  if st == "live" and d.get("available") else
                  "Swaps are live but not taking swaps right now. Don't call swap-take; tell the user to check back soon." if st == "live" else
