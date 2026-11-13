@@ -92,15 +92,29 @@ def per_1m(r):
     return pm, (pm * usd if usd else None)
 
 # ---------------- market stats (fills only) ----------------
+def live_open(rows=None, now=None):
+    """Open offers that have not reached expires_ts. Status 'open' past expiry is not depth (1.26.322)."""
+    now = time.time() if now is None else now
+    rows = S.swaps_all() if rows is None else rows
+    out = []
+    for r in rows:
+        if (r.get("status") or "") != "open": continue
+        exp = r.get("expires_ts")
+        if exp is not None and float(exp) <= now: continue
+        out.append(r)
+    return out
+
 def swap_stats():
-    rows = S.swaps_all(); op = [r for r in rows if r["status"] == "open"]
+    rows = S.swaps_all(); op = live_open(rows)
     fills = [r for r in rows if r["status"] == "filled"]
     last = max(fills, key=lambda r: r["fill_ts"] or 0) if fills else None
     lp = per_1m(last) if last else (None, None)
     asks = [(per_1m(r), r) for r in op] if fills else []
     best = min(((p[1] if p[1] is not None else None, p[0], r) for p, r in asks if p[0] is not None), key=lambda x: (x[0] is None, x[0] or x[1]), default=None)
-    return dict(open=len(op), on_offer=sum(r["poa"] or 0 for r in op), fills=len(fills), total=len(rows),
-                last=(lp, last["asset"]) if last else None, best=best)
+    poa_sum = sum(r["poa"] or 0 for r in op)
+    return dict(open=len(op), on_offer=poa_sum, fills=len(fills), total=len(rows),
+                last=(lp, last["asset"]) if last else None, best=best,
+                open_depth=dict(poa=round(poa_sum, 6), offers=len(op)))
 
 def swap_market():
     """Market stats from filled swaps only (no estimate from asks). USD via the CoinGecko reference; USDC counts at 1."""
@@ -129,6 +143,7 @@ def swap_market():
                 trades_all_time=len(done), volume_all_time_usd=round(sum(vall), 2) if vall else (None if done else 0.0),
                 usd_ref=f.get("src") or "CoinGecko", price=pr,
                 last_trade=lt, best_ask=ba, poa_on_offer=st["on_offer"], fills=st["fills"],
+                open_depth=st["open_depth"],
                 usd_ref_rates={k: f.get(k) for k in ("SOL", "ETH")}, **_rates_ts())
 
 def _rates_ts():
@@ -178,9 +193,9 @@ def rows():
     return [r for r in rs if r["status"] == "open"], sorted([r for r in rs if r["status"] == "filled" and r["fill_ts"]], key=lambda r: -r["fill_ts"])
 
 def book(asset=None):
-    op, fl = rows(); now = time.time()
+    op, fl = rows(); op = live_open(op)
     asks = [dict(id=r["offer_id"], poa=r["poa"], want=r["want"], asset=(r["asset"] or "").upper(), chain=r["chain"], exp=r["expires_ts"],
-                 px=r["want"] / r["poa"] * 1e6, maker=r["maker"]) for r in op if r["poa"] and r["want"] and (not r["expires_ts"] or r["expires_ts"] > now)]
+                 px=r["want"] / r["poa"] * 1e6, maker=r["maker"]) for r in op if r["poa"] and r["want"]]
     last = {}
     for r in fl:
         a = (r["asset"] or "").upper()

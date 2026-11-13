@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.322] - 2026-11-13
+
+### Added
+- Token page market view: last fill, open depth (POA in unexpired open asks; expired offers are left out) and an ask-only book plus fill history, all from the ingested swap archive. Bids are never estimated or invented; when none have been ingested the book reads No bids. Trading stays on POASwap (`/swaps` still redirects there). `open_depth` is an additive field on `/api/v1/swaps/status`. The `/api/v1/swaps` list reapplies expiry on each serve so a cached copy cannot keep an offer open past `expires_ts`. No new minepoa.com reads. Prompt hashes unchanged.
+
 ## [1.26.321] - 2026-11-13
 
 ### Fixed

@@ -1955,3 +1955,11 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .lv .lvc.dn{color:color-mix(in srgb,var(--ember-pale) 85%,var(--bone-2))}
 .lv .lvc.up::before{content:"▲";font-size:7px;margin-right:3px;vertical-align:1px;opacity:.8}.lv .lvc.dn::before{content:"▼";font-size:7px;margin-right:3px;vertical-align:1px;opacity:.8}
 .lv.lvu .lvc{top:auto;bottom:100%;margin:0 0 5px}
+/* 1.26.322: Token page market view (ask-only book and fill history) */
+.tokmkt{margin:0 0 var(--s4)}
+.tokmkt .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tokmkt .tokbk + .tokbk{margin-top:var(--s4)}
+.tokmkt .nobids{color:var(--mute)}
+.tokmkt tr.mid td{text-align:center;color:var(--dim);padding-top:var(--s2);padding-bottom:var(--s2)}
+.tokmkt tr.ask td{font-variant-numeric:tabular-nums}
+

@@ -60,3 +60,31 @@ def offer(oid):
 def price_history():
     """/api/v1/swaps/price-history."""
     return _call("/swaps/price-history") or []
+
+def book():
+    """Open unexpired asks and last fill per pair from the ingested book (1.26.322).
+    Expired offers are out. Bids are always empty: the book is ask-only and never estimated."""
+    if REMOTE:
+        rows = offers("open") or []
+        hist = price_history() or []
+        asks, last = [], {}
+        now = time.time()
+        for r in rows:
+            exp = r.get("expires_ts")
+            if exp is not None and float(exp) <= now: continue
+            if not r.get("poa") or not r.get("want"): continue
+            a = (r.get("asset") or "").upper(); ch = (r.get("chain") or "").lower()
+            asks.append(dict(id=r.get("offer_id"), poa=r["poa"], want=r["want"], asset=a, chain=ch, exp=exp,
+                             px=r["want"] / r["poa"] * 1e6, maker=r.get("maker")))
+        asks.sort(key=lambda o: o["px"])
+        for r in sorted([x for x in hist if x.get("price_per_1m_poa") is not None], key=lambda x: -int(x.get("ts") or 0)):
+            k = (r.get("asset") or "").upper() + "|" + (r.get("chain") or "").lower()
+            if k not in last: last[k] = r["price_per_1m_poa"]
+        return dict(asks=asks, last=last, bids=[])
+    from .swap import market as M
+    try:
+        asks, last = M.book()
+        return dict(asks=asks, last=last, bids=[])
+    except Exception:
+        return dict(asks=[], last={}, bids=[])
+

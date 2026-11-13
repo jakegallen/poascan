@@ -152,6 +152,9 @@ def api(path, qs):
     The HTTP request path does not use this: server.py serves the pinned clearance copy."""
     data, is_list, _ = _cached(path)
     if path == "/api/swaps/status": data = _fresh_age(data)
+    if path == "/api/swaps" and is_list:
+        now = time.time()
+        data = [S.effective(dict(r), now) for r in data]  # 1.26.322: honour expiry even if this copy was built before expires_ts
     return data, is_list
 
 def etag(path):
