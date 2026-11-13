@@ -793,9 +793,11 @@ EPOCHS_BODY_PACE_S = 2   # 1.26.324: pause between per-close body reads so a bac
 
 def job_epochs(force=False):
     """Close records. 1.26.324: /api/epochs is an index (one small row per close). Missing bodies are fetched
-    from /api/epochs/<n>, one at a time, sha256-checked against the index, and only then stored. The old all-bodies
-    list is still accepted if a test or an older origin serves it. The current segment's count is compared with
-    /api/status epochs_closed (which restarts at a genesis cut), so a new segment with no close yet reads nothing."""
+    from /api/epochs/<n>, one at a time, sha256-checked against the index, and only then stored. 1.26.325: the
+    raw body is not kept; close_rows stores the parsed fields (rewards, totals, pending, Answer pay and Grading pay
+    when published) plus the index sha256 and byte count. The old all-bodies list is still accepted if a test or an
+    older origin serves it. The current segment's count is compared with /api/status epochs_closed (which restarts
+    at a genesis cut), so a new segment with no close yet reads nothing."""
     from . import analytics as A   # shared parsed copy; re-parsing the blob here every 5 min cost ~50 MB each run
     st, _ = db.get_blob("status")
     with _SG.use(_SG.CURRENT): have = A.epochs_count()
@@ -812,12 +814,19 @@ def job_epochs(force=False):
         if d is NOT_MODIFIED:
             return False
         if is_epochs_index(d):
-            with _SG.use(_SG.CURRENT):
-                existing = [e for e in (A.epochs_raw() or []) if isinstance(e, dict) and e.get("epoch") is not None]
-            have_ns = {int(e["epoch"]) for e in existing}
-            missing = [row for row in d["epochs"] if isinstance(row, dict) and row.get("n") is not None
-                       and int(row["n"]) not in have_ns and row.get("sha256")]
-            got = []
+            from . import closestore as _CS
+            have = {(r["kind"], int(r["epoch"])) for r in db.q("SELECT kind, epoch FROM close_rows WHERE epoch IS NOT NULL")}
+            missing = []
+            for row in d["epochs"]:
+                if not isinstance(row, dict) or row.get("n") is None or not row.get("sha256"):
+                    continue
+                n = int(row["n"]); ts = row.get("close_ts")
+                seg = _SG.of_ts(ts) if ts else _SG.CURRENT
+                if (_SG.blob_kind(seg), n) in have:
+                    continue
+                missing.append(row)
+            stored = 0
+            pending_kinds = set()
             for i, row in enumerate(missing):
                 if i:
                     time.sleep(EPOCHS_BODY_PACE_S)
@@ -832,23 +841,29 @@ def job_epochs(force=False):
                 if int(rec["epoch"]) != int(row["n"]):
                     log.warning("/api/epochs/%s: body epoch %s does not match", row["n"], rec.get("epoch"))
                     continue
-                got.append(rec)
-            if not got:
+                raw_b = row.get("bytes")
+                try: raw_b = int(raw_b) if raw_b is not None else None
+                except (TypeError, ValueError): raw_b = None
+                kind = _SG.blob_kind(_SG.of_record(rec))
+                _CS.append_records(kind, [rec], {int(rec["epoch"]): (row["sha256"], raw_b)}, reindex=False)
+                pending_kinds.add(kind)
+                stored += 1
+                rec = None
+            _CS.prune_raw_blobs()
+            if not stored:
                 return False
-            # spill already-stored closes plus the new ones, oldest first, so finish() writes the full list
-            # and never replaces the blob with only the missing tail
-            for e in sorted(existing, key=lambda e: int(e["epoch"])):
-                spill.add(e)
-            for rec in got:
-                spill.add(rec)
+            from . import guard as _G
+            held = _G.close_acquire()   # heavy slot only; a full heavy pool does not block the store, and never takes a cheap slot
+            for kind in pending_kinds:
+                _CS.finalize(kind)
+            wrote = True; did = True
         elif isinstance(d, list) and d:
             # legacy all-bodies list (tests, or an origin that has not cut over)
-            pass
+            from . import guard as _G
+            held = _G.close_acquire()
+            wrote = spill.finish() if spill.n else store_epochs(d); did = True
         else:
             return False
-        from . import guard as _G
-        held = _G.close_acquire()   # heavy slot only; a full heavy pool does not block the store, and never takes a cheap slot
-        wrote = spill.finish() if spill.n else store_epochs(d); did = True
     finally:
         d = None
         if held:
@@ -893,19 +908,22 @@ class _Spill:
         for p in self.parts.values():
             if not p["closed"]: p["f"].write("]"); p["f"].close(); p["closed"] = True
     def finish(self):
-        """Write each segment that changed. An archived segment is never shrunk. Returns whether a blob was rewritten."""
+        """Write each segment that changed. An archived segment is never shrunk. Returns whether close_rows were rewritten.
+        1.26.325: the spill file is applied into close_rows and a stub blob; the raw list is not stored."""
         from . import analytics as _A, closestore as _CS
         self.close_files(); wrote = False
         for seg, p in self.parts.items():
             kind = _SG.blob_kind(seg)
             if seg != _SG.CURRENT:
-                m = _CS.meta(kind); old_n = int(m["n"]) if m else len(db.get_blob(kind)[0] or [])
+                old_n = _CS.count(kind)
                 if p["n"] <= old_n: continue
-            if _A.epochs_same_sigs(kind, p["sigs"]): db.touch_blob(kind); _A.epochs_retag(kind); continue
+            if _A.epochs_same_sigs(kind, p["sigs"]): _CS.touch(kind); _A.epochs_retag(kind); continue
             with _CS._lock:
-                db.put_file(kind, p["path"]); _CS.apply_sigs(kind, p["sigs"])
+                _CS.apply_spill(kind, p["path"], p["sigs"])
             wrote = True
-        if _SG.CURRENT not in self.parts and db.get_blob("epochs")[0] is None: db.put_blob("epochs", []); wrote = True
+        if _SG.CURRENT not in self.parts and _CS.count("epochs") == 0 and db.get_blob("epochs")[0] is None:
+            _CS.put_stub("epochs", 0); wrote = True
+        _CS.prune_raw_blobs()
         return wrote
     def clear(self):
         try: self.close_files()

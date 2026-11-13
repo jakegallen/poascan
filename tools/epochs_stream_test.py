@@ -71,9 +71,10 @@ srv_body.update(b=b"<html>busy</html>", enc="")
 try: I.fetch("/api/epochs"); check("a load page is still refused as non-JSON", False)
 except I.Busy: check("a load page is still refused as non-JSON", True)
 
-# 3) an unchanged re-read
+# 3) an unchanged re-read (1.26.325: start from close_rows + stub, the live store shape)
 rows = json.loads(BODY)
-db.put_blob(S.blob_kind(), rows)
+I.store_epochs(rows)
+A._cache.clear(); A._epochs.clear()
 with S.use(S.CURRENT): first = A.epochs_raw(); ts0 = A.epochs_ts()
 g0 = db.blob_gen(S.blob_kind()); time.sleep(1.1)
 I.store_epochs(json.loads(BODY)); A._cache.clear()
@@ -83,6 +84,6 @@ check("and its stored time still moves (Close records feed as of)", ts1 and ts0 
 rows2 = json.loads(BODY) + [dict(json.loads(BODY)[-1], epoch=30, ts=1792878384 + 30 * 21900)]
 I.store_epochs(rows2); A._cache.clear()
 with S.use(S.CURRENT): new = A.epochs_raw()
-check("a re-read with a new close is written and parsed", len(new) == 31 and new is not first and db.get_blob(S.blob_kind())[0] == rows2)
+check("a re-read with a new close is written and parsed", len(new) == 31 and new is not first and [A.full_close(e) for e in new] == rows2)
 srv.shutdown()
 print(f"\n{len(fails)} FAILED" if fails else "\nall ok"); sys.exit(1 if fails else 0)

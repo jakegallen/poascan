@@ -43,14 +43,19 @@ db.put_blob("epochs", {json.dumps(S1)})
 r = subprocess.run([sys.executable, "-c", seed], cwd=legacy, env=dict(os.environ, PYTHONPATH=legacy), capture_output=True, text=True)
 check("legacy 1.26.89 database seeded " + r.stderr[-300:], r.returncode == 0)
 
-from poascan import db, segments as SG, analytics as A, indexer as I, history as H, maint as M, records as RR
+from poascan import db, segments as SG, analytics as A, indexer as I, history as H, maint as M, records as RR, closestore as CS
 db.init(); db.init()   # idempotent
+
+def close_list(kind):
+    CS.ensure(kind)
+    A._cache.clear(); A._epochs.pop(kind, None)
+    return [A.full_close(e) for e in CS.slim(kind)]
 check("two segments, current is 2", SG.NUMBERS == (1, 2) and SG.CURRENT == 2 and SG.has_cut())
 check("existing txs are segment 1", db.q1("SELECT COUNT(*) AS n FROM txs WHERE segment IS NOT 1")["n"] == 0 and db.q1("SELECT COUNT(*) AS n FROM txs")["n"] == 395)
 check("existing answers are segment 1", db.q1("SELECT segment FROM answers")["segment"] == 1)
 anc = {(r["segment"], r["height"]) for r in db.q("SELECT segment, height FROM anchors")}
 check("anchors migrated with segment (final root stays in segment 1)", anc == {(1, 44003), (1, 2)})
-check("close records moved to epochs:s1", len(db.get_blob("epochs:s1")[0]) == 15 and db.get_blob("epochs")[0] == [])
+check("close records moved to epochs:s1", CS.count("epochs:s1") == 15 and CS.count("epochs") == 0 and CS.is_stub(db.get_blob("epochs:s1")[0]))
 
 # ---- 2. the new segment's anchors, txs and closes ----
 I.store_anchors([{"height": 2, "chain": "base-mainnet", "tx": "0xs2h2", "state_root": "r2", "anchored_at": iso(CUT + 1200)},
@@ -67,12 +72,12 @@ db.write("INSERT INTO txs(id, type, from_addr, epoch, ts) VALUES(?,?,?,?,?)", ("
 check("indexer and trigger give post-cut txs segment 2", db.q1("SELECT COUNT(*) AS n FROM txs WHERE segment=2")["n"] == 4)
 
 I.store_epochs(S1)   # /api/epochs still serving segment 1's records
-check("segment 1 records on /api/epochs leave the current blob empty", db.get_blob("epochs")[0] == [] and len(db.get_blob("epochs:s1")[0]) == 15)
+check("segment 1 records on /api/epochs leave the current blob empty", CS.count("epochs") == 0 and CS.count("epochs:s1") == 15)
 I.store_epochs([close(0, CUT + 1800, {X: "7"}), close(1, CUT + 1800 + P // 4, {Y: "3"})])   # new segment E0 and E1
 I.store_epochs(S1[:3])   # a short segment 1 read never shrinks the archive
 A._cache.clear()
-check("new E0/E1 in their own blob", [e["epoch"] for e in db.get_blob("epochs")[0]] == [0, 1])
-check("segment 1 archive untouched", len(db.get_blob("epochs:s1")[0]) == 15)
+check("new E0/E1 in their own blob", [e["epoch"] for e in close_list("epochs")] == [0, 1])
+check("segment 1 archive untouched", CS.count("epochs:s1") == 15)
 rows = A.epoch_rows()
 check("epoch list: current segment E0, E1 only", [r["epoch"] for r in rows] == [0, 1] and all(r["segment"] == 2 for r in rows))
 with SG.use(1): r1 = A.epoch_rows()

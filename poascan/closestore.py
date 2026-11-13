@@ -7,30 +7,57 @@ record's canonical sha256 and byte count (records.py). Only the slim records sta
 read from its row when a page needs it (a small LRU), and pend_ix answers "this answer's row at this close" without
 parsing a whole close.
 
-The blobs row of each segment ("epochs", "epochs:sN") is still written exactly as before, so a build from before 1.26.235
-reads the same database. close_meta records which blob copy the rows came from (its ts and byte length); when they differ
-(the first boot of 1.26.235, or a blob written by an older build after a rollback) the rows are rebuilt from the blob one
-close at a time, read through SQLite blob I/O in chunks, so the whole list is never held as text or parsed at once."""
+The close_rows table is the store (1.26.325). The raw ~15 MB minepoa close body is checked against the index sha256
+and byte count at fetch, then dropped; only the parsed fields stay (slim record, pending list, rewards, totals, and
+Answer pay and Grading pay when published), plus that raw sha256 and byte count for verification. The blobs row is a
+small stub so readers still have a ts and generation. A leftover full-list blob from an older build is pruned once the
+rows are current, or used to rebuild the rows if they are behind. close_meta records which blob copy the rows came from
+(its ts and byte length)."""
 import codecs, collections, hashlib, json, threading
 from . import db
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS close_rows(kind TEXT NOT NULL, pos INTEGER NOT NULL, epoch INTEGER, ts INTEGER, slim TEXT NOT NULL,
-  pending TEXT, ppos INTEGER, sha256 TEXT NOT NULL, nbytes INTEGER NOT NULL, sig TEXT NOT NULL, PRIMARY KEY(kind, pos));
+  pending TEXT, ppos INTEGER, sha256 TEXT NOT NULL, nbytes INTEGER NOT NULL, sig TEXT NOT NULL, raw_sha256 TEXT, raw_bytes INTEGER, PRIMARY KEY(kind, pos));
 CREATE TABLE IF NOT EXISTS close_meta(kind TEXT PRIMARY KEY, src_ts INTEGER, src_len INTEGER, n INTEGER NOT NULL, ver INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS pend_ix(kind TEXT NOT NULL, tx TEXT NOT NULL, pos0 INTEGER NOT NULL, pos1 INTEGER NOT NULL, v TEXT NOT NULL,
   PRIMARY KEY(kind, tx, pos0)) WITHOUT ROWID;
 """
 VER = 1
+STUB_V = 2   # 1.26.325: close_rows are canonical; the blobs row is a stub, not the close list
+STUB_MAX = 1024
 CHUNK = 4 << 20
 _lock = threading.RLock()   # one writer or rebuild at a time; readers that find the rows behind the blob wait here
 _ver = collections.Counter()   # kind -> bumped on every rows write (in-process; the slim copy and the LRU key on it)
 
 def init():
     db.conn().executescript(SCHEMA); db.conn().commit()
+    cols = {r["name"] for r in db.q("PRAGMA table_info(close_rows)")}
+    if "raw_sha256" not in cols:
+        c = db.conn(); c.execute("ALTER TABLE close_rows ADD COLUMN raw_sha256 TEXT"); c.execute("ALTER TABLE close_rows ADD COLUMN raw_bytes INTEGER"); c.commit()
 
 def kinds():
-    return [r["kind"] for r in db.q("SELECT kind FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'")]
+    ks = [r["kind"] for r in db.q("SELECT kind FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'")]
+    for r in db.q("SELECT DISTINCT kind FROM close_rows"):
+        if r["kind"] not in ks: ks.append(r["kind"])
+    return ks
+
+def stub_obj(n):
+    return {"v": STUB_V, "rows": "close_rows", "n": int(n)}
+
+def is_stub(obj):
+    return isinstance(obj, dict) and obj.get("v") == STUB_V and obj.get("rows") == "close_rows"
+
+def rows_canonical(kind):
+    """True when close_rows are the store and the blobs row is (or should be) a stub."""
+    m = meta(kind)
+    return bool(m and int(m["ver"]) >= STUB_V)
+
+def count(kind):
+    m = meta(kind)
+    if m: return int(m["n"])
+    r = db.q1("SELECT COUNT(*) AS n FROM close_rows WHERE kind=?", (kind,))
+    return int(r["n"]) if r else 0
 
 # ---------------------------------------------------------------- split and join
 def split(e):
@@ -48,12 +75,17 @@ def join(slim, pending, ppos):
     b = slim.get("basis") or {}; items = list(b.items()); items.insert(ppos, ("pending", pending))
     return {k: (dict(items) if k == "basis" else v) for k, v in slim.items()}
 
-def _row(kind, pos, e):
+def _row(kind, pos, e, raw_sha256=None, raw_bytes=None):
     from . import records as RR
+    if isinstance(e, dict) and "_raw" in e:
+        e = dict(e); raw = e.pop("_raw")
+        if raw and isinstance(raw, (tuple, list)) and len(raw) >= 2:
+            raw_sha256 = raw_sha256 or raw[0]; raw_bytes = raw_bytes if raw_bytes is not None else raw[1]
     full = json.dumps(e); slim, pend, ppos = split(e); cb = RR.canonical(e)
     ep = e.get("epoch") if isinstance(e, dict) else None; ts = e.get("ts") if isinstance(e, dict) else None
     return (kind, pos, int(ep) if isinstance(ep, (int, float)) else None, int(ts) if isinstance(ts, (int, float)) else None, slim, pend, ppos,
-            RR.sha256(cb), len(cb), hashlib.sha1(full.encode("utf-8", "surrogatepass")).hexdigest())
+            RR.sha256(cb), len(cb), hashlib.sha1(full.encode("utf-8", "surrogatepass")).hexdigest(),
+            (str(raw_sha256).lower() if raw_sha256 else None), (int(raw_bytes) if raw_bytes is not None else None))
 
 def sig_of(e): return hashlib.sha1(json.dumps(e).encode("utf-8", "surrogatepass")).hexdigest()
 
@@ -74,7 +106,9 @@ def meta(kind):
 _gen = {}   # kind -> db.blob_gen when the rows were last matched to the blob in this process (two writes in one second)
 def current(kind, src=None):
     m = meta(kind); src = src or blob_src(kind)
-    ok = bool(m and src and m["ver"] == VER and (m["src_ts"], m["src_len"]) == tuple(src))
+    ok = bool(m and src and int(m["ver"]) in (VER, STUB_V) and (m["src_ts"], m["src_len"]) == tuple(src))
+    if ok and int(m["ver"]) >= STUB_V and src[1] > STUB_MAX:
+        ok = False   # a full-list blob an older build wrote after the stub; rebuild from it
     g = db.blob_gen(kind)
     if ok and _gen.setdefault(kind, g) != g: ok = False
     return ok
@@ -100,6 +134,8 @@ def iter_blob(kind, strict=False):
         more(); skip_ws()
         if buf[i:i + 1] != "[":
             v = json.loads(buf[i:] + (b.read() or b"").decode("utf-8", "surrogatepass") or "null")
+            if is_stub(v):
+                return
             if strict and v and not isinstance(v, list): raise ValueError("close records: not a list")
             yield from (v or []); return
         i += 1; skip_ws()
@@ -117,13 +153,20 @@ def iter_blob(kind, strict=False):
             i += 1; skip_ws()
 
 # ---------------------------------------------------------------- writes
-INS = "INSERT OR REPLACE INTO close_rows(kind, pos, epoch, ts, slim, pending, ppos, sha256, nbytes, sig) VALUES(?,?,?,?,?,?,?,?,?,?)"
+INS = "INSERT OR REPLACE INTO close_rows(kind, pos, epoch, ts, slim, pending, ppos, sha256, nbytes, sig, raw_sha256, raw_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
 
 def rebuild(kind):
-    """Rows of one segment from its blob, one close at a time (idempotent: a no-op when close_meta matches the blob)."""
+    """Rows of one segment from its blob, one close at a time (idempotent: a no-op when close_meta matches the blob).
+    1.26.325: a stub blob must never wipe close_rows."""
     with _lock:
         src = blob_src(kind)
         if src is None or current(kind, src): return False
+        if src and src[1] <= STUB_MAX:
+            obj, _ = db.get_blob(kind)
+            if is_stub(obj):
+                n = count(kind)
+                _finish(kind, src, n, ver=STUB_V)
+                return False
         c = db.conn(); n = 0; have = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
         for e in iter_blob(kind):
             if have.get(n) != sig_of(e):
@@ -133,24 +176,27 @@ def rebuild(kind):
         return True
 
 def write(kind, rows):
-    """After db.put_blob(kind, rows): the changed rows only (by sig), then pend_ix and close_meta."""
+    """Write the changed close_rows only (by sig), publish a stub blob, then pend_ix and close_meta. 1.26.325:
+    the full list is not stored in blobs."""
     with _lock:
         have = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
         ch = [_row(kind, i, e) for i, e in enumerate(rows) if have.get(i) != sig_of(e)]
         if ch: db.write(INS, ch, many=True)
-        _finish(kind, blob_src(kind), len(rows))
+        put_stub(kind, len(rows))
+        _finish(kind, blob_src(kind), len(rows), ver=STUB_V)
 
-def _finish(kind, src, n):
+def _finish(kind, src, n, ver=None):
     db.write_tx([("DELETE FROM close_rows WHERE kind=? AND pos>=?", (kind, n), False)])
     _index(kind)
-    db.write("INSERT OR REPLACE INTO close_meta(kind, src_ts, src_len, n, ver) VALUES(?,?,?,?,?)", (kind, src[0] if src else None, src[1] if src else None, n, VER))
+    ver = VER if ver is None else ver
+    db.write("INSERT OR REPLACE INTO close_meta(kind, src_ts, src_len, n, ver) VALUES(?,?,?,?,?)", (kind, src[0] if src else None, src[1] if src else None, n, ver))
     _ver[kind] += 1; _lru.clear(); _gen[kind] = db.blob_gen(kind)
 
 def retag(kind):
     """After db.touch_blob: the rows stand for the blob's new stored time."""
     with _lock:
         m = meta(kind); src = blob_src(kind)
-        if m and src and m["src_len"] == src[1] and m["ver"] == VER: db.write("UPDATE close_meta SET src_ts=? WHERE kind=?", (src[0], kind))
+        if m and src and m["src_len"] == src[1] and int(m["ver"]) in (VER, STUB_V): db.write("UPDATE close_meta SET src_ts=? WHERE kind=?", (src[0], kind))
 
 def _write_row(row):
     """One close_rows insert on its own connection, so it can run while iter_blob still holds the read blob.
@@ -223,11 +269,92 @@ def _index(kind):
         try: os.unlink(path)
         except OSError: pass
 
+
+def put_stub(kind, n):
+    """Replace the blobs row with a small pointer at close_rows. Never writes the close list."""
+    db.put_blob(kind, stub_obj(n))
+
+def touch(kind):
+    """Move the stub (or leftover blob) stored time without rewriting close_rows."""
+    db.touch_blob(kind)
+
+def append_records(kind, recs, raw_map=None, reindex=True):
+    """Append parsed close records that are not already stored for this kind, oldest first. raw_map is
+    {epoch: (raw_sha256, raw_bytes)} from the minepoa index (the fetched body's hash, not the canonical hash).
+    reindex False: caller will finalize() once after a batch."""
+    recs = [e for e in recs if isinstance(e, dict) and e.get("epoch") is not None]
+    if not recs and not reindex: return 0
+    with _lock:
+        have_ep = {int(r["epoch"]) for r in db.q("SELECT epoch FROM close_rows WHERE kind=?", (kind,)) if r["epoch"] is not None}
+        have = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))}
+        pos = (max(have) + 1) if have else 0
+        added = 0
+        for e in sorted(recs, key=lambda e: int(e["epoch"])):
+            ep = int(e["epoch"]); raw = (raw_map or {}).get(ep)
+            if ep in have_ep:
+                if raw:
+                    db.write("UPDATE close_rows SET raw_sha256=COALESCE(raw_sha256, ?), raw_bytes=COALESCE(raw_bytes, ?) WHERE kind=? AND epoch=?",
+                             (str(raw[0]).lower(), int(raw[1]), kind, ep))
+                continue
+            raw_sha, raw_b = (raw[0], raw[1]) if raw else (None, None)
+            _write_row(_row(kind, pos, e, raw_sha256=raw_sha, raw_bytes=raw_b))
+            have_ep.add(ep); pos += 1; added += 1
+        if reindex:
+            n = db.q1("SELECT COUNT(*) AS n FROM close_rows WHERE kind=?", (kind,))["n"]
+            put_stub(kind, n)
+            _finish(kind, blob_src(kind), n, ver=STUB_V)
+        return added
+
+def finalize(kind):
+    """Rebuild pend_ix and publish the stub after a batch of append_records(..., reindex=False)."""
+    with _lock:
+        n = db.q1("SELECT COUNT(*) AS n FROM close_rows WHERE kind=?", (kind,))["n"]
+        put_stub(kind, n)
+        _finish(kind, blob_src(kind), n, ver=STUB_V)
+
+def apply_spill(kind, path, sigs):
+    """Read a spilled JSON array of close records one object at a time, write changed close_rows, publish a stub.
+    1.26.325: the spill file is not copied into blobs."""
+    recs = []
+    with open(path, "rb") as f:
+        raw = f.read()
+    recs = json.loads(raw.decode("utf-8", "surrogatepass"))
+    if not isinstance(recs, list):
+        raise ValueError("close records: not a list")
+    write(kind, recs)
+
+def prune_raw_blobs():
+    """Replace any leftover full close-list blobs with stubs once close_rows hold the same closes. Idempotent.
+    Never deletes close_rows, txs, or other served tables."""
+    init(); changed = []
+    for k in kinds():
+        src = blob_src(k)
+        n = db.q1("SELECT COUNT(*) AS n FROM close_rows WHERE kind=?", (k,))
+        n = int(n["n"]) if n else 0
+        if n == 0 and not (src and src[1] and src[1] > STUB_MAX):
+            continue
+        if src and src[1] <= STUB_MAX:
+            obj, _ = db.get_blob(k)
+            if is_stub(obj):
+                m = meta(k)
+                if not (m and int(m["ver"]) >= STUB_V):
+                    _finish(k, src, n if n else int(obj.get("n") or 0), ver=STUB_V)
+                    changed.append(k)
+                continue
+        if n == 0:
+            continue   # do not drop a large blob that has no rows behind it
+        put_stub(k, n)
+        _finish(k, blob_src(k), n, ver=STUB_V)
+        changed.append(k)
+    return changed
+
 def migrate():
-    """Startup: every segment's rows current with its blob (streamed; nothing to do once they are)."""
+    """Startup: every segment's rows current with its blob (streamed; nothing to do once they are).
+    1.26.325: after the rows are current, leftover full-list blobs are replaced with stubs."""
     init(); done = []
     for k in kinds():
         if rebuild(k): done.append(k)
+    done.extend(prune_raw_blobs())
     return done
 
 # ---------------------------------------------------------------- reads
