@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.327] - 2026-11-13
+
+### Fixed
+- Cached close records no longer keep `basis.settled` (about 2 MB of jury rows per recent close; around 80 MB of JSON for E58 to E78, and larger once parsed). The list is still on the close row and still comes back from `e.get("basis")` and from `full_close`, but only two parsed settled lists and two pending lists stay in memory. Walking every close (the pending fill used by epoch rows and backlog) no longer intern-dumps each pending list or keeps the last lists after the walk. Prompt hashes unchanged.
+
 ## [1.26.326] - 2026-11-13
 
 ### Fixed
