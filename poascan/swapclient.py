@@ -38,6 +38,18 @@ def status():
     The live local book, so open_offers is the real count. An unread database returns {}."""
     try: return _call("/swaps/status") or {}
     except Exception: return {}
+def trading_status():
+    """Pinned clearance body used by HTTP /api/v1/swaps/status and /api/v1/trading/status (1.26.320).
+
+    Same fields as the request path: write_ok, swap_writes_up, chain, last_incident, plus the market
+    fields when the pin has them. Explorer code must use this instead of importing hoststatus.
+    A remote swap API falls back to /swaps/status."""
+    if REMOTE:
+        try: return _get("/trading/status") or _get("/swaps/status") or {}
+        except Exception: return {}
+    from .swap import hoststatus as SS
+    try: return SS.serve() or {}
+    except Exception: return {}
 def offers(status=None):
     """/api/v1/swaps: every offer, newest activity first; status filters one state (open, filled, cancelled, expired, delisted)."""
     rows = _call("/swaps") or []
