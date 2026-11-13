@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.321"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.322"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-11T17:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -1433,7 +1433,7 @@ def openapi():
                                                                                     "usd_ref": {"type": "string"}, "price": {"type": "object", "description": "same object as /api/price"},
                                                                                     "last_trade": {"type": ["object", "null"], "description": "last fill: per_1m_poa (in its own asset) and asset"},
                                                                                     "best_ask": {"type": ["object", "null"], "description": "cheapest open offer once a fill exists: per_1m_poa and asset (asks are never a USD price)"},
-                                                                                    "poa_on_offer": {"type": "number"}, "fills": {"type": "integer"},
+                                                                                    "poa_on_offer": {"type": "number"}, "open_depth": {"type": "object", "description": "1.26.322: POA in unexpired open asks and the offer count. Expired offers are excluded. The book is ask-only; bids are never estimated.", "properties": {"poa": {"type": "number"}, "offers": {"type": "integer"}}}, "fills": {"type": "integer"},
                                                                                     "usd_ref_rates": {"type": "object", "description": "current USD reference per paid asset (SOL, ETH), CoinGecko"},
                                                                                     "usd_ref_rates_updated_at": {"type": "string", "format": "date-time", "description": "when usd_ref_rates were last written, ISO 8601 UTC; absent before the first write"}}},
                                                           "names": {"type": "object", "description": "Agent names for makers and takers in the book, by poa1 address"}}},

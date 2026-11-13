@@ -404,6 +404,10 @@ jobs:
         env:
           CI: "true"
         run: python tools/chartpop_blank_test.py
+      - name: Token market view (last fill, open depth excluding expired, ask-only book and fill history at 390 px)
+        env:
+          CI: "true"
+        run: python tools/marketview_test.py
       - name: Agent cells (one shared cell in every table and list; name to LabLeak or the short address, copy right after, ellipsis; no overlap at 360, 390 and 1280 px with 40+ character names)
         env:
           CI: "true"

@@ -588,8 +588,9 @@ def swap_module(base, spec, check):
           req0(base + "/swaps")[0] == 301 and c2 == 200 and c3 == 200 and b".xgrid{" in css and b".xgrid{" not in req(base + "/static/style.css")[1])
     st = json.loads(req(base + "/api/v1/swaps/status")[1]); oid = (json.loads(req(base + "/api/v1/swaps")[1]) or [{}])[0].get("offer_id")
     m = st["market"]
-    check("status market carries what the explorer tiles need (last_trade, best_ask, poa_on_offer, fills)",
-          {"last_trade", "best_ask", "poa_on_offer", "fills"} <= set(m) and "/api/v1/swaps/{offer_id}" in spec["paths"])
+    check("status market carries what the explorer tiles need (last_trade, best_ask, poa_on_offer, open_depth, fills)",
+          {"last_trade", "best_ask", "poa_on_offer", "open_depth", "fills"} <= set(m) and "/api/v1/swaps/{offer_id}" in spec["paths"]
+          and isinstance(m.get("open_depth"), dict) and "poa" in m["open_depth"] and "offers" in m["open_depth"])
     if oid:
         d = json.loads(req(base + "/api/v1/swaps/" + oid)[1])
         check("/api/v1/swaps/<offer_id>: offer + events; unknown -> 404", d["offer"]["offer_id"] == oid and isinstance(d["events"], list)
