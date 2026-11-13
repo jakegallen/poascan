@@ -133,10 +133,11 @@ def reward_tracker(a, p):
             with _SG.use(seg):
                 rec = _A.epoch_detail(ep)
             ch = _PCH.for_addr(ep, a, rec=rec, segment=seg)
-            if ch["answer_pay"] is not None or ch["grading_pay"] is not None:
+            if ch["answer_pay"] is not None or ch["grading_pay"] is not None or ch.get("referral_pay") is not None:
                 bits = []
                 if ch["answer_pay"] is not None: bits.append(f"Answer pay {poa(ch['answer_pay'], dec=2)}")
                 if ch["grading_pay"] is not None: bits.append(f"Grading pay {poa(ch['grading_pay'], dec=2)}")
+                if ch.get("referral_pay") is not None: bits.append(f"Referral pay {poa(ch['referral_pay'], dec=2)}")
                 pd = f'{pd} <span class="dim small">{" · ".join(bits)}</span>'
             elif ch["state"] == "pending" and r:
                 pd = f'{pd} <span class="dim small">split pending</span>'

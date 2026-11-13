@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.326] - 2026-11-13
+
+### Fixed
+- From E76, Answer pay, Grading pay and Referral pay are read from a published `basis.final_payout` (or a top-level `final_payout`): `answer.E`, `grading.E` and `referral.E` when those keys are present. Amounts that are not explicitly published stay null; W-floor `capped` and `repooled` maps are not treated as a per-Agent split, and nothing is inferred from minted or from seal counts. Per-Agent channel amounts appear only when the record names them per Agent; otherwise the close page and `/api/v1/epochs` show totals only. Closes before E76 stay a single combined pay. Prompt hashes unchanged.
+
 ## [1.26.325] - 2026-11-13
 
 ### Changed

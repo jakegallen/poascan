@@ -19,10 +19,10 @@ A1, A2, G1 = ad("A"), ad("B"), ad("G")
 
 # ---- parser: only explicit names
 check("empty source is nulls, not zero",
-      P.extract({}) == dict(answer_pay=None, grading_pay=None, by_addr={}))
+      P.extract({}) == dict(answer_pay=None, grading_pay=None, referral_pay=None, by_addr={}))
 check("unrelated close-report counts are not pay",
       P.extract({"grades": 49044, "grades_cast": 49044, "answers": 28849, "settled_split": {"passed": 1}})
-      == dict(answer_pay=None, grading_pay=None, by_addr={}))
+      == dict(answer_pay=None, grading_pay=None, referral_pay=None, by_addr={}))
 check("seal_load alone is not pay",
       P.extract({"basis": {"seal_load": {A1: 4, G1: 9}}, "seal_load": {A1: 4}})["answer_pay"] is None
       and P.extract({"basis": {"seal_load": {A1: 4}}})["by_addr"] == {})
@@ -33,18 +33,47 @@ blk = {"payout_channels": {"answer_pay": "10.5", "grading_pay": 2.25,
 ch = P.extract(blk)
 check("named block totals and by_addr (short keys only inside the block)",
       ch["answer_pay"] == 10.5 and ch["grading_pay"] == 2.25
-      and ch["by_addr"][A1] == dict(answer_pay=10.5, grading_pay=0.0)
-      and ch["by_addr"][G1] == dict(answer_pay=0.0, grading_pay=2.25))
+      and ch["by_addr"][A1] == dict(answer_pay=10.5, grading_pay=0.0, referral_pay=None)
+      and ch["by_addr"][G1] == dict(answer_pay=0.0, grading_pay=2.25, referral_pay=None))
 ch = P.extract({"basis": {"payout_channels": {"answer": "3", "grading": "1"}}})
 check("block under basis with short keys", ch["answer_pay"] == 3.0 and ch["grading_pay"] == 1.0)
 ch = P.extract({"answer_pay": {A1: "4", A2: "6"}, "grading_pay": {A1: "1"}})
 check("exact address maps named answer_pay / grading_pay; missing side stays null; totals summed",
-      ch["by_addr"][A1] == dict(answer_pay=4.0, grading_pay=1.0)
-      and ch["by_addr"][A2] == dict(answer_pay=6.0, grading_pay=None)
+      ch["by_addr"][A1] == dict(answer_pay=4.0, grading_pay=1.0, referral_pay=None)
+      and ch["by_addr"][A2] == dict(answer_pay=6.0, grading_pay=None, referral_pay=None)
       and ch["answer_pay"] == 10.0 and ch["grading_pay"] == 1.0)
 check("a leftover residual is not invented",
       P.extract({"rewards": {A1: "100"}, "payout_channels": {"answer_pay": "20"}})
-      == dict(answer_pay=20.0, grading_pay=None, by_addr={}))
+      == dict(answer_pay=20.0, grading_pay=None, referral_pay=None, by_addr={}))
+
+# 1.26.326: basis.final_payout answer.E / grading.E / referral.E
+fp = {"answer": {"E": 751976668.925128, "W": 7.52e8, "capped": {A1: 100.0, A2: 200.0}, "repooled": {G1: 3.0}},
+      "grading": {"E": 98023331.072829, "W": 9.8e7, "capped": {G1: 50.0}},
+      "referral": {"E": 3346399.954117}}
+ch = P.extract({"basis": {"final_payout": fp}, "rewards": {A1: "1"}})
+check("final_payout.E totals are read; referral.E is its own field; capped/repooled are not by_addr",
+      abs(ch["answer_pay"] - 751976668.925128) < 1e-9
+      and abs(ch["grading_pay"] - 98023331.072829) < 1e-9
+      and abs(ch["referral_pay"] - 3346399.954117) < 1e-9
+      and ch["by_addr"] == {})
+ch = P.extract({"final_payout": {"answer": {"E": 10}, "grading": {"E": 2}, "referral": {"E": 1}}})
+check("top-level final_payout is also a published source",
+      ch["answer_pay"] == 10.0 and ch["grading_pay"] == 2.0 and ch["referral_pay"] == 1.0)
+ch = P.extract({"basis": {"final_payout": {"answer": {"W": 10}, "grading": {"W": 2}}}})
+check("final_payout W alone is not an amount; E must be explicit",
+      ch["answer_pay"] is None and ch["grading_pay"] is None and ch["referral_pay"] is None)
+ch = P.extract({"basis": {"final_payout": {"answer": {"E": 5},
+                                           "by_addr": {A1: {"answer_pay": 5, "grading_pay": 0}}}}})
+check("final_payout per-Agent amounts only from a named by_addr map, never from capped",
+      ch["answer_pay"] == 5.0 and ch["by_addr"][A1]["answer_pay"] == 5.0
+      and ch["by_addr"][A1]["referral_pay"] is None)
+# payout_channels already set wins over a later final_payout in the same object? extract walks
+# named blocks first then final_payout; take() does not overwrite. Good.
+ch = P.extract({"payout_channels": {"answer_pay": 1, "grading_pay": 2},
+                "basis": {"final_payout": {"answer": {"E": 9}, "grading": {"E": 8}, "referral": {"E": 3}}}})
+check("a published payout_channels total is not overwritten by final_payout; referral can still fill in",
+      ch["answer_pay"] == 1.0 and ch["grading_pay"] == 2.0 and ch["referral_pay"] == 3.0)
+
 
 # ---- activation
 p76 = {P.PARAM_KEY: 76}
@@ -64,10 +93,10 @@ db.put_blob("params", dict(p76, vesting_epochs=100, auto_epoch_seconds=21600))
 db.put_blob("epochs", [e75, e76]); A._cache.clear()
 r75, r76 = A.epoch_rows()
 check("pre-E76: pay_split off and channel amounts null; minted is the combined total",
-      r75["pay_split"] == "off" and r75["answer_pay"] is None and r75["grading_pay"] is None
+      r75["pay_split"] == "off" and r75["answer_pay"] is None and r75["grading_pay"] is None and r75.get("referral_pay") is None
       and abs(r75["minted"] - 110) < 1e-9 and r75["paid"] == 2)
 check("E76 without published split: pay_split pending, amounts null, minted still the combined total",
-      r76["pay_split"] == "pending" and r76["answer_pay"] is None and r76["grading_pay"] is None
+      r76["pay_split"] == "pending" and r76["answer_pay"] is None and r76["grading_pay"] is None and r76.get("referral_pay") is None
       and abs(r76["minted"] - 100) < 1e-9)
 
 e76s = dict(e76, payout_channels={"answer_pay": "70", "grading_pay": "15",
@@ -78,6 +107,18 @@ r76 = A.epoch_rows()[-1]
 check("E76 with a published block: pay_split split and the published amounts (not inferred 20/10 of minted)",
       r76["pay_split"] == "split" and r76["answer_pay"] == 70.0 and r76["grading_pay"] == 15.0
       and abs(r76["minted"] - 100) < 1e-9)
+
+e76fp = dict(e76, basis={"final_payout": {"answer": {"E": 80.0}, "grading": {"E": 15.0}, "referral": {"E": 5.0}}})
+# minted from rewards is 100; the three parts sum to 100 but the parser does not require that
+db.put_blob("epochs", [e75, e76fp]); A._cache.clear()
+r75b, r76fp = A.epoch_rows()
+check("E76 final_payout: pay_split split, three parts present, pre-E76 stays combined",
+      r76fp["pay_split"] == "split" and r76fp["answer_pay"] == 80.0 and r76fp["grading_pay"] == 15.0
+      and r76fp["referral_pay"] == 5.0 and abs((r76fp["answer_pay"] + r76fp["grading_pay"] + r76fp["referral_pay"]) - 100) < 1e-9
+      and r75b["pay_split"] == "off" and r75b["answer_pay"] is None and r75b["referral_pay"] is None)
+# restore the payout_channels fixture for the tests that follow
+db.put_blob("epochs", [e75, e76s]); A._cache.clear()
+r76 = A.epoch_rows()[-1]
 
 # close report supplies the split when the record does not
 db.put_blob("epochs", [e75, e76]); A._cache.clear()
@@ -129,11 +170,12 @@ for rel in ("poascan/paychannels.py", "poascan/views.py", "poascan/views3.py", "
 
 src = open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read()
 check("close page uses the terse labels and the Split pending tag",
-      'stat("Answer pay"' in src and 'stat("Grading pay"' in src and "Split pending" in src)
+      'stat("Answer pay"' in src and 'stat("Grading pay"' in src and 'stat("Referral pay"' in src and "Split pending" in src)
 # the about text must say we never infer
 about = src.split('id="pay-channels"')[1][:2000]
 check("about#pay-channels says the split is never inferred and names Answer pay / Grading pay",
       "never inferred" in about and "Answer pay" in about and "Grading pay" in about
+      and "Referral pay" in about and "final_payout" in about
       and not any(c in about for c in dash))
 
 ev = open(os.path.join(ROOT, "poascan", "earnview.py"), encoding="utf-8").read()
@@ -155,8 +197,10 @@ ag = open(os.path.join(ROOT, "poascan", "agentapi.py"), encoding="utf-8").read()
 import re as _re
 _vm = _re.search(r'VERSION = "(\d+)\.(\d+)\.(\d+)"', ag)
 _ver = tuple(int(x) for x in _vm.groups()) if _vm else (0, 0, 0)
-check("version is at least 1.26.318 and the changelog records the split",
-      _ver >= (1, 26, 318) and "## [1.26.318]" in cl and "Answer pay" in cl and not any(c in cl.split("## [1.26.318]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.326 and the changelog records final_payout",
+      _ver == (1, 26, 326) and "## [1.26.326]" in cl and "final_payout" in cl
+      and not any(c in cl.split("## [1.26.326]")[1].split("## [")[0] for c in dash))
+check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
 check("both pre-E76 and E76 rows have minted, so the total chart has no hole",
