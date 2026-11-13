@@ -87,7 +87,9 @@ jobs:
         run: python tools/txs_micro_test.py
       - name: MCP probe slot (initialize, tools/list, ping and GET /mcp answer with the heavy pool full; tools/call still sheds 503)
         run: python tools/mcp_probe_test.py
-      - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; an address read and tools/call still shed)
+      - name: Address light path under load (1.26.319)
+        run: python tools/addrlight_test.py
+      - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; address API light copy under load; tools/call still sheds)
         run: python tools/visitor_slot_test.py
       - name: Busy shell (a human page with every slot held serves its last good copy or the branded Busy page; API, MCP and data files keep the text 503)
         run: python tools/busyshell_test.py

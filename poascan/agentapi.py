@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.318"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.319"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-11T17:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -192,8 +192,13 @@ def t_epoch(args):
                 segment=SG.selected(), segment_archived=SG.archived())
 
 def t_address(args):
-    from . import history as HI, calibration as CA
-    a = _addr(args); lim = _int(args, "tx_limit", 20, 0, 200); typ = str(args.get("tx_type") or "") or None
+    from . import history as HI, calibration as CA, addrlight as AL
+    a = _addr(args)
+    if AL.want_light():
+        row = AL.payload(a, reason="busy")
+        if not row: raise ToolError("address not found in the POAScan archive")
+        return row
+    lim = _int(args, "tx_limit", 20, 0, 200); typ = str(args.get("tx_type") or "") or None
     acc = db.q1("SELECT * FROM accounts WHERE addr=?", (a,)); rb = A.rewards_by_addr().get(a, {})
     try:
         txs, nxt = HI.txs_page(a, args.get("tx_cursor") or None, max(1, lim), typ) if lim else ([], None)
@@ -205,7 +210,7 @@ def t_address(args):
     from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.257: ballot 2464
     p = G.profile(a); inv = db.q1("SELECT COUNT(*) AS n FROM accounts WHERE invited_by=?", (a,))["n"]
     from . import strain as _ST
-    return dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
+    out = dict(address=a, balance=acc["balance"] if acc else None, balance_as_of=acc["api_ts"] if acc else None,
                 balance_stale=bool(_ST.for_endpoint("/api/agents")) or bool(acc and (acc["last_seen"] or 0) < (SG.BY_N[SG.CURRENT].get("start_ts") or 0)),
                 balance_as_of_checkpoint=None, balance_segment=SG.of_ts(acc["last_seen"]) if acc and acc["last_seen"] else None,
                 lifetime_rewards=sum(rb.values()), spendable_est=sp, locked_est=lk, spendable_basis=SG.carry_basis(),
@@ -222,7 +227,13 @@ def t_address(args):
                 established_expires_epoch_est=eh["established_expires_epoch_est"], established_expires_basis=eh["established_expires_basis"],
                 established_expires_closes_left=eh["established_expires_closes_left"], established_expires_ts_est=eh["established_expires_ts_est"],
                 **({"grading": grd, "calibration": CA.one(a)} if grd is not None else {}), url=f"{BASE}/address/{a}", method=BASE + "/about#history",
+                read_at=__import__("time").strftime("%Y-%m-%dT%H:%M:%SZ", __import__("time").gmtime()),
                 note="Balance comes from the network's agent list (refreshed every 15 min). Spendable/locked are estimates from the vesting schedule.")
+    AL.remember(dict(address=out["address"], balance=out.get("balance"), spendable_est=out.get("spendable_est"),
+                     locked_est=out.get("locked_est"), as_of=out.get("read_at"), read_at=out.get("read_at"),
+                     stale=out.get("balance_stale"), balance_as_of=out.get("balance_as_of"),
+                     balance_source=None, rewards_total=out.get("lifetime_rewards")))
+    return out
 
 def t_wallet(args):
     from . import wallet as WB
@@ -612,7 +623,7 @@ TOOLS = [  # name, title, description, input schema, fn
      "rewards_as_of is the close lifetime_rewards, spendable_est and locked_est stand at; rewards_behind (with rewards_behind_reason and balance_ahead_by) is true when the balance already includes a newer close POAScan has not read, so those three are behind it. Page the history with tx_cursor and filter it with tx_type. "
      "established_expires_epoch_est (also in established_history) is the close where standing is expected to drop (an estimate from observed behavior, not official; null when unknown), with established_expires_closes_left and established_expires_ts_est. "
      "kin is the address's opt-in kin group from its own latest claim on the LabLeak kin claim post ({group_id, label, members, status active or inactive, declared_at, evidence_urls, active_before_declared}), or null; never inferred. "
-     "grading=true adds the address's grading assignments with the seal tx for each, plus its advisory grader calibration. Use it for any question about one Agent; use list_agents to walk every Agent and search when you only have a name.",
+     "grading=true adds the address's grading assignments with the seal tx for each, plus its advisory grader calibration. Under load, if a heavy slot is not free, the tool still returns balance, spendable_est, locked_est, as_of, read_at and stale from the last stored copy (served=light) instead of failing busy; tx history waits for a slot. Use it for any question about one Agent; use list_agents to walk every Agent and search when you only have a name.",
      dict(S(address=ADDR_P,
             tx_limit={"type": "integer", "minimum": 0, "maximum": 200, "default": 20, "description": "txs per page of history (0 to 200, default 20); 0 skips the history"},
             tx_cursor={"type": "string", "description": "next_tx_cursor from the previous call, passed back unchanged, for the next (older) page of the history; omit for the newest page"},

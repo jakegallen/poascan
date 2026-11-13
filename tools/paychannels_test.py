@@ -151,8 +151,12 @@ check("prompt hash files were not touched",
 # changelog and version
 cl = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
 ag = open(os.path.join(ROOT, "poascan", "agentapi.py"), encoding="utf-8").read()
-check("version is 1.26.318 and the changelog records the split",
-      'VERSION = "1.26.318"' in ag and "## [1.26.318]" in cl and "Answer pay" in cl and not any(c in cl.split("## [1.26.318]")[1].split("## [")[0] for c in dash))
+# later releases bump VERSION; the 1.26.318 changelog entry still records the split
+import re as _re
+_vm = _re.search(r'VERSION = "(\d+)\.(\d+)\.(\d+)"', ag)
+_ver = tuple(int(x) for x in _vm.groups()) if _vm else (0, 0, 0)
+check("version is at least 1.26.318 and the changelog records the split",
+      _ver >= (1, 26, 318) and "## [1.26.318]" in cl and "Answer pay" in cl and not any(c in cl.split("## [1.26.318]")[1].split("## [")[0] for c in dash))
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
 check("both pre-E76 and E76 rows have minted, so the total chart has no hole",

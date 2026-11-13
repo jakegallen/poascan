@@ -2,7 +2,7 @@
 
 /api/v1/health is the same slot-exempt check as /api/health. /api/summary and /api/v1/summary answer without waiting
 for a heavy slot, and the edge is told not to serve an old snapshot after an origin error. /start, /help, /about and
-/agents serve a stored copy. An address read and MCP tools/call still shed 503.
+/agents serve a stored copy. MCP tools/call still sheds 503 (get_swap_status). From 1.26.319, /api/v1/address serves a light copy instead of 503; the HTML address page stays on the heavy pool.
 Run: python3 tools/visitor_slot_test.py (temp db, in-process, no network)."""
 import json, os, sys, tempfile, threading, time, urllib.error, urllib.request
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -36,10 +36,11 @@ ok(Req("/api/v1/health")._is_health() is True and Req("/api/health")._is_health(
 ok(Req("/api/v1/health")._norm() == Req("/api/health")._norm() == "/api/health", "v1 health normalises to /api/health before the slot check")
 ok(Req("/api/summary")._is_snapshot() and Req("/api/v1/summary")._is_snapshot() and Req("/api/summary?nocache=1")._is_snapshot(),
    "both summary URLs, including a cache buster, are the live snapshot")
-ok(not Req("/api/v1/address/poa1" + "A" * 40)._is_health() and not Req("/api/v1/address/poa1" + "A" * 40)._is_snapshot(),
-   "an address read stays on the heavy pool")
+ok(not Req("/api/v1/address/poa1" + "A" * 40)._is_health() and not Req("/api/v1/address/poa1" + "A" * 40)._is_snapshot()
+   and Req("/api/v1/address/poa1" + "A" * 40)._is_address_light_path(),
+   "the address API is the light path, not health or the live snapshot")
 
-# classification: health and summary run at once with every slot held; an address read waits then 503s
+# classification: health and summary run at once with every slot held; the address API takes the light path
 heavy, cheap = [], []
 while GD.slots.acquire(blocking=False): heavy.append(1)
 while GD.cheap is not None and GD.cheap.acquire(blocking=False): cheap.append(1)
@@ -52,9 +53,10 @@ for p in ("/api/health", "/api/v1/health", "/api/summary", "/api/v1/summary"):
     ok(called == [1] and r == "SERVED" and dt < 0.2, f"{p} does not wait for a heavy slot ({r}, {dt*1000:.0f} ms)")
 addr = Req("/api/v1/address/poa1" + "B" * 40); ran = []
 t0 = time.time()
-addr._gated(lambda: (ran.append(1), "ADDR")[1])
+got = addr._gated(lambda: (ran.append(1), "ADDR")[1])
 dt = time.time() - t0
-ok(addr.sent == [503] and not ran and dt >= 0.25, f"address API still sheds 503 ({addr.sent}, {dt*1000:.0f} ms)")
+ok(ran == [1] and got == "ADDR" and not addr.sent and dt < 0.25,
+   f"address API serves the light path when slots are full ({addr.sent}, {dt*1000:.0f} ms)")
 for _ in heavy: GD.slots.release()
 for _ in cheap: GD.cheap.release()
 heavy, cheap = [], []
@@ -99,8 +101,14 @@ for path in ("/api/summary", "/api/v1/summary", "/api/summary?nocache=1"):
            f"summary edge cache cannot revive an old epoch on a 503 ({cdn!r})")
         ok("server busy" not in body, "summary body is the snapshot, not the shed text")
 
-c, _, body, dt = get("/api/v1/address/poa1" + "C" * 40)
-ok(c == 503 and "server busy" in body, f"address API 503 while the heavy pool is full ({c}, {dt*1000:.0f} ms)")
+# 1.26.319: a known address gets the light JSON copy, not 503
+ADDR = "poa1" + "C" * 40
+now = int(time.time())
+db.write("INSERT INTO accounts(addr, balance, balance_s, first_seen, last_seen, api_ts) VALUES(?,?,?,?,?,?)",
+         (ADDR, 12.0, "12.000000", now - 100, now - 10, now - 10))
+c, _, body, dt = get("/api/v1/address/" + ADDR)
+ok(c == 200 and "read_at" in body and "12.000000" in body and "server busy" not in body and dt < 1.0,
+   f"address API light copy 200 while the heavy pool is full ({c}, {dt*1000:.0f} ms)")
 raw = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}}).encode()
 rq = urllib.request.Request(base + "/mcp", data=raw, headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
 t0 = time.time()

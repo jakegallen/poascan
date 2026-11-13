@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.319] - 2026-11-13
+
+### Fixed
+- MCP get_address and `/api/v1/address/<addr>` keep answering under load. Root cause: both took a heavy serving slot (tools/call has been heavy since 1.26.273; the address API is a scrape path, at most 3 at once, then 503 after a short wait). Production has four heavy slots, and a warm page render can hold one for tens of seconds, so the handler shed with HTTP 503 "server busy, retry shortly". That was POAScan's own slot shed, not Cloudflare and not a minepoa.com timeout on the tool itself (get_address already reads the local archive). When a heavy slot is not free, both now serve a light copy from the stored agent list and close records: `balance`, `spendable_est`, `locked_est`, `as_of`, `read_at` and `stale`. Tx history and a live address read still wait for a slot. Prompt hashes unchanged.
+
 ## [1.26.318] - 2026-11-12
 
 ### Added
