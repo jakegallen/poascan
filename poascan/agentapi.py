@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.319"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.320"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-11T17:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -488,7 +488,8 @@ def _recon():
                 per_close=[p for p in d["per_close"] if p["state"] != "no_reads"], method=BASE + "/about#reconcile")
 
 def t_swap_status(args):
-    d = dict(SC.status()); u = _swap_url(d); st = d.get("status") or ("live" if d.get("available") else "unknown")
+    from .swap import hoststatus as SS
+    d = dict(SS.serve()); u = _swap_url(d); st = d.get("status") or ("live" if d.get("available") else "unknown")
     d["note"] = (f"Swaps are live on minepoa.com. POAScan only reads: offers are on {u} and every swap runs through the network's own flow (go.md SWAPS)."
                  if st == "live" and d.get("available") else
                  "Swaps are live but not taking swaps right now. Don't call swap-take; tell the user to check back soon." if st == "live" else
@@ -698,7 +699,7 @@ TOOLS = [  # name, title, description, input schema, fn
      S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
     ("get_swap_status", "Swap status",
      "Whether swaps are live, paused, coming_soon or unknown (POASwap's status, source poaswap, with fetched_at), the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
-     "Check this before any swap; when available is false, don't call swap-take. pending_receipt is held, not paid; after a timed out take, read status before any re-take.", S(), t_swap_status),
+     "Also the bot trading snapshot: chain (last_block, last_close, as_of, age_s, stale), swap_writes_up (same as write_ok), and last_incident (newest current route halt, or null). Same body as /api/v1/swaps/status and its /api/v1/trading/status alias. Check this before any swap; when available is false, don't call swap-take. pending_receipt is held, not paid; after a timed out take, read status before any re-take.", S(), t_swap_status),
     ("get_route_status", "Route status",
      "Which minepoa.com routes are halted right now per POAScan's own probes (no new request to minepoa.com): Hosted mining, Assignments, Grading, Path actions, Swap writes, Tx lookup, Address lookup and Joining, "
      "each open, halted (HTTP 503 with the halt text), down (failing without it) or unknown, with since (when the run of bad reads began), as_of (newest read) and stale. "
@@ -1240,7 +1241,7 @@ def openapi():
         "/api/prompts/clients": _op("The shared client registry for the join prompt: tier, prefill format and connector settings per app", ANY, oid="joinClients", tag="meta",
                                     desc="data/clients.json as is (schema 1): tiers (full, connector, none; chat-browse retired in v2.9), the no-path panel line, join_url (minepoa.com's join page) and alternatives, and clients[] with id, name, tier, row, open, prefill (URL prefix the prompt is appended to, URL encoded; empty when the app has none), auto_sends and connector (settings_url, prefills_url, where, cli). /start and POASwap read the same file. Strong ETag; If-None-Match gives a 304. Cache-Control public, max-age=600; CORS open for GET. No parameters."),
         "/api/swaps/status": _op("Swap status from POASwap (live, paused, coming_soon or unknown), open offers and market stats", {"$ref": "#/components/schemas/SwapStatus"}, oid="swapsStatus", tag="token",
-                                 desc="status, available, swaps_live, reason, message, open_offer_count, updated_at and url come from POASwap's https://poaswap.io/api/v1/swaps/status, the single source (source poaswap). POAScan reads it at most once a minute and never writes to it; fetched_at is its last good read. A copy older than 15 minutes reads as status unknown; until POASwap has answered once since boot, status follows POAScan's default (flag_basis fallback). state keeps the v1 values: available, upgrading (live but not available, or paused), coming_soon, plus unknown. last_good_read, open_offers and market come from POAScan's own read of minepoa.com/api/swaps. Agents: when available is false, don't call swap-take; try again later. pending_receipt is held, not paid; after a timed out take, read status before any re-take."),
+                                 desc="status, available, swaps_live, reason, message, open_offer_count, updated_at and url come from POASwap's https://poaswap.io/api/v1/swaps/status, the single source (source poaswap). POAScan reads it at most once a minute and never writes to it; fetched_at is its last good read. A copy older than 15 minutes reads as status unknown; until POASwap has answered once since boot, status follows POAScan's default (flag_basis fallback). state keeps the v1 values: available, upgrading (live but not available, or paused), coming_soon, plus unknown. last_good_read, open_offers and market come from POAScan's own read of minepoa.com/api/swaps. 1.26.320: also chain (last_block, last_close, as_of, age_s, stale), swap_writes_up (alias of write_ok) and last_incident; /api/v1/trading/status is an alias of this body. Agents: when available is false, don't call swap-take; try again later. pending_receipt is held, not paid; after a timed out take, read status before any re-take."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", SWAP_OFFER, params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
