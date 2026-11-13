@@ -2,7 +2,7 @@
 
 /api/v1/health is the same slot-exempt check as /api/health. /api/summary and /api/v1/summary answer without waiting
 for a heavy slot, and the edge is told not to serve an old snapshot after an origin error. /start, /help, /about and
-/agents serve a stored copy. MCP tools/call still sheds 503 (get_swap_status). From 1.26.319, /api/v1/address serves a light copy instead of 503; the HTML address page stays on the heavy pool.
+/agents serve a stored copy. MCP tools/call still sheds 503 (other tools). get_swap_status is slot-exempt (1.26.321). From 1.26.319, /api/v1/address serves a light copy instead of 503; the HTML address page stays on the heavy pool.
 Run: python3 tools/visitor_slot_test.py (temp db, in-process, no network)."""
 import json, os, sys, tempfile, threading, time, urllib.error, urllib.request
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -116,7 +116,15 @@ try:
     r = urllib.request.urlopen(rq, timeout=4); mc, mb = r.status, r.read()
 except urllib.error.HTTPError as e:
     mc, mb = e.code, e.read()
-ok(mc == 503 and b"server busy" in mb and time.time() - t0 >= 0.25, f"tools/call still sheds 503 ({mc})")
+ok(mc == 200 and b"server busy" not in mb and time.time() - t0 < 0.5, f"get_swap_status is slot-exempt ({mc}, {(time.time()-t0)*1000:.0f} ms)")
+raw = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_route_status", "arguments": {}}}).encode()
+rq = urllib.request.Request(base + "/mcp", data=raw, headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
+t0 = time.time()
+try:
+    r = urllib.request.urlopen(rq, timeout=4); mc, mb = r.status, r.read()
+except urllib.error.HTTPError as e:
+    mc, mb = e.code, e.read()
+ok(mc == 503 and b"server busy" in mb and time.time() - t0 >= 0.25, f"other tools/call still shed 503 ({mc})")
 
 for _ in heavy: GD.slots.release()
 for _ in cheap: GD.cheap.release()

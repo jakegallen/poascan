@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.321] - 2026-11-13
+
+### Fixed
+- MCP get_swap_status no longer takes a heavy serving slot. It serves the same pinned body as `/api/v1/swaps/status` (chain, swap_writes_up, last_incident, write_ok), so a bot can check status before trading even when the pool is full. The JSON-RPC parse stays cheap. Other tools/call, and any batch that contains one, still shed 503 when slots are full. MCP get_address already had a light path in 1.26.319 (full payload if a slot is free, last-known copy if not). Prompt hashes unchanged.
+
 ## [1.26.320] - 2026-11-13
 
 ### Added
