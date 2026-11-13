@@ -197,9 +197,12 @@ ag = open(os.path.join(ROOT, "poascan", "agentapi.py"), encoding="utf-8").read()
 import re as _re
 _vm = _re.search(r'VERSION = "(\d+)\.(\d+)\.(\d+)"', ag)
 _ver = tuple(int(x) for x in _vm.groups()) if _vm else (0, 0, 0)
-check("version is 1.26.326 and the changelog records final_payout",
-      _ver == (1, 26, 326) and "## [1.26.326]" in cl and "final_payout" in cl
+check("version is at least 1.26.326 and the changelog records final_payout",
+      _ver >= (1, 26, 326) and "## [1.26.326]" in cl and "final_payout" in cl
       and not any(c in cl.split("## [1.26.326]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.327 and the changelog records the settled LRU",
+      _ver == (1, 26, 327) and "## [1.26.327]" in cl and "basis.settled" in cl
+      and not any(c in cl.split("## [1.26.327]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

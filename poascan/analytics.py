@@ -92,9 +92,9 @@ def networks():
 _epochs = {}   # blob kind -> {"ts", "v": slim close records (closestore.Close)}
 @cached("epochs_raw", 15, light=True)   # never waits for a heavy slot: the slim copy unless a close just landed
 def epochs_raw():
-    """The selected segment's close records (1.26.235: closestore.py, one row per close), each without basis.pending:
-    read a record's pending list with pending_of(e) and the whole record with full_close(e). Reloaded only when the
-    indexer stores a new copy."""
+    """The selected segment's close records (1.26.235: closestore.py, one row per close), each without basis.pending
+    (pending_of / full_close) and without a cached basis.settled (1.26.327: e.get("basis") still returns it from the
+    close row, two lists at a time). Reloaded only when the indexer stores a new copy."""
     kind = S.blob_kind(); c = _epochs.setdefault(kind, {"ts": None, "v": []})
     r = db.q1("SELECT ts FROM blobs WHERE kind=?", (kind,))
     ts = (r["ts"], db.blob_gen(kind)) if r else None   # 1.26.180: ts is whole seconds; a second write in the same second bumps gen
@@ -124,10 +124,13 @@ def pending_get(e, txs):
     return CS.pending_get(x[0], x[1], txs) if x and x[2] is not None else {}
 
 def full_close(e):
-    """The whole close record (with basis.pending in its stored place) for a slim record; any other record unchanged."""
+    """The whole close record (with basis.pending in its stored place, and basis.settled) for a slim record.
+    Reloads the stored slim so a cached copy that omitted settled still comes back whole."""
     x = _loc(e)
-    if not x or x[2] is None: return e
-    return CS.join(e, CS.pending(x[0], x[1]), x[2])
+    if not x: return e
+    slim = CS.slim_at(x[0], x[1]) or e
+    if x[2] is None: return slim
+    return CS.join(slim, CS.pending(x[0], x[1]), x[2])
 
 _cm = {}; _cm_lock = threading.Lock()
 def close_memo(name):
@@ -254,6 +257,7 @@ def since_fill():
             if row["epoch"] is not None: out[row["id"]] = int(row["epoch"])
     for t, n in first.items(): out.setdefault(t, n)
     _sf["v"] = out; _sf["ts"] = ts
+    CS.release()
     return out
 
 def since_of(tid, v):
@@ -294,6 +298,7 @@ def _epoch_pend():
                         pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")), pending_by_origin=dict(sorted(by_origin.items())),
                         dropped=dropped, graders=len(gc), grades=sum(gc.values())))
         pprev = set(pend); prev = t
+    CS.release()
     return out
 
 def _f(v):
@@ -1066,6 +1071,7 @@ def _backlog_pend():
             h["unknown" if c is None else "4+" if c >= 4 else str(c)] += 1
             if c is not None: ex.append(x)
         exact = all(ex) if ex else None; basis = "grades" if mf is not None and n >= mf else "panel"
+    CS.release()
     return dict(closes=closes, hist=hist, exact=exact, basis=basis, merge_from=mf)
 
 @cached("backlog", 60)
