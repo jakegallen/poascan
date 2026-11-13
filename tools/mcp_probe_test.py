@@ -1,6 +1,6 @@
 """MCP directory probes do not take a heavy slot (1.26.273). Glama checks a connector hourly by opening an MCP
 connection and listing tools. When every heavy slot is held, initialize, tools/list, ping, GET /mcp and the discovery
-JSON (mcp.json, server-card, ai-catalog, agent-card) still answer their normal statuses. tools/call still sheds 503, and once a slot is free it runs (the body was already read to classify).
+JSON (mcp.json, server-card, ai-catalog, agent-card) still answer their normal statuses. A single get_swap_status tools/call is also light (1.26.321). Other tools/call still shed 503, and once a slot is free they run (the body was already read to classify).
 Run: python3 tools/mcp_probe_test.py (temp db, in-process, no network)."""
 import json, os, sys, tempfile, threading, time, urllib.error, urllib.request
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -27,8 +27,10 @@ ok(AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "
 ok(AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})), "tools/list is light")
 ok(AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"})), "ping is light")
 ok(AG.mcp_light(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})), "a notification is light")
-ok(not AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}})),
-   "tools/call is heavy")
+ok(AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}})),
+   "a single get_swap_status tools/call is light")
+ok(not AG.mcp_light(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_route_status", "arguments": {}}})),
+   "other tools/call stay heavy")
 batch = [{"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
          {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}}]
 ok(not AG.mcp_light(json.dumps(batch)), "a batch that contains tools/call is heavy")
@@ -97,15 +99,23 @@ for path, pred in (
     ok(c == 200 and pred(body) and dt < 0.5, f"GET {path} 200 while slots are full ({c}, {dt*1000:.0f} ms)")
 ran.clear()
 c, b, dt = post("tools/call", {"name": "get_swap_status", "arguments": {}})
+sc = json.loads(b).get("result", {}) if c == 200 else {}
+ok(c == 200 and "tools/call" in ran and "structuredContent" in sc and dt < 0.5,
+   f"get_swap_status 200 with no heavy slot ({c}, ran={ran}, {dt*1000:.0f} ms)")
+body = (sc.get("structuredContent") or {})
+ok("write_ok" in body and "swap_writes_up" in body and "chain" in body and "last_incident" in body,
+   "get_swap_status under load carries the bot snapshot fields")
+ran.clear()
+c, b, dt = post("tools/call", {"name": "get_route_status", "arguments": {}})
 ok(c == 503 and b"server busy" in b and "tools/call" not in ran and dt >= 0.25,
-   f"tools/call sheds 503 without running when the heavy pool is full ({c}, ran={ran}, {dt*1000:.0f} ms)")
+   f"other tools/call still shed 503 when the heavy pool is full ({c}, ran={ran}, {dt*1000:.0f} ms)")
 
-# the classify step already read the body; a later call with a free slot must still run
+# the classify step already read the body; a later heavy call with a free slot must still run
 for _ in heavy: GD.slots.release()
 for _ in cheap: GD.cheap.release()
-c, b, dt = post("tools/call", {"name": "get_swap_status", "arguments": {}})
+c, b, dt = post("tools/call", {"name": "get_route_status", "arguments": {}})
 sc = json.loads(b).get("result", {}) if c == 200 else {}
-ok(c == 200 and "tools/call" in ran and "structuredContent" in sc, f"tools/call runs once a heavy slot is free ({c}, {dt*1000:.0f} ms)")
+ok(c == 200 and "tools/call" in ran and "structuredContent" in sc, f"a heavy tools/call runs once a slot is free ({c}, {dt*1000:.0f} ms)")
 
 srv.shutdown()
 ok(not any(chr(0x2013) in ln or chr(0x2014) in ln for ln in open(__file__, encoding="utf-8")), "no em or en dash in this test")

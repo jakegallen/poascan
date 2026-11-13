@@ -133,9 +133,11 @@ ok(sc.get("balance") is not None and "spendable_est" in sc and "locked_est" in s
    f"MCP light structuredContent has the balance fields ({list(sc)[:12]})")
 ok("recent_txs" not in sc, "under load MCP get_address omits tx history")
 
-# a different tools/call still sheds 503 when slots are full
+# get_swap_status is slot-exempt (1.26.321); a different heavy tools/call still sheds 503
 c, b, dt = post_mcp("get_swap_status", {})
-ok(c == 503 and b.startswith(b"server busy"), f"MCP get_swap_status still sheds 503 when slots are full (got {c})")
+ok(c == 200 and not b.startswith(b"server busy") and dt < 1.0, f"MCP get_swap_status is 200 while slots are full (got {c})")
+c, b, dt = post_mcp("get_route_status", {})
+ok(c == 503 and b.startswith(b"server busy"), f"MCP get_route_status still sheds 503 when slots are full (got {c})")
 
 # release slots: a full get_address then includes history and read_at
 for _ in scrape: GD.scrape.release()

@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.320"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.321"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-11T17:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -707,7 +707,7 @@ TOOLS = [  # name, title, description, input schema, fn
      S(reconcile={"type": "boolean", "default": True, "description": "include the reconciliation block (default true); false returns freshness only"}), t_status),
     ("get_swap_status", "Swap status",
      "Whether swaps are live, paused, coming_soon or unknown (POASwap's status, source poaswap, with fetched_at), the open offer count, and market stats from fills (market cap, FDV, trades and USD volume for 24h and all time). "
-     "Also the bot trading snapshot: chain (last_block, last_close, as_of, age_s, stale), swap_writes_up (same as write_ok), and last_incident (newest current route halt, or null). Same body as /api/v1/swaps/status and its /api/v1/trading/status alias. Check this before any swap; when available is false, don't call swap-take. pending_receipt is held, not paid; after a timed out take, read status before any re-take.", S(), t_swap_status),
+     "Also the bot trading snapshot: chain (last_block, last_close, as_of, age_s, stale), swap_writes_up (same as write_ok), and last_incident (newest current route halt, or null). Same body as /api/v1/swaps/status and its /api/v1/trading/status alias. This call does not take a heavy slot. Check this before any swap; when available is false, don't call swap-take. pending_receipt is held, not paid; after a timed out take, read status before any re-take.", S(), t_swap_status),
     ("get_route_status", "Route status",
      "Which minepoa.com routes are halted right now per POAScan's own probes (no new request to minepoa.com): Hosted mining, Assignments, Grading, Path actions, Swap writes, Tx lookup, Address lookup and Joining, "
      "each open, halted (HTTP 503 with the halt text), down (failing without it) or unknown, with since (when the run of bad reads began), as_of (newest read) and stale. "
@@ -967,13 +967,20 @@ def batch_size(raw):
     return max(1, min(BATCH_MAX, len(msg))) if isinstance(msg, list) else 1
 
 def mcp_light(raw):
-    """True when this body cannot run a tool (1.26.273). Glama's hourly check opens a connection and lists tools:
-    initialize, tools/list, ping, and notifications do no archive work. tools/call, and any batch that contains one, is heavy.
-    An unparseable body is light too: the handler answers 400 and never calls a tool."""
+    """True when this body cannot run a heavy tool (1.26.273, 1.26.321). Glama's hourly check opens a connection
+    and lists tools: initialize, tools/list, ping, and notifications do no archive work. A single tools/call of
+    get_swap_status is also light: it serves the same pinned body as /api/v1/swaps/status, with no heavy slot.
+    Any other tools/call, and any batch that contains one, is heavy. An unparseable body is light too: the
+    handler answers 400 and never calls a tool."""
     try: msg = json.loads(raw or b"null")
     except Exception: return True
-    msgs = msg if isinstance(msg, list) else [msg]
-    return not any(isinstance(m, dict) and m.get("method") == "tools/call" for m in msgs)
+    if isinstance(msg, dict):
+        if msg.get("method") != "tools/call": return True
+        p = msg.get("params") or {}
+        return isinstance(p, dict) and p.get("name") == "get_swap_status"
+    if isinstance(msg, list):
+        return not any(isinstance(m, dict) and m.get("method") == "tools/call" for m in msg)
+    return True
 
 def handle_mcp(raw):
     """raw: request body bytes. Returns (http_status, response_obj_or_None)."""

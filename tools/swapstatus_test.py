@@ -214,17 +214,15 @@ tr = json.loads(raw_tr)
 check(f"1.26.320: /api/v1/trading/status is a slot-exempt alias ({dt_tr:.2f}s)", dt_tr < 1 and tr.get("swap_writes_up") is tr.get("write_ok") and tr.get("write_ok")==got.get("write_ok")
       and "chain" in tr and "last_incident" in tr)
 body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}}).encode()
-# tools/call is still heavy: release one slot so MCP can run, then confirm the trading fields
-try: GD.slots.release()
-except ValueError: pass
+t0 = time.time()
 rq = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers={"Content-Type": "application/json", "Accept": "application/json"})
 mcp_raw = urllib.request.urlopen(rq, timeout=4).read()
+dt_mcp = time.time() - t0
 mcp = json.loads(mcp_raw)
 sc = (mcp.get("result") or {}).get("structuredContent") or {}
-check("1.26.320: MCP get_swap_status carries chain, swap_writes_up and last_incident",
-      "swap_writes_up" in sc and "chain" in sc and "last_incident" in sc and "write_ok" in sc)
-# re-hold the released slot so cleanup still matches `held`
-GD.slots.acquire(blocking=False)
+check(f"1.26.321: MCP get_swap_status is slot-exempt and carries the bot snapshot ({dt_mcp:.2f}s)",
+      dt_mcp < 1 and "swap_writes_up" in sc and "chain" in sc and "last_incident" in sc and "write_ok" in sc
+      and sc.get("swap_writes_up") == sc.get("write_ok"))
 check("http keeps meta.maintenance.active, join_state, swap_route and writes.swap_offer, and unknown is not open",
       "active" in m and m.get("join_state") == got.get("join_state") and (m.get("swap_route") or {}).get("state") == got["writes"]["swap_offer"]["state"]
       and got["writes"]["swap_offer"]["state"] in ("open", "paused", "down", "unknown")

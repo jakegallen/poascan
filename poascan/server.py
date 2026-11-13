@@ -1265,8 +1265,9 @@ class H(BaseHTTPRequestHandler):
         return False
     def _mcp_light(self):
         """MCP handshake and tools/list take no heavy slot (1.26.273). Glama marks the connector Unhealthy after two
-        failed hourly checks, and those checks are initialize plus tools/list. GET only answers 405. tools/call stays heavy.
-        The body is read once and kept for _post."""
+        failed hourly checks, and those checks are initialize plus tools/list. GET only answers 405. tools/call stays
+        heavy except a single get_swap_status call (1.26.321: same pinned body as /api/v1/swaps/status). The body is
+        read once and kept for _post."""
         if self._path_only() != "/mcp": return False
         if getattr(self, "command", "GET") != "POST": return True
         n = self.headers.get("Content-Length") or ""
