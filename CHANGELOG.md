@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.318] - 2026-11-12
+
+### Added
+- Pay by channel from E76 (`payout_channels_from_epoch`): the close page, the Agent payout tracker, the earn-check history and `/api/v1` show **Answer pay** and **Grading pay** when a public close record or close report publishes those amounts. Before E76 the pay stays a single combined total. When E76 or later has no published split, the total is unchanged and the close is tagged Split pending; `answer_pay`, `grading_pay` and per-Agent split fields are null, never inferred from pool shares or seal counts. `pay_split` on epoch rows is `off`, `pending` or `split`. A Pay by channel chart on the Token page appears only once a close publishes both amounts; Total mined and Minted vs burned run on with no gap. Method: `/about#pay-channels`. Prompt hashes unchanged.
+
+
 ## [1.26.317] - 2026-11-11
 
 ### Fixed

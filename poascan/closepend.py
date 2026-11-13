@@ -37,10 +37,12 @@ def _slim(d, n):
         if int(d.get("close_epoch")) != int(n) or not d.get("close_ts"): return None
     except (TypeError, ValueError): return None
     ss = d.get("settled_split") or {}; es = d.get("establishment") or {}
+    from . import paychannels as _PCH
     return dict(epoch=int(n), close_ts=int(d["close_ts"]), settled_count=d.get("settled_count"),
                 settled_passed=ss.get("passed"), settled_failed=ss.get("failed"),
                 settled_expired_no_jury=(ss.get("expired_empty_jury") or 0) + (ss.get("expired_with_seals") or 0) if ss else None,
-                admitted=es.get("admitted"), eligible=es.get("eligible"), fetched_at=int(time.time()))
+                admitted=es.get("admitted"), eligible=es.get("eligible"), fetched_at=int(time.time()),
+                **_PCH.slim_fields(d))
 
 def missing():
     """Close numbers past the last record, up to the last close /api/status counts."""
@@ -97,8 +99,10 @@ def rows():
     miss = set(missing()); out = []
     for k, v in sorted(((int(k), v) for k, v in have.items())):
         if k not in miss: continue
+        from . import paychannels as _PCH
         out.append(dict(v, segment=SG.CURRENT, lifetime=SG.gkey(k, SG.CURRENT), record="pending", rewards_state="record_pending",
-                        supply_step=_supply_step(v["close_ts"]), pool=None, minted=None, burned=None, paid=None, burn_pct=None, median=None))
+                        supply_step=_supply_step(v["close_ts"]), pool=None, minted=None, burned=None, paid=None, burn_pct=None, median=None,
+                        **_PCH.row_fields(k, rec=v, reports=[v], segment=SG.CURRENT)))
     return out
 
 def span():

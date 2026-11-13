@@ -125,6 +125,21 @@ def reward_tracker(a, p):
         if k >= n: pd, ps = ("at close", "cur")
         elif r: pd, ps = (poa(r, dec=2), "ok")
         else: pd, ps = ("0", "off" if not sub else "bad")
+        # 1.26.318: per-Agent channel amounts when published; never the close-level totals
+        if k < n:
+            from . import paychannels as _PCH, analytics as _A
+            seg, ep = _SG.split_gkey(k)
+            rec = None
+            with _SG.use(seg):
+                rec = _A.epoch_detail(ep)
+            ch = _PCH.for_addr(ep, a, rec=rec, segment=seg)
+            if ch["answer_pay"] is not None or ch["grading_pay"] is not None:
+                bits = []
+                if ch["answer_pay"] is not None: bits.append(f"Answer pay {poa(ch['answer_pay'], dec=2)}")
+                if ch["grading_pay"] is not None: bits.append(f"Grading pay {poa(ch['grading_pay'], dec=2)}")
+                pd = f'{pd} <span class="dim small">{" · ".join(bits)}</span>'
+            elif ch["state"] == "pending" and r:
+                pd = f'{pd} <span class="dim small">split pending</span>'
         if r:
             f = 1.0 if (_SG.carry_unlocked() is True and k < off) else min(1.0, max(0, n - k) / vest); done_t = _close_ts(k + vest - 1 - off)
             vs = (f'<span class="vbar"><i style="width:{f*100:.1f}%"></i></span><span class="num">{f*100:.0f}%</span>'
