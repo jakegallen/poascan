@@ -408,6 +408,8 @@ jobs:
         env:
           CI: "true"
         run: python tools/marketview_test.py
+      - name: Fill epoch from the close archive (every segment, never 0; exact close second belongs to the next epoch)
+        run: python tools/fill_epoch_test.py
       - name: Agent cells (one shared cell in every table and list; name to LabLeak or the short address, copy right after, ellipsis; no overlap at 360, 390 and 1280 px with 40+ character names)
         env:
           CI: "true"

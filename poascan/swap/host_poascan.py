@@ -23,21 +23,28 @@ def swap_route():   # 1.26.185: the one resolver (hosted.swap_route): state, dis
 def circulating_basis(): return _A.supply_split().get("circulating_basis")   # carry_unlocked, vesting_continues or unconfirmed (1.26.123)
 def names(): return _A.forum_names()                 # poa1 address -> agent name, for maker and taker links
 def epoch_of_ts(ts):
-    """Network epoch a ledger timestamp falls in: the epoch of the first archived close after ts (a tx at a close's exact
-    second belongs to the next epoch, as tx epochs on the ledger do). After the newest archived close it is the open epoch,
-    but only when a /api/status read taken at or after ts reports no further close; otherwise None (not yet known)."""
+    """Network epoch a ledger timestamp falls in: the epoch of the first archived close after ts, from the close archive
+    of every segment (a fill may predate the current segment). A tx at a close's exact second belongs to the next epoch,
+    as tx epochs on the ledger do. Epoch 0 is a segment genesis or cut close and is never returned (null instead). After
+    the newest archived close it is the open epoch of the current segment, but only when a /api/status read taken at or
+    after ts reports no further close; otherwise None (not yet known)."""
     import bisect, datetime as _dt
     if not ts: return None
-    rows = _A.epoch_rows()
+    rows = _A.epoch_rows_all() or []
     if not rows: return None
     k = bisect.bisect_right([r["close_ts"] for r in rows], int(ts))
-    if k < len(rows): return int(rows[k]["epoch"])
+    if k < len(rows):
+        ep = int(rows[k]["epoch"])
+        return ep if ep else None   # never 0: a genesis/cut close is not a fill epoch
+    # After the newest close in the whole archive: open epoch of the current segment (status.epochs_closed is that count).
+    cur = _A.epoch_rows() or []
+    if not cur: return None
     st, read_ts = _db.get_blob("status")
     st = st or {}
     try: as_of = int(_dt.datetime.fromisoformat(str(st.get("as_of")).replace("Z", "+00:00")).timestamp())
     except Exception: as_of = None
     seen = min([x for x in (as_of, read_ts) if x] or [0])
-    return int(rows[-1]["epoch"]) + 1 if st.get("epochs_closed") == len(rows) and seen >= ts else None
+    return int(cur[-1]["epoch"]) + 1 if st.get("epochs_closed") == len(cur) and seen >= ts else None
 
 def final_fill_ids():
     """swap-fill txs the ledger has finalized (core txs table): trades count only once final."""

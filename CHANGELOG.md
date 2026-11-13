@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.323] - 2026-11-13
+
+### Fixed
+- `fill_epoch` on filled `/api/v1/swaps` rows is the first close after `fill_ts` from the close archive of every segment, not only the current one. Fills from before the 24 Oct 2026 genesis cut were landing on segment 2's epoch 0 close and shipping as 0. A fill at a close's exact second still belongs to the next epoch. `fill_epoch` is never 0 (a genesis or cut close is not a fill epoch); it is null when the epoch cannot be determined. A missing `ext_ref` on a filled offer is backfilled only from a locally stored swap-fill body (`swap_events` or `tx_detail`); `fill_usd` is left alone when no recorded rate exists; `fill_atts` and `fill_final` stay the ledger marks at serve time. No new minepoa.com reads. Prompt hashes unchanged.
+
 ## [1.26.322] - 2026-11-13
 
 ### Added
