@@ -360,66 +360,25 @@ def migrate():
 # ---------------------------------------------------------------- reads
 def ver(kind): return _ver[kind]
 
-class Basis(dict):
-    """basis of a cached slim close without its settled list in memory (1.26.328). "settled" still reads as a key:
-    b.get("settled"), b["settled"], "settled" in b, items(), keys(), iteration, dict(b) and json.dumps(b) load it from
-    the close row through the 2-close settled LRU. Any other key is a plain dict read, so walking every close for
-    graders_served, challenge_eligible, marks and the like never parses a stored slim (1.26.327 re-parsed the whole
-    slim of every close on each e.get("basis"), about 112 MB of JSON per walk)."""
-    __slots__ = ("src",)   # (kind, pos, index of settled among the stored basis keys)
-
-    def _st(self): return settled(self.src[0], self.src[1])
-    def __contains__(self, k): return k == "settled" or dict.__contains__(self, k)
-    def __getitem__(self, k): return self._st() if k == "settled" else dict.__getitem__(self, k)
-    def get(self, k, default=None): return self._st() if k == "settled" else dict.get(self, k, default)
-    def __len__(self): return dict.__len__(self) + 1
-    def keys(self):
-        ks = list(dict.keys(self)); ks.insert(min(self.src[2], len(ks)), "settled"); return ks
-    def __iter__(self): return iter(self.keys())
-    def items(self):
-        it = list(dict.items(self)); it.insert(min(self.src[2], len(it)), ("settled", self._st())); return it
-    def values(self): return [v for _, v in self.items()]
-    def copy(self): return dict(self.items())
-    def __eq__(self, o): return dict(self.items()) == (dict(o.items()) if isinstance(o, dict) else o)
-    __hash__ = None
-    def __repr__(self): return "Basis(%r)" % (dict(dict.items(self)),)
-    def __reduce__(self): return (dict, (self.items(),))
-
 class Close(dict):
-    """A slim close record plus where its row is (kind, pos, ppos), so pending_of and full_close find the close even
-    after a newer copy replaced it. 1.26.328: basis is a Basis, which keeps settled on disk until a reader asks for it."""
+    """A slim close record: a plain dict to every reader (same keys, values, order and JSON), plus where its row is
+    (kind, pos, ppos), so pending_of and full_close find the close even after a newer copy replaced it."""
     __slots__ = ("loc",)
 
 def slim(kind):
-    """[slim record (Close)] of one segment, in stored order. basis.settled stays on disk (Basis) until read."""
+    """[slim record (Close)] of one segment, in stored order."""
     out = []
     for r in db.q("SELECT pos, ppos, slim FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):
         v = json.loads(r["slim"])
-        if isinstance(v, dict):
-            b = v.get("basis")
-            if isinstance(b, dict) and "settled" in b:
-                keys = list(b); nb = Basis((k, val) for k, val in b.items() if k != "settled")
-                nb.src = (kind, r["pos"], keys.index("settled")); v["basis"] = nb
-            v = Close(v); v.loc = (kind, r["pos"], r["ppos"], _ver[kind])
+        if isinstance(v, dict): v = Close(v); v.loc = (kind, r["pos"], r["ppos"], _ver[kind])
         out.append(v)
     return out
-
-def slim_at(kind, pos):
-    """The full stored slim of one close (includes basis.settled; still no pending)."""
-    r = db.q1("SELECT pos, ppos, slim FROM close_rows WHERE kind=? AND pos=?", (kind, pos))
-    if not r or r["slim"] is None:
-        return None
-    v = json.loads(r["slim"])
-    if isinstance(v, dict):
-        v = Close(v); v.loc = (kind, r["pos"], r["ppos"], _ver[kind])
-    return v
 
 def ensure(kind):
     """Rows current with the blob (rebuilt from it when not: first boot of 1.26.235, or a blob an older build wrote)."""
     if not current(kind): rebuild(kind)
 
 _lru = collections.OrderedDict(); LRU_MAX = 2   # (kind, pos, ver) -> parsed pending of one close
-_settled_lru = collections.OrderedDict(); SETTLED_LRU_MAX = 2   # (kind, pos, ver) -> basis.settled of one close
 def pending(kind, pos, ver=None):
     """The parsed pending list of one close. ver: the rows version a slim record was read at (None: now); a record from
     before a rewrite reads the current row of its position, which a rewrite only changes when the close itself changed."""
@@ -428,37 +387,21 @@ def pending(kind, pos, ver=None):
         hit = _lru.get(k)
         if hit is not None: _lru.move_to_end(k); return hit[0]
     r = db.q1("SELECT pending, ppos FROM close_rows WHERE kind=? AND pos=?", (kind, pos))
-    # 1.26.327: do not intern via json.dumps of every row; that doubled the peak while walking E58 to E78.
-    v = json.loads(r["pending"]) if r and r["pending"] is not None else None
+    v = _interned(json.loads(r["pending"])) if r and r["pending"] is not None else None
     with _lock:
         _lru[k] = (v,)
         while len(_lru) > LRU_MAX: _lru.popitem(last=False)
     return v
 
-def settled(kind, pos, ver=None):
-    """basis.settled of one close, from its stored slim. Only two parsed lists are kept."""
-    k = (kind, pos, _ver[kind])
-    with _lock:
-        hit = _settled_lru.get(k)
-        if hit is not None: _settled_lru.move_to_end(k); return hit[0]
-    r = db.q1("SELECT slim FROM close_rows WHERE kind=? AND pos=?", (kind, pos))
-    v = None
-    if r and r["slim"] is not None:
-        sl = json.loads(r["slim"])
-        if isinstance(sl, dict):
-            b = sl.get("basis")
-            if isinstance(b, dict):
-                v = b.get("settled")
-    with _lock:
-        _settled_lru[k] = (v,)
-        while len(_settled_lru) > SETTLED_LRU_MAX: _settled_lru.popitem(last=False)
-    return v
-
-def release():
-    """Drop parsed pending and settled lists so a walk of every close does not keep the last two."""
-    with _lock:
-        _lru.clear()
-        _settled_lru.clear()
+def _interned(p):
+    """Equal pending rows share one dict (read only; about 8k distinct rows among 36k answers at E23)."""
+    if not isinstance(p, dict): return p
+    seen = {}
+    for k, v in p.items():
+        if isinstance(v, dict):
+            o = seen.setdefault(json.dumps(v), v)
+            if o is not v: p[k] = o
+    return p
 
 def pending_get(kind, pos, txs):
     """{tx: row} of the given answers in one close's pending list (pend_ix; no close parsed)."""

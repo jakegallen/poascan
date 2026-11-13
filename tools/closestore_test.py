@@ -36,31 +36,6 @@ check("a second migration is a no-op (idempotent)", CS.migrate() == [] and CS.cu
 A._cache.clear(); A._epochs.clear()
 er = A.epochs_raw()
 check("epochs_raw: slim records, no pending list kept", len(er) == len(recs) and all("pending" not in (e.get("basis") or {}) for e in er))
-check("epochs_raw does not keep basis.settled on the cached slim",
-      all(not dict.__contains__(dict.get(e, "basis") or {}, "settled") for e in er))
-# 1.26.328: reading any other basis key on every close parses no stored slim
-_n = [0]; _st = CS.settled
-def _count(*a, **k): _n[0] += 1; return _st(*a, **k)
-CS.settled = _count; CS.release()
-for e in er:
-    b = e.get("basis") or {}; _ = (b.get("graders_served"), b.get("challenge_eligible"), e["basis"].get("carry_in"), "settled" in b)
-CS.settled = _st
-check("1.26.328: a walk of other basis keys reads no settled list", _n[0] == 0)
-_want = {k: ({x: y for x, y in v.items() if x != "pending"} if k == "basis" else v) for k, v in recs[4].items()}
-check("1.26.328: dict(), items() and json.dumps of basis still carry settled in its stored place",
-      dict(er[4]["basis"]) == _want["basis"] and [k for k, _ in er[4]["basis"].items()] == list(_want["basis"])
-      and json.dumps(er[4]) == json.dumps(_want) and json.dumps(dict(er[4])) == json.dumps(_want))
-check("e.get('basis') still returns the stored settled list",
-      er[4].get("basis")["settled"] == recs[4]["basis"]["settled"]
-      and er[4]["basis"]["settled"] == recs[4]["basis"]["settled"])
-# walk every close the way epoch_rows and backlog do
-for e in er:
-    _ = (e.get("basis") or {}).get("settled")
-    A.pending_of(e)
-check("settled and pending LRUs stay at 2 after a full walk",
-      len(CS._lru) <= CS.LRU_MAX == 2 and len(CS._settled_lru) <= CS.SETTLED_LRU_MAX == 2)
-CS.release()
-check("release drops both LRUs", len(CS._lru) == 0 and len(CS._settled_lru) == 0)
 check("full_close gives each record back exactly (keys in order)", json.dumps([A.full_close(e) for e in er]) == text)
 check("a record without pending stays as it was", A.full_close(er[-1]) == recs[-1] and A.pending_of(er[-1]) is None)
 check("pending_of reads one close's list", A.pending_of(er[4]) == recs[4]["basis"]["pending"])

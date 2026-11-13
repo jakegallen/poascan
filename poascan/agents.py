@@ -1,5 +1,5 @@
 """'The Agents' analytics. Model/harness = self-reported; operator families = estimated. Nothing is imputed."""
-import re, sys, json, math, time, statistics, collections, csv, os, datetime as dt
+import re, json, math, time, statistics, collections, csv, os, datetime as dt
 from . import db, analytics as A, econ as X
 from . import segments as _SG
 from .census_rules import M as CENSUS_M, LABEL as CENSUS_LABEL, KNOWN_ADDR
@@ -37,7 +37,7 @@ def answerers():
     for k, s in src.items(): out[k] |= s
     return dict(out)
 
-@A.close_memo("settled_by_author")   # 1.26.328: once per close, not every 120 s (each pass reads every settled list from disk)
+@cached("settled_by_author", 120)
 def settled_records():
     """List of (epoch, answer, author, passed, jury[], outcome) from every close record. outcome: passed, failed or
     expired_no_jury (outcome.py: settled with no jury, never counted as failed)."""
@@ -45,22 +45,8 @@ def settled_records():
     out = []
     for e in A.epochs_raw():
         for s in e.get("basis", {}).get("settled", []) or []:
-            # 1.26.328: a jury seat keeps only grader and aligned (all any reader uses), one shared read-only dict per
-            # (grader, aligned), so this list no longer pins every parsed settled row of every close
-            jury = [_seat(j) for j in (s.get("jury", []) or [])]
-            out.append((int(e["epoch"]), s.get("answer"), _in(s.get("from")), bool(s.get("passed")), jury, O.of(s)))
+            out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", []), O.of(s)))
     return out
-
-def _in(v): return sys.intern(v) if isinstance(v, str) else v
-_seats = {}
-def _seat(j):
-    if not isinstance(j, dict): return j
-    k = (j.get("grader"), j.get("aligned"))
-    try: hash(k)
-    except TypeError: return {"grader": k[0], "aligned": k[1]}
-    v = _seats.get(k)
-    if v is None: v = _seats.setdefault(k, {"grader": _in(k[0]), "aligned": k[1]})
-    return v
 
 @cached("record_agents", 120)
 def record_agents():
