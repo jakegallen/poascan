@@ -530,8 +530,14 @@ def confirmed(rb):
 
 def vest_split(rb, n=None, vest=None):
     """(spendable, locked) of one address's rewards_by_addr() entry: the vesting basis is its confirmed rewards (1.26.122).
-    With segments cut.carry_unlocked true (1.26.123), rewards from earlier segments are fully spendable since the cut."""
+    With segments cut.carry_unlocked true (1.26.123), rewards from earlier segments are fully spendable since the cut.
+    Bug 2850: rb holds only the close records POAScan has read. When the network lists newer closes than POAScan holds
+    (rewards_behind), open_gkey() has advanced past them, so vesting the held rewards against it unlocks more than it
+    should and locked_est reads low. Cap the vesting reference at the open epoch just after the newest held close; the
+    spendable and locked still sum to the held rewards (no invented split), only the split boundary is corrected."""
     vest = vest or int(params().get("vesting_epochs") or 100); n = open_gkey() if n is None else n
+    last = last_close_gkey()
+    if last is not None: n = min(n, last + 1)   # 2850: never vest held rewards against a close POAScan has not read
     c = confirmed(rb)
     if S.carry_unlocked() is True:
         off = S.offset(S.CURRENT); early = sum(v for k, v in c.items() if k < off)
