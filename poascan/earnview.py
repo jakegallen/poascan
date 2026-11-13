@@ -105,6 +105,7 @@ def result(d, hist=""):
 
 KIND = {"cut": "warn", "bad": "bad", "miss": "bad", "wait": "wait", "exp": "na", "good": "ok", "info": "na"}
 HCOLS = [SS.Col("close", "Close", "num"), SS.Col("answered", "Answer", "cat"), SS.Col("share", "Share", "num"), SS.Col("paid", "Paid", "num"),
+         SS.Col("answer_pay", "Answer pay", "num"), SS.Col("grading_pay", "Grading pay", "num"),
          SS.Col("cuts", "Reductions", "num"), SS.Col(None, "Credited")]
 
 def _lines(ls, kinds):
@@ -121,7 +122,8 @@ def history(d, qs, a):
     keys = [c.key for c in HCOLS if c.key]
     by = SS.page_sort(qs, keys, "close"); dr = SS.page_dir(qs)
     val = {"close": lambda r: r["close"], "answered": lambda r: 1 if r["answered"] else 0, "share": lambda r: EA._num(r["share"]),
-           "paid": lambda r: EA._num(r["paid"]), "cuts": lambda r: r["cuts"]}[by]
+           "paid": lambda r: EA._num(r["paid"]), "answer_pay": lambda r: EA._num(r.get("answer_pay")),
+           "grading_pay": lambda r: EA._num(r.get("grading_pay")), "cuts": lambda r: r["cuts"]}[by]
     kind = next(c.kind for c in HCOLS if c.key == by)
     rows = SS.sort_rows(list(h), val, kind, dr, tie=lambda r: -r["close"])
     link = lambda k, dd: E(f'{EA.ROUTE}?address={a}' + (f'&sort={k}' if k != "close" else "") + ("&dir=asc" if dd == "asc" else "") + "#history")
@@ -129,8 +131,10 @@ def history(d, qs, a):
            '<span class="tag ok">Yes</span>' if r["answered"] else '<span class="tag bad">No</span>',
            EA._poa(r["share"]) if r["share"] is not None else '<span class="na">···</span>',
            EA._poa(r["paid"]) if r["paid"] is not None else '<span class="na">···</span>',
+           (EA._poa(r["answer_pay"]) if r.get("answer_pay") is not None else ('<span class="na" title="Split pending">···</span>' if r.get("pay_split") == "pending" else '<span class="na">···</span>')),
+           (EA._poa(r["grading_pay"]) if r.get("grading_pay") is not None else ('<span class="na" title="Split pending">···</span>' if r.get("pay_split") == "pending" else '<span class="na">···</span>')),
            _lines(r["lines"], ("cut", "bad", "miss", "wait", "exp")), _lines(r["lines"], ("good", "info"))] for r in rows]
-    t = table([], tr, cls="ehist", pri=(0, 3, 4), sort=(HCOLS, by, dr, link))
+    t = table([], tr, cls="ehist", pri=(0, 3, 6), sort=(HCOLS, by, dr, link))
     return (f'<details class="ecall ehw" id="history" open><summary><span class="lbl">History</span><span class="dim small">{len(h)} closes</span></summary>'
             f'{t}</details>')
 

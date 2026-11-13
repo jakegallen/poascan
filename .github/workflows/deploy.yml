@@ -65,6 +65,8 @@ jobs:
         run: python tools/slotlatch_test.py
       - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
         run: python tools/earn_test.py
+      - name: Pay by channel (E76 Answer pay and Grading pay from published fields only; null and Split pending when unpublished; never inferred)
+        run: python tools/paychannels_test.py
       - name: Expired, no jury (a settled row with expired true and an empty jury is never failed; E19 split; receipts, earn check, epoch rows, cohorts, Score over juried answers, settlement Paid per close split)
         run: python tools/expired_no_jury_test.py
       - name: Join difficulty per challenge (no fixed bit count or time estimate in the join copy; kind must be pow; a 403 with required_bits gets a fresh proof; v0.67 and v0.68 release notes; early release read)
