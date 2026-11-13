@@ -13,6 +13,31 @@ def _ref(b):
         if r: return r
     return None
 
+
+def _ref_from_stored(txid, event_body):
+    """External payment ref already held locally: the swap-fill event body, or the stored tx_detail of that fill.
+    No upstream read. fill_usd is not inferred here."""
+    for raw in (event_body,):
+        try:
+            d = json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            d = None
+        if isinstance(d, dict):
+            r = _ref(d)
+            if r: return r
+    if not txid: return None
+    try:
+        row = H.q1("SELECT json FROM tx_detail WHERE id=?", (txid,))
+    except Exception:
+        return None
+    if not row or not row["json"]: return None
+    try:
+        d = json.loads(row["json"])
+    except Exception:
+        return None
+    body = d.get("body") if isinstance(d, dict) and isinstance(d.get("body"), dict) else d
+    return _ref(body) if isinstance(body, dict) else None
+
 def _f(x):
     try: return float(x)
     except Exception: return None
@@ -47,9 +72,8 @@ def job_swaps():
         log.warning("/api/swaps: %s", e)
     ingest_events(now)
     backfill_offer_fields(now)
-    for r in H.q("SELECT s.offer_id, e.json AS body FROM swaps s JOIN swap_events e ON e.txid=s.fill_txid WHERE s.status='filled' AND (s.ext_ref IS NULL OR s.ext_ref='')"):
-        try: ref = _ref(json.loads(r["body"]))   # local backfill, no upstream call
-        except Exception: ref = None
+    for r in H.q("SELECT s.offer_id, s.fill_txid, e.json AS body FROM swaps s JOIN swap_events e ON e.txid=s.fill_txid WHERE s.status='filled' AND (s.ext_ref IS NULL OR s.ext_ref='')"):
+        ref = _ref_from_stored(r["fill_txid"], r["body"])   # local swap_events and tx_detail only, no upstream call
         if ref: H.write("UPDATE swaps SET ext_ref=? WHERE offer_id=?", (ref, r["offer_id"]))
 
 def backfill_offer_fields(now=None):
