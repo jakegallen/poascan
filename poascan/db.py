@@ -125,6 +125,7 @@ def init():
     except Exception: pass   # the table is created lazily by gradehist._ensure() on a fresh DB; the index comes with it there
     from . import closestore as _CS   # 1.26.235: close records one row per close, rebuilt from the blobs when behind them (streamed)
     _CS.migrate()
+    _regroup_reindex(_CS)
 
 def _visit_counts_pjoin():
     """1.26.44: SQLite cannot change a CHECK in place, so a visit_counts table from before 'pjoin' is copied into a new one
@@ -192,14 +193,53 @@ def _segments():
     _regroup_closes(c, S)
     c.commit()
 
+def _blob_malformed(c, CS, k):
+    """True when a leftover blobs row is not a stub and not a list of close records (empty list and null are fine)."""
+    r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
+    if not r or r[0] is None: return False
+    try: obj = json.loads(r[0])
+    except Exception: return True
+    if CS.is_stub(obj) or obj is None or obj == []: return False
+    if not isinstance(obj, list): return True
+    return any(e is not None and not isinstance(e, dict) for e in obj)
+
 def _closes_need_regroup(c, S):
-    """True when _regroup_closes would write anything: the same grouping it computes, from (epoch, ts, segment) only."""
+    """True when _regroup_closes would write anything: the same grouping it computes, from (epoch, ts, segment) only.
+    1.26.325: close_rows are the store when present; leftover list blobs are still read. A stub with no rows is empty."""
+    from . import closestore as CS
+    CS.init()
     kinds = [r[0] for r in c.execute("SELECT kind FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()]
+    for r in c.execute("SELECT DISTINCT kind FROM close_rows WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall():
+        if r[0] not in kinds: kinds.append(r[0])
     if not kinds: return False
     sig_of = lambda e: (e.get("epoch"), e.get("ts"), S.of_record(e)) if isinstance(e, dict) else None
     have = {}
-    from . import closestore as CS
+    if any(_blob_malformed(c, CS, k) for k in kinds):
+        return True
     for k in kinds:
+        row_sigs = [(r[0], r[1], S.of_record({"epoch": r[0], "ts": r[1]}))
+                    for r in c.execute("SELECT epoch, ts FROM close_rows WHERE kind=? ORDER BY pos", (k,)).fetchall()]
+        if row_sigs:
+            have[k] = row_sigs
+            continue
+        src = CS.blob_src(k)
+        if src and src[1] <= CS.STUB_MAX:
+            obj = None
+            try:
+                r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
+                obj = json.loads(r[0]) if r else None
+            except Exception:
+                obj = None
+            if CS.is_stub(obj) or not obj:
+                have[k] = []
+                continue
+            if not isinstance(obj, list):
+                return True
+            v = [sig_of(e) for e in obj]
+            if None in v:
+                return True
+            have[k] = v
+            continue
         # 1.26.236: streamed from the stored text in chunks (closestore.iter_blob), one record at a time; reading the
         # whole text first held it all at once (75 MB on prod at E23, 340 MB in the 5x growth bench) on every boot
         try: v = [sig_of(e) for e in CS.iter_blob(k, strict=True)]
@@ -219,12 +259,48 @@ def _closes_need_regroup(c, S):
     if any(k not in want and have[k] for k in have): return True
     return "epochs" not in want and "epochs" not in have
 
+_REGROUP_REINDEX = []   # kinds whose pend_ix is rebuilt after db.init releases the write lock
+
+def _regroup_reindex(CS):
+    """pend_ix for kinds _regroup_closes moved (cannot run under db.init's write lock)."""
+    kinds = list(dict.fromkeys(_REGROUP_REINDEX)); _REGROUP_REINDEX.clear()
+    for k in kinds:
+        CS._index(k)
+
+def _records_of_kind(c, CS, k):
+    """Full close records of one kind: close_rows when present (raw sha/bytes kept), else a leftover list blob."""
+    rows = c.execute("SELECT slim, pending, ppos, raw_sha256, raw_bytes FROM close_rows WHERE kind=? ORDER BY pos", (k,)).fetchall()
+    if rows:
+        out = []
+        for slim, pending, ppos, raw_sha, raw_b in rows:
+            e = CS.join(json.loads(slim), json.loads(pending) if pending is not None else None, ppos)
+            if raw_sha or raw_b is not None:
+                if not isinstance(e, dict): e = {"_val": e}
+                e = dict(e); e["_raw"] = (raw_sha, raw_b)
+            out.append(e)
+        return out
+    r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
+    if not r or r[0] is None: return []
+    try: obj = json.loads(r[0])
+    except Exception: return []
+    if CS.is_stub(obj) or not isinstance(obj, list): return []
+    return [e for e in obj if isinstance(e, dict)]
+
 def _regroup_closes(c, S):
     # 1.26.230: every boot used to json.loads every close record blob (segment 2 alone 176 MB parsed) only to find, almost
     # always, that nothing moved. The check now reads each record's (epoch, ts) one at a time and keeps nothing else; the
     # full parse below runs only when a record has to move.
+    # 1.26.325: when close_rows are the store, records are regrouped there and the blobs row stays a stub. A leftover
+    # full-list blob is still read, then written as close_rows plus a stub (the raw list is not written back).
     if not _closes_need_regroup(c, S): return
-    kinds = {k: (ts, json.loads(j) or []) for k, ts, j in c.execute("SELECT kind, ts, json FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall()}
+    from . import closestore as CS
+    CS.init()
+    kinds = {}
+    for k, ts, j in c.execute("SELECT kind, ts, json FROM blobs WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall():
+        kinds[k] = (ts, _records_of_kind(c, CS, k))
+    for r in c.execute("SELECT DISTINCT kind FROM close_rows WHERE kind='epochs' OR kind LIKE 'epochs:s%'").fetchall():
+        if r[0] not in kinds:
+            kinds[r[0]] = (int(time.time()), _records_of_kind(c, CS, r[0]))
     if not kinds: return
     by, seen = {}, set()
     for k in sorted(kinds, key=lambda k: (k != "epochs", k)):   # a record present in two blobs is kept once
@@ -235,20 +311,43 @@ def _regroup_closes(c, S):
             seen.add(key); by.setdefault(S.of_record(e), []).append(e)
     want = {S.blob_kind(n): sorted(rows, key=lambda e: int(e.get("epoch", 0))) for n, rows in by.items()}
     sig = lambda rows: sorted((e.get("epoch"), e.get("ts")) for e in rows)
-    now = int(time.time()); ops = []
+    now = int(time.time()); changed = []
     for k, rows in want.items():
         if k not in kinds or sig(kinds[k][1]) != sig(rows):
-            ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?, ?, ?)", (k, kinds.get(k, (now,))[0] if k != "epochs" else now, json.dumps(rows))))
+            changed.append((k, rows, kinds.get(k, (now,))[0] if k != "epochs" else now))
+    seen_k = {k for k, _, _ in changed}
     for k in kinds:
+        if k in seen_k:
+            continue
+        if _blob_malformed(c, CS, k):
+            changed.append((k, want.get(k, []), kinds.get(k, (now,))[0] if k != "epochs" else now))
+            seen_k.add(k)
+            continue
         if k not in want and kinds[k][1]:
-            ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?, ?, ?)", (k, now, "[]")))   # its records now live in another segment's blob
+            changed.append((k, [], now))
+            seen_k.add(k)
     if "epochs" not in want and "epochs" not in kinds:
-        ops.append(("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES('epochs', ?, '[]')", (now,)))
-    if ops:
-        c.execute("BEGIN IMMEDIATE")
-        for q, a in ops: c.execute(q, a)
+        changed.append(("epochs", [], now))
+    if not changed: return
+    c.execute("BEGIN IMMEDIATE")
+    try:
+        for k, rows, ts in changed:
+            c.execute("DELETE FROM close_rows WHERE kind=?", (k,))
+            for i, e in enumerate(rows):
+                c.execute(CS.INS, _clean(CS._row(k, i, e)))
+            stub = json.dumps(CS.stub_obj(len(rows)))
+            c.execute("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (k, ts, stub))
+            c.execute("INSERT OR REPLACE INTO close_meta(kind, src_ts, src_len, n, ver) VALUES(?,?,?,?,?)",
+                      (k, ts, len(stub), len(rows), CS.STUB_V))
         c.commit()
-        for _q, a in ops: _bump(a[0] if len(a) == 3 else "epochs")
+    except Exception:
+        c.rollback(); raise
+    for k, rows, ts in changed:
+        _bump(k)
+        CS._ver[k] = CS._ver.get(k, 0) + 1
+        CS._lru.clear()
+        CS._gen[k] = blob_gen(k)
+        _REGROUP_REINDEX.append(k)
 
 def _clean(a):
     """No PoA key is ever stored: key-shaped tokens in any written string are redacted (poascan/keysafe.py)."""

@@ -13,7 +13,7 @@ os.environ["POA_BASE"] = "http://127.0.0.1:9"
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
 sys.path.insert(0, ROOT)
 
-from poascan import guard as GD, db, indexer as I, segments as S
+from poascan import guard as GD, db, indexer as I, segments as S, closestore as CS, analytics as A
 import poascan.server as SV
 
 fails = []
@@ -123,14 +123,14 @@ def sink(e): seen.append(e["epoch"])
 got = I._read_closes(io.BytesIO(body), "", sink)
 ok(seen == list(range(6)) and got[0] == [{"epoch": 0}] and len(got[0]) == 1, f"the stream sink keeps a one-field sample, not the list ({got[0]})")
 ok(I.store_epochs(rows) is True, "store_epochs writes a new list")
-ok(db.get_blob(S.blob_kind())[0] == rows, "the stored blob parses back to the same records")
+ok(CS.is_stub(db.get_blob(S.blob_kind())[0]) and [A.full_close(e) for e in CS.slim(S.blob_kind())] == rows, "close_rows parse back to the same records and the blob is a stub")
 before = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (S.blob_kind(),))}
 time.sleep(1.1)
 ok(I.store_epochs(json.loads(body)) is False, "an unchanged re-read does not rewrite the blob")
 after = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (S.blob_kind(),))}
 ok(before == after, "an unchanged re-read does not rewrite any close row")
 rows2 = json.loads(body); rows2.append(dict(rows2[-1], epoch=6, ts=1700000000 + 6 * 21600))
-ok(I.store_epochs(rows2) is True and db.get_blob(S.blob_kind())[0] == rows2, "one new close is stored and the blob matches")
+ok(I.store_epochs(rows2) is True and [A.full_close(e) for e in CS.slim(S.blob_kind())] == rows2, "one new close is stored in close_rows")
 after2 = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (S.blob_kind(),))}
 ok([p for p in after2 if after2[p] != before.get(p)] == [6], "only the new close's row is written")
 

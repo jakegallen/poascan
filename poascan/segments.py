@@ -161,8 +161,12 @@ def closes_of(m):
     c = BY_N[m].get("closes")
     if c is not None: return int(c)
     try:
+        from . import closestore as CS
+        n = CS.count(blob_kind(m))
+        if n: return n
         from . import db
-        return len(db.get_blob(blob_kind(m))[0] or [])
+        obj = db.get_blob(blob_kind(m))[0]
+        return len(obj or []) if isinstance(obj, list) else 0
     except Exception: return 0
 
 def offset(n=None):

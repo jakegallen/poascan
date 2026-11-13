@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.325] - 2026-11-13
+
+### Changed
+- Close ingestion no longer stores the raw minepoa close body (about 15 MB each from E58 on). After the index sha256 check, only the parsed fields stay in close_rows: the slim record, the pending list, per-Agent rewards, totals, and Answer pay and Grading pay when published, plus the body's sha256 and byte count for verification. The blobs row is a small stub. Leftover full-list blobs from earlier builds are pruned once the rows are current. Nothing already served (close_rows, txs, or other UI tables) is deleted. Prompt hashes unchanged.
+
 ## [1.26.324] - 2026-11-13
 
 ### Fixed

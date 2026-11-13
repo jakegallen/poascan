@@ -1,8 +1,8 @@
 """Close records one row per close (1.26.235, poascan/closestore.py). Temp database.
-* migration: rows are rebuilt from the blob streamed in small chunks (never the whole text), the same records come back
-  (full_close equals json.loads of the blob, byte for byte as JSON), and a second run is a no-op (idempotent);
-* backward compatible: the blob is still written with every store, so a build from before 1.26.235 reads the same data;
-  a blob an older build wrote later (rollback, then forward again) is picked up and the rows rebuilt;
+* migration: rows are rebuilt from the leftover full-list blob streamed in small chunks (never the whole text), the same
+  records come back from close_rows, the leftover blob is stubbed, and a second run is a no-op (idempotent);
+* 1.26.325: store_epochs writes close_rows and a small stub blob (not the raw close list);
+  a leftover full-list blob an older build wrote later is picked up and the rows rebuilt;
 * epochs_raw keeps slim records only; pending_of reads one close's list from its row; pend_ix answers per answer lookups;
   records.index serves the hash and size stored at ingest; epochs_same compares by stored sha1.
 Usage: python3 tools/closestore_test.py"""
@@ -28,7 +28,8 @@ kind = S.blob_kind()
 db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, T0, text))   # as an older build stores it
 CS.CHUNK = 4096   # many chunks per record: the decoder must resume across chunk edges
 tracemalloc.start(); done = CS.migrate(); peak = tracemalloc.get_traced_memory()[1]; tracemalloc.stop()
-check("migration rebuilt the segment's rows", done == [kind] and CS.meta(kind)["n"] == len(recs))
+check("migration rebuilt the segment's rows", kind in done and CS.meta(kind)["n"] == len(recs))
+check("migration stubs the leftover full-list blob", CS.is_stub(db.get_blob(kind)[0]))
 tracemalloc.start(); json.loads(text); old_peak = tracemalloc.get_traced_memory()[1]; tracemalloc.stop()
 check(f"migration peak {peak // 1024} KB, below one json.loads of the blob {old_peak // 1024} KB (streamed, one close at a time)", peak < old_peak)
 check("a second migration is a no-op (idempotent)", CS.migrate() == [] and CS.current(kind))
@@ -49,22 +50,27 @@ check("records.index: stored hash and size equal the canonical bytes", ix[3]["sh
 check("epochs_same: the same list is unchanged", A.epochs_same(kind, json.loads(text)))
 r2 = json.loads(text); r2[2]["basis"]["pending"][ids[1]]["kind"] = "appeal"
 check("epochs_same: one changed row is a change", not A.epochs_same(kind, r2))
-# indexer store: blob (for older builds) and rows together; only the changed row is rewritten
+# indexer store: close_rows and a stub blob; only the changed row is rewritten
 before = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
 time.sleep(1.1); I.store_epochs(r2)
 after = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
 check("store_epochs: only the changed close's row is rewritten", [p for p in after if after[p] != before.get(p)] == [2])
-check("store_epochs: the blob holds the new list (an older build reads it)", db.get_blob(kind)[0] == r2)
+blob = db.get_blob(kind)[0]
+check("store_epochs: the blob is a stub, not the raw close list", CS.is_stub(blob) and blob.get("n") == len(r2))
 A._cache.clear()
 check("epochs_raw follows the new copy", A.pending_of(A.epochs_raw()[2])[ids[1]]["kind"] == "appeal")
-# rollback then forward: an older build writes only the blob
+check("full_close still serves the new list from close_rows", json.dumps([A.full_close(e) for e in A.epochs_raw()]) == json.dumps(r2))
+# prune is a no-op once stubbed, and close_rows stay
+check("prune_raw_blobs leaves stubbed rows in place", CS.prune_raw_blobs() == [] and CS.count(kind) == len(r2))
+# rollback then forward: an older build writes only the full-list blob
 time.sleep(1.1); r3 = r2 + [close(11, 600)]
 db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", (kind, int(time.time()), json.dumps(r3)))
 check("a blob an older build wrote is seen as newer than the rows", not CS.current(kind))
 A._cache.clear(); er = A.epochs_raw()
-check("and the rows are rebuilt from it", len(er) == 12 and json.dumps([A.full_close(e) for e in er]) == json.dumps(r3) and CS.current(kind))
-# an old build reading the database: blobs row is the whole list as before
-check("old read path: json.loads of the blobs row gives the list", json.loads(db.q1("SELECT json FROM blobs WHERE kind=?", (kind,))["json"]) == r3)
+check("and the rows are rebuilt from it", len(er) == 12 and json.dumps([A.full_close(e) for e in er]) == json.dumps(r3))
+# 1.26.325 then stubs the leftover list (rows stay)
+CS.prune_raw_blobs()
+check("prune turns the rebuilt list blob into a stub and keeps the rows", CS.is_stub(db.get_blob(kind)[0]) and CS.count(kind) == 12 and CS.current(kind))
 for s in ("[]", " [ ]\n", "null"):
     db.write("INSERT OR REPLACE INTO blobs(kind, ts, json) VALUES(?,?,?)", ("epochs:s9", 1, s)); CS._gen.pop("epochs:s9", None)
     CS.rebuild("epochs:s9")
