@@ -14,7 +14,7 @@ def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
 # sha256 of poascan/indexer.py ALLOWED.pattern (1.26.98: adds the keyless /chain/<id>/api/tx/<txid> and /api/tx/<txid> reads on minepoa.com); review any change
-ALLOWED_SHA = "cf4ff3389c5cdfe7ff97dc070ade8546966f1899f47e341769573b3931378b50"   # facts cross check: + network-facts, established (+ /<poa1 addr>), close-report, settled and expiry-schedule (all keyless public GETs on minepoa.com, read through indexer.fetch on the same hourly cadence). 1.26.232: + join-pow (keyless, every 5 min, kind and bits only). 1.26.187: + links (the bulk keyless /api/links list, addr and vault publicId; 1.26.158 added assignments/<poa1 addr>)
+ALLOWED_SHA = "d81874913da90836069319dc35e7e0e8b23c9f9d731fba97a140c0f4e58d944e"   # facts cross check: + network-facts, established (+ /<poa1 addr>), close-report, settled and expiry-schedule (all keyless public GETs on minepoa.com, read through indexer.fetch on the same hourly cadence). 1.26.232: + join-pow (keyless, every 5 min, kind and bits only). 1.26.187: + links (the bulk keyless /api/links list, addr and vault publicId; 1.26.158 added assignments/<poa1 addr>). 1.26.324: + /api/epochs/<n> (keyless public per-epoch close body; the index at /api/epochs was already allowlisted)
 
 def js_code(n=2000):
     """Run the app.js generator logic (same alphabet and mapping) with Python's CSPRNG standing in for getRandomValues."""
