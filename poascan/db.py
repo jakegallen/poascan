@@ -193,6 +193,16 @@ def _segments():
     _regroup_closes(c, S)
     c.commit()
 
+def _blob_malformed(c, CS, k):
+    """True when a leftover blobs row is not a stub and not a list of close records (empty list and null are fine)."""
+    r = c.execute("SELECT json FROM blobs WHERE kind=?", (k,)).fetchone()
+    if not r or r[0] is None: return False
+    try: obj = json.loads(r[0])
+    except Exception: return True
+    if CS.is_stub(obj) or obj is None or obj == []: return False
+    if not isinstance(obj, list): return True
+    return any(e is not None and not isinstance(e, dict) for e in obj)
+
 def _closes_need_regroup(c, S):
     """True when _regroup_closes would write anything: the same grouping it computes, from (epoch, ts, segment) only.
     1.26.325: close_rows are the store when present; leftover list blobs are still read. A stub with no rows is empty."""
@@ -204,6 +214,8 @@ def _closes_need_regroup(c, S):
     if not kinds: return False
     sig_of = lambda e: (e.get("epoch"), e.get("ts"), S.of_record(e)) if isinstance(e, dict) else None
     have = {}
+    if any(_blob_malformed(c, CS, k) for k in kinds):
+        return True
     for k in kinds:
         row_sigs = [(r[0], r[1], S.of_record({"epoch": r[0], "ts": r[1]}))
                     for r in c.execute("SELECT epoch, ts FROM close_rows WHERE kind=? ORDER BY pos", (k,)).fetchall()]
@@ -303,9 +315,17 @@ def _regroup_closes(c, S):
     for k, rows in want.items():
         if k not in kinds or sig(kinds[k][1]) != sig(rows):
             changed.append((k, rows, kinds.get(k, (now,))[0] if k != "epochs" else now))
+    seen_k = {k for k, _, _ in changed}
     for k in kinds:
+        if k in seen_k:
+            continue
+        if _blob_malformed(c, CS, k):
+            changed.append((k, want.get(k, []), kinds.get(k, (now,))[0] if k != "epochs" else now))
+            seen_k.add(k)
+            continue
         if k not in want and kinds[k][1]:
             changed.append((k, [], now))
+            seen_k.add(k)
     if "epochs" not in want and "epochs" not in kinds:
         changed.append(("epochs", [], now))
     if not changed: return
