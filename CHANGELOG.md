@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.324] - 2026-11-13
+
+### Fixed
+- Close ingestion follows minepoa's edge-only /api/epochs index: one GET of the index, then /api/epochs/<n> for each missing close, with the body's raw sha256 checked against the index row. Only missing closes are fetched, one at a time with a short pause, so a backfill of E58 to E77 stays gentle. The old all-bodies list is still accepted if an origin serves it. Answer pay and Grading pay still appear only when a stored close record publishes them; nothing is inferred. No credential is placed in a URL. Prompt hashes unchanged.
+
 ## [1.26.323] - 2026-11-13
 
 ### Fixed

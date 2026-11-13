@@ -38,7 +38,7 @@ RETRY_AFTER_MAX_S = 6 * 3600                                   # a Retry-After b
 FEED_EPS = ("/api/explorer/txs", "/api/status", "/api/networks", "/api/swaps")
 # Hard allowlist: the indexer can only ever call these read-only paths.
 ALLOWED = re.compile(r"^/(chain/[a-z0-9][a-z0-9\-]{0,63}/api/tx/[0-9a-f]{64}|api/(status|networks|txs|explorer/txs|explorer/grading|explorer/tx/[0-9a-f]{64}|tx/[0-9a-f]{64}|explorer/address/poa1[1-9A-HJ-NP-Za-km-z]+|assignments/poa1[1-9A-HJ-NP-Za-km-z]+|"
-                     r"epochs|agents|anchors|params|release|notices|ballots|chains|links|swaps|join-pow|network-facts|established/poa1[1-9A-HJ-NP-Za-km-z]+|established|close-report|settled|expiry-schedule)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
+                     r"epochs(?:/[0-9]+)?|agents|anchors|params|release|notices|ballots|chains|links|swaps|join-pow|network-facts|established/poa1[1-9A-HJ-NP-Za-km-z]+|established|close-report|settled|expiry-schedule)|lableak/api/(communities|posts|posts/\d+))(\?[\w=&.\-]*)?$")
 
 class Busy(Exception):
     def __init__(self, msg, retry=None):
@@ -157,7 +157,7 @@ def _parse(path, raw):
     from . import analytics as _A
     return _A.parse_closes(raw.decode(json.detect_encoding(raw), "surrogatepass"))
 
-def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None, epoch_sink=None):
+def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None, epoch_sink=None, expect_sha256=None):
     """GET BASE+path, return parsed JSON. Records health in fetch_log. Raises on failure.
     Always asks for gzip (SC-009). cond=True sends If-None-Match with the ETag of the last 200 for this exact path and
     returns NOT_MODIFIED on a 304, so the caller keeps what it stored. soft=True (single-id detail reads): redirects are
@@ -196,6 +196,12 @@ def fetch(path, timeout=60, endpoint=None, cond=False, soft=False, gate=None, ep
             if raw[:1] not in (b"{", b"["):
                 _probe(ep, True, t0, "200"); count(ep, 200)
                 raise Busy("non-JSON response (load page?)")
+            if expect_sha256:
+                import hashlib as _hl
+                got = _hl.sha256(raw).hexdigest()
+                if got != str(expect_sha256).lower():
+                    _probe(ep, False, t0, "sha"); count(ep, "sha")
+                    raise Busy("close body sha256 mismatch for %s" % path)
             data = _parse(path, raw); nraw = len(raw); raw = wire = None
         hit = _ST.detect(path, data, r.headers)   # strain notice guard: a stand-in is never stored, cached or shown as data
         if hit and hit.get("kind") == "retired":   # the endpoint answered that it is retired: not a failure, not a stand-in
@@ -772,29 +778,77 @@ def job_join_pow():
     if isinstance(d, dict):
         db.put_blob("join_pow", dict(kind=d.get("kind"), bits=d.get("bits"), ts=int(time.time())))
 
+
+def is_epochs_index(d):
+    """True when /api/epochs is the edge index (chain_id + a row per close), not the old all-bodies list."""
+    return isinstance(d, dict) and isinstance(d.get("epochs"), list) and d.get("chain_id")
+
+def fetch_close_body(n, sha256=None, timeout=120):
+    """GET /api/epochs/<n> and return the close record. When sha256 is set, the raw JSON bytes (after gzip
+    decode, before parse) must match; a mismatch is skipped by the caller (this raises Busy). No credential
+    is placed in the path. endpoint is the template /api/epochs/:n so fetch_log stays one row."""
+    return fetch("/api/epochs/%d" % int(n), timeout=timeout, endpoint="/api/epochs/:n", expect_sha256=sha256)
+
+EPOCHS_BODY_PACE_S = 2   # 1.26.324: pause between per-close body reads so a backfill stays gentle on minepoa.com
+
 def job_epochs(force=False):
-    """Close records. The current segment's count is compared with /api/status epochs_closed (which restarts at a genesis
-    cut), so a new segment with no close yet reads nothing; the ~21 MB list is fetched only when a close is missing."""
+    """Close records. 1.26.324: /api/epochs is an index (one small row per close). Missing bodies are fetched
+    from /api/epochs/<n>, one at a time, sha256-checked against the index, and only then stored. The old all-bodies
+    list is still accepted if a test or an older origin serves it. The current segment's count is compared with
+    /api/status epochs_closed (which restarts at a genesis cut), so a new segment with no close yet reads nothing."""
     from . import analytics as A   # shared parsed copy; re-parsing the blob here every 5 min cost ~50 MB each run
     st, _ = db.get_blob("status")
     with _SG.use(_SG.CURRENT): have = A.epochs_count()
     need = (st or {}).get("epochs_closed", 0) or 0
     seeded = bool(have) or bool(db.q1("SELECT 1 AS x FROM blobs WHERE kind LIKE 'epochs:s%'"))
     if not force and seeded and have >= need: return False
-    # 1.26.221: minepoa.com's list is now about 51 MB (14 MB compressed) and ignores ?limit, so it is read at most once per
-    # EPOCHS_GAP_S whatever happens after (a read that stores nothing new, a failure, a count that never matches)
+    # 1.26.221: paced, at most once per EPOCHS_GAP_S whatever happens after (a read that stores nothing new, a failure,
+    # a count that never matches). The index itself is small; the gap still protects minepoa.com from a tight retry loop.
     r = db.q1("SELECT MAX(COALESCE(last_ok, 0), COALESCE(last_err, 0)) AS t FROM fetch_log WHERE endpoint='/api/epochs'")
     if not force and seeded and r and r["t"] and time.time() - r["t"] < EPOCHS_GAP_S: return False
-    # 1.26.271: the sink spills each close and drops it. A fetch that ignores epoch_sink (tests) still returns the list.
     spill = _Spill(); d = None; held = False; wrote = False; did = False
     try:
-        d = fetch("/api/epochs", timeout=180, cond=True, epoch_sink=spill.add)
-        if spill.n or (isinstance(d, list) and d):
-            from . import guard as _G
-            held = _G.close_acquire()   # heavy slot only; a full heavy pool does not block the store, and never takes a cheap slot
-            wrote = spill.finish() if spill.n else store_epochs(d); did = True
+        d = fetch("/api/epochs", timeout=60, cond=True)
+        if d is NOT_MODIFIED:
+            return False
+        if is_epochs_index(d):
+            with _SG.use(_SG.CURRENT):
+                existing = [e for e in (A.epochs_raw() or []) if isinstance(e, dict) and e.get("epoch") is not None]
+            have_ns = {int(e["epoch"]) for e in existing}
+            missing = [row for row in d["epochs"] if isinstance(row, dict) and row.get("n") is not None
+                       and int(row["n"]) not in have_ns and row.get("sha256")]
+            got = []
+            for i, row in enumerate(missing):
+                if i:
+                    time.sleep(EPOCHS_BODY_PACE_S)
+                try:
+                    rec = fetch_close_body(int(row["n"]), sha256=row["sha256"])
+                except Busy as e:
+                    log.warning("/api/epochs/%s: %s", row["n"], e)
+                    continue
+                if not isinstance(rec, dict) or rec.get("epoch") is None:
+                    log.warning("/api/epochs/%s: body is not a close record", row["n"])
+                    continue
+                if int(rec["epoch"]) != int(row["n"]):
+                    log.warning("/api/epochs/%s: body epoch %s does not match", row["n"], rec.get("epoch"))
+                    continue
+                got.append(rec)
+            if not got:
+                return False
+            # spill already-stored closes plus the new ones, oldest first, so finish() writes the full list
+            # and never replaces the blob with only the missing tail
+            for e in sorted(existing, key=lambda e: int(e["epoch"])):
+                spill.add(e)
+            for rec in got:
+                spill.add(rec)
+        elif isinstance(d, list) and d:
+            # legacy all-bodies list (tests, or an origin that has not cut over)
+            pass
         else:
             return False
+        from . import guard as _G
+        held = _G.close_acquire()   # heavy slot only; a full heavy pool does not block the store, and never takes a cheap slot
+        wrote = spill.finish() if spill.n else store_epochs(d); did = True
     finally:
         d = None
         if held:

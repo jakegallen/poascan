@@ -45,7 +45,8 @@ REQUIRED = {
     "/api/explorer/tx/:id": ("dict", ("id",)),
     "/api/explorer/address/:addr": ("dict", ("address", "balance", "txs")),
     "/api/txs": ("dict", ("valid",)),
-    "/api/epochs": ("list", ("epoch",)),
+    "/api/epochs": ("epochs_index", ("chain_id", "epochs")),
+    "/api/epochs/:n": ("dict", ("epoch",)),
     "/api/agents": ("list", ("addr",)),
     "/api/anchors": ("list", ("height", "chain")),
     "/api/notices": ("dict", ("active",)),
@@ -71,7 +72,7 @@ MAX_TEXT = 220
 GENERIC = "minepoa.com sent a notice instead of data."
 # ---------------------------------------------------------------------------------------------------------------------
 
-_TPL = ((re.compile(r"^/api/explorer/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/chain/[a-z0-9\-]+/api/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"),
+_TPL = ((re.compile(r"^/api/epochs/\d+$"), "/api/epochs/:n"), (re.compile(r"^/api/explorer/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/chain/[a-z0-9\-]+/api/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"),
         (re.compile(r"^/api/tx/[0-9a-f]{64}$"), "/api/explorer/tx/:id"), (re.compile(r"^/api/explorer/address/poa1\w+$"), "/api/explorer/address/:addr"),
         (re.compile(r"^/lableak/api/posts/\d+$"), "/lableak/api/posts/:id"))
 ADDR_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
@@ -92,6 +93,21 @@ def _schema_gap(tpl, data):
     spec = REQUIRED.get(tpl)
     if not spec: return None
     kind, keys = spec
+    if kind == "epochs_index":
+        # 1.26.324: the live /api/epochs body is an index object. Tests and a pre-cutover origin may still serve
+        # the old all-bodies list of close records. Both are real data; anything else is a schema gap.
+        if isinstance(data, list):
+            if not data: return "empty list" if tpl in NONEMPTY else None
+            bad = [x for x in data[:50] if not isinstance(x, dict) or "epoch" not in x]
+            return "list items missing epoch" if bad else None
+        if not isinstance(data, dict): return "expected an epochs index or a list of closes"
+        miss = [k for k in keys if k not in data]
+        if miss: return "missing " + ",".join(miss)
+        rows = data.get("epochs")
+        if not isinstance(rows, list): return "epochs is not a list"
+        if not rows: return "empty list" if tpl in NONEMPTY else None
+        bad = [x for x in rows[:50] if not isinstance(x, dict) or "n" not in x or "sha256" not in x]
+        return "index rows missing n,sha256" if bad else None
     if kind == "list":
         if not isinstance(data, list): return "expected a list"
         if not data: return "empty list" if tpl in NONEMPTY else None
