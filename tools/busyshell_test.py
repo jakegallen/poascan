@@ -69,8 +69,11 @@ r = Req("/network?tab=charts"); r.headers = {"User-Agent": "Mozilla/5.0 (compati
 r._gated(lambda: "X")
 code, body, ctype, hd = r.sent[-1]
 ok(code == 503 and body == B and hd.get("Retry-After") == "60" and hd.get("Cache-Control") == "no-store", f"Googlebot with no copy gets Busy as 503 Retry-After 60 ({code})")
-# API, MCP, files keep the text
-for p in ("/api/v1/address/poa1" + "D" * 40, "/api/v1/epochs", "/openapi-gpt.json", "/llms-full.txt", "/fragment/rows"):
+# API, MCP, files keep the text. 1.26.319: /api/v1/address itself is the light path, so the shed probe is /txs.
+r = Req("/api/v1/address/poa1" + "D" * 40); ran = []
+out = r._gated(lambda: (ran.append(1), "LIGHT")[1])
+ok(ran == [1] and out == "LIGHT" and not r.sent, "the address API is the light path, not the plain text 503")
+for p in ("/api/v1/address/poa1" + "D" * 40 + "/txs", "/api/v1/epochs", "/openapi-gpt.json", "/llms-full.txt", "/fragment/rows"):
     r = Req(p); r._gated(lambda: "X")
     code, body, ctype, hd = r.sent[-1] if r.sent else (None, "", "", {})
     ok(code == 503 and "server busy" in body and body != B, f"{p} keeps the plain text 503 ({code})")

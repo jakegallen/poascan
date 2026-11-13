@@ -1,8 +1,8 @@
 """Last-good visitor pages through an epoch close (1.26.275).
 
 Warmed pages sit outside the 24 MB FIFO and are served at any age with no worker slot. /fragment/chart?c=agents and
-/status do the same when the heavy pool is full. Address, tx and epoch-record reads still take a heavy slot, but only
-SCRAPE_MAX run at once and a waiter does not sit out a long upstream read. A close republishes without clearing the pin.
+/status do the same when the heavy pool is full. Tx and epoch-record reads still take a heavy slot, but only
+SCRAPE_MAX run at once and a waiter does not sit out a long upstream read. From 1.26.319, an extra /api/v1/address call serves a light copy instead of 503 and still takes no heavy slot. A close republishes without clearing the pin.
 
 Run: python3 tools/lastgood_test.py (temp db, in-process, no network)."""
 import os, sys, tempfile, threading, time, urllib.error, urllib.request
@@ -103,12 +103,13 @@ ok(len(held_s) == GD.SCRAPE_MAX, f"test holds every scrape slot ({len(held_s)})"
 ran = []
 t0 = time.time()
 addr = Req("/api/v1/address/poa1" + "B" * 40)
-addr._gated(lambda: (ran.append(1), "ADDR")[1])
+got = addr._gated(lambda: (ran.append(1), "ADDR")[1])
 dt = time.time() - t0
-ok(addr.sent == [503] and not ran and dt < 0.2, f"an extra address read 503s without waiting out HEAVY_WAIT ({dt*1000:.0f} ms)")
+ok(ran == [1] and got == "ADDR" and not addr.sent and dt < 0.2,
+   f"an extra address API call serves the light copy without waiting out HEAVY_WAIT ({dt*1000:.0f} ms)")
 n = 0
 while GD.slots.acquire(blocking=False): n += 1
-ok(n == GD.HEAVY_CAP, f"that 503 did not take a heavy slot ({n} still free)")
+ok(n == GD.HEAVY_CAP, f"the light address path took no heavy slot ({n} still free)")
 for _ in range(n): GD.slots.release()
 rew = Req("/api/v1/epoch/51/rewards"); ran = []
 t0 = time.time()

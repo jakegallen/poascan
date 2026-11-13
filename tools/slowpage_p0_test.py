@@ -104,9 +104,10 @@ GD.ip_heavy_release("9.9.9.9")
 ok(GD.ip_heavy_acquire("9.9.9.9") is True, "a release frees one in-flight slot for that ip")
 GD._ip_heavy.clear()
 
-# through _gated on a heavy scrape API route: the second concurrent request from one ip sheds before a slot
+# through _gated on a heavy scrape API route (address txs; the 1.26.319 light /api/v1/address path does not shed):
+# the second concurrent request from one ip sheds before a slot
 GD.IP_HEAVY_MAX = 1; GD._ip_heavy.clear()
-ADDR = "/api/v1/address/poa1" + "D" * 40
+ADDR = "/api/v1/address/poa1" + "D" * 40 + "/txs"
 cap_before = slots_value()
 ok(GD.ip_heavy_acquire("1.2.3.4") is True, "first request from the ip is in flight (reserved)")
 ran = []
