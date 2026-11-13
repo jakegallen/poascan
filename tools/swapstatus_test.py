@@ -32,6 +32,11 @@ t0 = time.time(); cold = SS.serve(); dt = time.time() - t0
 check("cold serve is fast", dt < 1)
 check("cold: available false, write_ok false, stale, state unknown",
       cold["available"] is False and cold["write_ok"] is False and cold["stale"] is True and cold["state"] == "unknown")
+check("1.26.320: swap_writes_up aliases write_ok, chain and last_incident are always present",
+      cold["swap_writes_up"] is False and cold["swap_writes_up"] is cold["write_ok"]
+      and isinstance(cold.get("chain"), dict) and "last_block" in cold["chain"] and "last_close" in cold["chain"]
+      and "as_of" in cold["chain"] and "age_s" in cold["chain"] and "stale" in cold["chain"]
+      and "last_incident" in cold)
 check("cold: join and swap_writes are UNKNOWN, not DOWN",
       cold["join"]["state"] == "UNKNOWN" and cold["swap_writes"]["state"] == "UNKNOWN"
       and cold["swap_writes"]["routes"]["swap_offer"]["state"] == "UNKNOWN" and "DOWN" not in json.dumps(cold["swap_writes"]))
@@ -69,6 +74,7 @@ check("halt keeps writes.swap_offer paused, not open",
 probe(401, b'{"error":"missing key"}')
 opened = SS.build()
 check("open probe: swap_offer OK and write_ok true", opened["swap_writes"]["routes"]["swap_offer"]["state"] == "OK" and opened["write_ok"] is True and opened["available"] is True)
+check("1.26.320: open probe swap_writes_up is true", opened["swap_writes_up"] is True and opened["swap_writes_up"] is opened["write_ok"])
 check("open probe: legacy swap_offer and swap_route are open",
       opened["writes"]["swap_offer"]["state"] == "open" and opened["swap_route"]["state"] == "open" and opened["swaps_writable"] is True)
 HO.write_job(now=int(time.time()), get=boom, force=True)
@@ -136,6 +142,13 @@ check("1.26.314: an old write read still fails closed: unknown, maintenance_acti
       ob["available"] is False and ob["maintenance_active"] is True and ob["swaps_writable"] is None and ob["swap_route"]["writable"] is None)
 nf = dict(live); nf.pop("halted_routes")
 check("1.26.314: halted_routes is always a list", SS.render(nf, {"status": "live"}, now, now)["halted_routes"] == [] and SS.render(None, {}, None, now)["halted_routes"] == [])
+hr_body = SS.render(dict(nf, halted_routes=[{"id": "tx_lookup", "label": "Tx lookup", "state": "halted", "since": "2026-11-09T05:06:47Z", "as_of": "2026-11-13T15:00:00Z"}]), {"status": "live"}, now, now)
+check("1.26.320: last_incident is the newest current route halt",
+      hr_body["last_incident"] and hr_body["last_incident"]["start"] == "2026-11-09T05:06:47Z"
+      and hr_body["last_incident"]["what"] == "Tx lookup" and hr_body["last_incident"]["ongoing"] is True
+      and hr_body["last_incident"]["end"] is None)
+empty_inc = SS.render(nf, {"status": "live"}, now, now)
+check("1.26.320: last_incident is null when nothing is halted", empty_inc["last_incident"] is None)
 
 # Notices are a MANDATORY security signal and stay FAIL-CLOSED (security review 2026-11-07): a stale
 # notices FETCH goes UNKNOWN and blocks join clearance, even when the last-known read was clear. We do
@@ -194,6 +207,24 @@ dt = time.time() - t0
 got = json.loads(raw)
 m = got.get("meta", {}).get("maintenance") or {}
 check(f"full heavy pool ({held} slots): 200 in under 1s ({dt:.2f}s)", dt < 1 and got["stale_after_s"] == 1920 and "write_ok" in got and "swap_offer" in got["swap_writes"]["routes"])
+t0 = time.time()
+raw_tr = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/trading/status", timeout=2).read()
+dt_tr = time.time() - t0
+tr = json.loads(raw_tr)
+check(f"1.26.320: /api/v1/trading/status is a slot-exempt alias ({dt_tr:.2f}s)", dt_tr < 1 and tr.get("swap_writes_up") is tr.get("write_ok") and tr.get("write_ok")==got.get("write_ok")
+      and "chain" in tr and "last_incident" in tr)
+body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_status", "arguments": {}}}).encode()
+# tools/call is still heavy: release one slot so MCP can run, then confirm the trading fields
+try: GD.slots.release()
+except ValueError: pass
+rq = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers={"Content-Type": "application/json", "Accept": "application/json"})
+mcp_raw = urllib.request.urlopen(rq, timeout=4).read()
+mcp = json.loads(mcp_raw)
+sc = (mcp.get("result") or {}).get("structuredContent") or {}
+check("1.26.320: MCP get_swap_status carries chain, swap_writes_up and last_incident",
+      "swap_writes_up" in sc and "chain" in sc and "last_incident" in sc and "write_ok" in sc)
+# re-hold the released slot so cleanup still matches `held`
+GD.slots.acquire(blocking=False)
 check("http keeps meta.maintenance.active, join_state, swap_route and writes.swap_offer, and unknown is not open",
       "active" in m and m.get("join_state") == got.get("join_state") and (m.get("swap_route") or {}).get("state") == got["writes"]["swap_offer"]["state"]
       and got["writes"]["swap_offer"]["state"] in ("open", "paused", "down", "unknown")

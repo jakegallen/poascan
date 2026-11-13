@@ -1161,8 +1161,9 @@ class H(BaseHTTPRequestHandler):
         answering them with the plain text busy line)."""
         p = self._norm(); return p in ("/api", "/api/reference") and AG.doc_ready("api" if p == "/api" else "reference")
     def _is_swap_status(self):
-        """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait."""
-        return self._norm() == "/api/swaps/status"
+        """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait.
+        1.26.320: /api/v1/trading/status is an alias of the same body."""
+        return self._norm() in ("/api/swaps/status", "/api/trading/status")
     def _txs_micro_parts(self):
         """(p, qs, fmt, selected, explicit) for /api/txs JSON, else None. Matches the micro-cache key _get uses,
         without changing this thread's segment."""
@@ -1468,7 +1469,7 @@ class H(BaseHTTPRequestHandler):
         try:
             if path == "/ws":
                 return HUB.accept(self)
-            if path == "/api/swaps/status": return self._swap_status_fast()
+            if path in ("/api/swaps/status", "/api/trading/status"): return self._swap_status_fast()
             if path in ("/api/summary", "/api/live"):
                 m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
                 if isinstance(d, dict):

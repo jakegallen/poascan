@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.320] - 2026-11-13
+
+### Added
+- Bot trading status on the existing slot-exempt `/api/v1/swaps/status` (and MCP get_swap_status), without a second source of truth: `chain` (last_block, last_close, as_of, age_s, stale from the stored status copy), `swap_writes_up` (the same boolean as write_ok) and `last_incident` (the newest current route halt, or null). `/api/v1/trading/status` is an alias of the same body. No new minepoa.com reads. Prompt hashes unchanged.
+
 ## [1.26.319] - 2026-11-13
 
 ### Fixed

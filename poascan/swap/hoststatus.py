@@ -89,6 +89,53 @@ def _force_unknown(block):
     return out
 
 
+def _iso_any(v):
+    """Unix seconds or an ISO string to ISO UTC, else None."""
+    if v is None: return None
+    if isinstance(v, str):
+        return v if "T" in v else _iso(v) if str(v).isdigit() else v
+    return _iso(v)
+
+def _chain_from_archive(now):
+    """Last block and last close from the stored /api/status copy. No minepoa.com read."""
+    now = int(now)
+    try:
+        from .. import analytics as A
+        st = A.status() or {}
+    except Exception:
+        st = {}
+    last_block = st.get("height")
+    last_close = st.get("epochs_closed")
+    as_of = st.get("as_of") or st.get("fetched_at") or st.get("ts")
+    as_of_iso = _iso_any(as_of)
+    try:
+        as_of_i = int(as_of) if as_of is not None and not isinstance(as_of, str) else None
+    except (TypeError, ValueError):
+        as_of_i = None
+    if as_of_i is None and isinstance(as_of, str):
+        # ISO
+        try:
+            as_of_i = int(__import__("calendar").timegm(__import__("time").strptime(as_of[:19], "%Y-%m-%dT%H:%M:%S")))
+        except Exception:
+            as_of_i = None
+    age = (now - as_of_i) if as_of_i else None
+    stale = bool(age is None or age > 15 * 60)
+    return dict(last_block=last_block, last_close=last_close, last_close_ts=None,
+                as_of=as_of_iso, age_s=age, stale=stale)
+
+def _last_incident_from(facts, now):
+    """Newest current route halt, else None. Local facts only; no probe scan on the request path."""
+    rows = list((facts or {}).get("halted_routes") or [])
+    best = None
+    for r in rows:
+        if not isinstance(r, dict): continue
+        since = r.get("since") or r.get("start")
+        if not since: continue
+        if best is None or str(since) > str(best.get("start") or ""):
+            best = dict(start=since, end=None, what=r.get("label") or r.get("id") or "route halt",
+                        id=r.get("id"), state=r.get("state"), as_of=r.get("as_of"), source="route_halts", ongoing=True)
+    return best
+
 def render(facts, extra, built_at, now):
     """Public body from stored facts. Pure: no database and no network."""
     now = now if now is not None else time.time()
@@ -161,6 +208,17 @@ def render(facts, extra, built_at, now):
     # 1.26.314: halted join, join PoW and tx lookup routes live here (POAScan's probes, with since and as_of), not in
     # maintenance_active, so nothing is lost and a halted join route does not stop trading.
     body["halted_routes"] = list((facts or {}).get("halted_routes") or [])
+    # 1.26.320: bot trading snapshot. Additive aliases and chain/incident fields from the local archive.
+    body["swap_writes_up"] = bool(write_ok)
+    ch = (extra or {}).get("chain")
+    if isinstance(ch, dict) and ("last_block" in ch or "last_close" in ch or "as_of" in ch):
+        body["chain"] = dict(ch)
+    else:
+        body["chain"] = dict(last_block=None, last_close=None, last_close_ts=None, as_of=None, age_s=None, stale=True)
+    if "last_incident" in (extra or {}) and extra.get("last_incident") is not None:
+        body["last_incident"] = extra.get("last_incident")
+    else:
+        body["last_incident"] = _last_incident_from(facts, now)
     _legacy(body)
     return body
 
@@ -301,6 +359,12 @@ def build(now=None):
     """Refresh the pin. Called off the request path. Returns the public body."""
     now = time.time() if now is None else now
     facts, extra = _facts(now), _extra()
+    extra = dict(extra or {})
+    if "chain" not in extra:
+        try: extra["chain"] = _chain_from_archive(now)
+        except Exception: pass
+    if "last_incident" not in extra:
+        extra["last_incident"] = _last_incident_from(facts, now)
     body = render(facts, extra, now, now)
     with _lock:
         _pin.update(facts=facts, extra=extra, built_at=now)
