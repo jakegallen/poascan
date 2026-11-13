@@ -164,7 +164,7 @@ def close_row(n, rec, a, mine, est_before):
     from . import paychannels as _PCH
     ch = _PCH.for_addr(n, a, rec=rec)
     return dict(close=n, ts=rec.get("ts"), answered=bool(ans), share=share, paid=paid, eligible=elig, seats=int(gs or 0), jury=jn, aligned=ja,
-                answer_pay=ch["answer_pay"], grading_pay=ch["grading_pay"], pay_split=ch["state"],
+                answer_pay=ch["answer_pay"], grading_pay=ch["grading_pay"], referral_pay=ch["referral_pay"], pay_split=ch["state"],
                 cuts=sum(1 for x in L if x["kind"] in ("cut", "bad", "miss")), lines=L, raw=raw, _est=est)
 
 def gather(a, get, forum_fn=None):
