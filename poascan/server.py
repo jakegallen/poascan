@@ -21,6 +21,7 @@ from . import kin as KN
 from . import segments as SG
 from . import htmlcache as HC
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
+from . import addrlight as AL
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -194,6 +195,10 @@ def api(path, qs):
     if m:
         a = m.group(1)
         if not V.ADDR_RX.match(a): raise BadRequest("address must be a poa1 address")
+        if AL.want_light():
+            row = AL.payload(a, reason="busy")
+            if not row: raise NotFound("address not found")
+            return row, False
         p = G.profile(a); d, err, at = V.address_read(a)
         bb = V.address_balance(a, d, at)   # the newer of the address read and the agent list row (15 min old at most)
         from . import strain as _ST   # a notice in place of the address read: the balance shown is the last real copy
@@ -202,7 +207,7 @@ def api(path, qs):
         rb = p["rewards"]; rsum = sum(rb.values()); sp, lk = A.vest_split(rb, A.open_gkey())
         from . import correction as _CC; lk = _CC.locked_after(a, lk)   # 1.26.257: ballot 2464, once the E44 record carries it
         rbs = RB.basis(float(bb["balance"]) if bb["balance"] is not None else None, rsum - _CC.applied(a), bb["as_of"], a, rb)   # 1.26.261: less a ballot 2464 burn
-        return dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
+        out = dict(address=a, balance=bb["balance"], balance_as_of=bb["as_of"], balance_source=bb["source"], balance_stale=stale,
                     rewards_total=round(rsum, 6), spendable_est=round(sp, 6), locked_est=round(lk, 6), rewards_as_of=rbs["as_of"],
                     rewards_behind=rbs["behind"], rewards_behind_reason=rbs["reason"], balance_ahead_by=rbs["balance_ahead_by"],
                     balance_as_of_checkpoint=bb.get("as_of_checkpoint"), balance_segment=bb.get("segment"),
@@ -211,7 +216,12 @@ def api(path, qs):
                     rewards_key="lifetime close number: segment 1 E0 to E14 are 0 to 14, segment 2 E0 is 15",
                     rewards_rows=[dict(zip(("segment", "epoch"), SG.split_gkey(int(k))), lifetime=int(k), reward=v) for k, v in sorted(p["rewards"].items(), key=lambda kv: int(kv[0]))],
                     carry_correction=_CC.for_address(a), streak=p["streak"], census=p["census"], family_size=(p["family"] or [None, None])[1],
-                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), wallet_binding=WB.binding(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err), False
+                    forum_name=p["forum_name"], established=a in A.established_set(), addresses=LK.addresses(a), addresses_notice=chains_notice(), wallet_binding=WB.binding(a), kin=KN.kin(a), txs=db.q("SELECT * FROM txs WHERE from_addr=? OR to_addr=? ORDER BY ts DESC LIMIT 500", (a, a)), fetch_error=err, read_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        AL.remember(dict(address=a, balance=out.get("balance"), spendable_est=out.get("spendable_est"),
+                          locked_est=out.get("locked_est"), as_of=out.get("read_at"), read_at=out.get("read_at"),
+                          stale=out.get("balance_stale"), balance_as_of=out.get("balance_as_of"),
+                          balance_source=out.get("balance_source"), rewards_total=out.get("rewards_total")))
+        return out, False
     m = re.match(r"^/api/agents/([^/]{1,80})/addresses$", path)
     if m:
         a = m.group(1)
@@ -1306,9 +1316,49 @@ class H(BaseHTTPRequestHandler):
                            "detail": f"this client is limited to about {GD.UA_THROTTLE_RATE:g} request per second across all of its IPs; honor Retry-After"})
         self.send(429, body, "application/json", {"Retry-After": str(wait), "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
         return True
+
+    _ADDR_API_RX = re.compile(r"^/api/address/(poa1\w+)$")
+    def _is_address_light_path(self):
+        """GET /api/v1/address/<poa1> (not /txs, /standing or the HTML page) or a single MCP get_address tools/call."""
+        if getattr(self, "command", "GET") == "GET" and self._ADDR_API_RX.match(self._norm()):
+            return True
+        if self._path_only() == "/mcp" and getattr(self, "command", "GET") == "POST":
+            raw = getattr(self, "_mcp_raw", None)
+            if raw: return AL.is_get_address_call(raw)
+        return False
+    def _address_gated(self, fn):
+        """Try a heavy slot for the full address payload. If none is free, serve the light copy (no 503)."""
+        ipk = self._ip_key()
+        got_ip = GD.ip_heavy_acquire(ipk)
+        got_scrape = got_slot = False
+        if got_ip:
+            try:
+                got_scrape = GD.scrape.acquire(timeout=GD.SCRAPE_WAIT)
+                if got_scrape:
+                    # brief wait only: if a slot is not free now, serve the light copy instead of stalling 2s
+                    got_slot = GD.slots.acquire(timeout=GD.SCRAPE_WAIT)
+                    if not got_slot:
+                        try: GD.scrape.release()
+                        except ValueError: pass
+                        got_scrape = False
+            finally:
+                if not got_slot:
+                    GD.ip_heavy_release(ipk)
+        if got_slot:
+            try: return fn()
+            finally:
+                try: GD.slots.release()
+                except ValueError: pass
+                try: GD.scrape.release()
+                except ValueError: pass
+                GD.ip_heavy_release(ipk)
+        AL.enter_light()
+        try: return fn()
+        finally: AL.exit_light()
     def _gated(self, fn):
         if self._ua_throttled(): return   # 1.26.287: before any slot or render
         if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_doc_ready() or self._txs_micro_hit(): return fn()
+        if self._is_address_light_path(): return self._address_gated(fn)   # 1.26.319: get_address / /api/address light copy when no heavy slot
         path = self._path_only()
         if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render
         if self._html_hit(): return fn()   # fresh, a pinned visitor page at any age, or a usable cheap copy: no slot
