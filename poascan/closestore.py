@@ -365,13 +365,22 @@ class Close(dict):
     (kind, pos, ppos), so pending_of and full_close find the close even after a newer copy replaced it."""
     __slots__ = ("loc",)
 
+_slim_prev = {}   # kind -> {(pos, sig, ppos): Close} from the last slim() read (1.26.336)
 def slim(kind):
-    """[slim record (Close)] of one segment, in stored order."""
-    out = []
-    for r in db.q("SELECT pos, ppos, slim FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):
-        v = json.loads(r["slim"])
-        if isinstance(v, dict): v = Close(v); v.loc = (kind, r["pos"], r["ppos"], _ver[kind])
+    """[slim record (Close)] of one segment, in stored order. 1.26.336: a close whose row is unchanged (same position, sig
+    and ppos) keeps the record already parsed, so a new close parses one slim record, not all of them. A full re-parse
+    held the old and the new copy at once (about 400 MB each at 80 closes) and pushed RSS toward the guard at a close.
+    Records are read only, so sharing one between the old and the new list changes nothing a reader sees."""
+    prev = _slim_prev.get(kind) or {}; out, nxt = [], {}
+    for r in db.q("SELECT pos, ppos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):
+        key = (r["pos"], r["sig"], r["ppos"]); v = prev.get(key)
+        if v is None:
+            t = db.q1("SELECT slim FROM close_rows WHERE kind=? AND pos=?", (kind, r["pos"]))
+            v = json.loads(t["slim"]) if t else None
+            if isinstance(v, dict): v = Close(v)
+        if isinstance(v, Close): v.loc = (kind, r["pos"], r["ppos"], _ver[kind]); nxt[key] = v
         out.append(v)
+    _slim_prev[kind] = nxt
     return out
 
 def ensure(kind):

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.336] - 2026-11-13
+
+### Fixed
+- A new close now parses only its own slim close record. Records already in memory are kept when their stored row is unchanged, so the old and the new copy of every close are no longer held at once (about 400 MB each at 80 closes). Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.335] - 2026-11-13
 
 ### Fixed
