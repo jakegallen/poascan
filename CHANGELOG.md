@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.338] - 2026-11-14
+
+### Fixed
+- The grading index behind address pages (assignments and the Grading tab count) is no longer rebuilt from every close after each restart and each new close. The stored rows now record which close rows they came from: a restart with the same closes reuses them, and a new close folds in only that close. The rebuild re-read every close's pending list (about 35 s of CPU and 250 to 330 MB of extra memory at 80 closes on a database copy, slower on the 1 CPU machine) while address requests waited on it holding heavy slots. On 2026-11-14 the site answered 503 from about 6:25 AM PT, after the E81 close, with a crawler on address pages; after the 6:33 AM PT restart a profile showed this rebuild running with address requests queued behind it. On a database copy the new close fold takes 1.4 s with no rise in peak memory, a restart 0.16 s, and the stored rows are identical to a full rebuild. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.336] - 2026-11-13
 
 ### Fixed

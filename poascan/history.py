@@ -93,7 +93,12 @@ _lock = threading.Lock(); _blk = threading.Lock(); _gx = {"key": None, "v": None
 GX_SCHEMA = """
 CREATE TABLE IF NOT EXISTS gx_rec(seg TEXT NOT NULL, answer TEXT NOT NULL, p TEXT, s TEXT, PRIMARY KEY(seg, answer)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS gx_by(seg TEXT NOT NULL, grader TEXT NOT NULL, answer TEXT NOT NULL, PRIMARY KEY(seg, grader, answer)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS gx_meta(seg TEXT PRIMARY KEY, fp TEXT NOT NULL);
 """
+# 1.26.338: gx_meta stores which close rows (position, sig) the gx_rec and gx_by rows were built from. The key above is
+# in memory only, so before this every boot and every new close re-read every close's pending list (about 37 s of CPU
+# and +250 to 330 MB RSS at 80 closes on a box copy) while address requests queued on _blk holding heavy slots. Now a
+# boot whose rows match reuses them, and a new close (old rows unchanged, one appended) folds in only that close.
 
 def grading_index():
     """{last, last_ts, merge, seg} of the selected segment's grading index, built into gx_rec and gx_by when the closes change.
@@ -108,11 +113,67 @@ def grading_index():
         with _lock:
             v = _gx["keys"].get(seg)
             if v and v["key"] == key: _gx.update(key=key, v=v); return v
-        v = _build(raw, seg, key)
+        v = _refresh(raw, seg, key)
         with _lock: _gx["keys"][seg] = v; _gx.update(key=key, v=v)
     return v
 
-def _build(raw, seg, key):
+def _fp(raw, seg):
+    """[[pos, sig], ...] of the close rows raw was read from, or None when raw is not exactly those rows (records
+    without a stored row, as in tests, or a list out of step with close_rows): then only a full build is safe."""
+    kind = S.blob_kind(seg)
+    locs = [getattr(e, "loc", None) for e in raw]
+    if not raw or any(not x or x[0] != kind for x in locs): return None
+    rows = db.q("SELECT pos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))
+    if [r["pos"] for r in rows] != [x[1] for x in locs]: return None
+    return [[r["pos"], r["sig"]] for r in rows]
+
+def _meta(raw, seg, key):
+    return dict(key=key, seg=str(seg), last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
+                merge=A.params().get("pending_merge_from_epoch"))
+
+def _refresh(raw, seg, key):
+    """Bring gx_rec and gx_by up to raw: reuse stored rows built from the same close rows, fold in only the appended
+    closes when every older row is unchanged, else rebuild from every close."""
+    c = db.conn(); c.executescript(GX_SCHEMA); sg = str(seg)
+    fp = _fp(raw, seg)
+    if fp is not None:
+        r = db.q1("SELECT fp FROM gx_meta WHERE seg=?", (sg,))
+        old = json.loads(r["fp"]) if r else None
+        if old == fp:
+            STATS["reuse"] += 1; return _meta(raw, seg, key)
+        if old and len(old) < len(fp) and fp[:len(old)] == old:
+            STATS["append"] += 1; _append(raw[len(old):], sg, fp); return _meta(raw, seg, key)
+    STATS["full"] += 1
+    return _build(raw, seg, key, fp)
+
+STATS = {"reuse": 0, "append": 0, "full": 0}
+
+def _rows_of(e, n):
+    """The gx_rec p and s values and the gx_by pairs one close contributes (the same values _build stores)."""
+    b = e.get("basis") or {}; ps, ss, by = {}, {}, set()
+    for t, p in (A.pending_of(e) or {}).items():
+        gr = {x.get("grader"): x.get("ts") for x in p.get("grades") or []} if "grades" in p else None
+        for g in list(p.get("panel") or []) + list(gr or {}): by.add((g, t))
+        ps[t] = json.dumps([n, p.get("kind"), A.since_of(t, p), list(dict.fromkeys(p.get("panel") or [])), gr])
+    for x in b.get("settled") or []:
+        t = x.get("answer")
+        if not t: continue
+        jy = list(dict.fromkeys(j.get("grader") for j in x.get("jury") or []))
+        for g in jy: by.add((g, t))
+        if t not in ss: ss[t] = json.dumps([n, bool(x.get("passed")), jy, O.of(x)])
+    return ps, ss, by
+
+def _append(new, sg, fp):
+    """Fold appended closes into the stored rows, oldest first, so a newer close's row replaces an older one (the full
+    build keeps the newest row per answer). Pairs only ever add."""
+    for e in sorted(new, key=lambda e: int(e.get("epoch", 0))):
+        n = int(e.get("epoch", 0)); ps, ss, by = _rows_of(e, n)
+        db.write_tx([("INSERT INTO gx_rec(seg, answer, p, s) VALUES(?,?,?,NULL) ON CONFLICT(seg, answer) DO UPDATE SET p=excluded.p", [(sg, t, v) for t, v in ps.items()], True),
+                     ("INSERT INTO gx_rec(seg, answer, p, s) VALUES(?,?,NULL,?) ON CONFLICT(seg, answer) DO UPDATE SET s=excluded.s", [(sg, t, v) for t, v in ss.items()], True),
+                     ("INSERT OR IGNORE INTO gx_by(seg, grader, answer) VALUES(?,?,?)", [(sg, g, t) for g, t in by if g is not None], True)])
+    db.write("INSERT OR REPLACE INTO gx_meta(seg, fp) VALUES(?,?)", (sg, json.dumps(fp)))
+
+def _build(raw, seg, key, fp=None):
     c = db.conn(); c.executescript(GX_SCHEMA); sg = str(seg)
     seen_p, seen_s, by, recs = set(), set(), set(), {}
     for e in sorted(raw, key=lambda e: int(e.get("epoch", 0)), reverse=True):   # newest first: the first row seen is the latest
@@ -131,10 +192,10 @@ def _build(raw, seg, key):
             seen_s.add(t); recs.setdefault(t, [None, None])[1] = json.dumps([n, bool(x.get("passed")), jy, O.of(x)])
     rows = [(sg, t, v[0], v[1]) for t, v in recs.items()]; recs = None
     bys = [(sg, g, t) for g, t in by if g is not None]; by = None
+    meta = [("INSERT OR REPLACE INTO gx_meta(seg, fp) VALUES(?,?)", (sg, json.dumps(fp)), False)] if fp is not None else [("DELETE FROM gx_meta WHERE seg=?", (sg,), False)]
     db.write_tx([("DELETE FROM gx_rec WHERE seg=?", (sg,), False), ("DELETE FROM gx_by WHERE seg=?", (sg,), False),
-                 ("INSERT INTO gx_rec(seg, answer, p, s) VALUES(?,?,?,?)", rows, True), ("INSERT OR IGNORE INTO gx_by(seg, grader, answer) VALUES(?,?,?)", bys, True)])
-    return dict(key=key, seg=sg, last=max((int(e.get("epoch", 0)) for e in raw), default=None), last_ts=max((int(e.get("ts") or 0) for e in raw), default=None),
-                merge=A.params().get("pending_merge_from_epoch"))
+                 ("INSERT INTO gx_rec(seg, answer, p, s) VALUES(?,?,?,?)", rows, True), ("INSERT OR IGNORE INTO gx_by(seg, grader, answer) VALUES(?,?,?)", bys, True)] + meta)
+    return _meta(raw, seg, key)
 
 def gx_by_grader(ix, g):
     """The answers grader g sits on (panel), sealed (grades) or judged (jury), in the close records of ix's segment."""
