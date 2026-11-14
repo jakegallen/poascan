@@ -17,6 +17,7 @@ kill_timeout = 10
   POASCAN_SERVE_RESERVE = "2"   # 1.26.280: slots kept for cheap pages (homepage, /chain) so heavy renders and close ingest cannot take every slot. With MAX_WORKERS 6 this leaves HEAVY_CAP 4.
   POASCAN_GRADING_FLOOR_S = "10"   # 1.26.333: grading_state is reused for 10 s across db writes (the indexer writes every few seconds, so the write-keyed memo always missed)
   POASCAN_SINCE_NOTICE_S = "120"   # 1.26.333: seals and sealers since the grading notice (two scans over every seal) are reused for 2 min; last_seal_at stays fresh
+  POASCAN_RSS_EXIT_MB = "3200"   # 1.26.339: 4 GB VM (see [[vm]] below). The guard forces a clean restart above this RSS; 3200 exits well before the kernel OOM while giving the working set real headroom. guard.py default stays 1500 for the 2 GB tier.
 
 [[mounts]]
   source = "poascan_data"
@@ -41,7 +42,7 @@ kill_timeout = 10
     path = "/healthz"
     timeout = "5s"
 
-[[vm]]   # performance-1x 2 GB (2026-11-07 PM): stepped down from performance-4x/8GB once the join surge passed and the 1.26.279 htmlcache WARM fix (#45) moved the heavy /network pages off the request path. performance-1x is the cheapest dedicated-CPU tier (no shared-CPU throttling, which was the cause of the Nov 7 503s + STALE tiles); one dedicated core plus the warm cache covers normal load. Step back up to performance-2x/4x if a sustained surge returns. Pinned here so deploys keep it (the 2026-11-02 lesson: an API-only hot-scale gets reset on redeploy).
+[[vm]]   # performance-1x, 4 GB (2026-11-14): stepped back UP from 2 GB after the memory-pressure churn returned. The 1.26.332 to 338 memo and rebuild fixes helped, but on 2 GB the RSS exit ceiling sat close to the ~1.1 GB working set, so an ordinary close spike still restarted a healthy process (about 12 restarts a day). 4 GB gives the working set real headroom; the matching exit ceiling is POASCAN_RSS_EXIT_MB in [env]. History: on 2026-11-07 PM it was stepped down from performance-4x/8GB to 2 GB once the join surge passed and the 1.26.279 htmlcache WARM fix (#45) moved the heavy /network pages off the request path. performance-1x is the cheapest dedicated-CPU tier (no shared-CPU throttling, which was the cause of the Nov 7 503s + STALE tiles). Step to performance-2x/4x if a sustained surge returns. Pinned here so deploys keep it (the 2026-11-02 lesson: an API-only hot-scale gets reset on redeploy).
   cpu_kind = "performance"
   cpus = 1
-  memory = "2gb"
+  memory = "4gb"

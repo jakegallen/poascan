@@ -35,7 +35,7 @@ BUSY_SELF_TIMEOUT = float(os.environ.get("POASCAN_BUSY_SELF_TIMEOUT", "25"))   #
 STEAL_THROTTLED = float(os.environ.get("POASCAN_STEAL_THROTTLED", "0.3"))   # share of CPU time that was steal over a check interval (1.26.82: 0.5 let 40 to 50% steal intervals count as hangs, so a throttled VM still restarted)
 CHECK_EVERY = 15
 RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "600"))
-RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "1500"))   # 2048 MB VM (fly.toml memory 2gb). 1.26.162 set 860 for the 1 GB tier (~950 MB usable). On 2026-11-06 the steady set was ~860 MB after gc and malloc_trim, so that cap restarted a healthy process during a close. 1500 still exits well before the kernel OOM.
+RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "1500"))   # default for the 2 GB tier; fly.toml [env] overrides to 3200 on the 4 GB VM (1.26.339). 1.26.162 set 860 for the 1 GB tier (~950 MB usable). On 2026-11-06 the steady set was ~860 MB after gc and malloc_trim, so a low cap restarted a healthy process during a close. The ceiling always exits well before the kernel OOM.
 TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
 GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
 

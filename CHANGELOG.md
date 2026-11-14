@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.339] - 2026-11-14
+
+### Changed
+- The machine moved from 2 GB to 4 GB of RAM and the RSS exit ceiling (POASCAN_RSS_EXIT_MB) was raised from 1500 to 3200 MB to match. The guard forces a clean restart when process RSS crosses that ceiling; on the 2 GB tier the ceiling sat close to the steady working set, so an ordinary close spike could restart a healthy process and show a short burst of 503s. On 4 GB the working set has real headroom and the ceiling still exits well before the kernel reclaimer. Both values are pinned in fly.toml so a redeploy keeps them. No API, data or prompt changes.
+
 ## [1.26.338] - 2026-11-14
 
 ### Fixed
