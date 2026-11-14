@@ -137,6 +137,8 @@ jobs:
         run: python tools/memcaps_test.py
       - name: Close records one row per close (streamed idempotent migration, older build reads the same database)
         run: python tools/closestore_test.py
+      - name: Single-flight close memos, origin epoch map and first live snapshot (one build on a cold boot)
+        run: python tools/singleflight_test.py
       - name: Boot passes read the close records in chunks (key scrub, regroup check)
         run: python tools/bootpeak_test.py
       - name: Large writes leave no bound copy behind

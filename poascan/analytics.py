@@ -129,7 +129,7 @@ def full_close(e):
     if not x or x[2] is None: return e
     return CS.join(e, CS.pending(x[0], x[1]), x[2])
 
-_cm = {}; _cm_lock = threading.Lock()
+_cm = {}; _cm_lock = threading.Lock(); _cm_flight = {}   # key -> RLock (1.26.330)
 def close_memo(name):
     """Memo of a function of the selected segment's close records: recomputed only when they change (a new close, a new
     stored copy) or the params blob changes, so a pending list is read from disk once per close, not once per TTL."""
@@ -141,8 +141,19 @@ def close_memo(name):
             with _cm_lock:
                 hit = _cm.get(k)
                 if hit and hit[0] == sig: return hit[1]
-            v = fn(*a)
-            with _cm_lock: _cm[k] = (sig, v)
+                lk = _cm_flight.setdefault(k, threading.RLock())
+            # 1.26.330: single-flight per key. On a cold boot dozens of /ws and /api/summary readers reached
+            # _epoch_pend at once and each parsed every close's pending list in parallel (py-spy: 42 threads), which
+            # pushed RSS over the guard. Later callers wait for the first compute and take its value.
+            got = lk.acquire(timeout=60)   # bounded: a holder that waits on a heavy slot never blocks the others for good
+            try:
+                with _cm_lock:
+                    hit = _cm.get(k)
+                    if hit and hit[0] == sig: return hit[1]
+                v = fn(*a)
+                with _cm_lock: _cm[k] = (sig, v)
+            finally:
+                if got: lk.release()
             return v
         wrap.__wrapped__ = fn
         return wrap
@@ -237,11 +248,19 @@ def minted_before():
 # 1.26.89: from the E14 close minepoa's pending rows carry no "since" (origin epoch); before, every row had it. Reading a
 # missing since as 0 put E14's 1,252 new answers under E0 (stale, expiring at close 16). since_of() fills it from POAScan's
 # archived challenge tx epoch, else the first close the answer sat in. The raw blob is never changed (close records hash it).
-_sf = {"ts": None, "v": {}}
+_sf = {"ts": None, "v": {}}; _sf_lock = threading.RLock()
 def since_fill():
     """{answer id: origin epoch} for pending rows without since, rebuilt only when a new epochs blob lands."""
     ts = (S.selected(), epochs_ts())
     if ts[1] is not None and ts == _sf["ts"]: return _sf["v"]
+    got = _sf_lock.acquire(timeout=60)   # 1.26.330: one rebuild at a time; the others take its result
+    try:
+        if ts[1] is not None and ts == _sf["ts"]: return _sf["v"]
+        return _since_fill_build(ts)
+    finally:
+        if got: _sf_lock.release()
+
+def _since_fill_build(ts):
     first = {}
     for e in epochs_raw():
         n = int(e.get("epoch", 0))
