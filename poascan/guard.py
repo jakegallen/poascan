@@ -15,7 +15,7 @@
    does (a ~340 MB working set). A full collection of that heap every 15 s was the largest CPU user in the process and
    ran the shared vCPUs out of burst credit (83% steal, 15 to 40 s responses). due_trim() and due_gc() bound both.
 """
-import ctypes, gc, logging, os, threading, time, urllib.request
+import ctypes, faulthandler, gc, logging, os, threading, time, urllib.request
 
 log = logging.getLogger("guard")
 MAX_WORKERS = int(os.environ.get("POASCAN_MAX_WORKERS", "16"))   # serving slots in all (heavy renders plus the cheap reserve)
@@ -38,6 +38,15 @@ RSS_TRIM_MB = int(os.environ.get("POASCAN_RSS_TRIM_MB", "600"))
 RSS_EXIT_MB = int(os.environ.get("POASCAN_RSS_EXIT_MB", "1500"))   # default for the 2048 MB (2 GB) tier; fly.toml [env] overrides to 3200 on the 4 GB VM (1.26.339). 1.26.162 set 860 for the 1 GB tier (~950 MB usable). On 2026-11-06 the steady set was ~860 MB after gc and malloc_trim, so that low a cap restarted a healthy process during a close on the 2048 MB machine. The ceiling always exits well before the kernel OOM.
 TRIM_EVERY = int(os.environ.get("POASCAN_TRIM_EVERY", "60"))   # malloc_trim at most this often, over RSS_TRIM_MB or not
 GC_EVERY = int(os.environ.get("POASCAN_GC_EVERY", "900"))     # full gc.collect() at most this often (Python's own GC runs anyway)
+# 1.26.341 (plan v2, B): when every heavy slot stays held for JAM_CHECKS checks in a row, write a thread-stack dump so the
+# jam's slot holders are visible (the 2026-11-14 6:25 AM jam left none). Rate-limited to one per DUMP_EVERY, capped at
+# DUMP_KEEP, written to the volume so it survives a restart. Code stacks and counts only: faulthandler writes no variable
+# values, so no request data, headers, IPs or tokens are included.
+DUMP_DIR = os.environ.get("POASCAN_DUMP_DIR") or os.path.join(os.path.dirname(os.environ.get("POASCAN_DB", "/data/poascan.db")) or "/data", "stuck")
+JAM_CHECKS = int(os.environ.get("POASCAN_JAM_CHECKS", "3"))     # consecutive checks with every heavy slot held before a dump
+DUMP_EVERY = int(os.environ.get("POASCAN_DUMP_EVERY", "600"))   # at most one dump per this many seconds
+DUMP_KEEP = int(os.environ.get("POASCAN_DUMP_KEEP", "5"))       # keep at most this many dumps on the volume
+_last_dump = [0.0]
 
 # 1.26.271: leave at least one heavy slot when MAX_WORKERS is 1 (the slot tests). A full reserve on a one slot
 # process would give heavy work nothing to take.
@@ -217,17 +226,53 @@ def on_check(ok, steal, busy=0):
     if state["fails"] >= HANG_FAILS: return f"/healthz did not answer {HANG_FAILS} checks in a row"
     return None
 
+def _prune_dumps():
+    try:
+        fs = sorted(x for x in os.listdir(DUMP_DIR) if x.startswith("stuck-") and x.endswith(".txt"))
+        for old in fs[:-DUMP_KEEP]:
+            try: os.remove(os.path.join(DUMP_DIR, old))
+            except Exception: pass
+    except Exception: pass
+
+def _stuck_dump(busy, jam_n, jam_s):
+    """Write a thread-stack dump when every heavy slot has been held for JAM_CHECKS checks, so the jam's slot holders
+    (each one's route is in its stack) are visible. Rate-limited to one per DUMP_EVERY and capped at DUMP_KEEP. Code
+    stacks and counts only: faulthandler writes no variable values, so no request data, headers, IPs or tokens appear."""
+    now = time.time()
+    if now - _last_dump[0] < DUMP_EVERY: return
+    _last_dump[0] = now
+    try:
+        os.makedirs(DUMP_DIR, exist_ok=True)
+        path = os.path.join(DUMP_DIR, time.strftime("stuck-%Y%m%d-%H%M%SZ.txt", time.gmtime(now)))
+        with open(path, "w") as f:
+            f.write("POAScan stuck dump %s UTC\n" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(now)))
+            f.write("heavy_busy %d/%d held %d checks (~%ds); conns_inflight %d/%d; rss %s MB\n"
+                    % (busy, HEAVY_CAP, jam_n, jam_s, MAX_CONNS - conns._value, MAX_CONNS, state.get("rss_mb")))
+            f.write("telemetry %r\n\n--- all thread stacks (each heavy-slot holder's route is in its stack) ---\n" % (telemetry(),))
+            f.flush()
+            faulthandler.dump_traceback(file=f, all_threads=True)
+        log.warning("guard: heavy pool full %d checks; wrote stuck dump %s", jam_n, path)
+        _prune_dumps()
+    except Exception as e:
+        log.warning("guard: stuck dump failed: %s", type(e).__name__)
+
 def _exit(why):
     log.critical("guard: %s; exiting so the machine restarts", why)
     logging.shutdown(); os._exit(70)
 
 def _watch(port):
-    url = f"http://127.0.0.1:{port}/healthz"; over = 0; last_trim = 0; last_gc = time.time()
+    url = f"http://127.0.0.1:{port}/healthz"; over = 0; last_trim = 0; last_gc = time.time(); jam = 0; jam_t0 = 0.0
     time.sleep(30)
     cpu = cpu_times()
     while True:
         t0 = time.time()
         busy = heavy_busy()   # S1: heavy renders in flight -> a slow answer is not a hang
+        if busy >= HEAVY_CAP:   # 1.26.341 (B): heavy pool full -> after JAM_CHECKS in a row, capture a stuck dump
+            if not jam: jam_t0 = t0
+            jam += 1
+            if jam >= JAM_CHECKS: _stuck_dump(busy, jam, int(time.time() - jam_t0))
+        else:
+            jam = 0
         try:
             with urllib.request.urlopen(url, timeout=(BUSY_SELF_TIMEOUT if busy > 0 else HANG_SELF_TIMEOUT)) as r: ok = r.status == 200
         except Exception:
