@@ -20,27 +20,45 @@ def settled_scores(seg=None):
 
 @A.close_memo("calibration_closes")
 def _close_part():
-    """The close record part of calibration (1.26.235: read once per close; the archive part stays live)."""
-    E = sorted(A.epochs_raw(), key=lambda e: int(e["epoch"]))
-    p = A.params(); merge = int(p.get("pending_merge_from_epoch") or 0)
-    seat = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))   # g -> close -> [seats, aligned]
-    split = collections.defaultdict(lambda: [0, 0, 0, 0])                              # g -> [seats on passed, aligned, seats on failed, aligned]
-    seal_ts = {}                                                                        # (answer, grader) -> seal ts (pending grades: ts only)
-    for e in E:
-        n = int(e["epoch"]); b = e.get("basis", {}) or {}
-        for s in b.get("settled", []) or []:
-            ok = bool(s.get("passed"))
-            for j in s.get("jury", []) or []:
-                g = j.get("grader"); al = int(bool(j.get("aligned")))
-                if not g: continue
-                c = seat[g][n]; c[0] += 1; c[1] += al
-                x = split[g]; i = 0 if ok else 2; x[i] += 1; x[i + 1] += al
-        if n >= merge:   # seal times only: a pending grade's score is never read
-            pend = A.pending_of(e) or {}
-            for ans, row in (pend.items() if isinstance(pend, dict) else ()):
-                for gr in (row or {}).get("grades") or []:
-                    if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts[(ans, gr["grader"])] = int(gr["ts"])
-    return seat, split, frozenset((g, t) for (_, g), t in seal_ts.items())   # only the (grader, ts) pairs are read
+    """The close record part of calibration (1.26.235: read once per close; the archive part stays live). 1.26.337: a
+    fold kept in close_fold (closesum.py); a new close folds its own pending list only."""
+    from . import closesum as SUM, segments as SG
+    raw = A.epochs_raw(); merge = int(A.params().get("pending_merge_from_epoch") or 0)
+    v = SUM.fold("calibration_closes", SG.blob_kind(), raw, [merge], lambda: ({}, {}, {}), lambda st, e, p: _cal_step(st, e, p, merge), _cal_finish,
+                 lite=lambda st: (st[0], st[1], _seal_pairs(st[2])))
+    if v is not None: return v
+    st = ({}, {}, {})
+    for e in sorted(raw, key=lambda e: int(e["epoch"])): _cal_step(st, e, A.pending_of(e) if int(e["epoch"]) >= merge else None, merge)
+    return _cal_finish(st)
+
+def _cal_step(st, e, pend, merge):
+    seat, split, seal_ts = st   # g -> close -> [seats, aligned]; g -> [seats on passed, aligned, seats on failed, aligned]; g -> answer -> seal ts
+    n = int(e["epoch"]); b = e.get("basis", {}) or {}
+    for s in b.get("settled", []) or []:
+        ok = bool(s.get("passed"))
+        for j in s.get("jury", []) or []:
+            g = j.get("grader"); al = int(bool(j.get("aligned")))
+            if not g: continue
+            c = seat.setdefault(g, {}).setdefault(n, [0, 0]); c[0] += 1; c[1] += al
+            x = split.setdefault(g, [0, 0, 0, 0]); i = 0 if ok else 2; x[i] += 1; x[i + 1] += al
+    if n >= merge:   # seal times only: a pending grade's score is never read
+        pend = pend or {}
+        for ans, row in (pend.items() if isinstance(pend, dict) else ()):
+            for gr in (row or {}).get("grades") or []:
+                if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts.setdefault(gr["grader"], {})[ans] = int(gr["ts"])
+
+def _seal_pairs(seal_ts):
+    """{grader: {answer: ts}} -> the (grader, ts) pairs (the walk's {(answer, grader): ts} grouped by grader: no tuple per seal)."""
+    return frozenset((g, t) for g, d in seal_ts.items() for t in d.values())
+
+def _cal_finish(st):
+    seat0, split0, seal_ts = st
+    seat = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))
+    for g, d in seat0.items():
+        for n, c in d.items(): seat[g][n] = list(c)
+    split = collections.defaultdict(lambda: [0, 0, 0, 0])
+    for g, x in split0.items(): split[g] = list(x)
+    return seat, split, seal_ts if isinstance(seal_ts, frozenset) else _seal_pairs(seal_ts)   # only the (grader, ts) pairs are read
 
 @cached("calibration", 300)
 def calibration():

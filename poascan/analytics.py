@@ -288,11 +288,28 @@ def since_fill():
         if got: _sf_lock.release()
 
 def _since_fill_build(ts):
-    first = {}
-    for e in epochs_raw():
+    """1.26.337: the first close each answer sat in without since, from pend_ix (one indexed scan of the stored runs),
+    not a walk of every close's pending list. The walk stays for records that are not the stored rows."""
+    raw = epochs_raw(); kind = S.blob_kind()
+    if raw and all(_loc(e) is not None and _loc(e)[0] == kind and _loc(e)[1] == i for i, e in enumerate(raw)):
+        ep_at = {i: int(e.get("epoch", 0)) for i, e in enumerate(raw)}; first = {}; fpos = {}
+        for r in db.qi("SELECT tx, pos0 FROM pend_ix WHERE kind=? AND json_type(v)='object' AND json_extract(v, '$.since') IS NULL", (kind,)):
+            n = ep_at.get(r[1])
+            if n is not None and (r[0] not in first or n < first[r[0]]): first[r[0]] = n; fpos[r[0]] = r[1]
+        return _since_fill_finish(ts, first, fpos)
+    first = {}; fpos = {}
+    for i, e in enumerate(epochs_raw()):
         n = int(e.get("epoch", 0))
         for t, v in (pending_of(e) or {}).items():
-            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n
+            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n; fpos[t] = i
+    return _since_fill_finish(ts, first, fpos)
+
+def since_first_pos():
+    """{answer: position of the first close it sat in without since} behind since_fill() (closesum keys folds on it)."""
+    since_fill(); return _sf.get("pos") or {}
+
+def _since_fill_finish(ts, first, fpos=None):
+    _sf["pos"] = fpos or {}
     out, ids = {}, list(first)
     for i in range(0, len(ids), 500):
         ch = ids[i:i + 500]
@@ -327,7 +344,16 @@ def grade_counts(e, prev_ts=None):
 
 @close_memo("epoch_rows_pend")
 def _epoch_pend():
-    """Per close (epochs_raw order): the epoch_rows fields read from basis.pending, one pending list at a time (1.26.235)."""
+    """Per close (epochs_raw order): the epoch_rows fields read from basis.pending. 1.26.337: from the close_sum rows
+    (closesum.py), so no pending list is parsed after its close's row is built."""
+    from . import closesum as SUM
+    sm = SUM.get(S.blob_kind(), epochs_raw(), params())
+    if SUM.has(sm, "ep"):
+        return [dict(x["ep"], pending_by_origin=dict((int(k), v) for k, v in x["ep"]["pending_by_origin"])) for x in sm]
+    return _epoch_pend_walk()
+
+def _epoch_pend_walk():
+    """The walk _epoch_pend did before 1.26.337 (kept for records not in stored order, and as the A/B reference)."""
     out = []; pprev = None; prev = None
     for e in epochs_raw():
         pend = pending_of(e) or {}; t = int(e["ts"])
@@ -1122,7 +1148,26 @@ def _seals(v, close, merge):
 @close_memo("backlog_pend")
 def _backlog_pend():
     """backlog's reads of basis.pending (1.26.235: once per close, not per 60 s TTL): per close after the first, everything
-    but the archive lookup for settled answers missing from the previous close's list; plus the last close's histogram."""
+    but the archive lookup for settled answers missing from the previous close's list; plus the last close's histogram.
+    1.26.337: from the close_sum rows (closesum.py). org is [("k", origin)] * count + [("m", answer)], as the walk gave
+    it up to order (backlog() only counts it)."""
+    from . import closesum as SUM
+    raw = epochs_raw(); p = params(); sm = SUM.get(S.blob_kind(), raw, p)
+    if not SUM.has(sm, "bl"): return _backlog_pend_walk()
+    mf = p.get("pending_merge_from_epoch"); mf = int(mf) if mf is not None else None
+    closes = []
+    for x in sm[1:]:
+        b = x["bl"]
+        org = [("k", int(k)) for k, c in b["org_k"] for _ in range(c)] + [("m", t) for t in b["org_m"]]
+        closes.append(dict(close=b["close"], settled=b["settled"], org=org, carried=b["carried"], grew=b["grew"], grew_unknown=b["grew_unknown"],
+                           dropped=b["dropped"], grew_by_epoch={int(k): v for k, v in b["grew_by_epoch"]}, dropped_by_epoch={int(k): v for k, v in b["dropped_by_epoch"]}))
+    hist = {}; exact = None; basis = None
+    if raw:
+        n = int(raw[-1]["epoch"]); hist = {int(k): v for k, v in sm[-1]["hist"]}; exact = sm[-1]["exact"]
+        basis = "grades" if mf is not None and n >= mf else "panel"
+    return dict(closes=closes, hist=hist, exact=exact, basis=basis, merge_from=mf)
+
+def _backlog_pend_walk():
     raw = epochs_raw(); mf = params().get("pending_merge_from_epoch"); mf = int(mf) if mf is not None else None
     closes = []; prev = None
     for e in raw:

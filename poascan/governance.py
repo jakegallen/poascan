@@ -209,7 +209,21 @@ def at_risk(qs):
 @A.close_memo("jury_series")
 def jury_series():
     """Per close of the selected segment: jury seats aligned and not aligned (settled[].jury[]), queue and empty panels.
-    1.26.235: computed once per close (each close's pending list is read from disk)."""
+    1.26.235: computed once per close (each close's pending list is read from disk). 1.26.337: queue and empty from the
+    close_sum rows (closesum.py) when the selected segment's records are in stored order."""
+    from . import closesum as SUM
+    raw = A.segment_closes(SG.selected())
+    sm = SUM.get(SG.blob_kind(), raw, A.params())
+    if SUM.has(sm, "jy"):
+        out = []
+        for e, x in zip(raw, sm):
+            b = e.get("basis", {}) or {}; js = [j for s in (b.get("settled") or []) for j in (s.get("jury") or [])]
+            out.append(dict(epoch=int(e.get("epoch", 0)), aligned=sum(1 for j in js if j.get("aligned")), other=sum(1 for j in js if not j.get("aligned")),
+                            queue=x["jy"]["queue"], empty=x["jy"]["empty"]))
+        return out
+    return jury_series_walk()
+
+def jury_series_walk():
     out = []
     for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))):
         b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]

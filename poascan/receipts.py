@@ -8,21 +8,36 @@ QUORUM_DEFAULT = 4
 
 @A.close_memo("receipt_closes")
 def _close_index():
-    """The close record part of index() (1.26.235: once per close, each close's pending list read from disk)."""
-    ep = sorted(A.epochs_raw(), key=lambda e: int(e.get("epoch", 0)))
-    out, credited, elig, chal = {}, {}, {}, {}
+    """The close record part of index() (1.26.235: once per close, each close's pending list read from disk).
+    1.26.337: a fold over the closes kept in close_fold (closesum.py): a new close folds its own pending list only."""
+    from . import closesum as SUM
+    raw = A.epochs_raw()
+    v = SUM.fold("receipt_closes", S.blob_kind(), raw, lambda n: [SUM.since_digest(n)], dict, _ci_step, lambda out: _ci_finish(out, raw),
+                 reuse=dict)   # shallow copy: _ci_step copies an answer's row before it changes it
+    if v is not None: return v
+    out = {}
+    for e in sorted(raw, key=lambda e: int(e.get("epoch", 0))): _ci_step(out, e, A.pending_of(e))
+    return _ci_finish(out, raw)
+
+def _ci_finish(out, raw):
+    """The parts read from the slim records alone (no pending list): kept out of the stored fold state."""
+    credited, elig, chal = {}, {}, {}; ep = sorted(raw, key=lambda e: int(e.get("epoch", 0)))
     for e in ep:
         n = int(e.get("epoch", 0)); b = e.get("basis") or {}
         credited[n] = set((e.get("rewards") or {}).keys())
         elig[n] = set(b.get("challenge_eligible") or []); chal[n] = dict(e.get("challenges") or {})
-        for t, p in (A.pending_of(e) or {}).items():
-            r = out.setdefault(t, {}); r.setdefault("first", n); r["last"] = n
+    return out, credited, elig, chal, [int(e.get("epoch", 0)) for e in ep]
+
+def _ci_step(out, e, pend):
+    if True:
+        n = int(e.get("epoch", 0)); b = e.get("basis") or {}
+        for t, p in (pend or {}).items():
+            r = out[t] = dict(out.get(t) or ()); r.setdefault("first", n); r["last"] = n
             r.update(since=A.since_of(t, p), panel=len(p.get("panel") or []), kind=p.get("kind"),
                      graded=len({g.get("grader") for g in p.get("grades") or []}) if "grades" in p else None)   # grades: the live seal list, from the merge on
         for s in b.get("settled") or []:
             t = s.get("answer")
-            if t: out.setdefault(t, {})["settled"] = dict(close=n, passed=bool(s.get("passed")), outcome=O.of(s), seals=len(s.get("jury") or []), author=s.get("from"))
-    return out, credited, elig, chal, [int(e.get("epoch", 0)) for e in ep]
+            if t: out[t] = dict(out.get(t) or (), settled=dict(close=n, passed=bool(s.get("passed")), outcome=O.of(s), seals=len(s.get("jury") or []), author=s.get("from")))
 
 @A.close_memo("receipt_light")
 def _light():

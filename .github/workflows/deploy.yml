@@ -141,6 +141,8 @@ jobs:
         run: python tools/singleflight_test.py
       - name: A new close parses only its own slim record (unchanged rows keep their parsed copy)
         run: python tools/slimreuse_test.py
+      - name: Per close summary rows and folded memos match the pending walk; a restart parses no pending list
+        run: python tools/closesum_test.py
       - name: Boot passes read the close records in chunks (key scrub, regroup check)
         run: python tools/bootpeak_test.py
       - name: Large writes leave no bound copy behind

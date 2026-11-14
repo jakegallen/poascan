@@ -90,7 +90,15 @@ def settlement():
 @A.close_memo("govv2_settle_pend")
 def _settle_pend():
     """settlement's reads of basis.pending, per close (1.26.235: once per close): the origin of each settled answer found in
-    the previous close's pending list, and {origin: [open, open with a panel]}."""
+    the previous close's pending list, and {origin: [open, open with a panel]}. 1.26.337: from the close_sum rows."""
+    from . import closesum as SUM
+    raw = A.segment_closes(SG.selected())
+    sm = SUM.get(SG.blob_kind(), raw, A.params())
+    if SUM.has(sm, "pin"):
+        return [({a: int(o) for a, o in x["pin"]}, {int(o): list(v) for o, v in x["opens"]}) for x in sm]
+    return _settle_pend_walk()
+
+def _settle_pend_walk():
     eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
     out, prev = [], {}
     for e in eps:

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.337] - 2026-11-13
+
+### Fixed
+- Pages and the API no longer parse every close's pending list after a restart or a new close. Each close's summary (pending counts, origin tallies, drops, seal histogram, jury queue, settlement opens) is stored once in its own row when the close first needs it, and the per answer tallies (receipts, cohorts, calibration) are kept as a running state that a new close extends by one close. A warm process folds a new close onto a copy of the state it already holds instead of reading a second full copy. On a copy of the live database: a restart builds these memos in 3.5 s instead of 117 s, a new close in 4.0 s instead of 105 s with peak memory 851 MB vs 857 MB, the one time first build takes 67 s (peak 777 MB vs 752 MB), and all 44 compared memo, API and page outputs are identical. The origin fill for answers without since reads the stored pending index instead of every close. Stored close records are unchanged; the summary rows are derived and rebuilt when a close changes. Prompt hashes unchanged.
+
 ## [1.26.336] - 2026-11-13
 
 ### Fixed

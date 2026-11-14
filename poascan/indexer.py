@@ -881,6 +881,11 @@ def job_epochs(force=False):
         except Exception: pass
         if wrote:
             try:
+                from . import closesum as _SUM, closestore as _CSX
+                for _k in _CSX.kinds(): _SUM.warm(_k)   # 1.26.337: the new close's summary row now, so no page parses its pending list
+            except Exception as e:
+                log.warning("close_sum warm: %s", e)
+            try:
                 from . import htmlcache as _HC
                 _HC.note_close()   # 1.26.275: rebuild visitor pages in the background; the pin stays until each new render is stored
             except Exception: pass
