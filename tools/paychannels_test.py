@@ -221,9 +221,12 @@ check("version is at least 1.26.334 and the changelog records the probe 429 hold
 check("version is at least 1.26.335 and the changelog records the params digest and the memo gate",
       _ver >= (1, 26, 335) and "## [1.26.335]" in cl and "digest of the content" in cl
       and not any(c in cl.split("## [1.26.335]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.336 and the changelog records the slim record reuse",
-      _ver == (1, 26, 336) and "## [1.26.336]" in cl and "parses only its own slim close record" in cl
+check("version is at least 1.26.336 and the changelog records the slim record reuse",
+      _ver >= (1, 26, 336) and "## [1.26.336]" in cl and "parses only its own slim close record" in cl
       and not any(c in cl.split("## [1.26.336]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.338 and the changelog records the grading index fold",
+      _ver == (1, 26, 338) and "## [1.26.338]" in cl and "grading index" in cl
+      and not any(c in cl.split("## [1.26.338]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
