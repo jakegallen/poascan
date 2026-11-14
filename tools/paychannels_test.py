@@ -212,9 +212,12 @@ check("version is at least 1.26.331 and the changelog records the timed out firs
 check("version is at least 1.26.332 and the changelog records the shared epoch rows",
       _ver >= (1, 26, 332) and "## [1.26.332]" in cl and "built once per change" in cl
       and not any(c in cl.split("## [1.26.332]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.333 and the changelog records the grading state reuse",
-      _ver == (1, 26, 333) and "## [1.26.333]" in cl and "reused for 10 s" in cl
+check("version is at least 1.26.333 and the changelog records the grading state reuse",
+      _ver >= (1, 26, 333) and "## [1.26.333]" in cl and "reused for 10 s" in cl
       and not any(c in cl.split("## [1.26.333]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.334 and the changelog records the probe 429 hold",
+      _ver == (1, 26, 334) and "## [1.26.334]" in cl and "uptime probe" in cl
+      and not any(c in cl.split("## [1.26.334]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

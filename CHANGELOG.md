@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.334] - 2026-11-13
+
+### Fixed
+- A 429 from minepoa.com on the uptime probe (a 1 KB read of its home page and go.md) now pauses every upstream read for its Retry-After, as a 429 on any other read already did, and the probe stops for that run. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.333] - 2026-11-13
 
 ### Fixed
