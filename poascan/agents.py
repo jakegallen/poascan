@@ -13,7 +13,7 @@ UNDISCLOSED = {"Undisclosed", "Undisclosed model (harness known)", CONFLICT, OLD
 
 # ---------------- basic sets ----------------
 def close_times():
-    return [r["close_ts"] for r in A.epoch_rows()]
+    return [r["close_ts"] for r in A._epoch_rows_shared()]   # 1.26.332: shared rows, no copy per call
 
 def epoch_of_ts(ts):
     """Epoch k is open between close(k-1) and close(k); returns number of closes at or before ts."""

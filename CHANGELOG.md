@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.332] - 2026-11-13
+
+### Fixed
+- Heavy pages still "server busy" on 1.26.331. The epoch list was rebuilt from every close on each call, and the join cohort and answer counts asked for it once per Agent, so one cold page held a slot for minutes. The epoch list is now built once per change of the close records or params (at most every 15 s) and shared. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.331] - 2026-11-13
 
 ### Fixed
