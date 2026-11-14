@@ -91,4 +91,34 @@ A.epoch_rows()
 check(f"epoch_rows: an entry older than ER_TTL rebuilds ({nb['b']})", nb["b"] == 3)
 A._epoch_rows_build = orig_b; A._er.clear()
 
+# 1.26.333: grading_state single-flight and the write floor
+from poascan import maint as MT
+gc = {"n": 0}; real_gs = MT._grading_state
+def slow_gs(now=None):
+    gc["n"] += 1; time.sleep(0.2); return {"state": "open"}
+MT._grading_state = slow_gs; MT.grading_memo_clear()
+ts = [threading.Thread(target=MT.grading_state) for _ in range(10)]
+[t.start() for t in ts]; [t.join(30) for t in ts]
+check(f"grading_state: 10 concurrent cold callers compute once ({gc['n']})", gc["n"] == 1)
+db.GEN[0] += 1; MT.grading_state()
+check(f"grading_state: with the floor off a db write still recomputes ({gc['n']})", gc["n"] == 2)
+MT.GRADING_FLOOR_S = 10
+db.GEN[0] += 1; MT.grading_state()
+check(f"grading_state: within the floor a db write reuses the value ({gc['n']})", gc["n"] == 2)
+MT._GMEMO[0] -= 11; db.GEN[0] += 1; MT.grading_state()
+check(f"grading_state: past the floor a db write recomputes ({gc['n']})", gc["n"] == 3)
+MT.GRADING_FLOOR_S = 0; MT._grading_state = real_gs; MT.grading_memo_clear()
+
+# 1.26.333: since-notice totals reused for SINCE_NOTICE_S, last_seal_at fresh
+qs = []; real_q1 = db.q1
+def spy_q1(sql, a=()):
+    qs.append(sql); return real_q1(sql, a)
+db.q1 = spy_q1; MT.SINCE_NOTICE_S = 120; MT._SN.clear()
+MT._since_notice(100); MT._since_notice(100)
+check(f"since_notice: the COUNT DISTINCT scan runs once in the window ({sum('DISTINCT' in q for q in qs)})", sum("DISTINCT" in q for q in qs) == 1)
+check("since_notice: MAX(ts) is read each time", sum("MAX(ts)" in q for q in qs) == 2)
+MT._since_notice(100, cached=False)
+check("since_notice: an explicit now (cached=False) scans again", sum("DISTINCT" in q for q in qs) == 2)
+db.q1 = real_q1; MT.SINCE_NOTICE_S = 0; MT._SN.clear()
+
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
