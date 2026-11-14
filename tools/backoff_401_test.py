@@ -94,5 +94,19 @@ reset()
 hit("/api/epochs", 401); hit("/api/epochs", 401); hit("/api/epochs", 401)
 check("401s off the shared feed endpoints never slow the live poll", not slow())
 
+# 1.26.334: a 429 on the uptime probe sets the host-wide hold and stops the run
+reset(); CODE["/"] = 429; seen = []
+_orig = Up.do_GET
+def _rec(self): seen.append(self.path.partition("?")[0]); _orig(self)
+Up.do_GET = _rec
+I.job_probe()
+Up.do_GET = _orig
+check("a 429 on the probe sets the host-wide hold", I._hold[0] > time.time())
+check("and the probe stops (go.md not read after the 429)", seen == ["/"])
+try: I.fetch("/api/networks"); held = False
+except I.Limited: held = True
+check("every later read waits out that hold", held)
+reset()
+
 up.shutdown()
 print(f"\n{'ALL PASS' if not fails else str(len(fails)) + ' FAILED'}"); sys.exit(1 if fails else 0)

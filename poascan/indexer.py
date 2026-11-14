@@ -280,7 +280,11 @@ def job_probe():
             req = urllib.request.Request(BASE + path, headers={"User-Agent": UA, "Range": "bytes=0-1023"})
             with urllib.request.urlopen(req, timeout=30) as r:
                 r.read(1024); _probe("probe " + path, 200 <= r.status < 400, t0, str(r.status)); count(path + " (probe)", r.status)
-        except urllib.error.HTTPError as e: _probe("probe " + path, False, t0, str(e.code)); count(path + " (probe)", e.code)
+        except urllib.error.HTTPError as e:
+            _probe("probe " + path, False, t0, str(e.code)); count(path + " (probe)", e.code)
+            if e.code == 429:   # 1.26.334: a 429 on a probe sets the same host-wide hold as fetch() and stops this run
+                _hold[0] = max(_hold[0], time.time() + min(RETRY_AFTER_MAX_S, retry_after(e.headers.get("Retry-After") if e.headers else None) or BACKOFF_BASE_S))
+                break
         except Exception as e: _probe("probe " + path, False, t0, type(e).__name__); count(path + " (probe)", "err")
         time.sleep(0.5)
     db.write("DELETE FROM probes WHERE ts < ?", (int(time.time()) - 14 * 86400,))
