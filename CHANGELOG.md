@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.329] - 2026-11-13
+
+### Fixed
+- Restarts and "server busy" on heavy routes since 1.26.327. The code is back to 1.26.326 (a forward revert of 1.26.327 and 1.26.328). Those builds kept `basis.settled` out of the cached closes and re-read it from each close row through a two close cache, so every walk of settled lists across all closes parsed the stored records again; heavy slots stayed busy and memory crossed the guard about every 8 to 12 minutes. 1.26.326 ran on the same stored close format without a guard exit. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.328] - 2026-11-13
 
 ### Fixed
