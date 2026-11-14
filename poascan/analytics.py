@@ -396,6 +396,7 @@ def epoch_rows():
     """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
     pp = _epoch_pend(); raw = epochs_raw(); from . import econ as _EC, correction as _CC
+    ppar = params()   # 1.26.331: one params read per walk (py-spy: a DB read and 14 KB JSON parse per close row)
     for i, e in enumerate(raw):
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
         unc = S.unconfirmed(int(e["epoch"]), seg)
@@ -436,7 +437,7 @@ def epoch_rows():
             paid_at_max=sum(1 for v in r if rs and round(v, 6) == round(rs[0], 6)) if r else 0,   # from the rewards row, not final_payout (E12: 152 at the top tier, 210 capped)
             referral_paid=len((b.get("referral2") or {}).get("paid", {})), propagation=len(e.get("propagation", {})), segment=seg,
             **_CP.fields_for(e),   # 1.26.192: paused and pause (closepause.py; false and null while the record has no halt fields)
-            **_PCH.row_fields(int(e["epoch"]), rec=e, segment=seg)))
+            **_PCH.row_fields(int(e["epoch"]), rec=e, segment=seg, p=ppar)))
         prev = t
     return out
 

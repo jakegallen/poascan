@@ -53,4 +53,21 @@ ts = [threading.Thread(target=lambda: res.append(hub.snapshot())) for _ in range
 check(f"live hub: 15 concurrent first readers build one snapshot ({len(built)})", len(built) == 1)
 check("live hub: every first reader gets the snapshot", len(res) == 15 and all(r and '"x":1' in r for r in res))
 
+# 1.26.331: a first build slower than the wait must not make each waiter build its own copy
+built2 = []
+def slow_snap():
+    built2.append(1); time.sleep(1.0); return {"y": 2}
+hub2 = L.Hub(slow_snap); hub2.FIRST_WAIT = 0.2
+res2 = []
+ts = [threading.Thread(target=lambda: res2.append(hub2.snapshot())) for _ in range(12)]
+[t.start() for t in ts]; [t.join(30) for t in ts]
+check(f"live hub: waiters that time out do not build their own first snapshot ({len(built2)})", len(built2) == 1)
+check("live hub: a timed out waiter gets None, the builder gets the snapshot",
+      sum(1 for r in res2 if r is None) == 11 and sum(1 for r in res2 if r and '"y":2' in r) == 1)
+
+# 1.26.331: epoch_rows reads params once per walk, not once per close row
+import inspect
+src = inspect.getsource(A.epoch_rows)
+check("epoch_rows passes one params read to every row", "ppar = params()" in src and "p=ppar" in src)
+
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
