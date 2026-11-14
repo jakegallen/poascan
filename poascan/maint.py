@@ -207,17 +207,18 @@ def _gmemo_ok(m, t, g):
     if m[1] is None or not 0 <= t - m[0] < GRADING_MEMO_S: return False
     return m[2] == g or t - m[0] < GRADING_FLOOR_S
 
-def grading_memo_clear(): _GMEMO[1] = None   # for a state change that is not a db write (tests patch hosted.state)
+def grading_memo_clear(): _GMEMO[1] = None; _SN.clear()   # for a state change that is not a db write (tests patch hosted.state)
 
 def _grading_state(now=None):
     """dict(state=open|unconfirmed|halted, basis, ...) with the evidence behind it. Before the completion notice the
     pre-1.26.58 rule stands (open when the grading route answers as open, else halted)."""
     from . import hosted as R
+    now_arg = now
     now = int(now or time.time()); c = complete(); halt = A.grading_halt(now)
     ev = dict(notice_id=c.get("notice_id") if c else None, notice_at=c["at"] if c else None, halt_notice=halt,
               window_s=GRADE_RECENT_S, min_seals=GRADE_MIN_SEALS, feed_fresh=_feed_fresh())
     if c:
-        r = db.q1("SELECT COUNT(*) AS n, COUNT(DISTINCT from_addr) AS g, MAX(ts) AS t FROM txs WHERE type='grade-sealed' AND ts >= ?", (c["at"],)) or {}
+        r = _since_notice(c["at"], cached=now_arg is None)
         rr = db.q1("SELECT COUNT(*) AS n, COUNT(DISTINCT from_addr) AS g FROM txs WHERE type='grade-sealed' AND ts >= ? AND ts > ?", (c["at"], now - GRADE_RECENT_S)) or {}
         ev.update(seals_since_notice=r["n"] or 0, sealers_since_notice=r["g"] or 0, last_seal_at=r["t"], seals_recent=rr["n"] or 0, sealers_recent=rr["g"] or 0)
     if halt: return dict(ev, state="halted", basis="notice")
@@ -228,6 +229,21 @@ def _grading_state(now=None):
     if ob: return dict(ev, state="halted", basis=ob)
     if ev["feed_fresh"] and ev["seals_recent"] >= GRADE_MIN_SEALS: return dict(ev, state="open", basis="notice+seals")
     return dict(ev, state="unconfirmed", basis="notice")
+
+# 1.26.333: the since-notice totals are two scans over every grade seal since the notice (635,902 seals, about 2.4 s
+# on production); the state itself only needs the recent window. The totals are reused for SINCE_NOTICE_S seconds
+# (0 by default and in the tests; fly.toml sets 120). last_seal_at stays fresh: one MAX(ts) read on the type index.
+SINCE_NOTICE_S = float(os.environ.get("POASCAN_SINCE_NOTICE_S", "0"))
+_SN = {}   # notice at -> (computed_at, n, g)
+
+def _since_notice(at, cached=True):
+    t = db.q1("SELECT MAX(ts) AS t FROM txs WHERE type='grade-sealed' AND ts >= ?", (at,)) or {}
+    hit = _SN.get(at)
+    if cached and SINCE_NOTICE_S > 0 and hit and 0 <= time.time() - hit[0] < SINCE_NOTICE_S:
+        return dict(n=hit[1], g=hit[2], t=t.get("t"))
+    r = db.q1("SELECT COUNT(*) AS n, COUNT(DISTINCT from_addr) AS g FROM txs WHERE type='grade-sealed' AND ts >= ?", (at,)) or {}
+    _SN.clear(); _SN[at] = (time.time(), r.get("n"), r.get("g"))
+    return dict(n=r.get("n"), g=r.get("g"), t=t.get("t"))
 
 def grading_open():
     """Grading is open: confirmed by grade seals after the completion notice (grading_state), or, before it, the route answers as open."""

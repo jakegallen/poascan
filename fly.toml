@@ -16,6 +16,7 @@ kill_timeout = 10
   POASCAN_MAX_WORKERS = "6"   # 1.26.280: serving slots in all. The 16 (HEAVY_CAP 12) default was sized for the old multi-core box; on one dedicated core a dozen CPU-bound renders only slow each other (GIL + context thrash) and risk a watchdog restart loop. 6 total -> HEAVY_CAP 4, with the reserve below.
   POASCAN_SERVE_RESERVE = "2"   # 1.26.280: slots kept for cheap pages (homepage, /chain) so heavy renders and close ingest cannot take every slot. With MAX_WORKERS 6 this leaves HEAVY_CAP 4.
   POASCAN_GRADING_FLOOR_S = "10"   # 1.26.333: grading_state is reused for 10 s across db writes (the indexer writes every few seconds, so the write-keyed memo always missed)
+  POASCAN_SINCE_NOTICE_S = "120"   # 1.26.333: seals and sealers since the grading notice (two scans over every seal) are reused for 2 min; last_seal_at stays fresh
 
 [[mounts]]
   source = "poascan_data"
