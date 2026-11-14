@@ -67,7 +67,28 @@ check("live hub: a timed out waiter gets None, the builder gets the snapshot",
 
 # 1.26.331: epoch_rows reads params once per walk, not once per close row
 import inspect
-src = inspect.getsource(A.epoch_rows)
+src = inspect.getsource(A._epoch_rows_build)
 check("epoch_rows passes one params read to every row", "ppar = params()" in src and "p=ppar" in src)
+
+# 1.26.332: epoch_rows is built once per change, not once per call (close_times / epoch_of_ts called it per row)
+from poascan import agents as G
+nb = {"b": 0}; orig_b = A._epoch_rows_build
+def counted_b(raw, pp):
+    nb["b"] += 1; time.sleep(0.2); return [dict(epoch=1, close_ts=100), dict(epoch=2, close_ts=200)]
+A._epoch_rows_build = counted_b; A._er.clear()
+ts = [threading.Thread(target=A.epoch_rows) for _ in range(10)]
+[t.start() for t in ts]; [t.join(30) for t in ts]
+check(f"epoch_rows: 10 concurrent cold callers build once ({nb['b']})", nb["b"] == 1)
+eps = [G.epoch_of_ts(t) for t in range(0, 300, 1)]
+check(f"epoch_rows: 300 epoch_of_ts calls reuse the build ({nb['b']})", nb["b"] == 1 and eps[150] == 1 and eps[250] == 2)
+r = A.epoch_rows(); r[0]["close_ts"] = -1; r.append({})
+check("epoch_rows: a caller changing its rows does not change the shared build", A.epoch_rows() == [dict(epoch=1, close_ts=100), dict(epoch=2, close_ts=200)])
+db.put_blob("params", {"x": 1})
+A.epoch_rows()
+check(f"epoch_rows: a params change rebuilds ({nb['b']})", nb["b"] == 2)
+A._er[next(iter(A._er))] = (A._er[next(iter(A._er))][0], time.time() - A.ER_TTL - 1) + A._er[next(iter(A._er))][2:]
+A.epoch_rows()
+check(f"epoch_rows: an entry older than ER_TTL rebuilds ({nb['b']})", nb["b"] == 3)
+A._epoch_rows_build = orig_b; A._er.clear()
 
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)

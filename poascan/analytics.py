@@ -391,11 +391,39 @@ def epoch_href(r):
     n = r.get("segment") or S.CURRENT
     return f"/epoch/{r['epoch']}" + ("" if n == S.CURRENT else f"?segment={n}")
 
+_er = {}                     # segment -> (sig, built_at, rows, raw, pp); raw and pp are kept so their ids stay unique
+_er_lock = threading.Lock(); _er_flight = {}
+ER_TTL = 15                  # seconds; epochs_raw has the same TTL
+
+def _epoch_rows_shared():
+    """1.26.332: the selected segment's epoch rows, built once per change of the close records, the pending memo or the
+    params blob (and at most every ER_TTL seconds). py-spy on 1.26.330 and 1.26.331: epoch_rows was a full walk of every
+    close on each call, and close_times() / epoch_of_ts() call it once per row (funnel walks every account), so one cold
+    page held a heavy slot for minutes. Read only: callers that may change rows use epoch_rows(), which copies."""
+    seg = S.selected(); raw = epochs_raw(); pp = _epoch_pend()
+    sig = (id(raw), id(pp), db.blob_gen("params"))
+    hit = _er.get(seg)
+    if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]
+    with _er_lock: lk = _er_flight.setdefault(seg, threading.RLock())
+    got = lk.acquire(timeout=30)   # single-flight; bounded so a slow holder never blocks the others for good
+    try:
+        hit = _er.get(seg)
+        if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]
+        rows = _epoch_rows_build(raw, pp)
+        _er[seg] = (sig, time.time(), rows, raw, pp)
+        return rows
+    finally:
+        if got: lk.release()
+
 def epoch_rows():
+    """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over).
+    Each call gets its own row dicts (shallow copies of the shared build)."""
+    return [dict(r) for r in _epoch_rows_shared()]
+
+def _epoch_rows_build(raw, pp):
     from . import closepause as _CP, outcome as _OC, paychannels as _PCH
-    """One row per close of the selected segment. cum_supply continues from earlier segments (balances carried over)."""
     out = []; prev = None; cum = cumc = minted_before(); pprev = None; seg = S.selected()
-    pp = _epoch_pend(); raw = epochs_raw(); from . import econ as _EC, correction as _CC
+    from . import econ as _EC, correction as _CC
     ppar = params()   # 1.26.331: one params read per walk (py-spy: a DB read and 14 KB JSON parse per close row)
     for i, e in enumerate(raw):
         b = e.get("basis", {}); r = [float(v) for v in e.get("rewards", {}).values()]
