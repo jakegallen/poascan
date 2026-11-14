@@ -428,8 +428,15 @@ def _epoch_rows_shared():
     close on each call, and close_times() / epoch_of_ts() call it once per row (funnel walks every account), so one cold
     page held a heavy slot for minutes. Read only: callers that may change rows use epoch_rows(), which copies."""
     seg = S.selected(); raw = epochs_raw(); pp = _epoch_pend()
-    sig = (id(raw), id(pp), params_sig())
     hit = _er.get(seg)
+    if len(pp) != len(raw):
+        # 1.26.335: the pending memo is still the last value (its rebuild after a new close is running). Keep the last
+        # rows; with none, the new close gets blank pending fields until the rebuild lands (never an IndexError).
+        if hit: return hit[2]
+        pp = list(pp[:len(raw)]) + [dict(pending=None, pending_short=None, pending_appeal=None, pending_empty_panel=None,
+                                         pending_by_origin={}, dropped=None, graders=None, grades=None)] * max(0, len(raw) - len(pp))
+        return _epoch_rows_build(raw, pp)
+    sig = (id(raw), id(pp), params_sig())
     if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]
     with _er_lock: lk = _er_flight.setdefault(seg, threading.RLock())
     got = lk.acquire(timeout=30)   # single-flight; bounded so a slow holder never blocks the others for good

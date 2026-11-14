@@ -152,4 +152,19 @@ check("close_memo: waiters past CM_WAIT get the last value", res.count(first) ==
 check("close_memo: the next call is a hit on the new value", smemo() == 2 and len(sc) == 2)
 A.CM_WAIT = 60
 
+# 1.26.335: a stale pending memo (one close short) never breaks epoch_rows
+A._er.clear(); A._epoch_rows_build = orig_b
+real_raw, real_pend = A.epochs_raw, A._epoch_pend
+fake_raw = [dict(epoch=1, ts=100, rewards={}, basis={}), dict(epoch=2, ts=200, rewards={}, basis={})]
+one = [dict(pending=3, pending_short=1, pending_appeal=0, pending_empty_panel=0, pending_by_origin={}, dropped=None, graders=0, grades=0)]
+A.epochs_raw = lambda: fake_raw; A._epoch_pend = lambda: one
+try:
+    rows = A.epoch_rows(); ok = len(rows) == 2 and rows[0]["pending"] == 3
+except Exception as e:
+    ok = False; print("  ", type(e).__name__, e)
+check("epoch_rows: a pending memo one close short gives blank fields, not an IndexError", ok)
+A._er[A.S.selected()] = ("x", time.time(), [{"epoch": 1, "close_ts": 100}], None, None)
+check("epoch_rows: with last rows kept, a short pending memo returns them", A.epoch_rows() == [{"epoch": 1, "close_ts": 100}])
+A.epochs_raw, A._epoch_pend = real_raw, real_pend; A._er.clear()
+
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
