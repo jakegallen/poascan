@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.340] - 2026-11-14
+
+### Added
+- The private /ops/memory readout now reports an approximate per structure byte size (a new "resident" block) for the largest in memory structures: the parsed slim close records, the analytics memos and caches, the grading index and its per grader cache, and the chart cache. Sizes are sampled and bounded (a capped object walk over a few entries scaled by count, never a full walk of a large structure), so the readout stays cheap. Measurement only: no API, data, page or prompt output changes.
+
 ## [1.26.339] - 2026-11-14
 
 ### Changed
