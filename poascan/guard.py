@@ -149,7 +149,12 @@ def heavy_busy():
             return max(0, HEAVY_CAP - slots._value)
     except Exception:
         return 0
-state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "busy_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0}
+state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "busy_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0, "sheds": 0}
+
+def note_shed():
+    """1.26.342 (plan v2, A): count a shed, i.e. a 503 returned because no heavy slot or capacity was free within the
+    bounded wait. Exposed as telemetry `sheds` on /api/status and /ops so a slot-starvation jam is visible as it happens."""
+    state["sheds"] = state.get("sheds", 0) + 1
 
 def telemetry():
     """Cheap read of the memory guard and self-check counters for diagnostics (poascan's own, not an upstream probe).
@@ -159,7 +164,7 @@ def telemetry():
     ua_throttle: the shared per-User-Agent API throttle (1.26.287); throttled counts its 429s since boot."""
     s = state
     return dict(trims=s["trims"], gcs=s["gcs"], rss_mb=s["rss_mb"], rss_exit_mb=RSS_EXIT_MB, rss_trim_mb=RSS_TRIM_MB,
-                rss_over=s.get("rss_over", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
+                rss_over=s.get("rss_over", 0), sheds=s.get("sheds", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
                 busy_fails=s.get("busy_fails", 0), heavy_busy=heavy_busy(),
                 steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP,
                 ua_throttle=dict(agents=list(UA_THROTTLE), rate=UA_THROTTLE_RATE, burst=UA_THROTTLE_BURST,
