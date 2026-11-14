@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.341] - 2026-11-14
+
+### Added
+- When every heavy serving slot stays held for several guard checks in a row, the guard now writes a thread-stack dump to the volume so the slot holders are visible (the 2026-11-14 6:25 AM jam left none to inspect, so its exact trigger was never confirmed). The dump is rate-limited to one per 10 minutes, keeps only the last five, and contains code stacks and counts only, never request data, headers, IPs or tokens. Diagnostic only: no API, data, page or prompt output changes.
+
 ## [1.26.340] - 2026-11-14
 
 ### Added

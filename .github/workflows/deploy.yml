@@ -143,6 +143,8 @@ jobs:
         run: python tools/slimreuse_test.py
       - name: Grading index reuses its rows on a restart and folds in only a new close
         run: python tools/gxappend_test.py
+      - name: Heavy pool full writes a capped, rate-limited thread dump (no request data)
+        run: python tools/stuckdump_test.py
       - name: Boot passes read the close records in chunks (key scrub, regroup check)
         run: python tools/bootpeak_test.py
       - name: Large writes leave no bound copy behind
