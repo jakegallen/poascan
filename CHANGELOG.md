@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.330] - 2026-11-13
+
+### Fixed
+- Memory spikes and "server busy" right after a boot. Dozens of live readers (the /ws feed and /api/summary) built the first snapshot at once, and each one parsed every close's pending list in parallel, so memory crossed the guard within minutes. The first snapshot, the per close memos and the origin epoch map are now built once while other readers wait for that result. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.329] - 2026-11-13
 
 ### Fixed

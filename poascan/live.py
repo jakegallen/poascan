@@ -28,6 +28,7 @@ class Hub:
         self.clients = {}            # sock -> bytearray (inbound buffer)
         self.pending = queue.Queue()  # sockets to register with the selector
         self.last_json = None; self.last_frame = None; self.last_at = 0
+        self._first = threading.Lock()   # 1.26.330: single first snapshot build
         self._bg = False   # 1.26.275: one background refresh; readers keep last_json until it is replaced
         self.sel = selectors.DefaultSelector()
         self.sent = 0
@@ -38,7 +39,12 @@ class Hub:
         """The last good snapshot. When one exists, a reader returns it at once and one refresh runs in the background.
         The previous JSON stays until that refresh assigns the new one."""
         if self.last_json is None:
-            self._refresh()
+            # 1.26.330: one first build; on a cold boot every /ws and /api/summary reader used to build its own
+            got = self._first.acquire(timeout=60)
+            try:
+                if self.last_json is None: self._refresh()
+            finally:
+                if got: self._first.release()
             return self.last_json
         if time.time() - self.last_at > max_age:
             self._kick()
