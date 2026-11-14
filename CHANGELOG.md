@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.333] - 2026-11-13
+
+### Fixed
+- Heavy pages still "server busy" after 1.26.332. The grading state check (two counts over every grade seal since the completion notice) was recomputed after every database write, and the indexer writes every few seconds, so most page renders ran it at once. It is now computed by one request at a time and reused for 10 s across writes. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.332] - 2026-11-13
 
 ### Fixed

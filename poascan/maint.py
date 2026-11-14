@@ -3,7 +3,7 @@ While on, the freshness state is Upgrading instead of Lagging: the header pill h
 Phases, from public data only: parked (checkpoint held at PARKED), then recovery (the checkpoint moved on; hosted routes reopen
 in stages). Auto-clear: the mining route answers as open again (hosted.py) and the hardening notice is no longer active.
 MAX_S is a safety stop that only applies while no fresh route read shows a pause."""
-import os, re, time
+import os, re, time, threading
 from . import db, analytics as A
 
 MAINTENANCE = os.environ.get("POASCAN_MAINTENANCE", "1") != "0"  # the switch; with it on, the official completion notice (complete()) ends maintenance by itself
@@ -187,9 +187,25 @@ def grading_state(now=None):
     the grade-sealed rows, blob decodes and the probe read ran up to ~15 times per page, 38% of live CPU)."""
     if now is not None or GRADING_MEMO_S <= 0: return _grading_state(now)
     t = time.time(); m = _GMEMO; g = db.GEN[0]
-    if m[1] is not None and m[2] == g and 0 <= t - m[0] < GRADING_MEMO_S: return dict(m[1])
-    d = _grading_state(); m[0], m[1], m[2] = t, d, g
+    if _gmemo_ok(m, t, g): return dict(m[1])
+    got = _GLOCK.acquire(timeout=30)   # 1.26.333: single-flight; bounded so a slow holder never blocks the others for good
+    try:
+        t = time.time(); g = db.GEN[0]
+        if _gmemo_ok(m, t, g): return dict(m[1])
+        d = _grading_state(); m[0], m[1], m[2] = t, d, g
+    finally:
+        if got: _GLOCK.release()
     return dict(d)
+
+# 1.26.333: on production every indexer write bumps db.GEN, so the memo above missed on nearly every call and py-spy found
+# most heavy-slot threads in the two grade-sealed COUNT DISTINCT scans at once. Within GRADING_FLOOR_S of a compute a
+# write does not force a recompute. 0 (the default, and the tests) keeps the old rule; fly.toml sets it for production.
+GRADING_FLOOR_S = float(os.environ.get("POASCAN_GRADING_FLOOR_S", "0"))
+_GLOCK = threading.RLock()
+
+def _gmemo_ok(m, t, g):
+    if m[1] is None or not 0 <= t - m[0] < GRADING_MEMO_S: return False
+    return m[2] == g or t - m[0] < GRADING_FLOOR_S
 
 def grading_memo_clear(): _GMEMO[1] = None   # for a state change that is not a db write (tests patch hosted.state)
 
