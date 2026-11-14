@@ -52,6 +52,67 @@ def caches():
     except Exception: pass
     return out
 
+def _approx_bytes(o, cap=6000):
+    """Best-effort byte size of one object graph, visiting at most `cap` objects. Bounded and low memory: a stack walk
+    with an id set, no recursion, stops at the cap. Undercounts a graph larger than the cap (good enough to rank)."""
+    seen = set(); stack = [o]; total = 0; n = 0
+    while stack and n < cap:
+        x = stack.pop(); i = id(x)
+        if i in seen: continue
+        seen.add(i); n += 1
+        try: total += sys.getsizeof(x)
+        except Exception: continue
+        if isinstance(x, dict):
+            for k, v in x.items(): stack.append(k); stack.append(v)
+        elif isinstance(x, (list, tuple, set, frozenset)):
+            stack.extend(x)
+        else:
+            d = getattr(x, "__dict__", None)
+            if isinstance(d, dict): stack.append(d)
+    return total
+
+def _est(c, sample=12, cap_per=6000):
+    """Approximate total bytes of a dict or sequence: deep-size up to `sample` entries and scale by len. Cheap and
+    bounded (never a full walk of a 400 MB structure), so it is safe on the live request path of the private endpoint."""
+    try: n = len(c)
+    except Exception: return None
+    if not n: return dict(entries=0, approx_kb=0)
+    items = list(c.items()) if isinstance(c, dict) else [(None, v) for v in c]
+    k = min(sample, len(items)); per = 0
+    for key, val in items[:k]:
+        per += _approx_bytes(val, cap_per) + (_approx_bytes(key, 64) if key is not None else 0)
+    avg = per / k if k else 0
+    return dict(entries=n, approx_kb=int(avg * n) // 1024)
+
+def _sum_kinds(d):
+    """For a {kind: sub-container} map, sum the per-kind estimates."""
+    te = tk = 0
+    for v in (d or {}).values():
+        if v is None: continue
+        r = _est(v)
+        if r: te += r["entries"]; tk += r["approx_kb"]
+    return dict(entries=te, approx_kb=tk)
+
+def resident():
+    """1.26.340: approximate bytes of the largest resident structures, so /ops/memory shows the real split instead of
+    estimates. Sampled and bounded (see _est), each guarded so one failure cannot break the report."""
+    out = {}
+    def put(name, fn):
+        try: out[name] = fn()
+        except Exception as e: out[name] = {"err": type(e).__name__}
+    from . import closestore as CS, analytics as A, history as HI, chartpop as CP, grading as GR
+    put("slim_prev", lambda: _sum_kinds(CS._slim_prev))               # parsed slim close records, all kinds (the big one)
+    put("close_lru", lambda: _est(CS._lru))
+    put("analytics_epochs", lambda: _sum_kinds({k: v.get("v") for k, v in A._epochs.items()}))
+    put("analytics_cache", lambda: _est(A._cache))
+    put("analytics_cm", lambda: _est(A._cm))
+    put("analytics_er", lambda: _est(A._er))
+    put("grading_acache", lambda: _est(HI._acache))
+    put("grading_gx_keys", lambda: _est(HI._gx.get("keys", {})))
+    put("grading_cur", lambda: _est(GR._cur))
+    put("chartpop_last", lambda: _est(CP._last))
+    return out
+
 def report():
     return dict(ts=int(time.time()), proc=proc(), malloc=malloc(), py_blocks=sys.getallocatedblocks(), gc=list(gc.get_count()),
-                gc_collections=[s.get("collections") for s in gc.get_stats()], caches=caches())
+                gc_collections=[s.get("collections") for s in gc.get_stats()], caches=caches(), resident=resident())

@@ -227,9 +227,12 @@ check("version is at least 1.26.336 and the changelog records the slim record re
 check("version is at least 1.26.338 and the changelog records the grading index fold",
       _ver >= (1, 26, 338) and "## [1.26.338]" in cl and "grading index" in cl
       and not any(c in cl.split("## [1.26.338]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.339 and the changelog records the RSS exit ceiling",
-      _ver == (1, 26, 339) and "## [1.26.339]" in cl and "exit ceiling" in cl
+check("version is at least 1.26.339 and the changelog records the RSS exit ceiling",
+      _ver >= (1, 26, 339) and "## [1.26.339]" in cl and "exit ceiling" in cl
       and not any(c in cl.split("## [1.26.339]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.340 and the changelog records the resident memory report",
+      _ver == (1, 26, 340) and "## [1.26.340]" in cl and "resident" in cl
+      and not any(c in cl.split("## [1.26.340]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
