@@ -1412,9 +1412,11 @@ class H(BaseHTTPRequestHandler):
                             h = HC.last(k); break
                 except Exception: h = None
             if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
-            retry = "60" if self._is_search_crawler() else "3"
+            retry = "60" if self._is_search_crawler() else "15"   # 1.26.342 (A): 15 (was 3) so a shed client backs off instead of hammer-retrying into the jam
+            GD.note_shed()
             return self.send(503, BUSY_HTML, extra={"Retry-After": retry, "Cache-Control": "no-store"})
-        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "3", "Cache-Control": "no-store"})
+        GD.note_shed()
+        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "15", "Cache-Control": "no-store"})
     def _swap_status_fast(self):
         """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""
         from .swap import hoststatus as SS

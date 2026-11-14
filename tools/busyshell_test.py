@@ -50,7 +50,7 @@ k2 = HC.key("/privacy", {}, seg, False)
 HC.put(k2, "<html>ANCIENT</html>", now=time.time() - HC.PIN_MAX_AGE_S - 60)
 r = Req("/privacy"); r._gated(lambda: "X")
 code, body, ctype, hd = r.sent[-1]
-ok(code == 503 and body == B and hd.get("Retry-After") == "3" and hd.get("Cache-Control") == "no-store", f"a copy older than a day is not served; busy page instead ({code})")
+ok(code == 503 and body == B and hd.get("Retry-After") == "15" and hd.get("Cache-Control") == "no-store", f"a copy older than a day is not served; busy page instead ({code})")
 # no copy at all: branded busy page
 r = Req("/network?tab=charts"); r._gated(lambda: "X")
 code, body, ctype, hd = r.sent[-1]

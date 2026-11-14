@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.342] - 2026-11-14
+
+### Changed
+- A request that cannot get a heavy serving slot within the bounded wait is now counted (a new `sheds` counter on the guard telemetry, visible on /api/status and /ops) and its 503 advises Retry-After 15 instead of 3, so a shed client backs off rather than hammer-retrying into a slot-starvation jam. Search crawlers still get Retry-After 60. Health and cheap pages never wait on a heavy slot, as before. No API body, data, page or prompt changes.
+
 ## [1.26.341] - 2026-11-14
 
 ### Added
