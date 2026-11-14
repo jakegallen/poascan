@@ -1,6 +1,8 @@
 """Derived statistics. Every number comes from stored public snapshots; nothing is estimated silently."""
 import json, time, threading, statistics, collections, csv, os, re, datetime as dt
 from . import db, segments as S, closestore as CS, econ as _X
+import logging
+log = logging.getLogger("poascan.analytics")
 
 _cache = collections.OrderedDict()   # (key, *args) -> (computed_at, value); LRU, bounded by CACHE_MAX
 _inflight = {}                        # key -> Event while one thread recomputes it
@@ -129,31 +131,55 @@ def full_close(e):
     if not x or x[2] is None: return e
     return CS.join(e, CS.pending(x[0], x[1]), x[2])
 
-_cm = {}; _cm_lock = threading.Lock(); _cm_flight = {}   # key -> RLock (1.26.330)
+_cm = {}; _cm_lock = threading.Lock()
+# 1.26.335: one close_memo compute at a time across every memo (re-entrant, so a memo body that reads another memo on the
+# same thread does not deadlock). A waiter never computes in parallel: past CM_WAIT it takes the last value (any
+# signature); with none (cold boot) it waits up to CM_COLD_WAIT more, and only then computes alone. py-spy and the fly
+# RSS on 1.26.334: the hourly params rewrite (7:36:58 PM PT) changed every memo signature; each waiter fell through
+# after 60 s and parsed every close's pending list at once (threads 20 -> 75, RSS 1.16 -> 1.56 GB, heavy routes 503).
+_cm_gate = threading.RLock()
+CM_WAIT, CM_COLD_WAIT = 60, 240
+_cm_stats = collections.Counter()
+_pdig = [None, None]   # (params blob (ts, gen), sha1 of its content)
+
+def params_sig():
+    """1.26.335: a digest of the params CONTENT. The params job rewrites the blob every hour; an unchanged copy must not
+    invalidate every close memo and the shared epoch rows (each recompute parses every close's pending list)."""
+    r = db.q1("SELECT ts FROM blobs WHERE kind='params'")
+    s = (r["ts"] if r else None, db.blob_gen("params"))
+    if _pdig[0] != s:
+        import hashlib
+        p = params()
+        _pdig[1] = hashlib.sha1(json.dumps(p, sort_keys=True).encode("utf-8", "surrogatepass")).hexdigest() if p else None
+        _pdig[0] = s
+    return _pdig[1]
+
 def close_memo(name):
     """Memo of a function of the selected segment's close records: recomputed only when they change (a new close, a new
-    stored copy) or the params blob changes, so a pending list is read from disk once per close, not once per TTL."""
+    stored copy) or the params content changes, so a pending list is read from disk once per close, not once per TTL."""
     def deco(fn):
         def wrap(*a):
             epochs_raw(); kind = S.blob_kind(); k = (name, kind) + a
-            pr = db.q1("SELECT ts FROM blobs WHERE kind='params'")
-            sig = (_epochs.get(kind, {}).get("ts"), CS.ver(kind), pr["ts"] if pr else None, db.blob_gen("params"))
+            sig = (_epochs.get(kind, {}).get("ts"), CS.ver(kind), params_sig())
             with _cm_lock:
                 hit = _cm.get(k)
                 if hit and hit[0] == sig: return hit[1]
-                lk = _cm_flight.setdefault(k, threading.RLock())
-            # 1.26.330: single-flight per key. On a cold boot dozens of /ws and /api/summary readers reached
-            # _epoch_pend at once and each parsed every close's pending list in parallel (py-spy: 42 threads), which
-            # pushed RSS over the guard. Later callers wait for the first compute and take its value.
-            got = lk.acquire(timeout=60)   # bounded: a holder that waits on a heavy slot never blocks the others for good
+            got = _cm_gate.acquire(timeout=CM_WAIT)
+            if not got:
+                with _cm_lock: hit = _cm.get(k)
+                if hit is not None:
+                    _cm_stats["stale"] += 1; return hit[1]   # a compute is running: the last value, never a parallel one
+                got = _cm_gate.acquire(timeout=CM_COLD_WAIT)
+                if not got: _cm_stats["alone"] += 1; log.warning("close_memo %s: computing without the gate", name)
             try:
                 with _cm_lock:
                     hit = _cm.get(k)
                     if hit and hit[0] == sig: return hit[1]
+                _cm_stats["compute"] += 1
                 v = fn(*a)
                 with _cm_lock: _cm[k] = (sig, v)
             finally:
-                if got: lk.release()
+                if got: _cm_gate.release()
             return v
         wrap.__wrapped__ = fn
         return wrap
@@ -254,6 +280,7 @@ def since_fill():
     ts = (S.selected(), epochs_ts())
     if ts[1] is not None and ts == _sf["ts"]: return _sf["v"]
     got = _sf_lock.acquire(timeout=60)   # 1.26.330: one rebuild at a time; the others take its result
+    if not got and _sf["ts"] is not None: return _sf["v"]   # 1.26.335: a rebuild is running: the last map, not a second rebuild
     try:
         if ts[1] is not None and ts == _sf["ts"]: return _sf["v"]
         return _since_fill_build(ts)
@@ -401,11 +428,12 @@ def _epoch_rows_shared():
     close on each call, and close_times() / epoch_of_ts() call it once per row (funnel walks every account), so one cold
     page held a heavy slot for minutes. Read only: callers that may change rows use epoch_rows(), which copies."""
     seg = S.selected(); raw = epochs_raw(); pp = _epoch_pend()
-    sig = (id(raw), id(pp), db.blob_gen("params"))
+    sig = (id(raw), id(pp), params_sig())
     hit = _er.get(seg)
     if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]
     with _er_lock: lk = _er_flight.setdefault(seg, threading.RLock())
     got = lk.acquire(timeout=30)   # single-flight; bounded so a slow holder never blocks the others for good
+    if not got and hit: return hit[2]   # 1.26.335: a build is running: the last rows, not a second build
     try:
         hit = _er.get(seg)
         if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]

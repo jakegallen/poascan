@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.335] - 2026-11-13
+
+### Fixed
+- The hourly params read no longer restarts every per close summary when the params content has not changed (the memos now key on a digest of the content, not the stored time). While one summary is being rebuilt, other readers get the last copy instead of rebuilding it in parallel, and only one rebuild runs at a time. On 1.26.334 the hourly params rewrite at 7:36 PM PT set off parallel rebuilds that held every heavy slot for about 10 minutes and pushed memory to 1.56 GB. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.334] - 2026-11-13
 
 ### Fixed

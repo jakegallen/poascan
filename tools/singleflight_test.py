@@ -121,4 +121,35 @@ MT._since_notice(100, cached=False)
 check("since_notice: an explicit now (cached=False) scans again", sum("DISTINCT" in q for q in qs) == 2)
 db.q1 = real_q1; MT.SINCE_NOTICE_S = 0; MT._SN.clear()
 
+# 1.26.335: an hourly params rewrite with the same content keeps every close memo; changed content recomputes
+pc = []
+@A.close_memo("sf_params")
+def pmemo():
+    pc.append(1); return len(pc)
+db.put_blob("params", {"pending_merge_from_epoch": 7, "x": 1}); pmemo(); pmemo()
+db.put_blob("params", {"x": 1, "pending_merge_from_epoch": 7})   # same content, new ts and generation
+pmemo()
+check(f"close_memo: an unchanged params rewrite is a memo hit ({len(pc)})", len(pc) == 1)
+db.put_blob("params", {"pending_merge_from_epoch": 8, "x": 1}); pmemo()
+check(f"close_memo: a params content change recomputes ({len(pc)})", len(pc) == 2)
+
+# 1.26.335: past CM_WAIT a waiter takes the last value instead of computing in parallel (1.26.334 fell through)
+A.CM_WAIT = 0.2
+sc = []; gate_in = threading.Event()
+@A.close_memo("sf_stale")
+def smemo():
+    sc.append(1); n = len(sc)
+    if n > 1: gate_in.set(); time.sleep(1.5)
+    return n
+first = smemo()
+db.put_blob("params", {"pending_merge_from_epoch": 9, "x": 1})   # new signature
+res = []
+t0 = threading.Thread(target=lambda: res.append(smemo())); t0.start(); gate_in.wait(5)
+ws = [threading.Thread(target=lambda: res.append(smemo())) for _ in range(12)]
+[t.start() for t in ws]; [t.join(30) for t in ws]; t0.join(30)
+check(f"close_memo: 13 callers on a new signature compute once ({len(sc) - 1})", len(sc) == 2)
+check("close_memo: waiters past CM_WAIT get the last value", res.count(first) == 12 and res.count(2) == 1)
+check("close_memo: the next call is a hit on the new value", smemo() == 2 and len(sc) == 2)
+A.CM_WAIT = 60
+
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
