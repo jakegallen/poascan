@@ -65,4 +65,9 @@ check(f"live hub: waiters that time out do not build their own first snapshot ({
 check("live hub: a timed out waiter gets None, the builder gets the snapshot",
       sum(1 for r in res2 if r is None) == 11 and sum(1 for r in res2 if r and '"y":2' in r) == 1)
 
+# 1.26.331: epoch_rows reads params once per walk, not once per close row
+import inspect
+src = inspect.getsource(A.epoch_rows)
+check("epoch_rows passes one params read to every row", "ppar = params()" in src and "p=ppar" in src)
+
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
