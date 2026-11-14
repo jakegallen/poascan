@@ -1472,7 +1472,10 @@ class H(BaseHTTPRequestHandler):
                 return HUB.accept(self)
             if path in ("/api/swaps/status", "/api/trading/status"): return self._swap_status_fast()
             if path in ("/api/summary", "/api/live"):
-                m = AG.meta(); d = json.loads(HUB.snapshot()) if path == "/api/summary" else dict(HUB.stats())
+                snap = HUB.snapshot() if path == "/api/summary" else None
+                if path == "/api/summary" and snap is None:   # 1.26.331: first snapshot still building after a boot
+                    return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store"})
+                m = AG.meta(); d = json.loads(snap) if path == "/api/summary" else dict(HUB.stats())
                 if isinstance(d, dict):
                     if path == "/api/summary": d["swaps"] = SC.status(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)

@@ -22,6 +22,7 @@ def frame(payload, opcode=0x1):
     return hdr + b
 
 class Hub:
+    FIRST_WAIT = 60   # s a first reader waits for the one first snapshot build
     def __init__(self, snapshot_fn):
         self.snapshot_fn = snapshot_fn
         self.lock = threading.Lock()
@@ -40,11 +41,13 @@ class Hub:
         The previous JSON stays until that refresh assigns the new one."""
         if self.last_json is None:
             # 1.26.330: one first build; on a cold boot every /ws and /api/summary reader used to build its own
-            got = self._first.acquire(timeout=60)
+            # 1.26.331: a reader that waited 60 s returns None instead of building its own copy. On 1.26.330 the first
+            # build waited on heavy slots for over a minute, then every waiter fell through and built (py-spy: 99 threads).
+            if not self._first.acquire(timeout=self.FIRST_WAIT): return self.last_json
             try:
                 if self.last_json is None: self._refresh()
             finally:
-                if got: self._first.release()
+                self._first.release()
             return self.last_json
         if time.time() - self.last_at > max_age:
             self._kick()

@@ -203,9 +203,12 @@ check("version is at least 1.26.326 and the changelog records final_payout",
 check("version is at least 1.26.329 and the changelog records the revert to 1.26.326",
       _ver >= (1, 26, 329) and "## [1.26.329]" in cl and "back to 1.26.326" in cl
       and not any(c in cl.split("## [1.26.329]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.330 and the changelog records the single first build",
-      _ver == (1, 26, 330) and "## [1.26.330]" in cl and "built once" in cl
+check("version is at least 1.26.330 and the changelog records the single first build",
+      _ver >= (1, 26, 330) and "## [1.26.330]" in cl and "built once" in cl
       and not any(c in cl.split("## [1.26.330]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.331 and the changelog records the timed out first readers",
+      _ver == (1, 26, 331) and "## [1.26.331]" in cl and "only one build runs" in cl
+      and not any(c in cl.split("## [1.26.331]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

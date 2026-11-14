@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.331] - 2026-11-13
+
+### Fixed
+- Memory still climbing and "server busy" after a boot on 1.26.330. The first live snapshot waited over a minute for a free slot, and every reader that had waited 60 s then built its own copy. A reader that times out now gets no snapshot (the /ws feed sends nothing yet and /api/summary answers 503 retry shortly) and only one build runs. Stored data is unchanged. Prompt hashes unchanged.
+
 ## [1.26.330] - 2026-11-13
 
 ### Fixed
