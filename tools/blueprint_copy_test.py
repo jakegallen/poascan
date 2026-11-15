@@ -45,7 +45,7 @@ check("/swap open steps: held not paid, 524 rule, never loop, stop states, lag, 
 ll = AG.llms_txt(); safety = ll.split("## Safety", 1)[1].split("## Source", 1)[0]
 check("llms.txt Safety: leak watch, critical notice, Emblem chat agent, 524", all(s in safety for s in (
       "next_nonce", "No answer: don't write.", "severity critical", "Emblem's chat agent or agent mode", "524")) and nodash(safety))
-check("llms.txt Updated 2026-10-28", "Updated 2026-10-28." in ll)
+check("llms.txt Updated 2026-11-15", "Updated 2026-11-15." in ll)
 tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]

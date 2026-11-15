@@ -191,11 +191,16 @@ from urllib.parse import quote
 LL = {c["id"]: S.link_len(c) for c in CR.CLIENTS if c["prefill"] and CR.variant(c)}
 print("     prefill link chars (32 char name):", LL)
 _K = dict((x["id"], x["kind"]) for x in top + rest)
-check(f"a prefill link is used only under 8,000 characters with the longest name; longer copies and opens (v2.9: Cursor's full prompt, {LL.get('cursor')})", S.URL_MAX == 8000
-      and all(_K[i] == ("auto" if v < 8000 else "paste") for i, v in LL.items()) and _K["claude"] == _K["chatgpt"] == _K["grok"] == "auto" and _K["cursor"] == "paste"
-      and all(LL[i] < 8000 for i in ("claude", "chatgpt", "grok", "perplexity")))
+check(f"1.26.345 per-client caps (C): kind follows each client's own cap; claude/chatgpt/perplexity raised to 8,500 after the 32-char check, grok and cursor stay at the 8,000 default (Cursor's full prompt {LL.get('cursor')})",
+      S.URL_MAX == 8000 and S.URL_MAX_HARD == 8600
+      and all(_K[i] == ("auto" if v < S.cap_for(i) else "paste") for i, v in LL.items())
+      and all(S.cap_for(i) == 8500 for i in ("claude", "chatgpt", "perplexity")) and S.cap_for("grok") == 8000 and S.cap_for("cursor") == 8000
+      and all(S.cap_for(i) <= S.URL_MAX_HARD for i in S.CLIENT_MAX))
+check("each raised client one-clicks at a 32-char name with its link under its cap (Grok's HTTP 431 keeps it copy-and-open; cursor too)",
+      all(_K[i] == "auto" and 8000 <= LL[i] < S.cap_for(i) for i in ("claude", "chatgpt", "perplexity"))
+      and _K["grok"] == "paste" and _K["cursor"] == "paste")
 check("the canonical prompt's Join modal links also fit (fits())", all(S.fits(n, p) for n, k, b, p in J.APPS if p) if J.APPS and len(J.APPS[0]) == 4 else True)
-_old = S.URL_MAX; S.URL_MAX = 100; t2, r2 = S.chats(); S.URL_MAX = _old
+_old = S.URL_MAX; _oldc = S.CLIENT_MAX; S.URL_MAX = 100; S.CLIENT_MAX = {}; t2, r2 = S.chats(); S.URL_MAX = _old; S.CLIENT_MAX = _oldc
 check("a prefill link over the limit falls back to copy and open (paste kind, no prefill); no-path clients stay none",
       dict((x["id"], (x["kind"], x["pre"])) for x in t2)["claude"] == ("paste", "") and all(x["kind"] == "none" for x in r2 if x["tier"] == "none"))
 
@@ -243,7 +248,7 @@ check("v2.9 proof of work: go.md Step 0/1 recipe (GET /api/join-pow, decimal non
       and not any(c in _pw for c in "\u2014\u2013"))
 check("variants: no em or en dashes, no {NAME} left, shorter than the full text, under the URL budget",
       not any(c in t for t in VT.values() for c in "\u2014\u2013") and not any("{NAME}" in t for t in VT.values())
-      and len(VT["connector"]) < len(VT["full"]) and len(VT["connector"]) < 5800)   # v2.9.7: 202 poll rule and the unclear-register check; v2.9.4 was 4500
+      and len(VT["connector"]) < len(VT["full"]) and len(VT["connector"]) < 6100)   # v2.9.7: 202 root-absolute poll_url resolve; v2.9.6 was 5603, v2.9.4 was 4500
 _tg = {c["id"]: S.client_prompt("n", c["id"]) for c in CR.CLIENTS}
 check("client_prompt: each client gets its variant (v2.5: no check-ins, so tagging changes nothing); no-path clients get none",
       all((t is None) == (CR.variant(CR.BY_ID[i]) is None) for i, t in _tg.items())
@@ -263,7 +268,7 @@ check("joinpow 1026: join.pow matches minepoa's live /api/join-pow (single_use, 
       and "bits" in _js9["pow"]["bits_source"] and not any(ch.isdigit() for ch in _js9["pow"]["bits_source"].split("(")[0]) and not any(c in str(_js9) for c in "\u2013\u2014"))
 check("api_join(client=): tagged variant text, tier, connector with the MCP URL, prefill and link length; no-path gives the panel and no text",
       ac["text"] == S.client_prompt("test-agent-7", "claude") and ac["variant"] == "connector" and ac["tier"] == "connector" and ac["connector"]["url"] == "https://minepoa.com/mcp"
-      and ac["sha256"] == hashlib.sha256(ac["text"].encode()).hexdigest() and ac["prefill_ok"] and ac["link_chars"] < 8000
+      and ac["sha256"] == hashlib.sha256(ac["text"].encode()).hexdigest() and ac["prefill_ok"] and ac["link_chars"] < S.cap_for("claude")
       and an["text"] is None and an["tier"] == "none" and an["panel"]["line"] == CR.NOPATH["line"] and [x["id"] for x in an["panel"]["alternatives"]] == CR.NOPATH["alternatives"]
       and ak["variant"] is None and ak["name"] == "YOUR_NAME" and ak["text"] is None and an["panel"]["join_url"] == "https://minepoa.com")
 _bc = []

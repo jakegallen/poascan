@@ -253,7 +253,17 @@ def _api_client(nm, cid):
                 notes="text is exactly what the /start button for this client copies: the " + v + " variant (no check-ins since v2.5)"
                       + ". Joining the blocks in order gives text. Show notice next to the text wherever you render it.")
 
-URL_MAX = 8000                        # every prefill link stays under this (longest name, tagged); longer falls back to copy and open
+URL_MAX = 8000                        # default prefill link cap (longest name, tagged); over it, a client falls back to copy and open
+URL_MAX_HARD = 8600                    # no per-client cap may go above this
+# 1.26.345: a client may be raised above the 8,000 default only after its own site passed the 32-char full-prompt composer
+# check (v2.9.7 lengthened the prompt; Grok C). claude, chatgpt and perplexity hold the full ~8,485 char link; grok.com
+# returns HTTP 431 (Request Header Fields Too Large) at that length, so it is NOT raised and stays copy and open; cursor
+# is well over any cap and stays copy and open too. Every other client keeps the 8,000 default.
+CLIENT_MAX = {"claude": 8500, "chatgpt": 8500, "perplexity": 8500}
+
+def cap_for(cid):
+    """The prefill link cap for a client id: its raised value if it passed the per-site check, else the 8,000 default; never above URL_MAX_HARD."""
+    return min(CLIENT_MAX.get(cid, URL_MAX), URL_MAX_HARD)
 
 def link_len(c, name="x" * 32):
     """Length of a registry client's prefill link with its variant, tagged, for this name (0 without a prefill or prompt)."""
@@ -262,13 +272,15 @@ def link_len(c, name="x" * 32):
     return len(c["prefill"] + quote(t, safe="")) if c["prefill"] and t else 0
 
 def fits_client(c):
-    return link_len(c) < URL_MAX
+    return link_len(c) < cap_for(c["id"])
 
 def fits(n, pre):
-    """True when the canonical prompt's prefill URL, tagged for client name n, with the longest name stays under URL_MAX."""
+    """True when the canonical prompt's prefill URL, tagged for client name n, with the longest name stays under that client's cap."""
     from urllib.parse import quote
-    from . import onboarding_prompt as OP
-    return len(pre + quote(OP.tagged(prompt("x" * 32), client_tag(n) or "x"), safe="")) < URL_MAX
+    from . import onboarding_prompt as OP, clients as C
+    cid = next((c["id"] for c in C.CLIENTS if c.get("prefill") == pre), None)
+    cap = cap_for(cid) if cid else URL_MAX
+    return len(pre + quote(OP.tagged(prompt("x" * 32), client_tag(n) or "x"), safe="")) < cap
 
 def chats():
     """/start step 2 choices from the shared registry, as dicts: top row, then More (registry order, Grok Bot first).
