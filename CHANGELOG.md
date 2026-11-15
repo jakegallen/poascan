@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.346] - 2026-11-15
+
+### Added
+- The private /ops/memory report gains a sqlite section (live per-thread connection count, cache_size, page_size, and the estimated page-cache MB they hold) and a summary with the tracked / RSS / untracked split (tracked = the sampled resident structures plus cache bytes plus the SQLite page cache; untracked = RssAnon minus tracked, i.e. the interpreter, thread stacks, fragmentation and anything not sampled; RssFile reported apart). Observability only: a token-gated endpoint, cheap reads, no behaviour, data, body or money-path change.
+
 ## [1.26.345] - 2026-11-15
 
 ### Changed

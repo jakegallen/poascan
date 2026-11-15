@@ -79,7 +79,13 @@ CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT
   n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, endpoint, reason)) WITHOUT ROWID;
 """
 
+# 1.26.346: a live count of per-thread connections, for the private /ops/memory report. Each connection holds its own
+# page cache (up to ~2 MB at the default cache_size), so this is the surest read on how much the pool weighs.
+_conn_lock = threading.Lock()
+_conn_live = 0
+
 def conn():
+    global _conn_live
     c = getattr(_local, "c", None)
     if c is None:
         os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
@@ -89,17 +95,34 @@ def conn():
         c.execute("PRAGMA synchronous=NORMAL")
         c.execute("PRAGMA journal_size_limit=16777216")   # 1.26.161: the WAL file is cut back to 16 MB after a checkpoint (it had grown to 77 MB)
         _local.c = c
+        with _conn_lock: _conn_live += 1
     return c
 
 def release():
     """Close this thread's connection (1.26.227). The server gives every request its own thread, and a connection left
     on a finished thread sits in a reference cycle with its statement cache until a full GC: under load about 90 of them
     (each with up to 2 MB of page cache) piled up and RSS grew about 6 MB/s. Request threads call this when they end."""
+    global _conn_live
     c = getattr(_local, "c", None)
     if c is not None:
         _local.c = None
         try: c.close()
         except Exception: pass
+        with _conn_lock: _conn_live -= 1
+
+def conn_stats():
+    """Live per-thread connections and the page cache each holds, for /ops/memory (1.26.346). cache_size and page_size are
+    read from this thread's connection (none is set, so every connection shares the default); est_cache_mb assumes that.
+    cache_size is negative for a KiB budget, positive for a page count. Cheap: two pragmas, no walk, no upstream call."""
+    try:
+        c = conn()
+        cs = c.execute("PRAGMA cache_size").fetchone()[0]
+        ps = c.execute("PRAGMA page_size").fetchone()[0]
+        kib = -cs if cs < 0 else (cs * ps) // 1024
+        with _conn_lock: live = _conn_live
+        return dict(live=live, cache_size=cs, page_size=ps, cache_kib_each=kib, est_cache_mb=(live * kib) // 1024)
+    except Exception as e:
+        return {"err": type(e).__name__}
 
 def init():
     with _wlock:

@@ -16,7 +16,7 @@ def proc():
     try:
         for l in open("/proc/self/status"):
             k = l.split(":")[0]
-            if k in ("VmRSS", "VmHWM", "RssAnon", "VmData"): out[k] = int(l.split()[1]) // 1024
+            if k in ("VmRSS", "VmHWM", "RssAnon", "RssFile", "VmData"): out[k] = int(l.split()[1]) // 1024
             elif k == "Threads": out[k] = int(l.split()[1])
     except Exception: pass
     return out
@@ -113,6 +113,38 @@ def resident():
     put("chartpop_last", lambda: _est(CP._last))
     return out
 
+def sqlite():
+    """1.26.346: live per-thread SQLite connections and the page cache they hold (db.conn_stats). Guarded so a db import
+    or pragma failure cannot break the report."""
+    try:
+        from . import db
+        return db.conn_stats()
+    except Exception as e:
+        return {"err": type(e).__name__}
+
+def _bucket_kb(res, cs, sq):
+    """Sum the KiB we can attribute: the sampled resident structures (approx_kb), the cache byte tallies, and the SQLite
+    page cache estimate. Entries without a byte figure (count-only caches) add nothing here."""
+    kb = 0
+    for v in (res or {}).values():
+        if isinstance(v, dict) and isinstance(v.get("approx_kb"), int): kb += v["approx_kb"]
+    for v in (cs or {}).values():
+        if isinstance(v, dict) and isinstance(v.get("bytes"), int): kb += v["bytes"] // 1024
+    if isinstance(sq, dict) and isinstance(sq.get("est_cache_mb"), int): kb += sq["est_cache_mb"] * 1024
+    return kb
+
+def _summary(p, cs, res, sq):
+    """1.26.346: the tracked / RSS / untracked split. tracked_mb is everything the report can name (sampled resident
+    structures, cache bytes, SQLite page cache); untracked_mb is RssAnon minus that (the interpreter, thread stacks,
+    allocator fragmentation and anything not sampled). RssFile (the mmapped binary and WAL) is reported apart."""
+    anon = p.get("RssAnon")
+    tracked = _bucket_kb(res, cs, sq) // 1024
+    return dict(rss_mb=p.get("VmRSS"), rss_anon_mb=anon, rss_file_mb=p.get("RssFile"), peak_mb=p.get("VmHWM"),
+                tracked_mb=tracked, untracked_mb=(anon - tracked) if isinstance(anon, int) else None,
+                note="tracked = sampled resident structures + cache bytes + SQLite page cache; untracked = RssAnon minus tracked (interpreter, thread stacks, fragmentation, unsampled).")
+
 def report():
-    return dict(ts=int(time.time()), proc=proc(), malloc=malloc(), py_blocks=sys.getallocatedblocks(), gc=list(gc.get_count()),
-                gc_collections=[s.get("collections") for s in gc.get_stats()], caches=caches(), resident=resident())
+    p = proc(); cs = caches(); res = resident(); sq = sqlite()
+    return dict(ts=int(time.time()), proc=p, malloc=malloc(), py_blocks=sys.getallocatedblocks(), gc=list(gc.get_count()),
+                gc_collections=[s.get("collections") for s in gc.get_stats()], caches=cs, resident=res, sqlite=sq,
+                summary=_summary(p, cs, res, sq))
