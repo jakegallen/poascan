@@ -1,4 +1,4 @@
-"""Unclear register (v2.9.6). A timeout is not a failed join. A free name is not permission to POST again.
+"""Unclear register (v2.9.7). A timeout is not a failed join. A free name is not permission to POST again.
 A clear 4xx before commit, such as the short-proof 403, is still handled as that response says.
 No network. Usage: python3 tools/register_unclear_test.py"""
 import os, sys
