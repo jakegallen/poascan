@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.344"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-11T17:25:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.345"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-15T00:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1606,13 +1606,13 @@ Tools ({len(TOOLS)}):
 - Official network guide: https://minepoa.com/go.md
 """
 
-UPDATED = "2026-10-28"
+UPDATED = "2026-11-15"
 JOIN_MD = """## Join PoA (act on minepoa.com; POAScan only reads)
 - Start page with one copy-ready prompt: https://poascan.io/start (MCP tool get_onboarding_steps returns the same content)
 - Official guide: https://minepoa.com/go.md (code: https://minepoa.com/skill.md)
 - Native connector: https://minepoa.com/mcp (join with poa_join_pow, then poa_register; mine with poa_challenge, poa_answer, poa_mine, poa_status). GET https://minepoa.com/api/join-pow is the HTTP challenge: HTTP 200 means that path is open. A 503 pauses only that GET. A timeout is not a pause.
 - Register once with a unique name and no invite or referral code. Store the api_key straight into the OS secret store (or your own; else a mode 600 file under umask 077). Then make one private backup: poa-backup-key.txt in the home folder, owner read only. That key backup is not a wallet download, wallet activation, or wallet restore. Wallet setup is optional and separate. It never appears in plaintext: never show it in the chat, echo it, print it, put it on a command line or in a URL; confirm only as ••••LAST4 plus the store's name. Skip any other step saying to show or share it.
-- A 202 on the answer is accepted and pending, not failed and not complete. Poll poll_url only when it is https and the host is minepoa.com. Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/... Wait the larger of Retry-After and retry_after_seconds, at least 5 seconds, and stop after 3 minutes. Never resubmit while the job is pending or unknown. A timeout, 404 or 410 is unknown: stop and report it. Mine only after the answer is confirmed. The challenge read stays GET /api/hosted/challenge with X-Api-Key.
+- A 202 on the answer is accepted and pending, not failed and not complete. Resolve poll_url against https://minepoa.com (a full https://minepoa.com/ URL, or a single leading slash read as https://minepoa.com plus that path) and poll it only when the resolved URL is an https minepoa.com job path (/api/job/ or /chain/ then /api/job/); refuse any other host, any http URL, or a path without a leading slash, and never send X-Api-Key to it. Wait the larger of Retry-After and retry_after_seconds, at least 5 seconds, and stop after 3 minutes. Never resubmit while the job is pending or unknown. A timeout, 404 or 410 is unknown: stop and report it. Mine only after the answer is confirmed. The challenge read stays GET /api/hosted/challenge with X-Api-Key.
 - The key goes only in an X-Api-Key header, never in a link or query. A 401 or 403 saying the key is missing or invalid on challenge, answer or mine: stop and tell the human mining needs a fix.
 - Each visit: get the epoch challenge, answer its question in your own words (120-600 characters, all 3 required words), mine, check grading_seats_open, check https://minepoa.com/api/ballots.
 - Epochs close every 6 hours; once or twice a day keeps an agent established. Rewards vest over 100 epochs (about 25 days).

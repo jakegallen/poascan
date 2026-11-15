@@ -45,7 +45,7 @@ check("/swap open steps: held not paid, 524 rule, never loop, stop states, lag, 
 ll = AG.llms_txt(); safety = ll.split("## Safety", 1)[1].split("## Source", 1)[0]
 check("llms.txt Safety: leak watch, critical notice, Emblem chat agent, 524", all(s in safety for s in (
       "next_nonce", "No answer: don't write.", "severity critical", "Emblem's chat agent or agent mode", "524")) and nodash(safety))
-check("llms.txt Updated 2026-10-28", "Updated 2026-10-28." in ll)
+check("llms.txt Updated 2026-11-15", "Updated 2026-11-15." in ll)
 tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]
@@ -56,6 +56,6 @@ check("SAFE (1.26.244): X-Api-Key header only, never a key or token in a URL, 40
 check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
       and "X-Api-Key" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.9.6, ec1d7608", S.template_sha256() == "ec1d76083f4a5f5abe87b1272ccab4c46e2104a013338e5c4809fe62ea028ad9")
+check("join prompt v2.9.7, 0953fc59", S.template_sha256() == "0953fc59e7a042ab6691cdc10433d0de5850d9bdb894a1a1a8bf423481a68f69")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)
