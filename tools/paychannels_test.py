@@ -245,9 +245,12 @@ check("version is at least 1.26.343 and the changelog records the shed route bre
 check("version is at least 1.26.344 and the changelog records the finer shed split",
       _ver >= (1, 26, 344) and "## [1.26.344]" in cl and "epoch_html" in cl
       and not any(c in cl.split("## [1.26.344]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.345 and the changelog records the 202 poll_url resolve rule (join prompt v2.9.7)",
-      _ver == (1, 26, 345) and "## [1.26.345]" in cl and "poll_url" in cl and "v2.9.7" in cl
+check("version is at least 1.26.345 and the changelog records the 202 poll_url resolve rule (join prompt v2.9.7)",
+      _ver >= (1, 26, 345) and "## [1.26.345]" in cl and "poll_url" in cl and "v2.9.7" in cl
       and not any(c in cl.split("## [1.26.345]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.346 and the changelog records the /ops/memory sqlite + tracked/untracked split",
+      _ver == (1, 26, 346) and "## [1.26.346]" in cl and "sqlite section" in cl and "untracked" in cl
+      and not any(c in cl.split("## [1.26.346]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
