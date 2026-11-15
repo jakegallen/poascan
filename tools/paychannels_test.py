@@ -236,9 +236,12 @@ check("version is at least 1.26.340 and the changelog records the resident memor
 check("version is at least 1.26.341 and the changelog records the stuck-pool thread dump",
       _ver >= (1, 26, 341) and "## [1.26.341]" in cl and "thread-stack dump" in cl
       and not any(c in cl.split("## [1.26.341]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.342 and the changelog records the shed counter and Retry-After backoff",
-      _ver == (1, 26, 342) and "## [1.26.342]" in cl and "sheds" in cl
+check("version is at least 1.26.342 and the changelog records the shed counter and Retry-After backoff",
+      _ver >= (1, 26, 342) and "## [1.26.342]" in cl and "sheds" in cl
       and not any(c in cl.split("## [1.26.342]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.343 and the changelog records the shed route breakdown",
+      _ver == (1, 26, 343) and "## [1.26.343]" in cl and "sheds_by" in cl
+      and not any(c in cl.split("## [1.26.343]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
