@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.344] - 2026-11-14
+
+### Added
+- The shed route counter from 1.26.343 now splits the "other" bucket further (epoch_html, agents_html, chain_html, page_html) so the biggest shed bucket can be attributed to a specific page kind before the cold-miss fix is designed. Measurement only: no API body, data, page or prompt output changes.
+
 ## [1.26.343] - 2026-11-14
 
 ### Added

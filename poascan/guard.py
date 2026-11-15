@@ -151,7 +151,7 @@ def heavy_busy():
         return 0
 state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "busy_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0, "sheds": 0, "sheds_by": {}}
 
-SHED_BUCKETS = ("addr_html", "tx_html", "api", "other")
+SHED_BUCKETS = ("addr_html", "tx_html", "epoch_html", "agents_html", "chain_html", "page_html", "api", "other")
 def note_shed(bucket="other"):
     """1.26.342/343 (plan v2, A and C): count a shed, i.e. a 503 returned because no heavy slot or capacity was free within
     the bounded wait. Total plus a split by coarse route bucket (SHED_BUCKETS), exposed as telemetry `sheds` and `sheds_by`

@@ -1402,6 +1402,10 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api"): return "api"
         if p == "/address" or p.startswith("/address/"): return "addr_html"
         if p == "/tx" or p.startswith("/tx/"): return "tx_html"
+        if p == "/epoch" or p.startswith("/epoch/"): return "epoch_html"
+        if p == "/agents" or p.startswith("/agents/"): return "agents_html"
+        if p == "/chain" or p.startswith("/chain"): return "chain_html"
+        if p in ("/", "/start", "/help", "/about") or p == "/governance" or p.startswith("/governance"): return "page_html"
         return "other"
     def _shed(self):
         """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never
