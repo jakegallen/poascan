@@ -16,9 +16,15 @@ check("telemetry exposes an integer sheds counter", isinstance(before, int))
 GD.note_shed(); GD.note_shed()
 check("note_shed increments the telemetry sheds count", GD.telemetry()["sheds"] == before + 2)
 
+b0 = GD.telemetry().get("sheds_by", {}).get("addr_html", 0)
+GD.note_shed("addr_html"); GD.note_shed("tx_html"); GD.note_shed("nonsense")
+tb = GD.telemetry().get("sheds_by", {})
+check("sheds_by splits by route bucket", tb.get("addr_html", 0) == b0 + 1 and tb.get("tx_html", 0) >= 1)
+check("an unknown bucket falls into other", tb.get("other", 0) >= 1)
+
 src = open(os.path.join(ROOT, "poascan", "server.py"), encoding="utf-8").read()
 check("the busy and API shed 503 advise Retry-After 15", '"Retry-After": "15"' in src and "server busy, retry shortly" in src)
 check("a search crawler shed keeps Retry-After 60", '"60" if self._is_search_crawler()' in src)
-check("each shed 503 is counted (note_shed before the shed returns)", src.count("GD.note_shed()") >= 2)
+check("each shed 503 is counted (note_shed before the shed returns)", src.count("GD.note_shed(") >= 2)
 
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)

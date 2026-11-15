@@ -1396,11 +1396,19 @@ class H(BaseHTTPRequestHandler):
         p = self._path_only()
         if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/")): return False
         return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
+    def _shed_bucket(self):
+        """Coarse route bucket for the shed counter (plan v2 C step 1): addr_html, tx_html, api, other."""
+        p = self._norm()
+        if p.startswith("/api"): return "api"
+        if p == "/address" or p.startswith("/address/"): return "addr_html"
+        if p == "/tx" or p.startswith("/tx/"): return "tx_html"
+        return "other"
     def _shed(self):
         """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never
         cached at the edge) or the small branded busy page; the API, MCP and data files keep the plain text 503.
         1.26.316: a crawler reuses the visitor last-good copy. Search crawlers get Retry-After 60 when there is no copy,
         so Googlebot is not told to retry in 3 seconds. The Busy card is only sent as 503, never 200 or 403."""
+        bkt = self._shed_bucket()
         if self._html_shed_ok():
             h = None
             if HC.ENABLED:
@@ -1413,7 +1421,7 @@ class H(BaseHTTPRequestHandler):
                 except Exception: h = None
             if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
             retry = "60" if self._is_search_crawler() else "15"   # 1.26.342 (A): 15 (was 3) so a shed client backs off instead of hammer-retrying into the jam
-            GD.note_shed()
+            GD.note_shed(bkt)
             return self.send(503, BUSY_HTML, extra={"Retry-After": retry, "Cache-Control": "no-store"})
         GD.note_shed()
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "15", "Cache-Control": "no-store"})

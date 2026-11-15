@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.343] - 2026-11-14
+
+### Added
+- The shed counter from 1.26.342 now also splits by coarse route bucket (a new sheds_by on the guard telemetry: addr_html, tx_html, api, other), so a slot-starvation jam can be attributed to the routes that drive it. An HTML shed is cold by construction (a warm page serves its cached copy as a 200, not a shed), so the route split is also the cold breakdown. Measurement only: no API body, data, page or prompt output changes.
+
 ## [1.26.342] - 2026-11-14
 
 ### Changed
