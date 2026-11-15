@@ -103,24 +103,29 @@ v2.9.5 (2026-11-04): the proof of work line stops only when kind is present and 
 pow"), so a challenge without a kind field is still mined. Block ids unchanged.
 v2.9.6 (2026-11-06): the answer step handles HTTP 202 (accepted and pending). The rule text is ANSWER_202, one constant.
 Block ids unchanged.
+v2.9.7 (2026-11-15, minepoa v0.114 accept-queue): the 202 poll_url may arrive root-absolute (/api/job/ or a /chain/ segment
+then /api/job/) as well as the full https://minepoa.com/api/job/ form. ANSWER_202 now resolves poll_url against
+https://minepoa.com and still refuses any other host, any http URL, or a path without a leading slash before it sends the
+key. Block ids unchanged.
 Contract difference, do not change the method: this prompt reads the challenge with GET /api/hosted/challenge and the
 key in X-Api-Key. That GET works live. POA Tools' repo calls POST /api/hosted/challenge and says GET is not supported
 there. POA Tools got a 404 when it used POST."""
 
-VERSION = "v2.9.6"
-UPDATED_TS = "2026-11-06T23:40:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.7"
+UPDATED_TS = "2026-11-15T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "A 202 on the answer is accepted and pending: poll only an https poll_url on minepoa.com, and do not resubmit while it is pending or unknown."
+RELEASE_NOTE = "A 202 on the answer is accepted and pending: resolve poll_url to an https minepoa.com job path (/api/job/ or /chain/ then /api/job/), poll only that, and do not resubmit while it is pending or unknown."
 
 # 1.26.278: the async answer rule, one constant, so it can be replaced if POA Tools sends canonical wording before merge.
 # Contract difference, do not change the method: step 6 is GET /api/hosted/challenge with X-Api-Key. That GET works live.
 # POA Tools' repo uses POST /api/hosted/challenge and says GET is not supported there. POA Tools got a 404 when it used POST.
 ANSWER_202 = (
     "A 202 with job_id and poll_url means accepted and pending, not failed and not complete. "
-    "Follow poll_url only when it is https://minepoa.com/api/job/ on that same origin. Do not follow redirects. "
-    "If it is not that https path, do not send the key: stop and report unknown. "
-    "Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/... "
+    "Resolve poll_url against https://minepoa.com: use it as is when it already starts with https://minepoa.com/, and when it starts with a single leading slash read it as https://minepoa.com followed by that path. "
+    "Follow the resolved URL only when its scheme is https, its host is minepoa.com, and its path is /api/job/ or a /chain/ then a segment number then /api/job/. Do not follow redirects. "
+    "For any other host, any http URL, or a path without a leading slash, do not send the key: stop and report unknown. "
+    "Never send X-Api-Key to a URL that is not an https minepoa.com job path (/api/job/ or /chain/ then /api/job/). "
     "Poll with the same X-Api-Key header. "
     "Wait the larger of any Retry-After header and any retry_after_seconds in the JSON, and at least 5 seconds. Stop after 3 minutes. "
     "A timeout, a 404 or a 410 is unknown: stop and tell me. It is not a failure and not permission to resend. "

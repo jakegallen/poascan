@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.345] - 2026-11-15
+
+### Changed
+- Join prompt v2.9.7: the answer step's 202 poll_url rule (ANSWER_202) now accepts a root-absolute poll_url as well as the full https form. A 202 poll_url may arrive as https://minepoa.com/api/job/..., as /api/job/..., or as /chain/ then a segment number then /api/job/...; the agent resolves it against https://minepoa.com and follows it only when the resolved URL is an https minepoa.com job path, still refusing any other host, any http URL, or a path without a leading slash before it sends the key. This matches minepoa v0.114's accept-queue, which can return a root-absolute or chain-scoped job path. Prompt and MCP output change in lockstep with POASwap's combined prompt (new combined sha256 b290b6d8, 12,415 characters; join core sha256 91d7c28b, 8,300 characters; template sha256 0953fc59). No API body, data or route behaviour changes.
+
 ## [1.26.343] - 2026-11-14
 
 ### Added

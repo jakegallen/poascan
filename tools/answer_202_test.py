@@ -1,6 +1,7 @@
-"""Join prompt v2.9.6: the 202 answer rule is one constant, in both variants, with the trusted-origin check
-and an explicit no-resubmit. The key backup is not described as wallet activation, download, or restore.
-No network. Usage: python3 tools/answer_202_test.py"""
+"""Join prompt v2.9.7: the 202 answer rule is one constant, in both variants, resolving poll_url against
+https://minepoa.com (full https, root-absolute /api/job/ or /chain/ then /api/job/) and refusing any other
+host, http, or a path without a leading slash before it sends the key, with an explicit no-resubmit. The key
+backup is not described as wallet activation, download, or restore. No network. Usage: python3 tools/answer_202_test.py"""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("POASCAN_INDEXER", "0")
@@ -13,16 +14,16 @@ def check(n, c):
 
 R = OP.ANSWER_202
 full, con = OP.TEMPLATE, OP.CONNECTOR
-check("v2.9.6", OP.VERSION == "v2.9.6")
+check("v2.9.7", OP.VERSION == "v2.9.7")
 check("ANSWER_202 is one constant and both variants carry it once", full.count(R) == 1 and con.count(R) == 1 and "job_id and poll_url" in R)
 check("202 is accepted and pending, not failed and not complete", "accepted and pending, not failed and not complete" in R)
-check("trusted origin: https minepoa.com /api/job/ same origin, no redirects, do not send the key",
-      "https://minepoa.com/api/job/" in R and "same origin" in R and "Do not follow redirects." in R and "do not send the key" in R and "report unknown" in R)
-check("never send the key to any other poll_url",
-      "Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/..." in R
-      and full.count("Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/...") == 1
-      and con.count("Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/...") == 1
-      and "Never send X-Api-Key to a poll_url that is not https://minepoa.com/api/job/..." in AG.llms_txt())
+check("resolve poll_url against minepoa.com: full https, root-absolute /api/job/ or /chain/ job path, no redirects, refuse anything else",
+      "Resolve poll_url against https://minepoa.com" in R and "/api/job/" in R and "/chain/" in R
+      and "Do not follow redirects." in R and "do not send the key" in R and "report unknown" in R
+      and "any http URL" in R and "a path without a leading slash" in R)
+KEY = "Never send X-Api-Key to a URL that is not an https minepoa.com job path (/api/job/ or /chain/ then /api/job/)."
+check("never send the key to a URL that is not an https minepoa.com job path",
+      KEY in R and full.count(KEY) == 1 and con.count(KEY) == 1 and KEY in AG.llms_txt())
 check("wait the larger of Retry-After and retry_after_seconds, floor 5 seconds, stop after 3 minutes",
       "larger of any Retry-After header and any retry_after_seconds" in R and "at least 5 seconds" in R and "Stop after 3 minutes" in R)
 check("never resubmit while pending or unknown", "Never resubmit this epoch's answer while the job is pending or unknown." in R)
