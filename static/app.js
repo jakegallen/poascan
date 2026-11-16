@@ -524,14 +524,21 @@ var sf=$(".search");if(sf){var si=$("input",sf),sb=$("button",sf);
  si.addEventListener("blur",function(){setTimeout(function(){if(!sf.contains(D.activeElement)&&!si.value.trim())sf.classList.remove("open")},120)});
  si.addEventListener("keydown",function(e){if(e.key==="Escape"){si.value="";sf.classList.remove("open");sb.focus()}})}
 
-/* search typeahead: the "Find my agent" hint plus agent names (replaces /find) */
-$$("form[role=search]").forEach(function(f){var inp=$("input",f),box=$(".sopts",f);if(!inp||!box)return;var t=null,seq=0,sel=-1;
- function pick(i){var a=$$("a",box);sel=Math.max(-1,Math.min(a.length-1,i));a.forEach(function(x,j){x.classList.toggle("on",j===sel);x.setAttribute("aria-selected",j===sel?"true":"false")})}
- inp.addEventListener("input",function(){clearTimeout(t);var q=inp.value.trim();if(q.length<2||/^(poa1|[0-9a-fA-F]{6,}$|[Ee]?\d+$)/.test(q)){box.innerHTML="";sel=-1;return}
-  t=setTimeout(function(){var n=++seq;fetch("/fragment/suggest?q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(xs){if(n!==seq)return;sel=-1;
-   var esc=function(t){return String(t).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
-   box.innerHTML=xs.filter(function(x){return /^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(x.id)}).map(function(x){return '<a role="option" href="/address/'+esc(x.id)+'"><span class="idn" data-a="'+esc(x.id)+'"></span>'+esc(x.name)+'<small>'+esc(x.id.slice(0,6))+'…'+esc(x.id.slice(-4))+'</small></a>'}).join("");paintIds(box)}).catch(function(){})},180)});
- inp.addEventListener("keydown",function(e){var a=$$("a",box);if(!a.length)return;if(e.key==="ArrowDown"){e.preventDefault();pick(sel+1)}else if(e.key==="ArrowUp"){e.preventDefault();pick(sel-1)}else if(e.key==="Enter"&&sel>=0){e.preventDefault();location.href=a[sel].href}})});
+/* search typeahead: typed rows from /fragment/suggest (Agents by name or poa1 prefix, txs by hex prefix, epochs by
+   number), grouped by kind, arrow keys and Enter, Escape closes, a plain No matches line. Local archive only, 60 s cache. */
+$$("form[role=search]").forEach(function(f){var inp=$("input",f),box=$(".sopts",f),hint=$(".shint",f);if(!inp||!box)return;var t=null,seq=0,sel=-1,G={agent:"Agents",tx:"Transactions",epoch:"Epochs"};
+ var esc=function(t){return String(t).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+ function pick(i){var a=$$("a",box);sel=Math.max(-1,Math.min(a.length-1,i));a.forEach(function(x,j){x.classList.toggle("on",j===sel);x.setAttribute("aria-selected",j===sel?"true":"false")});if(sel>=0)a[sel].scrollIntoView({block:"nearest"})}
+ function clear(){box.innerHTML="";sel=-1;if(hint)hint.hidden=false}
+ function ok(x){return x&&(x.kind==="agent"&&/^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(x.id)||x.kind==="tx"&&/^[0-9a-f]{64}$/.test(x.id)||x.kind==="epoch"&&/^E\d{1,6}$/.test(x.id))}
+ function href(x){return x.kind==="agent"?"/address/"+esc(x.id):x.kind==="tx"?"/tx/"+esc(x.id):"/epoch/"+esc(x.id.slice(1))}
+ function row(x){var ag=x.kind==="agent",ic=ag?'<span class="idn" data-a="'+esc(x.id)+'"></span>':'<span class="sgk" aria-hidden="true">'+(x.kind==="tx"?"Tx":"E")+'</span>';
+  return '<a role="option" href="'+href(x)+'">'+ic+'<span class="sl1">'+esc(x.label||x.id)+'</span>'+(ag&&x.label!==x.id.slice(0,6)+"…"+x.id.slice(-4)?'<small class="sad">'+esc(x.id.slice(0,6))+'…'+esc(x.id.slice(-4))+'</small>':"")+(x.sub?'<small>'+esc(x.sub)+'</small>':"")+'</a>'}
+ inp.addEventListener("input",function(){clearTimeout(t);var q=inp.value.trim();if(q.length<2){clear();return}
+  t=setTimeout(function(){var n=++seq;fetch("/fragment/suggest?q="+encodeURIComponent(q),{credentials:"omit"}).then(function(r){return r.json()}).then(function(xs){if(n!==seq)return;sel=-1;
+   xs=(xs||[]).filter(ok);var h="",last="";xs.forEach(function(x){if(x.kind!==last){last=x.kind;h+='<p class="sgh">'+G[x.kind]+'</p>'}h+=row(x)});
+   box.innerHTML=h||'<p class="snone">No matches · Enter searches all</p>';if(hint)hint.hidden=true;paintIds(box)}).catch(function(){})},160)});
+ inp.addEventListener("keydown",function(e){var a=$$("a",box);if(e.key==="Escape"){if(box.innerHTML){e.preventDefault();clear()}return}if(!a.length)return;if(e.key==="ArrowDown"){e.preventDefault();pick(sel+1)}else if(e.key==="ArrowUp"){e.preventDefault();pick(sel-1)}else if(e.key==="Enter"&&sel>=0){e.preventDefault();location.href=a[sel].href}})});
 /* narrow header bar: short placeholder (the hint below says what search takes) */
 (function(){var i=$(".hdr .search input");if(!i)return;var full=i.placeholder;function fit(){i.placeholder=i.clientWidth&&i.clientWidth<240?"Search":full}fit();addEventListener("resize",fit)})();
 if(location.hash==="#find"){var fi=$$(".hsearch input,.search input").filter(function(x){return x.offsetParent!==null})[0];if(fi){var fs=fi.closest("form");if(fs&&fs.classList.contains("search"))fs.classList.add("open");fi.focus()}}

@@ -1618,12 +1618,9 @@ class H(BaseHTTPRequestHandler):
                 except ValueError: return self.send(400, json.dumps({"error": "bad cursor or address"}), "application/json")
             if path == "/fragment/join":   # the retired Join dialog (1.26.86); an old cached page that asks for it lands on /start
                 return self.send(301, "", extra={"Location": "/start"})
-            if path == "/fragment/suggest":   # header search typeahead: agent names from the local archive only (no upstream call)
-                q = (qs.get("q", [""])[0] or "").strip().lower()[:40]; out = []
-                if len(q) >= 2:
-                    nm = A.forum_names(); hits = [(n.lower().find(q), len(n), a, n) for a, n in nm.items() if n and q in n.lower()]
-                    out = [dict(id=a, name=n) for _, _, a, n in sorted(hits) if V.ADDR_RX.match(a or "")][:6]   # SC-014: addresses only
-                return self.send(200, json.dumps(out), "application/json", {"Cache-Control": "public, max-age=60"})
+            if path == "/fragment/suggest":   # header search typeahead: typed rows (agents, txs, epochs) from the local archive only (suggest.py)
+                from . import suggest as SGT
+                return self.send(200, json.dumps(SGT.suggest(qs.get("q", [""])[0] or ""), separators=(",", ":")), "application/json", {"Cache-Control": "public, max-age=60"})
             if path == "/fragment/lb":   # Rankings Load more
                 try: return self.send(200, json.dumps(V4.fragment(qs)), "application/json", {"Cache-Control": "no-store"})
                 except ValueError: return self.send(400, json.dumps({"error": "bad tab or offset"}), "application/json")

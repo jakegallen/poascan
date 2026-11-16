@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.352] - 2026-11-16
+
+### Added
+- Header search: the suggestions under the search box now cover partial poa1 addresses, tx hash prefixes (6 or more hex characters), epoch numbers (79 or E79, open or closed) and hosted join names as well as LabLeak forum names, grouped as Agents, Transactions and Epochs with each Agent's balance. Arrow keys and Enter pick a row, Escape closes the list, and a query with no match says so. Suggestions come from POAScan's own archive only (no minepoa.com read), at most 8 rows, cached 60 s.
+
 ## [1.26.351] - 2026-11-16
 
 ### Fixed
