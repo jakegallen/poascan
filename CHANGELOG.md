@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.350] - 2026-11-16
+
+### Changed
+- Agent profile refresh: the header carries Rank, Streak, Paid epochs, First seen and Last seen as facts (a fact with no data is left out). The Overview puts Score beside Rewards at equal height, Activity full width below, then a new Epochs card: reward, answer outcomes (passed, failed, expired with no jury) and jury seats per epoch from close records POAScan already holds, 20 rows then Show more. The Rewards chart opens a taller copy in the pop-out dialog with no fetch.
+
+### Fixed
+- The equal height pass capped a whole column of cards with overflow hidden, which hid the profile Activity map on desktop. It now caps only a card.
+
 ## [1.26.349] - 2026-11-16
 
 ### Added

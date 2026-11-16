@@ -734,6 +734,11 @@ def pop_btn(key, name):
     """Expand button for a chart card header."""
     return f'<button type="button" class="cpx" data-chart="{key}" aria-haspopup="dialog" aria-label="Expand {E(name)} chart" title="Expand">{ICON_EXPAND}</button>'
 
+def pop_btn_local(tid, name):
+    """Expand button for a chart drawn on this page: app.js opens the taller copy in <template id=tid> in the pop-out dialog
+    (no fetch; for per-Agent charts the pop-out data endpoint does not carry)."""
+    return f'<button type="button" class="cpx" data-cexp="{E(tid)}" data-title="{E(name)}" aria-haspopup="dialog" aria-label="Expand {E(name)} chart" title="Expand">{ICON_EXPAND}</button>'
+
 def _fit(value):
     """Inline sizing hints: --nc number characters, --fx px taken by unit, ≈$ and gaps (12px mono is ~7.2px a character)."""
     txt = lambda cls: re.sub(r"<[^>]+>", "", (re.search(rf'<span class="{cls}[^"]*"[^>]*>(.*?)</span>', value) or [None, ""])[1])

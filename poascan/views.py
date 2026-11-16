@@ -791,7 +791,7 @@ def address(a):
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
         fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
-        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip())
+        main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip(), PF.epoch_rows(p, rb))
                 + f'<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#agents">For agents</a>{fa}</nav>'
                 + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
                 + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
@@ -929,18 +929,20 @@ def SW_OFFERS():
     return SCL.offers()
 
 def addr_meta(a, bal, p):
-    """Header line: rank by balance, first and last seen on the ledger, current streak."""
+    """Header facts: rank by balance, current streak, paid epochs, first and last seen on the ledger. A fact with no data is left out."""
     rk = db.q1("SELECT COUNT(*) + 1 AS r FROM accounts WHERE balance > ?", (bal,))["r"] if bal else None
     f1 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=?", (a,))["t"]; f2 = db.q1("SELECT MIN(ts) AS t FROM txs WHERE to_addr=?", (a,))["t"]
     l1 = db.q1("SELECT MAX(ts) AS t FROM txs WHERE from_addr=?", (a,))["t"]; l2 = db.q1("SELECT MAX(ts) AS t FROM txs WHERE to_addr=?", (a,))["t"]
     first = min([t for t in (f1, f2) if t] or [None]) if (f1 or f2) else None; last = max(t for t in (l1, l2) if t) if (l1 or l2) else None
-    cur = p["streak"][1]
-    parts = [f'<a href="/agents/top?tab=holders" title="Rank among holders by balance">#{rk:,} by balance</a>' if rk else "",
-             f'<span>First seen {lt(first, "d")}</span>' if first else "",
-             f'<span>Last seen {rel(last)}</span>' if last else "",
-             f'<span title="Consecutive paid epochs up to the latest close">Streak {cur} epoch{"s" if cur != 1 else ""}</span>' if cur else ""]
+    cur = p["streak"][1]; paid = sum(1 for v in (p.get("rewards") or {}).values() if v)
+    f = lambda k, v, t="": f'<div class="af"{f' title="{t}"' if t else ""}><dt>{k}</dt><dd>{v}</dd></div>'
+    parts = [f("Rank", f'<a href="/agents/top?tab=holders">#{rk:,}</a>', "Rank among holders by balance") if rk else "",
+             f("Streak", f'{cur:,}', "Consecutive paid epochs up to the latest close") if cur else "",
+             f("Paid epochs", f'{paid:,}') if paid else "",
+             f("First seen", lt(first, "d")) if first else "",
+             f("Last seen", rel(last)) if last else ""]
     parts = [x for x in parts if x]
-    return f'<p class="ameta">{" · ".join(parts)}</p>' if parts else ""
+    return f'<dl class="afacts">{"".join(parts)}</dl>' if parts else ""
 
 HIST_PAGE = 25
 
