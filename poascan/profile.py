@@ -4,7 +4,7 @@ parts, with jury and standing facts), rewards per epoch, and an hour by day acti
 POAScan's archive: Score and facts from governance.scores (cached 300 s), rewards from the close records, activity from the txs table (one indexed read per page)."""
 import time
 from . import db, marks as MK
-from .ui import E, card, copy, name_link, intc, short, bars
+from .ui import E, card, copy, name_link, intc, short, bars, table, poa, pop_btn_local
 
 LEVEL = {"safe": ("Safe", "ok"), "watch": ("Watch", "warn"), "atrisk": ("At risk", "bad"), "system": ("System", ""), "norecord": None}
 
@@ -80,8 +80,47 @@ def step(n, mx):
 def txs(n):
     return f'{n} tx{"" if n == 1 else "s"}'
 
-def overview(a, row, rew_items, tip=""):
-    """The Overview's signature row: Score beside rewards per epoch and the activity map."""
-    rb = bars(rew_items, colors=("gold",)) if rew_items else '<p class="empty">No rewards yet</p>'
-    side = card("Rewards", rb, '<span class="lbl">Per epoch</span>', cls="prew") + card("Activity", activity(a), '<span class="lbl">Txs by hour · <span class="phz">UTC</span></span>', cls="pact")
-    return f'<div class="grid2 pgrid">{score_card(row, tip)}<div class="side">{side}</div></div>'
+def overview(a, row, rew_items, tip="", ep_rows=None):
+    """The Overview: Score beside rewards per epoch (equal height), the activity map beside the Agent's record, then every
+    epoch it touched (newest first; app.js shows 20 and a Show more button). 1.26.FEV: the side column no longer stacks two
+    cards, so the equal height pass never clips the activity map."""
+    rb = bars(rew_items, height=210, colors=("gold",)) if rew_items else '<p class="empty">No rewards yet</p>'
+    big = bars(rew_items, height=320, colors=("gold",)) if rew_items else ""
+    ex = (f'<template id="cx-rew">{big}</template>' + pop_btn_local("cx-rew", "Rewards per epoch")) if big else ""
+    top = (f'<div class="grid2 pgrid evno">{score_card(row, tip)}'
+           + card("Rewards", rb, '<span class="lbl">Per epoch</span>' + ex, cls="prew") + '</div>')
+    act = card("Activity", activity(a), '<span class="lbl">Txs by hour · <span class="phz">UTC</span></span>', cls="pact")
+    return top + act + epochs_card(ep_rows or [])
+
+def epoch_rows(p, rb):
+    """One row per epoch the Agent touched: reward, its answers' outcomes and its jury seats, keyed by lifetime close number
+    (segments.gkey) so rewards and the selected segment's close records line up. Only what the close records hold."""
+    from . import segments as SG
+    out = {}
+    def r(g): return out.setdefault(g, dict(g=g, reward=None, passed=0, failed=0, expired=0, answered=False, seats=0, aligned=0))
+    for g, v in rb.items(): r(int(g))["reward"] = v
+    for e in p.get("answered") or []: r(SG.gkey(e))["answered"] = True
+    for e, _ans, ok, oc in p.get("settled") or []:
+        x = r(SG.gkey(e)); x["answered"] = True
+        if oc == "expired_no_jury": x["expired"] += 1
+        elif ok: x["passed"] += 1
+        else: x["failed"] += 1
+    for e, al in p.get("jury") or []:
+        x = r(SG.gkey(e)); x["seats"] += 1; x["aligned"] += 1 if al else 0
+    return [out[g] for g in sorted(out, reverse=True)]
+
+def _answers(x):
+    parts = [(k.capitalize() if x[k] == 1 else f"{x[k]} {k}") for k in ("passed", "failed", "expired") if x[k]]
+    if parts: return " · ".join(parts)
+    return "Answered" if x["answered"] else '<span class="na">···</span>'
+
+def epochs_card(rows):
+    """Epoch by epoch history: Epoch, Reward, Answers (passed, failed, expired with no jury), Jury (aligned / seats)."""
+    if not rows: return ""
+    from . import segments as SG
+    body = table(["Epoch", "Reward", "Answers", "Jury"],
+                 [[f'<a href="{SG.ep_href(x["g"])}">{SG.ep_label(x["g"])}</a>' + (' <span class="tag warn">Unconfirmed</span>' if SG.unconfirmed_g(x["g"]) else ""),
+                   poa(x["reward"], mined=True) if x["reward"] is not None else '<span class="na">···</span>', _answers(x),
+                   f'{x["aligned"]} / {x["seats"]}' if x["seats"] else '<span class="na">···</span>'] for x in rows],
+                 cls="eptab", pri=(0, 1, 2), usd=(1,))
+    return card(f"Epochs · {len(rows)}", body, cls="pepochs", id="epochs")
