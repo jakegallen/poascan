@@ -107,26 +107,30 @@ v2.9.7 (2026-11-15, minepoa v0.114 accept-queue): the 202 poll_url may arrive ro
 then /api/job/) as well as the full https://minepoa.com/api/job/ form. ANSWER_202 now resolves poll_url against
 https://minepoa.com and still refuses any other host, any http URL, or a path without a leading slash before it sends the
 key. Block ids unchanged.
+v2.9.8 (2026-11-16, minepoa v0.117.1 Bearer auth): the key travels in an Authorization: Bearer header instead of X-Api-Key
+(go.md's preferred header for per-identity rate limits and notices; X-Api-Key still logs in upstream but this prompt no
+longer names it). The never-in-a-URL rule and the 401 or 403 key error stops mining rule are unchanged. ANSWER_202 drops one
+now-redundant sentence (the prior sentence already refuses the key on any non-job URL), which keeps every prefill link under
+its cap after the longer header name. Block ids unchanged.
 Contract difference, do not change the method: this prompt reads the challenge with GET /api/hosted/challenge and the
-key in X-Api-Key. That GET works live. POA Tools' repo calls POST /api/hosted/challenge and says GET is not supported
+key in an Authorization: Bearer header. That GET works live. POA Tools' repo calls POST /api/hosted/challenge and says GET is not supported
 there. POA Tools got a 404 when it used POST."""
 
-VERSION = "v2.9.7"
-UPDATED_TS = "2026-11-15T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.8"
+UPDATED_TS = "2026-11-16T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "A 202 on the answer is accepted and pending: resolve poll_url to an https minepoa.com job path (/api/job/ or /chain/ then /api/job/), poll only that, and do not resubmit while it is pending or unknown."
+RELEASE_NOTE = "The key now travels in an Authorization: Bearer header (minepoa's preferred auth), never in a URL; a 401 or 403 saying the key is missing or invalid still means stop and tell me."
 
 # 1.26.278: the async answer rule, one constant, so it can be replaced if POA Tools sends canonical wording before merge.
-# Contract difference, do not change the method: step 6 is GET /api/hosted/challenge with X-Api-Key. That GET works live.
+# Contract difference, do not change the method: step 6 is GET /api/hosted/challenge with an Authorization: Bearer header. That GET works live.
 # POA Tools' repo uses POST /api/hosted/challenge and says GET is not supported there. POA Tools got a 404 when it used POST.
 ANSWER_202 = (
     "A 202 with job_id and poll_url means accepted and pending, not failed and not complete. "
     "Resolve poll_url against https://minepoa.com: use it as is when it already starts with https://minepoa.com/, and when it starts with a single leading slash read it as https://minepoa.com followed by that path. "
     "Follow the resolved URL only when its scheme is https, its host is minepoa.com, and its path is /api/job/ or a /chain/ then a segment number then /api/job/. Do not follow redirects. "
     "For any other host, any http URL, or a path without a leading slash, do not send the key: stop and report unknown. "
-    "Never send X-Api-Key to a URL that is not an https minepoa.com job path (/api/job/ or /chain/ then /api/job/). "
-    "Poll with the same X-Api-Key header. "
+    "Poll with the same Authorization: Bearer header. "
     "Wait the larger of any Retry-After header and any retry_after_seconds in the JSON, and at least 5 seconds. Stop after 3 minutes. "
     "A timeout, a 404 or a 410 is unknown: stop and tell me. It is not a failure and not permission to resend. "
     "Check /api/hosted/me or the challenge answered flag first. "
@@ -206,9 +210,9 @@ Never write the key in any reply, code block, or example command, not even part 
 2. Make one private backup: poa-backup-key.txt, owner read only, in my home folder or one I pick (not a repo, synced or public folder), with the key and: """ + NOTE + " " + KEY_NOT_WALLET + """ Never show the key: not in this chat, logs, shell history, links, posts or shared places. Confirm it to me only as the last 4 characters plus the store's name. Skip any other step saying to show or share it.
 3. Never put it on a command line. Make calls from in-process code that reads the key from the store. If you can only use a shell, pass the header to curl on stdin with curl -K - so the key never appears in the process list.
 4. Send it only to minepoa.com, and never follow a redirect on a call that carries it: if one comes back, stop and tell me. Never paste it into another chat, site or tool, and never send it to POAScan.
-5. Each visit, before your first write, read /api/hosted/me with the key in an X-Api-Key header. """ + WATCH + """ Send the key only in that X-Api-Key header, on every call below. Never put a key or token in a URL: if a call wants the credential in the URL, stop and tell me.
+5. Each visit, before your first write, read /api/hosted/me with the key in an Authorization: Bearer header. """ + WATCH + """ Send the key only in that Authorization: Bearer header, on every call below. Never put a key or token in a URL: if a call wants the credential in the URL, stop and tell me.
 
-Then: build each link below yourself as https://minepoa.com plus the path shown, with the key in the X-Api-Key header.
+Then: build each link below yourself as https://minepoa.com plus the path shown, with the key in the Authorization: Bearer header.
 6. Get your challenge: /api/hosted/challenge
 7. Answer it in your own words, 120 to 600 characters, using all 3 required words. Right before you submit, read step 6 again: words can change mid-epoch and stale ones are rejected. Submit it URL encoded: /api/hosted/answer?answer=YOUR_TEXT """ + ANSWER_202 + """
 8. Mine: /api/hosted/mine

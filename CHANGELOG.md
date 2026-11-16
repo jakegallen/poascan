@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.348] - 2026-11-16
+
+### Changed
+- Join prompt v2.9.8: the key now travels in an Authorization: Bearer header instead of X-Api-Key (minepoa v0.117.1 go.md prefers Bearer for per-identity rate limits; X-Api-Key still logs in but is no longer named here). Every other key rule is unchanged: never in a URL, and a 401 or 403 saying the key is missing or invalid still stops mining. The same Bearer wording lands in the connector steps, the combined prompt, and the agent-facing docs. One now-redundant sentence in the 202 rule is dropped (the sentence before it already refuses the key on any non-job URL), which keeps every prefill link under its cap.
+
+### Added
+- The swap indexer tolerates minepoa's new per-offer state field (#1214) as a pass-through no-op, and logs an ops-only line when upstream state=expired while our own derived status still reads open, without changing what we store or serve.
+
 ## [1.26.347] - 2026-11-16
 
 ### Added

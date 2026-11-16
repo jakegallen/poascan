@@ -87,7 +87,7 @@ check("no key in any link or prefill on /start", not KQ.search(pagehtml) and not
 LEAK = ("lableak", "grading-guide", "grading guide")
 check("no link whose path holds a leak term, in the prompts and the /start steps", not any(x in (t + pagehtml).lower() for t in texts.values() for x in LEAK)
       and not any(v and any(x in v.lower() for x in LEAK) for _, v, _n in S.STEPS))
-check("the prompt never lets the agent show the key: header only, stop on a URL credential", all("X-Api-Key" in t or "poa_" in t for t in texts.values())
+check("the prompt never lets the agent show the key: header only, stop on a URL credential", all("Authorization: Bearer" in t or "poa_" in t for t in texts.values())
       and "Never put a key or token in a URL" in texts["full"] and "never show it in this chat" in texts["full"] and "direct reply" not in texts["full"] + texts["connector"])
 
 # 1.26.244: every served prompt, Ask prompt and llms text, sitewide: no key or token in any URL or query, no grading guide link
@@ -106,7 +106,7 @@ badw = [k for k, v in served.items() if "lableak/#/a/work" in v or re.search(r"[
 check(f"no grading guide link and no key placeholder in a link in any served text {badw}", not badw)
 keyed = [t for t, v in asks.items() if "SAVED_KEY" in v]
 check("every Ask prompt that uses the key says header only and stops on a 401 or 403 or a URL credential",
-      keyed and all("only in an X-Api-Key header" in asks[t] and "401 or 403" in asks[t] and "show it in this chat" in asks[t] for t in keyed))
+      keyed and all("only in an Authorization: Bearer header" in asks[t] and "401 or 403" in asks[t] and "show it in this chat" in asks[t] for t in keyed))
 check("v2.9.4: the key error line once in both join variants", all(t.count(__import__("poascan.onboarding_prompt", fromlist=["x"]).AUTH_FIX) == 1 for t in texts.values())
       and "401 or 403 saying the key is missing or invalid" in ct)
 
@@ -126,7 +126,7 @@ pm = unescape(S.go_block(by["muse"]))
 check("halted: the not supported panel has no join link (it points to apps that run code)", "npj" not in pm and "data-npjoin" not in pm)
 check("halted: the notice in the Ask dialog too", P in unescape(J.ask_modal()))
 hf = S.hash_fields()
-check("the prompt is v2.9.7: template 0953fc59, combined b290b6d8", hf["template_sha256"].startswith("0953fc59") and hf["combined_sha256"].startswith("b290b6d8"))
+check("the prompt is v2.9.8: template 32f96b73, combined f9205f0f", hf["template_sha256"].startswith("32f96b73") and hf["combined_sha256"].startswith("f9205f0f"))
 check("no em or en dash", not re.search("[\u2013\u2014]", h + cx + ph + pc + js[js.index("1.26.248"):js.index("1.26.248") + 3000] + js[js.index("function PZ"):js.index("function PZ") + 1500]))
 
 # 1.26.241: server render for every app (the default Claude included): nothing for a lane that does not apply
