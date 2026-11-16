@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.351] - 2026-11-16
+
+### Fixed
+- Consistency at 390 px: long release tags and notes on Network and long footnote links (the tx page Raw API link) wrap inside the card instead of running past it, and the epoch header's previous and next arrows sit together at the right of Ask agent.
+
 ## [1.26.350] - 2026-11-16
 
 ### Changed
