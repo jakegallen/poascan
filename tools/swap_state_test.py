@@ -1,8 +1,6 @@
-"""Swap page state and signed feed backfill (1.26.68 reports).
-* /swap/<offer_id>: a terminal API status (expired, cancelled, filled) always wins over an inferred in-flight stage
-  (Fill landing); the page reads the same record as /api/v1/swaps/<offer_id>; every offer's page tag matches the API.
-  Case: offer de1ddefb (live 1.26.68), expired with a swap-fill tx that never finalized, read Fill landing.
-* POASwap links use the canonical https://poaswap.io/status/<offer_id> (and status?address=<poa1>), never /track?offer=.
+"""Swap API state and signed feed backfill (1.26.68 reports).
+* /api/v1/swaps/<offer_id> keeps its terminal status (case: offer de1ddefb, expired with a swap-fill tx that never
+  finalized). The /swap page moved to POASwap. No /track?offer= link anywhere.
 * /api/v1/notices/verified: distinct signed txs that share a version name are kept (no txid repeats) and labelled with a
   short txid; /network releases show the short txid for a repeated name.
 * Pending signed records are retried over time at the same light load (at most FETCH_PER_RUN real reads per 10 min run):
@@ -19,7 +17,7 @@ def check(name, ok):
 
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "s.db"); os.environ["POA_BASE"] = "http://127.0.0.1:9"
 import fixture; fixture.seed()
-from poascan import db, offer as OF, swapclient as SC, swap as SWM, signed as S, indexer as I, views as V
+from poascan import db, swapclient as SC, swap as SWM, signed as S, indexer as I, views as V
 def no_upstream(*a, **k): raise AssertionError("upstream read")
 I.fetch = no_upstream
 
@@ -34,49 +32,11 @@ def tag(h):
     m = re.search(r'<span>Status</span><div><span class="tag[^"]*">([^<]+)</span>', h); return m.group(1) if m else None
 put(SW, FX["events"])
 
-# ---------------- the reported offer: expired, a fill seen but never final ----------------
-api = SC.offer(OID); t, h = OF.page_body(OID)
+# ---------------- the reported offer: the API record wins (the /swap page moved to POASwap) ----------------
+api = SC.offer(OID)
 check("fixture: the API record says expired and carries a non-final swap-fill", api["offer"]["status"] == "expired"
       and any(e["kind"] == "swap-fill" and not e["final"] for e in api["events"]))
-check("de1ddefb page reads Expired, not Fill landing", tag(h) == "Expired" and "Fill landing" not in h)
-check("expired next steps: stop, don't take or pay; nothing about a landing fill", "Expired: stop." in h and "while it lands" not in h and "A fill tx is landing" not in h)
-check("stage history keeps the fill tx as Fill submitted, not final, then Expired",
-      "Fill submitted, not final" in h and '<span class="dim">not final</span>' in h and h.index("Fill submitted, not final") < h.rindex(">Expired<")
-      and '<span class="warn">pending</span>' not in h and "Fill attempt" not in h and "never final" not in h)
-check("the page's status is the API record's (same source as /api/v1/swaps/<id>)", OF.stage(SWM.api("/api/swaps/" + OID, {})[0]) == "expired" == OF.stage(api))
-
-# ---------------- every terminal state wins; only live offers infer Fill landing ----------------
-FILL = lambda n: [dict(txid=(n * 32)[:64], kind="swap-fill", addr=SW["maker"], ts=now - 30, final=False)]
-base = dict(SW, taker=None, fill_txid=None, fill_ts=None, ext_ref=None, cancel_txid=None, cancel_ts=None)
-cases = [("cancelled", dict(status="cancelled", cancel_txid="c0" * 32, cancel_ts=now - 60, expires_ts=now + 3600), "Cancelled"),
-         ("filled", dict(status="filled", taker=SW["maker"], fill_txid="f0" * 32, fill_ts=now - 60, expires_ts=now + 3600), "Filled"),
-         ("open, past expiry", dict(status="open", expires_ts=now - 60), "Expired"),
-         ("delisted, past expiry", dict(status="delisted", expires_ts=now - 60), "Expired"),
-         ("open", dict(status="open", expires_ts=now + 3600), "Fill landing"),
-         ("delisted before expiry", dict(status="delisted", expires_ts=now + 3600), "Fill landing")]
-for i, (name, kw, want) in enumerate(cases):
-    oid = f"{i:02x}" * 32; put(dict(base, offer_id=oid, **kw), FILL(f"{i + 10:02x}"))
-    got = tag(OF.page_body(oid)[1])
-    check(f"{name} with a non-final fill reads {want} (got {got})", got == want)
-for st in OF.TERMINAL:
-    check(f"stage(): terminal {st} is never overridden by events", OF.stage({"offer": {"status": st}, "events": FILL("ee")}) == st)
-
-# ---------------- scan: every offer the site knows, page tag vs API status ----------------
-mism = []
-for r in SC.offers():
-    a = SC.offer(r["offer_id"]); st = a["offer"]["status"]; lab = tag(OF.page_body(r["offer_id"])[1])
-    live = st in ("open", "delisted") and OF.stage(a) == "filling"
-    if r["status"] != st or lab != (OF.LABEL["filling"] if live else OF.LABEL.get(st, st.capitalize())): mism.append((r["offer_id"][:8], st, lab))
-check(f"every offer: page status matches the API, Fill landing only on live offers ({len(SC.offers())} offers, mismatches {mism})", not mism and len(SC.offers()) >= 7)
-
-# ---------------- canonical POASwap status links ----------------
-check("status_url: https://poaswap.io/status/<64 hex lowercase>", OF.status_url(OID.upper()) == "https://poaswap.io/status/" + OID
-      and OF.status_url("nope") is None and OF.status_url("ab" * 33) is None)
-check("addr_status_url: https://poaswap.io/status?address=<poa1>", OF.addr_status_url(SW["maker"]) == "https://poaswap.io/status?address=" + SW["maker"] and OF.addr_status_url("x") is None)
-check("/swap page links the canonical status page, never /track?offer=", f'href="https://poaswap.io/status/{OID}"' in h and "track?offer=" not in h and ">Status on POASwap ↗<" in h)
-sc = V.swaps_card(SW["maker"])
-check("address Swaps card: per-offer Status links, an address-level Status link in the header, no /track", f'href="https://poaswap.io/status/{OID}"' in sc
-      and f'href="https://poaswap.io/status?address={SW["maker"]}"' in sc and "track?offer=" not in sc and ">Status ↗<" in sc)
+check("the module API serves the same expired record", SWM.api("/api/swaps/" + OID, {})[0]["offer"]["status"] == "expired")
 src = "".join(open(os.path.join(ROOT, d, f), encoding="utf-8").read() for d in ("poascan", "static") for f in os.listdir(os.path.join(ROOT, d)) if f.endswith((".py", ".txt", ".js", ".json", ".html")))
 check("no /track?offer= link left in the code or static docs", "track?offer=" not in src)
 

@@ -16,7 +16,6 @@ from . import chartpop as CP
 from . import protocol as PT
 from . import standing as SD
 from . import governance as GV, gradingview as GVW
-from . import offer as OF
 from . import kin as KN
 from . import segments as SG
 from . import htmlcache as HC
@@ -499,12 +498,6 @@ def page(path, qs):
     if m: return V.tx(m.group(1).lower())
     m = re.match(r"^/address/(poa1\w+)$", path)
     if m: return V.address(m.group(1))
-    m = re.match(r"^/(?:swap|offer)/([A-Za-z0-9_-]{1,128})$", path)   # one swap offer's status, read only (offer.py); /offer/<id> is the same page
-    if m:
-        r = OF.page_body(m.group(1))
-        if r is None: return (404, V.page("Swap offer not found", V.card("Swap offer", V.na(f"POAScan holds no swap offer <code>{V.E(m.group(1))}</code>. Offers appear here once the network lists them.")), "/txs"))
-        return V.page(r[0], r[1], "/txs")
-    if path == SW.config.PAGE_PATH: return SW.page(path)
     if path in ("/start", "/join", "/onboarding"):
         from . import startv2 as SV2
         if SV2.on(): return SV2.page(V.page)   # preview only: POASCAN_STARTV2=1
@@ -563,7 +556,7 @@ CHECKIN_LIMIT = AG.Limiter(0.05, 12)  # GET /j/...: signup check-ins, per IP, in
 # A person reading pages stays far inside it; a crawler walking every address gets 429 with Retry-After. /api, /healthz,
 # /static, /fragment and everything else are not limited here, so API mirrors (POASwap polls every 60 s and 120 s) never see it.
 PAGE_LIMIT = AG.Limiter(float(os.environ.get("POASCAN_PAGE_RATE", "0.5")), int(os.environ.get("POASCAN_PAGE_BURST", "60")))
-PAGE_LIMITED = re.compile(r"^/(address|tx|swap|offer)/[^/]+$")
+PAGE_LIMITED = re.compile(r"^/(address|tx)/[^/]+$")
 # 1.26.252: a syntactically valid but unknown /tx/<hash> or /address/<poa1> 404 is cacheable at the edge (bots probe random
 # ones); the strict patterns keep malformed addresses, swap offers, /ops and every other 404 on no-store.
 CACHEABLE_404 = re.compile(r"^/(?:tx/[0-9a-fA-F]{64}|address/poa1[1-9A-HJ-NP-Za-km-z]{20,60})$")
@@ -596,7 +589,10 @@ MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/grow
 # The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
 # price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
 OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
-def offsite(path): return OFFSITE.get(path.rstrip("/") or "/")
+OFFSITE_RX = re.compile(r"^/(?:swap|offer)/[^/]+$")   # one swap offer's old page: POASwap holds swaps now
+def offsite(path):
+    p = path.rstrip("/") or "/"
+    return OFFSITE.get(p) or ("https://poaswap.io/" if OFFSITE_RX.match(p) else None)
 GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "offset", "sort", "dir"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
            "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"},
@@ -1535,9 +1531,6 @@ class H(BaseHTTPRequestHandler):
                     d["lite"] = True
                 if path == "/api/summary" and not lite: hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **hd))
-            if path in SW.STATIC:   # the swap module's own assets, same URLs as before
-                f, ct = SW.STATIC[path]
-                return self.send(200, open(f, "rb").read(), ct, {"Cache-Control": IMMUTABLE if "v" in qs else "public, max-age=3600"})
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")

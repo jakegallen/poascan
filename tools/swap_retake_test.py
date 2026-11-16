@@ -1,10 +1,8 @@
 """Swap take wording: after the first real fill, a failed or timed out take can still create a nonce account
 and a second take broadcasts the held payment. So no surface may tell an Agent to re-call swap-take until filled or that
-re-calling is safe. The BUY template and the FAQ say: after pending_receipt, take again once, only on receipt_ready true;
-after a failure or timeout, check status before any re-take; never loop; stop at Filled, Expired or Failed.
-Checks the source tree and every rendered surface (BUY template live and coming soon, /about with its FAQ JSON-LD,
-llms.txt, llms-full.txt, openapi.json, openapi-gpt.json, MCP tools/list and prompts/list).
-The BUY_TOKEN template reads swap-receipt at most once every 30 seconds for up to 10 minutes, then stops and reports.
+re-calling is safe. The BUY templates and the swap FAQ moved to POASwap with the swap page.
+Checks the source tree and every rendered surface (/about with its FAQ JSON-LD, llms.txt, llms-full.txt, openapi.json,
+openapi-gpt.json, MCP tools/list and prompts/list).
 Usage: python3 tools/swap_retake_test.py"""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -35,30 +33,6 @@ for d, ds, fs in os.walk(ROOT):
         hits += [(os.path.relpath(p, ROOT), h) for h in bad(t)]
 check(f"no re-call until filled / re-calling is safe wording in the tree {hits}", not hits)
 
-# ---- the BUY template, live and coming soon
-from poascan.swap import prompts as P, config as C, faq as F
-for live in (True, False):
-    C.SWAPS_LIVE = live; buy = P.templates()["buy"]
-    check(f"BUY (live={live}): no banned wording", not bad(buy))
-    check(f"BUY (live={live}): take again once, only on receipt_ready true", "call swap-take again once, only when" in buy and "receipt_ready true" in buy)
-    check(f"BUY (live={live}): status before any re-take, never loop, stop states", "check status" in buy and "before any re-take" in buy
-          and "Never loop." in buy and "Stop at Filled, Expired or Failed." in buy)
-    check(f"BUY (live={live}): keeps the payment rule, no dashes, no referral code", "Never send payment outside the network" in buy
-          and not re.search("[\u2013\u2014]", buy) and "referral" not in buy.lower().replace("don't use any referral", ""))
-    check(f"BUY (live={live}): no new POASwap mention, no fee line", "poaswap" not in buy.lower() and "1%" not in buy)
-    tok = P.templates()["buy_token"]
-    check(f"BUY_TOKEN (live={live}): no unbounded poll until receipt_ready", not re.search(r"poll[^.]{0,60}until receipt_ready", tok, re.I))
-    check(f"BUY_TOKEN (live={live}): swap-receipt read at most once every 30 seconds for up to 10 minutes", "at most once every 30 seconds for up to 10 minutes" in tok)
-    check(f"BUY_TOKEN (live={live}): stops and reports after the bound, no broadcast, never keeps polling", "stop and tell me" in tok
-          and "don't broadcast" in tok and "never keep polling" in tok)
-    check(f"BUY_TOKEN (live={live}): no dashes, no POASwap mention", not re.search("[\u2013\u2014]", tok) and "poaswap" not in tok.lower())
-qa = dict((q, a) for q, a in F.PAGE["qa"] if isinstance(a, str))
-tout = qa["What if a take times out?"]; how = qa["How does a buy work?"]
-check("FAQ timeout answer: status before any re-take, why, never loop, stop states", "Check status before any re-take" in tout and "nonce account" in tout
-      and "Never loop." in tout and "Stop at Filled, Expired or Failed." in tout and not bad(tout))
-check("FAQ buy answer: take again once, only on receipt_ready true", "call swap-take again once, only when a swap-receipt read shows receipt_ready true" in how and not bad(how))
-check("FAQ answers: no dashes, no POASwap, no fee", not re.search("[\u2013\u2014]", tout + how) and "poaswap" not in (tout + how).lower() and "1%" not in tout + how)
-
 # ---- rendered surfaces from a running server
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
@@ -74,7 +48,7 @@ try:
         try: get(base + "/api/health"); break
         except Exception: time.sleep(0.2)
     c, about = get(base + "/about")
-    check(f"/about renders ({c}) with the new FAQ wording", c == 200 and "Check status before any re-take" in about and "receipt_ready true" in about)
+    check(f"/about renders ({c}); the swap FAQ moved to POASwap", c == 200 and "How swaps work" not in about)
     for path in ("/about", "/llms.txt", "/llms-full.txt", "/openapi.json", "/openapi-gpt.json"):
         c, t = get(base + path); check(f"{path} ({c}): no banned wording", c == 200 and not bad(t))
     for m in ("tools/list", "prompts/list"):

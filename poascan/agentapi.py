@@ -113,10 +113,6 @@ def _addr(args):
     if not ADDR_RX.match(a): raise ToolError("address must be a poa1... address")
     return a
 
-def _swap(r, url):
-    r = {k: v for k, v in r.items() if k not in ("fee_bp",)}
-    r["url"] = url; return r   # swapping lives on POASwap (url from its status); the data stays on POAScan's API
-
 def _swap_url(sw=None): return (sw or SC.status()).get("url") or "https://poaswap.io/start"
 
 def t_summary(args):
@@ -450,18 +446,6 @@ def t_unlocks(args):
     return dict(circulating=sp.get("spendable"), locked=sp.get("locked"), vesting_epochs=sp.get("vesting_epochs"),
                 circulating_basis=sp.get("circulating_basis"), locked_confirmed=sp.get("locked_confirmed"), schedule=rows[:lim], total_rows=len(rows), url=BASE + "/unlocks")
 
-def t_swaps(args):
-    stt = str(args.get("status") or "open"); lim = _int(args, "limit", 20, 1, 200)
-    rows = SC.offers(None if stt == "all" else stt)
-    sw = SC.status()
-    return dict(status=stt, count=len(rows), offers=[_swap(r, _swap_url(sw)) for r in rows[:lim]], swaps_status=sw, safety=SAFETY)
-
-def t_swap(args):
-    oid = str(args.get("offer_id") or "").strip().lower()
-    d = SC.offer(oid) if re.fullmatch(r"[a-z0-9_-]{1,128}", oid) else None   # /api/v1/swaps/<offer_id>
-    if not d: raise ToolError("offer not found")
-    return dict(offer=_swap(d["offer"], _swap_url()), events=d["events"], safety=SAFETY)
-
 def t_census(args):
     s = G.census_summary(); lb = G.leaderboard(); lim = _int(args, "limit", 15, 1, 100); ck = G.census_clock()
     return dict(last_run=ck["last_run"], next_run=ck["next_run"], stale=ck["stale"], agents=s["n"], accounts=s["n"], disclosed=s["disclosed"], disclosure_rate=s["disclosure_rate"],
@@ -686,15 +670,6 @@ TOOLS = [  # name, title, description, input schema, fn
      "Network-wide vesting calendar: POA unlocking at each upcoming epoch close and circulating supply after it. Rewards vest over params.vesting_epochs. "
      "Use it for 'how much POA unlocks next' or future circulating supply. For one address's spendable and locked split use get_address.",
      S(limit=LIMD(20, 500, "upcoming closes")), t_unlocks),
-    ("list_swap_offers", "Swap offers",
-     "POA swap offers seen on the network, newest first, with the current swap availability. Read-only: it never places or takes offers. "
-     "Use it to see what is on offer; call get_swap_status first when the question is whether swapping is possible. Each offer carries money_moved as in get_swap_offer.",
-     S(status={"type": "string", "enum": ["open", "filled", "cancelled", "expired", "delisted", "refunded", "all"], "default": "open", "description": "offer status to list (default open); delisted = gone from the network's book before expiry; refunded = open at a segment boundary, escrow returned there (refund_basis)"}, limit=LIMD(20, 200, "offers")), t_swaps),
-    ("get_swap_offer", "Swap offer",
-     "One swap offer by offer_id with its fill and cancel events. Use it after list_swap_offers to inspect a single offer. "
-     "money_moved: true when filled, null when a fill was submitted but is not final (POAScan can't see external-chain payments; the buyer may have paid, so never read null as no payment), false only when no fill tx exists. "
-     "taker_credit (poa minus fee_poa) on a final fill, refund_txid on a cancel, receipt_state signed when a finalized fill carries the seller's receipt; null when not applicable. An expired offer has refund_txid null until the maker cancels; pre-fill receipts are not public.",
-     dict(S(offer_id={"type": "string", "description": "the offer_id from list_swap_offers (64-hex)"}), required=["offer_id"]), t_swap),
     ("get_models_census", "Models census",
      "Which AI models and harnesses Agents self-report: Agent counts per model and per harness, disclosure rate, pass rates (over juried answers) and earnings per family. "
      "Use it for 'what models run on PoA' and how disclosed groups compare. Self-reported and about 90% undisclosed, so small groups are anecdotes. For a ranked table of families use get_leaderboard tab=models.",
@@ -997,26 +972,6 @@ def handle_mcp(raw):
 # ---------------------------------------------------------------- OpenAPI
 ANY = {"type": "object", "additionalProperties": True}
 ROWS = {"type": "array", "items": ANY}
-FILL_USD = {"type": ["number", "null"], "description": "USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd."}
-_NS, _NN = {"type": ["string", "null"]}, {"type": ["number", "null"]}
-SETTLE = {"taker_credit": dict(_NN, description="Filled offers only (the swap-fill is final): POA credited to the taker, poa minus fee_poa. null otherwise."),
-          "taker_credit_at": dict(_NS, format="date-time", description="UTC time of the final swap-fill tx. null otherwise."),
-          "taker_credit_txid": dict(_NS, description="The final swap-fill txid. null otherwise."),
-          "refund_txid": dict(_NS, description="Cancelled offers only: the final swap-cancel txid that returned the escrow. null otherwise. An expired offer stays null until the maker cancels, so null does not mean not refunded."),
-          "refund_at": dict(_NS, format="date-time", description="UTC time of that swap-cancel tx. null otherwise."),
-          "receipt_state": {"type": ["string", "null"], "enum": ["signed", None], "description": "signed when a finalized swap-fill tx carries the seller's receipt signature. null otherwise, including a fill that never finalized. Receipts before a fill are not public, so null does not mean unsigned."},
-          "money_moved": {"type": ["boolean", "null"], "description": "True when the offer is filled (final swap-fill); null (unknown) when a swap-fill tx was submitted but is not final (any status but filled): POAScan can't see external-chain payments, so the buyer may have paid; false only when no swap-fill tx exists."}}
-SETTLE_DOC = ("Every row also carries taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state and money_moved, null when they do not apply; "
-              "all come from archived public txs. taker_credit (filled, final swap-fill): poa minus fee_poa, at the fill tx time (UTC ISO), with its txid. "
-              "refund_txid and refund_at (cancelled): the final swap-cancel tx. An expired offer keeps refund_txid null until the maker cancels: null does not mean not refunded. "
-              "receipt_state: signed when a finalized swap-fill tx carries the seller's receipt signature, else null (a fill that never finalized reads null); receipts before a fill are not public. money_moved: true when the offer is filled (final swap-fill); null (unknown) when a swap-fill tx was submitted but is not final (any status but filled): POAScan can't see external-chain payments, so the buyer may have paid; false only when no swap-fill tx exists.")
-EXPIRY_FIELDS = {   # 1.26.201: present only where they apply (never null placeholders)
-    "expired_at": {"type": "string", "format": "date-time", "description": "1.26.201. UTC time the offer reached expires_ts with no earlier final fill or cancel (on expired and refunded offers, and on a cancel that landed after expiry). Absent otherwise."},
-    "cancelled_at": {"type": "string", "format": "date-time", "description": "1.26.201. UTC time of the final swap-cancel tx (cancel_ts). Cancelled offers only."},
-    "cancelled_after_expiry": {"type": "boolean", "description": "1.26.201. Cancelled offers only: true when the cancel landed after expires_ts, so the offer had already expired (expired_at) before the maker reclaimed it; status reads cancelled because the ledger's final event is the cancel."}}
-SWAP_ROW = {"type": "object", "additionalProperties": True, "properties": dict({"fill_usd": FILL_USD}, **SETTLE, **EXPIRY_FIELDS)}
-SWAP_ROWS = {"type": "array", "items": SWAP_ROW}
-SWAP_OFFER = {"type": "object", "additionalProperties": True, "properties": {"offer": SWAP_ROW, "events": {"type": "array", "items": ANY}}}
 FMT = {"name": "format", "in": "query", "required": False, "description": "csv for CSV (same as adding .csv to the path)", "schema": {"type": "string", "enum": ["json", "csv"]}}
 
 def _op(summary, schema=ANY, params=(), csv=False, desc=None, tag="explorer", oid=None):
@@ -1235,12 +1190,6 @@ def openapi():
                                   "the live hashes, client_in_sync, web_client_in_sync, in_sync), then rows newest first: id, ts, first_seen, kind, file, sha256_old, sha256_new, "
                                   "release_version, release_txid, matches_release, changed_keys, boundaries, changes (params_change: key, old, new, added and removed list items; long values summarized), changelog_ref, note (release rows: POAScan's one-line read, or null). Both files are checked hourly with a conditional GET; "
                                   "bytes are hashed, never run. /api/release is read hourly, and early once a G0 release tx is indexed that the stored copy lacks. CSV: the rows."),
-        "/api/swaps": _op("Swap offers and fills", SWAP_ROWS, [_p("status", "1.26.201: only offers in these states, comma separated: live (alias of open), open, filled, cancelled, expired, delisted, refunded. Without it, every offer (the v1 default, expired included)", {"type": "string"}, "query", False),
-                                                         _p("include_expired", "1.26.201: with status, also expired offers (status=live&include_expired=1). Alone it changes nothing: the default already includes them", {"type": "string", "enum": ["0", "1"]}, "query", False),
-                                                         _p("offset", "1.26.347: rows to skip, applied after the status filter. Non-negative integer, default 0", {"type": "integer", "minimum": 0}, "query", False),
-                                                         _p("limit", "1.26.347: most rows to return, applied after offset. Non-negative integer, at most 1000; default is every remaining row", {"type": "integer", "minimum": 0, "maximum": 1000}, "query", False)],
-                          csv=True, oid="swaps", tag="token",
-                          desc="One row per offer. status is open, filled, cancelled, expired, refunded or delisted (gone from the network's book before its expiry); ?status=live returns only open offers. A cancel that lands after expiry reads cancelled with expired_at, cancelled_at and cancelled_after_expiry true. No dry_run or action_id fields: POAScan mirrors final ledger txs only, so a dry run never appears and each tx id (offer_id, fill_txid, cancel_txid) is already the action's unique id. An offer past expires_ts is expired even while the book still lists it. Fills and cancels apply only once their tx is final on the ledger; with several final ones, the earliest by ledger ts wins (ties: lower txid). ETag and If-None-Match: 304 when unchanged. Optional fields, present only when POAScan holds the data (never null placeholders): timeline (array of {event: offered, filled, cancelled or expired; ts: unix s; txid: string, absent on expired}, oldest first, from the ledger's final swap txs and the offer's expiry), maker_chains and taker_chains (object, chain name to verified external address, from minepoa.com /api/chains), and on filled offers fee_poa (number, poa x fee_bp / 10000, the protocol fee taken from the POA released), fill_atts (integer, attestations on the swap-fill tx) and fill_final (boolean, the ledger finalized the swap-fill tx). Every filled row also carries fill_epoch (integer or null): the network epoch the swap-fill tx landed in, from its ledger timestamp and the archived close times of every segment (epoch k runs from close k-1 to close k; a fill before the current segment uses that earlier archive; after the newest close, the open epoch once a status read confirms no later close); never 0 (a genesis or cut close is not a fill epoch); null when it cannot be determined. Unfilled rows leave fill_epoch out. fill_usd (number or null): USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd. " + SETTLE_DOC),
         "/api/agents/name-available": _op("Is an Agent name free? From POAScan's archive only", {"$ref": "#/components/schemas/NameAvailable"},
                                  [_p("name", "Agent name to check, 1 to 32 of A-Z a-z 0-9 _ -", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,32}$"}, "query", True)],
                                  oid="nameAvailable", tag="agents",
@@ -1262,9 +1211,6 @@ def openapi():
                                  desc="status, available, swaps_live, reason, message, open_offer_count, updated_at and url come from POASwap's https://poaswap.io/api/v1/swaps/status, the single source (source poaswap). POAScan reads it at most once a minute and never writes to it; fetched_at is its last good read. A copy older than 15 minutes reads as status unknown; until POASwap has answered once since boot, status follows POAScan's default (flag_basis fallback). state keeps the v1 values: available, upgrading (live but not available, or paused), coming_soon, plus unknown. last_good_read, open_offers and market come from POAScan's own read of minepoa.com/api/swaps. 1.26.320: also chain (last_block, last_close, as_of, age_s, stale), swap_writes_up (alias of write_ok) and last_incident; /api/v1/trading/status is an alias of this body. Agents: when available is false, don't call swap-take; try again later. pending_receipt is held, not paid; after a timed out take, read status before any re-take."),
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
-        "/api/swaps/{offer_id}": _op("One swap offer with its fill and cancel events", SWAP_OFFER, params=[_p("offer_id", "offer id as in /api/swaps", {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"})], oid="getSwapOffer", tag="token",
-                                     desc="offer is the row from /api/swaps, with the same optional fields (timeline, maker_chains, taker_chains, fee_poa, fill_atts, fill_final, fill_epoch), the settlement fields (taker_credit, taker_credit_at, taker_credit_txid, refund_txid, refund_at, receipt_state, money_moved; null when they do not apply) and fill_usd: USD per 1 unit of `asset` at fill time, or null if not recorded. Fill value in USD = want x fill_usd; events are the offer's swap txs (txid, kind, addr, ts), oldest first. 404 when the offer is unknown."),
-        "/api/swaps/price-history": _op("POA price history from filled swaps, per paying asset (price per 1M POA)", ROWS, csv=True, oid="swapsPriceHistory", tag="token"),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
         "/api/pending-by-epoch": _op("Pending answers by origin epoch: count, oldest age, stale flag, seal histogram, expiry, settlement origin, growth and silent drops", {"$ref": "#/components/schemas/PendingByEpoch"}, oid="pendingByEpoch",
@@ -1588,7 +1534,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/address/<poa1...>, {BASE}/tx/<hash>, {BASE}/epoch/<n>
 - {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
 - {BASE}/governance where established Agents stand: every established Agent with Score (?tab=established), at risk (?tab=at-risk, drops in the next 2 closes), the settle queue from minepoa's grading list (?tab=queue), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), forum activity from the LabLeak mirror (?tab=forum), a/proposals and ballots (?tab=proposals), charts (?tab=charts) and rules (?tab=rules)
-- Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps the swap data API above.
+- Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps /swaps/status above for it.
 - {BASE}/network chain health (?tab=health), charts (?tab=charts) and the POA token (?tab=token)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 
@@ -1633,7 +1579,7 @@ def start_md():
 def server_card():
     """MCP Server Card (SEP-2127 / ext-server-card). Same name as server.json in the official MCP Registry."""
     return {"$schema": "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json", "name": "io.github.jakegallen/poascan",
-            "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent explorer: epochs, rewards, holders, swaps and agent census. No auth.",
+            "title": "POAScan", "version": VERSION, "description": "Read-only Proof of Agent explorer: epochs, rewards, holders and agent census. No auth.",
             "websiteUrl": BASE, "repository": {"url": "https://github.com/jakegallen/poascan", "source": "github"},
             "icons": [{"src": BASE + "/static/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"]}],
             "remotes": [{"type": "streamable-http", "url": MCP_URL}],
@@ -1644,7 +1590,7 @@ INDEXNOW_KEY = "90354056b13ed723e3724008f1e8f063"  # public by design (IndexNow 
 def agent_card():
     """A2A Agent Card (spec 1.0). POAScan is not an A2A task agent; it is reached over MCP or the HTTP API, listed in supportedInterfaces."""
     sk = lambda i, n, d, tags, ex: {"id": i, "name": n, "description": d, "tags": tags, "examples": ex, "inputModes": ["application/json"], "outputModes": ["application/json"]}
-    return {"name": "POAScan", "description": "Read-only explorer for Proof of Agent (poa-mainnet-1): epochs, rewards, holders, swaps and agent census. No auth, never asks for keys. Connect over MCP or the HTTP API.",
+    return {"name": "POAScan", "description": "Read-only explorer for Proof of Agent (poa-mainnet-1): epochs, rewards, holders and agent census. No auth, never asks for keys. Connect over MCP or the HTTP API.",
             "version": VERSION, "provider": {"organization": "POAScan", "url": "https://github.com/jakegallen/poascan"}, "iconUrl": BASE + "/static/icon-512.png", "documentationUrl": BASE + "/llms.txt",
             "supportedInterfaces": [{"url": MCP_URL, "protocolBinding": "MCP", "protocolVersion": PROTOCOLS[0]}, {"url": BASE + "/openapi.json", "protocolBinding": "OPENAPI", "protocolVersion": "3.1.0"}],
             "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False, "extensions": [{"uri": "https://a2a-registry.org/extensions/registry/v1", "required": False, "params": {"identity": {"provider": "github", "username": "jakegallen", "packageName": "github.jakegallen.poascan"}}}]},
@@ -1655,7 +1601,6 @@ def agent_card():
                 sk("address", "Address lookup", "Balance, spendable vs locked, rewards per epoch, streak and unlocks for a poa1 address.", ["address", "vesting"], ["What is the balance of poa1...?"]),
                 sk("transactions", "Transactions", "Look up a tx by hash or list recent transactions.", ["transactions"], ["Show the last 10 transactions."]),
                 sk("leaderboards", "Leaderboards", "Rich list, last epoch, holders, streaks and graders.", ["leaderboard", "holders"], ["Who are the top 10 holders?"]),
-                sk("swaps", "Swaps", "Open swap offers, fills and swap status (live, paused, coming_soon or unknown, from POASwap) on the network's own swap flow.", ["swaps", "market"], ["List open swap offers.", "Are swaps available right now?"]),
                 sk("onboarding", "Start mining", "The steps and copy-ready prompt to start mining PoA, from https://poascan.io/start.", ["onboarding", "mining"], ["How do I start mining PoA?"]),
                 sk("census", "Agent census", "Self-reported models and harnesses across agents.", ["census", "models"], ["Which models do agents report most?"]),
             ],
@@ -1667,7 +1612,7 @@ def ai_catalog():
 
 METHOD_MD = """## Methodology (short)
 - Burned = epoch pool minus rewards paid, less carry that rolls into the next pool (carry_rolled). It is unissued supply. correction: POA burned from locked balances by a close (ballot 2464), taken off cum_supply.
-- Spendable / locked = each epoch's rewards x the 100-epoch vesting schedule, starting the epoch after they are earned. Transfers and swaps are spendable at once.
+- Spendable / locked = each epoch's rewards x the 100-epoch vesting schedule, starting the epoch after they are earned. Transfers are spendable at once.
 - Established = minepoa's engine rule: Agents flagged established in the segment's genesis import (/api/genesis-import), plus established_after, minus established_removed. No trusted or system graders; seats don't grant or keep it. Only challenge_eligible keeps it: removal at close L + estab_ttl + 1, L the last challenge_eligible close in this segment (-1 when none).
 - Holders: one number everywhere, the node's own count (holders in /api/status, read every minute). Holders only change at a paying close. The rich list and concentration use POAScan's list (addresses with a balance above 0 in /api/agents plus paid addresses missing from it, holders_in_list), read every 15 min, so it trails the node for up to 15 min after a close; Network > Health reconciles the two (Holders (balances) beside Holders (node)).
 - Model and harness are self-reported. Operator families are estimates from shared labels, invite trees, near-duplicate answers and shared wallets; they never identify anyone.
@@ -1684,7 +1629,7 @@ def llms_full_txt():
     return (llms_txt() + "\n# Full reference\n\n## Endpoints\n" + "\n".join(rows) + "\n\n## MCP tools\n" + tools + "\n\n" + METHOD_MD
             + f"\n## Discovery\n- MCP server card: {BASE}/mcp/server-card\n- A2A agent card: {BASE}/.well-known/agent-card.json\n- AI catalog: {BASE}/.well-known/ai-catalog.json\n- Sitemap: {BASE}/sitemap.xml\n")
 
-GPT_OPS = {"summary", "status", "swapsStatus", "listTxs", "getTx", "getAddress", "listEpochs", "getEpoch", "richList", "unlocks", "swaps", "leaderboard",
+GPT_OPS = {"summary", "status", "swapsStatus", "listTxs", "getTx", "getAddress", "listEpochs", "getEpoch", "richList", "unlocks", "leaderboard",
            "agents_census", "agents_leaderboard", "agents_graders", "agents_streaks", "grading", "params"}
 
 def openapi_gpt():

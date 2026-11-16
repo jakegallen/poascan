@@ -61,7 +61,7 @@ def unit():
     rt = VS.api_route
     check("API route templates, never raw paths", rt("/api/v1/tx/" + HEX) == "/api/v1/tx/{hash}" and rt("/api/address/poa1abc/txs") == "/api/v1/address/{address}/txs"
           and rt("/api/v1/epochs.csv") == "/api/v1/epochs" and rt("/api/v1/swaps/status") == "/api/v1/swaps/status"
-          and rt("/api/v1/swaps/12") == "/api/v1/swaps/{offer_id}" and rt("/api/v1/epoch/7/record") == "/api/v1/epoch/{n}/record"
+          and rt("/api/v1/swaps/12") == "other" and rt("/api/v1/epoch/7/record") == "/api/v1/epoch/{n}/record"
           and rt("/api/v1/" + SECRET_Q) == "other" and rt("/api/summary") == "/api/v1/summary")
     check("prompt ids: fixed cards and every Ask agent prompt", {"start.copy", "join.copyreg", "wallet.regshow", "mcp-poa.add", "ask-explain-epoch-n.open"} <= VS.PROMPT_IDS
           and all(re.fullmatch(r"[a-z0-9.-]{3,64}", i) for i in VS.PROMPT_IDS) and len(VS.PROMPT_IDS) < 400)

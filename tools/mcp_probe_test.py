@@ -79,7 +79,7 @@ info = json.loads(b).get("result", {}).get("serverInfo", {}) if c == 200 else {}
 ok(c == 200 and info.get("version") == AG.VERSION and dt < 0.5, f"initialize 200 while slots are full ({c}, {info.get('version')}, {dt*1000:.0f} ms)")
 c, b, dt = post("tools/list")
 tools = json.loads(b).get("result", {}).get("tools", []) if c == 200 else []
-ok(c == 200 and len(tools) == 54 and dt < 0.5, f"tools/list 200 with 54 tools while slots are full ({c}, {len(tools)}, {dt*1000:.0f} ms)")
+ok(c == 200 and len(tools) == 52 and dt < 0.5, f"tools/list 200 with 52 tools while slots are full ({c}, {len(tools)}, {dt*1000:.0f} ms)")
 c, b, dt = post("ping")
 ok(c == 200 and json.loads(b).get("result") == {} and dt < 0.5, f"ping 200 while slots are full ({c}, {dt*1000:.0f} ms)")
 c, b, dt = post("notifications/initialized", note=True)
@@ -87,7 +87,7 @@ ok(c == 202 and dt < 0.5, f"notifications/initialized 202 while slots are full (
 c, b, dt = get("/mcp", {"Accept": "text/event-stream", "User-Agent": "Glama-health"})
 ok(c == 405 and dt < 0.5 and b"server busy" not in b, f"GET /mcp is 405, not 503, while slots are full ({c}, {dt*1000:.0f} ms)")
 for path, pred in (
-    ("/.well-known/mcp.json", lambda d: d.get("url") == "https://poascan.io/mcp" and len(d.get("tools") or []) == 54),
+    ("/.well-known/mcp.json", lambda d: d.get("url") == "https://poascan.io/mcp" and len(d.get("tools") or []) == 52),
     ("/mcp/server-card", lambda d: d.get("version") == AG.VERSION and d.get("name") == "io.github.jakegallen/poascan"),
     ("/.well-known/ai-catalog.json", lambda d: (d.get("entries") or [{}])[0].get("type") == "application/mcp-server-card+json"),
     ("/.well-known/agent-card.json", lambda d: d.get("version") == AG.VERSION),

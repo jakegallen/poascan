@@ -2,7 +2,7 @@
 Checks: the at-risk flag (drop within the next 2 closes, same rule as the 1.26.55 estimate), pending answers with panel and
 grade counts matched by the address's answer txs, marks from basis.marks, /api/v1/address/<a>/standing, /api/v1/agents/at-risk
 (JSON and CSV, 400 on params), MCP get_standing and list_at_risk, OpenAPI and llms.txt, the address page rows and
-the Swaps card (POAScan /swap/<id> plus POASwap's read-only per-offer status, no fee text), /agents/at-risk (sort by drop
+no Swaps card (swaps live on POASwap), /agents/at-risk (sort by drop
 close, names to LabLeak profiles, Standing Watch credit to EmBot-Lantern), /at-risk 301, /about#standing (the marks
 observation is labelled observed, not documented, and appears only there and in tooltips), no dashes, 'Agents' wording,
 and the join prompt unchanged. Then, from tools/standing_view_fixture.json (the real E0 to E11 records, reduced), every
@@ -155,9 +155,7 @@ def main():
         check("address page: pending table with panel and grades columns", "Pending answer" in h and "<th>Panel</th>" in h and "<th>Grades</th>" in h)
         check("address page: Standing Watch link credited to EmBot-Lantern, at-risk and standing API links, #standing anchor",
               f'href="{SD.TRACKER}"' in h and "by EmBot-Lantern" in h and f'/api/v1/address/{NEXT}/standing' in h and 'id="standing"' in h)
-        sw = re.search(r'<section class="card [^"]*" id="swaps">(.*?)</section>', h, re.S)
-        check("address page: Swaps card links POAScan /swap/<id> and POASwap's per-offer status, no fee text",
-              sw is not None and f'href="/swap/{"f" * 64}"' in sw.group(1) and f'href="https://poaswap.io/status/{"f" * 64}"' in sw.group(1) and 'track?offer=' not in sw.group(1) and 'https://poaswap.io/status?address=' in sw.group(1) and "fee" not in sw.group(1).lower())
+        check("address page: no Swaps card even with offers (swaps live on POASwap)", 'id="swaps"' not in h and "/swap/" not in h)
         c, h2, _ = get(f"/address/{LATER}")
         check("address page: no Swaps card without offers, no AT RISK when 3 closes out", c == 200 and 'id="swaps"' not in h2 and ">AT RISK<" not in h2)
         c, h, _ = get("/governance?tab=at-risk")
@@ -175,7 +173,7 @@ def main():
         c, ab, _ = get("/about"); st = re.search(r'<p id="standing">(.*?)</p>', ab, re.S)
         check("/about#standing: at risk, pending, marks observed not documented, tracker credit", st is not None and "observed, not documented" in st.group(1)
               and "At risk" in st.group(1) and "EmBot-Lantern" in st.group(1) and SD.TRACKER in st.group(1))
-        new = (st.group(1) if st else "") + h + (sw.group(1) if sw else "") + json.dumps(tl.get("get_standing", "")) + json.dumps(tl.get("list_at_risk", ""))
+        new = (st.group(1) if st else "") + h + json.dumps(tl.get("get_standing", "")) + json.dumps(tl.get("list_at_risk", ""))
         check("new surfaces: no em or en dashes", not DASH.search(re.sub(r"<script.*?</script>", "", new, flags=re.S)))
         check("new surfaces: no Plus1 mention and no 'Accounts' wording", "plus1" not in new.lower() and not re.search(r"\bAccounts\b", re.sub(r"<[^>]+>", " ", (st.group(1) if st else "") + (tb.group(1) if tb else ""))))
     finally:

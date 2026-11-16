@@ -1,12 +1,10 @@
 """Unfinished fill: money_moved is null (unknown), not false, when a swap-fill tx was submitted but is not final.
 Case: de1ddefb (expired) has fill b994976f with final 0 and 1 attestation; the buyer's SOL payment landed on Solana,
 yet the offer read as if nothing was paid. POAScan can't see external-chain payments.
-* money_moved on /api/v1/swaps/<offer_id>, the list, CSV and MCP: true on a filled offer, null when a non-dropped
+* money_moved on /api/v1/swaps/<offer_id>, the list and CSV: true on a filled offer, null when a non-dropped
   swap-fill is not final (any status but filled), false only when no swap-fill tx exists (a dropped one does not count).
-* /swap/<offer_id>: status still Expired (terminal status wins); stage history 'Fill submitted, not final'; Fill row
-  'Submitted, not final'; Payment ref says unknown, not '···'; next steps say the payment may have landed.
-* Ask prompt, OpenAPI, llms.txt, MCP descriptions and /about#swap-settle: null means a fill was submitted but is not
-  final and POAScan can't see external-chain payments. No em or en dashes.
+* /swap/<offer_id> 301s to POASwap (the page moved there); OpenAPI and MCP no longer document the list or offer routes.
+* llms.txt: null means a fill was submitted but is not final and POAScan can't see external-chain payments. No em or en dashes.
 Real records: tools/swap_fields_fixture.json. Usage: python3 tools/unfinished_fill_test.py (temp database, no network)."""
 import importlib, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 os.environ["POASCAN_SWAP_EVIDENCE"] = ""   # ledger-only states: no balance evidence applied
@@ -18,7 +16,7 @@ def check(name, ok):
 
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "u.db"); os.environ["POA_BASE"] = "http://127.0.0.1:9"
 import fixture; fixture.seed()
-from poascan import db, swapclient as SC, indexer as I, agentapi as AA, offer as OF, prompts as PR
+from poascan import db, swapclient as SC, indexer as I, agentapi as AA
 SA = importlib.import_module("poascan.swap.api")
 def no_upstream(*a, **k): raise AssertionError("upstream read")
 I.fetch = no_upstream
@@ -52,30 +50,16 @@ put(o2, [dict(txid="b" * 64, kind="swap-fill", addr="poa1x", ts=int(time.time())
 check("open offer with a fill landing: null", SC.offer("a" * 64)["offer"]["money_moved"] is None)
 check("settle(): filled stays true even beside a pending fill", SA.settle(dict(status="filled", fill_txid="t", fill_ts=1, poa=1.0, fee_bp=100), False, True)["money_moved"] is True)
 
-# page
-t, h = OF.page_body(EXP)
-tag = re.search(r'<span>Status</span><div><span class="tag[^"]*">([^<]+)</span>', h)
-check("page: status still Expired", tag and tag.group(1) == "Expired")
-check("page: stage history 'Fill submitted, not final', no 'Fill attempt' or 'never final'",
-      "Fill submitted, not final" in h and "Fill attempt" not in h and "never final" not in h and '<span class="dim">not final</span>' in h)
-fr = re.search(r'<span>Fill</span><div>(.*?)</div></div>', h); pr = re.search(r'<span>Payment ref</span><div>(.*?)</div></div>', h)
-check("page: Fill row reads Submitted, not final with the tx", fr and "Submitted, not final" in fr.group(1) and FILL[:10] in fr.group(1))
-check("page: Payment ref says unknown, not '···'", pr and "can&#x27;t see external-chain payments" in pr.group(1) and "···" not in pr.group(1))
-check("page: next steps say the payment may have landed", "The payment may have landed on the external chain" in h and "If you paid and it never filled" not in h)
-_, hf = OF.page_body(FIL)
-check("page: a filled offer keeps its Fill row and Payment ref", "Submitted, not final" not in hf and "Fill submitted, not final" not in hf)
-_, pp = PR.swap_status(EXP)
-check("Ask prompt: money_moved null is unknown, never nothing paid", "money_moved is null" in pp and "never that nothing was paid" in pp)
-
 # docs
 blob = json.dumps(AA.openapi()); llms = AA.llms_txt()
 td = json.dumps(AA.handle_mcp(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode())[1])
 ab = open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read()
-for nm, txt in (("OpenAPI", blob), ("llms.txt", llms), ("MCP get_swap_offer", td), ("/about#swap-settle", ab)):
+check("OpenAPI and MCP no longer document the swap list or offer routes", "/api/swaps/{offer_id}" not in blob and '"/api/swaps"' not in blob and "get_swap_offer" not in td and "list_swap_offers" not in td)
+for nm, txt in (("llms.txt", llms),):
     check(f"{nm}: money_moved null means a fill was submitted but is not final; POAScan can't see external-chain payments",
           "money_moved" in txt and "submitted but is not final" in txt and "see external-chain payments" in txt.replace("\\u2019", "'").replace("can\\'t", "can't"))
-src = "".join(open(os.path.join(ROOT, p), encoding="utf-8").read() for p in ("poascan/offer.py", "poascan/swap/api.py", "poascan/swap/store.py", "poascan/prompts.py", "tools/unfinished_fill_test.py"))
-check("no em or en dashes", not any(c in src + llms + h for c in ("\u2014", "\u2013")))
+src = "".join(open(os.path.join(ROOT, p), encoding="utf-8").read() for p in ("poascan/swap/api.py", "poascan/swap/store.py", "poascan/prompts.py", "tools/unfinished_fill_test.py"))
+check("no em or en dashes", not any(c in src + llms for c in ("\u2014", "\u2013")))
 
 # HTTP, CSV and MCP (server subprocess, indexer off, no upstream)
 sp = socket.socket(); sp.bind(("127.0.0.1", 0)); port = sp.getsockname()[1]; sp.close(); base = f"http://127.0.0.1:{port}"
@@ -95,15 +79,9 @@ try:
     c, j = get("/api/v1/swaps.csv"); lines = j.splitlines(); hdr = lines[0].split(","); i = hdr.index("money_moved") if "money_moved" in hdr else -1
     row = next((l for l in lines if l.startswith(EXP)), "")
     check(f"CSV ({c}) has a money_moved column, empty for de1ddefb", c == 200 and i >= 0 and row and "False" not in row.split(",")[i] and "false" not in row.split(",")[i].lower())
-    H = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
-    for name, args, pick in (("get_swap_offer", {"offer_id": EXP}, lambda s: s["offer"]), ("list_swap_offers", {"status": "expired"}, lambda s: next(x for x in s["offers"] if x["offer_id"] == EXP))):
-        c, j = get("/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}).encode(), H)
-        sc = json.loads(j)["result"].get("structuredContent") or {}
-        try: v = pick(sc); ok = "money_moved" in v and v["money_moved"] is None
-        except Exception: ok = False
-        check(f"MCP {name}: de1ddefb money_moved null", ok)
-    c, h2 = get(f"/swap/{EXP}")
-    check(f"HTTP /swap/de1ddefb ({c}) reads Expired with Fill submitted, not final", c == 200 and "Fill submitted, not final" in h2 and ">Expired<" in h2)
+    import http.client
+    cn = http.client.HTTPConnection("127.0.0.1", port, timeout=20); cn.request("GET", f"/swap/{EXP}"); r = cn.getresponse(); r.read()
+    check(f"HTTP /swap/de1ddefb ({r.status}) 301s to POASwap", r.status == 301 and r.getheader("Location") == "https://poaswap.io/")
 finally:
     srv.terminate(); srv.wait(10)
 

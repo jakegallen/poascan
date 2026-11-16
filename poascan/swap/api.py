@@ -1,8 +1,8 @@
-"""The module's HTTP surface. The host server calls api() for JSON and page() for HTML; both take paths without the
+"""The module's HTTP surface. The host server calls api() for JSON; it takes paths without the
 /v1 prefix (the host maps /api/v1/... onto /api/...). The explorer side reads swaps only through these same routes
 (poascan/swapclient.py): /api/v1/price, /api/v1/swaps, /api/v1/swaps/status, /api/v1/swaps/price-history, /api/v1/swaps/<offer_id>."""
-import hashlib, json, os, re, mimetypes, threading, time
-from . import config as C, market as M, store as S, pages as P, host as H, state as ST
+import hashlib, json, re, threading, time
+from . import config as C, market as M, store as S, host as H, state as ST
 
 OFFER = re.compile(r"^/api/swaps/([A-Za-z0-9_-]{1,128})$")   # after /status and /price-history
 
@@ -160,14 +160,3 @@ def api(path, qs):
 def etag(path):
     """Weak ETag of a list route's current data (None for other routes)."""
     return _cached(path)[2] if path in ETAG_ROUTES else None
-
-def page(path):
-    """HTML for the swap page path, or None."""
-    return P.page() if path == C.PAGE_PATH else None
-
-_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-STATIC = {"/static/" + f: (os.path.join(_DIR, f), mimetypes.guess_type(f)[0]) for f in ("swap.js", "swap.css")}
-
-def live():
-    """What the host's live snapshot (WebSocket and /api/summary) carries for the swap page: the order book fragment."""
-    return {"swapsopen": P.book_html()}

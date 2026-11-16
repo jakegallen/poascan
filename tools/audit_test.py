@@ -283,7 +283,7 @@ try:
     c, _, b = get("/api/v1/address/poa1___"); check(f"SC-018 a malformed address is a 400 ({c})", c == 400 and b"error" in b)
     mcp = lambda body, ip="198.51.100.200": get("/mcp", {"Content-Type": "application/json", "Fly-Client-IP": ip}, body if isinstance(body, bytes) else json.dumps(body).encode(), "POST")
     bad = []
-    for tool, arg in (("list_transactions", "limit"), ("get_richlist", "limit"), ("list_swap_offers", "limit"), ("get_epoch", "epoch"), ("get_address", "tx_limit")):
+    for tool, arg in (("list_transactions", "limit"), ("get_richlist", "limit"), ("get_epoch", "epoch"), ("get_address", "tx_limit")):
         for v in ('"abc"', "-1", "1e400", "99999999999999999999999999", "null", "true", "[1]"):
             raw = ('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":{"%s":%s%s}}}' % (tool, arg, v, ',"address":"' + A1 + '"' if tool == "get_address" else "")).encode()
             c, _, b = mcp(raw, ip=f"10.9.{len(bad)}.{abs(hash(v)) % 250}")

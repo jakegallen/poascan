@@ -533,6 +533,6 @@ def below():
              f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a>. {E(SELF_NOTE)}</p><ol class="steps">{sc}</ol>')
     src = (f'<p class="dim small">Official guide: <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a> · '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> · <a href="/about#safety">Safety</a></p>'
-           f'<p class="dim small">Wallet and swaps: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
+           f'<p class="dim small">Wallets: <a href="{WALLET_HREF}" target="_blank" rel="noopener noreferrer">POASwap</a></p>')
     return (PH.box() + f'<details class="card stepsd"><summary class="ch"><h2>All steps</h2></summary>'
             f'<div class="cb"><ol class="steps">{li}</ol>{selfc}{src}</div></details>' + PH.history())

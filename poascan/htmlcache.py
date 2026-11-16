@@ -55,7 +55,7 @@ def _build_id():
 # to (). /wallet reads only ?address (walletview.page). Dynamic id routes (/tx/<h>, /address/<a>, /epoch/<n>) stay off the
 # map by design: they key on the path, not the query, and take the scrape path.
 CANON_QS = {"/": (), "/index.html": (), "/start": (), "/join": (), "/onboarding": (), "/about": (), "/privacy": (),
-            "/unlocks": (), "/upgrade": (), "/swaps": (), "/agents": (), "/agents/operators": (),
+            "/unlocks": (), "/upgrade": (), "/agents": (), "/agents/operators": (),
             "/help": ("address", "sort", "dir"), "/wallet": ("address",),
             "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir"),
             "/network": ("tab", "range", "esort", "edir", "isort", "idir"),

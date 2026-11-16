@@ -1,4 +1,4 @@
-"""Swap settlement fields on /api/v1/swaps and /api/v1/swaps/<offer_id> (and MCP get_swap_offer, OpenAPI, llms.txt, /about).
+"""Swap settlement fields on /api/v1/swaps and /api/v1/swaps/<offer_id> (and llms.txt; the routes are kept but no longer in OpenAPI or MCP).
 * taker_credit (final fills only): poa minus fee_poa (poa x fee_bp / 10000), with taker_credit_at (fill tx time, UTC ISO)
   and taker_credit_txid. null otherwise.
 * refund_txid and refund_at: the final swap-cancel tx of a cancelled offer. null otherwise; an expired offer stays null
@@ -74,16 +74,12 @@ r = SA.settle(dict(status="filled", fill_txid="t", fill_ts=1, poa=10729.310509, 
 check("rounding matches fee_poa (6 dp)", r["taker_credit"] == round(10729.310509 - round(10729.310509 * 100 / 10000, 6), 6) == 10622.017404)
 db.write("UPDATE swap_events SET json=? WHERE offer_id=? AND kind='swap-fill'", (json.dumps(FX["offers"][0]["events"][1]["body"]), EXP)); SA._rc.clear()
 
-# docs: OpenAPI, llms.txt, MCP tool description, /about
+# docs: llms.txt documents the fields; OpenAPI and MCP no longer list the swap routes
 blob = json.dumps(AA.openapi())
-check("OpenAPI documents all six fields with null semantics", all(k in blob for k in KEYS) and "null does not mean not refunded" in blob and "Receipts before a fill are not public" in blob)
+check("OpenAPI leaves out the swap list and offer routes (kept, undocumented)", '"/api/swaps"' not in blob and "/api/swaps/{offer_id}" not in blob)
 llms = AA.llms_txt()
 check("llms.txt documents them", all(k in llms for k in ("taker_credit", "refund_txid", "receipt_state")) and "null does not mean not refunded" in llms and "Receipts before a fill are not public" in llms)
-tool = next(t for t in AA.TOOLS if t[0] == "get_swap_offer") if hasattr(AA, "TOOLS") else None
-td = json.dumps(tool[:3]) if tool else json.dumps(AA.handle_mcp(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode())[1])
-check("MCP get_swap_offer description names the fields", "taker_credit" in td and "receipt_state" in td and "pre-fill receipts are not public" in td)
-ab = open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read()
-check("/about#swap-settle explains the fields", 'id="swap-settle"' in ab and "null does not mean not refunded" in ab and "Receipts before a fill are not public" in ab)
+check("MCP: get_swap_offer and list_swap_offers are gone", not {t[0] for t in AA.TOOLS} & {"get_swap_offer", "list_swap_offers"})
 src = "".join(open(os.path.join(ROOT, p), encoding="utf-8").read() for p in ("poascan/swap/api.py", "poascan/swap/store.py", "tools/swap_fields_test.py"))
 check("no em or en dashes in the new code and copy", "\u2014" not in src and "\u2013" not in src and "\u2014" not in llms and "\u2013" not in llms)
 
@@ -106,10 +102,6 @@ try:
     check(f"HTTP /api/v1/swaps/<cancelled> ({code}) carries refund_txid", code == 200 and o["refund_txid"] == c["refund_txid"])
     code, j = get("/api/v1/swaps.csv")
     check(f"CSV list ({code}) has the columns", code == 200 and all(k in j.splitlines()[0] for k in KEYS))
-    H = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
-    code, j = get("/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_swap_offer", "arguments": {"offer_id": EXP}}}).encode(), H)
-    sc = json.loads(j)["result"].get("structuredContent") or {}
-    check("MCP get_swap_offer returns them (de1ddefb null)", "offer" in sc and sc["offer"].get("receipt_state") is None and all(k in sc["offer"] for k in KEYS))
 finally:
     srv.terminate(); srv.wait(10)
 
