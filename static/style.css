@@ -1973,4 +1973,9 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .tokmkt .nobids{color:var(--mute)}
 .tokmkt tr.mid td{text-align:center;color:var(--dim);padding-top:var(--s2);padding-bottom:var(--s2)}
 .tokmkt tr.ask td{font-variant-numeric:tabular-nums}
-
+/* epoch story: the steps of a closed epoch under its hourly chart */
+.estory{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.estory li{display:flex;align-items:baseline;gap:8px;padding:6px 10px;border:1px solid var(--line2);border-radius:var(--r-md);background:color-mix(in srgb,var(--gold) 3%,transparent)}
+.estory .esl{font:600 var(--t12)/1.2 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl)}
+.estory b{font:500 var(--t13)/1.2 var(--mono);color:var(--hi);white-space:nowrap}
+@media (max-width:640px){.estory{gap:6px}.estory li{flex:1 1 calc(50% - 6px);justify-content:space-between;min-width:0}.estory li.et{flex-basis:100%}.estory b{overflow:hidden;text-overflow:ellipsis}#story .xl.xo{display:none}}
