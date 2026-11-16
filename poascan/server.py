@@ -104,6 +104,20 @@ def swap_page(rows, qs):
     if lim is not None: lim = min(lim, SWAP_PAGE_MAX)
     return rows[off:(off + lim) if lim is not None else None]
 
+_PARAMS_LAST = {}   # last non-empty params mirror copy: served if a later blob read is empty, so the mirror never goes blank
+def _params_mirror():
+    """The body of /api/params and its /api/v1 alias: the hourly upstream params POAScan already caches in the "params"
+    blob (indexer.job_hourly_meta reads minepoa.com/api/params once an hour and stores the whole copy), minus the
+    swap_fee* keys. Every upstream key passes straight through, including the emission set (seal_load_frozen_from_epoch,
+    emission_ceiling, emission_carry_from_epoch and the rest); nothing is dropped or fabricated. The last non-empty copy
+    is kept in memory and served if a later read comes back empty, so the mirror stays reliable (last-good, never
+    upstream on the request path). The route is slot-exempt (_is_params), so an API storm never sheds it with 503."""
+    try: d = {k: v for k, v in A.params().items() if not str(k).startswith("swap_fee")}
+    except Exception: d = {}
+    if d: _PARAMS_LAST.clear(); _PARAMS_LAST.update(d)
+    elif _PARAMS_LAST: d = dict(_PARAMS_LAST)
+    return d
+
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
     if path == "/api/health":
@@ -375,7 +389,7 @@ def api(path, qs):
         if len(q[0]) > 120: raise BadRequest("q is at most 120 characters")
         return resolve(q[0].strip()), False
     if path == "/api/anchors": return A.anchors_latest(500, SG.selected() if SG.archived() else None), True   # current segment first; ?segment=1 keeps segment 1
-    if path == "/api/params": return {k: v for k, v in A.params().items() if not k.startswith("swap_fee")}, False
+    if path == "/api/params": return _params_mirror(), False   # slot-exempt (_is_params); last-good blob copy, emission keys included
     if path == "/api/chains":   # address map; upstream_notice is added only while minepoa has /api/chains paused (keys stay addresses otherwise)
         d = dict(db.get_blob("chains")[0] or {}); n = chains_notice()
         if n: d["upstream_notice"] = n
@@ -1179,6 +1193,11 @@ class H(BaseHTTPRequestHandler):
         """1.26.278: /api/v1/swaps/status is a pinned local copy. No heavy slot and no upstream wait.
         1.26.320: /api/v1/trading/status is an alias of the same body."""
         return self._norm() in ("/api/swaps/status", "/api/trading/status")
+    def _is_params(self):
+        """The params mirror (/api/params and its /api/v1 alias) is the hourly params blob POAScan already holds, read with
+        a last-good in-memory fallback (_params_mirror). It never reads upstream on the request path, so it takes no heavy
+        slot: an API storm must not shed /api/params with 503, and both URLs return the same bytes (emission keys included)."""
+        return self._norm() == "/api/params"
     def _txs_micro_parts(self):
         """(p, qs, fmt, selected, explicit) for /api/txs JSON, else None. Matches the micro-cache key _get uses,
         without changing this thread's segment."""
@@ -1374,7 +1393,7 @@ class H(BaseHTTPRequestHandler):
         finally: AL.exit_light()
     def _gated(self, fn):
         if self._ua_throttled(): return   # 1.26.287: before any slot or render
-        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_doc_ready() or self._txs_micro_hit(): return fn()
+        if self._is_health() or self._is_free() or self._mcp_light() or self._is_snapshot() or self._is_moved() or self._chart_ready() or self._is_swap_status() or self._is_params() or self._is_doc_ready() or self._txs_micro_hit(): return fn()
         if self._is_address_light_path(): return self._address_gated(fn)   # 1.26.319: get_address / /api/address light copy when no heavy slot
         path = self._path_only()
         if getattr(self, "command", "GET") == "GET" and PAGE_LIMITED.match(path) and self.page_limited(): return   # R2 (1.26.280): reject an over-limit /address or /tx client here, before it can take a heavy slot or a cache render

@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.349] - 2026-11-16
+
+### Added
+- Answer Sort context on the queue board and in /api/v1/governance/board: read-only measurements, not verdicts, from minepoa's official Answer Sort tool. Cross-author sentence families (members, authors, shared sentence), the as_of_close and the multi-author share. Counts and sentence overlaps only, no scores or verdicts; cached per close, non-blocking and last-good on failure, labeled and linked. It never changes a grade, a reward or any on-chain value. The MCP get_grading_board and governanceBoard descriptions name it the same way.
+
+### Changed
+- /api/params (and its /api/v1 alias) is now a slot-exempt mirror of the hourly params blob POAScan already holds, with a last-good in-memory fallback so it never goes blank and never reads upstream on the request path. An API storm no longer sheds it with 503. Every upstream key passes through, including the emission set (seal_load_frozen_from_epoch and the rest); swap_fee* keys stay dropped.
+- Bug 2850 locked_est: held rewards are now vested against the open epoch just after the newest close POAScan has read, not the network's advanced open epoch. While rewards_behind, locked_est no longer reads low; spendable plus locked still sum to the held rewards, only the split boundary is corrected.
+
 ## [1.26.348] - 2026-11-16
 
 ### Changed
