@@ -89,6 +89,21 @@ def swap_filter(rows, qs):
     if ie in ("1", "true"): want.add("expired")
     return [r for r in rows if r.get("status") in want]
 
+SWAP_PAGE_MAX = 1000
+def swap_page(rows, qs):
+    """1.26.347: /api/swaps honours ?offset (rows to skip, default 0) and ?limit (at most SWAP_PAGE_MAX; default is
+    every remaining row). Both must be non-negative integers. Applied after swap_filter, so paging and the status
+    filter compose. The default list (no offset, no limit) is unchanged."""
+    def _n(k):
+        v = (qs.get(k) or [None])[0]
+        if v in (None, ""): return None
+        if not v.isdigit(): raise BadRequest(k + " must be a non-negative integer")
+        return int(v)
+    off = _n("offset") or 0
+    lim = _n("limit")
+    if lim is not None: lim = min(lim, SWAP_PAGE_MAX)
+    return rows[off:(off + lim) if lim is not None else None]
+
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
     if path == "/api/health":
@@ -284,9 +299,9 @@ def api(path, qs):
         if qs: raise BadRequest("no parameters")
         from . import signed as _SIG
         return dict(_SIG.feed(), upstream_notice=notices_notice()), False
-    if path == "/api/swaps" and (qs.get("status") or qs.get("include_expired")):   # 1.26.201: opt-in filters; the default stays every offer
-        rows, lst = SW.api(path, qs); return swap_filter(rows, qs), lst
-    if path == "/api/price" or path == "/api/swaps" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's routes
+    if path == "/api/swaps":   # 1.26.201 opt-in filters (status, include_expired) + 1.26.347 paging (offset, limit); the default list is unchanged
+        rows, lst = SW.api(path, qs); return swap_page(swap_filter(rows, qs), qs), lst
+    if path == "/api/price" or path.startswith("/api/swaps/"): return SW.api(path, qs)   # the swap module's other routes (price, status, price-history, the per-offer detail)
     if path == "/api/agents/new-per-day": return G.new_per_day(), True
     if path == "/api/concentration": return A.concentration(), False
     if path == "/api/clusters":
@@ -1679,6 +1694,11 @@ class H(BaseHTTPRequestHandler):
                 except Unavailable as e: return self.send(503, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": "60", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 m = AG.meta(); mh = AG.meta_headers(m)
                 tag = SW.etag(p) if fmt != "csv" else None   # swap list routes: weak ETag of the data (SC-010)
+                if tag and p == "/api/swaps" and any(k in qs for k in ("offset", "limit", "status", "include_expired")):
+                    # 1.26.347: fold the filter/paging params into the ETag so a filtered or paged copy never shares one
+                    # with the full list (which would 304 the wrong body); the default list keeps the base tag.
+                    _k = "|".join(k + "=" + ",".join(qs[k]) for k in ("status", "include_expired", "offset", "limit") if k in qs)
+                    tag = 'W/"' + hashlib.sha1((tag + "|" + _k).encode()).hexdigest()[:20] + '"'
                 if tag:
                     mh = dict(mh, **{"ETag": tag, "Access-Control-Expose-Headers": mh["Access-Control-Expose-Headers"] + ", ETag"})
                     if tag in [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]:

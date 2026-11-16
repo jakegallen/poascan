@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.347] - 2026-11-16
+
+### Added
+- /api/swaps (and its /api/v1 alias) now honours ?offset (rows to skip, default 0) and ?limit (at most 1000; default is every remaining row), applied after the status filter so paging and filtering compose. Both must be non-negative integers; anything else is a 400. The default list (no offset, no limit) is byte-for-byte unchanged.
+
+### Fixed
+- The /api/swaps weak ETag now folds in the status, include_expired, offset and limit query parameters, so a filtered or paged copy never shares an ETag with the full list (which could return a 304 with the wrong body). The default list keeps its existing ETag.
+
 ## [1.26.346] - 2026-11-15
 
 ### Added
