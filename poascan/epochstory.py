@@ -17,9 +17,11 @@ def data(n, r, open_ts):
     if hit and now - hit[0] < STORY_TTL: return hit[1]
     close_ts = int(r["close_ts"])
     start = int(open_ts) if open_ts else None
+    # answers are read in a bounded time range around the epoch (an index range, not every answer of the segment)
+    lo, hi = (start or close_ts - 86400) - 3600, close_ts + 7200
     if not start:   # the first close of a segment: from its first answer
-        x = db.q1("SELECT MIN(ts) AS m FROM txs WHERE segment=? AND type='challenge' AND epoch=?", (seg, n)); start = x and x["m"]
-    tot = db.q1("SELECT COUNT(*) AS c FROM txs WHERE segment=? AND type='challenge' AND epoch=?", (seg, n))["c"]
+        x = db.q1("SELECT MIN(ts) AS m FROM txs WHERE segment=? AND type='challenge' AND ts >= ? AND ts <= ? AND epoch=?", (seg, lo, hi, n)); start = x and x["m"]
+    tot = db.q1("SELECT COUNT(*) AS c FROM txs WHERE segment=? AND type='challenge' AND ts >= ? AND ts <= ? AND epoch=?", (seg, lo, hi, n))["c"]
     hrs, a, g = [], {}, {}
     if start and close_ts > start:
         # hourly bins from the open (not clock hours); a last bin under 30 minutes joins the one before it
