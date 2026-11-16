@@ -697,7 +697,7 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  D.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target;if(!t||!t.matches||!t.matches(".cpt[data-chart]"))return;e.preventDefault();open(t.dataset.chart,"",t)});
  var q0=cpParse(location.search);if(q0)open(q0.c,q0.r,$('[data-chart="'+q0.c+'"]'));
 })();
-/* 1.26.FEV local expand ([data-cexp]): a chart only this page draws (an Agent's rewards) opens its taller copy, server drawn into a
+/* 1.26.350 local expand ([data-cexp]): a chart only this page draws (an Agent's rewards) opens its taller copy, server drawn into a
    <template>, in the pop-out dialog. No fetch. Hover tips bind once the copy is in. */
 (function(){var dl=null;function shut(){if(dl&&dl.open)dl.close()}
  D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-cexp]");if(!b)return;var t=D.getElementById(b.dataset.cexp);if(!t||!t.content)return;e.preventDefault();
@@ -766,7 +766,7 @@ function rowcap(){[].slice.call(D.querySelectorAll("main table:not(.nocap) > tbo
 function even(){var on=window.innerWidth>900;[].slice.call(D.querySelectorAll("main .grid2:not(.evno)")).forEach(function(g){
  var k=[].filter.call(g.children,function(c){return c.offsetParent!==null});k.forEach(function(c){c.classList.remove("evcap");c.style.maxHeight=""});
  if(!on||k.length!==2)return;g.classList.add("evm");var a=k[0].offsetHeight,b=k[1].offsetHeight;g.classList.remove("evm");
- var t=a>b?k[0]:k[1],s=Math.max(Math.min(a,b),360);if(Math.max(a,b)-s<60||!t.classList.contains("card"))return;   /* 1.26.FEV: only a card scrolls inside; capping a column of cards hid the lower ones */t.style.maxHeight=s+"px";t.classList.add("evcap")})}
+ var t=a>b?k[0]:k[1],s=Math.max(Math.min(a,b),360);if(Math.max(a,b)-s<60||!t.classList.contains("card"))return;   /* 1.26.350: only a card scrolls inside; capping a column of cards hid the lower ones */t.style.maxHeight=s+"px";t.classList.add("evcap")})}
 var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(even,150)});
 D.addEventListener("toggle",function(e){if(e.target.closest&&e.target.closest("main .grid2")){clearTimeout(tm);tm=setTimeout(even,60)}},true);
 function go(){rowcap();even();setTimeout(even,800)}

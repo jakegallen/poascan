@@ -82,7 +82,7 @@ def txs(n):
 
 def overview(a, row, rew_items, tip="", ep_rows=None):
     """The Overview: Score beside rewards per epoch (equal height), the activity map beside the Agent's record, then every
-    epoch it touched (newest first; app.js shows 20 and a Show more button). 1.26.FEV: the side column no longer stacks two
+    epoch it touched (newest first; app.js shows 20 and a Show more button). 1.26.350: the side column no longer stacks two
     cards, so the equal height pass never clips the activity map."""
     rb = bars(rew_items, height=210, colors=("gold",)) if rew_items else '<p class="empty">No rewards yet</p>'
     big = bars(rew_items, height=320, colors=("gold",)) if rew_items else ""
