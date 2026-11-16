@@ -327,7 +327,17 @@ try:
     # SC-014 suggest
     c, _, b = get("/fragment/suggest?q=zebra"); ids = [x["id"] for x in json.loads(b)]
     check(f"SC-014 suggest returns poa1 addresses only ({ids})", A2 in ids and not any("<" in i or '"' in i for i in ids))
+    sg = lambda q: json.loads(get("/fragment/suggest?q=" + q)[2])
+    r = sg(A2[:9]); t0 = db.q1("SELECT id FROM txs ORDER BY id LIMIT 1")
+    check(f"search: a poa1 prefix finds the Agent, typed rows with a url ({r[:1]})", any(x["kind"] == "agent" and x["id"] == A2 and x["url"] == "/address/" + A2 for x in r))
+    r = sg(t0["id"][:8]) if t0 else []
+    check("search: a tx hex prefix finds the tx", bool(t0) and any(x["kind"] == "tx" and x["id"] == t0["id"] for x in r))
+    r = sg("E1"); r2 = sg("E99999")
+    check(f"search: an epoch number is an epoch row, a far future one is not ({r[:1]})", any(x["kind"] == "epoch" and x["url"] == "/epoch/1" for x in r) and not any(x["kind"] == "epoch" for x in r2))
+    r = sg("zzqqxxno")
+    check("search: no match is an empty list, at most 8 rows, cached 60 s", r == [] and len(sg("ze")) <= 8 and "max-age=60" in str(get("/fragment/suggest?q=ze")[1]))
     js = open(os.path.join(ROOT, "static", "app.js")).read()
+    check("search: app.js groups rows and has a No matches line", "sgh" in js and "No matches" in js and "Escape" in js)
     check("SC-014 app.js escapes the id", "esc(x.id)" in js and "'+x.id+'" not in js)
     # SC-017 headers and www
     o = urllib.request.build_opener(NoRedir)
