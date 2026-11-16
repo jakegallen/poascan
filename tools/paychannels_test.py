@@ -251,9 +251,12 @@ check("version is at least 1.26.345 and the changelog records the 202 poll_url r
 check("version is at least 1.26.346 and the changelog records the /ops/memory sqlite + tracked/untracked split",
       _ver >= (1, 26, 346) and "## [1.26.346]" in cl and "sqlite section" in cl and "untracked" in cl
       and not any(c in cl.split("## [1.26.346]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.347 and the changelog records /api/swaps offset/limit paging",
-      _ver == (1, 26, 347) and "## [1.26.347]" in cl and "?offset" in cl and "?limit" in cl
+check("version is at least 1.26.347 and the changelog records /api/swaps offset/limit paging",
+      _ver >= (1, 26, 347) and "## [1.26.347]" in cl and "?offset" in cl and "?limit" in cl
       and not any(c in cl.split("## [1.26.347]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.348 and the changelog records the Bearer auth switch (v2.9.8) and the swap state no-op",
+      _ver == (1, 26, 348) and "## [1.26.348]" in cl and "Authorization: Bearer" in cl and "#1214" in cl and "v2.9.8" in cl
+      and not any(c in cl.split("## [1.26.348]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

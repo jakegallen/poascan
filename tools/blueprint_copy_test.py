@@ -45,17 +45,17 @@ check("/swap open steps: held not paid, 524 rule, never loop, stop states, lag, 
 ll = AG.llms_txt(); safety = ll.split("## Safety", 1)[1].split("## Source", 1)[0]
 check("llms.txt Safety: leak watch, critical notice, Emblem chat agent, 524", all(s in safety for s in (
       "next_nonce", "No answer: don't write.", "severity critical", "Emblem's chat agent or agent mode", "524")) and nodash(safety))
-check("llms.txt Updated 2026-11-15", "Updated 2026-11-15." in ll)
+check("llms.txt Updated 2026-11-15", "Updated 2026-11-16." in ll)
 tool = [d for n, _, d, _, _ in AG.TOOLS if n == "get_swap_status"][0]
 check("MCP get_swap_status: pending_receipt is held, not paid", "pending_receipt is held, not paid" in tool)
 _sp = [v for k, v in AG.openapi()["paths"].items() if k.endswith("/swaps/status")]
 check("OpenAPI swaps status: pending_receipt is held, not paid", len(_sp) == 1 and "pending_receipt is held, not paid" in str(_sp[0]))
-check("SAFE (1.26.244): X-Api-Key header only, never a key or token in a URL, 401 or 403 means tell me it needs a fix, never shown in the chat",
-      "Send SAVED_KEY only in an X-Api-Key header on every minepoa.com call above." in PR.SAFE and "401 or 403" in PR.SAFE and "show it in this chat" in PR.SAFE
+check("SAFE (1.26.348): Authorization: Bearer header only, never a key or token in a URL, 401 or 403 means tell me it needs a fix, never shown in the chat",
+      "Send SAVED_KEY only in an Authorization: Bearer header on every minepoa.com call above." in PR.SAFE and "401 or 403" in PR.SAFE and "show it in this chat" in PR.SAFE
       and "key=" not in PR.SAFE and "token=" not in PR.SAFE and "key=" not in PR.WATCH)
 check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
-      and "X-Api-Key" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
+      and "Authorization: Bearer" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.9.7, 0953fc59", S.template_sha256() == "0953fc59e7a042ab6691cdc10433d0de5850d9bdb894a1a1a8bf423481a68f69")
+check("join prompt v2.9.8, 32f96b73", S.template_sha256() == "32f96b730f24d89de63d9b11a34d1c9cae74b76492eb53a0af87b20a29d6d492")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + how + safe + tout + hw + safety + ns).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)

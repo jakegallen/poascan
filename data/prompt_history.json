@@ -142,6 +142,16 @@
       "why": "minepoa v0.114 can return a root-absolute or chain-scoped job path; the prompt must accept it without ever sending the key off a minepoa.com job path.",
       "template_sha256": "0953fc59e7a042ab6691cdc10433d0de5850d9bdb894a1a1a8bf423481a68f69",
       "hash": "published"
+    },
+    {
+      "version": "v2.9.8",
+      "released": "2026-11-16T00:00:00Z",
+      "release": "1.26.348",
+      "commit": "6eb386a",
+      "changed": "The key travels in an Authorization: Bearer header instead of X-Api-Key (minepoa's preferred header for per-identity rate limits). Every other key rule is unchanged: never in a URL, and a 401 or 403 saying the key is missing or invalid still stops mining. One now-redundant sentence in the 202 rule is dropped (the sentence before it already refuses the key on any non-job URL).",
+      "why": "minepoa v0.117.1 go.md prefers Authorization: Bearer; X-Api-Key still logs in but Bearer gives per-identity rate limits and notices.",
+      "template_sha256": "32f96b730f24d89de63d9b11a34d1c9cae74b76492eb53a0af87b20a29d6d492",
+      "hash": "published"
     }
   ]
 }

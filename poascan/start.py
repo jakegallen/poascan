@@ -124,7 +124,7 @@ STEPS = [
     ("Store the key", None, "OS secret store only. One private key backup, then never shown; confirm as ••••LAST4. Not a wallet download, wallet activation, or wallet restore."),
     ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words. A 202 is accepted and pending: poll only an https poll_url on minepoa.com, and never resubmit while pending or unknown."),
     ("Mine", f"{B}/api/hosted/mine", "Only after the answer is confirmed."),
-    ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an X-Api-Key header."),
+    ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an Authorization: Bearer header."),
 ]
 
 # v2.9 (decision Oct 26): self-custody joins get skill.md's manual proof steps as written there (poa.mjs does not mine the

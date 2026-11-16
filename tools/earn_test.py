@@ -42,7 +42,7 @@ e = EA.check(A, est); ie = {i["key"]: i for i in e["items"]}
 check("established Agent: Earning, closes left, seats", e["headline"] == "Earning" and ie["established"]["value"] == "Yes · 6 closes left" and ie["seats"]["value"] == "66 seats · 50 aligned" and ie["payouts"]["value"] == "1.62M POA · 2 closes")
 txt = repr(d) + repr(e) + repr(EA.WAYS) + repr(EA.GRADING_RULES) + EA.DISCLAIMER + repr(EV.FAQ) + EV.ask_item(A)[1]
 check("no em or en dashes", "\u2014" not in txt and "\u2013" not in txt)
-check("Ask prompt: no key in links, never auto submits", "X-Api-Key header" in EV.ask_item(A)[1] and "wait for my go-ahead" in EV.ask_item(A)[1] and "key=" not in EV.ask_item(A)[1])
+check("Ask prompt: no key in links, never auto submits", "Authorization: Bearer header" in EV.ask_item(A)[1] and "wait for my go-ahead" in EV.ask_item(A)[1] and "key=" not in EV.ask_item(A)[1])
 check("says Agents, never Accounts", "Account" not in txt)
 import time
 now = int(time.time())

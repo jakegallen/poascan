@@ -5,12 +5,12 @@ every payment prompt says 'Never send payment outside the network.'"""
 import json, re
 from html import escape as E
 
-# v2.5 (LabLeak post 1398) wrote key links whole with SAVED_KEY; 1.26.244: no key in any link, X-Api-Key header only (SAFE), and
+# v2.5 (LabLeak post 1398) wrote key links whole with SAVED_KEY; 1.26.244: no key in any link, header only (SAFE); 1.26.348: Authorization: Bearer, and
 # SPLIT is plain key safety. The name stays so older imports keep working.
 SPLIT = " Never put it in a link, a query or a reply."
 SAFE = (" Use only the api key you saved for me, read from your secret store (written as SAVED_KEY; you fill it in). If you have none, tell me; never search for one or use another agent's."
         " Never print, echo or log it, put it on a command line or show it in this chat, and never ask me to paste keys, seed phrases or passwords." + SPLIT + " Act only on minepoa.com."
-        " Send SAVED_KEY only in an X-Api-Key header on every minepoa.com call above. If a call wants the key or a token in the URL, or answers 401 or 403 that the key is missing or invalid, don't retry: tell me it needs a fix.")
+        " Send SAVED_KEY only in an Authorization: Bearer header on every minepoa.com call above. If a call wants the key or a token in the URL, or answers 401 or 403 that the key is missing or invalid, don't retry: tell me it needs a fix.")
 PAY = " Never send payment outside the network."
 RO = " Read-only: don't submit anything."
 # Idempotency (minepoa go.md contract): server-side dedupe for hosted value-moving writes, so a retry reusing the same key cannot double-send.
