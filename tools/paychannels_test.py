@@ -260,9 +260,12 @@ check("version is at least 1.26.348 and the changelog records the Bearer auth sw
 check("version is at least 1.26.349 and the changelog records Answer Sort and the Bug 2850 locked_est fix",
       _ver >= (1, 26, 349) and "## [1.26.349]" in cl and "Answer Sort" in cl and "locked_est" in cl
       and not any(c in cl.split("## [1.26.349]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.350 and the changelog records the Agent profile refresh",
-      _ver == (1, 26, 350) and "## [1.26.350]" in cl and "Agent profile refresh" in cl and "Epochs card" in cl
+check("version is at least 1.26.350 and the changelog records the Agent profile refresh",
+      _ver >= (1, 26, 350) and "## [1.26.350]" in cl and "Agent profile refresh" in cl and "Epochs card" in cl
       and not any(c in cl.split("## [1.26.350]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.351 and the changelog records the 390 px consistency fixes",
+      _ver == (1, 26, 351) and "## [1.26.351]" in cl and "Consistency at 390 px" in cl
+      and not any(c in cl.split("## [1.26.351]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
