@@ -339,7 +339,7 @@ function charts(){if(RM||!("IntersectionObserver" in W))return chartTips();
  W.addEventListener("scroll",function(){if(!rq){rq=1;setTimeout(rv,250)}},{passive:true});W.addEventListener("pageshow",rv);
  chartTips()}
 function chartTips(){
- $$(".chartbox").forEach(function(b){var svg=$("svg",b);if(!svg)return;var items=$$("[data-tip]",svg);if(!items.length)return;
+ $$(".chartbox").forEach(function(b){var svg=$("svg",b);if(!svg||b.dataset.tp)return;b.dataset.tp="1";var items=$$("[data-tip]",svg);if(!items.length)return;
   var xh=D.createElement("i"),xt=D.createElement("div"),xd=D.createElement("i");xh.className="xh";xt.className="xt";xd.className="xd";b.appendChild(xh);b.appendChild(xt);b.appendChild(xd);var on=null;
   /* one chart spec (1.26.119): the SVG is stretched to its plot box, so x and y scale separately; a dot marks the hovered point */
   function move(e){var r=svg.getBoundingClientRect(),br=b.getBoundingClientRect(),vb=svg.viewBox.baseVal,sx=r.width/vb.width,sy=r.height/vb.height,x=(e.clientX-r.left)/sx,best=null,bd=1e9;
@@ -697,6 +697,19 @@ function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
  D.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target;if(!t||!t.matches||!t.matches(".cpt[data-chart]"))return;e.preventDefault();open(t.dataset.chart,"",t)});
  var q0=cpParse(location.search);if(q0)open(q0.c,q0.r,$('[data-chart="'+q0.c+'"]'));
 })();
+/* 1.26.350 local expand ([data-cexp]): a chart only this page draws (an Agent's rewards) opens its taller copy, server drawn into a
+   <template>, in the pop-out dialog. No fetch. Hover tips bind once the copy is in. */
+(function(){var dl=null;function shut(){if(dl&&dl.open)dl.close()}
+ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-cexp]");if(!b)return;var t=D.getElementById(b.dataset.cexp);if(!t||!t.content)return;e.preventDefault();
+  if(!dl){dl=D.createElement("dialog");dl.className="cpop cexp";dl.setAttribute("aria-modal","true");dl.setAttribute("aria-labelledby","cx-t");
+   dl.innerHTML='<div class="cp-in"><div class="cp-hd"><h2 id="cx-t"></h2><button type="button" class="jm-x cp-x" aria-label="Close" data-cxclose><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="cp-box"></div></div>';
+   D.body.appendChild(dl);dl.addEventListener("click",function(e){if(e.target===dl||e.target.closest("[data-cxclose]"))shut()});
+   dl.addEventListener("close",function(){D.documentElement.classList.remove("jmlock");var o=dl._op;dl._op=null;if(o&&o.focus)o.focus({preventScroll:true})})}
+  $("#cx-t",dl).textContent=b.dataset.title||"";var bx=$(".cp-box",dl);bx.innerHTML="";bx.appendChild(t.content.cloneNode(true));dl._op=b;
+  if(dl.showModal)dl.showModal();else dl.setAttribute("open","");D.documentElement.classList.add("jmlock");
+  $$(".chart",bx).forEach(function(c){c.classList.remove("pre");c.classList.add("in")});
+  var cb=$(".chartbox",bx),cv=cb&&$(".cvg",cb);if(cv){var pp=$(".cvp",cb)||cv,cs=getComputedStyle(bx);cv.style.setProperty("--ch",Math.max(150,Math.floor(bx.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-(cb.offsetHeight-pp.offsetHeight)-2))+"px")}
+  chartTips()})})();
 if(BM.demo)wantLive=false;   /* the dev demo feeds apply() itself */
 hsInit();
 if(wantLive)connect();
@@ -750,10 +763,10 @@ function apply(el){var r=rows(el),n=+(el.dataset.rcn||CAP),b=el._rcb;r.forEach(f
 function rowcap(){[].slice.call(D.querySelectorAll("main table:not(.nocap) > tbody, main .card ul:not(.nocap):not(.chips), main .card ol:not(.nocap)")).forEach(function(el){
  if(el.closest("nav,header,.qbox,.chartbox,.nocap"))return;if(rows(el).length<=CAP&&!el._rcb)return;
  if(!el.dataset.rc){el.dataset.rc="1";new MutationObserver(function(){apply(el)}).observe(el,{childList:true})}apply(el)})}
-function even(){var on=window.innerWidth>900;[].slice.call(D.querySelectorAll("main .grid2")).forEach(function(g){
+function even(){var on=window.innerWidth>900;[].slice.call(D.querySelectorAll("main .grid2:not(.evno)")).forEach(function(g){
  var k=[].filter.call(g.children,function(c){return c.offsetParent!==null});k.forEach(function(c){c.classList.remove("evcap");c.style.maxHeight=""});
  if(!on||k.length!==2)return;g.classList.add("evm");var a=k[0].offsetHeight,b=k[1].offsetHeight;g.classList.remove("evm");
- var t=a>b?k[0]:k[1],s=Math.max(Math.min(a,b),360);if(Math.max(a,b)-s<60)return;t.style.maxHeight=s+"px";t.classList.add("evcap")})}
+ var t=a>b?k[0]:k[1],s=Math.max(Math.min(a,b),360);if(Math.max(a,b)-s<60||!t.classList.contains("card"))return;   /* 1.26.350: only a card scrolls inside; capping a column of cards hid the lower ones */t.style.maxHeight=s+"px";t.classList.add("evcap")})}
 var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(even,150)});
 D.addEventListener("toggle",function(e){if(e.target.closest&&e.target.closest("main .grid2")){clearTimeout(tm);tm=setTimeout(even,60)}},true);
 function go(){rowcap();even();setTimeout(even,800)}

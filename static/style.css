@@ -1293,9 +1293,17 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 .prof .pname.pa{font:500 var(--t20)/1.3 var(--mono)}
 .prof .amono{display:flex;align-items:center;gap:6px;min-width:0;color:var(--bone-2);font-size:var(--t13)}.prof .amono .mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prof .ameta{margin:8px 0 0}
+.afacts{display:flex;flex-wrap:wrap;gap:8px 28px;margin:12px 0 0}
+.af{min-width:0}.af dt{font:600 var(--t12)/var(--lh-tight) var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl);margin:0 0 4px}
+.af dd{margin:0;font:500 var(--t15,15px)/1.2 var(--mono);color:var(--bone);white-space:nowrap}.af dd a{color:var(--gold)}
 .ptags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .prof .px{align-self:start}
 .pgrid{align-items:start}
+.pgrid.evno{align-items:stretch}.pgrid.evno>.card{margin:0}
+.prew{display:flex;flex-direction:column}.prew>.cb{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-end}
+.pact{margin-top:16px}
+@media (min-width:901px){.pact .pheat{gap:4px}.pact .phr i{aspect-ratio:auto;height:16px}}
+.pepochs .eptab td:nth-child(3){white-space:nowrap}
 .psc{display:grid;grid-template-columns:160px minmax(0,1fr);gap:28px;align-items:center;padding:8px 0 20px}
 .dial{position:relative;width:160px;height:160px;display:grid;place-items:center;align-content:center}
 .dial svg{position:absolute;inset:0;transform:rotate(-90deg)}
@@ -1319,6 +1327,7 @@ tr.in .hmark{animation:hallin 1.2s var(--ease) both}
 @media (max-width:640px){
  .prof{grid-template-columns:72px minmax(0,1fr);gap:16px;padding:16px}.prof .mmark.pm{width:72px;height:72px;align-self:start}
  .prof .px{grid-column:1/-1;justify-self:start}.prof .pname{font-size:var(--t28)}
+ .afacts{gap:8px 18px}.af dd{font-size:var(--t13)}
  .psc{grid-template-columns:minmax(0,1fr);justify-items:center;gap:16px}.pparts{width:100%}
  .ppart{grid-template-columns:96px minmax(0,1fr) 28px}
  .pfacts{grid-template-columns:repeat(2,minmax(0,1fr));margin:0 -12px -12px}.pf{padding:12px}

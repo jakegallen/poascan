@@ -87,6 +87,28 @@ TIP = ("Birth panel: the answer has a panel listed in the close record (set when
 NTIP = ("POAScan's replay of a proposed rule, until a close record carries neutral_answer and neutral_grading itself. "
         "Answer: longest gap between answer txs over 3 h, or under 20 answer txs. Grading: seal txs under 25% of the median of the last 3 closes that were neither.")
 
+def answer_sort_html():
+    """Read-only Answer Sort context under the queue board: cross-author sentence families from minepoa's official
+    grading-context tool, labeled measurements not verdicts and linked. Counts and overlaps only, never a grade input.
+    answersort.context() is non-blocking (cached per close, last-good on failure), so this never slows or breaks the board."""
+    from . import answersort as AS
+    d = AS.context()
+    link = f'<a href="{AS.TOOL_URL}">Answer Sort tool</a>'
+    head = f'<h3 class="rech">Answer Sort <span class="tag">{E(AS.LABEL)}</span></h3>'
+    if not d.get("available"):
+        return head + ('<p class="cov dim small">Cross-author sentence families from minepoa\'s Answer Sort. Counts and '
+                       f'sentence overlaps only, no scores or verdicts. {link}</p>')
+    share = d.get("multi_author_share"); ac = d.get("as_of_close")
+    sub = ("Cross-author sentence families from minepoa's Answer Sort"
+           + (f", as of the E{ac} close" if ac is not None else "")
+           + (f" ({share * 100:.0f}% of answers share a sentence with another author)" if isinstance(share, (int, float)) else "")
+           + f". Counts and sentence overlaps only, no scores or verdicts. {link}")
+    rows = "".join(f'<tr><td class="r">{intc(f.get("members") or 0)}</td><td class="r">{intc(f.get("authors") or 0)}</td>'
+                   f'<td class="small">{E((f.get("sample") or "")[:120])}</td></tr>' for f in (d.get("top_cross_author_families") or []))
+    tab = (f'<div class="tw"><table class="hist cal gov"><thead><tr><th class="r">Members</th><th class="r">Authors</th>'
+           f'<th>Shared sentence</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ""
+    return head + f'<p class="cov dim small">{sub}</p>' + tab
+
 def card_html():
     d = data()
     if d["last_close"] is None: return ""
@@ -110,10 +132,12 @@ def card_html():
             + (f' · grading list as of {lt(gl["as_of"], "dt")}' if gl and gl.get("as_of") else "") + f' · Counts only · <a href="{METHOD}">Method</a></p>')
     links = '<a class="more" href="/api/v1/governance/board">API →</a>'
     return (card("Queue board", f'<div class="stats four">{s}</div><h3 class="rech">Birth panel by closes waited</h3>' + btab
-            + ('<h3 class="rech">Neutral closes</h3>' + ctab if ctab else "") + foot, links, cls="histc", id="board"))
+            + ('<h3 class="rech">Neutral closes</h3>' + ctab if ctab else "") + answer_sort_html() + foot, links, cls="histc", id="board"))
 
 def api():
     d = data()
-    return dict(d, data_as_of_close=d.get("last_close"), stale_reason=A.close_lag(d.get("last_close")),
+    from . import answersort as AS
+    return dict(d, answer_sort=AS.context(), data_as_of_close=d.get("last_close"), stale_reason=A.close_lag(d.get("last_close")),
                 method="https://poascan.io" + METHOD, url="https://poascan.io/governance?tab=queue#board",
-                note="Counts only. No pending seal blob or score is read. neutral_* are POAScan's replay of a proposed rule unless source says close record.")
+                note="Counts only. No pending seal blob or score is read. neutral_* are POAScan's replay of a proposed rule unless source says close record. "
+                     "answer_sort is read-only context from minepoa's Answer Sort tool (measurements, not verdicts: counts and sentence overlaps only), cached per close; it never changes a grade, reward or on-chain value.")

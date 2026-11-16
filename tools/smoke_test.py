@@ -431,8 +431,8 @@ def history(base, check):
           and req0(base + "/fragment/lb?tab=nope")[0] == 400 and "html" in lb and 'data-liverows="txs"' in tx1 and 'data-liverows="closes-home"' in hm
           and 'data-liverows="closes" data-keep="all"' in ep1 and ab.count('class="lzs"') == 2 and 'id="real"' in ab
           and 'aspect-ratio:640/170' in __import__("poascan.ui", fromlist=["x"]).line([(0, 1)]))
-    check("/address: header carries name or address once, meta line; overview rows do not repeat the header",
-          'class="ameta"' in ov and "First seen" in ov and ">Balance<" not in ov.split('class="chips atabs scroll"')[1] and "Spendable / Locked" not in ov)
+    check("/address: header carries name or address once, header facts; overview rows do not repeat the header; epochs card; local expand",
+          'class="afacts"' in ov and "First seen" in ov and 'class="grid2 pgrid evno"' in ov and 'class="card pact"' in ov and ('id="epochs"' in ov or "No rewards yet" in ov) and ">Balance<" not in ov.split('class="chips atabs scroll"')[1] and "Spendable / Locked" not in ov)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": a2, "tx_limit": 25, "grading": True, "grading_limit": 2}}}).encode(),
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
