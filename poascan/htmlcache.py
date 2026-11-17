@@ -227,6 +227,12 @@ def put(k, html, now=None):
         while _bytes[0] > MAX_BYTES and _c:
             k0 = next(iter(_c)); _bytes[0] -= _c.pop(k0)[2]; stats["evict"] += 1
 
+def _background():
+    try:
+        from . import analytics as A
+        A.background()
+    except Exception: pass
+
 def _reserve():
     """The cheap-slot semaphore, or None when this process has no reserve (a one-slot test)."""
     try:
@@ -249,6 +255,7 @@ def _refresh(k, fn):
             ev.set(); return
     def run():
         try:
+            _background()
             t0 = time.time(); h = fn()
             if isinstance(h, str):
                 put(k, h)
@@ -435,6 +442,7 @@ def warm_loop(render_path, seg=lambda: None, stop=None):
     """Background: re-render each WARM page when its copy is within WARM_EVERY s of its TTL. render_path(path, qs) -> html
     (it sets up the request context: current segment, not a crawler); seg() is the segment part of the key.
     A close (note_close) wakes this loop and forces one pass that publishes each new render without clearing the pin first."""
+    _background()
     while not (stop and stop.is_set()):
         with _lock:
             force = _close_due[0]

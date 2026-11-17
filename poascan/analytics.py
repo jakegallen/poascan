@@ -10,6 +10,14 @@ _lock = threading.Lock()
 CACHE_MAX = 256
 _heavy = threading.BoundedSemaphore(int(os.environ.get("POASCAN_HEAVY_MAX", "2")))   # cold computes running at once
 _depth = threading.local()
+_bg = threading.local()
+_bg_heavy = threading.BoundedSemaphore(1)   # 1.26.364: background renders hold at most one of the _heavy slots
+
+def background():
+    """Mark this thread as a background renderer (warm loop, stale refresh, doc warm). Its cold computes take at most one
+    _heavy slot, so a visitor's compute always has one: on boot and after a close two warm renders used to hold both
+    while every request slot waited behind them."""
+    _bg.on = True
 
 def cached(key, ttl=30, light=False):
     """TTL cache with single-flight: one thread recomputes an expired entry while the others get the stale
@@ -37,6 +45,8 @@ def cached(key, ttl=30, light=False):
                 if hit: return hit[1]
             outer = not getattr(_depth, "n", 0)
             slot = outer and not light
+            bg = slot and getattr(_bg, "on", False)
+            if bg: _bg_heavy.acquire()
             if slot: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
             _depth.n = getattr(_depth, "n", 0) + 1
             try:
@@ -48,6 +58,7 @@ def cached(key, ttl=30, light=False):
             finally:
                 _depth.n -= 1
                 if slot: _heavy.release()
+                if bg: _bg_heavy.release()
                 if own:
                     with _lock: _inflight.pop(k, None)
                     ev.set()

@@ -1857,7 +1857,7 @@ def _warm_render(p, qs):
 def _doc_warm(stop=None, every=240, first=15):
     """1.26.306: render /api and /api/reference on this thread, then again every 4 minutes. Before, the first copy after a
     deploy needed a heavy slot, and under an API storm none came free, so /api served the plain busy line."""
-    time.sleep(first)
+    A.background(); time.sleep(first)
     while True:
         for name, fn in (("api", lambda: AG.api_page(V.page, V.card)), ("reference", lambda: AG.reference_page(V.page, V.card))):
             try: AG._DOC[name] = (time.time(), fn())
