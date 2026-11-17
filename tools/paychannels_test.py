@@ -317,9 +317,12 @@ check("version is at least 1.26.367 and the changelog records only the closes",
 check("version is at least 1.26.368 and the changelog records folds over the closes",
       _ver >= (1, 26, 368) and "## [1.26.368]" in cl and "folds over the closes" in cl
       and not any(c in cl.split("## [1.26.368]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.369 and the changelog records the streamed grader patterns",
-      _ver == (1, 26, 369) and "## [1.26.369]" in cl and "streamed" in cl
+check("version is at least 1.26.369 and the changelog records the streamed grader patterns",
+      _ver >= (1, 26, 369) and "## [1.26.369]" in cl and "streamed" in cl
       and not any(c in cl.split("## [1.26.369]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.370 and the changelog records the Community Topics tab",
+      _ver == (1, 26, 370) and "## [1.26.370]" in cl and "Community Topics" in cl
+      and not any(c in cl.split("## [1.26.370]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
