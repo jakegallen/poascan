@@ -263,7 +263,7 @@ def check(a, inp, now=None):
 
     # 2 Answers per epoch (receipts: accepted and final means it landed on chain)
     mine = [r for r in rc if r.get("segment") == cur]
-    landed = sorted({r["epoch"] for r in mine if r.get("accepted")})
+    landed = sorted({r["epoch"] for r in mine if r.get("accepted") and r.get("epoch") is not None})   # a receipt with no epoch yet has no chip
     first = landed[0] if landed else None
     chips = []
     if first is not None and open_ep is not None:
