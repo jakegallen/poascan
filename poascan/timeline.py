@@ -19,6 +19,14 @@ def _f(v):
 def _first(sql, args):
     r = db.q1(sql, args); return dict(r) if r else None
 
+def _either(sql, args, last):
+    """Sent or received: one indexed lookup per side, then the earlier (or later) row. A single (from_addr=? OR to_addr=?)
+    with a segment filter made SQLite scan the whole segment (up to seconds per address page)."""
+    rows = [r for r in (_first(sql.format(col=c), args) for c in ("from_addr", "to_addr")) if r]
+    if not rows: return None
+    k = lambda r: (r["ts"] or 0, r["id"])
+    return max(rows, key=k) if last else min(rows, key=k)
+
 _memo, MEMO_S, MEMO_MAX = {}, 120, 500
 
 def events(a):
@@ -34,7 +42,7 @@ def _events(a):
     for k, typ in _TX:
         r = _first("SELECT id, ts, epoch FROM txs WHERE from_addr=? AND type=? AND segment=? ORDER BY ts, id LIMIT 1", (a, typ, seg))
         if r: ev.append(dict(kind=k, ts=r["ts"], tx=r["id"], close=None, value=None))
-    r = _first("SELECT id, ts, amount FROM txs WHERE (from_addr=? OR to_addr=?) AND type='transfer' AND segment=? ORDER BY ts, id LIMIT 1", (a, a, seg))
+    r = _either("SELECT id, ts, amount FROM txs WHERE {col}=? AND type='transfer' AND segment=? ORDER BY ts, id LIMIT 1", (a, seg), last=False)
     if r: ev.append(dict(kind="transfer", ts=r["ts"], tx=r["id"], close=None, value=_f(r["amount"])))
     r = _first("SELECT id, ts, from_addr FROM txs WHERE invited_by=? AND type='join' AND segment=? ORDER BY ts, id LIMIT 1", (a, seg))
     if r: ev.append(dict(kind="invite", ts=r["ts"], tx=r["id"], close=None, value=None))
@@ -53,7 +61,7 @@ def _events(a):
     from . import correction as CC   # 1.26.257: ballot 2464, scheduled until the E44 record carries it
     cc = CC.for_address(a)
     if cc: ev.append(dict(kind="correction", ts=cc["ts"], tx=None, close=cc["close"], value=cc["amount"], state=cc["state"], post=cc["post"]))
-    r = _first("SELECT id, ts, type FROM txs WHERE (from_addr=? OR to_addr=?) AND segment=? ORDER BY ts DESC, id DESC LIMIT 1", (a, a, seg))
+    r = _either("SELECT id, ts, type FROM txs WHERE {col}=? AND segment=? ORDER BY ts DESC, id DESC LIMIT 1", (a, seg), last=True)
     if r and not any(x.get("tx") == r["id"] for x in ev): ev.append(dict(kind="latest", ts=r["ts"], tx=r["id"], close=None, value=None, type=r["type"]))
     order = list(KINDS)
     ev.sort(key=lambda x: ((x["ts"] or 0), order.index(x["kind"])))
