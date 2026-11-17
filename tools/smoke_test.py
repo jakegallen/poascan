@@ -90,7 +90,7 @@ def main():
         check("mcp initialize", c == 200 and json.loads(b)["result"]["serverInfo"]["name"] == "poascan")
         c, b = req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), H); check(f"mcp notification -> {c}", c == 202)
         c, b = rpc("tools/list"); tools = [t["name"] for t in json.loads(b)["result"]["tools"]] if c == 200 else []
-        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 54 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
+        check(f"mcp tools/list ({len(tools)} tools)", len(tools) == 52 and {"get_standing", "list_at_risk", "get_epoch_record", "get_answer_receipt", "get_pending_by_epoch", "get_swap_status", "get_onboarding_steps", "get_cluster_signals", "list_agents"} <= set(tools))
         readme = open(os.path.join(root, "README.md")).read()
         check("README tool count + names", f"* {len(tools)} tools:" in readme and all(f"`{t}`" in readme for t in tools))
         c, b = req(base + "/llms.txt"); check("llms.txt tool count", f"Tools ({len(tools)}):".encode() in b)
@@ -166,12 +166,10 @@ def main():
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
         from poascan import agentapi as _AG, indexer as _IX
-        from poascan.swap.pages import _usd as _U
         from poascan.swap import indexer as _SIX
-        check("no scientific notation: JSON numbers, USD stats, fill payment ref under proof",
+        check("no scientific notation: JSON numbers, fill payment ref under proof",
               _AG.plainjson('{"a": 1.059e-05, "s": "1e-05"}') == '{"a": 0.00001059, "s": "1e-05"}'
               and not _re.search(r"\d[eE][-+]\d", req(base + "/api/v1/swaps/status")[1].decode().split('"meta"')[0])
-              and [_U(v) for v in (327.56, 10388.08, 0.11, 0.00001059)] == ["$327.56", "$10,388", "$0.11", "$0.000011"]
               and _SIX._ref({"proof": {"chain": "solana", "ref": "abc"}}) == "abc" and "node_stale" in req(base + "/api/v1/swaps/status")[1].decode())
         _mk = json.loads(req(base + "/api/v1/swaps/status")[1])["market"]
         check("swaps market: all-time fields added, 24h kept",
@@ -202,9 +200,8 @@ def main():
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
               for u in ("/", "/chain", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
         _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
-        _mt = _re.search(rb'<section class="card mtile">.*?</section>', _hm[1], _re.S)
-        check("home Market card links POASwap (new tab, mark), not /swaps", bool(_mt) and b'href="/swaps"' not in _mt.group(0)
-              and b'<a class="more mswap" href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _mt.group(0) and b"POASwap" in _mt.group(0))
+        check("home: no Market card, one Trade on POASwap link (new tab, mark), not /swaps", b'class="card mtile"' not in _hm[1] and _hm[1].count(b">Trade on POASwap \xe2\x86\x92</a>") == 1
+              and b'<p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _hm[1])
         check("/about price history points to POASwap; /privacy says swaps and wallet setup are on POASwap, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
               and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
@@ -252,6 +249,7 @@ def main():
         check(f"every redirect target renders, failures {bad[:3]}", not bad)
         for u in ["/api/v1/swaps/price-history", "/api/v1/agents/new-per-day", "/api/v1/uptime", "/api/v1/uptime.csv", "/api/v1/uptime?endpoint=/api/swaps"]:
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
+            if "/swaps/" in u: check(f"openapi leaves out {u} (kept, undocumented)", u not in spec["paths"]); continue
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
         check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
@@ -466,7 +464,7 @@ def calibration(base, check):
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     check("calibration in OpenAPI, llms.txt and MCP get_address; tool count unchanged",
-          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 54)
+          "/api/v1/agents/calibration" in spec["paths"] and "/agents/calibration" in llms and (sc.get("calibration") or {}).get("seats") == 25 and len(tl["result"]["tools"]) == 52)
 
 def cohorts(base, check):
     """Frozen answer cohorts: the five states sum to the frozen count at every close; Gate A per close."""
@@ -517,8 +515,8 @@ def reconcile(base, check):
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
     sc = (call.get("result") or {}).get("structuredContent") or {}
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 10, "method": "tools/list"}).encode(), {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])["result"]["tools"]
-    check("MCP tools/list: 54 tools, every parameter described, every tool says when to use it",
-          len(tl) == 54 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
+    check("MCP tools/list: 52 tools, every parameter described, every tool says when to use it",
+          len(tl) == 52 and all(p.get("description") for t in tl for p in t["inputSchema"].get("properties", {}).values()) and all("Use it" in t["description"] or "Check this" in t["description"] for t in tl)
           and all("\u2014" not in t["description"] for t in tl))
     check("reconcile in OpenAPI, llms.txt and MCP get_indexer_status", "/api/v1/reconcile" in spec["paths"] and "/reconcile" in llms and len((sc.get("reconcile") or {}).get("rows") or []) == 12)
 
@@ -584,12 +582,13 @@ def swap_module(base, spec, check):
     check(f"swap boundary: explorer reads swaps via the API, the module enters POAScan only via host.py {bad}", not bad
           and not os.path.exists(os.path.join(root, "poascan", "swapx.py")) and not os.path.exists(os.path.join(root, "static", "swap.js")))
     c2, css = req(base + "/static/swap.css"); c3, _ = req(base + "/static/swap.js")
-    check("swap assets still served from the package at the same URLs (/swaps itself 301s to POASwap)",
-          req0(base + "/swaps")[0] == 301 and c2 == 200 and c3 == 200 and b".xgrid{" in css and b".xgrid{" not in req(base + "/static/style.css")[1])
+    check("swap pages are gone: /swaps, /swap/<id> and /offer/<id> 301 to POASwap, swap.css and swap.js 404",
+          req0(base + "/swaps")[0] == 301 and req0(base + "/swap/" + "ab" * 32) == (301, "https://poaswap.io/") and req0(base + "/offer/x1") == (301, "https://poaswap.io/")
+          and c2 == 404 and c3 == 404 and b".xgrid{" not in req(base + "/static/style.css")[1])
     st = json.loads(req(base + "/api/v1/swaps/status")[1]); oid = (json.loads(req(base + "/api/v1/swaps")[1]) or [{}])[0].get("offer_id")
     m = st["market"]
     check("status market carries what the explorer tiles need (last_trade, best_ask, poa_on_offer, open_depth, fills)",
-          {"last_trade", "best_ask", "poa_on_offer", "open_depth", "fills"} <= set(m) and "/api/v1/swaps/{offer_id}" in spec["paths"]
+          {"last_trade", "best_ask", "poa_on_offer", "open_depth", "fills"} <= set(m) and "/api/v1/swaps/{offer_id}" not in spec["paths"] and "/api/v1/swaps" not in spec["paths"]
           and isinstance(m.get("open_depth"), dict) and "poa" in m["open_depth"] and "offers" in m["open_depth"])
     if oid:
         d = json.loads(req(base + "/api/v1/swaps/" + oid)[1])
@@ -597,11 +596,11 @@ def swap_module(base, spec, check):
               and req(base + "/api/v1/swaps/nope-not-an-offer")[0] == 404)
     env = dict(os.environ, SWAP_BRAND="SwapSite", SWAP_BASE_URL="https://swap.example.com", SWAP_PAGE_PATH="/", SWAP_METHOD_URL="https://swap.example.com/method",
                PYTHONPATH=root, POASCAN_INDEXER="0")
-    out = _sp.run([_sys.executable, "-c", "from poascan.swap import config as C, prompts as P, faq as F, pages as G; "
-                   "print(C.PAGE_URL, C.STATUS_URL, C.link(C.METHOD_URL), C.link(C.START_URL), 'swap.example.com/api/v1/swaps/status' in P._CHECK_SOON)"],
+    out = _sp.run([_sys.executable, "-c", "from poascan.swap import config as C; "
+                   "print(C.PAGE_URL, C.STATUS_URL, C.link(C.METHOD_URL), C.link(C.START_URL))"],
                   capture_output=True, text=True, env=env, timeout=60).stdout.split()
     check(f"swap config: base URL, page path and method link move with the env (swap.example.com) {out}",
-          out[:5] == ["https://swap.example.com/", "https://swap.example.com/api/v1/swaps/status", "/method", "https://poascan.io/start", "True"])
+          out[:4] == ["https://swap.example.com/", "https://swap.example.com/api/v1/swaps/status", "/method", "https://poascan.io/start"])
 
 def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.

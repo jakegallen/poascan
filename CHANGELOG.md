@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.353] - 2026-11-16
+
+### Removed
+- Swap and trading pages: /swaps, /swap/<id> and /offer/<id> now redirect to POASwap, and Home shows one Trade on POASwap link in place of the Market card. The address Swaps card, the token Open asks, Fill history and depth stats, the 1st swap milestone and the swap FAQ are gone. The MCP tools list_swap_offers and get_swap_offer are removed (52 tools); /api/v1/swaps and /api/v1/swaps/price-history are still served but no longer documented. /api/v1/swaps/status and get_swap_status are unchanged.
+
 ## [1.26.352] - 2026-11-16
 
 ### Added

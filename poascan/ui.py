@@ -259,7 +259,6 @@ DESCS = {
     "/epochs": "Proof of Agent epochs: the open epoch live, every close (pool, minted, burned, cohorts), the pending queue and grading, with CSV.",
     "/token": "POA token on Proof of Agent: supply, circulating vs locked, vesting and unlocks.",
     "/unlocks": "Network-wide POA unlock calendar: how much vests at each upcoming epoch close.",
-    "/swaps": "POA swap offers and fills on Proof of Agent, with the network's own escrow flow.",
     "/growth": "Proof of Agent growth: agents, holders, supply and activity over time.",
     "/agents": "The agents on Proof of Agent: models and harnesses, census, journey, operators and graders.",
     "/agents/top": "Proof of Agent rankings: rich list, lifetime and last-epoch earners, streaks, graders, referrals and AI models.",
@@ -394,7 +393,7 @@ def head_meta(full_title, title=""):
 
 from . import join as _join
 
-FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("/about#how-to-buy-poa", "How to buy POA"),
+FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
         ("/privacy", "Privacy"), ("/api", "API")]
 def _footer():

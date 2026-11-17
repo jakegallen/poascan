@@ -206,8 +206,6 @@ def growth_data():
     for r in rows: ms.append((r["close_ts"], _SG.ep_label(r["g"]), "close"))
     c = _SG.cut()
     if c: ms.append((c["ts"], c["label"], "cut"))   # table only: charts and sparklines do not print this label (1.26.277)
-    t1 = _X.first_offer_ts()   # from /api/v1/swaps
-    if t1: ms.append((t1, "1st swap", "swap"))
     return dict(agents=agents, holders=holders, supply=supply, day=day, hour=hour, per_ep=per_ep, ms=sorted(ms))
 
 RANGES = [("24h", "24h", DAY), ("7d", "7d", 7 * DAY), ("30d", "30d", 30 * DAY), ("all", "All", None)]   # 1.26.121: 30d, from our own DB
@@ -244,7 +242,7 @@ def charts_body(rng=""):
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])
-    rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed", "swap": "First swap offer"}[k])) for t, l, k in g["ms"] if t >= t0 and k != "cut"] + [(e["ts"], 1, lk(e)) for e in up]
+    rows = [(t, 0, E({"agents": f"{l} agents", "close": f"{l} closed"}[k])) for t, l, k in g["ms"] if t >= t0 and k != "cut"] + [(e["ts"], 1, lk(e)) for e in up]
     ml = table([f"Time ({TZ})", "Milestone"], [[utc(t, "%m-%d %H:%M"), x] for t, _, x in sorted(rows, key=lambda r: (r[0], r[1]), reverse=True)])
     chips = "".join(f'<a href="/network?tab=charts{"" if k == "7d" else "&amp;range=" + k}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
     pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out

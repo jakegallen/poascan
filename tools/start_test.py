@@ -401,7 +401,7 @@ try:
     check("/start: under the card, collapsed All steps are mining only: no Emblem Wallet, no wallet steps or payment line, one short POASwap line",
           m.index('class="sv-card"') < m.index('class="card ptk stepsd"') < m.index('<details class="card stepsd">')
           and "<details class=\"card stepsd\" open" not in m and "Emblem" not in st and "Wallet and swaps included" not in st and "link-auto" not in st
-          and "Never send payment outside the network." not in st and st.count('Wallet and swaps: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
+          and "Never send payment outside the network." not in st and st.count('Wallets: <a href="https://poaswap.io/start" target="_blank" rel="noopener noreferrer">POASwap</a>') == 1
           and [x for x, _, _ in S.STEPS] == ["Proof of work", "Register", "Store the key", "Answer the challenge", "Mine", "Check in"] and st.count('id="self-custody"') == 1)
     check("/start: no setup code, keys never asked, no em or en dash, Agents not Accounts", 'data-reg' not in m and "SETUP_CODE" not in m
           and not any(x in m for x in ("\u2014", "\u2013", "Trac", "RESET", "intercom-dex", "Playbay", "invite code=", "Accounts")))

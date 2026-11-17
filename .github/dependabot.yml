@@ -19,3 +19,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Staying on python:3.12-slim: digest refreshes only, no minor or major image bumps.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]

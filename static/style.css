@@ -1981,3 +1981,5 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .tokmkt tr.mid td{text-align:center;color:var(--dim);padding-top:var(--s2);padding-bottom:var(--s2)}
 .tokmkt tr.ask td{font-variant-numeric:tabular-nums}
 
+/* Home: the one POASwap link where the Market card was */
+.mtrade{margin:14px 0 0;text-align:center}.mtrade a{display:inline-flex;align-items:center;gap:8px;font:600 var(--t13)/1.2 var(--ui);color:var(--gold)}

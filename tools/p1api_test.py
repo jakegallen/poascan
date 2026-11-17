@@ -19,7 +19,7 @@ try: SV.api("/api/agents/sybil", {"x": ["1"]}); ok = False
 except SV.BadRequest: ok = True
 check("sybil route: an unknown parameter is a 400", ok)
 names = [t[0] for t in AG.TOOLS]
-check("MCP: sybil_signals is a tool (54 in all)", "sybil_signals" in names and len(names) == 54)
+check("MCP: sybil_signals is a tool (52 in all)", "sybil_signals" in names and len(names) == 52)
 st = [t for t in AG.TOOLS if t[0] == "list_governance_standing"][0]
 check("MCP: list_governance_standing takes offset", "offset" in json.dumps(st[3]))
 check("at-risk: offset allowed and passed", '"/api/governance/at-risk": {"level", "limit", "offset", "sort", "dir"}' in SV.GOV_API.__repr__().replace("'", '"') or "offset" in SV.GOV_API["/api/governance/at-risk"])

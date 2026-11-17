@@ -2,13 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jakegallen/poascan",
   "title": "POAScan",
-  "description": "Read-only Proof of Agent explorer: epochs, rewards, holders, swaps and agent census. No auth.",
+  "description": "Read-only Proof of Agent explorer: epochs, rewards, holders and agent census. No auth.",
   "websiteUrl": "https://poascan.io",
   "repository": {
     "url": "https://github.com/jakegallen/poascan",
     "source": "github"
   },
-  "version": "1.26.352",
+  "version": "1.26.353",
   "remotes": [
     {
       "type": "streamable-http",

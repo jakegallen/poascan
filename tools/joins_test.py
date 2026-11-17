@@ -2,7 +2,7 @@
 * joins_rate_calc: trailing 24 h by default; an ended pause (agents_joined flat 2 h or more) starts the window where it ended,
   at least 1 h; an ongoing pause keeps 24 h; 1h, 6h and 24h rates; no data is None
 * joins_rate reads POAScan's own status snapshots only (no upstream call) and is cached
-* the home page leads with (no USD on that row, audit SC-020; USD stays on Market and /token) Total mined, Circulating supply, Agents and Agents / hr in a .kpis row: terse labels, no sub-line,
+* the home page leads with (no USD on that row, audit SC-020; USD stays on /token) Total mined, Circulating supply, Agents and Agents / hr in a .kpis row: terse labels, no sub-line,
   no share buttons, the watermark on every card, 'Agents' not 'Accounts'; Holders and heights stay on the page
 * /about#home explains each; /api/v1/summary and /api/v1/status carry agent_joins_per_hour and its window (additive)
 Usage: python3 tools/joins_test.py"""
@@ -113,7 +113,7 @@ try:
     css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
     check("every stat card carries the watermark; the row is 4 across and 2 x 2 on phones",
           ".stat::after" in css and "wm.svg" in css and ".kpis{grid-template-columns:repeat(4" in css and re.search(r"max-width:900px\)\{\.kpis\{grid-template-columns:repeat\(2", css) is not None)
-    check("no USD on the headline row (audit SC-020); the Market card keeps it", 'class="usd"' not in k and "\u2248$" not in k and 'class="usd"' in home)
+    check("no USD on the headline row (audit SC-020)", 'class="usd"' not in k and "\u2248$" not in k)
     from poascan import views as V
     lc = V.live_snapshot()["cards"]
     check("live cards: circ (home) has no USD; vest (token page) keeps it", 'class="usd"' not in lc.get("circ", "x usd") and 'data-live="circ"' in lc["circ"] and 'class="usd"' in lc["vest"])

@@ -39,9 +39,6 @@ for bad in (q(status="nope"), q(status="live", include_expired="maybe")):
     try: SV.swap_filter(rows, bad); check(f"bad value {bad} is a 400", False)
     except SV.BadRequest: check(f"bad value {bad} is a 400", True)
 from poascan import agentapi as AG
-sp = AG.openapi()["paths"]; op = next(v for k, v in sp.items() if k.endswith("/swaps"))["get"]
-props = AG.SWAP_ROW["properties"]
-check("OpenAPI: status and include_expired params, the three fields, and why there is no dry_run or action_id",
-      {p["name"] for p in op["parameters"]} >= {"status", "include_expired"} and {"expired_at", "cancelled_at", "cancelled_after_expiry"} <= set(props)
-      and "dry_run" in op["description"] and "action_id" in op["description"])
+sp = AG.openapi()["paths"]
+check("OpenAPI: the swap list is served but undocumented; status stays", not any(k.endswith("/swaps") for k in sp) and "/api/v1/swaps/status" in sp)
 print("\n%d failed" % len(fails) if fails else "\nall passed"); sys.exit(1 if fails else 0)

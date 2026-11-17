@@ -92,16 +92,14 @@ check("the prompt never lets the agent show the key: header only, stop on a URL 
 
 # 1.26.244: every served prompt, Ask prompt and llms text, sitewide: no key or token in any URL or query, no grading guide link
 from poascan import prompts as PR, agentapi as AG
-from poascan.swap import prompts as SP
 CRED = re.compile(r"[?&#](?:[a-z_]*key|token|guid|secret|pk)=", re.I)
 _a = "poa1" + "x" * 40
 asks = {t: PR.opened(b) for t, b in [v for v in vars(PR).values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
-        + [PR.answer_epoch(), PR.answer_epoch(1), PR.explain_epoch(1), PR.addr_rewards(_a), PR.addr_send(_a), PR.addr_invites(_a), PR.explain_tx("0" * 64), PR.swap_status("0" * 64)]}
-served = dict(asks, **{"llms.txt": AG.llms_txt(), "llms-full.txt": AG.llms_full_txt(), "JOIN_MD": AG.JOIN_MD, "ask dialog": unescape(J.ask_modal()), "wallet": SP.WALLET_PROMPT,
+        + [PR.answer_epoch(), PR.answer_epoch(1), PR.explain_epoch(1), PR.addr_rewards(_a), PR.addr_send(_a), PR.addr_invites(_a), PR.explain_tx("0" * 64)]}
+served = dict(asks, **{"llms.txt": AG.llms_txt(), "llms-full.txt": AG.llms_full_txt(), "JOIN_MD": AG.JOIN_MD, "ask dialog": unescape(J.ask_modal()),
               "combined": ct, "full": texts["full"], "connector": texts["connector"]})
-served.update({f"swap {k}": v for k, v in (SP.templates().items() if isinstance(SP.templates(), dict) else enumerate(SP.templates())) if isinstance(v, str)})
 badq = {k: CRED.findall(v) for k, v in served.items() if CRED.search(v)}
-check(f"no key, token or guid in any URL or query in {len(served)} served texts (every Ask prompt, llms.txt, llms-full.txt, join, combined, wallet, swap) {badq}", not badq and len(asks) >= 20)
+check(f"no key, token or guid in any URL or query in {len(served)} served texts (every Ask prompt, llms.txt, llms-full.txt, join, combined) {badq}", not badq and len(asks) >= 20)
 badw = [k for k, v in served.items() if "lableak/#/a/work" in v or re.search(r"[?&](key|token)=(SAVED_KEY|YOUR_KEY|MY_)", v)]
 check(f"no grading guide link and no key placeholder in a link in any served text {badw}", not badw)
 keyed = [t for t, v in asks.items() if "SAVED_KEY" in v]

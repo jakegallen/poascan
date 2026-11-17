@@ -39,10 +39,12 @@ try:
     left = {u: v for u, v in left.items() if v}
     check(f"no internal /swaps or /swaps#xemb link in pages, llms or sitemap {left}", not left)
     check("sitemap drops /swaps; /about and /privacy say swaps live on POASwap", "poascan.io/swaps" not in pages["/sitemap.xml"]
-          and 'Swaps now live on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
+          and 'Trading lives on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
           and 'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>' in pages["/privacy"])
     from poascan import agentapi as AG
-    check("MCP swap tool results point to poaswap.io", AG._swap({"id": "x"}, AG._swap_url())["url"] == "https://poaswap.io/start" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
+    names = {t[0] for t in AG.TOOLS}
+    check("MCP: get_swap_status stays, list_swap_offers and get_swap_offer are gone, swap url points to poaswap.io",
+          "get_swap_status" in names and not names & {"list_swap_offers", "get_swap_offer"} and AG._swap_url() == "https://poaswap.io/start" and "/swaps\"" not in json.dumps(AG.TOOLS, default=str))
 finally:
     p.terminate(); p.wait(10)
 print("all passed" if not fails else f"{len(fails)} failed")

@@ -78,7 +78,7 @@ def addr_rewards(a):
     return ("Check rewards and vesting",
         f"Check the rewards and vesting of PoA (Proof of Agent) address {a}: balance, rewards per epoch and how much is still vesting. "
         f"Data: https://minepoa.com/api/explorer/address/{a} and https://poascan.io/api/v1/address/{a}. Vesting: each epoch's earned rewards unlock in equal slices over 100 epochs (about 25 days at 6-hour epochs; see https://minepoa.com/api/params), starting the next epoch; "
-        "POA received from transfers or swaps is spendable at once. If this is my own agent, also read spendable and locked from https://minepoa.com/api/hosted/me." + RO + SAFE)
+        "POA received from transfers is spendable at once. If this is my own agent, also read spendable and locked from https://minepoa.com/api/hosted/me." + RO + SAFE)
 
 def addr_send(a):
     return ("Send POA to this address",
@@ -162,7 +162,7 @@ FIND = ("Find my agent on POAScan",
 # ---- API ----
 API = ("Use the POAScan API",
     "Use the read-only POAScan API (https://poascan.io/api/v1, no auth) to answer my question about PoA (Proof of Agent): [QUESTION]. Endpoints: /api/v1/health, /api/v1/status, /api/v1/summary, /api/v1/epochs, /api/v1/txs, "
-    "/api/v1/richlist, /api/v1/swaps, /api/v1/unlocks, /api/v1/leaderboard/<tab> (richlist, holders, referrals, ...), /api/v1/agents/leaderboard, and CSV versions such as /api/v1/epochs.csv or /api/v1/address/<poa1...>.csv. Check meta.stale before trusting numbers. "
+    "/api/v1/richlist, /api/v1/unlocks, /api/v1/leaderboard/<tab> (richlist, holders, referrals, ...), /api/v1/agents/leaderboard, and CSV versions such as /api/v1/epochs.csv or /api/v1/address/<poa1...>.csv. Check meta.stale before trusting numbers. "
     "Full spec: https://poascan.io/openapi.json; agent guide: https://poascan.io/llms.txt. "
     "POAScan indexes minepoa.com and can lag, so verify anything important at https://minepoa.com/api/... Cache results and don't poll more than once a minute." + RO)
 
@@ -173,29 +173,19 @@ MCP = ("Add POAScan to your agent",
     "Then call get_network_summary and tell me the open epoch, supply and holders. POAScan never needs keys, so never share any." + RO)
 
 
-# ---- swap status (LabLeak 1332): read only, one offer; the safe take rules, no fee
-def swap_status(oid):
-    return ("Check this swap's status",
-        f"Check PoA (Proof of Agent) swap offer {oid} for me, read only. GET https://poaswap.io/api/v1/check?offer={oid} (add &ref=REF only if I gave you my payment ref) "
-        f"and https://poascan.io/api/v1/swaps/{oid}. Tell me the stage, whether money moved and the next step it gives. "
-        "pending_receipt means held, not paid: say it waits for the seller. POAScan can lag a few minutes; lag is not failure. "
-        "If POAScan's money_moved is null, a fill was submitted but isn't final: say the payment may have landed and is unknown, never that nothing was paid. "
-        "Stop at Filled, Expired or Failed: tell me and stop checking. Check status before any re-take; never take or pay again while a take may be landing. "
-        "Never loop: if it says to check again, do it once, later. Never send payment outside the network. Never ask me for keys or seed phrases." + RO)
-
 # ---- fixed ids for the prompt button click counts (poascan/visits.py, POST /ops/e). Never derived from page data.
 def pid(title):
     """'Explain epoch 12' -> 'ask-explain-epoch-n'. Titles come from this module only."""
     s = re.sub(r"[^a-z]+", "-", re.sub(r"\d+", "n", title.lower())).strip("-")
     return "ask-" + s[:40].rstrip("-")
 
-CARDS = ("join", "start", "wallet", "swap", "upgrade", "mcp-poa", "mcp-poascan")
+CARDS = ("join", "start", "wallet", "upgrade", "mcp-poa", "mcp-poascan")
 ACTS = ("open", "copy", "app", "copyreg", "appreg", "regshow", "add")
 
 def titles():
     a = "poa1" + "x" * 40
     fixed = [v for v in globals().values() if isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)]
-    return sorted({t for t, _ in fixed + [answer_epoch(), answer_epoch(1), explain_epoch(1), addr_rewards(a), addr_send(a), addr_invites(a), explain_tx("0" * 64), swap_status("0" * 64)]})
+    return sorted({t for t, _ in fixed + [answer_epoch(), answer_epoch(1), explain_epoch(1), addr_rewards(a), addr_send(a), addr_invites(a), explain_tx("0" * 64)]})
 
 def ids():
     """Every accepted id: '<card>.<action>' for the fixed cards and every Ask agent prompt."""

@@ -26,7 +26,6 @@ def js_code(n=2000):
 
 def unit():
     from poascan import regcode as RC, keysafe as KS, start as ST
-    from poascan.swap import prompts as P
     check("alphabet is exactly a-z2-7, 32 unique chars", RC.ALPHABET == "abcdefghijklmnopqrstuvwxyz234567" and len(set(RC.ALPHABET)) == 32)
     js = open(os.path.join(ROOT, "static", "app.js")).read()
     m = re.search(r"/\* Wallet setup prompts:.*?\}\)\(\);", js, re.S); blk = m.group(0) if m else ""
@@ -40,23 +39,16 @@ def unit():
     code = codes[0]
     check("start prompt v2 carries no setup code step (mining only; wallets via /swaps)", not hasattr(ST, "REG_STEP") and not hasattr(ST, "reg_attrs")
           and "{SETUP_CODE}" not in ST.prompt("amber-otter-123") and "poaswap" not in ST.prompt("amber-otter-123").lower() and ST.WALLET_HREF == "https://poaswap.io/start")
-    for name, base, reg in (("wallet", P.WALLET_PROMPT, P.WALLET_REG),):
-        f = RC.fill(base, reg["lead"], reg["before"], code)
-        lines = f.split("\n"); nums = [l for l in lines if re.match(r"^\d+\. ", l)]
-        check(f"{name}: step inserted once, as the last numbered step", f.count(code) == 1 and nums[-1].startswith(reg["lead"]) and code in nums[-1])
-        check(f"{name}: rest of the prompt unchanged", f.replace("\n" + RC.step(reg["lead"]).replace(RC.SLOT, code), "", 1) == base)
-        check(f"{name}: safety lines kept", ("Never paste or show passwords, keys or seed phrases in chat." in f) if name == "wallet"
-              else ("Never send payment outside the network." in f and "Never ask me for keys" in f))
-        check(f"{name}: no key-shaped text", not KS.has_key(f) and not KS.PARAM_RX.search(RC.step("")))
+    check("no key-shaped text in the step", not KS.PARAM_RX.search(RC.step("")))
     st = RC.step("")
     fields = re.findall(r'"([a-z_0-9]+)"', st.split("only these fields:", 1)[1].split(". Public", 1)[0])
     named = [x for x in fields if x not in ("scan", "created", "connected", RC.SLOT)]
     check("step names only the allowed fields", set(named) == set(RC.FIELDS))
     check("no signature or verification fields (created as a field, sig, type)", '"sig"' not in st and '"type"' not in st and '"created":' not in st and "sign" not in st.replace("signatures", ""))
     check("step: JSON body, no query string, public addresses only, skippable", "POST JSON (body only, no query string)" in st and RC.URL + " " in st
-          and "?" not in RC.URL and "Public addresses only, never keys" in st and st.endswith("Skip if unsure.") and "Optional" in P.WALLET_REG["lead"])
-    check("no em dashes", "\u2014" not in st + P.WALLET_PROMPT + ST.prompt() and "\u2014" not in js)
-    check("server-side text has no step (llms.txt, MCP)", "poaswap" not in ST.PROMPT and "poaswap" not in P.WALLET_PROMPT and "poaswap" not in json.dumps(ST.data()))
+          and "?" not in RC.URL and "Public addresses only, never keys" in st and st.endswith("Skip if unsure."))
+    check("no em dashes", "\u2014" not in st + ST.prompt() and "\u2014" not in js)
+    check("server-side text has no step (llms.txt, MCP)", "poaswap" not in ST.PROMPT and "poaswap" not in json.dumps(ST.data()))
     # outbound: no module that makes requests names poaswap or imports regcode
     for dp, _, fs in os.walk(os.path.join(ROOT, "poascan")):
         for fn in fs:

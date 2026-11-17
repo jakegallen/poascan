@@ -1,5 +1,5 @@
-"""Forum promises (LabLeak 1375 and 1332): the community status board link, and /swap/<offer_id>, a read-only per-offer
-swap status page built from POAScan's own swap data (castle-claude-agent's offer from post 1332 as the case).
+"""Forum promises (LabLeak 1375 and 1332): the community status board link. The per-offer /swap/<offer_id> page moved to
+POASwap: it 301s there, and /tx shows the offer id as plain text (castle-claude-agent's offer from post 1332 as the case).
 Usage: python3 tools/forum_promises_test.py (temp database, no network; one local server for the routes)."""
 import json, os, re, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
@@ -10,7 +10,7 @@ def check(name, ok):
 
 tmp = tempfile.mkdtemp(); DBP = os.path.join(tmp, "f.db"); os.environ["POASCAN_DB"] = DBP; os.environ["POA_BASE"] = "http://127.0.0.1:9"
 import fixture; fixture.seed()
-from poascan import db, offer as OF, prompts as PR, views2 as V2, views as V, market as X
+from poascan import db, views2 as V2, views as V, market as X
 FX = json.load(open(os.path.join(HERE, "castle_offer_fixture.json")))
 OID = FX["swap"]["offer_id"]; SW = FX["swap"]
 
@@ -25,47 +25,11 @@ def seed_castle(db):
 seed_castle(db)
 def nodash(h): return not any(c in h for c in "\u2014\u2013") and "&mdash;" not in h and "&ndash;" not in h
 
-# ---------------- /swap/<offer_id>: castle-claude-agent's offer (post 1332) ----------------
-t, h = OF.page_body(OID)
-check("castle offer renders with a short title", t == "Swap 9d095580…6937d2")
-check("status Filled", '<span class="tag ok">Filled</span>' in h)
-check("escrow: 10,000 POA locked by the maker, offer tx linked", "10,000</span> <span class=\"unit\">POA</span> locked by the maker" in h and f'href="/tx/{OID}"' in h)
-check("wants 0.001 SOL on Solana to the maker's address (Solscan)", "0.001</span> <span class=\"unit\">SOL</span> on Solana" in h and "https://solscan.io/account/" + SW["pay_to"] in h)
-check("payment ref links the external tx", "https://solscan.io/tx/" + SW["ext_ref"] in h)
-check("fill tx, time, 5 attestations, final", f'href="/tx/{SW["fill_txid"]}"' in h and "5 attestations" in h and '<span class="ok">final</span>' in h)
-check("stage history: offered then filled, both final", h.index("Offered (escrow locked)") < h.index(">Filled<", h.index("Stage history")) and h.count('<span class="ok">final</span>') >= 3)
-check("next steps for Filled: stop, don't take or pay again", "Filled and final: nothing left to do. Stop checking." in h and "Don&#x27;t take or pay this offer again." in h)
-check("names what POAScan can't see (nonce rent) and links the taker's verified Solana address", "durable nonce account" in h and "https://solscan.io/account/" + FX["chains"][SW["taker"]]["solana"]["addr"] in h)
-check("no fee on this page (it lives on the Swap Fee card)", not re.search(r"\bfee\b|9,900|1%", h, re.I))
-check("track and API links, read-only line", f"https://poaswap.io/status/{OID}" in h and "track?offer=" not in h and f'href="/api/v1/swaps/{OID}"' in h and "never signs or sends anything" in h)
-check("no em or en dashes", nodash(h))
-tt, pp = PR.swap_status(OID)
-check("Ask agent prompt on the page (copy-ready, read only)", "data-ask=" in h and "Check this swap&#x27;s status" in h)
-check("prompt: poaswap check and POAScan offer reads, safe rules", f"https://poaswap.io/api/v1/check?offer={OID}" in pp and f"https://poascan.io/api/v1/swaps/{OID}" in pp
-      and "Stop at Filled, Expired or Failed" in pp and "Check status before any re-take" in pp and "Never loop" in pp and "Never send payment outside the network." in pp and "Read-only" in pp)
-check("prompt: no key, no referral, no fee, no dashes", "SAVED_KEY" not in pp and "pk_" not in pp and "referral" not in pp.lower() and "invite" not in pp.lower() and "fee" not in pp.lower() and nodash(pp))
-check("prompt id is registered for click counts", PR.pid(tt) in {PR.pid(x) for x in PR.titles()})
-
-# ---------------- other stages ----------------
-def variant(**kw):
-    o = dict(SW, **kw); oid = kw.get("offer_id")
-    cols = ",".join(o); db.write(f"INSERT OR REPLACE INTO swaps({cols}) VALUES({','.join('?' * len(o))})", tuple(o.values()))
-    return OF.page_body(oid)[1]
 now = int(time.time())
-h = variant(offer_id="op" + "1" * 30, status="open", taker=None, fill_txid=None, fill_ts=None, ext_ref=None, expires_ts=now + 3600)
-check("open: check status before any take, network flow only, never loop", "Check status before any take or re-take." in h and "Never send payment outside the network." in h and "never loop" in h
-      and "Stop at Filled, Expired or Failed." in h and '<span class="tag ok">Open</span>' in h)
-h = variant(offer_id="ex" + "1" * 30, status="open", taker=None, fill_txid=None, fill_ts=None, ext_ref=None, expires_ts=now - 60)
-check("past expiry reads Expired: stop", '<span class="tag ">Expired</span>' in h and "Expired: stop." in h)
-oid = "pf" + "1" * 30
-db.write("INSERT OR REPLACE INTO swap_events(txid, offer_id, kind, addr, ts, json, final, checked, dropped, first_seen) VALUES(?,?,?,?,?,?,0,NULL,0,?)", ("ab" * 32, oid, "swap-fill", SW["taker"], now, "{}", now))
-h = variant(offer_id=oid, status="open", taker=None, fill_txid=None, fill_ts=None, ext_ref=None, expires_ts=now + 3600)
-check("a fill seen but not final reads Fill landing: wait, don't re-take", "Fill landing" in h and "Don&#x27;t re-take or pay again while it lands." in h)
-check("unknown or malformed offer ids render nothing", OF.page_body("nope" * 3) is None and OF.page_body("bad id!") is None and OF.page_body("x" * 200) is None)
 
-# ---------------- /tx links the status page ----------------
+# ---------------- /tx shows the offer id as plain text (the swap pages moved to POASwap) ----------------
 rows = dict(X.tx_rows({"offer": OID}))
-check("/tx offer row links /swap/<offer_id>", f'href="/swap/{OID}">Swap status' in rows.get("Offer", ""))
+check("/tx offer row shows the offer id, no POAScan swap link", OID in rows.get("Offer", "") and "/swap/" not in rows.get("Offer", "") and "Swap status" not in rows.get("Offer", ""))
 
 # ---------------- status board link ----------------
 URL = "https://embot-lantern.codeberg.page/poa-field-guide/status/"
@@ -92,11 +56,11 @@ try:
     for _ in range(60):
         try: get("/healthz"); break
         except Exception: time.sleep(0.25)
-    c, b = get("/swap/" + OID); c2, b2 = get("/offer/" + OID)
-    check(f"GET /swap/<id> 200 and /offer/<id> the same page ({c}, {c2})", c == 200 and c2 == 200 and "Stage history" in b and "Stage history" in b2)
-    c, b = get("/swap/" + "0" * 64)
-    check(f"unknown offer is a 404 page ({c})", c == 404 and "POAScan holds no swap offer" in b)
-    c, _ = get("/swap/bad%20id"); check(f"malformed id is a 404 ({c})", c == 404)
+    import http.client
+    def head(path):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=20); c.request("GET", path); r = c.getresponse(); r.read(); return r.status, r.getheader("Location")
+    got = [head(u) for u in ("/swap/" + OID, "/offer/" + OID, "/swap/" + "0" * 64, "/swap/" + OID + "/")]
+    check(f"/swap/<id> and /offer/<id> 301 to POASwap, known or not ({got})", all(g == (301, "https://poaswap.io/") for g in got))
     c, b = get("/api/v1/swaps/" + OID); check("the API it mirrors still answers", c == 200 and json.loads(b)["offer"]["status"] == "filled")
 finally:
     p.terminate(); p.wait(timeout=10)

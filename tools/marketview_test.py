@@ -1,6 +1,5 @@
-"""Token page market view (1.26.322): last fill, open depth excluding expired offers, ask-only book
-and fill history from ingested data only. Bids are never invented. At 390 px the view stays inside
-the viewport. Usage: python3 tools/marketview_test.py"""
+"""Swap market data (1.26.322): open depth excludes expired offers and the book is ask-only, in the API. The Token page
+keeps Last fill only (the ask book and fill history moved to POASwap). At 390 px the page stays inside the viewport. Usage: python3 tools/marketview_test.py"""
 import json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 os.environ.setdefault("POASCAN_SEGMENTS", "1")
@@ -121,13 +120,8 @@ try:
           lst == 200 and {r["offer_id"] for r in opens} == {"live-ask"})
 
     html = get("/network?tab=token")[1].decode()
-    check("Token page shows Last fill, Open depth and the market view",
-          "Last fill" in html and "Open depth" in html and 'id="token-market"' in html)
-    check("Token book is ask-only: No bids, and no invented bid rows",
-          "No bids" in html and 'class="bid"' not in html)
-    check("expired ask id is not in the open book", 'data-offer="expired-ask"' not in html)
-    check("live ask and fill history are on the page", 'data-offer="live-ask"' in html and "Fill history" in html)
-
+    check("Token page keeps Last fill; the ask book, fill history and Open depth are gone (swaps live on POASwap)",
+          "Last fill" in html and "Open depth" not in html and 'id="token-market"' not in html and "Fill history" not in html and "Best ask" not in html and 'data-offer=' not in html)
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
@@ -146,31 +140,14 @@ try:
                 pg.goto(base + "/network?tab=token", wait_until="domcontentloaded", timeout=60000)
                 pg.wait_for_timeout(400)
                 visible = pg.evaluate("""() => {
-                  const ids = ['token-market'];
                   const labels = [...document.querySelectorAll('.sl,.stat .sl,dt,h2')].map(e => e.textContent.trim());
-                  const mkt = document.getElementById('token-market');
-                  const r = mkt ? mkt.getBoundingClientRect() : null;
-                  return {
-                    labels,
-                    hasMarket: !!mkt,
-                    marketW: r ? Math.round(r.width) : 0,
-                    ox: document.documentElement.scrollWidth - innerWidth,
-                    noBids: (mkt && mkt.innerText.includes('No bids')) || false,
-                    lastFill: labels.some(t => /Last fill/i.test(t)),
-                    openDepth: labels.some(t => /Open depth/i.test(t)),
-                    bidRows: document.querySelectorAll('#token-market tr.bid, #token-market .bid').length,
-                    expired: !!document.querySelector('#token-market [data-offer="expired-ask"]'),
-                    live: !!document.querySelector('#token-market [data-offer="live-ask"]'),
-                  };
+                  return {ox: document.documentElement.scrollWidth - innerWidth, lastFill: labels.some(t => /Last fill/i.test(t)),
+                          market: !!document.getElementById('token-market')};
                 }""")
-                shot = os.path.join(shot_dir, f"token-market-{w}.png")
-                pg.locator("#token-market").screenshot(path=shot) if visible["hasMarket"] else pg.screenshot(path=shot)
+                shot = os.path.join(shot_dir, f"token-{w}.png"); pg.screenshot(path=shot)
                 check(f"{w} px screenshot path wrote {os.path.basename(shot)} ({os.path.getsize(shot)} bytes)",
                       os.path.isfile(shot) and os.path.getsize(shot) > 1000)
-                check(f"{w} px: Last fill, Open depth and the market view are on the page",
-                      visible["lastFill"] and visible["openDepth"] and visible["hasMarket"])
-                check(f"{w} px: No bids, no invented bid rows, expired ask out, live ask in",
-                      visible["noBids"] and visible["bidRows"] == 0 and not visible["expired"] and visible["live"])
+                check(f"{w} px: Last fill on the page, no market view", visible["lastFill"] and not visible["market"])
                 check(f"{w} px: no horizontal overflow (ox={visible['ox']})", visible["ox"] <= 0)
                 check(f"{w} px: no page errors {errs[:2]}", not errs)
                 pg.close()

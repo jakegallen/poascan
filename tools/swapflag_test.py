@@ -38,13 +38,11 @@ os.environ["POASCAN_DB"] = tempfile.mktemp(suffix=".db")
 os.environ["SWAP_FLAG_URL"] = f"http://127.0.0.1:{srv.server_address[1]}/api/v1/swaps/status"
 from poascan import db; db.init()
 from poascan import swapflag as F, agentapi as AG, faq as FQ
-from poascan.swap import market as M, config as C, faq as SF
+from poascan.swap import market as M, config as C
 F.TIMEOUT = 1
 T0 = 1_800_000_000.0
 def api(): return M.swap_status_api()
 def note(): return AG.t_swap_status({})["note"]
-def buy(): return SF._buy_now()
-def tile(): return SF._swaps()
 
 # boot fallback: POASwap never reached since boot, SWAPS_LIVE (True) decides status
 F._reset()
@@ -61,8 +59,6 @@ check("live: status live, available true, state available", (d["status"], d["ava
 check("live: clean POASwap message shown (with a period)", d["message"] == "Swaps are live.")
 check("live: url, source, fetched_at, open_offer_count, updated_at", d["url"] == "https://poaswap.io/start" and d["source"] == "poaswap" and d["fetched_at"] and d["open_offer_count"] == 3 and d["updated_at"] == "2026-10-23T16:50:43Z")
 check("live: MCP note says live and links url", note().startswith("Swaps are live on minepoa.com.") and "https://poaswap.io/start" in note())
-check("live: FAQ 'Can I buy right now?' says yes and links url", buy().startswith("Yes. Swaps are live on minepoa.com.") and 'href="https://poaswap.io/start"' in buy())
-check("live: FAQ tile Available", ">Available<" in tile())
 
 # 304: If-None-Match sent, last good copy kept and refreshed
 MODE["m"] = "304"; n0 = len(SEEN); r = F.refresh(T0 + 60)
@@ -74,12 +70,11 @@ MODE["m"] = "paused"; F.refresh(T0 + 120); d = api()
 check("paused: status paused, available false, state upgrading", (d["status"], d["available"], d["state"]) == ("paused", False, "upgrading"))
 check("paused: POASwap message used, reason passed through", d["message"] == "Book data stale." and d["reason"] == "book_stale")
 check("paused: MCP note", note() == "Swaps are paused. Don't call swap-offer or swap-take; tell the user to check back soon.")
-check("paused: FAQ copy and tile", buy().startswith("Not right now. Book data stale. See <a href=\"https://poaswap.io/start\">") and ">Paused<" in tile())
 
 # coming_soon with a dash in the message: POAScan's own label instead
 MODE["m"] = "coming_soon"; F.refresh(T0 + 180); d = api()
 check("coming_soon: dashed message replaced by POAScan's label", d["status"] == "coming_soon" and d["message"] == "Swaps are coming soon." and d["state"] == "coming_soon")
-check("coming_soon: FAQ and MCP note", buy().startswith("Not yet. Swaps are coming soon.") and note().startswith("Swaps are coming soon. Don't call swap-offer or swap-take yet"))
+check("coming_soon: MCP note", note().startswith("Swaps are coming soon. Don't call swap-offer or swap-take yet"))
 
 # timeout: short timeout, the last good copy stays
 MODE["m"] = "live"; F.refresh(T0 + 200)
@@ -97,19 +92,20 @@ check("stale: past 15 min status unknown, available false, basis expired", fl["s
 F._state["ok_ts"] = time.time() - 1000   # api() reads the clock
 d = api()
 check("stale: api status unknown, state unknown, label", (d["status"], d["state"], d["available"], d["message"]) == ("unknown", "unknown", False, "Swap status is unknown right now."))
-check("stale: MCP note and FAQ", note().startswith("POAScan can't read POASwap's swap status right now.") and buy().startswith("POAScan can't read the swap status right now.") and ">Unknown<" in tile())
+check("stale: MCP note", note().startswith("POAScan can't read POASwap's swap status right now."))
 
 # hostile values: non-https url falls back, HTML in message replaced
 MODE["m"] = "evilurl"; F.refresh(); d = api()
 check("non-https url ignored, HTML message replaced by label", d["url"] == "https://poaswap.io/start" and d["message"] == "Swaps are live on minepoa.com.")
 
-# summary, MCP summary, offers and the home Market link all carry the flag
+# summary and MCP summary carry the flag; Home keeps one POASwap link
 MODE["m"] = "live"; F.refresh()
 s = AG.t_summary({})
 check("MCP summary swaps block: status, source, fetched_at", s["swaps"]["status"] == "live" and s["swaps"]["source"] == "poaswap" and s["swaps"]["fetched_at"])
 check("llms.txt: swap line uses url", "Swaps and wallet setup are on POASwap: https://poaswap.io/start." in AG.llms_txt())
 from poascan import views as V
-check("home Market link uses url", 'class="more mswap" href="https://poaswap.io/start"' in V.home())
+hm = V.home()
+check("home: no Market card, one Trade on POASwap link", hm.count(">Trade on POASwap →</a>") == 1 and 'class="more mswap"' not in hm and ">Market<" not in hm)
 
 # POAScan only reads: every request was a plain GET with no body
 check("only GETs, no request body, nothing sent to POASwap", SEEN and all(m == "GET" and n == 0 for m, _, _, n in SEEN))
