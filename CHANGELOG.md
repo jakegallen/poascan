@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.365] - 2026-11-17
+
+### Changed
+- Pending rows are interned keyed by repr instead of json.dumps: the same rows share one dict, and a full pending scan is about a quarter faster (governance, receipts and standing read every close).
+
 ## [1.26.364] - 2026-11-16
 
 ### Changed
