@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.359] - 2026-11-16
+
+### Fixed
+- Memory: close records share one copy of equal addresses, jury seats and empty lists, so the settled lists of 80 closes take about 150 MB instead of about 300 MB. Every record reads and serializes exactly as before.
+
 ## [1.26.358] - 2026-11-16
 
 ### Fixed
