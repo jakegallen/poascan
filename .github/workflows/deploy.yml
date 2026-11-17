@@ -101,6 +101,8 @@ jobs:
         run: python tools/bgslot_test.py
       - name: Pending row interning keyed by repr groups the same rows (1.26.365)
         run: python tools/intern_test.py
+      - name: Governance tabs kept as pinned pages, refreshed in the background (1.26.366)
+        run: python tools/govpin_test.py
       - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; address API light copy under load; tools/call still sheds)
         run: python tools/visitor_slot_test.py
       - name: Busy shell (a human page with every slot held serves its last good copy or the branded Busy page; API, MCP and data files keep the text 503)
