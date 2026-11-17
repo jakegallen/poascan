@@ -424,12 +424,13 @@ def pending(kind, pos, ver=None):
     return v
 
 def _interned(p):
-    """Equal pending rows share one dict (read only; about 8k distinct rows among 36k answers at E23)."""
+    """Equal pending rows share one dict (read only; about 8k distinct rows among 36k answers at E23). 1.26.365: keyed by
+    repr, which only groups rows json.dumps also groups, at about a quarter of the cost on a full pending scan."""
     if not isinstance(p, dict): return p
     seen = {}
     for k, v in p.items():
         if isinstance(v, dict):
-            o = seen.setdefault(json.dumps(v), v)
+            o = seen.setdefault(repr(v), v)
             if o is not v: p[k] = o
     return p
 
