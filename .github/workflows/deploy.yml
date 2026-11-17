@@ -430,6 +430,8 @@ jobs:
         env:
           CI: "true"
         run: python tools/marketview_test.py
+      - name: Token price and volume charts (fills only, UTC days, no gap, chart only)
+        run: python tools/tokencharts_test.py
       - name: Fill epoch from the close archive (every segment, never 0; exact close second belongs to the next epoch)
         run: python tools/fill_epoch_test.py
       - name: Close ingestion from the /api/epochs index (missing bodies only, sha256 checked, legacy list still works)

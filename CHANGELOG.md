@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.354] - 2026-11-16
+
+### Added
+- Token tab: a Price chart (POA per 1M, each UTC day's last fill, in SOL while the USD reference is withheld) and a Daily volume chart (POA filled per UTC day), from the first fill day to the last with no gap. Chart only, built from the fills POAScan already reads.
+
 ## [1.26.353] - 2026-11-16
 
 ### Removed

@@ -1030,7 +1030,7 @@ def token_body(h2=False):
     # USD only when the guarded reference is shown (fills only, /about#market). Market cap is price x circulating: in USD with
     # the guarded price, else in the last trade's asset. Minted and burned are summed over every close in one history,
     # leaving out the closes not carried over at the restart, so nothing is counted twice.
-    from . import swapclient as SC; from .views2 import ICON_SWAP
+    from . import swapclient as SC, tokencharts as TC; from .views2 import ICON_SWAP
     mk = SC.status().get("market") or {}; pr = SC.price(); lt = mk.get("last_trade")
     circ_v = float(sp["spendable"] or 0)
     ltd = (f' <span class="dim small">{time.strftime("%b %-d", time.localtime(int(mk["last_fill_ts"])))}</span>' if lt and mk.get("last_fill_ts") else "")
@@ -1063,6 +1063,7 @@ def token_body(h2=False):
 <div class="stats eight">{stats}</div>
 <div class="stats {"four" if mcap else "three"}">{mrow}</div>
 <nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#token">For agents</a>{fa}</nav>
+{TC.cards_html()}
 {card("Top holders", holders_t + f'<p class="dim small">Median holder {num(h["median"])} POA.</p>', X.usd_toggle() + PR.ask([PR.TOKEN]) + '<a class="more" href="/agents/top">Rich list →</a>', id="holders")}
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
