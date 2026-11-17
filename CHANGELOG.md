@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.358] - 2026-11-16
+
+### Fixed
+- Address pages: the Timeline tab's latest tx and first transfer now use one indexed lookup per side (sent, received) instead of a single either-side query that scanned the whole segment. Renders that took up to seconds now take milliseconds, so busy crawls no longer fill the render slots.
+
 ## [1.26.357] - 2026-11-16
 
 ### Fixed
