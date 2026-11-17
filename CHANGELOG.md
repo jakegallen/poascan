@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.366] - 2026-11-17
+
+### Changed
+- Every Governance tab is pinned once it has rendered: visitors get the last good copy at any age with no serving slot, and a background thread renders the next one. A cold tab render reads every close and used to hold a visitor slot for up to 150 s.
+
 ## [1.26.365] - 2026-11-17
 
 ### Changed

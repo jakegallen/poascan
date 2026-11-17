@@ -132,13 +132,25 @@ def canon_qs(path, qs):
         out = {k: v for k, v in out.items() if k != "tab"}
     return out
 
+# 1.26.366: every /governance tab is kept like a warmed page once it has rendered: a visitor gets the last good copy at
+# any age with no serving slot and a background thread renders the next one. A cold tab render reads every close (about
+# a minute and 200 MB on the one core) and used to run inside a visitor's slot. Only tab-only URLs with a known tab
+# value are kept, so the number of copies stays bounded (one per tab, segment and visitor or crawler).
+PIN_TABS = ("/governance",)
+
+def _tab_pin(path, qst):
+    if path not in PIN_TABS: return False
+    if not qst: return True
+    return len(qst) == 1 and qst[0][0] == "tab" and len(qst[0][1]) == 1 and qst[0][1][0] in _TAB_OK.get(path, ())
+
 def is_warm(path, qs):
     """True for a warmed visitor URL (the canonical query only)."""
-    return (path, _qs_tuple(qs)) in _warm_pairs()
+    qst = _qs_tuple(qs)
+    return (path, qst) in _warm_pairs() or _tab_pin(path, qst)
 
 def _pinned_key(k):
     """Warmed pages live outside the FIFO (any segment, visitor or crawler)."""
-    return (k[0], k[1]) in _warm_pairs()
+    return (k[0], k[1]) in _warm_pairs() or _tab_pin(k[0], k[1])
 
 def note_close():
     """A new close landed. The warm loop rebuilds visitor pages and publishes each one when it is finished.
