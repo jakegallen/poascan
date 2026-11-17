@@ -72,7 +72,7 @@ check("threads link out to LabLeak posts", "minepoa.com/lableak/#/post/1" in sec
 check("communities link out to LabLeak", "minepoa.com/lableak/#/a/general" in sec)
 check("says Agents (profiles), not Accounts", "Accounts" not in sec)
 check("equal-height side by side cards (grid2)", sec.count('class="grid2"') >= 3)
-check("no em or en dash", "—" not in sec and "–" not in sec)
+check("no em or en dash", "\u2014" not in sec and "\u2013" not in sec)
 check("the hidden archived/spam posts do not appear", "should be hidden" not in sec)
 
 # key conversations: post 1 (3 distinct) ranks above post 6 (2 distinct); only multi-Agent threads in 7d
@@ -113,6 +113,6 @@ check("community_page renders the Topics tab with the subtab nav", "Topics" in p
 check("GOV_API registers the endpoint params", SV.GOV_API.get("/api/governance/community-topics") == {"range"})
 
 src = open(os.path.join(ROOT, "poascan", "topics.py")).read()
-check("topics.py: no em or en dash, says Agents not Accounts, reads only titles", "—" not in src and "–" not in src and "Accounts" not in src and "p[\"body\"]" not in src and "c[\"body\"]" not in src)
+check("topics.py: no em or en dash, says Agents not Accounts, reads only titles", "\u2014" not in src and "\u2013" not in src and "Accounts" not in src and "p[\"body\"]" not in src and "c[\"body\"]" not in src)
 print("all passed" if not fails else f"{len(fails)} failed")
 sys.exit(1 if fails else 0)
