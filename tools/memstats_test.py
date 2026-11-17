@@ -24,12 +24,15 @@ check("sqlite: live connection count, cache_size, page_size, cache_kib_each, est
       isinstance(sq.get("live"), int) and sq["live"] >= 1 and isinstance(sq.get("cache_size"), int)
       and isinstance(sq.get("page_size"), int) and isinstance(sq.get("cache_kib_each"), int) and isinstance(sq.get("est_cache_mb"), int))
 
-# the live count rises when another thread opens a connection and does not release it (the pileup signal), and the
-# counter never goes negative
+# the live count rises while another thread holds a connection (the pileup signal), and since 1.26.357 falls back when
+# that thread ends without releasing (its holder closes the connection); the counter never goes negative
 base = db.conn_stats()["live"]
-def hold(): db.conn()
-t = threading.Thread(target=hold); t.start(); t.join()
-check("live connection count rises when a thread opens a connection without releasing", db.conn_stats()["live"] == base + 1)
+go, done = threading.Event(), threading.Event()
+def hold(): db.conn(); go.set(); done.wait(10)
+t = threading.Thread(target=hold); t.start(); go.wait(10)
+check("live connection count rises while a thread holds a connection", db.conn_stats()["live"] == base + 1)
+done.set(); t.join()
+check("and falls back when that thread ends without releasing", db.conn_stats()["live"] == base)
 
 s = r["summary"]
 check("summary: rss, rss_anon, rss_file, tracked and untracked, all ints (or None for a field /proc did not give)",

@@ -1,5 +1,5 @@
-"""Memory regressions (1.26.227, the 2026-10-29 OOM). 1) A request thread's SQLite connection is closed when the thread
-ends: the server gives each request its own thread, and connections left on finished threads sat in reference cycles
+"""Memory regressions (1.26.227, the 2026-10-29 OOM). 1) A thread's SQLite connection is closed when the thread
+ends (request threads by release(), any other thread by its holder, 1.26.357): the server gives each request its own thread, and connections left on finished threads sat in reference cycles
 until a full GC, so RSS climbed about 6 MB/s under load to the 1 GB limit. 2) Close records parse to the same values as
 json.loads while unchanged pending rows are shared between closes, so the parsed list stays a fraction of its old size.
 Temp database. Usage: python3 tools/memory_test.py"""
@@ -34,6 +34,21 @@ try:
     after = sum(1 for o in gc.get_objects() if isinstance(o, sqlite3.Connection))
 finally: gc.enable()
 check(f"40 finished request threads leave no open connection behind without a GC ({after - before} left)", after - before <= 1)
+# 1.26.357: a short-lived thread that never calls release() (HTML refresh, snapshot, chart workers) closes its connection on exit
+gc.disable()
+try:
+    held = []
+    def noisy(): db.q("SELECT 1 AS x"); held.append(db._local.c)
+    for _ in range(40):
+        th = threading.Thread(target=noisy); th.start(); th.join()
+    def is_closed(c):
+        try: c.execute("SELECT 1"); return False
+        except sqlite3.ProgrammingError: return True
+    shut = sum(is_closed(c) for c in held); held.clear()
+finally: gc.enable()
+check(f"40 threads that never release still close their connection on exit, no GC ({shut}/40)", shut == 40)
+c0 = db.conn(); db._local.c = None; c1 = db.conn()
+check("a new connection on the same thread closes the replaced one, the live count stays even", c1 is not c0 and db.conn_stats().get("live", 0) >= 1)
 
 # 2) close records: same values, shared pending rows, bounded size
 rnd = random.Random(7); ids = [f"{rnd.getrandbits(256):064x}" for _ in range(3000)]

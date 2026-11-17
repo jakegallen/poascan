@@ -84,6 +84,22 @@ CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT
 _conn_lock = threading.Lock()
 _conn_live = 0
 
+class _Closer:
+    """1.26.357: closes its thread's connection when the thread ends. A thread-local value is dropped as soon as its
+    thread exits, but the sqlite3 connection sits in a reference cycle with its statement cache, so it (and up to 2 MB
+    of page cache) waited for a full GC. Short-lived threads that never call release() (the HTML refresh, live
+    snapshot, chart and answer-sort workers) piled these up: 150 such threads held about 330 MB in a local test.
+    This holder is not in the cycle, so it goes at once and closes the connection with it."""
+    __slots__ = ("c",)
+    def __init__(self, c): self.c = c
+    def __del__(self):
+        global _conn_live
+        c, self.c = self.c, None
+        if c is None: return
+        try: c.close()
+        except Exception: pass
+        with _conn_lock: _conn_live -= 1
+
 def conn():
     global _conn_live
     c = getattr(_local, "c", None)
@@ -96,6 +112,7 @@ def conn():
         c.execute("PRAGMA journal_size_limit=16777216")   # 1.26.161: the WAL file is cut back to 16 MB after a checkpoint (it had grown to 77 MB)
         _local.c = c
         with _conn_lock: _conn_live += 1
+        _local.h = _Closer(c)   # replaces (and closes) any earlier holder on this thread
     return c
 
 def release():
@@ -104,6 +121,9 @@ def release():
     (each with up to 2 MB of page cache) piled up and RSS grew about 6 MB/s. Request threads call this when they end."""
     global _conn_live
     c = getattr(_local, "c", None)
+    h = getattr(_local, "h", None)
+    if h is not None and h.c is c: h.c = None   # closed here, so the holder does not count it twice
+    _local.h = None
     if c is not None:
         _local.c = None
         try: c.close()
