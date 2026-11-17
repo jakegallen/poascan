@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.360] - 2026-11-16
+
+### Fixed
+- Start earning check and the address API's standing read only that address's pending rows instead of parsing a whole close, so they no longer hold a render slot while busy pages wait.
+
 ## [1.26.359] - 2026-11-16
 
 ### Fixed
