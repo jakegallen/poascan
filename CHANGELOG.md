@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.364] - 2026-11-16
+
+### Changed
+- Visitors come first for cold compute slots: background renders hold at most one, and a visitor refreshing a cached value it already has serves it at once instead of waiting for a slot. Before, two warm renders could leave every request slot waiting behind them.
+
 ## [1.26.363] - 2026-11-16
 
 ### Changed

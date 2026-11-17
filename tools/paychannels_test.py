@@ -299,9 +299,12 @@ check("version is at least 1.26.361 and the changelog records Established histor
 check("version is at least 1.26.362 and the changelog records spike dump",
       _ver >= (1, 26, 362) and "## [1.26.362]" in cl and "spike dump" in cl
       and not any(c in cl.split("## [1.26.362]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.363 and the changelog records once per request",
-      _ver == (1, 26, 363) and "## [1.26.363]" in cl and "once per request" in cl
+check("version is at least 1.26.363 and the changelog records once per request",
+      _ver >= (1, 26, 363) and "## [1.26.363]" in cl and "once per request" in cl
       and not any(c in cl.split("## [1.26.363]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.364 and the changelog records cold compute slots",
+      _ver == (1, 26, 364) and "## [1.26.364]" in cl and "cold compute slots" in cl
+      and not any(c in cl.split("## [1.26.364]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
