@@ -48,6 +48,27 @@ def settled_records():
             out.append((int(e["epoch"]), s.get("answer"), s.get("from"), bool(s.get("passed")), s.get("jury", []), O.of(s)))
     return out
 
+@cached("settled_index", 120)
+def settled_index():
+    """Positions into settled_records() per address, built once per cache interval (1.26.356): (by_author, by_grader),
+    each addr -> array of record indexes (a grader's index repeats once per seat it held on that record). The address
+    page and the profile used to scan every settled record for each address they rendered (about 0.4 s a page under
+    crawl); this is one pass shared by all, stored as 4-byte ints so it stays small."""
+    import array
+    by, gr = {}, {}
+    for i, (_, _, au, _, jury, _) in enumerate(settled_records()):
+        if au: by.setdefault(au, array.array("i")).append(i)
+        for j in jury or ():
+            g = j.get("grader") if isinstance(j, dict) else None
+            if g: gr.setdefault(g, array.array("i")).append(i)
+    return by, gr
+
+def settled_of(addr):
+    """(records authored by addr, records where addr held a jury seat) from settled_index(), in record order."""
+    rs = settled_records(); by, gr = settled_index()
+    seen = set(); g = [rs[i] for i in gr.get(addr, ()) if not (i in seen or seen.add(i))]
+    return [rs[i] for i in by.get(addr, ())], g
+
 @cached("record_agents", 120)
 def record_agents():
     """Every address POAScan has a close-record footprint for in the selected segment (1.26.252): answerers, settled
@@ -488,8 +509,9 @@ def network_health():
 # ---------------- profile ----------------
 def profile(addr):
     cen = census_now().get(addr); rb = A.rewards_by_addr().get(addr, {})
-    sett = [(e, ans, p, oc) for e, ans, au, p, _, oc in settled_records() if au == addr]   # oc: passed, failed or expired_no_jury
-    jur = [(e, j.get("aligned")) for e, _, _, _, jury, _ in settled_records() for j in jury if j["grader"] == addr]
+    mine, seats = settled_of(addr)
+    sett = [(e, ans, p, oc) for e, ans, au, p, _, oc in mine]   # oc: passed, failed or expired_no_jury
+    jur = [(e, j.get("aligned")) for e, _, _, _, jury, _ in seats for j in jury if j["grader"] == addr]
     served = sum(e.get("basis", {}).get("graders_served", {}).get(addr, 0) for e in A.epochs_raw())
     st = streaks().get(addr, (0, 0))
     ans = answerers(); answered = sorted(k for k, s in ans.items() if addr in s)
@@ -513,9 +535,9 @@ def established_history(addr):
     pp = A.params(); ttl = X.estab_ttl()   # 1.26.257: the selected segment's current rule; each change reads its own close's TTL below
     ans = answerers(); rb = A.rewards_by_addr().get(addr, {})
     passed, settled, expired, seated = collections.Counter(), collections.Counter(), collections.Counter(), set()   # seated: closes where it held a grading seat
-    for n, _, au, ok, jury, oc in settled_records():
-        if au == addr: settled[n] += 1; passed[n] += 1 if ok else 0; expired[n] += oc == "expired_no_jury"
-        if any(j.get("grader") == addr for j in jury): seated.add(n)
+    mine, seats = settled_of(addr)
+    for n, _, au, ok, jury, oc in mine: settled[n] += 1; passed[n] += 1 if ok else 0; expired[n] += oc == "expired_no_jury"
+    seated |= {r[0] for r in seats}
     changes, listed = [], None
     for e in ep:
         n = int(e.get("epoch", 0)); b = e.get("basis", {}) or {}

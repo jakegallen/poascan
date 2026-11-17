@@ -1249,6 +1249,10 @@ class H(BaseHTTPRequestHandler):
         """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
         p = self._path_only()
         if p.startswith("/static/") or p.startswith("/mark/") or p.startswith("/hallmark/"): return True
+        # 1.26.356: link previews need no heavy slot. og.py already serves its cache or the generic card, and new renders
+        # run one at a time from its own small token bucket (one every 5 s), so CPU stays bounded without the slot wait
+        # that was shedding /og/* with 503s under crawl.
+        if p.startswith("/og/"): return True
         return p in ROOT_FILES or p in ("/robots.txt", "/security.txt") or p in self.MCP_DISCOVERY
     def _bits(self):
         """(path, query without segment, segment, crawler) the HTML cache key is built from. Does not change request state."""
