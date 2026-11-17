@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.357] - 2026-11-16
+
+### Fixed
+- Memory: a worker thread's SQLite connection is closed when the thread ends instead of waiting for the next full GC, so short-lived refresh threads no longer pile up page caches (about 2 MB each).
+
 ## [1.26.356] - 2026-11-16
 
 ### Fixed
