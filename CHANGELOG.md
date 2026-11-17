@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.355] - 2026-11-16
+
+### Added
+- Epoch story: a closed epoch's page shows answers and grades per hour from the open to the close, then the steps in order: Opened, Answers, Grades, Closed, Settled, Paid, Established and Removed.
+
 ## [1.26.354] - 2026-11-16
 
 ### Added
