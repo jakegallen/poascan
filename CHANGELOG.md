@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.362] - 2026-11-16
+
+### Added
+- Ops: a spike dump (thread stacks, requests in flight by path and client kind, gc counts) when resident memory jumps 150 MB within 10 s or every heavy slot stays held for 6 s, and a shed count split by client kind on /api/status. No query strings, headers, IPs or tokens are written.
+
 ## [1.26.361] - 2026-11-16
 
 ### Fixed
