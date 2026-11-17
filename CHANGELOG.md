@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.356] - 2026-11-16
+
+### Fixed
+- Address pages render about six times faster: settled records are indexed per address once per cache interval instead of scanned twice on every render, so a crawl no longer fills the heavy slots and sheds 503s. Link preview images (/og/*) no longer wait for a heavy slot.
+
 ## [1.26.355] - 2026-11-16
 
 ### Added
