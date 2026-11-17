@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.361] - 2026-11-16
+
+### Fixed
+- The Established history API for one Agent no longer waits at the door for a render slot. It reads cached indexes in a few milliseconds, and a cold rebuild still takes a slot inside the cache, so it no longer sheds with 503 under crawl.
+
 ## [1.26.360] - 2026-11-16
 
 ### Fixed

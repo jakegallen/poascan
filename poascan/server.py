@@ -26,6 +26,7 @@ STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
               "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"), "/apple-touch-icon-precomposed.png": ("apple-touch-icon.png", "image/png"),
               "/site.webmanifest": ("site.webmanifest", "application/manifest+json")}
+EST_RX = re.compile(r"^/api(?:/v1)?/address/poa1\w+/established$")   # 1.26.361: served without a heavy slot (_is_free)
 log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
@@ -1253,6 +1254,9 @@ class H(BaseHTTPRequestHandler):
         # run one at a time from its own small token bucket (one every 5 s), so CPU stays bounded without the slot wait
         # that was shedding /og/* with 503s under crawl.
         if p.startswith("/og/"): return True
+        # 1.26.361: an Agent's Established history is a few ms from cached indexes (agents.settled_index); a cold rebuild
+        # still takes a heavy slot inside @cached. Waiting at the door for a slot only shed it with 503s under crawl.
+        if EST_RX.match(p): return True
         return p in ROOT_FILES or p in ("/robots.txt", "/security.txt") or p in self.MCP_DISCOVERY
     def _bits(self):
         """(path, query without segment, segment, crawler) the HTML cache key is built from. Does not change request state."""
