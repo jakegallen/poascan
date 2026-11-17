@@ -1497,10 +1497,10 @@ class H(BaseHTTPRequestHandler):
             GD.note_req(self._shed_bucket(), k)
         except Exception: pass
     def do_GET(self):
-        self._track()
+        self._track(); MT.request_scope(True)
         try: return self._gated(self._get)
         finally:
-            SG.reset(); GD.ACTIVE.pop(threading.get_ident(), None)
+            SG.reset(); MT.request_scope(False); GD.ACTIVE.pop(threading.get_ident(), None)
     def do_POST(self):
         self._track()
         try: return self._gated(self._post)
