@@ -16,6 +16,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Added
 - Epoch story: a closed epoch's page shows answers and grades per hour from the open to the close, then the steps in order: Opened, Answers, Grades, Closed, Settled, Paid, Established and Removed.
 
+### Fixed
+- Token charts: an empty read right after a restart is retried after 30 seconds instead of hiding the charts for 5 minutes.
+
 ## [1.26.354] - 2026-11-16
 
 ### Added

@@ -41,6 +41,8 @@ check("two chart cards, terse titles", 'id="price"' in h and 'id="volume"' in h 
 check("chart only: no trade link, offer book or alert", "poaswap" not in h.lower() and "/swap" not in h and "Buy" not in h and "alert" not in h.lower())
 check("no dashes", "\u2014" not in h and "\u2013" not in h)
 setup([]); check("no fills, no cards", T.cards_html() == "" and T.data() is None)
+SC.price_history = lambda: HIST; check("an empty read is kept 30 s, not 5 min", T.data() is None)
+T._c["d"] = (T._c["d"][0] - 31, None); check("after 30 s the next read fills the charts", T.data() is not None)
 src = open(os.path.join(ROOT, "poascan", "tokencharts.py")).read()
 check("reads only swapclient (no new upstream polling)", "urllib" not in src and "minepoa" not in src)
 print("FAILED: " + ", ".join(fails) if fails else "all tokencharts checks passed"); sys.exit(1 if fails else 0)

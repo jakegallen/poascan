@@ -32,7 +32,7 @@ def data():
     now = time.time()
     with _lock:
         hit = _c.get("d")
-        if hit and now - hit[0] < TTL: return hit[1]
+        if hit and now - hit[0] < (TTL if hit[1] else 30): return hit[1]   # an empty read (swap store still loading at boot) retries soon
     rows = _rows(); d = None
     if rows:
         cnt = {}
