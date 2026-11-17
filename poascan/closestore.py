@@ -366,17 +366,38 @@ class Close(dict):
     __slots__ = ("loc",)
 
 _slim_prev = {}   # kind -> {(pos, sig, ppos): Close} from the last slim() read (1.26.336)
+_pool = {}        # kind -> (addresses, small dicts, the empty list) shared by that segment's slim records (1.26.359)
+
+def _compact(o, pool):
+    """1.26.359: equal Agent addresses, equal small flat dicts (a jury seat: grader and aligned) and empty lists point at
+    one shared copy. About 300 MB of slim records at 80 closes become about 150 MB. Safe because records are read only."""
+    strs, dicts, empty = pool
+    if isinstance(o, str): return strs.setdefault(o, o) if o.startswith("poa1") else o
+    if isinstance(o, list):
+        if not o: return empty
+        for i, x in enumerate(o): o[i] = _compact(x, pool)
+        return o
+    if isinstance(o, dict):
+        flat = len(o) <= 4
+        for k, x in o.items():
+            x = _compact(x, pool); o[k] = x
+            if flat and not isinstance(x, (str, int, float, bool, type(None))): flat = False
+        return dicts.setdefault(tuple((k, type(x), x) for k, x in o.items()), o) if flat else o   # type too: True == 1
+    return o
+
 def slim(kind):
     """[slim record (Close)] of one segment, in stored order. 1.26.336: a close whose row is unchanged (same position, sig
     and ppos) keeps the record already parsed, so a new close parses one slim record, not all of them. A full re-parse
     held the old and the new copy at once (about 400 MB each at 80 closes) and pushed RSS toward the guard at a close.
     Records are read only, so sharing one between the old and the new list changes nothing a reader sees."""
     prev = _slim_prev.get(kind) or {}; out, nxt = [], {}
+    if not prev or kind not in _pool: _pool[kind] = ({}, {}, [])   # a full parse starts a fresh pool
+    pool = _pool[kind]
     for r in db.q("SELECT pos, ppos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,)):
         key = (r["pos"], r["sig"], r["ppos"]); v = prev.get(key)
         if v is None:
             t = db.q1("SELECT slim FROM close_rows WHERE kind=? AND pos=?", (kind, r["pos"]))
-            v = json.loads(t["slim"]) if t else None
+            v = _compact(json.loads(t["slim"]), pool) if t else None
             if isinstance(v, dict): v = Close(v)
         if isinstance(v, Close): v.loc = (kind, r["pos"], r["ppos"], _ver[kind]); nxt[key] = v
         out.append(v)

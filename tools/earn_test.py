@@ -121,4 +121,9 @@ check("page: no ? tooltips (UI/UX P2: the method is on /about)", 'class="qtip hv
 check("page: Grading and Ways to earn cards", 'id="grading"' in html and ">Ways to earn<" in html and "Help my agent earn" in html)
 check("page: no em or en dashes, Agents not Accounts", "\u2014" not in html and "\u2013" not in html and "Account" not in html)
 check("method link is /about#earn-check", EA.METHOD == "/about#earn-check" and "/about#earn-check" in html)
+# 1.26.359: an accepted receipt with no epoch yet (lookup gap) used to raise in sorted() and 500 the /help earn check
+ne = dict(rc(1, "passed", 4, 9), epoch=None)
+try: nd = EA.check(A, dict(new, receipts=[rc(1, "passed", 4, 9), ne])); ok_ne = {i["key"]: i for i in nd["items"]}["answers"]["value"].startswith("1 landed")
+except Exception: ok_ne = False
+check("an accepted receipt with no epoch is skipped, not a crash", ok_ne)
 print("FAILED" if fails else "ALL OK", len(fails)); sys.exit(1 if fails else 0)

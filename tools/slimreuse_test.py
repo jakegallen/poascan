@@ -36,4 +36,16 @@ check("pending of a reused record still reads its own row", len(A.pending_of(c[1
 db.write("UPDATE close_rows SET sig='x' WHERE kind=? AND pos=?", (kind, c[0].loc[1]))
 d = CS.slim(kind)
 check("a row whose sig changed is parsed again", d[0] is not c[0] and d[0] == c[0] and all(x is y for x, y in zip(c[1:], d[1:])))
+# 1.26.359: equal addresses, small flat dicts (jury seats) and empty lists are shared, and the JSON never changes
+def jclose(n):
+    st = [{"answer": f"{n:02d}{i:062x}", "from": "poa1author" + "x" * 30, "passed": True, "losers": [], "winners": [],
+           "jury": [{"grader": "poa1g" + "y" * 30, "aligned": True}, {"grader": "poa1h" + "y" * 30, "aligned": 1}]} for i in range(3)]
+    return {"epoch": n, "ts": T0 + 21600 * n, "pool": "10", "basis": {"pending": {}, "settled": st}, "rewards": {}}
+CS.append_records(kind, [jclose(4), jclose(5)])
+e = CS.slim(kind); s4, s5 = e[4]["basis"]["settled"], e[5]["basis"]["settled"]
+check("an address repeated across closes is one string", s4[0]["from"] is s5[2]["from"])
+check("equal jury seats are one dict", s4[0]["jury"][0] is s5[1]["jury"][0])
+check("aligned True and aligned 1 stay apart", s4[0]["jury"][1]["aligned"] == 1 and type(s4[0]["jury"][1]["aligned"]) is int and s4[0]["jury"][0]["aligned"] is True)
+check("empty lists are one list", s4[0]["losers"] is s5[0]["winners"])
+check("the shared records still read like a fresh parse", json.dumps(e) == json.dumps([json.loads(r["slim"]) for r in db.q("SELECT slim FROM close_rows WHERE kind=? ORDER BY pos", (kind,))]))
 print("FAILED: " + "; ".join(fails) if fails else "all ok"); sys.exit(1 if fails else 0)
