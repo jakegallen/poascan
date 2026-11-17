@@ -191,8 +191,9 @@ def gather(a, get, forum_fn=None):
             if n >= lc - 1:   # preview (earn gates): this Agent's pending answers and their grade counts at the last two closes
                 b0 = rec.get("basis") if isinstance(rec.get("basis"), dict) else {}
                 from . import analytics as _A
-                pg = b0.get("pending") if "pending" in b0 else _A.pending_of(rec)   # 1.26.235: a local slim record reads its row
-                pg = pg if isinstance(pg, dict) else {}; mt = {r.get("tx") for r in mine}
+                mt = {r.get("tx") for r in mine}   # 1.26.360: a slim record reads only these rows (pend_ix), not the whole close
+                pg = b0.get("pending") if "pending" in b0 else _A.pending_get(rec, [t for t in mt if t])
+                pg = pg if isinstance(pg, dict) else {}
                 out.setdefault("pend_grades", {})[n] = {t: dict(grades=len({(g.get("grader") if isinstance(g, dict) else g) for g in p.get("grades") or []}), panel=len(p.get("panel") or []))
                                                          for t, p in pg.items() if t in mt and isinstance(p, dict)}
             row = close_row(n, rec, a, mine, est); est = row.pop("_est")
