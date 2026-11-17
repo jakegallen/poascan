@@ -1,5 +1,5 @@
 """POASCAN HTTP server: pages, read-only JSON/CSV API, static files. Python stdlib only."""
-import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, signal, traceback, urllib.parse
+import json, hashlib, os, re, csv, io, gzip, time, logging, mimetypes, signal, threading, traceback, urllib.parse
 from html import escape as E
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import guard as GD
@@ -30,6 +30,7 @@ EST_RX = re.compile(r"^/api(?:/v1)?/address/poa1\w+/established$")   # 1.26.361:
 log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
+_TRACK_SALT = os.urandom(8).hex()   # 1.26.362: per-boot salt for the spike dump's client net hash; never stored
 COMMIT = os.environ.get("GIT_SHA") or None   # deployed git SHA (Dockerfile ENV from the deploy build-arg); None in local builds
 # Process start/restart count, persisted in a DB blob on the Fly volume so it survives restarts (the guard exits the
 # process on a hang or an OOM, Fly restarts it, and the next boot bumps this). boot_at is this process's start time;
@@ -1445,6 +1446,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/chain" or p.startswith("/chain"): return "chain_html"
         if p in ("/", "/start", "/help", "/about") or p == "/governance" or p.startswith("/governance"): return "page_html"
         return "other"
+    def _kind(self):
+        try: return VS.kind(self._path_only(), self.headers.get("User-Agent") or "")
+        except Exception: return None
     def _shed(self):
         """1.26.288 (P0): no slot. A human page gets its last good copy (any key, up to PIN_MAX_AGE_S old, no slot, never
         cached at the edge) or the small branded busy page; the API, MCP and data files keep the plain text 503.
@@ -1463,9 +1467,9 @@ class H(BaseHTTPRequestHandler):
                 except Exception: h = None
             if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
             retry = "60" if self._is_search_crawler() else "15"   # 1.26.342 (A): 15 (was 3) so a shed client backs off instead of hammer-retrying into the jam
-            GD.note_shed(bkt)
+            GD.note_shed(bkt, self._kind())
             return self.send(503, BUSY_HTML, extra={"Retry-After": retry, "Cache-Control": "no-store"})
-        GD.note_shed()
+        GD.note_shed(kind=self._kind())
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "15", "Cache-Control": "no-store"})
     def _swap_status_fast(self):
         """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""
@@ -1484,11 +1488,23 @@ class H(BaseHTTPRequestHandler):
         d = dict(d, meta=meta, writes=d.get("writes"))
         hd = {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store", "X-API-Version": AG.VERSION}
         return self.send(200, json.dumps(d, default=str), "application/json", hd)
+    def _track(self):
+        """1.26.362: note this request for the spike dump (path without query, client kind, per-boot net hash)."""
+        try:
+            p = self._path_only()[:96]; ua = self.headers.get("User-Agent") or ""
+            h = hashlib.sha256((_TRACK_SALT + self.limiter_key()).encode()).hexdigest()[:6]
+            k = VS.kind(p, ua); GD.ACTIVE[threading.get_ident()] = (time.time(), self.command, p, k, h)
+            GD.note_req(self._shed_bucket(), k)
+        except Exception: pass
     def do_GET(self):
+        self._track()
         try: return self._gated(self._get)
-        finally: SG.reset()
+        finally:
+            SG.reset(); GD.ACTIVE.pop(threading.get_ident(), None)
     def do_POST(self):
-        return self._gated(self._post)   # the segment a request reads (?segment=) never leaks into the next one on this thread
+        self._track()
+        try: return self._gated(self._post)
+        finally: GD.ACTIVE.pop(threading.get_ident(), None)   # the segment a request reads (?segment=) never leaks into the next one on this thread
     def _get(self):
         if self.cf_origin_blocked(): return   # shed a direct poascan.fly.dev hit before any routing, DB or upstream work
         I.CLIENT.ip = self.client_ip()   # for the on-demand upstream budget (memory only, this request)

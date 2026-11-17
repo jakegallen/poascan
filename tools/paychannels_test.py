@@ -293,9 +293,12 @@ check("version is at least 1.26.359 and the changelog records share one copy of 
 check("version is at least 1.26.360 and the changelog records only that address's pending rows",
       _ver >= (1, 26, 360) and "## [1.26.360]" in cl and "only that address's pending rows" in cl
       and not any(c in cl.split("## [1.26.360]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.361 and the changelog records Established history API",
-      _ver == (1, 26, 361) and "## [1.26.361]" in cl and "Established history API" in cl
+check("version is at least 1.26.361 and the changelog records Established history API",
+      _ver >= (1, 26, 361) and "## [1.26.361]" in cl and "Established history API" in cl
       and not any(c in cl.split("## [1.26.361]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.362 and the changelog records spike dump",
+      _ver == (1, 26, 362) and "## [1.26.362]" in cl and "spike dump" in cl
+      and not any(c in cl.split("## [1.26.362]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
