@@ -1493,7 +1493,8 @@ class H(BaseHTTPRequestHandler):
         try:
             p = self._path_only()[:96]; ua = self.headers.get("User-Agent") or ""
             h = hashlib.sha256((_TRACK_SALT + self.limiter_key()).encode()).hexdigest()[:6]
-            GD.ACTIVE[threading.get_ident()] = (time.time(), self.command, p, VS.kind(p, ua), h)
+            k = VS.kind(p, ua); GD.ACTIVE[threading.get_ident()] = (time.time(), self.command, p, k, h)
+            GD.note_req(self._shed_bucket(), k)
         except Exception: pass
     def do_GET(self):
         self._track()

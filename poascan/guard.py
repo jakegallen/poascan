@@ -152,6 +152,10 @@ def heavy_busy():
 state = {"last_ok": time.time(), "fails": 0, "throttled_fails": 0, "busy_fails": 0, "steal": None, "rss_mb": None, "trims": 0, "gcs": 0, "rss_over": 0, "sheds": 0, "sheds_by": {}}
 
 SHED_BUCKETS = ("addr_html", "tx_html", "epoch_html", "agents_html", "chain_html", "page_html", "api", "other")
+def note_req(bucket, kind):
+    """1.26.362: requests by route bucket and client kind (the shed rate's denominator on /api/status)."""
+    rk = state.setdefault("reqs_kind", {}); k = f"{bucket if bucket in SHED_BUCKETS else 'other'}:{kind}"; rk[k] = rk.get(k, 0) + 1
+
 def note_shed(bucket="other", kind=None):
     """1.26.342/343 (plan v2, A and C): count a shed, i.e. a 503 returned because no heavy slot or capacity was free within
     the bounded wait. Total plus a split by coarse route bucket (SHED_BUCKETS), exposed as telemetry `sheds` and `sheds_by`
@@ -172,7 +176,7 @@ def telemetry():
     ua_throttle: the shared per-User-Agent API throttle (1.26.287); throttled counts its 429s since boot."""
     s = state
     return dict(trims=s["trims"], gcs=s["gcs"], rss_mb=s["rss_mb"], rss_exit_mb=RSS_EXIT_MB, rss_trim_mb=RSS_TRIM_MB,
-                rss_over=s.get("rss_over", 0), sheds=s.get("sheds", 0), sheds_by=dict(s.get("sheds_by") or {}), sheds_kind=dict(s.get("sheds_kind") or {}), spikes=s.get("spikes", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
+                rss_over=s.get("rss_over", 0), sheds=s.get("sheds", 0), sheds_by=dict(s.get("sheds_by") or {}), sheds_kind=dict(s.get("sheds_kind") or {}), reqs_kind=dict(s.get("reqs_kind") or {}), spikes=s.get("spikes", 0), self_check_fails=s["fails"], throttled_fails=s["throttled_fails"],
                 busy_fails=s.get("busy_fails", 0), heavy_busy=heavy_busy(),
                 steal=s["steal"], last_ok=s["last_ok"], heavy_cap=HEAVY_CAP, reserve_cap=RESERVE_CAP,
                 ua_throttle=dict(agents=list(UA_THROTTLE), rate=UA_THROTTLE_RATE, burst=UA_THROTTLE_BURST,
