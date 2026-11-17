@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.363] - 2026-11-16
+
+### Changed
+- Pages build the maintenance state once per request instead of about seven times per render, cutting a cold address page render to about a third locally.
+
 ## [1.26.362] - 2026-11-16
 
 ### Added

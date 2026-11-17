@@ -620,7 +620,20 @@ def _ttl():
     try: return NP.value("pending_ttl_epochs", _SG.CURRENT)
     except Exception: return TTL_EPOCHS
 
+_REQ = threading.local()
+def request_scope(on):
+    """1.26.363: within one GET the state is built once (a page asked for it about 7 times per render, about 4 ms each).
+    Outside a request scope every call builds it fresh."""
+    _REQ.on = bool(on); _REQ.memo = None
+
 def state():
+    if not getattr(_REQ, "on", False): return _state()
+    k = (sum(db._blob_gen.values()), len(db._blob_gen)); m = _REQ.memo
+    if m is not None and m[0] == k: return dict(m[1])
+    v = _state(); _REQ.memo = (k, v)
+    return dict(v)
+
+def _state():
     from . import hosted as R
     cp = A.status().get("checkpoint_height"); cleared = _cleared(); active = cleared is None
     lj = last_join(); rec = recovery(); rt = R.current(); ck = R.checked_at(); hl = strip_text(); hm = strip_mobile(); c = complete()
