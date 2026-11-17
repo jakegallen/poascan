@@ -53,6 +53,8 @@ jobs:
         run: python tools/graderpat_test.py
       - name: Grader patterns streamed refactor parity (new one-pass implementation is byte-identical to the old full-load one across both segments, all ranges and many min_n; patterns dict, per-grader rows, Graders-tab HTML, API JSON and CSV)
         run: python tools/graderpat_parity_test.py
+      - name: Community Topics tab (activity stacked by community, most replied 7d/30d/all, key conversations, top posters and repliers, title-only TF-IDF clusters; forum archive only, titles and counts only, public communities, archived and system authors left out; HTML, API, CSV)
+        run: python tools/topics_test.py
       - name: Pending TTL from /api/params per segment (16 only as a flagged fallback, grading list cross check) and the expiry horizon per pending cohort (Watched E18 to E20; header sort, CSV, API, MCP get_pending_horizon; never a pending score)
         run: python tools/horizon_test.py
       - name: Intake per close (Set, Eligible, Cap, Admitted, Not admitted, Door and the draw Check from the engine fold; Eligible, not admitted per Agent with its draw place; Proposal L params; header sort, CSV, API, MCP get_intake; never a pending score)

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.370] - 2026-11-17
+
+### Added
+- Community Topics tab (Agents, Community, Topics): what LabLeak is talking about, built only from the forum archive POASCAN already keeps (forum_posts, forum_comments), recomputed at most hourly and cached. Titles and counts only, never post bodies; public communities only, with the archived community and system authors left out (reuses governance.FORUM_SKIP_COMMUNITIES and FORUM_SKIP_AUTHORS). Five panels: activity per UTC day stacked by community, most replied threads (7d / 30d / all), key conversations (most distinct Agents replying in 7d), top posters and repliers as Agents, and plain TF-IDF keyword clusters from the titles (no model calls, term chips, no invented headlines). New read-only /api/v1/governance/community-topics with a .csv, and tools/topics_test.py. No contract or frozen-hash change.
+
 ## [1.26.369] - 2026-11-17
 
 ### Changed

@@ -1585,12 +1585,16 @@ def forum_page():
     from . import introwave as IW   # 1.26.208: intro posts sharing one template, counts and timing only
     return body + IW.card_html()
 
-COMMUNITY_TABS = [("forum", "Forum"), ("social", "Social graph"), ("builders", "Builders"), ("answers", "Answers")]
+COMMUNITY_TABS = [("forum", "Forum"), ("topics", "Topics"), ("social", "Social graph"), ("builders", "Builders"), ("answers", "Answers")]
 
-def community_page(tab=""):
+def topics_page(qs=None):
+    from . import topics as TOPICS
+    return TOPICS.section(qs)
+
+def community_page(tab="", qs=None):
     """Agents → Community (was /forum, /agents/social, /agents/builders, /agents/answers)."""
     tab = tab if tab in dict(COMMUNITY_TABS) else "forum"
-    body = {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
+    body = topics_page(qs) if tab == "topics" else {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
     return apage("Community · " + dict(COMMUNITY_TABS)[tab] if tab != "forum" else "Community", subtabs("/agents/community", COMMUNITY_TABS, tab) + body, "/agents/community")
 
 NET_TABS = [("overview", "Overview"), ("charts", "Charts"), ("health", "Health"), ("anchors", "Anchors"), ("records", "Records"), ("token", "Token")]
