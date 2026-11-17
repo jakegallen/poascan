@@ -714,6 +714,10 @@ def fixture_pages(check):
               '<h1 class="ephd">Epoch 7 · ' in ep7 and 'closed <time class="t lt" datetime="' in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
               and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided<" in ep7 and ">Passed / failed / expired<" in ep7
               and re.search(r'<th class="pc hs"[^>]*><a class="hsb"[^>]*>Reward<', ep7) and 'title="&lt;' not in ep7)
+        st = ep7.split('id="story"', 1)[1].split("</section>", 1)[0] if 'id="story"' in ep7 else ""
+        check("epoch story: one card above the stat cards, steps from the close row, terse labels, no dashes",
+              ep7.count('id="story"') == 1 and ep7.index('id="story"') < ep7.index('class="stats six"') and '<ol class="estory">' in st
+              and '<span class="esl">Closed</span>' in st and "\u2014" not in st and "\u2013" not in st and "<small" not in st)
         tx_ = req(base + "/chain/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)

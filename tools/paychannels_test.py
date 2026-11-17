@@ -272,9 +272,12 @@ check("version is at least 1.26.352 and the changelog records Header search",
 check("version is at least 1.26.353 and the changelog records Trade on POASwap",
       _ver >= (1, 26, 353) and "## [1.26.353]" in cl and "Trade on POASwap" in cl
       and not any(c in cl.split("## [1.26.353]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.354 and the changelog records Daily volume",
-      _ver == (1, 26, 354) and "## [1.26.354]" in cl and "Daily volume" in cl
+check("version is at least 1.26.354 and the changelog records Daily volume",
+      _ver >= (1, 26, 354) and "## [1.26.354]" in cl and "Daily volume" in cl
       and not any(c in cl.split("## [1.26.354]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.355 and the changelog records Epoch story",
+      _ver == (1, 26, 355) and "## [1.26.355]" in cl and "Epoch story" in cl
+      and not any(c in cl.split("## [1.26.355]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

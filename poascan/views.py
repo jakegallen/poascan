@@ -1267,7 +1267,9 @@ def epoch(n):
     line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span>closed {lt(r["close_ts"])}</span>'
             f' · {r["paid"]:,} Agents paid{burn_clause}{split_tag}</h1>')
     payouts = na("Closed, no payout (no answer reached quorum).") if zeropay else ((note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt)
+    from . import epochstory as EST_   # the story card: answers and grades per hour, then the close (epochstory.py)
     body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
+            + EST_.card_html(n, r, (rows.get(n - 1) or {}).get("close_ts")) +
             f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
