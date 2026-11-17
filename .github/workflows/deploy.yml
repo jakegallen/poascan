@@ -97,7 +97,7 @@ jobs:
         run: python tools/mcp_probe_test.py
       - name: Address light path under load (1.26.319)
         run: python tools/addrlight_test.py
-      - name: Background renders hold at most one cold compute slot (1.26.364)
+      - name: Cold compute slots go to visitors first (1.26.364)
         run: python tools/bgslot_test.py
       - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; address API light copy under load; tools/call still sheds)
         run: python tools/visitor_slot_test.py

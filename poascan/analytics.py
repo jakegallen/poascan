@@ -11,6 +11,7 @@ CACHE_MAX = 256
 _heavy = threading.BoundedSemaphore(int(os.environ.get("POASCAN_HEAVY_MAX", "2")))   # cold computes running at once
 _depth = threading.local()
 _bg = threading.local()
+STALE_MAX = 300   # seconds a visitor may be served a previous value while every cold slot is busy
 _bg_heavy = threading.BoundedSemaphore(1)   # 1.26.364: background renders hold at most one of the _heavy slots
 
 def background():
@@ -46,8 +47,16 @@ def cached(key, ttl=30, light=False):
             outer = not getattr(_depth, "n", 0)
             slot = outer and not light
             bg = slot and getattr(_bg, "on", False)
+            got = False
+            if slot and own and hit and not bg and time.time() - hit[0] < max(STALE_MAX, 4 * ttl):
+                # 1.26.364: a visitor refreshing a value it already has never waits for a cold slot; it serves the
+                # previous value and the next caller that finds a slot free refreshes it
+                got = _heavy.acquire(blocking=False)
+                if not got:
+                    with _lock: _inflight.pop(k, None)
+                    ev.set(); return hit[1]
             if bg: _bg_heavy.acquire()
-            if slot: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
+            if slot and not got: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
             _depth.n = getattr(_depth, "n", 0) + 1
             try:
                 v = fn(*a)
