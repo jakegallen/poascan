@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.369] - 2026-11-17
+
+### Changed
+- Grader patterns (Governance, Graders tab) are now computed in one streamed pass over `grade_history`, ordered by answer, instead of loading the whole table twice (once in `_patterns` as `rs` plus `by_ans`, and again in `timing`). Per grader the code folds running sums and a 4-bucket score histogram rather than keeping the full row lists, and the network-wide answer to seal timing is matched to its seals in the same pass. This cuts the first-render memory peak sharply (the Graders tab was the largest transient on the box) with byte-identical output. A new `tools/graderpat_parity_test.py` proves the patterns dict, every per-grader row, the Graders-tab HTML, the API JSON and the CSV stay identical to the previous implementation across both segments, all ranges and many `min_n`.
+
 ## [1.26.368] - 2026-11-17
 
 ### Changed

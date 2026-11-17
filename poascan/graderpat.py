@@ -78,36 +78,54 @@ def patterns(rng="all", min_n=MIN_N):
 @cached("grader_patterns", 300)
 def _patterns_hot(rng, min_n): return _patterns(rng, min_n)
 
+def _scores(hist):
+    """Rebuild the settled 0..3 score multiset from the 4-bucket histogram, so spread feeds statistics.stdev the exact
+    same values as before. Order does not matter: stdev is exact and symmetric."""
+    return [k for k in range(4) for _ in range(hist[k])]
+
 def _patterns(rng="all", min_n=MIN_N):
-    from . import gradehist as GH
-    GH._ensure(); seg = SG.selected(); sc_on = has_scores(seg)
+    from . import gradehist as GH, grading as GR
+    GH._ensure(); GR._ensure(); seg = SG.selected(); sc_on = has_scores(seg)
     cl = _closes_in(rng)
-    rs = db.q("SELECT answer, grader, close, aligned, score FROM grade_history WHERE seg=?", (seg,))
-    if cl is not None: rs = [r for r in rs if r["close"] in cl]
-    by_ans = collections.defaultdict(list)
-    for r in rs: by_ans[r["answer"]].append(r)
-    g = collections.defaultdict(lambda: dict(seats=0, aligned=0, peers=[], scores=[], dist=[], closes=set()))
-    for ans, js in by_ans.items():
+    # One streamed pass over grade_history, ordered by answer so only a single answer's jury is held at a time, never the
+    # whole table. grade_history is PRIMARY KEY(seg, answer, grader) WITHOUT ROWID, so WHERE seg=? ORDER BY answer is a
+    # clustered-index scan with no sort buffer. Per grader we fold running sums and a 4-bucket score histogram instead of
+    # the full row lists, and the network-wide timing seats are matched to their seals in this same pass. The transient
+    # peak no longer scales with the table: the old code loaded every row twice (here as rs + by_ans, and again in timing).
+    sealt = _seal_times()
+    g = collections.defaultdict(lambda: dict(seats=0, aligned=0, peers=[], hist=[0, 0, 0, 0], dist=[], closes=set()))
+    t_matched = []; t_want = set()
+    def fold(js):
         for r in js:
             x = g[r["grader"]]; x["seats"] += 1; x["aligned"] += r["aligned"]; x["closes"].add(r["close"])
             oth = [o for o in js if o["grader"] != r["grader"]]
             if oth: x["peers"].append(sum(o["aligned"] for o in oth) / len(oth))
             if sc_on and r["score"] is not None:
-                x["scores"].append(r["score"])
+                x["hist"][r["score"]] += 1
                 os_ = [o["score"] for o in oth if o["score"] is not None]
                 if os_: x["dist"].append(abs(r["score"] - statistics.fmean(os_)))
+    js = []; cur = None
+    for r in db.qi("SELECT answer, grader, close, aligned, score FROM grade_history WHERE seg=? ORDER BY answer", (seg,)):
+        if cl is not None and r["close"] not in cl: continue
+        a = r["answer"]
+        if a != cur:
+            if js: fold(js)
+            js = []; cur = a
+        js.append(r)
+        if (a, r["grader"]) in sealt: t_matched.append((a, r["grader"])); t_want.add(a)
+    if js: fold(js)
     sysg = system_set(); nm = A.forum_names(); out = []
     for a, x in g.items():
-        s = x["scores"]; hist = [s.count(k) for k in range(4)]
-        top = max(range(4), key=lambda k: (hist[k], -k)) if s else None
-        n_elig = len(s) if sc_on else x["seats"]
+        hist = x["hist"]; n_s = hist[0] + hist[1] + hist[2] + hist[3]
+        top = max(range(4), key=lambda k: (hist[k], -k)) if n_s else None
+        n_elig = n_s if sc_on else x["seats"]
         row = dict(address=a, name=nm.get(a) or None, system=a in sysg, seats=x["seats"], aligned=x["aligned"],
                    agreement=round(x["aligned"] / x["seats"], 4) if x["seats"] else None,
                    peers=round(statistics.fmean(x["peers"]), 4) if x["peers"] else None, peer_seats=len(x["peers"]),
                    closes=len(x["closes"]), last_close=max(x["closes"]) if x["closes"] else None)
         if sc_on:
-            row.update(scored=len(s), spread=round(statistics.stdev(s), 3) if len(s) > 1 else None,
-                       top_score=top, top_share=round(hist[top] / len(s), 4) if s else None,
+            row.update(scored=n_s, spread=round(statistics.stdev(_scores(hist)), 3) if n_s > 1 else None,
+                       top_score=top, top_share=round(hist[top] / n_s, 4) if n_s else None,
                        distance=round(statistics.fmean(x["dist"]), 3) if x["dist"] else None, mix={str(k): hist[k] for k in range(4)})
         row["below_min"] = n_elig < min_n
         out.append(row)
@@ -123,7 +141,7 @@ def _patterns(rng="all", min_n=MIN_N):
                 median=dict({k: med(k) for k in keys}), score_mix=mix,
                 bands=dict(agreement=_bands([r["agreement"] for r in pool if r["agreement"] is not None], AG_BANDS),
                            spread=_bands([r["spread"] for r in pool if r.get("spread") is not None], SD_BANDS) if sc_on else None),
-                timing=timing(rng), rows=out)
+                timing=_timing_bands(_timing_hrs(sealt, list(t_want), t_matched)), rows=out)
 
 AG_BANDS = [(0, "<60%"), (.6, "60%+"), (.7, "70%+"), (.8, "80%+"), (.85, "85%+"), (.9, "90%+"), (.95, "95%+")]
 SD_BANDS = [(0, "<0.4"), (.4, "0.4+"), (.5, "0.5+"), (.6, "0.6+"), (.7, "0.7+"), (.8, "0.8+"), (1, "1.0+")]
@@ -135,30 +153,44 @@ def _bands(vals, bands):
         out.append(dict(band=lab, graders=sum(1 for v in vals if lo <= v < hi)))
     return out
 
-def timing(rng="all"):
-    """Network wide: hours from the answer tx to each seal, on settled seats in range whose seal POAScan saw in minepoa's
-    grading list (grading_seals: grader and time only) and whose answer tx it holds. Never per grader."""
-    from . import gradehist as GH, grading as GR
-    GH._ensure(); GR._ensure(); seg = SG.selected(); cl = _closes_in(rng)
-    seats = db.q("SELECT answer, grader, close FROM grade_history WHERE seg=?", (seg,))
-    if cl is not None: seats = [r for r in seats if r["close"] in cl]
-    if not seats: return dict(seals=0, median_hours=None, bands=[])
-    sealt = {(r["answer"], r["grader"]): r["t"] for r in db.q("SELECT answer, grader, MIN(ts) AS t FROM grading_seals GROUP BY answer, grader")}
-    want = list({r["answer"] for r in seats if (r["answer"], r["grader"]) in sealt})
+def _seal_times():
+    """{(answer, grader): earliest seal ts} from grading_seals (grader and time only). Matches the network-wide timing seats."""
+    return {(r["answer"], r["grader"]): r["t"] for r in db.q("SELECT answer, grader, MIN(ts) AS t FROM grading_seals GROUP BY answer, grader")}
+
+def _timing_hrs(sealt, want, matched):
+    """Hours from each matched seat's answer tx to its seal. want: answers whose tx time to fetch; matched: the (answer,
+    grader) seats that had a seal. Order independent downstream (median sorts, bands count)."""
     ats = {}
     for i in range(0, len(want), 500):
         ch = want[i:i + 500]
         for r in db.q(f"SELECT id, ts FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)): ats[r["id"]] = r["ts"]
     hrs = []
-    for r in seats:
-        t = sealt.get((r["answer"], r["grader"])); a = ats.get(r["answer"])
+    for ans, grd in matched:
+        t = sealt.get((ans, grd)); a = ats.get(ans)
         if t and a and t >= a: hrs.append((t - a) / 3600)
+    return hrs
+
+def _timing_bands(hrs):
+    """Network-wide answer-to-seal distribution. Fewer than TIMING_MIN matched seals draws nothing."""
     if len(hrs) < TIMING_MIN: return dict(seals=len(hrs), median_hours=None, bands=[])
     out = []
     for i, (lo, lab) in enumerate(TIMING_BANDS):
         hi = TIMING_BANDS[i + 1][0] if i + 1 < len(TIMING_BANDS) else float("inf")
         out.append(dict(band=lab, seals=sum(1 for h in hrs if lo <= h < hi)))
     return dict(seals=len(hrs), median_hours=round(statistics.median(hrs), 2), bands=out)
+
+def timing(rng="all"):
+    """Network wide: hours from the answer tx to each seal, on settled seats in range whose seal POAScan saw in minepoa's
+    grading list (grading_seals: grader and time only) and whose answer tx it holds. Never per grader. Streams the seats
+    (no full in-memory list): keeps only the (answer, grader) that matched a seal, then fetches those answers' tx times."""
+    from . import gradehist as GH, grading as GR
+    GH._ensure(); GR._ensure(); seg = SG.selected(); cl = _closes_in(rng)
+    sealt = _seal_times(); matched = []; want = set()
+    for r in db.qi("SELECT answer, grader, close FROM grade_history WHERE seg=?", (seg,)):
+        if cl is not None and r["close"] not in cl: continue
+        k = (r["answer"], r["grader"])
+        if k in sealt: matched.append(k); want.add(r["answer"])
+    return _timing_bands(_timing_hrs(sealt, list(want), matched))
 
 def select(rng="all", min_n=MIN_N, by="name", d="desc", show_all=False):
     p = patterns(rng, min_n); rows = [r for r in p["rows"] if show_all or not r["below_min"]]
