@@ -307,18 +307,66 @@ def since_fill():
     finally:
         if got: _sf_lock.release()
 
+SF_BLOB = "since_fill:s{}"   # 1.26.367: the map and the closes it covers, per segment, on the /data volume
+_sf_state = {}                # segment -> {"closes": {pos: sig}, "first": {tid: n}, "out": {tid: epoch}, "fb": [tid]}
+
 def _since_fill_build(ts):
-    first = {}
-    for e in epochs_raw():
+    """1.26.367: read only the closes this segment's map has not covered yet (by close_rows position and sig), and
+    keep the map in a blob so a restart does not read every close again. Any covered close that changed or went away
+    rebuilds from every close, which is the only path before 1.26.367. The result equals a full rebuild."""
+    seg = ts[0]; recs = epochs_raw(); locs = [_loc(e) for e in recs]
+    if any(x is None or x[2] is None for x in locs): return _since_fill_full(ts, recs)
+    kind = locs[0][0] if locs else S.blob_kind(seg)
+    sigs = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
+    st = _sf_state.get(seg)
+    if st is None:
+        try:
+            b = db.get_blob(SF_BLOB.format(seg))[0]
+            if isinstance(b, dict) and b.get("v") == 1 and b.get("kind") == kind:
+                st = dict(closes={int(k): v for k, v in b["closes"].items()}, first=b["first"], out=b["out"], fb=list(b["fb"]))
+        except Exception:
+            st = None
+    cur = {x[1]: sigs.get(x[1]) for x in locs}
+    if st is None or any(cur.get(p) != g for p, g in st["closes"].items()): return _since_fill_full(ts, recs, kind, cur)
+    new = [e for e, x in zip(recs, locs) if x[1] not in st["closes"]]
+    first, out = dict(st["first"]), dict(st["out"]); add = set()
+    for e in new:
         n = int(e.get("epoch", 0))
         for t, v in (pending_of(e) or {}).items():
-            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n
-    out, ids = {}, list(first)
+            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n; add.add(t)
+    recheck = add | set(st["fb"])
+    out = {t: v for t, v in out.items() if t not in recheck}
+    fb = _since_fill_out(first, out, recheck)
+    return _since_fill_keep(ts, kind, cur, first, out, fb, changed=bool(new) or fb != st["fb"])
+
+def _since_fill_out(first, out, ids):
+    """Fill out[t] for ids: the archived challenge tx epoch, else the first close the answer sat in. Returns the ids that
+    took the fallback (no tx epoch yet), sorted, so a later update checks them again as a full rebuild would."""
+    ids = list(ids); got = set()
     for i in range(0, len(ids), 500):
         ch = ids[i:i + 500]
         for row in db.q(f"SELECT id, epoch FROM txs WHERE id IN ({','.join('?' * len(ch))})", tuple(ch)):
-            if row["epoch"] is not None: out[row["id"]] = int(row["epoch"])
-    for t, n in first.items(): out.setdefault(t, n)
+            if row["epoch"] is not None: out[row["id"]] = int(row["epoch"]); got.add(row["id"])
+    fb = sorted(t for t in ids if t not in got)
+    for t in fb: out[t] = first[t]
+    return fb
+
+def _since_fill_full(ts, recs, kind=None, cur=None):
+    first = {}
+    for e in recs:
+        n = int(e.get("epoch", 0))
+        for t, v in (pending_of(e) or {}).items():
+            if isinstance(v, dict) and v.get("since") is None and (t not in first or n < first[t]): first[t] = n
+    out = {}; fb = _since_fill_out(first, out, first)
+    if kind is None: _sf["v"] = out; _sf["ts"] = ts; return out
+    return _since_fill_keep(ts, kind, cur, first, out, fb, changed=True)
+
+def _since_fill_keep(ts, kind, cur, first, out, fb, changed):
+    seg = ts[0]
+    _sf_state[seg] = dict(closes=dict(cur), first=first, out=out, fb=fb)
+    if changed:
+        try: db.put_blob(SF_BLOB.format(seg), {"v": 1, "kind": kind, "closes": {str(k): v for k, v in cur.items()}, "first": first, "out": out, "fb": fb})
+        except Exception as ex: log.warning("since_fill: keep failed (%s)", type(ex).__name__)
     _sf["v"] = out; _sf["ts"] = ts
     return out
 
