@@ -105,6 +105,8 @@ jobs:
         run: python tools/govpin_test.py
       - name: since_fill reads only new closes and equals a full rebuild (1.26.367)
         run: python tools/sincefill_test.py
+      - name: Per-close folds read each close once and equal a full walk (1.26.368)
+        run: python tools/fold_test.py
       - name: Visitor slots (v1 health matches /api/health; summary answers with the heavy pool full and must not be served stale on a 503; start, help, about and agents serve a stored copy; address API light copy under load; tools/call still sheds)
         run: python tools/visitor_slot_test.py
       - name: Busy shell (a human page with every slot held serves its last good copy or the branded Busy page; API, MCP and data files keep the text 503)

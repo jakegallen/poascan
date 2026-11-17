@@ -174,6 +174,58 @@ def params_sig():
         _pdig[0] = s
     return _pdig[1]
 
+# 1.26.368: per-close folds. jury_series, calibration, settlement and the epoch rows each walked every close and parsed
+# its pending list (four full walks on each new close and after a restart, plus since_fill). Each is now a fold over the
+# closes in order: the state after the closes already covered is kept, a new close is folded in on top, and one walk
+# serves every fold, so each close's pending list is read once. A covered close that changed or went away, a params
+# change, or (for the folds that read origins) a since_fill change folds from the first close again.
+_folds = {}        # name -> (init, step, since, copy)
+_fs = {}           # (name, kind) -> (close keys covered, tag, state)
+_fold_lock = threading.RLock()
+fold_stats = dict(walks=0, parsed=0, resumed=0, full=0)
+
+def close_fold(name, init, step, since=False, copy=None):
+    """Register a fold: step(state, close, its pending, previous close or None, previous pending or None) -> state.
+    step must not change the state it is given unless copy is set (copy(state) is folded on, the kept state never
+    changes). since: the step reads since_of, so a change of since_fill refolds from the first close."""
+    _folds[name] = (init, step, since, copy)
+
+def _since_ok(snap, m, first, last_epoch):
+    """A fold that reads since_of may resume when every origin it read is unchanged: each id in the map it was folded
+    with maps to the same epoch now, and no id first seen at or before its last close has joined the map since."""
+    if first is None or any(m.get(t) != v for t, v in snap.items()): return False
+    return not any(first.get(t, last_epoch + 1) <= last_epoch for t in m if t not in snap)
+
+def fold(name):
+    """The state of fold name over the selected segment's closes, or None when the records cannot be folded (a record
+    without its row, or closes out of epoch order): the caller then walks every close as before 1.26.368."""
+    recs = epochs_raw(); locs = [_loc(e) for e in recs]; eps = [int(e.get("epoch", 0)) for e in recs]
+    if name not in _folds or any(x is None or x[2] is None for x in locs) or eps != sorted(eps): return None
+    kind = locs[0][0] if locs else S.blob_kind()
+    sigs = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=?", (kind,))}
+    keys = [(x[1], sigs.get(x[1])) for x in locs]
+    ps = params_sig(); m = since_fill() if any(f[2] for f in _folds.values()) else None
+    first = (_sf_state.get(S.selected()) or {}).get("first") if m is not None else None
+    with _fold_lock:
+        plan = {}
+        for nm, (init, step, since, cp) in _folds.items():
+            tag = (ps, dict(m) if since else None); h = _fs.get((nm, kind))
+            if (h and h[1][0] == ps and keys[:len(h[0])] == h[0]
+                    and (not since or (h[0] and _since_ok(h[1][1], m, first, eps[len(h[0]) - 1])) or not h[0])):
+                plan[nm] = [len(h[0]), cp(h[2]) if cp and len(h[0]) < len(keys) else h[2], tag]; fold_stats["resumed"] += 1
+            else:
+                plan[nm] = [0, init(), tag]; fold_stats["full"] += 1
+        lo = min(p[0] for p in plan.values())
+        if lo < len(recs): fold_stats["walks"] += 1
+        pe = recs[lo - 1] if lo else None; pp = pending_of(pe) if 0 < lo < len(recs) else None
+        for i in range(lo, len(recs)):
+            e = recs[i]; pend = pending_of(e); fold_stats["parsed"] += 1
+            for nm, p in plan.items():
+                if p[0] <= i: p[1] = _folds[nm][1](p[1], e, pend, pe, pp)
+            pe, pp = e, pend
+        for nm, p in plan.items(): _fs[(nm, kind)] = (keys, p[2], p[1])
+        return _fs[(name, kind)][2]
+
 def close_memo(name):
     """Memo of a function of the selected segment's close records: recomputed only when they change (a new close, a new
     stored copy) or the params content changes, so a pending list is read from disk once per close, not once per TTL."""
@@ -393,21 +445,27 @@ def grade_counts(e, prev_ts=None):
             if isinstance(g, dict) and g.get("grader") and isinstance(ts, (int, float)) and (prev_ts is None or ts > prev_ts) and (not t1 or ts <= t1): c[g["grader"]] += 1
     return c
 
+def _ep_step(out, e, pend, pe, pp):
+    pend = pend or {}; t = int(e["ts"]); pprev = None if pe is None else set(pp or {}); prev = None if pe is None else int(pe["ts"])
+    kinds = collections.Counter(v.get("kind") for v in pend.values())
+    by_origin = collections.Counter(since_of(x, v) for x, v in pend.items())
+    sids = {s.get("answer") for s in (e.get("basis", {}).get("settled", []) or []) if s.get("answer")}
+    dropped = None if pprev is None else sum(1 for x in pprev if x not in pend and x not in sids)
+    gc = grade_counts(e, prev)
+    return out + [dict(pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
+                       pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")), pending_by_origin=dict(sorted(by_origin.items())),
+                       dropped=dropped, graders=len(gc), grades=sum(gc.values()))]
+close_fold("epoch_rows_pend", list, _ep_step, since=True)
+
 @close_memo("epoch_rows_pend")
 def _epoch_pend():
-    """Per close (epochs_raw order): the epoch_rows fields read from basis.pending, one pending list at a time (1.26.235)."""
-    out = []; pprev = None; prev = None
+    """Per close (epochs_raw order): the epoch_rows fields read from basis.pending, one pending list at a time (1.26.235).
+    1.26.368: a fold, so a new close reads only its own pending list and the previous one."""
+    v = fold("epoch_rows_pend")
+    if v is not None: return list(v)
+    out = []; pe = pp = None
     for e in epochs_raw():
-        pend = pending_of(e) or {}; t = int(e["ts"])
-        kinds = collections.Counter(v.get("kind") for v in pend.values())
-        by_origin = collections.Counter(since_of(x, v) for x, v in pend.items())
-        sids = {s.get("answer") for s in (e.get("basis", {}).get("settled", []) or []) if s.get("answer")}
-        dropped = None if pprev is None else sum(1 for x in pprev if x not in pend and x not in sids)
-        gc = grade_counts(e, prev)
-        out.append(dict(pending=len(pend), pending_short=kinds.get("short", 0), pending_appeal=kinds.get("appeal", 0),
-                        pending_empty_panel=sum(1 for v in pend.values() if not v.get("panel")), pending_by_origin=dict(sorted(by_origin.items())),
-                        dropped=dropped, graders=len(gc), grades=sum(gc.values())))
-        pprev = set(pend); prev = t
+        pend = pending_of(e); out = _ep_step(out, e, pend, pe, pp); pe, pp = e, pend
     return out
 
 def _f(v):

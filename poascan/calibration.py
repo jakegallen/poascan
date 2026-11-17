@@ -3,7 +3,7 @@
 1.26.183: scores are settled only, from grade_history (gradehist.py: the 0 to 3 scores settled juries carry in minepoa's
 grading list). Before, they came from the grades on rows still pending at each close (basis.pending[].grades[].score);
 those are no longer read. Pending grades are read for their grader and timestamp only (seal counts)."""
-import bisect, collections, statistics
+import bisect, collections, re, statistics, threading
 from . import db, analytics as A
 from .analytics import cached
 
@@ -18,29 +18,72 @@ def settled_scores(seg=None):
     for r in db.q("SELECT grader, score FROM grade_history WHERE seg=? AND score IS NOT NULL", (seg or SG.selected(),)): out[r["grader"]].append(int(r["score"]))
     return out
 
+def _cal_init():
+    return (collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0])),   # g -> close -> [seats, aligned]
+            collections.defaultdict(lambda: [0, 0, 0, 0]),                              # g -> [seats on passed, aligned, seats on failed, aligned]
+            {})                                                                          # (answer, grader) -> seal ts (pending grades: ts only)
+
+def _cal_copy(st):
+    seat, split, seal_ts = _cal_init()
+    for g, by in st[0].items():
+        for n, c in by.items(): seat[g][n] = list(c)
+    for g, x in st[1].items(): split[g] = list(x)
+    seal_ts.update(st[2])
+    return seat, split, seal_ts
+
+_mg = [None, 0]
+def _merge():
+    """params pending_merge_from_epoch, read once per params content (a fold reads it per close)."""
+    k = A.params_sig()
+    if _mg[0] != k: _mg[:] = [k, int(A.params().get("pending_merge_from_epoch") or 0)]
+    return _mg[1]
+
+def _cal_step(st, e, pend, pe, pp):
+    seat, split, seal_ts = st
+    merge = _merge()
+    n = int(e["epoch"]); b = e.get("basis", {}) or {}
+    for s in b.get("settled", []) or []:
+        ok = bool(s.get("passed"))
+        for j in s.get("jury", []) or []:
+            g = j.get("grader"); al = int(bool(j.get("aligned")))
+            if not g: continue
+            c = seat[g][n]; c[0] += 1; c[1] += al
+            x = split[g]; i = 0 if ok else 2; x[i] += 1; x[i + 1] += al
+    if n >= merge:   # seal times only: a pending grade's score is never read
+        pend = pend or {}
+        for ans, row in (pend.items() if isinstance(pend, dict) else ()):
+            for gr in (row or {}).get("grades") or []:
+                if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts[_sk(ans, gr["grader"])] = int(gr["ts"])
+    return st
+
+# 1.26.368: the fold keeps seal_ts between closes (about 360k (answer, grader) keys), so a key is one int when the answer
+# is a 64 character hex id: the id's value shifted left 32 bits, plus the grader's index in _gname. Any other answer keeps
+# the (answer, grader) tuple. Both forms map back to the grader exactly, so the (grader, ts) pairs are unchanged.
+_gix, _gname, _glock = {}, [], threading.Lock()
+_HEX = re.compile(r"[0-9a-f]{64}")
+
+def _sk(ans, g):
+    if not (isinstance(ans, str) and _HEX.fullmatch(ans)): return (ans, g)
+    i = _gix.get(g)
+    if i is None:
+        with _glock:
+            i = _gix.get(g)
+            if i is None: i = _gix[g] = len(_gname); _gname.append(g)
+    return (int(ans, 16) << 32) | i
+
+def _sg(k): return _gname[k & 0xFFFFFFFF] if isinstance(k, int) else k[1]
+A.close_fold("calibration_closes", _cal_init, _cal_step, copy=_cal_copy)
+
 @A.close_memo("calibration_closes")
 def _close_part():
-    """The close record part of calibration (1.26.235: read once per close; the archive part stays live)."""
-    E = sorted(A.epochs_raw(), key=lambda e: int(e["epoch"]))
-    p = A.params(); merge = int(p.get("pending_merge_from_epoch") or 0)
-    seat = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))   # g -> close -> [seats, aligned]
-    split = collections.defaultdict(lambda: [0, 0, 0, 0])                              # g -> [seats on passed, aligned, seats on failed, aligned]
-    seal_ts = {}                                                                        # (answer, grader) -> seal ts (pending grades: ts only)
-    for e in E:
-        n = int(e["epoch"]); b = e.get("basis", {}) or {}
-        for s in b.get("settled", []) or []:
-            ok = bool(s.get("passed"))
-            for j in s.get("jury", []) or []:
-                g = j.get("grader"); al = int(bool(j.get("aligned")))
-                if not g: continue
-                c = seat[g][n]; c[0] += 1; c[1] += al
-                x = split[g]; i = 0 if ok else 2; x[i] += 1; x[i + 1] += al
-        if n >= merge:   # seal times only: a pending grade's score is never read
-            pend = A.pending_of(e) or {}
-            for ans, row in (pend.items() if isinstance(pend, dict) else ()):
-                for gr in (row or {}).get("grades") or []:
-                    if isinstance(gr, dict) and gr.get("grader") and isinstance(gr.get("ts"), (int, float)) and gr["ts"]: seal_ts[(ans, gr["grader"])] = int(gr["ts"])
-    return seat, split, frozenset((g, t) for (_, g), t in seal_ts.items())   # only the (grader, ts) pairs are read
+    """The close record part of calibration (1.26.235: read once per close; the archive part stays live). 1.26.368: a fold
+    (analytics.fold); the kept state is copied before a new close is folded in, so a value already returned never changes."""
+    st = A.fold("calibration_closes")
+    if st is None:
+        st = _cal_init()
+        for e in sorted(A.epochs_raw(), key=lambda e: int(e["epoch"])): _cal_step(st, e, A.pending_of(e), None, None)
+    seat, split, _ = _cal_copy((st[0], st[1], {}))
+    return seat, split, frozenset((_sg(k), t) for k, t in st[2].items())   # only the (grader, ts) pairs are read
 
 @cached("calibration", 300)
 def calibration():

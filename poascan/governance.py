@@ -206,16 +206,21 @@ def at_risk(qs):
     nav = _pager("at-risk", lambda **o: dict(dict(level=f, **keep), **o), pg, pages, "standing")
     return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows[sl], sort=by, d=d, link=link) + nav + foot, links, cls="histc", id="standing")
 
+def _js_step(out, e, pend, pe, pp):
+    b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]
+    pend = pend or {}; pend = pend if isinstance(pend, dict) else {}
+    return out + [dict(epoch=int(e.get("epoch", 0)), aligned=sum(1 for j in js if j.get("aligned")), other=sum(1 for j in js if not j.get("aligned")),
+                       queue=len(pend), empty=sum(1 for v in pend.values() if not (v or {}).get("panel")))]
+A.close_fold("jury_series", list, _js_step)
+
 @A.close_memo("jury_series")
 def jury_series():
     """Per close of the selected segment: jury seats aligned and not aligned (settled[].jury[]), queue and empty panels.
-    1.26.235: computed once per close (each close's pending list is read from disk)."""
+    1.26.235: computed once per close (each close's pending list is read from disk). 1.26.368: a fold (analytics.fold)."""
+    v = A.fold("jury_series")
+    if v is not None: return list(v)
     out = []
-    for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))):
-        b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]
-        pend = A.pending_of(e) or {}; pend = pend if isinstance(pend, dict) else {}
-        out.append(dict(epoch=int(e.get("epoch", 0)), aligned=sum(1 for j in js if j.get("aligned")), other=sum(1 for j in js if not j.get("aligned")),
-                        queue=len(pend), empty=sum(1 for v in pend.values() if not (v or {}).get("panel"))))
+    for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))): out = _js_step(out, e, A.pending_of(e), None, None)
     return out
 
 def seals_since_close():

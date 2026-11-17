@@ -87,21 +87,26 @@ def settlement():
             out.append(_split(dict(close=n, close_ts=ts, origin=None if o == -1 else o, **g[o])))
     return out
 
+def _sp_step(out, e, pend, pe, pp):
+    prev = (pp or {}) if pe is not None else {}; prev = prev if isinstance(prev, dict) else {}
+    b = e.get("basis") or {}
+    pin = {s.get("answer"): A.since_of(s.get("answer"), prev[s.get("answer")]) for s in b.get("settled") or [] if s.get("answer") in prev}
+    pend = pend or {}; opens = {}
+    for aid, v in pend.items():
+        if not isinstance(v, dict): continue
+        x = opens.setdefault(A.since_of(aid, v), [0, 0]); x[0] += 1; x[1] += 1 if v.get("panel") else 0
+    return out + [(pin, opens)]
+A.close_fold("govv2_settle_pend", list, _sp_step, since=True)
+
 @A.close_memo("govv2_settle_pend")
 def _settle_pend():
     """settlement's reads of basis.pending, per close (1.26.235: once per close): the origin of each settled answer found in
-    the previous close's pending list, and {origin: [open, open with a panel]}."""
-    eps = sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0)))
-    out, prev = [], {}
-    for e in eps:
-        b = e.get("basis") or {}
-        pin = {s.get("answer"): A.since_of(s.get("answer"), prev[s.get("answer")]) for s in b.get("settled") or [] if s.get("answer") in prev}
-        pend = A.pending_of(e) or {}; opens = {}
-        for aid, v in pend.items():
-            if not isinstance(v, dict): continue
-            x = opens.setdefault(A.since_of(aid, v), [0, 0]); x[0] += 1; x[1] += 1 if v.get("panel") else 0
-        out.append((pin, opens))
-        prev = pend if isinstance(pend, dict) else {}
+    the previous close's pending list, and {origin: [open, open with a panel]}. 1.26.368: a fold (analytics.fold)."""
+    v = A.fold("govv2_settle_pend")
+    if v is not None: return list(v)
+    out = []; pe = pp = None
+    for e in sorted(A.segment_closes(SG.selected()), key=lambda e: int(e.get("epoch", 0))):
+        pend = A.pending_of(e); out = _sp_step(out, e, pend, pe, pp); pe, pp = e, pend
     return out
 
 def _split(x):

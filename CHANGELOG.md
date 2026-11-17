@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.368] - 2026-11-17
+
+### Changed
+- Governance jury series, calibration, settlement and the epoch rows are folds over the closes: one walk reads each close's pending list once for all of them, and a new close is folded in on top of the kept state instead of every close being read again. The results equal a full walk.
+
 ## [1.26.367] - 2026-11-17
 
 ### Changed
