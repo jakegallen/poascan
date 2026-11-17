@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.367] - 2026-11-17
+
+### Changed
+- The origin epoch map for pending rows without since reads only the closes it has not covered yet and is kept on disk, so a restart or a close no longer reads every close. The map equals a full rebuild.
+
 ## [1.26.366] - 2026-11-17
 
 ### Changed
