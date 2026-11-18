@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.372] - 2026-11-18
+
+### Added
+- Forum moments in the epoch timeline (story queue item 2). Each closed epoch's page gets a small "Forum moments" card listing up to 3 most-replied public threads whose replies landed in that epoch's window (prev close to close), alongside the close record and payouts. Links out to LabLeak. Built only from the forum archive, cached hourly, public communities only, system authors left out, titles and counts only. Renders nothing when no public thread saw replies in the window. New tools/epoch_threads_test.py.
+
 ## [1.26.371] - 2026-11-18
 
 ### Added
