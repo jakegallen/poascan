@@ -417,6 +417,12 @@ jobs:
         run: |
           sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99poascan > /dev/null
+      - name: Cache the Playwright browsers (keyed on the pinned Playwright version)
+        # the browser download, not apt, is what hung the WebKit install on 1.26.381 and #167; a cache hit skips it
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.64.1
       - name: Install Playwright and Chromium (pinned, headless shell only) for the header render check
         # a slow apt mirror can take 10+ minutes here; the job limit is 45 minutes (killing apt mid install broke the retries)
         timeout-minutes: 20
@@ -444,8 +450,11 @@ jobs:
           CI: "true"
         run: python tools/tip_layer_test.py
       - name: Install WebKit (pinned Playwright) for the mobile menu check
-        timeout-minutes: 20
-        run: python -m playwright install --with-deps webkit
+        # fail fast and retry once: the browser download (not apt) has hung here before; a cache hit makes it near-instant
+        timeout-minutes: 5
+        run: |
+          install() { timeout 120 python -m playwright install --with-deps webkit; }
+          install || { echo "WebKit install timed out or failed, retrying once"; install; }
       - name: Mobile menu at 360 and 390 px (opens under the header with visible, clickable links on a fresh load and after scrolling; Chromium and WebKit)
         env:
           CI: "true"
