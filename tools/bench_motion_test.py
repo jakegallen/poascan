@@ -22,7 +22,7 @@ check("ticker: Agent names link to their LabLeak profile in a new tab", f'href="
 check("ticker: sealed a grade reads in Seals green", '<i class="sw s"></i>' in t and "sealed a grade" in t)
 check("ticker: an empty archive reads one line", "Waiting for the next tx" in BN.ticker_html([]))
 check("summary payload leaves the strip and ticker out", 'class="btk"' not in V.tracker_html(score=False) and 'class="score"' not in V.tracker_html(score=False))
-check("bezel: a head and a glint over the ticks, the fill as --f", re.search(r'<div class="bzw" style="--f:[\d.]+"><svg[^>]*>.*?</svg><i class="bzs"></i><i class="bzh"></i></div>', h, re.S) is not None)
+check("1.26.380 ring: the fill as --f, a head and two ripples over the ticks", re.search(r'<div class="ring hring" data-start="[^"]*" data-close="[^"]*" style="--f:[\d.]+"><svg[^>]*>.*?</svg><i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>', h, re.S) is not None)
 check("the now line glow sits over the lanes", '<i class="nowg" aria-hidden="true"></i>' in h)
 snap = V.live_snapshot()
 check("snapshot last close carries settled (the close summary)", "settled" in snap["last"])

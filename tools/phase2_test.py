@@ -22,7 +22,7 @@ check("score: answers, attests and seals of the window only (no joins, nothing o
 check("score: the base sits on a whole minute, one window back", d["b"] % 60 == 0 and now - 1440 - 60 < d["b"] <= now - 1440)
 h = V.tracker_html()
 check("bench: epoch numeral, countdown and live keys", 'class="bn num" data-live="epoch"' in h and 'class="cd" data-close=' in h and 'data-live="answers"' in h and 'data-live="graders"' in h)
-check("bench: 72 tick bezel with the epoch start and close in the visitor's time", h.count("<line class=\"") >= 72 and 'class="bezel" data-start=' in h and 'data-f="t"' in h)
+check("bench 1.26.380: the ring fills over the epoch (pathLength 100 with --f) and carries the start and close", 'class="ring hring" data-start=' in h and 'class="rp"' in h and 'pathLength="100"' in h and "--f:" in h)
 check("bench: three lanes with counts, a now line and the 24m axis", h.count('class="lane"') == 3 and h.count('class="now"') == 3 and ">24m<" in h and ">now<" in h)
 lane = lambda k: re.search(r'data-k="%s".*?<b class="c num">(\d+)</b>' % k, h, re.S).group(1)
 check("bench: lane counts (1 answer, 1 attest, 1 seal in 24 min)", (lane("a"), lane("t"), lane("s")) == ("1", "1", "1"))
@@ -32,16 +32,16 @@ p = BN.pour_html(dict(epoch=11, pool=1e9, minted=1.7e8, burned=8.3e8, burn_pct=8
 check("pour: pool, minted and burned split, burn share", "1.00B" in p and 'style="width:17.00%"' in p and "170.00M" in p and "830.00M" in p and "83.0%" in p and 'aria-label="Minted 17.0%, burned 83.0%"' in p)
 check("pour: one empty state line when there is no close", BN.pour_html(None) == '<p class="empty">No closes yet</p>')
 hm = V.home()
-check("home: the Bench, the Pour (watermark kept: bmcard), stats and live tables", 'id="tracker" class="card benchc"' in hm and "pourc" in hm and "bmcard" in hm
-      and 'data-liverows="closes-home"' in hm and 'id="feed"' in hm and "Active Agents" in hm)
+check("home 1.26.380: the Heartbeat card (ring, strip, headline row), the Epochs panel and live tables; no Pour card", 'id="tracker" class="card benchc hpulse"' in hm and "pourc" not in hm and 'class="stats four kpis"' in hm
+      and 'data-liverows="closes-home"' in hm and 'id="feed"' in hm and "Active Agents" in hm and "Replies today" in hm)
 check("home: no Burn meter (the Pour replaces it), no em or en dashes", "Burn meter" not in hm and "\u2014" not in hm and "\u2013" not in hm)
-check("home grid: the Assay line (Type, Agent, Seals, Age) beside Closes and the Pour (Graders on Governance, 1.26.292)", hm.index("Assay line") < hm.index('class="side"') < hm.index("Closes</h2>") < hm.index("pourc") and "Graders</h2>" not in hm
+check("home grid 1.26.380: the Stream (Type, Agent, Seals, Age) beside the Epochs panel (answers chart, open row, closes)", hm.index(">Stream<") < hm.index('class="cpw emini"') < hm.index('class="er open"') < hm.index('data-liverows="closes-home"') and "Graders</h2>" not in hm
       and '<span>Type</span><span>Agent</span><span>Seals</span><span>Age</span>' in hm)
 fr = V.feed_rows(3)
 check("assay rows: type first, agent, seal pips, age linking the tx; rows keep data-id for the live merge", fr.startswith('<div class="frow" data-id="') and '<span class="badge' in fr
       and 'class="dots"' in fr and '<a class="ft" href="/tx/' in fr and fr.index("badge") < fr.index('class="fw"') < fr.index('class="dots"') < fr.index('class="ft"'))
 ce = V.home_epochs(__import__("poascan.analytics", fromlist=["x"]).epoch_rows())
-check("closes: minted, burned and a pour bar per close; phones keep #, Paid, Minted and Pour", "<th" in ce and ">Burned<" in ce and ">Pour<" in ce and 'class="mpour"' in ce
+check("closes 1.26.380: one row per close with paid and a minted/burned bar (aria label), the live rows keep their tr", "<tr" in ce and 'class="ebar mpour"' in ce
       and 'aria-label="Minted 17.0%, burned 83.0%"' in ce and V.live_rows("closes-home").count("<tr") >= 1)
 check("graders card: jurors with 10 or more settled seats, aligned bar and share", "Settled" in V.home_graders() or V.home_graders() == '<p class="empty">No settled grades yet</p>')
 snap = V.live_snapshot()

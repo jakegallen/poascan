@@ -237,6 +237,14 @@ def pulse():
                 + (f" AND author NOT IN ({sc})" if skip else "") + " AND created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
     return dict(hottest=hottest, replies_today=rt, posts_today=pt)
 
+@cached("forum_reply_days", 3600)
+def reply_days(n=30):
+    """Heartbeat: public replies per UTC day for the last n days, [(day start ts, count)], oldest first, for the Replies today
+    sparkline on Home. Reuses posts_daily (Network > Charts, cached hourly), so no extra query."""
+    t0 = int(time.time() // 86400 * 86400) - (n - 1) * 86400
+    by = {ts: c for ts, _p, c in posts_daily() if ts >= t0}
+    return [(t0 + i * 86400, int(by.get(t0 + i * 86400, 0))) for i in range(n)]
+
 def _trim(title, n=80):
     """Shorten a thread title to at most n characters at a word boundary, ending in an ellipsis (never mid-word).
     Trailing punctuation left by the cut is dropped, so a cut after 'removed),' ends as 'removed' plus the ellipsis."""

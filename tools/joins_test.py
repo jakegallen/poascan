@@ -107,9 +107,9 @@ try:
     m = re.search(r'<section class="stats four kpis"[^>]*>(.*?)</section>', home, re.S)
     k = m.group(1) if m else ""
     labels = re.findall(r'<div class="sl">(?:<svg.*?</svg>)?(?:<span[^>]*>)?([^<]+)', k)
-    check(f"headline row (1.26.292): Total mined, Agents, Active Agents, Holders {labels}", labels == ["Total mined", "Agents", "Active Agents", "Holders"])
+    check(f"headline row (1.26.292): Total mined, Agents, Active Agents, Holders {labels}", labels == ["Total mined", "Agents", "Active Agents", "Holders", "Replies today"])
     check("Active Agents value is live (data-live=active); no Agents / hr card (1.26.116)", re.search(r'data-live="active"><span class="num"', k) is not None and "joins_hr" not in k)
-    check("no sub-line, share button or 'Accounts' in the row", len(re.findall(r'class="stat[ "]', k)) == 4 and not any(x in k for x in ('class="sub', "share", "Share", "Accounts", "asof")))
+    check("no sub-line, share button or 'Accounts' in the row", len(re.findall(r'class="stat[ "]', k)) == 5 and not any(x in k for x in ('class="sub', "share", "Share", "Accounts", "asof")))
     css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
     check("every stat card carries the watermark; the row is 4 across and 2 x 2 on phones",
           ".stat::after" in css and "wm.svg" in css and ".kpis{grid-template-columns:repeat(4" in css and re.search(r"max-width:900px\)\{\.kpis\{grid-template-columns:repeat\(2", css) is not None)

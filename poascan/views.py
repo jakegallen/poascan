@@ -81,8 +81,7 @@ def tracker_html(score=True):
     o = A.open_epoch(); nm = names()
     feed = [dict(type=r["type"], addr=r["from_addr"], name=nm.get(r["from_addr"]), ts=int(r["ts"] or 0)) for r in
             db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")] if score else ()
-    h = BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]), feed=feed)
-    return h if score else re.sub(r'<div class="score".*?</div></div></div></div>$', "</div></div>", h, flags=re.S)
+    return BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]), feed=feed, score=score)
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
@@ -214,22 +213,64 @@ def raw_fields(extra):
     return (inline + f'<details class="raw"><summary>Show raw JSON · {len(extra)} field{"s" if len(extra) != 1 else ""}{cut}</summary>'
             f'<pre class="wrappre">{E(raw[:20000])}</pre></details>')
 
+def _thread_line(t, cls="eth"):
+    """One forum thread under an epoch row: #id, title (clamped by CSS), reply count. Titles and counts only, public threads."""
+    if not t: return ""
+    n = int(t.get("replies") or 0)
+    return (f'<a class="{cls}" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer" title="{n:,} repl{"y" if n == 1 else "ies"}">'
+            f'<span class="fpid">#{int(t["id"])}</span><span class="ett">{E(t.get("title") or "")}</span><b class="num">{n:,}</b></a>')
+
+def _release_epochs(rows):
+    """{epoch: version} for signed minepoa releases that landed inside a close's window (prev close, close], from the stored
+    release copy (protocol.releases, no upstream read)."""
+    try:
+        from . import protocol as PRO
+        rel = [(int(r.get("ts") or 0), str(r.get("version") or "")) for r in PRO.releases() if r.get("ts")]
+    except Exception: return {}
+    out = {}
+    for i, r in enumerate(rows):
+        lo = rows[i - 1]["close_ts"] if i else 0
+        for ts, v in rel:
+            if lo < ts <= (r.get("close_ts") or 0) and r["epoch"] not in out: out[r["epoch"]] = v.split("-")[0]
+    return out
+
+def home_open_row(o):
+    """1.26.380 Heartbeat: the open epoch on top of the Epochs panel: a live fill bar (the .vessel tick hook), answers so far
+    and the most replied public thread since the last close (topics.pulse, cached hourly)."""
+    from . import topics as _TOP
+    try: hot = (_TOP.pulse() or {}).get("hottest")
+    except Exception: hot = None
+    s, c = o.get("last_close"), o.get("est_close")
+    f = min(1.0, max(0.0, (time.time() - s) / (o.get("period") or 21600))) if s else 0
+    return (f'<div class="er open"><span class="en"><i class="ldot" aria-hidden="true"></i><span>E<span data-live="bm_ep">{o.get("epoch")}</span></span></span>'
+            f'<span class="et">Open</span><span class="ebar vessel" data-start="{s or ""}" data-close="{c or ""}"><i class="molten" style="width:{f * 100:.2f}%"></i></span>'
+            f'<span class="ep"><b class="num" data-live="answers">{intc(o.get("answers"))}</b></span><span class="epl">answers</span>{_thread_line(hot)}</div>')
+
 def home_epochs(ep, with_pending=True):
-    """Closes on Home: when, Agents paid, minted, burned and the pour (the pool split, minted gold against burned slag)."""
-    from . import closepend as CPD
+    """1.26.380 Heartbeat: the Epochs panel rows, newest first: hallmark and epoch, close time, the pour bar (minted against
+    burned), Agents paid, a release tag when a signed minepoa release landed in the window, and the epoch's most replied
+    public thread (topics.epoch_threads, cached hourly). One <tr> per close so the live row merge (/fragment/rows) keeps working."""
+    from . import closepend as CPD, topics as _TOP
     pend = list(reversed(CPD.rows()))[:6] if with_pending else []   # 1.26.307: closes counted with no record yet, newest first
     rows = list(reversed(ep[-(6 - len(pend)):])) if len(pend) < 6 else []
-    def pour(r):
+    prev = {r["epoch"]: (ep[i - 1]["close_ts"] if i else 0) for i, r in enumerate(ep)}
+    rel = _release_epochs(ep[-8:]) if rows else {}
+    out = []
+    for r in pend:
+        out.append(f'<tr class="pendr"><td><div class="er"><a href="/chain#history" class="en mono" title="{E(PEND_TIP)}">E{r["epoch"]}</a>'
+                   f'<span class="et">{utc(r["close_ts"], "%b %d %H:%M")}<span class="tag warn" title="{E(PEND_TIP)}">Record pending</span></span>'
+                   f'<span class="ebar"></span><span class="ep">{_step_cell(r)}</span><span class="epl"></span></div></td></tr>')
+    for r in rows:
         pool = float(r.get("pool") or 0); m = 100 * float(r.get("minted") or 0) / pool if pool else 0
         t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
-        return f'<span class="mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
-    na_ = '<span class="dim">···</span>'
-    prow = [[f'<a href="/chain#history" class="mono" title="{E(PEND_TIP)}">E{r["epoch"]}</a> <span class="tag warn" title="{E(PEND_TIP)}">Record pending</span>', utc(r["close_ts"], "%b %d %H:%M"), na_,
-             _step_cell(r), na_, ""] for r in pend]
-    return table(["#", f"Closed ({TZ})", "Paid", "Minted", "Burned", "Pour"],
-               prow + [[f'<a href="/epoch/{r["epoch"]}" class="mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 28)}E{r["epoch"]}</a>' + nopay_tag(r), utc(r["close_ts"], "%b %d %H:%M"), intc(r["paid"]),
-                 f'<span class="num mined" title="{full(r["minted"])} POA">{compact(r["minted"], 1)}</span>',
-                 f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"], 1)}</span>', pour(r)] for r in rows], cls="closes", pri=(0, 2, 3, 5))
+        try: th = (_TOP.epoch_threads(prev.get(r["epoch"]), r["close_ts"]) or [None])[0]
+        except Exception: th = None
+        tag = f'<span class="tag rel" title="minepoa release {E(rel[r["epoch"]])}">{E(rel[r["epoch"]])}</span>' if r["epoch"] in rel else ""
+        out.append(f'<tr><td><div class="er"><a href="/epoch/{r["epoch"]}" class="en mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 22)}E{r["epoch"]}</a>'
+                   f'<span class="et">{utc(r["close_ts"], "%b %d %H:%M")}{tag}{nopay_tag(r)}</span>'
+                   f'<span class="ebar mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
+                   f'<span class="ep">{intc(r["paid"])}</span><span class="epl">paid</span>{_thread_line(th)}</div></td></tr>')
+    return f'<table class="erows"><tbody>{"".join(out)}</tbody></table>'
 
 def _pend_tip():
     """1.26.307: Token totals are close records only; say which closes they leave out."""
@@ -270,6 +311,26 @@ def home_answers():
     return card(ICON_FEED + "Answers per epoch", f'<div class="cpw" data-chart="answers">{body}</div>',
                 _U.pop_btn("answers", "Answers per epoch") + '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc ansc")
 
+HOME_EPOCHS_MINI = 24
+ICON_VOICE = _ui._ic('<path d="M8 10h8M8 13h5"/><path d="M7 7.5h10a1.2 1.2 0 0 1 1.2 1.2v5.6A1.2 1.2 0 0 1 17 15.5h-4.6L9.5 18v-2.5H7a1.2 1.2 0 0 1-1.2-1.2V8.7A1.2 1.2 0 0 1 7 7.5z"/>')
+
+def home_answers_mini():
+    """1.26.380 Heartbeat: Answers per closed epoch as a short flat chart on top of the Epochs panel (it replaced the wide
+    3D card; the pop-out keeps the full chart). About 30 elements instead of 200; watermarked by CSS."""
+    o = A.open_epoch().get("epoch"); g = V3.growth_data()
+    cur = SG.gkey(o, SG.CURRENT) if o is not None else None
+    rows = [(k, a) for k, a, _p in g["per_ep"] if cur is None or k < cur][-HOME_EPOCHS_MINI:]
+    if len(rows) < 2: return f'<div class="emini">{skel(2)}</div>'
+    mx = max(a for _, a in rows) or 1; n = len(rows); w = 100 / n
+    bars = "".join(f'<rect class="eb{" last" if i == n - 1 else ""}" x="{i * w + w * .14:.2f}" y="{100 - 92 * a / mx:.2f}" width="{w * .72:.2f}" height="{92 * a / mx:.2f}" style="--i:{i}"/>'
+                   for i, (k, a) in enumerate(rows))
+    last, prev = rows[-1][1], rows[-2][1]
+    ch = (100 * (last - prev) / prev) if prev else 0
+    chg = f'<span class="{"up" if ch >= 0 else "dn"}">{"+" if ch >= 0 else "\u2212"}{abs(ch):.1f}%</span>'
+    ax = "".join(f"<span>{E(SG.ep_label(rows[i][0]))}</span>" for i in (0, n // 2, n - 1))
+    return (f'<div class="cpw emini" data-chart="answers"><div class="emh"><span class="lbl"><i class="sw a"></i>Answers</span><b class="num">{last:,}</b>{chg}</div>'
+            f'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{bars}</svg><div class="emx">{ax}</div></div>')
+
 def home_sparks():
     """Sparkline series for the 4 home stats, from data POAScan already archives (no upstream calls)."""
     g = V3.growth_data(); u = V3.unlock_data()
@@ -306,21 +367,19 @@ def home():
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
     # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
-    supc = home_answers()   # 1.26.309 (Jake t531u): the Supply line repeated Total mined; Answers per epoch instead
-    from . import topics as _TOP   # story queue item 5: one terse forum-pulse line in the epoch/live block (forum archive, cached hourly)
+    from . import topics as _TOP   # 1.26.380 Heartbeat: the forum folds into the epochs (no separate strip)
+    try: pz = _TOP.pulse() or {}; rd = _TOP.reply_days()
+    except Exception: pz, rd = {}, []
+    rep = spark_in(stat("Replies today", f'<span class="num voice">{int(pz.get("replies_today") or 0):,}</span>', icon=ICON_VOICE, tip="Public LabLeak replies since 00:00 UTC, from POAScan's forum archive (read hourly). Titles and counts only."), rd[:-1]).replace('<div class="stat', '<div class="stat fstat', 1)
+    kpis += rep
+    burn = f'<span class="burnp" title="Burned share of the E{ep[-1]["epoch"]} pool"><b class="num">{float(ep[-1].get("burn_pct") or 0):.1f}%</b> burned</span>' if ep else ""
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
-<section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
-<section class="stats four kpis" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section>
-{supc}
+<section id="tracker" class="card benchc hpulse" aria-label="Open epoch">{tracker_html()}<section class="stats four kpis" role="group" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section></section>
 <div class="grid2 hgrid">
-{card(ICON_FEED + 'Assay line', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed">{feed_rows(16)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
-<div class="side">
-{card(ICON_CUBE + "Closes", f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', '<a href="/chain" class="more">Full list →</a>')}
-{card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}
+{card(ICON_FEED + 'Stream', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed" data-n="10">{feed_rows(10)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
+{card(ICON_CUBE + "Epochs", home_answers_mini() + home_open_row(A.open_epoch()) + f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', burn + _ui.pop_btn("answers", "Answers per epoch") + '<a href="/chain" class="more">Full list →</a>', cls="epochc")}
 </div>
-</div>
-{_TOP.pulse_line()}
 <p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">Trade on POASwap →</a></p>'''
     return page("Proof of Agent explorer", body, "/")
 
@@ -1200,7 +1259,7 @@ def epoch(n):
     rows = {r["epoch"]: r for r in A.epoch_rows()}; arch = SG.archived()
     o = A.open_epoch() if not arch else {"epoch": None}
     if n == o["epoch"]:
-        body = cut_note() + card(f"Epoch {n} · open", tracker_html()) if n == 0 and SG.has_cut() else card(f"Epoch {n} · open", tracker_html())
+        body = cut_note() + card(f"Epoch {n} · open", tracker_html(), cls="hpulse") if n == 0 and SG.has_cut() else card(f"Epoch {n} · open", tracker_html(), cls="hpulse")
         return page(f"Epoch {n}", body, "/epochs")
     r = rows.get(n)
     if not r and arch: return 404, page("Epoch not found", card("Epoch", na(f"{SG.label()} has no epoch {n} (E0 to E{max(rows) if rows else '···'}).")), "/epochs")

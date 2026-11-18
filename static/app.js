@@ -89,7 +89,7 @@ function tick(){var now=Date.now()/1000;
  $$(".cd[data-close]").forEach(function(c){var e=+c.dataset.close;if(e)c.textContent=dur(e-now)});
  $$(".xcd[data-close]").forEach(function(c){var e=+c.dataset.close;if(e)c.textContent=e>now?dur(e-now):"expired"});
  $$(".ring[data-close]").forEach(function(r){var s=+r.dataset.start,e=+r.dataset.close;if(!s||!e)return;var f=Math.min(1,Math.max(0,(now-s)/(e-s)));
-  var p=r.querySelector(".rp");if(p)p.setAttribute("stroke-dasharray",(f*100).toFixed(2)+" 100");
+  var p=r.querySelector(".rp");if(p)p.setAttribute("stroke-dasharray",(f*100).toFixed(2)+" 100");r.style.setProperty("--f",f.toFixed(4));
   var left=e-now;r.classList.toggle("final",left>0&&left<=60);
   if(left<=0&&!flashed[e]){flashed[e]=1;r.classList.remove("flash");void r.offsetWidth;r.classList.add("flash")}});
  $$(".bezel[data-close]").forEach(function(z){var s=+z.dataset.start,e=+z.dataset.close;if(!s||!e)return;var f=Math.min(1,Math.max(0,(now-s)/(e-s))),L=z.querySelectorAll("line"),n=L.length;
@@ -118,11 +118,11 @@ function setNum(key,val,f){if(val==null)return;var old=prev[key];prev[key]=val;i
 /* feed merge: new rows slide in */
 function mergeFeed(html){var f=$("#feed");if(!f||!html)return;var tmp=D.createElement("div");tmp.innerHTML=html;
  var have={};$$(".frow",f).forEach(function(r){have[r.dataset.id]=1});
- var rows=$$(".frow",tmp),fresh=rows.filter(function(r){return !have[r.dataset.id]});
+ var rows=$$(".frow",tmp),k=rows.findIndex(function(r){return have[r.dataset.id]}),fresh=k<0?rows:rows.slice(0,k);
  if(!$(".frow",f)){f.innerHTML=html;paintIds(f);times(f);return}
  if(!fresh.length)return;
  fresh.reverse().forEach(function(r){r.classList.add("in");f.insertBefore(r,f.firstChild)});
- var all=$$(".frow",f);for(var i=rows.length;i<all.length;i++)all[i].remove();
+ var all=$$(".frow",f);for(var i=+f.dataset.n||rows.length;i<all.length;i++)all[i].remove();
  paintIds(f);times(f)}
 function setTicker(html){var t=$("#ticker");if(!t||!html)return;var tmp=D.createElement("div");tmp.innerHTML=html;var n=$(".tk-track",tmp),o=$(".tk-track",t);
  if(o&&n&&o.dataset.sig===n.dataset.sig)return;t.innerHTML=html;paintIds(t);times(t)}
@@ -240,7 +240,7 @@ function benchGo(){if(BM.on&&!RM&&!BM.raf&&!D.hidden)BM.raf=requestAnimationFram
 function benchSize(){var sc=$("#score");if(!sc)return;$$("#score .lane").forEach(function(l){l._w=0;l._g=0;l._sk=0;var g=$(".mk",l);if(g)g._tx=null;var sk=$(".sk",l);if(sk)sk._p=null});
  var s=$("#score .lane svg");if(s&&s.clientWidth)sc.style.setProperty("--u",(1440/s.clientWidth).toFixed(3))}
 /* a short flare at the now line of each lane that just got a mark */
-function benchSpark(ks){if(RM||D.hidden)return;Object.keys(ks).forEach(function(k){var l=$('#score .lane[data-k="'+k+'"]');if(!l)return;var s=D.createElement("i");s.className="lspk";s.setAttribute("aria-hidden","true");l.appendChild(s);s.addEventListener("animationend",function(){s.remove()})})}
+function benchSpark(ks){if(RM||D.hidden)return;if(ks.a){var hr=$(".hring");if(hr){hr.classList.remove("beat");void hr.offsetWidth;hr.classList.add("beat")}}Object.keys(ks).forEach(function(k){var l=$('#score .lane[data-k="'+k+'"]');if(!l)return;var s=D.createElement("i");s.className="lspk";s.setAttribute("aria-hidden","true");l.appendChild(s);s.addEventListener("animationend",function(){s.remove()})})}
 /* the ticker: one line, the newest tx first, then the latest few in turn every 3.2 s (1.4 s while new ones queue) */
 var TKV={ANSWER:["answered","a"],ATTEST:["attested","t"],GRADE:["sealed a grade","s"],JOIN:["joined","j"]};
 function tkAgo(ts){var d=Math.max(0,Math.floor(Date.now()/1000-ts));return d<60?d+"s ago":d<3600?Math.floor(d/60)+"m ago":d<86400?Math.floor(d/3600)+"h ago":Math.floor(d/86400)+"d ago"}
@@ -303,7 +303,7 @@ var HS={el:null,asof:0,bad:false,why:""},HS_S=360;
 function hsAgo(x){x=Math.max(0,x|0);return x<3600?Math.floor(x/60)+"m":Math.floor(x/3600)+"h "+Math.floor(x%3600/60)+"m"}
 function hsEsc(x){return String(x).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function hsCheck(){if(!HS.el)return;var age=HS.asof?Date.now()/1000-HS.asof:0,why=HS.bad?HS.why:(HS.asof&&age>HS_S?"Last read "+hsAgo(age)+" ago":"");
- $$('.kpis .stat>.sl,.krow [data-chart="holders"]>.sl').forEach(function(sl){var f=$(".hstale",sl);
+ $$('.kpis .stat:not(.fstat)>.sl,.krow [data-chart="holders"]>.sl').forEach(function(sl){var f=$(".hstale",sl);
   if(!why){if(f)f.remove();return}
   if(!f){sl.insertAdjacentHTML("beforeend",'<details class="qtip sflag hstale"><summary class="tag warn">Stale</summary><span class="qbox" role="note"></span></details>');f=$(".hstale",sl)}
   var sm=$("summary",f),qb=$(".qbox",f);if(qb.textContent!==why){qb.textContent=why;sm.title=why;sm.setAttribute("aria-label","Stale: "+why)}});
