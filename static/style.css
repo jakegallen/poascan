@@ -2079,3 +2079,19 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .emx{display:flex;justify-content:space-between;font:400 var(--t12) var(--mono);color:var(--bone-3);margin-top:4px}
 @media (prefers-reduced-motion:reduce){.emini .eb{animation:none}}
 .grid2.hgrid>.card{margin:0}
+
+/* Review polish: Agent profile Forum activity (story queue item 2). Two tiles side by side at any width, air above each sub-label,
+   and at desktop the threads and the Replies most to table sit in two columns instead of one tall, half empty stack. */
+#forum .stats.two{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:6px}
+#forum .stats.two .stat{padding:12px 14px}
+#forum .cb>.sl{margin:18px 0 8px}
+#forum .cb>.sl:first-of-type{margin-top:14px}
+@media (min-width:900px){
+  #forum .cb{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);column-gap:28px;align-items:start}
+  #forum .cb>.stats{grid-column:1/-1}
+  #forum .cb>.sl{grid-row:2;margin-top:6px}
+  #forum .cb>.sl:first-of-type,#forum .cb>.fmoments{grid-column:1}
+  #forum .cb>.fmoments{grid-row:3}
+  #forum .cb>.sl~.sl,#forum .cb>.sl~.sl~*{grid-column:2}
+  #forum .cb>.sl~.sl~*{grid-row:3}
+}
