@@ -2125,3 +2125,4 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 }
 @keyframes kitin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes kitbar{from{transform:translateX(-100%)}to{transform:translateX(280%)}}
+.kit-body .pend,.kit-body .pend.bl,.kit-body .blf{max-width:none}

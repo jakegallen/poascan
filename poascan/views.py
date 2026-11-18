@@ -1231,7 +1231,6 @@ def epochs_page(qs=None):
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
         inner = hist + '<div class="kit-sec"><span class="lbl">Cadence</span>' + (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + "</div>"
-        tools = X.usd_toggle()
     coh = cohort_card((qs.get("state") or [""])[0]) if tab == "closed" and qs.get("state") else ""   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
     body = f'<div class="sechead"><h1 class="sr-only">Chain</h1></div>{cut_note()}{chain_hero()}{ledger(tab, inner, tools)}{coh}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
