@@ -416,7 +416,7 @@ def txs(qs):
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
     tools = f'<span class="kit-n num" title="Transactions">{total:,}</span>'
     body = f'<div class="chips scroll">{tabs}</div>{_txs_behind()}{tb}{pg}'
-    return page("Transactions", f'<div class="sechead"><h1 class="sr-only">Chain</h1></div>{chain_hero()}{ledger("txs", body, tools)}', "/txs")
+    return page("Transactions", f'<div class="sechead"><h1 class="sr-only">Transactions</h1></div>{chain_hero()}{ledger("txs", body, tools)}', "/txs")
 
 def _tx_cols():
     from . import scoresort as SS

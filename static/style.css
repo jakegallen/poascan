@@ -2109,7 +2109,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .kit-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch;margin-top:18px}
 .kit-split:first-child{margin-top:0}
 .kit-blk{display:flex;flex-direction:column;min-width:0}.kit-blk>.chartbox{flex:1}
-.kit-figs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;margin:0 0 16px;border:var(--hair);border-radius:var(--r,10px);overflow:hidden}
+.kit-figs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;margin:0 0 16px;border:var(--hair);border-radius:var(--r-md);overflow:hidden}
 .kit-figs>div{padding:12px 16px;min-width:0}.kit-figs>div+div{border-left:var(--hair)}
 .kit-figs .lbl{display:block;margin-bottom:6px}.kit-figs b{display:block;font:500 var(--t20)/1.1 var(--mono);color:var(--hi)}
 .kit-body>.chips:first-child{margin-top:0}
