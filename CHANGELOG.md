@@ -15,6 +15,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ### Changed
 - Agents consolidation: one hero (the Established ring against the live chain total of Agents, the live strip, six KPI cards) and one module with Rankings, Models, Operators and Community as tabs. Rankings is one table with a metric chip row and a rank arrow since the last close (Rich list, Earned), beside the Journey funnel (first stage labelled Archive) and Miners per epoch with a New Agents toggle. Models holds Families, Pass rates and Journey (cohort funnel, custody, a retention heat strip, time to answer). Operators and Community (Forum, Topics, Social graph, Builders, Answers) sit in the same module. Every old URL keeps working and opens its tab. The Overview Top 5, the For agents card, the Census Snapshots table and the header CSV and API links are gone from the pages (the API and CSV endpoints are unchanged).
+
 ## [1.26.387] - 2026-11-18
 
 ### Added
