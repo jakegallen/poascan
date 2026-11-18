@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.374] - 2026-11-18
+
+### Changed
+- Forum pulse counts read tight: plain word spacing, tabular numerals, no parentheses ("13 replies this epoch · 460 today"). The Forum moments card drops its descriptive footnote; the method is one short line in the new Forum data section on /about. CSS and template only; no data, API or contract change.
+
 ## [1.26.373] - 2026-11-18
 
 ### Changed

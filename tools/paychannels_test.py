@@ -329,9 +329,12 @@ check("version is 1.26.371 and the changelog records the homepage forum pulse",
 check("version is at least 1.26.372 and the changelog records forum moments in the epoch timeline",
       _ver >= (1, 26, 372) and "## [1.26.372]" in cl and "Forum moments" in cl
       and not any(c in cl.split("## [1.26.372]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.373 and the changelog records the forum pulse and moments polish",
-      _ver == (1, 26, 373) and "## [1.26.373]" in cl and "word boundary" in cl
+check("version is at least 1.26.373 and the changelog records the forum pulse and moments polish",
+      _ver >= (1, 26, 373) and "## [1.26.373]" in cl and "word boundary" in cl
       and not any(c in cl.split("## [1.26.373]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.374 and the changelog records the forum pulse spacing and footnote removal",
+      _ver == (1, 26, 374) and "## [1.26.374]" in cl and "tabular numerals" in cl
+      and not any(c in cl.split("## [1.26.374]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

@@ -246,7 +246,7 @@ def _trim(title, n=80):
     if not t[n - 1].isspace() and " " in cut: cut = cut.rsplit(" ", 1)[0]
     return cut.rstrip(" ,;:.-(/[{") + "\u2026"
 
-def _plur(n, s="repl", one="y", many="ies"): return f"{intc(n)} {s}{one if n == 1 else many}"
+def _plur(n, s="repl", one="y", many="ies"): return f"{int(n):,} {s}{one if n == 1 else many}"
 
 def pulse_line():
     """One terse homepage line (empty string if nothing to show). Titles and counts only; links out to LabLeak + Topics."""
@@ -255,7 +255,7 @@ def pulse_line():
     h, parts = p["hottest"], []
     if h:
         parts.append(f'<a class="fpt" href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(h["id"])}</span> {E(h["title"])}</a>')
-    meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{_plur(p["replies_today"])} today'] if p["replies_today"] else [])
+    meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{int(p["replies_today"]):,} today'] if p["replies_today"] else [])
     if meta: parts.append(f'<span class="fpm">{" · ".join(meta)}</span>')
     return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}<a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
 
@@ -284,5 +284,4 @@ def epoch_threads_card(n, prev_ts, close_ts):
     if not ts_: return ""
     rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
                    f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
-    return card("Forum moments", f'<ul class="fmoments">{rows}</ul>'
-                '<p class="cov dim small">Most replied public threads during this epoch. Titles and counts only, from the forum archive.</p>')
+    return card("Forum moments", f'<ul class="fmoments">{rows}</ul>')

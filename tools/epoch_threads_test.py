@@ -48,6 +48,7 @@ card = TP.epoch_threads_card(7, PREV, CLOSE)
 check("card: labelled Forum moments, links threads to LabLeak", "Forum moments" in card and "minepoa.com/lableak/#/post/1" in card and "minepoa.com/lableak/#/post/2" in card)
 check("card: titles and counts only, never a body", "SECRET_BODY" not in card and "SECRET_COMMENT_BODY" not in card)
 check("card: list items use the clamped title link and a meta line (no raw bullets)", "<ul class=\"fmoments\">" in card and card.count('class="fmt"') == len(t) and "fmm" in card)
+check("card: no descriptive footnote (method lives on /about)", "cov" not in card and "Titles and counts only" not in card)
 check("card: no em or en dash", chr(0x2014) not in card and chr(0x2013) not in card)
 
 A._cache.clear()
