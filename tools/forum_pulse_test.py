@@ -1,7 +1,7 @@
 """Homepage forum pulse (POAScan story queue item 5): the hottest public thread this epoch and replies today, as one terse
 line in the existing epoch/live block. Forum archive only, cached hourly, public communities, system authors left out,
 titles and counts only. Usage: python3 tools/forum_pulse_test.py (temp database, no network)."""
-import os, sys, tempfile, time
+import os, re, sys, tempfile, time
 os.environ["POASCAN_DB"] = os.path.join(tempfile.mkdtemp(), "t.db")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
@@ -65,6 +65,12 @@ check("css: moments list has no bullets or indent, titles clamp and wrap, reveal
       and "line-clamp:2" in css.split(".fpt,.fmt{")[1].split("}")[0] and "prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}" in css)
 check("pulse markup: label, thread link, counts, Topics link", all(c in line for c in ('class="fpl"', 'class="fpt"', 'class="fpm"', 'class="more"')))
 
+plain = re.sub(r"<[^>]+>", "", line)
+check("pulse counts: tight terse text, no parentheses, no number spans, one space between words",
+      "(" not in plain and ")" not in plain and 'class="num"' not in line and "  " not in plain and re.search(r"\d replies this epoch · \d+ today", plain) is not None)
+css2 = open(os.path.join(ROOT, "static", "style.css")).read()
+check("css: pulse counts use tabular numerals", ".fpm,.fmm{font-variant-numeric:tabular-nums" in css2)
+check("about: Forum data method line exists", 'id="community-topics"' in open(os.path.join(ROOT, "poascan", "views.py")).read())
 # empty state: no public forum data -> empty line, no crash (pulse is @cached; clearing analytics cache busts it)
 db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts"); A._cache.clear()
 check("empty forum archive yields an empty line (no crash)", TP.pulse_line() == "")
