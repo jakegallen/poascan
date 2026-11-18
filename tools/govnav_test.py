@@ -116,10 +116,11 @@ def live():
         act = {u: active(u) for u in ("/chain", "/chain/txs", "/chain?tab=pending", "/epoch/1", "/network?tab=token", "/unlocks", "/governance", "/governance?tab=rules", "/agents/top")}
         check(f"active tab {act}", act == {"/chain": "/chain", "/chain/txs": "/chain", "/chain?tab=pending": "/chain", "/epoch/1": "/chain", "/network?tab=token": "/network",
                                            "/unlocks": "/network", "/governance": "/governance", "/governance?tab=rules": "/governance", "/agents/top": "/agents"})
-        # Chain sub-tabs
+        # Chain: one tabbed module (kit.tabmod), Epochs, Txs, Pending and Grading as real links, the right one on
         c1, ch, _ = get("/chain"); c2, tx, _ = get("/chain/txs")
-        check("Chain: Epochs and Transactions sub-tabs, the right one on", c1 == 200 and c2 == 200 and '<nav class="chips" aria-label="Chain">' in ch
-              and 'href="/chain" class="chip on"' in ch and 'href="/chain/txs" class="chip "' in ch and 'href="/chain/txs" class="chip on"' in tx)
+        check("Chain: Epochs and Txs tabs in one module, the right one on", c1 == 200 and c2 == 200 and 'aria-label="Chain"' in ch and 'data-kit="tabs"' in ch
+              and 'href="/chain" class="chip on" data-kit-tab="closed"' in ch and 'href="/chain/txs" class="chip " data-kit-tab="txs"' in ch and 'href="/chain/txs" class="chip on" data-kit-tab="txs"' in tx
+              and 'data-kit-tab="grading"' in ch and 'class="card benchc hpulse"' in ch and 'class="card benchc hpulse"' in tx)
         check("Chain: epoch tabs and type chips use the new routes", 'href="/chain?tab=pending"' in ch and 'href="/epochs' not in ch and 'href="/txs' not in tx and 'href="/chain/txs?type=' in tx)
         # Network: Token tab, Overview and Health intact
         c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]; hl = get("/network?tab=health")[1]

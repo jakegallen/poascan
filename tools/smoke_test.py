@@ -158,8 +158,8 @@ def main():
         except urllib.error.HTTPError as e: _c = e.code
         check(f"agents/view ETag -> 304 ({_c})", bool(_et) and _c == 304)
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
-        c, b = req(base + "/chain"); check(f"/epochs: open epoch hero on top, then Closed | Pending | Grading tabs -> {c}", c == 200 and b'data-live="answers"' in b and b'livehero' in b
-              and b.index(b"livehero") < b.index(b'class="chips atabs scroll"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
+        c, b = req(base + "/chain"); check(f"/chain: Heartbeat hero on top, then one tab module (Epochs | Txs | Pending | Grading) -> {c}", c == 200 and b'data-live="answers"' in b and b'class="card benchc hpulse"' in b
+              and b.index(b'class="card benchc hpulse"') < b.index(b'class="chips kit-tabs"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
         check("/epochs in sitemap + llms; 1.26.382: no header links or Ask agent on Home", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
               and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive"' not in req(base + "/")[1] and b'class="askb"' not in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/network?tab=token")[1])
@@ -207,7 +207,7 @@ def main():
               and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())
         check("no separate Upgrading dot on any page (1.26.181: the header status carries Upgrading)", b'id="updot"' not in _hm[1]
               and all(b'id="updot"' not in req(base + u)[1] for u in ("/chain", "/about", "/privacy")))
-        check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Epochs</h1>' in req(base + "/chain")[1])
+        check("page H1: /start shows one visible title, others stay visually hidden", req(base + "/start")[1].count(b"<h1") == 1 and b'<h1 class="sr-only">Chain</h1>' in req(base + "/chain")[1])
         _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: not supported apps behind one closed Something else; no connector deeplinks", _m.count('<details class="sv-other">') == 1 and "Something else" in _m and '>Other clients<' not in _m
               and not (_lm or _ki) and all(f'class="sv-o" data-app="{n}"' in _m for n in ("kimi", "z-ai", "deepseek", "huggingchat", "muse")) and 'data-app="le-chat"' in _m)
@@ -254,7 +254,7 @@ def main():
         check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
-        lv = req(base + "/chain?tab=pending")[1]; check("Pending tab: the queue", b"Queue</h2>" in lv and b"\xe2\x80\x94" not in lv and b'class="chip on">Pending' in lv)
+        lv = req(base + "/chain?tab=pending")[1]; check("Pending tab: the queue", b'class="pendc"' in lv and b"\xe2\x80\x94" not in lv and b'class="chip on" data-kit-tab="pending"' in lv)
         c, _ = req(base + "/find"); check(f"GET /find -> {c}", c == 200)
         txt = b"".join(req(base + x)[1] for x in ["/", "/start", "/agents", "/status", "/what-is-proof-of-agent", "/how-to-mine-poa", "/what-is-poascan", "/about", "/api", "/find", "/privacy", "/chain", "/llms.txt", "/llms-full.txt", "/openapi.json"]).decode()
         check("no em/en dashes in output", chr(0x2014) not in txt and chr(0x2013) not in txt)
@@ -479,7 +479,7 @@ def cohorts(base, check):
     check("Gate A: challenge_eligible over answers born at that close", g[7]["eligible"] == 2 and g[7]["answers"] == 9 and g[7]["rate"] == round(2 / 9, 4) and c7["gate_a"]["eligible"] == 2 and d["k"] == 5)
     c, h, b = reqh(base + "/api/v1/cohorts.csv")
     check("cohorts CSV: one row per cohort and close", c == 200 and b.decode().count("\n") == 1 + sum(len(x["closes"]) for x in cs))
-    pg0 = req(base + "/chain")[1].decode(); check("/chain: Cohorts moved to For agents (1.26.296)", 'id="cohorts"' not in pg0 and "/api/v1/cohorts" in pg0)
+    pg0 = req(base + "/chain")[1].decode(); check("/chain: no Cohorts card by default (1.26.296), no For agents card (1.26.383)", 'id="cohorts"' not in pg0 and 'id="for-agents"' not in pg0)
     pg = req(base + "/chain?state=unsealed")[1].decode(); p2 = req(base + "/chain?state=passed")[1].decode(); p3 = req(base + "/chain?state=nope")
     card = pg[pg.index('id="cohorts"'):]; card = card[:card.index("</section>")]
     check("/epochs: Cohorts card with state chips, Gate A, age columns, method link",
@@ -722,7 +722,7 @@ def fixture_pages(check):
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)
         gr = req(base + "/chain?tab=grading")[1].decode()
-        check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Per close</h2>" in gr)
+        check("grading: Awaiting graders and Decided replace No panel and Settled", ">Awaiting graders<" in gr and ">Decided<" in gr and ">No panel<" not in gr and "Per close</span>" in gr)
         hm2 = req(base + "/")[1].decode()
         check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
               not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
@@ -765,7 +765,7 @@ def fixture_pages(check):
               and _IX.uptime_name("/api/status") == "probe /api/status" and _IX.uptime_name("/api/params") == "/api/params")
         _st = req(base + "/status")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
         check("uptime: derived /api/status folds into one continuous series", ",/api/status,probe,25,25," in _csv and ",/api/status,fetch" not in _csv)
-        check("fixture: Epochs → Grading has an h1", b"<h1" in g and b">Epochs</h1>" in g)
+        check("fixture: Epochs → Grading has an h1", b"<h1" in g and b">Chain</h1>" in g)
         check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])
     finally:
         p.terminate(); p.wait(10)

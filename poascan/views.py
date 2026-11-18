@@ -1956,7 +1956,7 @@ def _pt(ts):
 def pending_body():
     """Chain > Pending: the queue by origin epoch, with seal counts and expiry (a tab of the Chain module)."""
     d = A.pending_by_epoch(); rows = d["rows"]
-    if not rows: return '<div class="xempty">0</div>'
+    if not rows: return '<div class="pendc"><div class="xempty">0</div></div>'
     ge = "" if d.get("seals_exact") else "≥"   # before the merge, panel counts miss some accepted seals
     def hist(r):
         h = r.get("seals")
