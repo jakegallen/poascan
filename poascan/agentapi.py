@@ -125,7 +125,8 @@ def t_summary(args):
                 circulating_basis=sp.get("circulating_basis"), locked_confirmed=sp.get("locked_confirmed"), carried_supply=sp.get("carried_supply"), excluded_rewards=sp.get("excluded_rewards"),
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
-                open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
+                open_epoch=o, closing_in=o.get("closing_in"),   # POASCAN data ask 1b: seconds to the next close + open_epoch.answers_so_far/graders_so_far
+                last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
                 segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(),
                 open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], **_joins(), url=BASE + "/")
 
