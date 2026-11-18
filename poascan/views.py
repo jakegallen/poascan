@@ -235,7 +235,7 @@ def _release_epochs(rows):
     return out
 
 def home_open_row(o):
-    """1.26.379 Heartbeat: the open epoch on top of the Epochs panel: a live fill bar (the .vessel tick hook), answers so far
+    """1.26.380 Heartbeat: the open epoch on top of the Epochs panel: a live fill bar (the .vessel tick hook), answers so far
     and the most replied public thread since the last close (topics.pulse, cached hourly)."""
     from . import topics as _TOP
     try: hot = (_TOP.pulse() or {}).get("hottest")
@@ -247,7 +247,7 @@ def home_open_row(o):
             f'<span class="ep"><b class="num" data-live="answers">{intc(o.get("answers"))}</b></span><span class="epl">answers</span>{_thread_line(hot)}</div>')
 
 def home_epochs(ep, with_pending=True):
-    """1.26.379 Heartbeat: the Epochs panel rows, newest first: hallmark and epoch, close time, the pour bar (minted against
+    """1.26.380 Heartbeat: the Epochs panel rows, newest first: hallmark and epoch, close time, the pour bar (minted against
     burned), Agents paid, a release tag when a signed minepoa release landed in the window, and the epoch's most replied
     public thread (topics.epoch_threads, cached hourly). One <tr> per close so the live row merge (/fragment/rows) keeps working."""
     from . import closepend as CPD, topics as _TOP
@@ -315,7 +315,7 @@ HOME_EPOCHS_MINI = 24
 ICON_VOICE = _ui._ic('<path d="M8 10h8M8 13h5"/><path d="M7 7.5h10a1.2 1.2 0 0 1 1.2 1.2v5.6A1.2 1.2 0 0 1 17 15.5h-4.6L9.5 18v-2.5H7a1.2 1.2 0 0 1-1.2-1.2V8.7A1.2 1.2 0 0 1 7 7.5z"/>')
 
 def home_answers_mini():
-    """1.26.379 Heartbeat: Answers per closed epoch as a short flat chart on top of the Epochs panel (it replaced the wide
+    """1.26.380 Heartbeat: Answers per closed epoch as a short flat chart on top of the Epochs panel (it replaced the wide
     3D card; the pop-out keeps the full chart). About 30 elements instead of 200; watermarked by CSS."""
     o = A.open_epoch().get("epoch"); g = V3.growth_data()
     cur = SG.gkey(o, SG.CURRENT) if o is not None else None
@@ -367,7 +367,7 @@ def home():
     kpis = "".join(pop(spark_in(h[k], sp.get(sk), smk.get(sk)), ck)
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
     # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
-    from . import topics as _TOP   # 1.26.379 Heartbeat: the forum folds into the epochs (no separate strip)
+    from . import topics as _TOP   # 1.26.380 Heartbeat: the forum folds into the epochs (no separate strip)
     try: pz = _TOP.pulse() or {}; rd = _TOP.reply_days()
     except Exception: pz, rd = {}, []
     rep = spark_in(stat("Replies today", f'<span class="num voice">{int(pz.get("replies_today") or 0):,}</span>', icon=ICON_VOICE, tip="Public LabLeak replies since 00:00 UTC, from POAScan's forum archive (read hourly). Titles and counts only."), rd[:-1]).replace('<div class="stat', '<div class="stat fstat', 1)
@@ -850,7 +850,9 @@ def address(a):
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
         fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
+        from . import topics as _TOP   # story queue item 2: this Agent's public forum activity (empty string when none)
         main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip(), PF.epoch_rows(p, rb))
+                + _TOP.agent_forum_card(a)
                 + f'<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#agents">For agents</a>{fa}</nav>'
                 + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
                 + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')

@@ -78,6 +78,6 @@ check("empty forum archive yields an empty line (no crash)", TP.pulse_line() == 
 pulse_src = open(os.path.join(ROOT, "poascan", "topics.py")).read().split("def pulse(")[1].split("def pulse_line")[0]
 check("pulse reads local tables only (db.q / A.epochs_raw), no network fetch", "db.q" in pulse_src and "fetch(" not in pulse_src and "requests" not in pulse_src)
 _vs = open(os.path.join(ROOT, "poascan", "views.py")).read()
-check("1.26.379 Heartbeat: Home folds the forum into the Epochs panel (the hottest thread on the open row, no separate pulse strip)", "_TOP.pulse_line()" not in _vs.split("def home(")[1].split("\ndef ")[0] and "_TOP.pulse()" in _vs.split("def home_open_row(")[1].split("\ndef ")[0])
+check("1.26.380 Heartbeat: Home folds the forum into the Epochs panel (the hottest thread on the open row, no separate pulse strip)", "_TOP.pulse_line()" not in _vs.split("def home(")[1].split("\ndef ")[0] and "_TOP.pulse()" in _vs.split("def home_open_row(")[1].split("\ndef ")[0])
 print("all passed" if not fails else f"{len(fails)} failed")
 sys.exit(1 if fails else 0)

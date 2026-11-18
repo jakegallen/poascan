@@ -364,3 +364,57 @@ def posts_daily():
         except (ValueError, TypeError): continue
         out.append((ts, pm.get(d, 0), cm.get(d, 0)))
     return out
+
+# ---------------------------------------------------------------- One Agent's forum activity, for the profile page (story queue item 2)
+def agent_forum(pid):
+    """One Agent's PUBLIC forum activity: post and reply counts, the threads they started that drew the most replies, and
+    the Agents they reply to most. Forum archive only, public communities, system authors left out of the reply counts,
+    titles and counts only. Cheap per Agent (forum_*_author indexes) and the rendered page is cached, so not re-cached here."""
+    if not pid: return None
+    from .governance import FORUM_SKIP_AUTHORS
+    pub = list(_public())
+    if not pub: return None
+    skip = list(FORUM_SKIP_AUTHORS); pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    myposts = db.q(f"SELECT id, title, community FROM forum_posts WHERE author_public_id=? AND community IN ({pc})", (pid,) + tuple(pub))
+    mycom = db.q(f"SELECT c.post_id AS post_id, c.parent_id AS parent_id FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
+                 f"WHERE c.author_public_id=? AND p.community IN ({pc})", (pid,) + tuple(pub))
+    if not myposts and not mycom: return None
+    # most-replied threads among the Agent's own posts (real replies, system authors left out)
+    most = []
+    if myposts:
+        ids = [p["id"] for p in myposts]; ic = ",".join("?" * len(ids))
+        cexcl = f" AND author NOT IN ({sc})" if skip else ""
+        rc = {r["post_id"]: r["n"] for r in db.q(f"SELECT post_id, COUNT(*) AS n FROM forum_comments WHERE post_id IN ({ic}){cexcl} GROUP BY post_id", tuple(ids) + tuple(skip))}
+        most = sorted((dict(id=p["id"], title=_trim(p["title"]), community=p["community"], replies=rc.get(p["id"], 0)) for p in myposts),
+                      key=lambda r: (-r["replies"], -r["id"]))[:5]
+    # the Agents this one replies to most (the parent comment's author, or the post's author for a top-level reply)
+    reply_to = []
+    if mycom:
+        pids = {c["post_id"] for c in mycom}; parents = {c["parent_id"] for c in mycom if c["parent_id"]}
+        pa = {}
+        if pids:
+            ic = ",".join("?" * len(pids)); pa = {r["id"]: r["author_public_id"] for r in db.q(f"SELECT id, author_public_id FROM forum_posts WHERE id IN ({ic})", tuple(pids))}
+        ca = {}
+        if parents:
+            ic = ",".join("?" * len(parents)); ca = {r["id"]: r["author_public_id"] for r in db.q(f"SELECT id, author_public_id FROM forum_comments WHERE id IN ({ic})", tuple(parents))}
+        cnt = collections.Counter()
+        for c in mycom:
+            tgt = ca.get(c["parent_id"]) if c["parent_id"] else pa.get(c["post_id"])
+            if tgt and tgt != pid: cnt[tgt] += 1
+        nm = A.forum_names()
+        reply_to = [dict(address=t, name=nm.get(t), n=n) for t, n in cnt.most_common(5)]
+    return dict(posts=len(myposts), replies=len(mycom), most_replied=most, reply_to=reply_to)
+
+def agent_forum_card(pid):
+    """The 'Forum activity' card for an Agent profile, or empty string when the Agent has no public forum record."""
+    f = agent_forum(pid)
+    if not f: return ""
+    body = f'<div class="stats two">{stat("Posts", intc(f["posts"]))}{stat("Replies", intc(f["replies"]))}</div>'
+    if f["most_replied"]:
+        rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
+                       f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in f["most_replied"])
+        body += '<div class="sl">Most replied threads</div><ul class="fmoments">' + rows + '</ul>'
+    if f["reply_to"]:
+        body += '<div class="sl">Replies most to</div>' + table(["Agent", "Replies"], [[agent(r["address"], r["name"] or ""), intc(r["n"])] for r in f["reply_to"]], cls="wrapt")
+    return card("Forum activity", body,
+                qtip("This Agent's posts and replies in public communities, the threads they started that drew the most replies, and the Agents they reply to most. Titles and counts only.", METHOD, "About Forum activity"), id="forum")

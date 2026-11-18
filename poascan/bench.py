@@ -207,7 +207,7 @@ def bezel(o, now=None):
             f'<div class="bzw" style="--f:{f:.5f}"><svg viewBox="0 0 712 22" preserveAspectRatio="none" aria-hidden="true">{ln}</svg><i class="bzs"></i><i class="bzh"></i></div>{ax}</div>')
 
 def ring_html(o, cd, now=None):
-    """1.26.379 Heartbeat: the open epoch as a ring that fills over its 6 hours (app.js tick drives .rp and --f, the same
+    """1.26.380 Heartbeat: the open epoch as a ring that fills over its 6 hours (app.js tick drives .rp and --f, the same
     .ring[data-close] hook the small rings use), six hour ticks, a head at now, and the numeral with the countdown inside.
     Two soft ripples breathe out of it; app.js adds .beat when a new answer lands. Reduced motion keeps it still."""
     now = time.time() if now is None else now
@@ -225,7 +225,7 @@ def ring_html(o, cd, now=None):
 
 def bench_html(o, graders, ask, now=None, feed=(), score=True):
     """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip). `ask`: the Ask button.
-    1.26.379 Heartbeat: the ring on the left (it replaces the numeral row and the 72 tick bezel), the live strip and the trio on
+    1.26.380 Heartbeat: the ring on the left (it replaces the numeral row and the 72 tick bezel), the live strip and the trio on
     the right. score=False leaves the strip and ticker out (the /api/summary field stays small)."""
     now = time.time() if now is None else now
     left = (o["est_close"] - now) if o.get("est_close") else None

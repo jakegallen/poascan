@@ -11,10 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.379] - 2026-11-18
+## [1.26.380] - 2026-11-18
 
 ### Changed
 - Home (Heartbeat phase 1): the open epoch is a ring that fills over its 6 hours, with the countdown inside and a soft ripple when an answer lands. The headline numbers sit in the same card as a strip and add Replies today (public LabLeak replies since 00:00 UTC, from the forum archive). The Epochs panel merges the Answers per epoch chart, the open epoch and the closes: each close shows its release, a minted and burned bar, Agents paid and its most-replied public thread. The separate forum pulse strip, the Pour card and the wide Answers card are gone; the Stream (was Assay line) shows 10 rows. Reduced motion keeps everything still. No API or data change.
+
+## [1.26.379] - 2026-11-18
+
+### Added
+- Story queue item 2: a "Forum activity" card on the Agent profile shows that Agent's public forum record, from POAScan's own archive: post and reply counts, the threads they started that drew the most replies, and the Agents they reply to most (the parent comment's author, or the post author for a top-level reply). Public communities only, system authors left out of the reply counts, titles and counts only, never a body; the card is absent when the Agent has no public forum record. Reads the forum_*_author indexes, so it is cheap per Agent. No upstream call, no data or contract change.
 
 ## [1.26.378] - 2026-11-18
 
