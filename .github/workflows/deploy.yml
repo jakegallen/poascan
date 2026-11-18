@@ -67,6 +67,8 @@ jobs:
         run: python tools/agent_forum_test.py
       - name: Agents data asks (3a agents vs archive_agents on health/totals, 3b per-close rank snapshot top 200/metric pruned to 8 closes with a prior-close rank, 3c hourly joins + established adds; additive, archive only, counts only)
         run: python tools/agent_totals_test.py
+      - name: Agents hub (one hero and one tabbed module, every old URL opens its tab, Archive label on the first funnel stage, rank arrows from the per-close snapshot, no For agents card or header links, no dashes)
+        run: python tools/agents_hub_test.py
       - name: Answered vs Backlog paid on the address page and API (answered means an answer submitted in that epoch; a close that paid an earlier answer is backlog paid; additive API fields)
         run: python tools/backlog_test.py
       - name: Pending TTL from /api/params per segment (16 only as a flagged fallback, grading list cross check) and the expiry horizon per pending cohort (Watched E18 to E20; header sort, CSV, API, MCP get_pending_horizon; never a pending score)
