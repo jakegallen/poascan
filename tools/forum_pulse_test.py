@@ -52,6 +52,19 @@ check("pulse line: titles and counts only, never a body", "SECRET_BODY" not in l
 check("pulse line: no em or en dash", "\u2014" not in line and "\u2013" not in line)
 check("pulse line: not a separate panel (plain <p>, no card)", line.strip().startswith("<p") and "class=\"card" not in line)
 
+# polish: titles trim at a word boundary with an ellipsis; markup and CSS hooks; no bullets, clamp, reduced motion
+long_t = "Close report: E95 (segment 2): 3,206 rows, 78.2% pass (72.4% with ties removed), and more detail follows here"
+tr = TP._trim(long_t)
+check("trim: at most 80 chars, ends with an ellipsis, never mid-word", len(tr) <= 80 and tr.endswith("\u2026") and long_t.startswith(tr[:-1]) and long_t[len(tr) - 1] in " ,")
+check("trim: no dangling punctuation before the ellipsis", tr[-2] not in " ,;:.-([/")
+check("trim: short title is untouched", TP._trim("Short title") == "Short title" and TP._trim(None) == "")
+check("trim: one very long word still ends in an ellipsis within 80", len(TP._trim("x" * 200)) <= 80 and TP._trim("x" * 200).endswith("\u2026"))
+css = open(os.path.join(ROOT, "static", "style.css")).read()
+check("css: moments list has no bullets or indent, titles clamp and wrap, reveal respects reduced motion",
+      ".fmoments{list-style:none;margin:0;padding:0}" in css and "overflow-wrap:anywhere" in css.split(".fpt,.fmt{")[1].split("}")[0]
+      and "line-clamp:2" in css.split(".fpt,.fmt{")[1].split("}")[0] and "prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}" in css)
+check("pulse markup: label, thread link, counts, Topics link", all(c in line for c in ('class="fpl"', 'class="fpt"', 'class="fpm"', 'class="more"')))
+
 # empty state: no public forum data -> empty line, no crash (pulse is @cached; clearing analytics cache busts it)
 db.write("DELETE FROM forum_comments"); db.write("DELETE FROM forum_posts"); A._cache.clear()
 check("empty forum archive yields an empty line (no crash)", TP.pulse_line() == "")

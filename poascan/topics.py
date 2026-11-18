@@ -230,12 +230,21 @@ def pulse():
                f"GROUP BY p.id ORDER BY n DESC, MAX(c.created_at) DESC LIMIT 1", tuple(pub) + tuple(skip) + (es,))
     hottest = None
     if hot and hot[0]["n"]:
-        r = hot[0]; hottest = dict(id=r["id"], title=(r["title"] or "")[:80], community=r["community"], replies=r["n"])
+        r = hot[0]; hottest = dict(id=r["id"], title=_trim(r["title"]), community=r["community"], replies=r["n"])
     rt = (db.q1(f"SELECT COUNT(*) AS n FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
                 f"WHERE p.community IN ({pc}){cskip} AND c.created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
     pt = (db.q1(f"SELECT COUNT(*) AS n FROM forum_posts WHERE community IN ({pc})"
                 + (f" AND author NOT IN ({sc})" if skip else "") + " AND created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
     return dict(hottest=hottest, replies_today=rt, posts_today=pt)
+
+def _trim(title, n=80):
+    """Shorten a thread title to at most n characters at a word boundary, ending in an ellipsis (never mid-word).
+    Trailing punctuation left by the cut is dropped, so a cut after 'removed),' ends as 'removed' plus the ellipsis."""
+    t = " ".join((title or "").split())
+    if len(t) <= n: return t
+    cut = t[:n - 1]
+    if not t[n - 1].isspace() and " " in cut: cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:.-(/[{") + "\u2026"
 
 def _plur(n, s="repl", one="y", many="ies"): return f"{intc(n)} {s}{one if n == 1 else many}"
 
@@ -243,13 +252,12 @@ def pulse_line():
     """One terse homepage line (empty string if nothing to show). Titles and counts only; links out to LabLeak + Topics."""
     p = pulse()
     if not p["hottest"] and not p["replies_today"]: return ""
-    bits = []
-    h = p["hottest"]
+    h, parts = p["hottest"], []
     if h:
-        bits.append(f'hottest thread <a href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer">#{int(h["id"])} {E(h["title"])}</a> ({_plur(h["replies"])} this epoch)')
-    if p["replies_today"]:
-        bits.append(f'{_plur(p["replies_today"])} today')
-    return f'<p class="dim small fpulse">Forum pulse: {" · ".join(bits)} <a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
+        parts.append(f'<a class="fpt" href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(h["id"])}</span> {E(h["title"])}</a>')
+    meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{_plur(p["replies_today"])} today'] if p["replies_today"] else [])
+    if meta: parts.append(f'<span class="fpm">{" · ".join(meta)}</span>')
+    return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}<a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
 
 # ---------------------------------------------------------------- Forum moments in the epoch timeline (story queue item 2)
 @cached("epoch_threads", 3600)
@@ -268,13 +276,13 @@ def epoch_threads(prev_ts, close_ts, limit=3):
                 f"FROM forum_posts p JOIN forum_comments c ON c.post_id=p.id "
                 f"WHERE p.community IN ({pc}){cskip} AND c.created_at > ? AND c.created_at <= ? "
                 f"GROUP BY p.id ORDER BY n DESC, MAX(c.created_at) DESC LIMIT ?", tuple(pub) + tuple(skip) + (a, b, int(limit)))
-    return [dict(id=r["id"], title=(r["title"] or "")[:80], community=r["community"], replies=r["n"]) for r in rows]
+    return [dict(id=r["id"], title=_trim(r["title"]), community=r["community"], replies=r["n"]) for r in rows]
 
 def epoch_threads_card(n, prev_ts, close_ts):
     """Small 'Forum moments' card for an epoch page, or empty string when no public thread saw replies in the window."""
     ts_ = epoch_threads(prev_ts, close_ts)
     if not ts_: return ""
-    rows = "".join(f'<li><a href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer">#{int(t["id"])} {E(t["title"])}</a>'
-                   f' <span class="dim">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
+    rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
+                   f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
     return card("Forum moments", f'<ul class="fmoments">{rows}</ul>'
                 '<p class="cov dim small">Most replied public threads during this epoch. Titles and counts only, from the forum archive.</p>')

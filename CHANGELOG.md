@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.373] - 2026-11-18
+
+### Changed
+- Polish for the forum pulse (home) and Forum moments (epoch page). Moments list loses its default bullets and indent and gets hairline rows that match the other cards. Long titles wrap safely and clamp to two lines at 390px. Titles are now cut at a word boundary with an ellipsis, so none ends mid-word or on stray punctuation. The pulse becomes one tidy bar with a small label, the hottest thread, and its counts, and stacks cleanly on a phone. Both reveal softly on load and stay still under reduced motion. CSS and template only; no data, API or contract change.
+
 ## [1.26.372] - 2026-11-18
 
 ### Added
