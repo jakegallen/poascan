@@ -285,3 +285,50 @@ def epoch_threads_card(n, prev_ts, close_ts):
     rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
                    f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
     return card("Forum moments", f'<ul class="fmoments">{rows}</ul>')
+
+# ---------------------------------------------------------------- Releases and notices to the threads that discuss them (story queue item 3)
+# Ballots and a/proposals already link their own LabLeak threads (governance.BALLOTS topics and the Post column). The gap is
+# the Releases and notices card, which linked nowhere. This points each release or notice at the PUBLIC forum thread(s) whose
+# TITLE names it by an exact token (a version string or a notice id), high precision only: nothing is shown unless a title
+# plainly carries the token, so there are no fuzzy or noisy guesses. Forum archive only, titles and counts, no bodies.
+TOK_MIN = 4   # ignore tokens shorter than this; a version or notice id is longer, a bare 2 or 3 char token would be noisy
+
+@cached("title_index", 3600)
+def _title_index():
+    """(id, title, lower, replies) for public, non-skip-author threads, built hourly for exact title-token matching."""
+    from .governance import FORUM_SKIP_AUTHORS
+    pub = list(_public())
+    if not pub: return []
+    skip = list(FORUM_SKIP_AUTHORS)
+    pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    aexcl = f" AND author NOT IN ({sc})" if skip else ""
+    cexcl = f" AND c.author NOT IN ({sc})" if skip else ""
+    posts = db.q(f"SELECT id, title FROM forum_posts WHERE community IN ({pc}){aexcl}", tuple(pub) + tuple(skip))
+    rc = {r["post_id"]: r["n"] for r in db.q(
+        f"SELECT c.post_id AS post_id, COUNT(*) AS n FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
+        f"WHERE p.community IN ({pc}){cexcl} GROUP BY c.post_id", tuple(pub) + tuple(skip))}
+    return [dict(id=p["id"], title=p["title"] or "", lower=(p["title"] or "").lower(), replies=rc.get(p["id"], 0)) for p in posts]
+
+def _tok_re(tok):
+    """Bounded, case-insensitive matcher for one token: not glued to another letter or digit, so '0.9.3' does not match
+    inside '0.9.30' and a plain number only matches when the token carries its own '#'."""
+    return re.compile(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])")
+
+def thread_links(tokens, exclude_ids=(), limit=2):
+    """Up to `limit` public threads whose TITLE contains one of the exact tokens, most replied first. High precision: a
+    token shorter than TOK_MIN is ignored and the match is bounded, so only a title that plainly names the release links."""
+    toks = [t.lower() for t in (str(x).strip() for x in (tokens or []) if x) if len(t) >= TOK_MIN]
+    if not toks: return []
+    pats = [_tok_re(t) for t in toks]; ex = {int(x) for x in exclude_ids}
+    hits = [r for r in _title_index() if r["id"] not in ex and any(p.search(r["lower"]) for p in pats)]
+    hits.sort(key=lambda r: (-r["replies"], -r["id"]))
+    return [dict(id=r["id"], title=_trim(r["title"]), replies=r["replies"]) for r in hits[:limit]]
+
+def thread_chips(tokens, exclude_ids=()):
+    """Inline LabLeak thread links for a release or notice (empty string when no public title names it). Reuses the terse
+    dim styling, so the Releases and notices table gains meaning without a mostly empty extra column."""
+    links = thread_links(tokens, exclude_ids)
+    if not links: return ""
+    inner = " ".join(f'<a href="https://minepoa.com/lableak/#/post/{int(x["id"])}" rel="noopener noreferrer" '
+                     f'title="{E(x["title"])} · {_plur(x["replies"])}">#{int(x["id"])}</a>' for x in links)
+    return f' <span class="dim small">· {inner}</span>'
