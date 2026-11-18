@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.371] - 2026-11-18
+
+### Added
+- Homepage forum pulse (story queue item 1 of the "tell the PoA story" set). One terse line in the existing epoch and live block (not a separate panel): the hottest public thread this epoch (most replies since the last close) and replies today, linking the thread to LabLeak and to the Topics tab. Built only from the forum archive POASCAN already keeps, cached hourly, public communities only, system authors left out, titles and counts only. New tools/forum_pulse_test.py.
+
 ## [1.26.370] - 2026-11-17
 
 ### Added

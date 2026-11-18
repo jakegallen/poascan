@@ -307,6 +307,7 @@ def home():
                    for k, sk, ck in (("mined_hero", "mined", "mined"), ("accounts", "accounts", "agents"), ("active", "active", "active"), ("holders", "holders", "holders")))
     # 1.26.292 (UI/UX P4): four numbers. Circulating supply lives on /network (Charts), the heights on /network and /api/v1/summary
     supc = home_answers()   # 1.26.309 (Jake t531u): the Supply line repeated Total mined; Answers per epoch instead
+    from . import topics as _TOP   # story queue item 5: one terse forum-pulse line in the epoch/live block (forum archive, cached hourly)
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc" aria-label="Open epoch">{tracker_html()}</section>
@@ -319,6 +320,7 @@ def home():
 {card(ICON_FLAME + "Pour", BN.pour_html(ep[-1] if ep else None), (f'<a class="lbl" href="/epoch/{ep[-1]["epoch"]}">Epoch {ep[-1]["epoch"]}</a>' if ep else "") + PR.ask([PR.BURN]), cls="bmcard pourc")}
 </div>
 </div>
+{_TOP.pulse_line()}
 <p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">Trade on POASwap →</a></p>'''
     return page("Proof of Agent explorer", body, "/")
 
