@@ -47,7 +47,7 @@ check("archived community and the skip community are never the hottest", p["hott
 check("replies today counts public non-bot replies only (3 on p1 + 1 on p2 = 4)", p["replies_today"] == 4)
 
 line = TP.pulse_line()
-check("pulse line: terse, labelled, links the thread to LabLeak and Topics", "Forum pulse" in line and "minepoa.com/lableak/#/post/1" in line and "/agents/community?tab=topics" in line)
+check("pulse line: terse, labelled, links the thread to LabLeak; no Topics link (1.26.382)", "Forum pulse" in line and "minepoa.com/lableak/#/post/1" in line and "/agents/community?tab=topics" not in line)
 check("pulse line: titles and counts only, never a body", "SECRET_BODY" not in line and "SECRET_COMMENT_BODY" not in line)
 check("pulse line: no em or en dash", "\u2014" not in line and "\u2013" not in line)
 check("pulse line: not a separate panel (plain <p>, no card)", line.strip().startswith("<p") and "class=\"card" not in line)
@@ -63,7 +63,7 @@ css = open(os.path.join(ROOT, "static", "style.css")).read()
 check("css: moments list has no bullets or indent, titles clamp and wrap, reveal respects reduced motion",
       ".fmoments{list-style:none;margin:0;padding:0}" in css and "overflow-wrap:anywhere" in css.split(".fpt,.fmt{")[1].split("}")[0]
       and "line-clamp:2" in css.split(".fpt,.fmt{")[1].split("}")[0] and "prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}" in css)
-check("pulse markup: label, thread link, counts, Topics link", all(c in line for c in ('class="fpl"', 'class="fpt"', 'class="fpm"', 'class="more"')))
+check("pulse markup: label, thread link, counts, no header link", all(c in line for c in ('class="fpl"', 'class="fpt"', 'class="fpm"')) and 'class="more"' not in line)
 
 plain = re.sub(r"<[^>]+>", "", line)
 check("pulse counts: tight terse text, no parentheses, no number spans, one space between words",
