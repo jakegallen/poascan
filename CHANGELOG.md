@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.385] - 2026-11-18
+
+### Changed
+- CI only (no app change): cache the Playwright browsers in `~/.cache/ms-playwright` keyed on the pinned Playwright version, and make the WebKit install step fail fast (timeout-minutes 5) and retry once with a 120s per-attempt shell timeout. The WebKit browser download had hung the deploy on 1.26.381, #167 and #169; a cache hit skips it. No other test steps touched.
+
 ## [1.26.384] - 2026-11-18
 
 ### Changed
