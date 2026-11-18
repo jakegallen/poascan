@@ -97,11 +97,13 @@ def epoch_rows(p, rb):
     (segments.gkey) so rewards and the selected segment's close records line up. Only what the close records hold."""
     from . import segments as SG
     out = {}
-    def r(g): return out.setdefault(g, dict(g=g, reward=None, passed=0, failed=0, expired=0, answered=False, seats=0, aligned=0))
+    def r(g): return out.setdefault(g, dict(g=g, reward=None, passed=0, failed=0, expired=0, answered=False, backlog=False, seats=0, aligned=0))
     for g, v in rb.items(): r(int(g))["reward"] = v
-    for e in p.get("answered") or []: r(SG.gkey(e))["answered"] = True
+    # 1.26.375: answered means an answer was submitted in that epoch (a challenge tx); a close that paid an earlier answer is backlog
+    for e in p.get("submitted") or []: r(SG.gkey(e))["answered"] = True
+    for e in p.get("backlog") or []: r(SG.gkey(e))["backlog"] = True
     for e, _ans, ok, oc in p.get("settled") or []:
-        x = r(SG.gkey(e)); x["answered"] = True
+        x = r(SG.gkey(e))
         if oc == "expired_no_jury": x["expired"] += 1
         elif ok: x["passed"] += 1
         else: x["failed"] += 1
@@ -110,9 +112,13 @@ def epoch_rows(p, rb):
     return [out[g] for g in sorted(out, reverse=True)]
 
 def _answers(x):
+    """Answers cell: an Answered tag when an answer was submitted in this epoch, a Backlog paid tag when the close paid an
+    earlier answer instead, then the outcomes of the answers this close settled (those can be from earlier epochs)."""
     parts = [(k.capitalize() if x[k] == 1 else f"{x[k]} {k}") for k in ("passed", "failed", "expired") if x[k]]
-    if parts: return " · ".join(parts)
-    return "Answered" if x["answered"] else '<span class="na">···</span>'
+    tag = ('<span class="tag ok">Answered</span>' if x["answered"] else
+           '<span class="tag warn" title="Paid from an earlier answer">Backlog paid</span>' if x.get("backlog") else "")
+    if parts: return (tag + " " if tag else "") + " · ".join(parts)
+    return tag or '<span class="na">···</span>'
 
 def epochs_card(rows):
     """Epoch by epoch history: Epoch, Reward, Answers (passed, failed, expired with no jury), Jury (aligned / seats)."""

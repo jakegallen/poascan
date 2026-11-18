@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.375] - 2026-11-18
+
+### Changed
+- Address page: "Epochs answered" is split into Answered (an answer submitted in that epoch, from the challenge txs in our archive) and Backlog paid (the close paid an earlier answer that settled, with none submitted in that epoch). The epoch list tags each epoch Answered or Backlog paid, and the reward tracker's Submitted step says "backlog paid" for those closes. Reported on LabLeak post 3113. Method on /about.
+
+### Added
+- API and MCP established history fields: `epochs_submitted`, `submitted_epochs`, `first_submitted_epoch`, `last_submitted_epoch`, `epochs_backlog_paid`, `backlog_paid_epochs`, and `submitted` and `backlog_paid` inside `window`. Existing fields are unchanged, including `epochs_answered`, which still counts both. New tools/backlog_test.py.
+
 ## [1.26.374] - 2026-11-18
 
 ### Changed

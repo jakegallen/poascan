@@ -37,6 +37,22 @@ def answerers():
     for k, s in src.items(): out[k] |= s
     return dict(out)
 
+def submitted_epochs(addr):
+    """Epochs in which addr submitted an answer: a challenge tx in POAScan's own archive, selected segment. One query on the
+    from_addr index, no upstream read. answerers() also credits an epoch whose close paid an earlier answer; this does not."""
+    w, wa = _SG.sql()
+    out = set()
+    for r in db.q("SELECT ts, epoch FROM txs WHERE type='challenge' AND from_addr=?" + w, (addr,) + tuple(wa)):
+        out.add(int(r["epoch"] if r["epoch"] is not None else epoch_of_ts(r["ts"] or 0)))
+    return sorted(out)
+
+def backlog_epochs(answered, submitted, settled):
+    """Closes that paid addr for an earlier answer (backlog): credited in that close (listed as answered, or holding a
+    passed settled row) but with no answer submitted in that epoch. settled rows are (epoch, answer, passed, outcome)."""
+    sub = set(submitted)
+    credited = set(answered) | {r[0] for r in settled if r[2] and r[3] != "expired_no_jury"}
+    return sorted(k for k in credited if k not in sub)
+
 @cached("settled_by_author", 120)
 def settled_records():
     """List of (epoch, answer, author, passed, jury[], outcome) from every close record. outcome: passed, failed or
@@ -515,6 +531,7 @@ def profile(addr):
     served = sum(e.get("basis", {}).get("graders_served", {}).get(addr, 0) for e in A.epochs_raw())
     st = streaks().get(addr, (0, 0))
     ans = answerers(); answered = sorted(k for k, s in ans.items() if addr in s)
+    submitted = submitted_epochs(addr); backlog = backlog_epochs(answered, submitted, sett)   # 1.26.375: answered splits into submitted vs backlog paid
     fp = db.q1("SELECT COUNT(*) AS n FROM forum_posts WHERE author_public_id=? AND community!='poa-archive'", (addr,))["n"]
     fc = db.q1("SELECT COUNT(*) AS n FROM forum_comments WHERE author_public_id=?", (addr,))["n"]
     b = builders(); name = A.forum_names().get(addr)
@@ -522,7 +539,7 @@ def profile(addr):
     credit = dict(b["credits"]).get(name) if name else None
     op = operators(); fam = op["fam_of"].get(addr)
     lab = db.q1("SELECT label, custody, source FROM labels WHERE addr=?", (addr,))
-    return dict(census=cen, rewards=rb, settled=sett, jury=jur, served=served, streak=st, answered=answered,
+    return dict(census=cen, rewards=rb, settled=sett, jury=jur, served=served, streak=st, answered=answered, submitted=submitted, backlog=backlog,
                 forum_posts=fp, forum_comments=fc, forum_name=name, builder_posts=bp, credit=credit,
                 family=fam, label=lab)
 
@@ -568,15 +585,18 @@ def established_history(addr):
     basis = ("readmitted" if listed and listed.get("readmitted") else "listed" if listed and listed["change"] == "added" else
              "removed" if listed else "import" if est and imp else "none")
     answered = sorted(k for k, s in ans.items() if addr in s)
+    submitted = submitted_epochs(addr); backlog = backlog_epochs(answered, submitted, [(e, a_, ok, oc) for e, a_, _, ok, _, oc in mine])
     n_ans = db.q1("SELECT COUNT(*) AS n FROM txs WHERE from_addr=? AND type='challenge'", (addr,))["n"]
     f = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=? OR to_addr=?", (addr, addr))["t"]
     paid = sorted(k for k, v in rb.items() if v > 0)
     return dict(established=est, basis=basis, basis_epoch=(listed or {}).get("epoch") if basis in ("listed", "removed", "readmitted") else (seat_eps[-1] if basis == "seat" else None),
                 readmitted=basis == "readmitted", readmitted_epoch=readm[-1]["epoch"] if readm else None, readmissions=readm[::-1],
                 first_seen_ts=f, answers=n_ans, epochs_answered=len(answered), first_answer_epoch=answered[0] if answered else None,
-                last_answer_epoch=answered[-1] if answered else None, settled=sum(settled.values()), passed=sum(passed.values()), expired_no_jury=sum(expired.values()),
+                last_answer_epoch=answered[-1] if answered else None,
+                epochs_submitted=len(submitted), submitted_epochs=submitted, first_submitted_epoch=submitted[0] if submitted else None,
+                last_submitted_epoch=submitted[-1] if submitted else None, epochs_backlog_paid=len(backlog), backlog_paid_epochs=backlog, settled=sum(settled.values()), passed=sum(passed.values()), expired_no_jury=sum(expired.values()),
                 epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,
-                window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
+                window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], submitted=[k for k in w if k in set(submitted)], backlog_paid=[k for k in w if k in set(backlog)], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
                 changes=changes[::-1], **A.established_expiry_est(addr),
                 note="Inputs from public close records only. minepoa decides standing; your hosted /me is the authority.")
 

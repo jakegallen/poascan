@@ -2005,3 +2005,4 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .fmm{font-size:var(--t12);overflow-wrap:anywhere}
 @media (max-width:480px){.fpulse{padding:12px 14px 2px;gap:4px 12px;align-items:center}.fpt{flex-basis:100%;order:2}.fpm{order:3;flex:1 1 auto;white-space:normal}.fpulse .more{order:4}.fpl{order:1}}
 @media (prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}}
+.elist{overflow-wrap:anywhere;line-height:1.5}
