@@ -223,8 +223,8 @@ def ring_html(o, cd, now=None):
             f'<div class="rc"><span class="lbl">Epoch{tip("epoch")}</span><b class="bn num" data-live="epoch">{o["epoch"]}</b>'
             f'<div class="bcd"><span class="lbl">Closes in{tip("close")}</span>{cd}</div></div></div>')
 
-def bench_html(o, graders, ask, now=None, feed=(), score=True):
-    """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip). `ask`: the Ask button.
+def bench_html(o, graders, now=None, feed=(), score=True):
+    """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip).
     1.26.380 Heartbeat: the ring on the left (it replaces the numeral row and the 72 tick bezel), the live strip and the trio on
     the right. score=False leaves the strip and ticker out (the /api/summary field stays small)."""
     now = time.time() if now is None else now
@@ -236,7 +236,7 @@ def bench_html(o, graders, ask, now=None, feed=(), score=True):
             f'<div>{graders}</div><div><span class="lbl">Pool{tip("pool")}</span>{pool}</div></div>')
     strip = score_html(now, ticker_html(feed, now)) if score else ""
     return (f'<div class="bench">'
-            f'<div class="bl"><div class="bh">{ask}<a class="more tklive" href="/chain">More →</a></div>{ring_html(o, cd, now)}</div>'
+            f'<div class="bl">{ring_html(o, cd, now)}</div>'
             f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
             f'<span class="legend">{leg}</span></div>{strip}{trio}</div></div>')
 

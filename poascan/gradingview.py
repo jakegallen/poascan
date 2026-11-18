@@ -160,7 +160,7 @@ def agent_cards(a):
                       f'<td class="r">{_need(r)}</td><td class="r dk">E{r["born"]}</td><td class="r">E{r["expires"]}</td></tr>' for r in v["pending"])
         out.append(card(f"Pending answers · {v['pending_count']:,}" + f, '<div class="tw"><table class="hist cal gov queue"><thead><tr><th>Answer</th><th>Quorum</th><th class="r dk">Trusted</th><th class="r dk">Untrusted</th>'
                         f'<th class="r">Need</th><th class="r dk">Born</th><th class="r">Expires</th></tr></thead><tbody>{trs}</tbody></table></div>' + asof,
-                        f'<a class="more" href="/governance?tab=queue">Queue →</a>', id="gov-pending"))
+                        id="gov-pending"))
     if v["seals"]:
         trs = "".join(f'<tr><td>{ans_link(s["answer"])}</td><td class="dk">{agent_cell(s["author"], s["author_name"]) if s["author"] else "···"}</td>'
                       f'<td class="r">{lt(s["ts"], "dt")}</td><td class="r">{_yesno(s["counting"])}</td>'

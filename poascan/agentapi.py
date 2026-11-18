@@ -1726,7 +1726,7 @@ def doc_ready(name):
     hit = _DOC.get(name); return bool(hit) and time.time() - hit[0] < DOC_MAX
 
 def api_page(page, card):
-    from . import ui as U, prompts as PR
+    from . import ui as U
     groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)
     def row(m, path, purpose, smp):
         url = BASE + (smp or path)
@@ -1742,7 +1742,7 @@ def api_page(page, card):
                f'<p class="dim small">Streamable HTTP. Spec: <a href="/openapi.json">openapi.json</a> · <a href="/llms.txt">llms.txt</a> · '
                f'<a href="/.well-known/mcp.json">mcp.json</a> · <a href="/api/reference">Interactive reference</a></p>')
     from . import oneclick as OC
-    body = ('<div class="sechead"><h1>API</h1>' + PR.ask([API_ASK]) + '</div>'
+    body = ('<div class="sechead"><h1>API</h1></div>'
             + '<p class="apin">Read-only. No keys. JSON; add <code>.csv</code> to lists. Cache and poll at most once a minute; bursts over 20 requests in 10 s get a 429.</p>'
             + f'<nav class="chips apijump" aria-label="Sections">{jump}</nav>'
             + card("Connect", connect + OC.html("poascan", MCP_URL), id="connect"))

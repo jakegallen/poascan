@@ -265,7 +265,7 @@ def pulse_line():
         parts.append(f'<a class="fpt" href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(h["id"])}</span> {E(h["title"])}</a>')
     meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{int(p["replies_today"]):,} today'] if p["replies_today"] else [])
     if meta: parts.append(f'<span class="fpm">{" · ".join(meta)}</span>')
-    return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}<a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
+    return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}</p>'
 
 # ---------------------------------------------------------------- Forum moments in the epoch timeline (story queue item 2)
 @cached("epoch_threads", 3600)

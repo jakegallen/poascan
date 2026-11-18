@@ -602,7 +602,6 @@ a.aname:hover,a.aname:focus-visible,:where(.ag)>a.agn:hover,:where(.ag)>a.agn:fo
 .lh-cd .cd{display:block;font:500 var(--t64)/1.05 var(--mono);color:var(--amber);letter-spacing:-.01em}
 .lh-k{display:grid;grid-template-columns:repeat(3,auto);gap:10px 28px}.lh-k b{display:block;font:500 var(--t28)/1.1 var(--mono);color:var(--hi)}
 .livehero .lbl{display:block;margin-bottom:6px}
-.tklive{margin-left:8px;white-space:nowrap}
 @media(max-width:900px){.livehero{grid-template-columns:1fr;padding:20px}.lh-cd .cd{font-size:var(--t40)}.lh-k{grid-template-columns:repeat(3,minmax(0,1fr))}.lh-k b{font-size:var(--t20)}}
 
 /* footer: one flowing row of small muted links */
@@ -772,8 +771,7 @@ td a.mono{display:inline-block;min-width:24px}
  .tracker .ephd{font-size:var(--t14);flex-basis:100%;grid-column:1/-1}
  .trk .tracker{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:center}
  .trk .tracker .ring{grid-row:1/3;align-self:center}
- .trk .tracker .askb{grid-column:1/3;justify-self:start}.trk .tracker .tklive{justify-self:end;margin-left:0}
- .trk .tracker:has(>.epn){display:flex;flex-wrap:wrap}.trk .tracker:has(>.epn)>.askb{margin-right:auto}   /* epoch page: the previous and next arrows sit together at the right of Ask agent */
+ .trk .tracker:has(>.epn){display:flex;flex-wrap:wrap}   /* epoch page: the previous and next arrows sit together at the right of Ask agent */
  .addrhead .ahid h1{font-size:var(--t20)}.addrhead .ahid h1.mono{font-size:var(--t14)}
  .txsum{font-size:var(--t16)}
 }
@@ -1094,7 +1092,7 @@ td a.mono{display:inline-block;min-width:24px}
 .bench{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr)}
 .bench>div{padding:var(--s5);min-width:0}
 .bench .bl{border-right:1px solid var(--rule);display:flex;flex-direction:column}
-.bh{display:flex;align-items:center;gap:10px;min-height:28px}.bh .lbl{display:inline}.bh .lbl.on{color:var(--bone)}.bl .bh .askb{margin-left:auto}
+.bh{display:flex;align-items:center;gap:10px;min-height:28px}.bh .lbl{display:inline}.bh .lbl.on{color:var(--bone)}
 .bnum{display:flex;align-items:flex-end;gap:28px;margin-top:10px}
 .bench .bn{font:400 112px/.8 var(--fig);color:var(--bone-hi);letter-spacing:-.03em;font-variant-numeric:lining-nums}
 .bcd .lbl{margin-bottom:10px}.bcd .cd{font:400 var(--t40)/1 var(--fig);color:var(--gold);font-variant-numeric:tabular-nums lining-nums;white-space:nowrap}
@@ -2009,7 +2007,7 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .abk{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px}
 /* ---------- 1.26.380 Heartbeat (Home): the epoch ring, the vitals strip inside the hero, the Epochs panel with a thread per close ---------- */
 @media (min-width:641px){.hpulse .bench{grid-template-columns:minmax(260px,4fr) minmax(0,8fr)}}
-.hpulse .bench .bl{align-items:center;justify-content:flex-start;gap:6px}.hpulse .bl .bh{align-self:stretch;justify-content:flex-end}
+.hpulse .bench .bl{align-items:center;justify-content:center;gap:6px}
 .hpulse .br{display:flex;flex-direction:column}.hpulse .br .trio{margin-top:auto}
 .hring{width:248px;height:auto;aspect-ratio:1;margin:4px auto 6px;display:block;flex:none}
 .hring svg{overflow:visible}
@@ -2059,7 +2057,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .tag.rel{color:var(--swap-hi);border-color:color-mix(in srgb,var(--steel) 40%,transparent);padding:0 6px;font-size:10.5px;text-transform:none;letter-spacing:.02em}
 @media (max-width:1100px){.hpulse .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.hpulse .kpis .stat:nth-child(4){border-left:0}.hpulse .kpis .stat:nth-child(n+4){border-top:var(--hair)}}
 @media (max-width:640px){
- .hring{width:228px}.hpulse .bench .bn{font-size:76px}.hpulse .bl .bh{justify-content:space-between}
+ .hring{width:228px}.hpulse .bench .bn{font-size:76px}
  .hpulse .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hpulse .kpis .stat{padding:12px 14px 10px;border-top:var(--hair)}
  .hpulse .kpis .stat:nth-child(n){border-left:0}.hpulse .kpis .stat:nth-child(2n){border-left:var(--hair)}.hpulse .kpis .stat:nth-child(-n+2){border-top:0}.hpulse .kpis .stat:last-child{grid-column:1/-1}
  .er{grid-template-columns:52px minmax(0,1fr) 54px;grid-template-areas:"n t p" "n b b" "n h h";column-gap:10px}.er .epl{display:none}.er .ebar{margin:3px 0}
