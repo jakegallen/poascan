@@ -120,7 +120,8 @@ def models(sub, qs):
 
 def retention_strip(ret):
     """Retention as one heat strip: a cell per close (answered at E and again at E+1), opacity by rate; the last 24."""
-    cells = "".join(f'<i style="--r:{r["rate"]:.3f}" title="E{r["n"]} to E{r["n"] + 1}: {r["kept"]:,} of {r["base"]:,} returned ({100 * r["rate"]:.0f}%)"></i>' for r in ret[-24:])
+    mx = max((r["rate"] for r in ret[-24:]), default=0) or 1   # scaled to the best close in view so a low rate still reads
+    cells = "".join(f'<i style="--r:{r["rate"] / mx:.3f}" title="E{r["n"]} to E{r["n"] + 1}: {r["kept"]:,} of {r["base"]:,} returned ({100 * r["rate"]:.0f}%)"></i>' for r in ret[-24:])
     return f'<div class="rstrip" role="img" aria-label="Retention by close">{cells}</div>'
 
 def journey():
