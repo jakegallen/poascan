@@ -2093,3 +2093,4 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
   #forum .cb>.sl~.sl,#forum .cb>.sl~.sl~*{grid-column:2}
   #forum .cb>.sl~.sl~*{grid-row:3}
 }
+.ch .cpx{margin:-5px 0}   /* 1.26.382: the expand icon no longer makes its header taller than its neighbour (no header links left to pad the row) */

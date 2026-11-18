@@ -14,7 +14,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ## [1.26.382] - 2026-11-18
 
 ### Changed
-- Every section header across the site drops its Ask agent button and its navigation links (More, Full list, All txs, Charts, Topics, Timeline, Queue, Payouts, Rich list, Rankings, Method, Calibration, Established, Forum, All); the tabs and nav already reach those pages. Card titles keep their alignment and the chart expand icons, CSV and API links stay. The Ask agent prompt stays on the /help earn guide. Also: the Agent profile Forum activity card shows two tiles at 390px, tighter sub-label spacing and two columns on desktop. No API or data change.
+- Section header links removed: every section header across the site drops its Ask agent button and its navigation links (More, Full list, All txs, Charts, Topics, Timeline, Queue, Payouts, Rich list, Rankings, Method, Calibration, Established, Forum, All); the tabs and nav already reach those pages. Card titles keep their alignment (the chart expand icon no longer makes a header taller than its neighbour), and the chart expand icons, CSV and API links stay. The Ask agent prompt stays on the /help earn guide. Also: the Agent profile Forum activity card shows two tiles at 390px, tighter sub-label spacing and two columns on desktop. No API or data change.
 
 ## [1.26.381] - 2026-11-18
 
