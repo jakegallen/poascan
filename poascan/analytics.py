@@ -1212,6 +1212,66 @@ def anchors_latest(n=20, segment=None):
     if segment: return db.q("SELECT * FROM anchors WHERE segment=? ORDER BY height DESC, chain LIMIT ?", (segment, n))
     return db.q("SELECT * FROM anchors ORDER BY segment DESC, height DESC, chain LIMIT ?", (n,))
 
+def route_buckets(route=None, minutes=60):
+    """POASCAN data ask 4c: per-UTC-minute counts of the route checks POAScan already runs against the minepoa hosted
+    routes, split open (a clear read), halted (a 503 with the halt text) and down (any other failed read). route= keeps one
+    route. Counts only, from the route_checks table; no new upstream request."""
+    try: minutes = max(1, min(180, int(minutes)))
+    except (ValueError, TypeError): minutes = 60
+    cut = int(time.time()) - minutes * 60
+    where = "ts >= ?"; args = [cut]
+    if route:
+        where += " AND route = ?"; args.append(route)
+    buckets = {}
+    for r in db.q(f"SELECT (ts/60)*60 AS m, ok, code FROM route_checks WHERE {where}", tuple(args)):
+        b = buckets.setdefault(int(r["m"]), [0, 0, 0])   # open, halted, down
+        if r["ok"]: b[0] += 1
+        elif str(r["code"] or "").startswith("503"): b[1] += 1
+        else: b[2] += 1
+    rows = [[m, v[0], v[1], v[2]] for m, v in sorted(buckets.items())]
+    routes = [r["route"] for r in db.q("SELECT DISTINCT route FROM route_checks WHERE ts >= ? ORDER BY route", (cut,))]
+    return dict(minutes=minutes, route=route, columns=["minute_ts", "open", "halted", "down"], buckets=rows, routes=routes)
+
+def _iso_ts(s):
+    try:
+        import datetime as _dt
+        return int(_dt.datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+def network_events(kind=None, limit=20):
+    """POASCAN data ask 4b: one merged events feed of the four network event kinds, newest first. anchor (checkpoints to
+    Base and Solana), release (signed releases), notice (active hosted notices) and record (segment firsts). Labels and
+    links only, no bodies; from POAScan's archive and the blobs it already mirrors, no new upstream call."""
+    from . import highlights as HL, protocol as PR, maint as M
+    try: limit = max(1, min(20, int(limit)))
+    except (ValueError, TypeError): limit = 20
+    kind = kind if kind in ("anchor", "release", "notice", "record") else None
+    ev = []
+    if kind in (None, "anchor"):
+        exp = {"base": "https://basescan.org/tx/", "solana": "https://solscan.io/tx/"}
+        for a in anchors_latest(limit):
+            ts = _iso_ts(a.get("anchored_at")); ch = (a.get("chain") or "").lower()
+            if ts is None: continue
+            ev.append(dict(ts=ts, type="anchor", label=f"Checkpoint {a['height']} anchored to {ch.title() or 'chain'}",
+                           url=(exp[ch] + a["tx"]) if ch in exp and a.get("tx") else None))
+    if kind in (None, "release"):
+        for r in PR.releases()[:limit]:
+            ts = int(r.get("ts") or 0)
+            if ts: ev.append(dict(ts=ts, type="release", label=f"Release {r.get('version')}", url=(f"/tx/{r['txid']}") if r.get("txid") else None))
+    if kind in (None, "notice"):
+        for n in M._active_notices():
+            msg = str(n.get("msg") or n.get("id") or "").strip()
+            if msg: ev.append(dict(ts=int(n.get("issued_ts") or n.get("ts") or 0) or None, type="notice",
+                                   label=(msg[:117] + "…") if len(msg) > 118 else msg, url=None))
+    if kind in (None, "record"):
+        for f in HL.data().get("firsts", []):
+            ts = int(f.get("ts") or 0)
+            if f.get("found") and ts:
+                ev.append(dict(ts=ts, type="record", label=f.get("label"), url=(f"/tx/{f['tx']}") if f.get("tx") else None))
+    ev.sort(key=lambda e: -(e["ts"] or 0))
+    return dict(type=kind, types=["anchor", "release", "notice", "record"], events=ev[:limit])
+
 def anchor_summary():
     """The selected segment's anchors (a new segment's top height is its own, not segment 1's h44003)."""
     sg = S.selected()
