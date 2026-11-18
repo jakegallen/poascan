@@ -138,7 +138,9 @@ def live_snapshot():
     h = headline()
     return dict(live=is_live(), pill=pill(), stale=bool(st.get("stale")), as_of=st.get("as_of"), nums=nums,
                 cards={k: v for k, v in h.items() if k in ("vest", "circ")}, frags={},
-                epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool")),
+                epoch=dict(n=o.get("epoch"), start=o.get("last_close"), close=o.get("est_close"), period=o.get("period"), pool=o.get("pool"),
+                           answers_so_far=o.get("answers_so_far"), graders_so_far=o.get("graders_so_far"), closing_in=o.get("closing_in")),   # POASCAN data ask 1b
+                closing_in=o.get("closing_in"),   # POASCAN data ask 1b: top-level seconds to the next close
                 last=dict(epoch=last.get("epoch"), minted=last.get("minted"), burned=last.get("burned"), burn_pct=last.get("burn_pct"), settled=last.get("settled")),
                 feed=feed_rows(stable=True), supply=sup, holders=st.get("holders"), accounts=st.get("agents_joined"), **upgrade_live(), **joins_fields())
 
