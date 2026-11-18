@@ -971,7 +971,7 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     else: _, mx, nk = _nice(0, mx0 * 1.16)   # headroom for the tallest bar's callout
     real = [(sum(v) if stacked else max(v)) for _, v in series]   # true heights, for the chip and the callout
     if clip and ymax:
-        # 1.26.386: a single outlier (one 4,007 h gap) flattened every other bar. With clip, columns taller than ymax are drawn
+        # 1.26.387: a single outlier (one 4,007 h gap) flattened every other bar. With clip, columns taller than ymax are drawn
         # at the top of the plot (tip and callout still read the true value) so the normal rhythm stays visible.
         series = [(l, v if t <= mx else [x * mx / t for x in v]) for (l, v), t in zip(series, real)]
     cls = [series_cls(c) for c in colors] if len(series[0][1]) > 1 or legend else ["s-gold"]

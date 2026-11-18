@@ -186,7 +186,7 @@ function scoreMark(r,b,nw){var x=r[1]-b,k=r[0],c=nw?" nw":"";if(k==="a")return '
 function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){SC.busy=0;scoreIngest(d)}).catch(function(){SC.busy=0})}
 function scoreIngest(d){var old=SC.max,ks={};if(old&&!RM)d.rows.forEach(function(r){if(r[1]>old)ks[r[0]]=1});$$("#score .lane").forEach(function(l){var k=l.dataset.k,sk=$(".sk",l);if(sk){sk._s=d.rows.filter(function(r){return r[0]===k}).map(function(r){return r[1]});sk.dataset.b=d.b;sealUntip();sealDraw(sk,old);return}
    var g=$(".mk",l);if(!g)return;var h="",cut=Date.now()/1000-240,pa=[[],[]];
-   /* 1.26.385: answers older than 4 minutes are two paths (dim, final), as bench.py renders them, so a busy chain stays a few hundred nodes lighter */
+   /* 1.26.387: answers older than 4 minutes are two paths (dim, final), as bench.py renders them, so a busy chain stays a few hundred nodes lighter */
    d.rows.forEach(function(r){if(r[0]!==k)return;if(k==="a"&&r[1]<cut){pa[r[3]?1:0].push(r[1]-d.b);return}h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});
    pa.forEach(function(xs,f){if(xs.length)h='<path class="ma'+(f?" f":"")+'" data-x="'+xs.join(",")+'" d="'+xs.map(function(x){return"M"+x+" 12V40"}).join("")+'"/>'+h});
    g.dataset.b=d.b;g.innerHTML=h});

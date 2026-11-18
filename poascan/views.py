@@ -1251,7 +1251,7 @@ def seg_about():
 def cadence_chart(rows):
     """Chain Cadence: close gaps in hours per close. One stalled gap (a 4,007 h outlier after the restart) used to flatten the
     chart, so the scale tops out at about twice the 90th percentile and taller columns are clipped, still read true in the tip
-    and the callout (1.26.386)."""
+    and the callout (1.26.387)."""
     vals = sorted(v for _, v in rows if v)
     ymax = None
     if len(vals) >= 8:
