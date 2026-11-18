@@ -2,6 +2,7 @@
 (function(){
 "use strict";
 var D=document,W=window,RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
+W.poaKit={tips:function(){chartTips()},lt:function(r){lt(r)},rm:RM};
 function $(s,r){return (r||D).querySelector(s)}function $$(s,r){return Array.prototype.slice.call((r||D).querySelectorAll(s))}
 function pad(n){return n<10?"0"+n:""+n}
 function utc(ts){var d=new Date(ts*1000);return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1)+"-"+pad(d.getUTCDate())+" "+pad(d.getUTCHours())+":"+pad(d.getUTCMinutes())+" UTC"}
@@ -779,3 +780,28 @@ D.addEventListener("toggle",function(e){if(e.target.closest&&e.target.closest("m
 function go(){rowcap();even();setTimeout(even,800)}
 if(D.readyState==="loading")D.addEventListener("DOMContentLoaded",go);else go();window.addEventListener("load",even);
 window.poaRows={cap:rowcap,even:even}})();
+
+/* Shared page kit (kit.py): a tab link in .kit-tabs swaps only the module body. The target page is fetched (the page cache serves
+   it), its body and toolbar replace the current ones with a short crossfade, and the URL and title follow. No script, a modified
+   click, or any error: the link just loads. Reduced motion swaps with no fade. */
+(function(){var D=document,W=window,K=W.poaKit||{},RM=!!K.rm,busy=0;
+function mod(){return D.querySelector('.kit-mod[data-kit="tabs"]')}
+function after(m){if(K.lt)K.lt(m);if(K.tips)K.tips();if(W.poaRows){W.poaRows.cap();W.poaRows.even()}
+}
+function swap(url,push){var m=mod();if(!m||busy)return false;busy=1;var body=m.querySelector(".kit-body"),tools=m.querySelector(".kit-tools"),h=body.offsetHeight;
+ var tm=setTimeout(function(){m.classList.add("kit-busy")},160);
+ fetch(url,{credentials:"same-origin",headers:{"X-Requested-With":"poakit"}}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(t){
+  var d=new DOMParser().parseFromString(t,"text/html"),nm=d.querySelector('.kit-mod[data-kit="tabs"]');if(!nm)throw 0;
+  var nb=nm.querySelector(".kit-body"),nt=nm.querySelector(".kit-tools");
+  function put(){body.style.minHeight=h+"px";body.innerHTML=nb.innerHTML;if(tools&&nt)tools.innerHTML=nt.innerHTML;
+   m.querySelectorAll(".kit-tabs .chip").forEach(function(c,i){var n=nm.querySelectorAll(".kit-tabs .chip")[i];if(!n)return;c.className=n.className;
+    if(n.hasAttribute("aria-current"))c.setAttribute("aria-current","page");else c.removeAttribute("aria-current");var cn=c.querySelector(".dim"),nn=n.querySelector(".dim");if(cn&&nn)cn.textContent=nn.textContent});
+   if(d.title)D.title=d.title;if(push)history.pushState({kit:1},"",url);
+   body.classList.remove("kit-out");if(!RM){body.classList.add("kit-in");setTimeout(function(){body.classList.remove("kit-in");body.style.minHeight=""},300)}else body.style.minHeight="";
+   after(m);clearTimeout(tm);m.classList.remove("kit-busy");busy=0}
+  if(RM)put();else{body.classList.add("kit-out");setTimeout(put,140)}
+ }).catch(function(){clearTimeout(tm);busy=0;W.location.href=url});return true}
+D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(".kit-tabs a[data-kit-tab]");if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+ if(a.getAttribute("aria-current")==="page"){e.preventDefault();return}
+ if(swap(a.href,true))e.preventDefault()});
+W.addEventListener("popstate",function(){if(mod())W.location.reload()})})();
