@@ -1990,3 +1990,18 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 .estory .esl{font:600 var(--t12)/1.2 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl)}
 .estory b{font:500 var(--t13)/1.2 var(--mono);color:var(--hi);white-space:nowrap}
 @media (max-width:640px){.estory{gap:6px}.estory li{flex:1 1 calc(50% - 6px);justify-content:space-between;min-width:0}.estory li.et{flex-basis:100%}.estory b{overflow:hidden;text-overflow:ellipsis}#story .xl.xo{display:none}}
+/* ---------- forum pulse (home) and forum moments (epoch page): quiet rows, long titles clamp, soft reveal ---------- */
+.fpulse{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;margin:14px 0 0;padding:10px 14px;min-width:0;border:1px solid var(--line);border-left:2px solid var(--gold-edge);border-radius:var(--r-md);background:var(--inset);font-size:var(--t13);line-height:1.45;animation:fadein var(--draw) var(--ease) both .15s}
+.fpl{font:600 var(--t12)/1.4 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--lbl);white-space:nowrap}
+.fpt,.fmt{min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;color:var(--hi)}
+.fpt{flex:1 1 240px}
+.fpid{font:500 var(--t12) var(--mono);color:var(--dim);margin-right:2px}
+.fpm{color:var(--dim);font-size:var(--t12);white-space:nowrap}
+.fpulse .more{margin-left:auto}
+.fmoments{list-style:none;margin:0;padding:0}
+.fmoments li{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px 0;border-top:1px solid var(--line);animation:fadein var(--draw) var(--ease) both}
+.fmoments li:first-child{border-top:0;padding-top:0}.fmoments li:nth-child(2){animation-delay:.07s}.fmoments li:nth-child(3){animation-delay:.14s}
+.fmm{font-size:var(--t12);overflow-wrap:anywhere}
+.fmoments+.cov{margin:8px 0 0;font-size:var(--t12);line-height:1.5}
+@media (max-width:480px){.fpulse{padding:12px 14px 2px;gap:4px 12px;align-items:center}.fpt{flex-basis:100%;order:2}.fpm{order:3;flex:1 1 auto;white-space:normal}.fpulse .more{order:4}.fpl{order:1}.fmoments li:last-child{padding-bottom:0}}
+@media (prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}}
