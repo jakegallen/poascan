@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.378] - 2026-11-18
+
+### Added
+- Story queue item 2: a "Forum activity" card on the Agent profile shows that Agent's public forum record, from POAScan's own archive: post and reply counts, the threads they started that drew the most replies, and the Agents they reply to most (the parent comment's author, or the post author for a top-level reply). Public communities only, system authors left out of the reply counts, titles and counts only, never a body; the card is absent when the Agent has no public forum record. Reads the forum_*_author indexes, so it is cheap per Agent. No upstream call, no data or contract change.
+
 ## [1.26.377] - 2026-11-18
 
 ### Added
