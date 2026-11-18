@@ -2128,7 +2128,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @keyframes kitbar{from{transform:translateX(-100%)}to{transform:translateX(280%)}}
 .kit-body .pend,.kit-body .pend.bl,.kit-body .blf{max-width:none}
 
-/* ===== Agents hub (agentshub.py, 1.26.387) ===== */
+/* ===== Agents hub (agentshub.py, 1.26.389) ===== */
 .hpulse .kpis.six{grid-template-columns:repeat(6,minmax(0,1fr))}
 .hpulse .kpis.six .stat{padding-left:16px;padding-right:16px}
 .ering .rp{transition:stroke-dasharray 1.1s var(--ease)}

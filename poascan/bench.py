@@ -241,7 +241,7 @@ def bench_html(o, graders, now=None, feed=(), score=True):
             f'<span class="legend">{leg}</span></div>{strip}{trio}</div></div>')
 
 def est_ring_html(est, total):
-    """1.26.387 Agents hero: the Heartbeat ring as a share gauge. Established Agents fill it against the live chain total
+    """1.26.389 Agents hero: the Heartbeat ring as a share gauge. Established Agents fill it against the live chain total
     (status.agents_joined). Same ring SVG and ripples as the epoch ring; no countdown, app.js counts the numeral up once."""
     f = min(1.0, max(0.0, est / total)) if total else 0
     tk = ('<circle class="mk2" cx="120" cy="120" r="111" pathLength="96" stroke-dasharray=".25 1.75"/>'

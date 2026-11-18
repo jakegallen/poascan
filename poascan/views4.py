@@ -73,7 +73,7 @@ def rows(tab, sort="", d="desc"):
 MOVE_METRIC = {"holders": "balance", "richlist": "earnings"}   # Rankings tabs that show a rank arrow since the previous close (agents.agent_rank snapshot)
 
 def _moves(tab, out):
-    """1.26.387: x["mv"] = places gained since the previous close (positive up), "new" for an address that was not on the board,
+    """1.26.389: x["mv"] = places gained since the previous close (positive up), "new" for an address that was not on the board,
     from the per-close snapshot (agents.agent_rank, top 200). Only the first 200 rows can move; no arrow when there is no previous close."""
     try:
         r = G.agent_rank(MOVE_METRIC[tab], 200)

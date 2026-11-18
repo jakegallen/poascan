@@ -1,4 +1,4 @@
-"""Agents hub (1.26.387, consolidation step 2): one hero and one module for what were 22 URLs.
+"""Agents hub (1.26.389, consolidation step 2): one hero and one module for what were 22 URLs.
 
 Hero: the Established ring (against the live chain total), the live strip, and six KPI cards.
 Module: Rankings, Models, Operators and Community as tabs (kit.tabmod); each tab and each chip inside a tab is its own URL

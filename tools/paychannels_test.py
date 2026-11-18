@@ -371,9 +371,9 @@ check("version is at least 1.26.385 and the changelog records the Playwright cac
 check("version is 1.26.386 and the changelog records the Agents data asks",
       _ver >= (1, 26, 386) and "## [1.26.386]" in cl and "per-close rank" in cl
       and not any(c in cl.split("## [1.26.386]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.388 and the changelog records the Agents consolidation",
-      _ver == (1, 26, 388) and "## [1.26.388]" in cl and "Agents consolidation" in cl
-      and not any(c in cl.split("## [1.26.388]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.389 and the changelog records the Agents consolidation",
+      _ver == (1, 26, 389) and "## [1.26.389]" in cl and "Agents consolidation" in cl
+      and not any(c in cl.split("## [1.26.389]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

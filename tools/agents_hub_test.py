@@ -1,4 +1,4 @@
-"""Agents hub (1.26.388): one hero and one tabbed module for Rankings, Models, Operators and Community; every old URL opens
+"""Agents hub (1.26.389): one hero and one tabbed module for Rankings, Models, Operators and Community; every old URL opens
 its tab; the first funnel stage is labelled Archive; rank arrows come from the per-close snapshot; no header shortcut links,
 no dashes, no For agents card. Usage: python3 tools/agents_hub_test.py (fixture database, no network)."""
 import os, re, sys, tempfile
