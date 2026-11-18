@@ -11,6 +11,10 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.386] - 2026-11-18
+
+### Added
+- Agents data for the page consolidation (POASCAN ASK on #147), additive, archive-only, counts-only, no route removed: `GET /api/v1/agents/totals` plus new fields on `/api/v1/agents/health` (`agents` = the live chain account count from status.agents_joined, `archive_agents` = every address POAScan has ever seen, `dropped_at_cut` = archive minus chain); `GET /api/v1/agents/rank?metric=&limit=` (top agents by earnings, balance or passes, each row with its prior-close rank, from a per-close rank snapshot kept for the last 8 closes); `GET /api/v1/agents/hourly` (join-memo joins and established adds per UTC hour). Added to /api/reference.
 ## [1.26.385] - 2026-11-18
 
 ### Changed

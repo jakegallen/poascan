@@ -521,12 +521,75 @@ def social():
                 top_edges=W.most_common(10))
 
 # ---------------- health card ----------------
+def agent_totals():
+    """Agent counts (POASCAN data ask 3a): agents = the live chain account count (status agents_joined, current segment);
+    archive_agents = every address POAScan has ever seen in its archive, which includes the Segment 1 accounts dropped at
+    the genesis cut (archive minus chain). Counts only, no upstream read."""
+    chain = A.status().get("agents_joined"); arch = len(accounts_all())
+    dropped = (arch - chain) if (isinstance(chain, int) and isinstance(arch, int)) else None
+    return dict(agents=chain, archive_agents=arch, dropped_at_cut=dropped,
+                agents_basis="status.agents_joined (chain, current segment)", archive_basis="distinct addresses in POAScan's archive")
+
 def network_health():
-    cs = census_summary(); org = originality(); op = operators(); est = len(A.established_set())
+    cs = census_summary(); org = originality(); op = operators(); est = len(A.established_set()); tot = agent_totals()
     last = org["epochs"][-1] if org["epochs"] else None
     return dict(disclosure_rate=cs["disclosure_rate"], disclosed=cs["disclosed"], n=cs["n"], originality=last["originality"] if last else None,
                 orig_n=last["n"] if last else 0, orig_epoch=last["epoch"] if last else None, families=op["families"], accounts=op["accounts"],
-                established=est, effective_families=cs["effective_families"])
+                established=est, effective_families=cs["effective_families"],
+                agents=tot["agents"], archive_agents=tot["archive_agents"], dropped_at_cut=tot["dropped_at_cut"])   # POASCAN data ask 3a
+
+# ---------------- per-close rank (data ask 3b) ----------------
+# A tiny leaderboard with a prior-close rank. Metrics are cheap, archive-derived totals; the snapshot (top 200 per metric
+# per close) is written lazily the first read after a new close and pruned to the last 8 closes, so no ingest hook is needed.
+RANK_METRICS = {
+    "earnings": "total POA rewards received (lifetime, every segment)",
+    "balance":  "current POA balance",
+    "passes":   "paid closes (established records)",
+}
+
+def _rank_values(metric):
+    if metric == "balance":
+        return {a: float(r.get("balance") or 0) for a, r in accounts_all().items()}
+    rb = A.rewards_by_addr()
+    if metric == "passes":
+        return {a: float(len(v)) for a, v in rb.items()}
+    return {a: float(sum(v.values())) for a, v in rb.items()}   # earnings
+
+def _latest_close_epoch():
+    rows = [r for r in A.epoch_rows() if r.get("close_ts") and r.get("established")]
+    return int(rows[-1]["epoch"]) if rows else None
+
+def _ensure_rank_snapshot(metric, close_epoch):
+    if db.q("SELECT 1 FROM agent_rank_snap WHERE metric=? AND close_epoch=? LIMIT 1", (metric, close_epoch)):
+        return
+    ordered = sorted(((a, v) for a, v in _rank_values(metric).items() if v > 0), key=lambda x: -x[1])[:200]
+    if ordered:
+        db.write("INSERT OR REPLACE INTO agent_rank_snap(close_epoch,metric,rank,addr,value) VALUES(?,?,?,?,?)",
+                 [(close_epoch, metric, i + 1, a, v) for i, (a, v) in enumerate(ordered)], many=True)
+    keep = [r["close_epoch"] for r in db.q(
+        "SELECT DISTINCT close_epoch FROM agent_rank_snap WHERE metric=? ORDER BY close_epoch DESC LIMIT 8", (metric,))]
+    if keep:
+        db.write("DELETE FROM agent_rank_snap WHERE metric=? AND close_epoch < ?", (metric, min(keep)))
+
+def agent_rank(metric="earnings", limit=20):
+    """Top agents by one metric at the latest close, each with its prior-close rank (null if new to the board)."""
+    metric = metric if metric in RANK_METRICS else "earnings"
+    try: limit = max(1, min(200, int(limit)))
+    except (ValueError, TypeError): limit = 20
+    ce = _latest_close_epoch()
+    if ce is None:
+        return dict(metric=metric, metrics=list(RANK_METRICS), close_epoch=None, prev_close=None, rows=[])
+    _ensure_rank_snapshot(metric, ce)
+    closes = [r["close_epoch"] for r in db.q(
+        "SELECT DISTINCT close_epoch FROM agent_rank_snap WHERE metric=? ORDER BY close_epoch DESC LIMIT 2", (metric,))]
+    prev_close = closes[1] if len(closes) > 1 else None
+    prev = {r["addr"]: r["rank"] for r in db.q(
+        "SELECT addr, rank FROM agent_rank_snap WHERE metric=? AND close_epoch=?", (metric, prev_close))} if prev_close is not None else {}
+    names = _names()
+    rows = [dict(rank=r["rank"], prev_rank=prev.get(r["addr"]), address=r["addr"], name=names.get(r["addr"]), value=r["value"])
+            for r in db.q("SELECT rank, addr, value FROM agent_rank_snap WHERE metric=? AND close_epoch=? ORDER BY rank LIMIT ?",
+                          (metric, ce, limit))]
+    return dict(metric=metric, metrics=list(RANK_METRICS), close_epoch=ce, prev_close=prev_close, rows=rows)
 
 # ---------------- profile ----------------
 def profile(addr):

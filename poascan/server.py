@@ -402,6 +402,11 @@ def api(path, qs):
         if n: d["upstream_notice"] = n
         return d, False
     if path == "/api/agents/health": return G.network_health(), False
+    if path == "/api/agents/totals": return G.agent_totals(), False   # POASCAN data ask 3a: chain agents vs archive_agents
+    if path == "/api/agents/hourly":   # POASCAN data ask 3c: hourly joins + established adds
+        return A.agents_hourly((qs.get("hours") or ["168"])[0]), False
+    if path == "/api/agents/rank":   # POASCAN data ask 3b: per-close rank snapshot (top 200/metric, prune >8 closes)
+        return G.agent_rank((qs.get("metric") or ["earnings"])[0], (qs.get("limit") or ["20"])[0]), False
     if path == "/api/agents/leaderboard": return G.leaderboard()["by_family"], True
     if path == "/api/agents/leaderboard-harness": return G.leaderboard()["by_harness"], True
     if path == "/api/agents/census": return G.census_series(), True

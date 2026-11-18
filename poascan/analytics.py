@@ -666,6 +666,19 @@ def pending_by_origin_seals():
                          seal_2=int(h.get("2", 0)), seal_3=int(h.get("3", 0))))
     return rows
 
+def agents_hourly(hours=168):
+    """Hourly joins and established adds (POASCAN data ask 3c), archive only, counts only, no upstream read. joins = join-memo
+    txs per UTC hour; established = new established_after per close, bucketed at the close hour. Default 7 days (168 h)."""
+    try: hours = max(1, min(720, int(hours)))
+    except (ValueError, TypeError): hours = 168
+    cut = int(time.time()) - hours * 3600
+    joins = [[int(r["h"]), r["n"]] for r in db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM labels WHERE source='join memo' AND ts > ? GROUP BY h ORDER BY h", (cut,))]
+    est = {}
+    for r in epoch_rows():
+        if r.get("close_ts") and r["close_ts"] > cut and r.get("established"):
+            hh = (int(r["close_ts"]) // 3600) * 3600; est[hh] = est.get(hh, 0) + r["established"]
+    return dict(joins=joins, established=[[h, n] for h, n in sorted(est.items())], hours=hours)
+
 def epoch_detail(n):
     for e in epochs_raw():
         if int(e["epoch"]) == n: return e

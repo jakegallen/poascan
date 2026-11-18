@@ -77,6 +77,11 @@ CREATE TABLE IF NOT EXISTS checkin_probes(day TEXT NOT NULL, version TEXT NOT NU
   n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0), PRIMARY KEY(day, version, client)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS upstream_denials(day TEXT NOT NULL, endpoint TEXT NOT NULL CHECK (length(endpoint) <= 80), reason TEXT NOT NULL,
   n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, endpoint, reason)) WITHOUT ROWID;
+-- per-close agent rank snapshot (1.26, poascan/agents.py data ask 3b): top 200 addresses per metric at each close so the
+-- rank page can show a prior-close rank; written lazily the first read after a new close, pruned to the last 8 closes.
+CREATE TABLE IF NOT EXISTS agent_rank_snap(close_epoch INTEGER NOT NULL, metric TEXT NOT NULL CHECK (length(metric) <= 16),
+  rank INTEGER NOT NULL, addr TEXT NOT NULL, value REAL NOT NULL, PRIMARY KEY(metric, close_epoch, addr)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS agent_rank_snap_rank ON agent_rank_snap(metric, close_epoch, rank);
 """
 
 # 1.26.346: a live count of per-thread connections, for the private /ops/memory report. Each connection holds its own
