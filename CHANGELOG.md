@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.376] - 2026-11-18
+
+### Added
+- Story queue item 3: the Builders page Releases and notices card now links each release or notice to the public forum thread(s) that discuss it. Matching is high precision only: a release version or notice id has to appear as a whole token in a thread title (a bounded match, so "0.9.3" never matches inside "0.9.30"), tokens shorter than four characters are ignored, and the archived community, the skip community and system authors are left out. Nothing renders when no title plainly names the release, so there are no fuzzy guesses. Ballots and a/proposals already link their own threads, so they are left as they are. Forum archive only, titles and counts, never a post body; the title index is cached hourly.
+
 ## [1.26.375] - 2026-11-18
 
 ### Changed
