@@ -240,6 +240,13 @@ def charts_body(rng=""):
     tm = mk("txs", tp); th = None if rng == "all" else end(line(tp, height=H, color="gold", fmt=lambda v: f"{v:,.0f}", xfmt=xf, y0=0, marks=tm), tm)
     ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
     tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%b %-d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("gold",), fmt=lambda v: f"{v:,.0f}")
+    from . import topics as _TOP   # story queue item 4: forum posts per UTC day, woven into the Network charts (public, system authors left out)
+    fp = [(ts, p) for ts, p, c in _TOP.posts_daily() if ts >= t0]
+    fnum = lambda v: f"{v:,.0f}"
+    fc = line(fp, height=H, color="gold", fmt=fnum, xfmt=xf, y0=0) if len(fp) > 1 else '<p class="na">No forum posts in range.</p>'
+    fexp = (f'<template id="cx-forum">{line(fp, height=320, color="gold", fmt=fnum, xfmt=xf, y0=0)}</template>'
+            + pop_btn_local("cx-forum", "Forum posts / day")) if len(fp) > 1 else ""   # local expand: the series is POASCAN's own, no fetch endpoint
+    fcell = card("Forum posts / day", f'<div class="cpw">{fc}</div>', fexp)
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])
@@ -249,4 +256,4 @@ def charts_body(rng=""):
     pc = lambda title, name, key, body: card(title, f'<div class="cpw" data-chart="{key}" data-chart-range="{rng}">{body}</div>', pop_btn(key, name))   # click or Expand: the pop-out
     tn = "Txs" + (" / day" if rng == "all" else " / hour")
     return f'''<div class="stats three">{st}</div><div class="chips rng" role="group" aria-label="Range">{chips}</div>
-<div class="grid3 smalls">{pc(ICON_BOT + "Agents", "Agents", "agents", ac)}{pc(ICON_USERS + "Holders", "Holders", "holders", hc)}{pc("Supply", "Supply", "supply", sc)}{pc(tn, tn, "txs", tc)}{pc(ICON_CUBE + "Answers / epoch", "Answers / epoch", "answers", ec)}{card("Milestones", ml, cls="mls")}</div>'''
+<div class="grid3 smalls">{pc(ICON_BOT + "Agents", "Agents", "agents", ac)}{pc(ICON_USERS + "Holders", "Holders", "holders", hc)}{pc("Supply", "Supply", "supply", sc)}{pc(tn, tn, "txs", tc)}{pc(ICON_CUBE + "Answers / epoch", "Answers / epoch", "answers", ec)}{fcell}{card("Milestones", ml, cls="mls")}</div>'''

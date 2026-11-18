@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.377] - 2026-11-18
+
+### Added
+- Story queue item 4: a "Forum posts / day" chart is woven into Network > Charts, from POAScan's own forum archive (public communities only, the archived community and system authors left out), counts only, cached hourly. It honours the selected range (24h, 7d, 30d, All) and expands locally like the other charts, so it needs no new data endpoint and stays off the browser chart allowlist. No upstream call, no data or contract change.
+
 ## [1.26.376] - 2026-11-18
 
 ### Added
