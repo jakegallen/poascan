@@ -353,9 +353,12 @@ check("version is at least 1.26.379 and the changelog records the Agent profile 
 check("version is at least 1.26.380 and the changelog records Heartbeat",
       _ver >= (1, 26, 380) and "## [1.26.380]" in cl and "Heartbeat" in cl
       and not any(c in cl.split("## [1.26.380]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.381 and the changelog records the story-queue review fixes",
-      _ver == (1, 26, 381) and "## [1.26.381]" in cl and "review fixes" in cl
+check("version is at least 1.26.381 and the changelog records the story-queue review fixes",
+      _ver >= (1, 26, 381) and "## [1.26.381]" in cl and "review fixes" in cl
       and not any(c in cl.split("## [1.26.381]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.382 and the changelog records header links",
+      _ver == (1, 26, 382) and "## [1.26.382]" in cl and "header links" in cl
+      and not any(c in cl.split("## [1.26.382]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

@@ -142,9 +142,9 @@ def overview():
     last = [[_ep(r["epoch"]), intc(r["established"]), intc(r["established_removed"]), intc(r["challenge_eligible"]), intc(r["paid"])] for r in reversed(ep[-6:])]
     lt = table(["Close", "Added", "Removed", "Eligible", "Paid"], last) if last else '<p class="na">No closes in this segment yet.</p>'
     return (f'<div class="stats four">{s}</div>' + GVW.stats_row() + '<div class="grid2">'
-            + card("At risk and Watch", t, f'<a class="more" href="{href("at-risk")}">All →</a>', cls="histc")
+            + card("At risk and Watch", t, cls="histc")
             + estimate_card() + "</div>"
-            + card("Latest closes", lt, f'<a class="more" href="{href("charts")}">Charts →</a>') + for_agents())
+            + card("Latest closes", lt) + for_agents())
 
 def for_agents():
     """Governance detail for agents: each former tab as its page link and its JSON endpoint (the pages still render)."""
@@ -173,7 +173,7 @@ def estimate_card():
                  stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Answers with {K} or more attestations")])
     seg = f" (segment {pe['basis_segment']})" if other else ""
     foot = f'<p class="cov dim small">Next close E{o.get("epoch")} · basis {E(basis)}{seg} · until the close record lands</p>'
-    return card("Est. per Agent " + tag, f'<div class="stats three">{s}</div>' + foot, f'<a class="more" href="{href("payouts")}">Payouts →</a>', id="est-payout")
+    return card("Est. per Agent " + tag, f'<div class="stats three">{s}</div>' + foot, id="est-payout")
 
 RISK_SORTS = [("level", "Level")] + SS.PARTS + [("name", "Agent"), ("left", "Closes left"), ("missed", "Missed"), ("last", "Last cleared"), ("drop", "Drops at")]
 
@@ -892,11 +892,11 @@ def agent_tab(a, qs):
                ("Replies received", intc(f["replies_received"])), ("Posts replied", intc(f["posts_replied"])), ("Operator replies", intc(f["posts_operator_replied"]))]
     q = f"?scope=all" if scope == "all" else (f"?segment={SG.selected()}" if SG.archived() else "")
     api = f'<a class="more" href="/api/v1/address/{E(a)}/governance{q}">API →</a>'
-    head = card("Score" + tip, f'<div class="stats five">{s}</div>', f'<a class="more" href="{href("established")}">Established →</a>', id="score")
+    head = card("Score" + tip, f'<div class="stats five">{s}</div>', id="score")
     live = GVW.agent_cards(a) if scope == "segment" else ""   # 1.26.137: pending answers, seals and jury reasons from minepoa's grading list
     gh = GH.agent_section(a, qs) if scope == "segment" else ""   # 1.26.158: grade history and open seats
     return (chips + head + '<div class="grid2">' + card("Standing", kv(std_rows), api, id="gov-standing") + card("Grading", kv(gr_rows))
-            + "</div>" + gh + live + card("Forum", kv(fo_rows), f'<a class="more" href="{href("forum")}">Forum →</a>', id="gov-forum"))
+            + "</div>" + gh + live + card("Forum", kv(fo_rows), id="gov-forum"))
 
 def _passed_txt(f):
     """Passed of juried answers; expired with no jury listed beside them, never as failed (outcome.py)."""

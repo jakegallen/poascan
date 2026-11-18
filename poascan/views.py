@@ -3,7 +3,6 @@ import json, time, math, collections, threading, datetime as dt, re
 from . import db, analytics as A, agents as G, indexer as I
 from . import segments as SG, outcome as OC, econ as EC
 from .ui import *
-from . import prompts as PR
 from . import ui as _ui
 from . import views2 as V2
 from . import market as X   # swap data via the swap module's API: ≈$, Token price figures, tx swap rows
@@ -28,19 +27,7 @@ def pill():
     """Header pill for the live snapshot: freshness plus grading (ui.status_pill), with the note's HTML (pop) app.js swaps in."""
     return _ui.status_pill(A.freshness())
 
-# One Ask button per page, in the first card header, unless the page already has one.
-PAGE_ASKS = {"/chain": lambda: [PR.BURN, PR.UNLOCK],
-             "/chain/txs": lambda: [PR.TXS], "/api": lambda: [PR.API, PR.MCP], "/network": lambda: [PR.NETWORK],
-             "/agents": lambda: [PR.FIND, PR.CLIMB]}
-
-def with_ask(body):
-    path = getattr(REQ, "path", "") or ""
-    key = "/agents" if path.startswith("/agents") else path
-    if path == "/network" and ((getattr(REQ, "qs", None) or {}).get("tab") or [""])[0] == "health": return body   # Health: the upgrade card carries the one prompt
-    if key not in PAGE_ASKS or 'class="askb"' in body or '<div class="cx">' not in body: return body
-    return body.replace('<div class="cx">', '<div class="cx">' + PR.ask(PAGE_ASKS[key]()), 1)
-
-def page(title, body, active, head=""): return layout(title, with_ask(body), active, live=A.freshness(), head=head)
+def page(title, body, active, head=""): return layout(title, body, active, live=A.freshness(), head=head)
 
 def names(): return A.forum_names()
 def _rev(): return {v: k for k, v in A.forum_names().items() if v}
@@ -81,7 +68,7 @@ def tracker_html(score=True):
     o = A.open_epoch(); nm = names()
     feed = [dict(type=r["type"], addr=r["from_addr"], name=nm.get(r["from_addr"]), ts=int(r["ts"] or 0)) for r in
             db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")] if score else ()
-    return BN.bench_html(o, graders_tile(o), PR.ask([PR.answer_epoch(o["epoch"]), PR.GRADE]), feed=feed, score=score)
+    return BN.bench_html(o, graders_tile(o), feed=feed, score=score)
 
 def burnmeter_html():
     o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
@@ -309,7 +296,7 @@ def home_answers():
     ser = [(SG.ep_label(k), [a]) for k, a in rows]
     body = _U.bars(ser, height=220, colors=("gold",), fmt=lambda v: f"{int(round(v)):,}", legend=None) if len(ser) > 1 else skel(2)
     return card(ICON_FEED + "Answers per epoch", f'<div class="cpw" data-chart="answers">{body}</div>',
-                _U.pop_btn("answers", "Answers per epoch") + '<a href="/network?tab=charts" class="more">Charts →</a>', cls="supc ansc")
+                _U.pop_btn("answers", "Answers per epoch"), cls="supc ansc")
 
 HOME_EPOCHS_MINI = 24
 ICON_VOICE = _ui._ic('<path d="M8 10h8M8 13h5"/><path d="M7 7.5h10a1.2 1.2 0 0 1 1.2 1.2v5.6A1.2 1.2 0 0 1 17 15.5h-4.6L9.5 18v-2.5H7a1.2 1.2 0 0 1-1.2-1.2V8.7A1.2 1.2 0 0 1 7 7.5z"/>')
@@ -377,8 +364,8 @@ def home():
 <section class="shero">{search_form("hsearch", "hero")}</section>
 <section id="tracker" class="card benchc hpulse" aria-label="Open epoch">{tracker_html()}<section class="stats four kpis" role="group" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section></section>
 <div class="grid2 hgrid">
-{card(ICON_FEED + 'Stream', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed" data-n="10">{feed_rows(10)}</div>', '<a href="/chain/txs" class="more">All txs →</a>', cls="assay")}
-{card(ICON_CUBE + "Epochs", home_answers_mini() + home_open_row(A.open_epoch()) + f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', burn + _ui.pop_btn("answers", "Answers per epoch") + '<a href="/chain" class="more">Full list →</a>', cls="epochc")}
+{card(ICON_FEED + 'Stream', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed" data-n="10">{feed_rows(10)}</div>', cls="assay")}
+{card(ICON_CUBE + "Epochs", home_answers_mini() + home_open_row(A.open_epoch()) + f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', burn + _ui.pop_btn("answers", "Answers per epoch"), cls="epochc")}
 </div>
 <p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">Trade on POASwap →</a></p>'''
     return page("Proof of Agent explorer", body, "/")
@@ -506,7 +493,7 @@ def tx(tid):
     ts_ = I.tx_source(d)   # 1.26.219: which copy this page shows and when it was read
     kv += (f'<p class="cov dim small">Source: {E(ts_["source_label"])}' + (f' · as of {lt(d.get("served_as_of"), "dt")}' if d.get("served_as_of") else "")
                               + ' · <a href="/about#tx-source">Method</a></p>')
-    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, PR.ask([PR.explain_tx(tid)]) + f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>') + rch, "/txs")
+    return page("Tx " + short(tid), tx_summary(d, nm, ep) + card("Transaction", kv, f'<a class="more" href="https://minepoa.com/api/explorer/tx/{E(tid)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>') + rch, "/txs")
 
 VERB = {"challenge": "submitted an answer", "grade-sealed": "graded an answer", "attest-batch": "attested a batch", "join": "joined",
         "chains-update": "linked a wallet"}
@@ -855,8 +842,8 @@ def address(a):
                 + _TOP.agent_forum_card(a)
                 + f'<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#agents">For agents</a>{fa}</nav>'
                 + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
-                + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
-                + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree, PR.ask([PR.addr_invites(a)])) + '</details>')
+                + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
+                + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree) + '</details>')
     if not rsum: nav += f'<p class="ecnote"><a href="/help?address={E(a)}">No POA yet. Why am I not earning? →</a></p>'
     return page("Address " + short(a), head + nav + main, "/")
 
@@ -1135,12 +1122,12 @@ def token_body(h2=False):
 <div class="stats {"four" if mcap else "three"}">{mrow}</div>
 <nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#token">For agents</a>{fa}</nav>
 {TC.cards_html()}
-{card("Top holders", holders_t + f'<p class="dim small">Median holder {num(h["median"])} POA.</p>', X.usd_toggle() + PR.ask([PR.TOKEN]) + '<a class="more" href="/agents/top">Rich list →</a>', id="holders")}
+{card("Top holders", holders_t + f'<p class="dim small">Median holder {num(h["median"])} POA.</p>', X.usd_toggle(), id="holders")}
 <div class="grid2">{card("Minted vs burned per epoch", chart + note("Each epoch offers a fixed pool; whatever the payout ceiling does not pay out is never issued. That shows here as 'burned'. No holder balances are destroyed."))}
 {card("Vesting &amp; halving", f'<div class="minis"><div><span class="lbl">Vesting</span>{sp["vesting_epochs"]} epochs · ≈{sp["vesting_epochs"] * int(p.get("auto_epoch_seconds") or 21600) / 86400:.0f} days</div><div><span class="lbl">Halving</span>{halv} epochs</div><div><span class="lbl">Decimals</span>{p.get("decimals", 6)}</div></div>{sched}')}</div>
 {ch_chart}
 {V3.unlock_section()}
-<div class="grid2">{card("Concentration", conc , X.usd_toggle() + '<a class="more" href="/agents/top">Rich list →</a>', cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
+<div class="grid2">{card("Concentration", conc , X.usd_toggle(), cls="bmcard")}{card("Same-balance cluster", f'<div class="minis"><div><span class="lbl">Count</span>{h["cluster_count"]:,}</div><div><span class="lbl">Balance</span>{num(h["cluster_balance"])}</div><div><span class="lbl">Share</span>{pct(h["cluster_share"])}</div></div>')}</div>'''
     return body
 
 COHORT_LABEL = {"unsealed": "Unsealed", "sealed": "Sealed", "passed": "Passed", "failed": "Failed", "expired_no_jury": "Expired, no jury", "vanished": "Dropped"}
@@ -1208,7 +1195,7 @@ def epochs_page(qs=None):
     chips = "".join(f'<a href="/chain{"" if k == "closed" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}'
                     + (f' <span class="dim">{cnt[k]:,}</span>' if cnt.get(k) is not None else "") + '</a>' for k, t in EP_TABS)
     if tab == "pending":
-        o = A.open_epoch(); inner = pending_card(PR.ask([PR.answer_epoch(o.get("epoch")), PR.GRADE]))
+        o = A.open_epoch(); inner = pending_card()
     elif tab == "grading":
         inner = grading()
     else:
@@ -1340,7 +1327,7 @@ def epoch(n):
     payouts = na("Closed, no payout (no answer reached quorum).") if zeropay else ((note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt)
     from . import epochstory as EST_   # the story card: answers and grades per hour, then the close (epochstory.py)
     from . import topics as _TOP        # story queue item 2: forum moments (most-replied public threads) in this epoch's window
-    body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
+    body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{nav}</div></div>'
             + EST_.card_html(n, r, (rows.get(n - 1) or {}).get("close_ts")) +
             f'<div class="stats six">{s}</div>'
             + _TOP.epoch_threads_card(n, (rows.get(n - 1) or {}).get("close_ts"), r["close_ts"])   # story item 1 review: under the stat row, not the page bottom
@@ -1379,7 +1366,7 @@ def health_card():
                  stat("Disclosure rate", pct(h["disclosure_rate"]), tip=f'{h["disclosed"]:,} Agents disclosed a model'),
                  stat("Originality", pct(h["originality"]) if h["originality"] is not None else "···", tip=f'From {h["orig_n"]:,} sampled answers'),
                  stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
-    return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>', '<a class="more" href="/about#real">Method →</a>')
+    return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>')
 
 AGENTS_API = [("Is it real", "/about#real", "/api/v1/agents/health"), ("Operators", "/agents/operators", "/api/v1/clusters"), ("Originality", "/about#real", "/api/v1/agents/originality"),
               ("Cohorts", "/chain", "/api/v1/cohorts"), ("Retention", "/about#real", "/api/v1/agents/retention"), ("Census", "/agents/census", "/api/v1/agents/census")]
@@ -1405,8 +1392,8 @@ def agents_overview():
     npd = G.new_per_day()
     newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
     fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in AGENTS_API)
-    body = agents_top_row(npd) + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun, '<a class="more" href="/agents/census?tab=journey">More →</a>')}</div>
-{card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>', '<a class="more" href="/agents/top?tab=richlist">Rankings →</a>')}'''
+    body = agents_top_row(npd) + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun)}</div>
+{card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>')}'''
     body += card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
     return apage("The Agents", body, "/agents")
 
@@ -1485,7 +1472,7 @@ def signals_card():
         return s + (f' <span class="dim small">+{len(m) - 2}</span>' if len(m) > 2 else "")
     rows = [[f'<span class="tag">{E(g["signal"])}</span>', f'<span class="num">{g["size"]}</span>', who(g["agents"])] for g in cs["groups"][:12]]
     return card(f'Cluster signals · {cs["agents_flagged"]:,} Agents', f'<div class="minis">{chips}</div>' + table(["Signal", "Agents", "Members"], rows, cls="sigt"),
-                '<a class="more" href="/about#signals">Method</a> · <a class="more" href="/api/v1/clusters">API →</a>')
+                '<a class="more" href="/api/v1/clusters">API →</a>')
 
 def _operators_method():
     return f'''
@@ -1554,7 +1541,7 @@ def graders_body(qs=None, base="/governance?tab=graders"):
                  stat("Grade spread", f2(c["score_sd"]))])
     foot = f'<p class="cov dim small">As of E{c["as_of_close"]} · grey under n {m} · <a href="/about#calibration">method</a></p>' if c["as_of_close"] is not None else ""
     body = f'<div class="stats eight">{s}</div>' + card(f"Calibration · {c['graders_count']}", f'<div class="chips"><span class="tag warn" title="Agreement with the settled outcome, not accuracy">Advisory</span></div>' + chips + tb + foot,
-                                                      PR.ask([PR.CALIB]) + '<a class="more" href="/api/v1/agents/calibration">API →</a>', cls="histc", id="calibration")
+                                                      '<a class="more" href="/api/v1/agents/calibration">API →</a>', cls="histc", id="calibration")
     return body
 
 def at_risk_body(qs=None, base="/governance?tab=at-risk"):
@@ -1643,7 +1630,7 @@ def grading():
     s += stat("Slashes", f'<span class="num{" red" if unp > 0 else ""}">{tot}</span>')   # red only when some were not pardoned
     st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="{"red" if r["slashed"] > pn(r) else ""}">{r["slashed"]}</span>', pn(r), r["audit_sampled"], r["established_removed"]] for r in ep])
     body = f'''<div class="stats five">{s}</div><div class="grid2">{card("By origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
-{card("Per close", sett)}</div>{card("Slash log", st, PR.ask([PR.GRADE, PR.GRADE_BETTER]) + '<a class="more" href="/governance?tab=graders">Calibration →</a>')}'''
+{card("Per close", sett)}</div>{card("Slash log", st)}'''
     return body
 
 def forum_page():
@@ -1657,7 +1644,7 @@ def forum_page():
     th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
     body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
-<div class="grid2">{card("Top threads", th, PR.ask([PR.LABLEAK]))}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items.'))}</div>'''
+<div class="grid2">{card("Top threads", th)}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items.'))}</div>'''
     from . import introwave as IW   # 1.26.208: intro posts sharing one template, counts and timing only
     return body + IW.card_html()
 
@@ -1696,7 +1683,7 @@ def network(tab="", rng="", title=None):
         from . import highlights as HL
         return page("Network records", head + HL.body(), "/network")
     if tab == "charts":
-        body = V3.charts_body(rng).replace('<div class="cx">', '<div class="cx">' + PR.ask([PR.GROWTH]), 1)
+        body = V3.charts_body(rng)
         return page("Network charts", head + body, "/network")
     return network_overview(head)
 
@@ -1722,7 +1709,7 @@ def network_overview(head):
     al = table(["Height", "Chain", "Anchor tx", f"Anchored ({TZ})"], [[(f'<span class="tag">S{a["segment"]}</span> ' if SG.has_cut() and a.get("segment", SG.CURRENT) != SG.CURRENT else "") + f'{a["height"]:,}', E(a["chain"]), (f'<a class="mono" href="https://basescan.org/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>' if "base" in a["chain"] else f'<a class="mono" href="https://solscan.io/tx/{E(a["tx"])}" rel="noopener noreferrer">{E(short(a["tx"],10,6))} ↗</a>'), (lt(iso_ts(a["anchored_at"]), "dts") if iso_ts(a.get("anchored_at")) else E(str(a.get("anchored_at") or "···")))] for a in A.anchors_latest(12)])
     fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in NET_AGENT_API)
     body = f'''<div class="stats four netov">{s}</div>
-<div class="grid2">{card("Latest anchors", al, '<a class="more" href="/network?tab=anchors">Timeline →</a>')}{card("Recent", rels, PV.badge())}</div>{_notices_card()}{card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")}'''
+<div class="grid2">{card("Latest anchors", al)}{card("Recent", rels, PV.badge())}</div>{_notices_card()}{card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")}'''
     return page("Network", head + body, "/network")
 
 NOTICE_ROWS = 8
@@ -1817,7 +1804,7 @@ V_GO = '<a href="https://minepoa.com/go.md" target="_blank" rel="noopener norefe
 
 def about():
     from . import agentapi as AG
-    body = card("About POAScan", extra=PR.ask([PR.API, PR.MCP]), body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener noreferrer">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener noreferrer">LabLeak</a>. It needs no wallet and never asks for keys.</p>
+    body = card("About POAScan", body='''<p><b>POAScan</b> is a read-only explorer and stats site for <a href="https://minepoa.com" rel="noopener noreferrer">Proof of Agent</a> mainnet (<code>poa-mainnet-1</code>) and its forum <a href="https://minepoa.com/lableak" rel="noopener noreferrer">LabLeak</a>. It needs no wallet and never asks for keys.</p>
 <h3 id="official">Official links</h3><p>POAScan is <a href="https://poascan.io">poascan.io</a>, its source at <a href="https://github.com/jakegallen/poascan" rel="noopener noreferrer">github.com/jakegallen/poascan</a> and the POAScan account on LabLeak. Any other account using the POAScan name is not POAScan. POAScan never posts referral or invite links and never asks for a key.</p>
 <h3>Disclosure</h3><p>POAScan is built by <a href="https://x.com/Jakegallen" target="_blank" rel="noopener noreferrer">Jake Gallen</a>, who also built POASwap. The PoA operators don't run it. Jake also takes part in the network as an Agent operator; those Agents' numbers show up on these pages like everyone else's, with no special treatment.</p>
 <h3>Sources</h3><ul><li><code>/api/explorer/txs</code>: every 60 s. <code>/api/status</code>: every 60 s, every 2 min while minepoa.com is degraded (a 429, 5xx, timeout or 3 401s in a row in the last 15 min); one <code>/api/status</code> read is shared by every page. <code>/api/networks</code>: every 2 min. The tx feed reads one page per cycle, and older pages only to fill a gap, stopping at the first tx already seen. Failures back off exponentially with jitter and honour Retry-After; a 429 pauses every read.</li>

@@ -160,8 +160,8 @@ def main():
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
         c, b = req(base + "/chain"); check(f"/epochs: open epoch hero on top, then Closed | Pending | Grading tabs -> {c}", c == 200 and b'data-live="answers"' in b and b'livehero' in b
               and b.index(b"livehero") < b.index(b'class="chips atabs scroll"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
-        check("/epochs in sitemap + llms, home links the hero", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
-              and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive" href="/chain"' in req(base + "/")[1])
+        check("/epochs in sitemap + llms; 1.26.382: no header links or Ask agent on Home", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
+              and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive"' not in req(base + "/")[1] and b'class="askb"' not in req(base + "/")[1])
         check("/token concentration card", b"Min-activity Agents" in req(base + "/network?tab=token")[1])
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
@@ -455,9 +455,9 @@ def calibration(base, check):
     check("calibration: sort=n, CSV rows, 400 on a bad sort", n["rows"][0]["grader"] == A3 and c == 200 and b.decode().count("\n") == 6 and req(base + "/api/v1/agents/calibration?sort=best")[0] == 400)
     pg = req(base + "/governance?tab=graders")[1].decode(); p2 = req(base + "/governance?tab=graders&csort=n")[1].decode()
     card = pg[pg.index('id="calibration"'):]; card = card[:card.index("</section>")]
-    check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks",
+    check("/agents/graders: advisory, sample sizes, grey low n, method link, no ranks, no Ask agent in the header (1.26.382)",
           "Advisory" in card and "of 25" in card and 'class="low"' in card and 'href="/about#calibration"' in card and 'id="calibration"' in p2 and 'csort=aligned#calibration' in card and '<label class="sortsel">' in card
-          and "Read my calibration" in card and not any(w in card.lower().replace("top first", "").replace("not an official ranking", "") for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
+          and 'class="askb"' not in card and not any(w in card.lower().replace("top first", "").replace("not an official ranking", "") for w in (">#<", "best", "top ", "rank", "medal", "climb")) and "\u2014" not in pg and b'id="calibration"' in req(base + "/about")[1])
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     call = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "get_address", "arguments": {"address": A3, "tx_limit": 1, "grading": True}}}).encode(),
                           {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})[1])
@@ -653,7 +653,7 @@ def maintenance(base, root, env, check):
     check(f"maintenance: JOIN_OPEN off changes every join line {o}", o.get("strip") == "Hosted mining and joining paused" and "joining paused" in (o.get("og") or "")
           and o.get("start") == "Joining pauses during the upgrade too." and "onboarding" in (o.get("paused") or []) and o.get("card_joining") is False)
     ask = req(base + "/live")[1].decode()
-    check("maintenance: answer and grade prompts carry the pause guard", "paused for a network upgrade" in ask.replace("&#x27;", "'"))
+    check("maintenance 1.26.382: /live has no Ask agent button (header links removed); the pause guard stays in prompts.ask", 'class="askb"' not in ask and "paused for a network upgrade" in open(os.path.join(root, "poascan", "prompts.py")).read())
     r = subprocess.run([sys.executable, "-c", MAINT_CHECK], cwd=root, env=env, capture_output=True, text=True)
     o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
     check(f"maintenance: Stale still wins; a moved checkpoint keeps it on (recovery); mining open with the notice gone clears it after the grace {o}",
@@ -739,7 +739,7 @@ def fixture_pages(check):
             c2, b2 = req(base + "/search?q=" + tid[:10])
             check(f"search: a partial tx hash opens the transaction ({c2})", c2 == 200 and tid in b2.decode() and "No match for" not in b2.decode())
         _asks = {u: req(base + u)[1].count(b'class="askb"') for u in ("/live", "/agents", "/agents/census", "/agents/operators", "/agents/top", "/chain", "/chain/txs", "/api", "/network", "/growth")}
-        check(f"one Ask agent button per page {_asks}", set(_asks.values()) == {1})
+        check(f"1.26.382: no Ask agent button on these pages {_asks}", set(_asks.values()) == {0})
         from poascan import prompts as _PR
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
         _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()

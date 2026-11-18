@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.381"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.382"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-16T00:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -1726,7 +1726,7 @@ def doc_ready(name):
     hit = _DOC.get(name); return bool(hit) and time.time() - hit[0] < DOC_MAX
 
 def api_page(page, card):
-    from . import ui as U, prompts as PR
+    from . import ui as U
     groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)
     def row(m, path, purpose, smp):
         url = BASE + (smp or path)
@@ -1742,7 +1742,7 @@ def api_page(page, card):
                f'<p class="dim small">Streamable HTTP. Spec: <a href="/openapi.json">openapi.json</a> · <a href="/llms.txt">llms.txt</a> · '
                f'<a href="/.well-known/mcp.json">mcp.json</a> · <a href="/api/reference">Interactive reference</a></p>')
     from . import oneclick as OC
-    body = ('<div class="sechead"><h1>API</h1>' + PR.ask([API_ASK]) + '</div>'
+    body = ('<div class="sechead"><h1>API</h1></div>'
             + '<p class="apin">Read-only. No keys. JSON; add <code>.csv</code> to lists. Cache and poll at most once a minute; bursts over 20 requests in 10 s get a 429.</p>'
             + f'<nav class="chips apijump" aria-label="Sections">{jump}</nav>'
             + card("Connect", connect + OC.html("poascan", MCP_URL), id="connect"))

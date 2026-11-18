@@ -3,7 +3,6 @@ import time, collections
 from html import escape as E
 from . import db, analytics as A, agents as G
 from .ui import *
-from . import prompts as PR
 from . import market as X   # POA | USD toggle; the price comes from the swap module's /api/v1/price
 from . import segments as SG   # lifetime close numbers render as segment-local labels (ep_label, ep_href)
 
@@ -220,7 +219,7 @@ def leaderboard_page(tab, apage, qs=None):
     cq = "&".join(x for x in ((f"sort={so}" if so else ""), ("dir=asc" if d == "asc" else "")) if x)
     title = dict(TABS)[tab]
     body = (f'<nav class="chips lbtabs scroll" aria-label="Rankings">{chips}</nav>'
-            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + PR.ask([PR.CLIMB, PR.GRADE_BETTER]) + f'<a class="more" href="/api/leaderboard/{key}.csv{"?" + cq.replace("&", "&amp;") if cq else ""}" download>CSV →</a>'
+            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + f'<a class="more" href="/api/leaderboard/{key}.csv{"?" + cq.replace("&", "&amp;") if cq else ""}" download>CSV →</a>'
                 + f'<a class="more" href="/api/v1/leaderboard/{key}{"?" + cq.replace("&", "&amp;") if cq else ""}">API →</a>'))
     if tab == "ai":
         from . import views as V

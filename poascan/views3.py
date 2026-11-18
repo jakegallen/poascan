@@ -5,7 +5,6 @@ from html import escape as E
 from . import segments as _SG
 from . import db, analytics as A, agents as G
 from .ui import *
-from . import prompts as PR
 from .ui import _ic
 
 def page(*a):
@@ -93,7 +92,7 @@ def unlock_calendar(nrows=12):
     return table([], rows, pri=(0, 2, 3), usd=(2, 3), sort=spec)
 
 def unlock_section():
-    return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), PR.ask([PR.UNLOCK, PR.SPENDABLE]), cls="")}'
+    return (f'<div id="unlocks"></div>{card(ICON_LOCK + "Circulating supply · minted to date", unlock_chart(), cls="")}'
             f'<div class="stats eight">{unlock_stats()}</div>'
             f'{card("Unlock calendar", unlock_calendar(), _X.usd_toggle() + "<a class=\'more\' href=\'/api/unlocks.csv\'>CSV →</a>", id="calendar")}')
 

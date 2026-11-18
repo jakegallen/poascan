@@ -444,7 +444,7 @@ def status_body():
     latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in d["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
     up = upgrade_line()
     body = f'''<p class="tabnote"><span class="tag">minepoa.com · our probes</span>{_board()}{data_asof()}</p>{up}{feeds_html(fd)}{routes_html()}<div class="stats eight">{st}</div>
-{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, PR.ask([PR.BACKOFF]), id="endpoints")}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it, id="incidents")}'''
+{card("Freshness", freshness_html())}{recon_card()}{card("Endpoints", tb, id="endpoints")}<div class="grid2">{card("Finality lag · 24h", lagc)}{card("Latency p50 · hourly", latc)}</div><div class="grid2">{card("Uptime · daily UTC", uptime_chart_html(), '<a class="more" href="/api/v1/uptime.csv">CSV →</a>')}{card("Uptime · 7d", uptime_table_html())}</div>{card("Incidents · 14d", it, id="incidents")}'''
     return body
 
 def data_asof():

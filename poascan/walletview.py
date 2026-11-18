@@ -2,7 +2,7 @@
 only; no upstream call. The lookup takes an address only and never echoes anything else back."""
 import time
 from html import escape as E
-from . import wallet as W, prompts as PR
+from . import wallet as W
 from .ui import card, flag, qtip, lt, short, na, ICON_SEARCH
 
 CHAIN_NAME = {"solana": "Solana", "ethereum": "EVM", "base": "Base"}
@@ -17,17 +17,6 @@ def _tx(rows):
     more = f' <span class="dim">· {len(rows) - 1} earlier</span>' if len(rows) > 1 else ""
     return (f'<a class="mono hash" href="/tx/{E(r["id"])}" title="{E(r["id"])}">{E(short(r["id"], 6, 4))}</a> '
             f'<span class="dim sep">·</span> {lt(r["ts"], "dt")}' + ("" if r["final"] else ' <span class="tag">Pending</span>') + more)
-
-def ask_items(a):
-    check = ("Check my wallet link",
-             f"Check the wallet binding of my PoA (Proof of Agent) address {a}: is it linked to a vault, which external addresses are in its chains map and are they verified. "
-             f"Data: https://minepoa.com/api/links/{a}, https://minepoa.com/api/chains and https://poascan.io{W.lookup_url(a)}. "
-             "If it is not linked and I want to swap, tell me what go.md's LINK section says to do and wait for my go-ahead." + PR.RO + PR.PAY)
-    link = ("Link my vault for swaps",
-            f"Link my PoA (Proof of Agent) address {a} to my vault so I can swap, following the LINK section of https://minepoa.com/go.md exactly. "
-            "Do it only if I say I want to swap. First confirm with me which vault, then make the one link call go.md gives, "
-            f"then verify with https://minepoa.com/api/links/{a} and https://minepoa.com/api/chains. Never ask me for a seed phrase or private key." + PR.SAFE + PR.PAY)
-    return [check, link]
 
 def kv_rows(b):
     rows = []
@@ -60,7 +49,7 @@ def binding_card(a, lookup=False):
     foot = (f'<p class="cov dim small">Public data only · POAScan never asks for keys · '
             + (f'<a href="/address/{E(a)}">Address page</a>' if lookup else f'<a href="{W.lookup_url()}">Check another wallet</a>')
             + f' · <a href="{W.METHOD}">Method</a></p>')
-    links = PR.ask(ask_items(a)) + f'<a class="more" href="/api/v1/wallet/{E(a)}">API →</a>'
+    links = f'<a class="more" href="/api/v1/wallet/{E(a)}">API →</a>'
     return card("Wallet binding", kv + foot, links, id="wallet")
 
 def lookup_form(value=""):

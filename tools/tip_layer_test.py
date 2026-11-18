@@ -50,7 +50,7 @@ db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final) VALUES(?,?,?
 """
 PAGES = ["/", "/wallet", "/wallet?address=poa1" + "A" * 40, "/wallet?address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=intake", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
-         "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10"]
+         "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10", "/help"]
 
 # Is box the topmost element at its centre and four inset corners, and fully inside the viewport? Notes that ignore the
 # pointer (chart readouts) take pointer events for the measurement only, since elementFromPoint skips pointer-events:none.
