@@ -61,9 +61,11 @@ def hero():
 def module(cur, body):
     return KIT.tabmod([(k, h, t, None) for k, h, t in TABS], cur, body, id="colony", label="Agents")
 
+H1 = {"rankings": "Agents", "models": "Models", "operators": "Operators", "community": "Community"}
+
 def page(cur, body, title="Agents"):
     V = _V()
-    return V.page(title, f'<div class="sechead"><h1 class="sr-only">Agents</h1></div>{hero()}{module(cur, body)}', "/agents")
+    return V.page(title, f'<div class="sechead"><h1 class="sr-only">{H1[cur]}</h1></div>{hero()}{module(cur, body)}', "/agents")
 
 # ---------------- Rankings ----------------
 def funnel_block(f):

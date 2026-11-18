@@ -2154,6 +2154,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:no-preference){.mv{animation:mvflash 1.4s var(--ease) 1}}
 @keyframes mvflash{0%{opacity:0;transform:translateY(3px)}30%{opacity:1}100%{opacity:1;transform:none}}
 .rstrip{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px}
-.rstrip i{display:block;height:34px;border-radius:3px;background:color-mix(in srgb,var(--gold) calc(var(--r,0) * 100%),var(--ink-2));min-width:0}
+.rstrip i{display:block;height:34px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--gold) calc(var(--r,0) * 100%),var(--ink-2));min-width:0}
 @media (prefers-reduced-motion:no-preference){.rstrip i{animation:rsin .5s var(--ease) both}.rstrip i:nth-child(odd){animation-delay:40ms}}
 @keyframes rsin{from{transform:scaleY(.2);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.ering .rp{transition:none}}
