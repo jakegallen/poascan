@@ -113,12 +113,15 @@ def epoch_rows(p, rb):
 
 def _answers(x):
     """Answers cell. Plain outcomes of the answers this close settled (they can be from earlier epochs), or Answered when an
-    answer was submitted here and nothing settled. A close that paid an earlier answer instead (none submitted in this epoch)
-    gets a Backlog paid tag on its own line, so only the exception is flagged."""
+    answer was submitted here and nothing settled. A close that settled an earlier answer instead (none submitted in this epoch)
+    gets a Backlog paid tag (it paid more than 0 POA) or a plain Backlog tag (it paid 0) on its own line, so only the exception is flagged."""
     parts = [(k.capitalize() if x[k] == 1 else f"{x[k]} {k}") for k in ("passed", "failed", "expired") if x[k]]
     outs = " · ".join(parts)
     if x.get("backlog") and not x["answered"]:
-        return '<span class="abk"><span class="tag warn" title="Paid from an earlier answer">Backlog paid</span>' + (f'<span class="dim small">{outs}</span>' if outs else "") + '</span>'
+        paid = (x.get("reward") or 0) > 0
+        tag = ('<span class="tag warn" title="Paid more than 0 POA for an earlier answer">Backlog paid</span>' if paid else
+               '<span class="tag" title="Settled an earlier answer, paid 0 POA">Backlog</span>')
+        return '<span class="abk">' + tag + (f'<span class="dim small">{outs}</span>' if outs else "") + '</span>'
     if outs: return outs
     return "Answered" if x["answered"] else '<span class="na">···</span>'
 

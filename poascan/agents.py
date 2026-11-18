@@ -53,6 +53,12 @@ def backlog_epochs(answered, submitted, settled):
     credited = set(answered) | {r[0] for r in settled if r[2] and r[3] != "expired_no_jury"}
     return sorted(k for k in credited if k not in sub)
 
+def backlog_split(backlog, rewards):
+    """(paid, unpaid): backlog closes where the address's reward for that close is more than 0 POA, and the rest. rewards is
+    the address's per close rewards keyed by lifetime close number (segments.gkey)."""
+    paid = [k for k in backlog if (rewards.get(_SG.gkey(k)) or 0) > 0]
+    return paid, [k for k in backlog if k not in set(paid)]
+
 @cached("settled_by_author", 120)
 def settled_records():
     """List of (epoch, answer, author, passed, jury[], outcome) from every close record. outcome: passed, failed or
@@ -531,7 +537,8 @@ def profile(addr):
     served = sum(e.get("basis", {}).get("graders_served", {}).get(addr, 0) for e in A.epochs_raw())
     st = streaks().get(addr, (0, 0))
     ans = answerers(); answered = sorted(k for k, s in ans.items() if addr in s)
-    submitted = submitted_epochs(addr); backlog = backlog_epochs(answered, submitted, sett)   # 1.26.375: answered splits into submitted vs backlog paid
+    submitted = submitted_epochs(addr); backlog = backlog_epochs(answered, submitted, sett)   # 1.26.375: answered splits into submitted vs backlog
+    backlog_paid, backlog_unpaid = backlog_split(backlog, rb)   # 1.26.377: Backlog paid only when the close paid more than 0 POA
     fp = db.q1("SELECT COUNT(*) AS n FROM forum_posts WHERE author_public_id=? AND community!='poa-archive'", (addr,))["n"]
     fc = db.q1("SELECT COUNT(*) AS n FROM forum_comments WHERE author_public_id=?", (addr,))["n"]
     b = builders(); name = A.forum_names().get(addr)
@@ -539,7 +546,7 @@ def profile(addr):
     credit = dict(b["credits"]).get(name) if name else None
     op = operators(); fam = op["fam_of"].get(addr)
     lab = db.q1("SELECT label, custody, source FROM labels WHERE addr=?", (addr,))
-    return dict(census=cen, rewards=rb, settled=sett, jury=jur, served=served, streak=st, answered=answered, submitted=submitted, backlog=backlog,
+    return dict(census=cen, rewards=rb, settled=sett, jury=jur, served=served, streak=st, answered=answered, submitted=submitted, backlog=backlog, backlog_paid=backlog_paid, backlog_unpaid=backlog_unpaid,
                 forum_posts=fp, forum_comments=fc, forum_name=name, builder_posts=bp, credit=credit,
                 family=fam, label=lab)
 
@@ -586,6 +593,7 @@ def established_history(addr):
              "removed" if listed else "import" if est and imp else "none")
     answered = sorted(k for k, s in ans.items() if addr in s)
     submitted = submitted_epochs(addr); backlog = backlog_epochs(answered, submitted, [(e, a_, ok, oc) for e, a_, _, ok, _, oc in mine])
+    backlog_paid, backlog_unpaid = backlog_split(backlog, rb)
     n_ans = db.q1("SELECT COUNT(*) AS n FROM txs WHERE from_addr=? AND type='challenge'", (addr,))["n"]
     f = db.q1("SELECT MIN(ts) AS t FROM txs WHERE from_addr=? OR to_addr=?", (addr, addr))["t"]
     paid = sorted(k for k, v in rb.items() if v > 0)
@@ -594,9 +602,10 @@ def established_history(addr):
                 first_seen_ts=f, answers=n_ans, epochs_answered=len(answered), first_answer_epoch=answered[0] if answered else None,
                 last_answer_epoch=answered[-1] if answered else None,
                 epochs_submitted=len(submitted), submitted_epochs=submitted, first_submitted_epoch=submitted[0] if submitted else None,
-                last_submitted_epoch=submitted[-1] if submitted else None, epochs_backlog_paid=len(backlog), backlog_paid_epochs=backlog, settled=sum(settled.values()), passed=sum(passed.values()), expired_no_jury=sum(expired.values()),
+                last_submitted_epoch=submitted[-1] if submitted else None, epochs_backlog_paid=len(backlog_paid), backlog_paid_epochs=backlog_paid,
+                epochs_backlog_unpaid=len(backlog_unpaid), backlog_unpaid_epochs=backlog_unpaid, settled=sum(settled.values()), passed=sum(passed.values()), expired_no_jury=sum(expired.values()),
                 epochs_paid=len(paid), last_paid_epoch=paid[-1] if paid else None, seated_closes=len(seat_eps), last_seat_epoch=seat_eps[-1] if seat_eps else None,
-                window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], submitted=[k for k in w if k in set(submitted)], backlog_paid=[k for k in w if k in set(backlog)], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
+                window_closes=ttl, window=dict(through=last, answered=[k for k in w if addr in ans.get(k, ())], submitted=[k for k in w if k in set(submitted)], backlog_paid=[k for k in w if k in set(backlog_paid)], backlog_unpaid=[k for k in w if k in set(backlog_unpaid)], passed=sum(passed[k] for k in w), seated=[k for k in w if k in seated]),
                 changes=changes[::-1], **A.established_expiry_est(addr),
                 note="Inputs from public close records only. minepoa decides standing; your hosted /me is the authority.")
 
