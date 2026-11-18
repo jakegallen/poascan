@@ -206,21 +206,39 @@ def bezel(o, now=None):
     return (f'<div class="bezel" data-start="{s or ""}" data-close="{c or ""}">'
             f'<div class="bzw" style="--f:{f:.5f}"><svg viewBox="0 0 712 22" preserveAspectRatio="none" aria-hidden="true">{ln}</svg><i class="bzs"></i><i class="bzh"></i></div>{ax}</div>')
 
-def bench_html(o, graders, ask, now=None, feed=()):
-    """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip). `ask`: the Ask button."""
+def ring_html(o, cd, now=None):
+    """1.26.376 Heartbeat: the open epoch as a ring that fills over its 6 hours (app.js tick drives .rp and --f, the same
+    .ring[data-close] hook the small rings use), six hour ticks, a head at now, and the numeral with the countdown inside.
+    Two soft ripples breathe out of it; app.js adds .beat when a new answer lands. Reduced motion keeps it still."""
+    now = time.time() if now is None else now
+    s, c, per = o.get("last_close"), o.get("est_close"), o.get("period") or 21600
+    f = min(1.0, max(0.0, (now - s) / per)) if s else 0
+    # six hour ticks and the 15 minute ticks between them as two dashed circles (2 elements, not 48 lines)
+    tk = ('<circle class="mk2" cx="120" cy="120" r="111" pathLength="96" stroke-dasharray=".25 1.75"/>'
+          '<circle class="hk" cx="120" cy="120" r="112.5" pathLength="96" stroke-dasharray=".5 15.5" stroke-dashoffset=".25"/>')
+    return (f'<div class="ring hring" data-start="{s or ""}" data-close="{c or ""}" style="--f:{f:.4f}">'
+            f'<svg viewBox="0 0 240 240" aria-hidden="true"><circle class="rt" cx="120" cy="120" r="104"/>'
+            f'<circle class="rp" cx="120" cy="120" r="104" pathLength="100" stroke-dasharray="{f * 100:.2f} 100"/>{tk}</svg>'
+            f'<i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>'
+            f'<div class="rc"><span class="lbl">Epoch{tip("epoch")}</span><b class="bn num" data-live="epoch">{o["epoch"]}</b>'
+            f'<div class="bcd"><span class="lbl">Closes in{tip("close")}</span>{cd}</div></div></div>')
+
+def bench_html(o, graders, ask, now=None, feed=(), score=True):
+    """The whole hero card body. `graders`: views.graders_tile (count, Halted or Unconfirmed tag, tooltip). `ask`: the Ask button.
+    1.26.376 Heartbeat: the ring on the left (it replaces the numeral row and the 72 tick bezel), the live strip and the trio on
+    the right. score=False leaves the strip and ticker out (the /api/summary field stays small)."""
     now = time.time() if now is None else now
     left = (o["est_close"] - now) if o.get("est_close") else None
     cd = f'<b class="cd" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
     pool = f'<b class="num" data-live="pool">{compact(o.get("pool"))}</b><small>POA</small>' if o.get("pool") else "<b>···</b>"
     leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for n, k in (("Answer", "a"), ("Attest", "t"), ("Seal", "s")))
+    trio = (f'<div class="trio"><div><span class="lbl">Answers{tip("answers")}</span><b class="num" data-live="answers">{intc(o.get("answers"))}</b></div>'
+            f'<div>{graders}</div><div><span class="lbl">Pool{tip("pool")}</span>{pool}</div></div>')
+    strip = score_html(now, ticker_html(feed, now)) if score else ""
     return (f'<div class="bench">'
-            f'<div class="bl"><div class="bh"><span class="lbl">Epoch{tip("epoch")}</span>{ask}<a class="more tklive" href="/chain">More →</a></div>'
-            f'<div class="bnum"><b class="bn num" data-live="epoch">{o["epoch"]}</b><div class="bcd"><span class="lbl">Closes in{tip("close")}</span>{cd}</div></div>'
-            f'{bezel(o, now)}'
-            f'<div class="trio"><div><span class="lbl">Answers{tip("answers")}</span><b class="num" data-live="answers">{intc(o.get("answers"))}</b></div>'
-            f'<div>{graders}</div><div><span class="lbl">Pool{tip("pool")}</span>{pool}</div></div></div>'
+            f'<div class="bl"><div class="bh">{ask}<a class="more tklive" href="/chain">More →</a></div>{ring_html(o, cd, now)}</div>'
             f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
-            f'<span class="legend">{leg}</span></div>{score_html(now, ticker_html(feed, now))}</div></div>')
+            f'<span class="legend">{leg}</span></div>{strip}{trio}</div></div>')
 
 def pour_html(last):
     """The latest close's pool, split into minted (gold) and burned (slag)."""

@@ -237,6 +237,22 @@ def pulse():
                 + (f" AND author NOT IN ({sc})" if skip else "") + " AND created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
     return dict(hottest=hottest, replies_today=rt, posts_today=pt)
 
+@cached("forum_reply_days", 3600)
+def reply_days(n=30):
+    """1.26.376 Heartbeat: public replies per UTC day for the last n days, [(day start ts, count)], oldest first, for the
+    Replies today sparkline on Home. Forum archive only (local tables), cached hourly, system authors left out."""
+    from .governance import FORUM_SKIP_AUTHORS
+    pub = list(_public())
+    if not pub: return []
+    skip = list(FORUM_SKIP_AUTHORS); now = time.time()
+    t0 = int(now // 86400 * 86400) - (n - 1) * 86400
+    pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    cskip = f" AND c.author NOT IN ({sc})" if skip else ""
+    rows = db.q(f"SELECT substr(c.created_at, 1, 10) AS d, COUNT(*) AS n FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
+                f"WHERE p.community IN ({pc}){cskip} AND c.created_at >= ? GROUP BY d", tuple(pub) + tuple(skip) + (time.strftime("%Y-%m-%d 00:00:00", time.gmtime(t0)),))
+    by = {r["d"]: int(r["n"] or 0) for r in rows}
+    return [(t0 + i * 86400, by.get(time.strftime("%Y-%m-%d", time.gmtime(t0 + i * 86400)), 0)) for i in range(n)]
+
 def _trim(title, n=80):
     """Shorten a thread title to at most n characters at a word boundary, ending in an ellipsis (never mid-word).
     Trailing punctuation left by the cut is dropped, so a cut after 'removed),' ends as 'removed' plus the ellipsis."""

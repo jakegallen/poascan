@@ -31,8 +31,8 @@ check("1.26.257: jury size from params panel_size, settle cap from econ.py (segm
       and ((f"settles up to {_cap:,} pending" in _lv) if _cap else ("every answer that reached quorum" in _lv)))
 check("the seal tip never says a sealed grade can be read", "sealed until the answer settles" in BN.TIP["lane_s"][1] and not re.search(r"\b(decode|read|reveal)", BN.TIP["lane_s"][1]))
 check("no referral codes in the tips", not re.search(r"poa1|ref=|invite", " ".join(x for _, _, x in BN.TIPS)))
-check("the bezel drawing stays hidden from screen readers, its ? does not", '<svg viewBox="0 0 712 22" preserveAspectRatio="none" aria-hidden="true">' in h
-      and re.search(r'<div class="bezel" data-start="[^"]*" data-close="[^"]*">', h) is not None)
+check("the ring drawing stays hidden from screen readers (1.26.376)", '<svg viewBox="0 0 240 240" aria-hidden="true">' in h
+      and re.search(r'<div class="ring hring" data-start="[^"]*" data-close="[^"]*"', h) is not None)
 check("no descriptive sub-lines under the stats (tips only)", re.search(r'<div class="trio">.*?</div></div></div>', h, re.S) is not None and "<p" not in re.search(r'<div class="trio">.*?</div></div></div>', h, re.S).group(0))
 check("Graders keeps its detail on the number (title)", re.search(r'data-live="graders" title="[^"]+"', h) is not None)
 ab = V.about() if callable(getattr(V, "about", None)) else ""
