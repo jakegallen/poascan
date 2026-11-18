@@ -207,3 +207,46 @@ CSV_FIELDS = ("range", "id", "title", "community", "author", "author_id", "repli
 def csv_rows(rows):
     """Flatten the most-replied rows from api()['rows'] for the generic CSV handler (mirrors graderpat.csv_rows)."""
     return [{k: r.get(k) for k in CSV_FIELDS} for r in rows]
+
+# ---------------------------------------------------------------- Homepage forum pulse (story queue item 5)
+@cached("forum_pulse", 3600)
+def pulse():
+    """Two terse facts for the homepage epoch/live section: the hottest public thread this epoch (most replies since the last
+    close) and replies today. Forum archive only (local tables), cached hourly, public communities, system authors left out."""
+    from .governance import FORUM_SKIP_AUTHORS
+    pub = list(_public())
+    if not pub: return dict(hottest=None, replies_today=0, posts_today=0)
+    skip = list(FORUM_SKIP_AUTHORS)
+    now = time.time()
+    ers = A.epochs_raw() or []
+    estart = max((int(e.get("ts") or 0) for e in ers), default=0) or int(now - 6 * 3600)   # this-epoch window = after the last close
+    es = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(estart))
+    t0 = time.strftime("%Y-%m-%d 00:00:00", time.gmtime(now))
+    pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    cskip = f" AND c.author NOT IN ({sc})" if skip else ""   # exclude bot/system replies from the counts
+    hot = db.q(f"SELECT p.id AS id, p.title AS title, p.community AS community, COUNT(c.id) AS n "
+               f"FROM forum_posts p JOIN forum_comments c ON c.post_id=p.id "
+               f"WHERE p.community IN ({pc}){cskip} AND c.created_at >= ? "
+               f"GROUP BY p.id ORDER BY n DESC, MAX(c.created_at) DESC LIMIT 1", tuple(pub) + tuple(skip) + (es,))
+    hottest = None
+    if hot and hot[0]["n"]:
+        r = hot[0]; hottest = dict(id=r["id"], title=(r["title"] or "")[:80], community=r["community"], replies=r["n"])
+    rt = (db.q1(f"SELECT COUNT(*) AS n FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
+                f"WHERE p.community IN ({pc}){cskip} AND c.created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
+    pt = (db.q1(f"SELECT COUNT(*) AS n FROM forum_posts WHERE community IN ({pc})"
+                + (f" AND author NOT IN ({sc})" if skip else "") + " AND created_at >= ?", tuple(pub) + tuple(skip) + (t0,)) or {}).get("n") or 0
+    return dict(hottest=hottest, replies_today=rt, posts_today=pt)
+
+def _plur(n, s="repl", one="y", many="ies"): return f"{intc(n)} {s}{one if n == 1 else many}"
+
+def pulse_line():
+    """One terse homepage line (empty string if nothing to show). Titles and counts only; links out to LabLeak + Topics."""
+    p = pulse()
+    if not p["hottest"] and not p["replies_today"]: return ""
+    bits = []
+    h = p["hottest"]
+    if h:
+        bits.append(f'hottest thread <a href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer">#{int(h["id"])} {E(h["title"])}</a> ({_plur(h["replies"])} this epoch)')
+    if p["replies_today"]:
+        bits.append(f'{_plur(p["replies_today"])} today')
+    return f'<p class="dim small fpulse">Forum pulse: {" · ".join(bits)} <a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
