@@ -801,7 +801,15 @@ function swap(url,push){var m=mod();if(!m||busy)return false;busy=1;var body=m.q
    after(m);clearTimeout(tm);m.classList.remove("kit-busy");busy=0}
   if(RM)put();else{body.classList.add("kit-out");setTimeout(put,140)}
  }).catch(function(){clearTimeout(tm);busy=0;W.location.href=url});return true}
-D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(".kit-tabs a[data-kit-tab]");if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+D.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest(".kit-tabs a[data-kit-tab],a[data-kit-sub]");if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
  if(a.getAttribute("aria-current")==="page"){e.preventDefault();return}
  if(swap(a.href,true))e.preventDefault()});
-W.addEventListener("popstate",function(){if(mod())W.location.reload()})})();
+W.addEventListener("popstate",function(){if(mod())W.location.reload()});
+/* chart toggle (kit-tg): two server rendered panes, the chip row shows one. */
+D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(".kit-tg [data-pane]");if(!b)return;var box=b.closest(".kit-blk")||b.parentNode.parentNode,k=b.getAttribute("data-pane");
+ box.querySelectorAll(".kit-tg [data-pane]").forEach(function(x){var on=x===b;x.classList.toggle("on",on);x.setAttribute("aria-pressed",on?"true":"false")});
+ box.querySelectorAll(".kit-pane").forEach(function(p){p.hidden=p.getAttribute("data-p")!==k});if(K.tips)K.tips()});
+/* the Agents ring numeral counts up once (not under reduced motion) */
+function cu(){D.querySelectorAll("[data-cu]").forEach(function(n){var v=+n.getAttribute("data-cu");n.removeAttribute("data-cu");if(RM||!(v>0))return;var t0=null,d=900;
+ function f(t){if(t0===null)t0=t;var p=Math.min(1,(t-t0)/d),q=1-Math.pow(1-p,3);n.textContent=Math.round(v*q).toLocaleString("en-US");if(p<1)W.requestAnimationFrame(f)}W.requestAnimationFrame(f)})}
+cu()})();
