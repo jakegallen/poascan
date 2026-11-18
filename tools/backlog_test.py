@@ -47,9 +47,10 @@ check("totals add up: submitted + backlog paid >= answered, and the sum equals t
 
 rows = {x["g"]: x for x in PF.epoch_rows(p, {})}
 cell = {g: PF._answers(x) for g, x in rows.items()}
-check("epoch list: submitted epochs carry the Answered tag", all("Answered" in cell[SG.gkey(e)] for e in (1, 3, 4)))
+check("epoch list: an answered epoch with nothing settled reads Answered, never Backlog paid", "Answered" in cell[SG.gkey(4)] and "Backlog" not in cell[SG.gkey(4)])
+check("epoch list: answered epochs with settled outcomes show the outcomes, no backlog tag", all("Backlog" not in cell[SG.gkey(e)] for e in (1, 3, 4)) and "Failed" in cell[SG.gkey(3)])
 check("epoch list: backlog epochs carry Backlog paid and never Answered", all("Backlog paid" in cell[SG.gkey(e)] and "Answered" not in cell[SG.gkey(e)] for e in (2, 5)))
-check("epoch list: outcomes still shown next to the tag", "Passed" in cell[SG.gkey(2)] and "Failed" in cell[SG.gkey(3)])
+check("epoch list: outcomes still shown under the Backlog paid tag", "Passed" in cell[SG.gkey(2)] and "Passed" in cell[SG.gkey(5)])
 check("epoch list: no em or en dash", all("\u2014" not in c and "\u2013" not in c for c in cell.values()))
 
 el = V._elist(list(range(1, 31)))

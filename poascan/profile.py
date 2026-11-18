@@ -112,13 +112,15 @@ def epoch_rows(p, rb):
     return [out[g] for g in sorted(out, reverse=True)]
 
 def _answers(x):
-    """Answers cell: an Answered tag when an answer was submitted in this epoch, a Backlog paid tag when the close paid an
-    earlier answer instead, then the outcomes of the answers this close settled (those can be from earlier epochs)."""
+    """Answers cell. Plain outcomes of the answers this close settled (they can be from earlier epochs), or Answered when an
+    answer was submitted here and nothing settled. A close that paid an earlier answer instead (none submitted in this epoch)
+    gets a Backlog paid tag on its own line, so only the exception is flagged."""
     parts = [(k.capitalize() if x[k] == 1 else f"{x[k]} {k}") for k in ("passed", "failed", "expired") if x[k]]
-    tag = ('<span class="tag ok">Answered</span>' if x["answered"] else
-           '<span class="tag warn" title="Paid from an earlier answer">Backlog paid</span>' if x.get("backlog") else "")
-    if parts: return (tag + " " if tag else "") + " · ".join(parts)
-    return tag or '<span class="na">···</span>'
+    outs = " · ".join(parts)
+    if x.get("backlog") and not x["answered"]:
+        return '<span class="abk"><span class="tag warn" title="Paid from an earlier answer">Backlog paid</span>' + (f'<span class="dim small">{outs}</span>' if outs else "") + '</span>'
+    if outs: return outs
+    return "Answered" if x["answered"] else '<span class="na">···</span>'
 
 def epochs_card(rows):
     """Epoch by epoch history: Epoch, Reward, Answers (passed, failed, expired with no jury), Jury (aligned / seats)."""
