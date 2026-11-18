@@ -150,7 +150,7 @@ def reward_tracker(a, p):
         else: vs, vss = ("···", "off")
         step = lambda st, lab, val: f'<div class="rs {st}"><i></i><b>{lab}</b><span>{val}</span></div>'
         rows.append(f'<div class="rtr"><a class="rte" href="{_SG.ep_href(k)}">{_SG.ep_label(k)}</a><div class="rsteps">'
-                    + step("ok" if sub else ("dimx" if k in backlog and k < n else "off" if k < n else "cur"), "Submitted", "yes" if sub else ("backlog paid" if k in backlog and k < n else ("grader only" if r else "···") if k < n else "…"))
+                    + step("ok" if sub else ("dimx" if k in backlog and k < n else "off" if k < n else "cur"), "Submitted", "yes" if sub else (("backlog paid" if r else "backlog") if k in backlog and k < n else ("grader only" if r else "···") if k < n else "…"))
                     + step(gs, "Graded", gr) + step(ps, "Paid", pd) + step(vss, "Vesting", vs) + '</div></div>')
     # schedule
     nxt = sum(v / vest for k, v in rb.items() if k <= n - 1 and n + 1 - k <= vest)
