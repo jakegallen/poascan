@@ -11,10 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.383] - 2026-11-18
+## [1.26.384] - 2026-11-18
 
 ### Changed
 - Chain consolidation (phase 0 and 1): the shared page kit (kit.py: hero, KPI card, tab module, motion with reduced motion) and Chain as one module under the Heartbeat hero. Epochs, Txs, Pending and Grading are tabs that swap in place; each tab is still its own URL. The For agents card, the chain sub-chips and the header CSV and API links are gone. Cadence and the slash log sit inside the module.
+
+## [1.26.383] - 2026-11-18
+
+### Added
+- Chain and Network data for the page consolidation (POASCAN ASK on #147), additive, archive-only, counts-only, no route removed: `GET /api/v1/chain/closes?limit=24` (last closes with backlog, awaiting_graders, passed, failed, burn_pct for the KPI sparklines); `/api/v1/summary` gains `closing_in` and `open_epoch.answers_so_far` / `graders_so_far`; `GET /api/v1/chain/pending-by-origin` (pending answers per origin epoch by seal count 0 to 3); `GET /api/v1/network/anchors-eta` (next anchor ETA and cadence over the last 24 closes). Added to /api/reference.
 
 ## [1.26.382] - 2026-11-18
 

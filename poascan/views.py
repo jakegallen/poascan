@@ -1155,16 +1155,17 @@ def cohort_card(state="unsealed"):
 EP_TABS = [("closed", "Closed"), ("pending", "Pending"), ("grading", "Grading")]
 
 def chain_hero():
-    """Chain's hero (1.26.383): Home's Bench over a KPI strip of the latest close, each with its last 24 closes as a sparkline."""
-    ep = A.epoch_rows(); kp = ""
-    if ep:
-        last = ep[-1]; w = ep[-24:]
-        sk = lambda f: [(r["close_ts"], f(r)) for r in w]
-        kp = "".join([KIT.kpi("Backlog", intc(last["pending"]), sk(lambda r: r["pending"])),
-                      KIT.kpi("Awaiting graders", intc(last["pending_empty_panel"]), sk(lambda r: r["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
-                      KIT.kpi("Passed", intc(last["settled_passed"]), sk(lambda r: r["settled_passed"])),
-                      KIT.kpi("Failed", intc(last["settled_failed"]), sk(lambda r: r["settled_failed"]), tip="Failed by a jury at the latest close"),
-                      KIT.kpi("Burned", f'<span class="num red">{float(last.get("burn_pct") or 0):.1f}%</span>', sk(lambda r: float(r.get("burn_pct") or 0)), tip=f'Burned share of the E{last["epoch"]} pool')])
+    """Chain's hero (1.26.384): Home's Bench over a KPI strip of the latest close, each with its last 24 closes as a sparkline.
+    The numbers are Build's /api/v1/chain/closes set (A.chain_closes, #147 ask 1a), the same function the endpoint serves."""
+    cl = A.chain_closes(24); kp = ""
+    if cl:
+        last = cl[-1]
+        sk = lambda k: [(r["close_ts"], r[k] or 0) for r in cl if r.get("close_ts")]
+        kp = "".join([KIT.kpi("Backlog", intc(last["backlog"]), sk("backlog")),
+                      KIT.kpi("Awaiting graders", intc(last["awaiting_graders"]), sk("awaiting_graders"), tip="Pending answers with no grading panel assigned yet"),
+                      KIT.kpi("Passed", intc(last["passed"]), sk("passed")),
+                      KIT.kpi("Failed", intc(last["failed"]), sk("failed"), tip="Failed by a jury at the latest close"),
+                      KIT.kpi("Burned", f'<span class="num red">{float(last.get("burn_pct") or 0):.1f}%</span>', sk("burn_pct"), tip=f'Burned share of the E{last["epoch"]} pool')])
     return KIT.pulse(tracker_html(), kp)
 
 def ledger(cur, body, toolbar=""):

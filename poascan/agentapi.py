@@ -8,7 +8,7 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.383"  # API, MCP server, server.json and agent card share this version
+VERSION = "1.26.384"  # API, MCP server, server.json and agent card share this version
 RELEASED_TS = "2026-11-16T00:20:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
@@ -125,7 +125,8 @@ def t_summary(args):
                 circulating_basis=sp.get("circulating_basis"), locked_confirmed=sp.get("locked_confirmed"), carried_supply=sp.get("carried_supply"), excluded_rewards=sp.get("excluded_rewards"),
                 holders=st.get("holders"), agents=st.get("agents_joined"), accounts=st.get("agents_joined"), epochs_closed=st.get("epochs_closed"),
                 height=nw.get("height"), checkpoint_height=nw.get("checkpoint_height"),
-                open_epoch=o, last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
+                open_epoch=o, closing_in=o.get("closing_in"),   # POASCAN data ask 1b: seconds to the next close + open_epoch.answers_so_far/graders_so_far
+                last_epoch={k: last.get(k) for k in ("epoch", "close_ts", "pool", "minted", "burned", "burn_pct", "paid")},
                 segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(),
                 open_swap_offers=sw.get("open_offers") or 0, poa_on_offer=(sw.get("market") or {}).get("poa_on_offer") or 0, swaps=sw, concentration=A.concentration(), txs_indexed=A.tx_counts()["n"], **_joins(), url=BASE + "/")
 
@@ -1213,6 +1214,9 @@ def openapi():
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
+        "/api/chain/closes": _op("Last N closes for the Chain KPI sparklines", ANY, [_p("limit", "closes to return, 1 to 96 (default 24)", {"type": "integer", "default": 24}, "query", False)], oid="chainCloses", tag="epochs", desc="closes: oldest first, each {epoch, close_ts, backlog, awaiting_graders, passed, failed, burn_pct}. From the close records, counts only, no upstream read."),
+        "/api/chain/pending-by-origin": _op("Pending answers per origin epoch bucketed by seal count 0 to 3", ANY, oid="pendingByOrigin", tag="epochs", desc="rows: {origin_epoch, seal_0, seal_1, seal_2, seal_3}, from the same close-record seal histogram the Pending tab renders. Counts only, never a pending score or a decoded seal."),
+        "/api/network/anchors-eta": _op("Next anchor ETA and recent anchor cadence over the last 24 closes", ANY, oid="anchorsEta", tag="meta", desc="last_anchor_ts, next_anchor_eta, cadence_s (median gap between distinct anchor heights), cadence_mean_s, anchors_in_window, window_start_ts, closes_window. From the anchors table, no upstream read."),
         "/api/pending-by-epoch": _op("Pending answers by origin epoch: count, oldest age, stale flag, seal histogram, expiry, settlement origin, growth and silent drops", {"$ref": "#/components/schemas/PendingByEpoch"}, oid="pendingByEpoch",
                                      desc="Carried-forward answers come from basis.pending of the latest close record; current-epoch answers are those archived since the last close. Seals are distinct graders in each row's grades list (from params.pending_merge_from_epoch on); before that, a short row's panel length is a lower bound and appeal rows are unknown. Expiry close = origin epoch + params.pending_ttl_epochs; its time is an estimate from the last close plus auto_epoch_seconds per close. Method: https://poascan.io/about#pending"),
         "/api/clusters": _op("Cluster signals: groups of Agents sharing near-duplicate answers, synchronized timing, a vault link or funding. Signals, not findings", ANY, [_p("signal", "filter to one signal type", {"type": "string", "enum": ["near-duplicate answers", "synchronized timing", "shared vault link", "shared funding"]}, "query", False)], oid="clusterSignals", tag="agents"),
