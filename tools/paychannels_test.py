@@ -366,8 +366,11 @@ check("version is at least 1.26.384 and the changelog records the Chain consolid
       _ver >= (1, 26, 384) and "## [1.26.384]" in cl and "Chain consolidation" in cl
       and not any(c in cl.split("## [1.26.384]")[1].split("## [")[0] for c in dash))
 check("version is 1.26.385 and the changelog records the Playwright cache CI fix",
-      _ver == (1, 26, 385) and "## [1.26.385]" in cl and "Playwright" in cl
+      _ver >= (1, 26, 385) and "## [1.26.385]" in cl and "Playwright" in cl
       and not any(c in cl.split("## [1.26.385]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.387 and the changelog records the Home DOM trim and the Cadence scale cap",
+      _ver == (1, 26, 387) and "## [1.26.387]" in cl and "Cadence" in cl and "two paths" in cl
+      and not any(c in cl.split("## [1.26.387]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
