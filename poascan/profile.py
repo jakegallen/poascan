@@ -97,11 +97,13 @@ def epoch_rows(p, rb):
     (segments.gkey) so rewards and the selected segment's close records line up. Only what the close records hold."""
     from . import segments as SG
     out = {}
-    def r(g): return out.setdefault(g, dict(g=g, reward=None, passed=0, failed=0, expired=0, answered=False, seats=0, aligned=0))
+    def r(g): return out.setdefault(g, dict(g=g, reward=None, passed=0, failed=0, expired=0, answered=False, backlog=False, seats=0, aligned=0))
     for g, v in rb.items(): r(int(g))["reward"] = v
-    for e in p.get("answered") or []: r(SG.gkey(e))["answered"] = True
+    # 1.26.375: answered means an answer was submitted in that epoch (a challenge tx); a close that paid an earlier answer is backlog
+    for e in p.get("submitted") or []: r(SG.gkey(e))["answered"] = True
+    for e in p.get("backlog") or []: r(SG.gkey(e))["backlog"] = True
     for e, _ans, ok, oc in p.get("settled") or []:
-        x = r(SG.gkey(e)); x["answered"] = True
+        x = r(SG.gkey(e))
         if oc == "expired_no_jury": x["expired"] += 1
         elif ok: x["passed"] += 1
         else: x["failed"] += 1
@@ -110,8 +112,14 @@ def epoch_rows(p, rb):
     return [out[g] for g in sorted(out, reverse=True)]
 
 def _answers(x):
+    """Answers cell. Plain outcomes of the answers this close settled (they can be from earlier epochs), or Answered when an
+    answer was submitted here and nothing settled. A close that paid an earlier answer instead (none submitted in this epoch)
+    gets a Backlog paid tag on its own line, so only the exception is flagged."""
     parts = [(k.capitalize() if x[k] == 1 else f"{x[k]} {k}") for k in ("passed", "failed", "expired") if x[k]]
-    if parts: return " · ".join(parts)
+    outs = " · ".join(parts)
+    if x.get("backlog") and not x["answered"]:
+        return '<span class="abk"><span class="tag warn" title="Paid from an earlier answer">Backlog paid</span>' + (f'<span class="dim small">{outs}</span>' if outs else "") + '</span>'
+    if outs: return outs
     return "Answered" if x["answered"] else '<span class="na">···</span>'
 
 def epochs_card(rows):
