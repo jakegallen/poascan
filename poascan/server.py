@@ -396,6 +396,10 @@ def api(path, qs):
         if len(q[0]) > 120: raise BadRequest("q is at most 120 characters")
         return resolve(q[0].strip()), False
     if path == "/api/anchors": return A.anchors_latest(500, SG.selected() if SG.archived() else None), True   # current segment first; ?segment=1 keeps segment 1
+    if path == "/api/network/route-buckets":   # POASCAN data ask 4c: per-minute open/halted/down from route_checks
+        return A.route_buckets((qs.get("route") or [None])[0], (qs.get("minutes") or ["60"])[0]), False
+    if path == "/api/network/events":   # POASCAN data ask 4b: merged anchor|release|notice|record feed, labels + urls only
+        return A.network_events((qs.get("type") or [None])[0], (qs.get("limit") or ["20"])[0]), False
     if path == "/api/params": return _params_mirror(), False   # slot-exempt (_is_params); last-good blob copy, emission keys included
     if path == "/api/chains":   # address map; upstream_notice is added only while minepoa has /api/chains paused (keys stay addresses otherwise)
         d = dict(db.get_blob("chains")[0] or {}); n = chains_notice()

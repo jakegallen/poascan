@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.387] - 2026-11-18
+
+### Added
+- Network data for the page consolidation (POASCAN ASK on #147), additive, archive-only, counts-only, no route removed: `GET /api/v1/network/events?type=&limit=` (one merged events feed, newest first, of anchor, release, notice and record, labels and links only, no bodies, from the anchors table and the release/notice blobs POAScan already mirrors); `GET /api/v1/network/route-buckets?route=&minutes=` (per-UTC-minute open/halted/down counts from the route-check probes, default 60 min, cap 180). Added to /api/reference.
+
+### Fixed
+- Data ask 1b completion: the REST `/api/v1/summary` snapshot now carries `closing_in` at top level and `answers_so_far` / `graders_so_far` / `closing_in` inside its open-epoch block (they shipped on MCP get_summary in 1.26.383 but the homepage snapshot dropped them).
+
 ## [1.26.386] - 2026-11-18
 
 ### Added
