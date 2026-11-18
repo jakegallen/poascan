@@ -791,7 +791,9 @@ def address(a):
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
         fa = "".join(f'<a class="chip" href="/api/v1/address/{E(a)}{sfx}">{t}</a>' for t, sfx in AGENT_API_CHIPS)
+        from . import topics as _TOP   # story queue item 2: this Agent's public forum activity (empty string when none)
         main = (PF.overview(a, srow, [(SG.ep_label(k), [v]) for k, v in eps], GV.score_tip(), PF.epoch_rows(p, rb))
+                + _TOP.agent_forum_card(a)
                 + f'<nav class="chips fachips" aria-label="For agents"><a class="lbl" href="/api#agents">For agents</a>{fa}</nav>'
                 + __import__("poascan.walletview", fromlist=["x"]).binding_card(a) + established_card(a)
                 + '<details class="adetail"><summary class="chip">Details</summary>' + card("Profile", warn + kvh, PR.ask([PR.addr_rewards(a), PR.addr_send(a), PR.addr_invites(a)]) + f'<a class="more" href="https://minepoa.com/api/explorer/address/{E(a)}" rel="nofollow noopener noreferrer">Source JSON ↗</a>')
