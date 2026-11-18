@@ -4,6 +4,7 @@ from . import db, analytics as A, agents as G, indexer as I
 from . import segments as SG, outcome as OC, econ as EC
 from .ui import *
 from . import ui as _ui
+from . import kit as KIT   # shared page kit: hero, KPI card, tab module (kit.py)
 from . import views2 as V2
 from . import market as X   # swap data via the swap module's API: ≈$, Token price figures, tx swap rows
 from . import views3 as V3
@@ -362,7 +363,7 @@ def home():
     burn = f'<span class="burnp" title="Burned share of the E{ep[-1]["epoch"]} pool"><b class="num">{float(ep[-1].get("burn_pct") or 0):.1f}%</b> burned</span>' if ep else ""
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>
 <section class="shero">{search_form("hsearch", "hero")}</section>
-<section id="tracker" class="card benchc hpulse" aria-label="Open epoch">{tracker_html()}<section class="stats four kpis" role="group" aria-label="Headline numbers" data-asof="{asof}"{' data-stale="1"' if why else ''}>{kpis}</section></section>
+{KIT.pulse(tracker_html(), kpis, attrs=f' data-asof="{asof}"' + (' data-stale="1"' if why else ''))}
 <div class="grid2 hgrid">
 {card(ICON_FEED + 'Stream', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed" data-n="10">{feed_rows(10)}</div>', cls="assay")}
 {card(ICON_CUBE + "Epochs", home_answers_mini() + home_open_row(A.open_epoch()) + f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', burn + _ui.pop_btn("answers", "Answers per epoch"), cls="epochc")}
@@ -413,8 +414,9 @@ def txs(qs):
     pages = max(1, math.ceil(total / per))
     q = (f"&type={E(typ)}" if typ else "") + sq
     pg = f'<div class="pager"><a href="?page=1{q}">« First</a><a href="?page={max(1,page_n-1)}{q}">‹ Prev</a><span>Page {page_n:,} of {pages:,}</span><a href="?page={min(pages,page_n+1)}{q}">Next ›</a><a href="?page={pages}{q}">Last »</a></div>'
-    body = card(f"Transactions · {total:,}", f'<div class="chips scroll">{tabs}</div>{_txs_behind()}{tb}{pg}', f'<a class="more" href="/api/txs.csv?type={E(typ)}">CSV →</a>')
-    return page("Transactions", '<div class="sechead"><h1 class="sr-only">Transactions</h1>' + chain_tabs("/chain/txs") + '</div>' + body, "/txs")
+    tools = f'<span class="kit-n num" title="Transactions">{total:,}</span>'
+    body = f'<div class="chips scroll">{tabs}</div>{_txs_behind()}{tb}{pg}'
+    return page("Transactions", f'<div class="sechead"><h1 class="sr-only">Chain</h1></div>{chain_hero()}{ledger("txs", body, tools)}', "/txs")
 
 def _tx_cols():
     from . import scoresort as SS
@@ -1152,6 +1154,26 @@ def cohort_card(state="unsealed"):
 
 EP_TABS = [("closed", "Closed"), ("pending", "Pending"), ("grading", "Grading")]
 
+def chain_hero():
+    """Chain's hero (1.26.383): Home's Bench over a KPI strip of the latest close, each with its last 24 closes as a sparkline."""
+    ep = A.epoch_rows(); kp = ""
+    if ep:
+        last = ep[-1]; w = ep[-24:]
+        sk = lambda f: [(r["close_ts"], f(r)) for r in w]
+        kp = "".join([KIT.kpi("Backlog", intc(last["pending"]), sk(lambda r: r["pending"])),
+                      KIT.kpi("Awaiting graders", intc(last["pending_empty_panel"]), sk(lambda r: r["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
+                      KIT.kpi("Passed", intc(last["settled_passed"]), sk(lambda r: r["settled_passed"])),
+                      KIT.kpi("Failed", intc(last["settled_failed"]), sk(lambda r: r["settled_failed"]), tip="Failed by a jury at the latest close"),
+                      KIT.kpi("Burned", f'<span class="num red">{float(last.get("burn_pct") or 0):.1f}%</span>', sk(lambda r: float(r.get("burn_pct") or 0)), tip=f'Burned share of the E{last["epoch"]} pool')])
+    return KIT.pulse(tracker_html(), kp)
+
+def ledger(cur, body, toolbar=""):
+    """Chain's one module: Closed, Txs, Pending and Grading as tabs (kit.tabmod); each tab is its own URL and renders alone."""
+    ep = A.epoch_rows(); epa = A.epoch_rows_all(); pend = A.pending_by_epoch()
+    closed = len(epa) - len(ep) + max(len(ep), int(A.status().get("epochs_closed") or 0))
+    tabs = [("closed", "/chain", "Epochs", closed), ("txs", "/chain/txs", "Txs", None), ("pending", "/chain?tab=pending", "Pending", pend.get("total")), ("grading", "/chain?tab=grading", "Grading", None)]
+    return KIT.tabmod(tabs, cur, body, toolbar, id="ledger", label="Chain")
+
 def live_hero():
     """The open epoch: ring, countdown and live counts. Top of /epochs (it replaced /live)."""
     o = A.open_epoch(); now = time.time(); left = (o["est_close"] - now) if o["est_close"] else None
@@ -1189,13 +1211,11 @@ def epochs_page(qs=None):
     """Open epoch hero, then Closed (history, cohorts, cadence), Pending (the queue, was /live) and Grading (was /grading) tabs.
     ?segment=1 shows an archived segment's closes only (no open epoch, queue or grading: those belong to the live segment)."""
     if SG.archived(): return epochs_archived()
-    qs = qs or {}; tab = (qs.get("tab") or [""])[0]; tab = tab if tab in dict(EP_TABS) else ("closed" if not qs.get("state") else "closed")
-    ep = A.epoch_rows(); pend = A.pending_by_epoch(); epa = A.epoch_rows_all()   # 1.26.301: History and Cadence span every segment
-    cnt = {"closed": len(epa) - len(ep) + max(len(ep), int(A.status().get("epochs_closed") or 0) if not SG.archived() else 0), "pending": pend.get("total")}
-    chips = "".join(f'<a href="/chain{"" if k == "closed" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}'
-                    + (f' <span class="dim">{cnt[k]:,}</span>' if cnt.get(k) is not None else "") + '</a>' for k, t in EP_TABS)
+    qs = qs or {}; tab = (qs.get("tab") or [""])[0]; tab = tab if tab in dict(EP_TABS) else "closed"
+    ep = A.epoch_rows(); epa = A.epoch_rows_all()   # 1.26.301: History and Cadence span every segment
+    tools = ""
     if tab == "pending":
-        o = A.open_epoch(); inner = pending_card()
+        inner = pending_body()
     elif tab == "grading":
         inner = grading()
     else:
@@ -1210,11 +1230,10 @@ def epochs_page(qs=None):
             unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")
         live = not (qs.get("sort") or qs.get("dir"))   # new closes are prepended live only in the default order (newest first)
         hist = f'<div data-liverows="closes" data-keep="all" data-top="{ep[-1]["epoch"] if ep else ""}">{hist}</div>' if live else hist
-        inner = (card("History", hist, X.usd_toggle() + '<a class="more" href="/api/epochs.csv">CSV →</a>', id="history")
-                 + (cohort_card((qs.get("state") or [""])[0]) if qs.get("state") else "")   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
-                 + card("Cadence", (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + note("Target 21,600 s (6 h) per params.auto_epoch_seconds."))
-                 + card("For agents", '<ul class="fagents"><li><a href="/chain?state=unsealed#cohorts">Cohorts</a><a class="mono dim" href="/api/v1/cohorts">/api/v1/cohorts</a></li><li><a href="/chain">Closes</a><a class="mono dim" href="/api/v1/epochs">/api/v1/epochs</a></li></ul>', '<a class="more" href="/api#chain">API →</a>', id="for-agents"))
-    body = f'<div class="sechead"><h1 class="sr-only">Epochs</h1>{chain_tabs("/chain")}{seg_tabs()}</div>{cut_note()}{live_hero()}<nav class="chips atabs scroll" aria-label="Epochs">{chips}</nav>{inner}'
+        inner = hist + '<div class="kit-sec"><span class="lbl">Cadence</span>' + (cad if ep else na(unl if nc else f"No closes in {SG.label(SG.CURRENT)} yet.")) + "</div>"
+        tools = X.usd_toggle()
+    coh = cohort_card((qs.get("state") or [""])[0]) if tab == "closed" and qs.get("state") else ""   # 1.26.296: Cohorts at /api/v1/cohorts (and ?state= links still render it)
+    body = f'<div class="sechead"><h1 class="sr-only">Chain</h1></div>{cut_note()}{chain_hero()}{ledger(tab, inner, tools)}{coh}'
     return page({"pending": "Pending answers", "grading": "Grading"}.get(tab, "Epochs"), body, "/epochs")
 
 def seg_about():
@@ -1610,28 +1629,20 @@ def social_page():
 
 def grading():
     ep = A.epoch_rows(); last = ep[-1] if ep else None; p = A.params()
-    if not last: return card("Backlog", na("No close records yet."))
+    if not last: return na("No close records yet.")
     origins = sorted({k for r in ep for k in r["pending_by_origin"]})
     keep = origins[-5:]; old = origins[:-5]   # last 5 origin epochs each get a color, earlier ones share "Older"
     row = lambda r: ([sum(r["pending_by_origin"].get(k, 0) for k in old)] if old else []) + [r["pending_by_origin"].get(k, 0) for k in keep]
     back = bars([(f"E{r['epoch']}", row(r)) for r in ep], legend=(["Older"] if old else []) + [f"from E{k}" for k in keep],
                 colors=("mute", "gold", "steel", "copper", "bone", "ember", "verd"))
     sett = bars([(f"E{r['epoch']}", [r["settled_passed"], r["settled_failed"], r["settled_expired_no_jury"]]) for r in ep], legend=["Passed", "Failed", "Expired, no jury"], colors=("verd", "ember", "mute"))
-    sk = lambda f: [(r["close_ts"], f(r)) for r in ep]
-    s = "".join([spark_in(stat("Backlog", intc(last["pending"])), sk(lambda r: r["pending"])), stat("Appeals open", intc(last["pending_appeal"])),
-                 stat("Awaiting graders", intc(last["pending_empty_panel"]), tip="Pending answers with no grading panel assigned yet"),
-                 spark_in(stat("Decided", intc(last["settled"]), tip="Answers whose grading finished at the latest close (settled)"), sk(lambda r: r["settled"])),
-                 spark_in(stat("Passed", intc(last["settled_passed"])), sk(lambda r: r["settled_passed"])),
-                 spark_in(stat("Failed", intc(last["settled_failed"]), tip="Failed by a jury at the latest close"), sk(lambda r: r["settled_failed"])),
-                 spark_in(stat("Expired", intc(last["settled_expired_no_jury"]), tip="Expired, no jury: settled at the latest close with no jurors"), sk(lambda r: r["settled_expired_no_jury"])),
-                 spark_in(stat("Grades served", intc(last["grades"])), sk(lambda r: r["grades"])), spark_in(stat("Jurors", intc(last["graders"]), tip="Agents who graded at the latest close"), sk(lambda r: r["graders"]))])
     pard = p.get("slash_pardons") or {}
     pn = lambda r: len(pard.get(str(r["epoch"]), [])); tot = sum(r["slashed"] for r in ep); unp = tot - sum(pn(r) for r in ep)
-    s += stat("Slashes", f'<span class="num{" red" if unp > 0 else ""}">{tot}</span>')   # red only when some were not pardoned
-    st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="{"red" if r["slashed"] > pn(r) else ""}">{r["slashed"]}</span>', pn(r), r["audit_sampled"], r["established_removed"]] for r in ep])
-    body = f'''<div class="stats five">{s}</div><div class="grid2">{card("By origin", back + note(f'Ungraded answers carry forward up to {p.get("pending_ttl_epochs","?")} epochs. Panel size {p.get("panel_size","?")}, quorum {p.get("grade_quorum","?")}.'))}
-{card("Per close", sett)}</div>{card("Slash log", st)}'''
-    return body
+    fg = KIT.figs([("Appeals open", intc(last["pending_appeal"])), ("Decided", intc(last["settled"])), ("Expired", intc(last["settled_expired_no_jury"])),
+                   ("Grades served", intc(last["grades"])), ("Jurors", intc(last["graders"])), ("Slashes", f'<span class="{"red" if unp > 0 else ""}">{tot}</span>')])   # red only when some slashes were not pardoned
+    st = table(["Epoch", "Slashed", "Pardoned", "Audit sampled", "Est. removed"], [[f'E{r["epoch"]}', f'<span class="{"red" if r["slashed"] > pn(r) else ""}">{r["slashed"]}</span>', pn(r), r["audit_sampled"], r["established_removed"]] for r in reversed(ep)])
+    return (fg + KIT.split('<span class="lbl">By origin</span>' + back, '<span class="lbl">Per close</span>' + sett)
+            + '<div class="kit-sec"><span class="lbl">Slash log</span>' + st + "</div>")
 
 def forum_page():
     f = A.forum()
@@ -1943,9 +1954,10 @@ def _pt(ts):
     on = sun(3, 2).replace(hour=10, tzinfo=dt.timezone.utc); off = sun(11, 1).replace(hour=9, tzinfo=dt.timezone.utc)
     return u + dt.timedelta(hours=-7 if on <= u < off else -8)
 
-def pending_card(ask=""):
+def pending_body():
+    """Chain > Pending: the queue by origin epoch, with seal counts and expiry (a tab of the Chain module)."""
     d = A.pending_by_epoch(); rows = d["rows"]
-    if not rows: return card("Queue", '<div class="xempty">0</div>', ask, cls="pendc")
+    if not rows: return '<div class="xempty">0</div>'
     ge = "" if d.get("seals_exact") else "≥"   # before the merge, panel counts miss some accepted seals
     def hist(r):
         h = r.get("seals")
@@ -1970,4 +1982,4 @@ def pending_card(ask=""):
                 f'<div><span class="lbl">Grew</span><b class="num">{lc["grew"]:,}</b></div>'
                 f'<div><span class="lbl">Dropped</span><b class="num">{lc["dropped"]:,}</b></div></div>'
                 + "".join(f'<p class="dim small" title="Seal count not in the close record">{k}: {n:,} row{"" if n == 1 else "s"}</p>' for k, n in xs if n))
-    return card("Queue", t + foot, ask, cls="pendc")
+    return f'<div class="pendc">{t}{foot}</div>'
