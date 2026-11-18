@@ -1270,9 +1270,11 @@ def epoch(n):
             f' · {r["paid"]:,} Agents paid{burn_clause}{split_tag}</h1>')
     payouts = na("Closed, no payout (no answer reached quorum).") if zeropay else ((note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt)
     from . import epochstory as EST_   # the story card: answers and grades per hour, then the close (epochstory.py)
+    from . import topics as _TOP        # story queue item 2: forum moments (most-replied public threads) in this epoch's window
     body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             + EST_.card_html(n, r, (rows.get(n - 1) or {}).get("close_ts")) +
-            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
+            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>'
+            + _TOP.epoch_threads_card(n, (rows.get(n - 1) or {}).get("close_ts"), r["close_ts"]))
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
 # ---------------- The Agents ----------------

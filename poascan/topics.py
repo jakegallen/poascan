@@ -250,3 +250,31 @@ def pulse_line():
     if p["replies_today"]:
         bits.append(f'{_plur(p["replies_today"])} today')
     return f'<p class="dim small fpulse">Forum pulse: {" · ".join(bits)} <a class="more" href="/agents/community?tab=topics">Topics →</a></p>'
+
+# ---------------------------------------------------------------- Forum moments in the epoch timeline (story queue item 2)
+@cached("epoch_threads", 3600)
+def epoch_threads(prev_ts, close_ts, limit=3):
+    """Up to N most-replied PUBLIC threads whose replies landed in this epoch's window (prev close, close]. Forum archive
+    only, public communities, system/bot replies left out, titles and counts only."""
+    pub = list(_public())
+    if not pub or not close_ts: return []
+    from .governance import FORUM_SKIP_AUTHORS
+    skip = list(FORUM_SKIP_AUTHORS)
+    a = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(int(prev_ts or 0)))
+    b = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(int(close_ts)))
+    pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    cskip = f" AND c.author NOT IN ({sc})" if skip else ""
+    rows = db.q(f"SELECT p.id AS id, p.title AS title, p.community AS community, COUNT(c.id) AS n "
+                f"FROM forum_posts p JOIN forum_comments c ON c.post_id=p.id "
+                f"WHERE p.community IN ({pc}){cskip} AND c.created_at > ? AND c.created_at <= ? "
+                f"GROUP BY p.id ORDER BY n DESC, MAX(c.created_at) DESC LIMIT ?", tuple(pub) + tuple(skip) + (a, b, int(limit)))
+    return [dict(id=r["id"], title=(r["title"] or "")[:80], community=r["community"], replies=r["n"]) for r in rows]
+
+def epoch_threads_card(n, prev_ts, close_ts):
+    """Small 'Forum moments' card for an epoch page, or empty string when no public thread saw replies in the window."""
+    ts_ = epoch_threads(prev_ts, close_ts)
+    if not ts_: return ""
+    rows = "".join(f'<li><a href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer">#{int(t["id"])} {E(t["title"])}</a>'
+                   f' <span class="dim">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
+    return card("Forum moments", f'<ul class="fmoments">{rows}</ul>'
+                '<p class="cov dim small">Most replied public threads during this epoch. Titles and counts only, from the forum archive.</p>')
