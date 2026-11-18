@@ -2158,3 +2158,5 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:no-preference){.rstrip i{animation:rsin .5s var(--ease) both}.rstrip i:nth-child(odd){animation-delay:40ms}}
 @keyframes rsin{from{transform:scaleY(.2);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.ering .rp{transition:none}}
+@media (prefers-reduced-motion:no-preference){.kit-body .funnel .fb i{transform-origin:0 50%;animation:fgrow .8s var(--ease) both}.kit-body .funnel .fs:nth-child(2) .fb i{animation-delay:70ms}.kit-body .funnel .fs:nth-child(3) .fb i{animation-delay:140ms}.kit-body .funnel .fs:nth-child(4) .fb i{animation-delay:210ms}.kit-body .funnel .fs:nth-child(5) .fb i{animation-delay:280ms}}
+@keyframes fgrow{from{transform:scaleX(0)}to{transform:none}}
