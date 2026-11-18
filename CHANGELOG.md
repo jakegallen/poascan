@@ -11,11 +11,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.377] - 2026-11-18
+## [1.26.378] - 2026-11-18
 
 ### Changed
 - Address page: a close that settled an earlier answer but paid 0 POA is now plain Backlog; Backlog paid is kept for closes that paid more than 0 POA. Applies to the stat rows (Answered, Backlog paid, Backlog), the epoch list tags, the reward tracker's Submitted step and /about. Follow-up to 1.26.375 (LabLeak post 3113).
 - API and MCP established history: `epochs_backlog_paid` and `backlog_paid_epochs` now count only closes that paid more than 0 POA (they shipped in 1.26.375 counting every backlog close). Added `epochs_backlog_unpaid`, `backlog_unpaid_epochs` and `window.backlog_unpaid` for the 0 POA closes; paid plus unpaid is the old backlog count. `epochs_answered` is unchanged.
+
+## [1.26.377] - 2026-11-18
+
+### Added
+- Story queue item 4: a "Forum posts / day" chart is woven into Network > Charts, from POAScan's own forum archive (public communities only, the archived community and system authors left out), counts only, cached hourly. It honours the selected range (24h, 7d, 30d, All) and expands locally like the other charts, so it needs no new data endpoint and stays off the browser chart allowlist. No upstream call, no data or contract change.
 
 ## [1.26.376] - 2026-11-18
 

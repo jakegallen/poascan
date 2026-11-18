@@ -61,6 +61,8 @@ jobs:
         run: python tools/epoch_threads_test.py
       - name: Releases and notices link the threads that name them (bounded exact title-token match on a version or notice id, short tokens ignored, archived and skip communities and system authors left out, nothing when no title names it; forum archive only, cached hourly, titles and counts only)
         run: python tools/release_threads_test.py
+      - name: Forum posts per day on the Network charts (public communities, the archived community and system authors left out, counts only, cached hourly; honours the range and expands locally; no upstream call)
+        run: python tools/forum_chart_test.py
       - name: Answered vs Backlog paid on the address page and API (answered means an answer submitted in that epoch; a close that paid an earlier answer is backlog paid; additive API fields)
         run: python tools/backlog_test.py
       - name: Pending TTL from /api/params per segment (16 only as a flagged fallback, grading list cross check) and the expiry horizon per pending cohort (Watched E18 to E20; header sort, CSV, API, MCP get_pending_horizon; never a pending score)

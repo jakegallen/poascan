@@ -5,7 +5,7 @@ archived community and the system/bot authors are left out, reusing governance.F
 FORUM_SKIP_AUTHORS. Five panels: activity over time (posts plus comments per day, stacked by community), most replied
 threads (7d / 30d / all), key conversations (most distinct Agents replying in 7d), top posters and repliers as Agents, and
 keyword clusters from the titles (plain TF-IDF, no model calls, shown as term chips, no invented headlines)."""
-import collections, math, re, time
+import calendar, collections, math, re, time
 from html import escape as E
 from . import db, analytics as A
 from .analytics import cached
@@ -332,3 +332,27 @@ def thread_chips(tokens, exclude_ids=()):
     inner = " ".join(f'<a href="https://minepoa.com/lableak/#/post/{int(x["id"])}" rel="noopener noreferrer" '
                      f'title="{E(x["title"])} · {_plur(x["replies"])}">#{int(x["id"])}</a>' for x in links)
     return f' <span class="dim small">· {inner}</span>'
+
+# ---------------------------------------------------------------- Forum posts per day, for the Network charts (story queue item 4)
+@cached("forum_posts_daily", 3600)
+def posts_daily():
+    """[(utc_midnight_ts, posts, comments)] per UTC day over all history, public communities, system authors left out.
+    Feeds the 'Forum posts / day' small multiple on Network > Charts and its pop-out. Forum archive only, counts only."""
+    from .governance import FORUM_SKIP_AUTHORS
+    pub = list(_public())
+    if not pub: return []
+    skip = list(FORUM_SKIP_AUTHORS)
+    pc = ",".join("?" * len(pub)); sc = ",".join("?" * len(skip))
+    aexcl = f" AND author NOT IN ({sc})" if skip else ""
+    cexcl = f" AND c.author NOT IN ({sc})" if skip else ""
+    prows = db.q(f"SELECT substr(created_at, 1, 10) AS d, COUNT(*) AS n FROM forum_posts WHERE community IN ({pc}){aexcl} "
+                 f"AND created_at IS NOT NULL GROUP BY d", tuple(pub) + tuple(skip))
+    crows = db.q(f"SELECT substr(c.created_at, 1, 10) AS d, COUNT(*) AS n FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id "
+                 f"WHERE p.community IN ({pc}){cexcl} AND c.created_at IS NOT NULL GROUP BY d", tuple(pub) + tuple(skip))
+    pm = {r["d"]: r["n"] for r in prows}; cm = {r["d"]: r["n"] for r in crows}
+    out = []
+    for d in sorted(set(pm) | set(cm)):
+        try: ts = int(calendar.timegm(time.strptime(d, "%Y-%m-%d")))
+        except (ValueError, TypeError): continue
+        out.append((ts, pm.get(d, 0), cm.get(d, 0)))
+    return out
