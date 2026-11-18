@@ -957,7 +957,7 @@ def _xidx(labels, n_max=6):
     n = len(labels); every = max(1, math.ceil(n / n_max))
     return list(range(0, n, every))
 
-def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None, xk="t", head=True):
+def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact, legend=None, stacked=True, ymax=None, xk="t", head=True, clip=False):
     """series: list of (xlabel, [v1, v2, ...]) or (xlabel, [v...], ts): with a ts the label and tip read in the reader's zone
     (app.js; xk the kind, "t" for hourly buckets). Day buckets that are UTC days keep their plain label. Bars fit the card.
     1.26.291 (UI/UX P3): 3D columns (an isometric extrusion: a lit front face, a darker side face, a top cap), a faint floor
@@ -967,8 +967,13 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
     series = [(s[0], [0 if v is None else v for v in s[1]]) for s in series]   # 1.26.310: a missing value draws no column and its tip reads ···
     if not series: return chart_skel(640, height)
     n = len(series); mx0 = max((sum(v) if stacked else max(v)) for _, v in series) or 1; nk = 4
-    if ymax: mx = ymax
+    if ymax: mx = ymax; nk = _nice(0, ymax)[2] if clip else nk
     else: _, mx, nk = _nice(0, mx0 * 1.16)   # headroom for the tallest bar's callout
+    real = [(sum(v) if stacked else max(v)) for _, v in series]   # true heights, for the chip and the callout
+    if clip and ymax:
+        # 1.26.386: a single outlier (one 4,007 h gap) flattened every other bar. With clip, columns taller than ymax are drawn
+        # at the top of the plot (tip and callout still read the true value) so the normal rhythm stays visible.
+        series = [(l, v if t <= mx else [x * mx / t for x in v]) for (l, v), t in zip(series, real)]
     cls = [series_cls(c) for c in colors] if len(series[0][1]) > 1 or legend else ["s-gold"]
     step = VW / n; bw = step * (0.52 if n < 40 else 0.64); dx = min(bw * 0.42, 20); dy = 8 * VH / max(height, 60)
     g, ylab, _ = _grid(0, mx, fmt, nk)
@@ -978,7 +983,7 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
            f'<linearGradient id="{gr}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="r0"/><stop offset="1" class="r1"/></linearGradient></defs>']
     xs_i = set(_xidx([l for l, _ in series], 7)); xl = []
     tot = lambda vals: (sum(vals) if stacked else max(vals))
-    imax = max(range(n), key=lambda i: tot(series[i][1]))
+    imax = max(range(n), key=lambda i: real[i])
     poly = lambda pts: " ".join(f"{_f(x)},{_f(y)}" for x, y in pts)
     rh = VH * 0.09   # reflection depth under the floor line
     for i, (lab, vals) in enumerate(series):
@@ -1014,17 +1019,17 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
             p = 100 * (x + (bw + dx) / 2) / VW
             lz = f' data-lts="{int(tss[i])}" data-f="{xk}"' if tss[i] else ""
             xl.append(_xlab(p, E(str(lab)), lz))
-    lv = series[-1][1]; lvt = (compact3 if fmt is compact else fmt)(tot(lv))   # the chip reads as the headline does
-    cg = (_chg(tot(series[-2][1]), tot(lv)) if n > 1 else "") if head else ""
+    lv = series[-1][1]; lvt = (compact3 if fmt is compact else fmt)(real[-1])   # the chip reads as the headline does
+    cg = (_chg(real[-2], real[-1]) if n > 1 else "") if head else ""
     tags = _tag("lv b", VW, VH - VH * (tot(lv) / mx) - dy / 2, lvt, sub=cg)
     if imax != n - 1:
         xm = step * imax + (step - bw - dx) / 2 + (bw + dx) / 2
-        tags += _tag("ex hi", xm, VH - VH * (tot(series[imax][1]) / mx) - dy, fmt(tot(series[imax][1])))
+        tags += _tag("ex hi", xm, VH - VH * (tot(series[imax][1]) / mx) - dy, fmt(real[imax]))
     lg = ""
     if legend: lg = '<span class="legend">' + "".join(f'<span><i class="{cls[j % len(cls)]}"></i>{E(l)}</span>' for j, l in enumerate(legend)) + "</span>"
     hd = ""
     if head:
-        cur = tot(lv); prev = tot(series[-2][1]) if n > 1 else None   # the bar's full height, as the pinned chip reads
+        cur = real[-1]; prev = real[-2] if n > 1 else None   # the bar's full height, as the pinned chip reads
         hd = _head(cur, fmt, "", _period(tss[0], tss[-1]) if tss[0] and tss[-1] else "", lg)
     elif lg: hd = f'<div class="chd"><span class="chs">{lg}</span></div>'
     yw = int(7 * max(len(_tk(fmt)(mx * k / nk)) for k in range(nk + 1)) + 12)   # bars read their scale on a left axis, clear of the columns
