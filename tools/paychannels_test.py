@@ -359,9 +359,12 @@ check("version is at least 1.26.381 and the changelog records the story-queue re
 check("version is at least 1.26.382 and the changelog records header links",
       _ver >= (1, 26, 382) and "## [1.26.382]" in cl and "header links" in cl
       and not any(c in cl.split("## [1.26.382]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.383 and the changelog records the Chain and Network data asks",
-      _ver == (1, 26, 383) and "## [1.26.383]" in cl and "pending-by-origin" in cl
+check("version is at least 1.26.383 and the changelog records the Chain and Network data asks",
+      _ver >= (1, 26, 383) and "## [1.26.383]" in cl and "pending-by-origin" in cl
       and not any(c in cl.split("## [1.26.383]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.384 and the changelog records the Agents data asks",
+      _ver == (1, 26, 384) and "## [1.26.384]" in cl and "per-close rank" in cl
+      and not any(c in cl.split("## [1.26.384]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
