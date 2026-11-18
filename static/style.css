@@ -2007,7 +2007,7 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 @media (prefers-reduced-motion:reduce){.fpulse,.fmoments li{animation:none}}
 .elist{overflow-wrap:anywhere;line-height:1.5}
 .abk{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px}
-/* ---------- 1.26.376 Heartbeat (Home): the epoch ring, the vitals strip inside the hero, the Epochs panel with a thread per close ---------- */
+/* ---------- 1.26.379 Heartbeat (Home): the epoch ring, the vitals strip inside the hero, the Epochs panel with a thread per close ---------- */
 @media (min-width:641px){.hpulse .bench{grid-template-columns:minmax(260px,4fr) minmax(0,8fr)}}
 .hpulse .bench .bl{align-items:center;justify-content:flex-start;gap:6px}.hpulse .bl .bh{align-self:stretch;justify-content:flex-end}
 .hpulse .br{display:flex;flex-direction:column}.hpulse .br .trio{margin-top:auto}

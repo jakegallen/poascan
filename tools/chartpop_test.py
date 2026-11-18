@@ -117,7 +117,7 @@ from poascan import views as V
 home = V.home()["body"] if isinstance(V.home(), dict) else str(V.home())
 for k in ("mined", "agents", "active", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
 check("home: no Agents / hr opener (Active Agents card since 1.26.116)", 'data-chart="joins"' not in home)
-check("home 1.26.376: the Epochs panel opens with a light Answers per epoch chart that opens the answers pop-out; no Supply line",
+check("home 1.26.379: the Epochs panel opens with a light Answers per epoch chart that opens the answers pop-out; no Supply line",
       'class="cpw emini" data-chart="answers"' in home and 'class="cpx" data-chart="answers"' in home and ">Answers<" in home[home.find('class="cpw emini"'):]
       and '"Supply"' not in home and ">Supply<" not in home)
 _ans = home[home.find('class="cpw emini"'):]; _ans = _ans[:_ans.find("</section>")]

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.379] - 2026-11-18
+
+### Changed
+- Home (Heartbeat phase 1): the open epoch is a ring that fills over its 6 hours, with the countdown inside and a soft ripple when an answer lands. The headline numbers sit in the same card as a strip and add Replies today (public LabLeak replies since 00:00 UTC, from the forum archive). The Epochs panel merges the Answers per epoch chart, the open epoch and the closes: each close shows its release, a minted and burned bar, Agents paid and its most-replied public thread. The separate forum pulse strip, the Pour card and the wide Answers card are gone; the Stream (was Assay line) shows 10 rows. Reduced motion keeps everything still. No API or data change.
+
 ## [1.26.378] - 2026-11-18
 
 ### Changed
