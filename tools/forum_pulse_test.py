@@ -49,7 +49,7 @@ check("replies today counts public non-bot replies only (3 on p1 + 1 on p2 = 4)"
 line = TP.pulse_line()
 check("pulse line: terse, labelled, links the thread to LabLeak and Topics", "Forum pulse" in line and "minepoa.com/lableak/#/post/1" in line and "/agents/community?tab=topics" in line)
 check("pulse line: titles and counts only, never a body", "SECRET_BODY" not in line and "SECRET_COMMENT_BODY" not in line)
-check("pulse line: no em or en dash", "—" not in line and "–" not in line)
+check("pulse line: no em or en dash", "\u2014" not in line and "\u2013" not in line)
 check("pulse line: not a separate panel (plain <p>, no card)", line.strip().startswith("<p") and "class=\"card" not in line)
 
 # empty state: no public forum data -> empty line, no crash (pulse is @cached; clearing analytics cache busts it)
