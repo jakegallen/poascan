@@ -11,7 +11,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.387] - 2026-11-18
+## [1.26.388] - 2026-11-18
 
 ### Changed
 - Home: the Answers lane draws answers older than four minutes as two paths (dim and final) instead of one line each, so a busy chain no longer pushes Home past 1,000 elements. Lane counts, sliding and the newest-answer animation are unchanged.

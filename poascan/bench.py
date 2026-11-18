@@ -189,7 +189,7 @@ def score_html(now=None, ticker=""):
                        f'<b class="c num">{n}</b></div>')
             continue
         if k == "a":
-            # 1.26.387: a busy chain draws hundreds of answer lines (one SVG element each, 400+ at peak, which put Home over
+            # 1.26.388: a busy chain draws hundreds of answer lines (one SVG element each, 400+ at peak, which put Home over
             # 1,000 elements). Answers older than the last 4 minutes are drawn as two paths (dim, final); the newest stay lines
             # so app.js still slides, prunes and animates them. Same pixels, a few hundred fewer nodes.
             cut = int(now) - 240; old = [r for r in mine if r[1] < cut]; mine = [r for r in mine if r[1] >= cut]
