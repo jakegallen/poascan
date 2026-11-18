@@ -121,6 +121,12 @@ def _params_mirror():
 
 def api(path, qs):
     """Return (rows_or_obj, is_list). Raises KeyError for unknown routes."""
+    if path == "/api/chain/closes":   # POASCAN data ask 1a: last N closes for the Chain KPI sparklines (archive only, counts only)
+        cl = A.chain_closes((qs.get("limit") or ["24"])[0]); return dict(closes=cl, count=len(cl)), False
+    if path == "/api/chain/pending-by-origin":   # POASCAN data ask 1c: pending answers per origin epoch by seal count 0..3
+        rows = A.pending_by_origin_seals(); return dict(rows=rows, count=len(rows)), False
+    if path == "/api/network/anchors-eta":   # POASCAN data ask 4a: next anchor ETA + cadence over the last 24 closes
+        return A.anchor_eta(), False
     if path == "/api/health":
         h = A.health(); st = A.status(); fd = A.feeds()   # ok, state, chain and feeds: the same per-feed state as Network > Health and the pill
         from . import indexer as _IX

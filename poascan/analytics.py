@@ -630,6 +630,42 @@ def _epoch_rows_build(raw, pp):
         prev = t
     return out
 
+def chain_closes(limit=24):
+    """Last `limit` closes for the Chain page KPI sparklines (POASCAN data ask 1a): backlog, awaiting graders, passed,
+    failed and burn percent per close, oldest first. Archive only (from the close records), counts only, no upstream read."""
+    try: limit = max(1, min(96, int(limit)))
+    except (ValueError, TypeError): limit = 24
+    return [dict(epoch=r["epoch"], close_ts=r["close_ts"], backlog=r.get("pending"), awaiting_graders=r.get("pending_empty_panel"),
+                 passed=r.get("settled_passed"), failed=r.get("settled_failed"), burn_pct=r.get("burn_pct")) for r in epoch_rows()[-limit:]]
+
+def anchor_eta():
+    """Next anchor ETA and recent anchor cadence (POASCAN data ask 4a), from the anchors table only (no upstream read).
+    Cadence is the median gap between consecutive distinct anchor heights over the window covering the last 24 closes."""
+    import datetime as _dt
+    rows = epoch_rows(); win_start = rows[-24]["close_ts"] if len(rows) >= 24 else (rows[0]["close_ts"] if rows else 0)
+    ts = []
+    for r in db.q("SELECT height, MIN(anchored_at) AS t FROM anchors GROUP BY height"):
+        if not r["t"]: continue
+        try: ts.append(int(_dt.datetime.fromisoformat(str(r["t"]).replace("Z", "+00:00")).timestamp()))
+        except (ValueError, TypeError): continue
+    ts.sort(); last = ts[-1] if ts else None
+    win = [t for t in ts if t >= (win_start or 0)]
+    gaps = sorted(b - a for a, b in zip(win, win[1:]) if b > a)
+    med = gaps[len(gaps) // 2] if gaps else None
+    return dict(last_anchor_ts=last, next_anchor_eta=(last + med) if (last and med) else None,
+                cadence_s=med, cadence_mean_s=(int(sum(gaps) / len(gaps)) if gaps else None),
+                anchors_in_window=len(win), window_start_ts=win_start or None, closes_window=min(24, len(rows)))
+
+def pending_by_origin_seals():
+    """Pending answers per origin epoch bucketed by seal count 0..3 (POASCAN data ask 1c), for the Pending tab. Counts only,
+    from the same close-record data the Pending view renders (pending_by_epoch); never a pending score or a decoded seal."""
+    rows = []
+    for x in (pending_by_epoch().get("rows") or []):
+        h = x.get("seals") or {}
+        rows.append(dict(origin_epoch=x["epoch"], seal_0=int(h.get("0", 0)), seal_1=int(h.get("1", 0)),
+                         seal_2=int(h.get("2", 0)), seal_3=int(h.get("3", 0))))
+    return rows
+
 def epoch_detail(n):
     for e in epochs_raw():
         if int(e["epoch"]) == n: return e
@@ -672,6 +708,8 @@ def _open_epoch():
     graders = nq(reopened - 1) if reopened else graders_epoch
     return dict(epoch=closed, last_close=last_close, est_close=(last_close + period) if last_close else None,
                 period=period, pool=pool, answers=answers, graders=graders,
+                answers_so_far=answers, graders_so_far=graders,   # POASCAN data ask 1b: agreed open_epoch field names
+                closing_in=(last_close + period - int(time.time())) if last_close else None,
                 graders_basis="grade-sealed senders since grading reopened" if reopened else "grade-sealed senders since the last close",
                 graders_epoch=graders_epoch, graders_reopened_at=reopened,
                 graders_served_last=rows[-1].get("graders") if rows else None, graders_served_last_official=rows[-1].get("graders_official") if rows else None, graders_served_last_epoch=rows[-1]["epoch"] if rows else None, grading_halted=gs["state"] == "halted" and gs["basis"] != "none", grading_halt_notice=halt,
