@@ -9,7 +9,7 @@ from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
 VERSION = "1.26.387"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-18T23:32:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+RELEASED_TS = "2026-11-18T23:45:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1213,6 +1213,13 @@ def openapi():
         "/api/price": _op("POA in USD from filled swaps only, with the thin-market guard", ANY, oid="price", tag="token",
                           desc="Asks are never used. usd_per_poa is null (shown false) when no swap filled in window_s (7 days). thin is true with fewer than thin_below.fills fills or under thin_below.volume_usd of volume in the window; values are then rounded to sig_figs 2, else 3. basis is last_fill, or median_last_5_fills once the window holds 5 fills. The paid asset converts at the USD reference recorded at fill time (USDC at 1). POAScan shows these values as a muted ≈$ beside POA amounts. Method: /about#market."),
         "/api/agents/new-per-day": _op("New Agents per UTC day (from /api/status snapshots; first day partial)", ROWS, csv=True, oid="agentsNewPerDay", tag="agents"),
+        "/api/agents/totals": _op("Agent counts: agents (the live chain account count, status agents_joined of the current segment) and archive_agents (every address POAScan has ever seen); dropped_at_cut is archive minus chain, the Segment 1 accounts dropped at the genesis cut", ANY, oid="agentTotals", tag="agents",
+                                  desc="Counts only, from POAScan's archive; no upstream read."),
+        "/api/agents/rank": _op("Top agents by one metric at the latest close, each with its prior-close rank", ROWS, [_p("metric", "earnings (lifetime POA rewards, default), balance (current POA) or passes (paid closes)", {"type": "string", "enum": ["earnings", "balance", "passes"], "default": "earnings"}, "query", False),
+                                 _p("limit", "rows 1 to 200 (default 20)", {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "query", False)], oid="agentRank", tag="agents",
+                                desc="rows [{rank, prev_rank (null if new to the board), address, name, value}]; close_epoch and prev_close in the envelope. Ranks come from a per-close snapshot (top 200 per metric, kept for the last 8 closes) taken from POAScan's archive; prev_rank is the address's rank at the previous close."),
+        "/api/agents/hourly": _op("Per-UTC-hour agent joins (from join memos) and established adds (per close, at the close hour)", ANY, [_p("hours", "lookback 1 to 720 (default 168)", {"type": "integer", "default": 168, "minimum": 1, "maximum": 720}, "query", False)], oid="agentsHourly", tag="agents",
+                                  desc="joins [[hour_ts, n]], established [[hour_ts, n]]. Archive only, counts per hour."),
         "/api/concentration": _op("Holder concentration: top 1, 5, 10 and 20 share of supply, Gini, and min-activity Agents (paid in at most 1 epoch)", {"$ref": "#/components/schemas/Concentration"}, oid="concentration", tag="token"),
         "/api/chain/closes": _op("Last N closes for the Chain KPI sparklines", ANY, [_p("limit", "closes to return, 1 to 96 (default 24)", {"type": "integer", "default": 24}, "query", False)], oid="chainCloses", tag="epochs", desc="closes: oldest first, each {epoch, close_ts, backlog, awaiting_graders, passed, failed, burn_pct}. From the close records, counts only, no upstream read."),
         "/api/chain/pending-by-origin": _op("Pending answers per origin epoch bucketed by seal count 0 to 3", ANY, oid="pendingByOrigin", tag="epochs", desc="rows: {origin_epoch, seal_0, seal_1, seal_2, seal_3}, from the same close-record seal histogram the Pending tab renders. Counts only, never a pending score or a decoded seal."),
