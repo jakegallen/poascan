@@ -145,6 +145,7 @@ function liveRows(s){$$("[data-liverows]").forEach(function(box){var k=box.datas
 var SC={top:null,t:0,busy:0,max:0,tm:0};
 function scoreSlide(){var now=Date.now()/1000;$$("#score .lane").forEach(function(l){var sk=$(".sk",l);if(sk){sealSlide(l,sk,now);return}var g=$(".mk",l);if(!g)return;var tx=+g.dataset.b-(now-1440),n=0;
   g.setAttribute("transform","translate("+tx.toFixed(1)+" 0)");$$("line",g).forEach(function(m){var x=+m.getAttribute("x1")+tx;if(x<-60)m.remove();else if(x>=0)n++});g._tx=tx;
+  $$("path[data-x]",g).forEach(function(m){var xs=m._xs||(m._xs=m.dataset.x.split(",").map(Number)),c=0,mx=-1e9;xs.forEach(function(v){var x=v+tx;if(x>=0)c++;if(x>mx)mx=x});if(mx<-60)m.remove();else n+=c});
   var c=$(".c",l);if(c&&odv(c)!==String(n))laneCount(c,n)})}
 /* the Seals lane (bench.py seal_clusters, the same algorithm): seals come in bursts, so neighbours closer than their widths plus 4 px
    merge into one capsule with a count at their weighted centre, reclustered at the lane's real width (and on resize). The newest is
@@ -184,8 +185,11 @@ function scoreMark(r,b,nw){var x=r[1]-b,k=r[0],c=nw?" nw":"";if(k==="a")return '
   return '<line class="ms'+c+'" x1="'+x+'" x2="'+x+'" y1="23" y2="29"/>'}
 function scoreFetch(){SC.busy=1;SC.t=Date.now();fetch("/fragment/score",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){SC.busy=0;scoreIngest(d)}).catch(function(){SC.busy=0})}
 function scoreIngest(d){var old=SC.max,ks={};if(old&&!RM)d.rows.forEach(function(r){if(r[1]>old)ks[r[0]]=1});$$("#score .lane").forEach(function(l){var k=l.dataset.k,sk=$(".sk",l);if(sk){sk._s=d.rows.filter(function(r){return r[0]===k}).map(function(r){return r[1]});sk.dataset.b=d.b;sealUntip();sealDraw(sk,old);return}
-   var g=$(".mk",l);if(!g)return;var h="";
-   d.rows.forEach(function(r){if(r[0]===k)h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});g.dataset.b=d.b;g.innerHTML=h});
+   var g=$(".mk",l);if(!g)return;var h="",cut=Date.now()/1000-240,pa=[[],[]];
+   /* 1.26.385: answers older than 4 minutes are two paths (dim, final), as bench.py renders them, so a busy chain stays a few hundred nodes lighter */
+   d.rows.forEach(function(r){if(r[0]!==k)return;if(k==="a"&&r[1]<cut){pa[r[3]?1:0].push(r[1]-d.b);return}h+=scoreMark(r,d.b,old&&r[1]>old&&!RM)});
+   pa.forEach(function(xs,f){if(xs.length)h='<path class="ma'+(f?" f":"")+'" data-x="'+xs.join(",")+'" d="'+xs.map(function(x){return"M"+x+" 12V40"}).join("")+'"/>'+h});
+   g.dataset.b=d.b;g.innerHTML=h});
   d.rows.forEach(function(r){if(r[1]>SC.max)SC.max=r[1]});scoreSlide();benchSpark(ks)}
 /* the Pour: when a snapshot shows a new close, the card fetches its body, the pool bar starts whole and splits into minted gold and
    burned slag (600 ms), and the new close's hallmark draws in as its row lands in Closes (CSS, 1.2 s in all). */
