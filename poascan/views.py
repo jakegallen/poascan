@@ -1156,7 +1156,7 @@ EP_TABS = [("closed", "Closed"), ("pending", "Pending"), ("grading", "Grading")]
 
 def chain_hero():
     """Chain's hero (1.26.384): Home's Bench over a KPI strip of the latest close, each with its last 24 closes as a sparkline.
-    The numbers are Build's /api/v1/chain/closes set (A.chain_closes, #147 ask 1a), the same function the endpoint serves."""
+    The numbers are Build's /api/v1/chain/closes set (A.chain_closes, ask 1a), the same function the endpoint serves."""
     cl = A.chain_closes(24); kp = ""
     if cl:
         last = cl[-1]
