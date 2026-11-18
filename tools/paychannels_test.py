@@ -368,9 +368,12 @@ check("version is at least 1.26.384 and the changelog records the Chain consolid
 check("version is at least 1.26.385 and the changelog records the Playwright cache CI fix",
       _ver >= (1, 26, 385) and "## [1.26.385]" in cl and "Playwright" in cl
       and not any(c in cl.split("## [1.26.385]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.386 and the changelog records the Agents data asks",
+check("version is at least 1.26.386 and the changelog records the Agents data asks",
       _ver >= (1, 26, 386) and "## [1.26.386]" in cl and "per-close rank" in cl
       and not any(c in cl.split("## [1.26.386]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.387 and the changelog records the Network data asks",
+      _ver >= (1, 26, 387) and "## [1.26.387]" in cl and "route-buckets" in cl
+      and not any(c in cl.split("## [1.26.387]")[1].split("## [")[0] for c in dash))
 check("version is 1.26.389 and the changelog records the Agents consolidation",
       _ver == (1, 26, 389) and "## [1.26.389]" in cl and "Agents consolidation" in cl
       and not any(c in cl.split("## [1.26.389]")[1].split("## [")[0] for c in dash))

@@ -9,7 +9,7 @@ from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
 VERSION = "1.26.389"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-18T23:54:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+RELEASED_TS = "2026-11-18T23:59:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1241,6 +1241,12 @@ def openapi():
         "/api/forum": _op("LabLeak forum stats and top threads", oid="forum", tag="forum"),
         "/api/grading": _op("Grading backlog and settlements per epoch", ROWS, csv=True, oid="grading"),
         "/api/anchors": _op("Latest external-chain anchors, current segment first; rows carry segment", ROWS, [SEGQ], csv=True, oid="anchors", tag="meta"),
+        "/api/network/events": _op("One merged network events feed, newest first: anchor (checkpoints to Base and Solana), release (signed releases), notice (active hosted notices) and record (segment firsts)", ANY, [_p("type", "keep one kind", {"type": "string", "enum": ["anchor", "release", "notice", "record"]}, "query", False),
+                                    _p("limit", "rows 1 to 20 (default 20)", {"type": "integer", "default": 20, "minimum": 1, "maximum": 20}, "query", False)], oid="networkEvents", tag="meta",
+                                   desc="events [{ts, type, label, url}]; labels and links only, no bodies. From POAScan's archive and the release/notice blobs it already mirrors; no new upstream call."),
+        "/api/network/route-buckets": _op("Per-UTC-minute route-check counts: open (a clear read), halted (a 503 with the halt text) and down (any other failed read), from the probes POAScan already runs", ANY, [_p("route", "keep one route, e.g. hosted_mining", {"type": "string"}, "query", False),
+                                       _p("minutes", "lookback 1 to 180 (default 60)", {"type": "integer", "default": 60, "minimum": 1, "maximum": 180}, "query", False)], oid="routeBuckets", tag="meta",
+                                      desc="buckets [[minute_ts, open, halted, down]]; routes lists the routes seen in the window. Counts only, no new upstream request."),
         "/api/params": _op("Network parameters (archived hourly from minepoa.com)", oid="params", tag="meta"),
         "/api/notices/verified": _op("minepoa notices and releases with their G0 publisher signature check (verified, invalid, unsigned or pending)", ANY, csv=True, oid="verifiedNotices", tag="meta",
                                      desc="records[]: kind (notice or release), id, title, severity (info, action or critical; null for releases), txid (null for a server-override notice), txid_short (first 8 hex), same_id_count (how many distinct signed txs carry this kind and id; minepoa published some releases more than once under one version name, each its own tx, all kept), label (the id, plus a middle dot and txid_short when same_id_count > 1), time_utc, time_pt, signer, signer_fingerprint (SHA256 of the raw key, first 16 hex), status, reason (null when verified), "
