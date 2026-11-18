@@ -337,9 +337,10 @@ def thread_chips(tokens, exclude_ids=()):
     dim styling, so the Releases and notices table gains meaning without a mostly empty extra column."""
     links = thread_links(tokens, exclude_ids)
     if not links: return ""
-    inner = " ".join(f'<a href="https://minepoa.com/lableak/#/post/{int(x["id"])}" rel="noopener noreferrer" '
-                     f'title="{E(x["title"])} · {_plur(x["replies"])}">#{int(x["id"])}</a>' for x in links)
-    return f' <span class="dim small">· {inner}</span>'
+    # story item 3 review: show the id AND a short title as a full-size link (a readable tap target at 390px, not an 11px chip)
+    inner = " ".join(f'<a class="relthread" href="https://minepoa.com/lableak/#/post/{int(x["id"])}" rel="noopener noreferrer" '
+                     f'title="{_plur(x["replies"])}"><span class="fpid">#{int(x["id"])}</span> {E(_trim(x["title"], 40))}</a>' for x in links)
+    return f'<div class="reldisc dim">Discussed: {inner}</div>'
 
 # ---------------------------------------------------------------- Forum posts per day, for the Network charts (story queue item 4)
 @cached("forum_posts_daily", 3600)
@@ -409,7 +410,7 @@ def agent_forum_card(pid):
     """The 'Forum activity' card for an Agent profile, or empty string when the Agent has no public forum record."""
     f = agent_forum(pid)
     if not f: return ""
-    body = f'<div class="stats two">{stat("Posts", intc(f["posts"]))}{stat("Replies", intc(f["replies"]))}</div>'
+    body = f'<div class="stats two">{stat("Posts", intc(f["posts"]))}{stat("Comments", intc(f["replies"]))}</div>'   # item 2 review: these are comments written; "replies" in the thread rows means replies received
     if f["most_replied"]:
         rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
                        f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in f["most_replied"])

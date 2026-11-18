@@ -48,7 +48,8 @@ check("archived community and skip community never counted", sum(p for _, p, _ i
 check("series is posts per day (ts, posts) for the chart", [(ts, p) for ts, p, c in d] == [(midnight("2026-11-10"), 2), (midnight("2026-11-11"), 1)])
 
 v3 = open(os.path.join(ROOT, "poascan", "views3.py")).read()
-check("Network charts render the forum posts per day cell", "posts_daily()" in v3 and 'card("Forum posts / day"' in v3 and "{fcell}" in v3)
+check("Network charts render the forum activity per day cell (posts + comments, today's partial day excluded)",
+      "posts_daily()" in v3 and 'card("Forum activity / day"' in v3 and "{fcell}" in v3 and "p + c" in v3 and "tmid" in v3)
 check("the forum chart expands locally (no fetch endpoint, the series is POASCAN's own)",
       'pop_btn_local("cx-forum"' in v3 and 'id="cx-forum"' in v3 and '"forum"' not in open(os.path.join(ROOT, "poascan", "chartpop.py")).read())
 tp = open(os.path.join(ROOT, "poascan", "topics.py")).read()

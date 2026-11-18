@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.381] - 2026-11-18
+
+### Changed
+- Story queue review fixes (POASCAN review on #147), all forum-archive only, no data change: (1) epoch page Forum moments moves up under the stat row instead of the page bottom; (2) Builders Releases and notices thread links now show the id and a short title as a full-size link (a readable tap target, title no longer only a tooltip), the list is newest release first, and the Agents named column is blank rather than a repeated "none"; (3) the Network forum chart excludes today's partial UTC day (no false drop) and plots posts plus comments as "Forum activity / day" since comments are the real volume; (4) the Agent profile forum card labels the count "Comments" (comments written), distinct from the "replies received" used in the thread rows.
+
 ## [1.26.380] - 2026-11-18
 
 ### Changed

@@ -1342,8 +1342,9 @@ def epoch(n):
     from . import topics as _TOP        # story queue item 2: forum moments (most-replied public threads) in this epoch's window
     body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{PR.ask([PR.explain_epoch(n), PR.answer_epoch(), PR.GRADE])}{nav}</div></div>'
             + EST_.card_html(n, r, (rows.get(n - 1) or {}).get("close_ts")) +
-            f'<div class="stats six">{s}</div><div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>'
-            + _TOP.epoch_threads_card(n, (rows.get(n - 1) or {}).get("close_ts"), r["close_ts"]))
+            f'<div class="stats six">{s}</div>'
+            + _TOP.epoch_threads_card(n, (rows.get(n - 1) or {}).get("close_ts"), r["close_ts"])   # story item 1 review: under the stat row, not the page bottom
+            + f'<div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
     return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
 
 # ---------------- The Agents ----------------
@@ -1599,7 +1600,8 @@ def builders_page():
                [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:80])}</a>', E(p["community"]), author_link(p["author"], _rev()), p["comment_count"], p["score"], utc(A.utc_to_ts(p["created_at"]))] for p in b["posts"][:60]], cls="wrapt")
     cr = table(["Agent", "G0 mentions", "Threads"], [[E(n), c, ", ".join(f"#{x}" for x in b["credit_posts"].get(n, [])[:8])] for n, c in b["credits"]])
     from . import topics as _TOP   # story queue item 3: point each release or notice at the public threads that name it
-    sr = table(["Release", "Text", "Agents named"], [[E(k or "") + _TOP.thread_chips([k]), E((t or "")[:140]), ", ".join(E(x) for x in h) or '<span class="na">none</span>'] for k, t, h in b["sysrefs"]], cls="wrapt")
+    # item 3 review: newest releases first (they were oldest-first, so the newest sat behind Show more); blank, not a repeated "none", in Agents named
+    sr = table(["Release", "Text", "Agents named"], [[E(k or "") + _TOP.thread_chips([k]), E((t or "")[:140]), ", ".join(E(x) for x in h)] for k, t, h in list(b["sysrefs"])[::-1]], cls="wrapt")
     tl = table(["Tool", "Builder", "What", "Key to read", "Key to act", "Checked"],
                [[f'<a href="{E(t["url"])}" rel="noopener nofollow">{E(t["name"])}</a>', E(t["builder"]), E(t["what"]), E(_nop(t["requires_key_to_read"])), E(_nop(t["requires_key_to_act"])), E(t["checked"])] for t in b["tools"]], cls="wrapt")
     au = table(["Author", "Posts"], [[author_link(a, _rev()) or "", n] for a, n in b["by_author"]])

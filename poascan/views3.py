@@ -241,12 +241,13 @@ def charts_body(rng=""):
     ec = bars([(_SG.ep_label(k), [a, max(0, p)]) for k, a, p in pe_r], height=H, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Answered", "Paid"])
     tc = th or bars([(dt.datetime.fromtimestamp(r["d"], dt.timezone.utc).strftime("%b %-d"), [r["n"]]) for r in g["day"] if r["d"] + DAY > t0], height=H, colors=("gold",), fmt=lambda v: f"{v:,.0f}")
     from . import topics as _TOP   # story queue item 4: forum posts per UTC day, woven into the Network charts (public, system authors left out)
-    fp = [(ts, p) for ts, p, c in _TOP.posts_daily() if ts >= t0]
+    tmid = int(now // DAY) * DAY   # item 4 review: exclude today's partial UTC day so the headline is not a false 50% drop; comments are the real volume, so plot posts + comments
+    fp = [(ts, p + c) for ts, p, c in _TOP.posts_daily() if t0 <= ts < tmid]
     fnum = lambda v: f"{v:,.0f}"
-    fc = line(fp, height=H, color="gold", fmt=fnum, xfmt=xf, y0=0) if len(fp) > 1 else '<p class="na">No forum posts in range.</p>'
+    fc = line(fp, height=H, color="gold", fmt=fnum, xfmt=xf, y0=0) if len(fp) > 1 else '<p class="na">No forum activity in range.</p>'
     fexp = (f'<template id="cx-forum">{line(fp, height=320, color="gold", fmt=fnum, xfmt=xf, y0=0)}</template>'
-            + pop_btn_local("cx-forum", "Forum posts / day")) if len(fp) > 1 else ""   # local expand: the series is POASCAN's own, no fetch endpoint
-    fcell = card("Forum posts / day", f'<div class="cpw">{fc}</div>', fexp)
+            + pop_btn_local("cx-forum", "Forum activity / day")) if len(fp) > 1 else ""   # local expand: the series is POASCAN's own, no fetch endpoint
+    fcell = card("Forum activity / day", f'<div class="cpw">{fc}</div>', fexp)
     from . import signed as SG   # notice milestones link their G0-signed tx: badge from signed.py
     sb = lambda u: (f'<span class="sigl">{h}</span>' if (h := SG.badge_tx(u[4:])) else "") if u and u.startswith("/tx/") else ""
     lk = lambda e: (f'<a href="{E(e["url"])}"' + (' target="_blank" rel="noopener noreferrer"' if e["url"].startswith("http") else "") + f'>{E(e["label"])}</a>{sb(e["url"])}') if e["url"] else E(e["label"])

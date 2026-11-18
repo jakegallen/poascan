@@ -52,6 +52,7 @@ check("reply targets carry names", f["reply_to"] and f["reply_to"][0]["name"] in
 
 card = TP.agent_forum_card(A1)
 check("card shows counts, most-replied threads and replies-most-to", 'class="stats two"' in card and "Most replied threads" in card and "Replies most to" in card)
+check("the counts stat reads Posts and Comments (comments written), distinct from replies received", "Comments" in card and "Posts" in card)
 check("card links threads to LabLeak", "minepoa.com/lableak/#/post/1" in card)
 check("card carries no post or comment body", "SECRET_BODY" not in card and "SECRET_COMMENT_BODY" not in card)
 check("card has no em or en dash", chr(0x2014) not in card and chr(0x2013) not in card)

@@ -51,7 +51,8 @@ check("a token shorter than TOK_MIN is ignored (no noisy bare-number match)", TP
 check("reply counts come from public non-bot comments", v and v[0]["replies"] == 2)
 
 chips = TP.thread_chips(["0.9.3"])
-check("chips link the thread to LabLeak with the terse dim styling", 'minepoa.com/lableak/#/post/1' in chips and 'class="dim small"' in chips and chips.startswith(" "))
+check("chips link the thread to LabLeak with the id and an inline title (a full-size tap target, title not only a tooltip)",
+      'minepoa.com/lableak/#/post/1' in chips and "#1" in chips and "notes on 0.9.3" in chips and 'class="relthread"' in chips and "Discussed" in chips)
 check("chips carry no post body", "SECRET_BODY" not in chips and "SECRET_COMMENT_BODY" not in chips)
 check("chips: no em or en dash", chr(0x2014) not in chips and chr(0x2013) not in chips)
 check("no matching title yields an empty string (nothing rendered, no noise)", TP.thread_chips(["no-such-release-token"]) == "")
