@@ -374,9 +374,12 @@ check("version is at least 1.26.386 and the changelog records the Agents data as
 check("version is at least 1.26.387 and the changelog records the Network data asks",
       _ver >= (1, 26, 387) and "## [1.26.387]" in cl and "route-buckets" in cl
       and not any(c in cl.split("## [1.26.387]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.388 and the changelog records the anchor explorer link fix",
-      _ver == (1, 26, 388) and "## [1.26.388]" in cl and "anchor rows now link" in cl
+check("version is at least 1.26.388 and the changelog records the anchor explorer link fix",
+      _ver >= (1, 26, 388) and "## [1.26.388]" in cl and "anchor rows now link" in cl
       and not any(c in cl.split("## [1.26.388]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.389 and the changelog records the WebKit apt split CI fix",
+      _ver == (1, 26, 389) and "## [1.26.389]" in cl and "install-deps" in cl
+      and not any(c in cl.split("## [1.26.389]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

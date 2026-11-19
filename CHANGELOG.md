@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.389] - 2026-11-19
+
+### Changed
+- CI only (no app change): split the WebKit install so apt (`playwright install-deps`) runs with a generous budget while only the browser download is time-boxed (150s) and retried once. The 1.26.385 single timeout wrapped apt too, so a slow apt mirror failed the step; this separates the two.
+
 ## [1.26.388] - 2026-11-19
 
 ### Fixed
