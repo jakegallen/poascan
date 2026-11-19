@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.400] - 2026-11-19
+
+### Changed
+- /help and /wallet moved into Start: /help is the Earn tab, /help?address= and /wallet (with or without a poa1 address) are the Check tab. Both answer 301 and keep a valid address; a key-shaped value is dropped, never echoed. The API, MCP tools and the earn check data are unchanged. Both pages left the sitemap.
+- /upgrade no longer carries an Ask agent prompt box (Ask agent lives only in /start).
 ## [1.26.399] - 2026-11-19
 
 ### Changed

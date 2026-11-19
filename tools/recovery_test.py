@@ -229,7 +229,7 @@ try:
           "<details" in dtl and "<details open" not in dtl and f'<code class="sr">{ROOTHASH}</code>' in dtl and "<code>2026-10-21-hardening</code> active" in dtl
           and 'Fresh, <span class="upts">as of <time data-upts=' in dtl and "Tx counters restarted at the new checkpoint: 1 tx, 0 final." in dtl
           and '<span class="upts">at <time data-upts=' in dtl and "Check once an hour at a random minute. No retry loops." in dtl and "Pending grades keep 16 epochs." in dtl
-          and dtl.count('class="pbox"') == 1)
+          and dtl.count('class="pbox"') == 0)
     check("/upgrade: no reopen time, no 24 to 72, never 'reopened' while nothing is official", "24 to 72" not in card and "reopened" not in card and " hours" not in card.split('class="upa"')[0])
     check(f"/upgrade: clean {clean(card)}", not clean(card))
     c, stp = get("/start")

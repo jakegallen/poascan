@@ -33,12 +33,12 @@ check("self_render_ms carries p50, p95 and a sample count (POAScan's own render 
 
 # a failing render is counted as a warm failure, not a success
 def boom_render(p, qs):
-    if p == "/help": raise RuntimeError("render failed")
+    if p == "/about": raise RuntimeError("render failed")
     return f"<html>{p}</html>"
 HC.warm_paths.clear(); HC._warm_ms.clear(); HC.stats["warm"] = 0
 HC.warm_once(boom_render, lambda: None, force=True)
 check("a render that raises records a warm failure and no success for that path",
-      HC.warm_paths["/help"]["fail"] >= 1 and HC.warm_paths["/help"]["ok"] == 0 and HC.warm_paths["/"]["ok"] >= 1)
+      HC.warm_paths["/about"]["fail"] >= 1 and HC.warm_paths["/about"]["ok"] == 0 and HC.warm_paths["/"]["ok"] >= 1)
 
 # ---- memory-guard telemetry ----
 g = GD.telemetry()
