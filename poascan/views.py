@@ -1171,7 +1171,7 @@ def chain_hero():
     if cl:
         last = cl[-1]
         sk = lambda k: [(r["close_ts"], r[k] or 0) for r in cl if r.get("close_ts")]
-        kp = "".join([KIT.kpi("Backlog", intc(last["backlog"]), sk("backlog")),
+        kp = "".join([KIT.kpi("Backlog at close", intc(last["backlog"]), sk("backlog"), tip=f'Backlog as of the E{last["epoch"]} close. The Pending tab counts the live queue'),
                       KIT.kpi("Awaiting graders", intc(last["awaiting_graders"]), sk("awaiting_graders"), tip="Pending answers with no grading panel assigned yet"),
                       KIT.kpi("Passed", intc(last["passed"]), sk("passed")),
                       KIT.kpi("Failed", intc(last["failed"]), sk("failed"), tip="Failed by a jury at the latest close"),

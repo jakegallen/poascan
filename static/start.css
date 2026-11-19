@@ -43,3 +43,7 @@
 .stnext li{flex:1;border-bottom:1px solid var(--line)}.stnext li:last-child{border-bottom:0}
 .sv-name0[hidden]+.stnext{display:none}
 .sthub .s2v,.sthub .sv-card,.sthub .kit-mod[data-kit="join"] .kit-body{align-items:stretch;width:100%;max-width:none;margin:0}
+/* 1.26.398: state tags under the ring (halted or paused) and the stage preview on an empty Check tab */
+.ststate{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 14px 14px}
+.stq+.stnext{margin-top:8px}
+.ststate time{font:inherit;letter-spacing:inherit}
