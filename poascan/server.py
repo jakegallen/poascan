@@ -610,7 +610,7 @@ OFFSITE_RX = re.compile(r"^/(?:swap|offer)/[^/]+$")   # one swap offer's old pag
 def offsite(path):
     p = path.rstrip("/") or "/"
     return OFFSITE.get(p) or ("https://poaswap.io/" if OFFSITE_RX.match(p) else None)
-GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "offset", "sort", "dir"}, "/api/governance/payouts": set(),
+GOV_API = {"/api/governance": set(), "/api/governance/standing": set(), "/api/governance/established": {"sort", "dir", "filter", "limit", "offset"}, "/api/governance/at-risk": {"level", "limit", "offset", "sort", "dir"}, "/api/governance/payouts": set(),
            "/api/governance/graders": {"limit", "sort", "dir"}, "/api/governance/directory": {"sort", "dir", "filter", "limit", "offset"},
            "/api/governance/forum": {"range", "sort", "dir"}, "/api/governance/proposals": {"limit"}, "/api/governance/queue": {"need", "sort", "dir", "limit", "offset"},
            "/api/governance/grade-history": {"addr", "sort", "dir", "limit", "offset"},
@@ -650,6 +650,7 @@ def governance_api(path, qs):
     if path == "/api/governance/established":
         so, d = sd(GV.EST_SORTS, "score")
         return GV.api_established(so, pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6), d)
+    if path == "/api/governance/standing": return GV.api_standing_summary()   # POASCAN data ask 5a: safe/watch/at_risk/closing_next counts
     if path == "/api/governance/payouts": return GV.api_payouts()
     if path == "/api/governance/graders":
         so, d = sd(GV.GRADER_SORTS, "seals")

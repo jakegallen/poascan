@@ -69,6 +69,16 @@ def standing_rows():
     return dict(rows=rows, open_epoch=cur, ttl=ttl, last_close=last,
                 counts={k: sum(1 for r in rows if r["level"] == k) for k, _ in LEVELS})
 
+def api_standing_summary():
+    """POASCAN data ask 5a: the at-risk tracker's standing buckets as counts. safe, watch and at_risk match the tracker
+    levels; closing_next is the established Agents estimated to drop at the open epoch's close (closes left == 1). Counts
+    only, from the close records (standing_rows), no upstream read."""
+    s = standing_rows(); c = s["counts"]
+    closing_next = sum(1 for r in s["rows"] if r.get("left") == 1)
+    return dict(safe=c.get("safe", 0), watch=c.get("watch", 0), at_risk=c.get("risk", 0), closing_next=closing_next,
+                established=sum(c.get(k, 0) for k in ("safe", "watch", "risk")), open_epoch=s["open_epoch"],
+                last_close=s["last_close"], ttl=s["ttl"], segment=SG.selected(), method=METHOD)
+
 def _agent(r, est=False):
     """Agent cell: name (LabLeak) with the short address under it. est: an established row, tagged Unconfirmed when
     minepoa's grading list does not have it (grading.established_check)."""
