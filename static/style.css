@@ -2162,3 +2162,11 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:reduce){.ering .rp{transition:none}}
 @media (prefers-reduced-motion:no-preference){.kit-body .funnel .fb i{transform-origin:0 50%;animation:fgrow .8s var(--ease) both}.kit-body .funnel .fs:nth-child(2) .fb i{animation-delay:70ms}.kit-body .funnel .fs:nth-child(3) .fb i{animation-delay:140ms}.kit-body .funnel .fs:nth-child(4) .fb i{animation-delay:210ms}.kit-body .funnel .fs:nth-child(5) .fb i{animation-delay:280ms}}
 @keyframes fgrow{from{transform:scaleX(0)}to{transform:none}}
+
+/* Chain Pending expiry strip (1.26.402): one bar per close until the pending TTL; the next close is gold */
+.hz{margin:0 0 14px;padding:10px 12px 8px;border:1px solid var(--line);border-radius:10px;max-width:none}
+.hzh{display:flex;align-items:baseline;gap:10px}.hzh b{font-size:1.15rem}
+.hzp{display:flex;align-items:flex-end;gap:3px;height:56px;margin-top:6px}
+.hzb{flex:1;min-width:2px;background:color-mix(in srgb,var(--gold,#FFB300) 38%,transparent);border-radius:2px 2px 0 0}
+.hzb.nx{background:var(--gold,#FFB300)}
+.hzx{display:flex;justify-content:space-between;margin-top:4px;font-size:.72rem;color:var(--mute,#9a8f78)}
