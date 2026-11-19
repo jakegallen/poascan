@@ -230,7 +230,7 @@ def live():
         check(f"API bad params 400, unknown endpoint 404 {bad}", bad == [400, 400, 400, 400, 400, 404])
         sp = J.loads(get("/openapi.json")[1]); ap = get("/api")[1]
         check("OpenAPI and /api docs list every governance endpoint with segment", all(f"/api/v1/governance{x}" in sp["paths"] for x in ("", "/at-risk", "/payouts", "/graders", "/directory", "/forum", "/proposals"))
-              and all(any(q.get("name") == "segment" for q in sp["paths"][f"/api/v1/governance{x}"]["get"]["parameters"]) for x in ("", "/directory")) and "/governance/directory" in ap and "list_governance_directory" in ap)
+              and all(any(q.get("name") == "segment" for q in sp["paths"][f"/api/v1/governance{x}"]["get"]["parameters"]) for x in ("", "/directory")) and "/governance/directory" in __import__("json").dumps(sp["paths"]) and "list_governance_directory" in get("/api?tab=mcp&q=governance")[1])   # 1.26.395: the index pages 20 rows; read the spec and search the MCP list
         # MCP
         def rpc(m, prm):
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
