@@ -7,8 +7,8 @@ until the last stage lands. The address is checked for format first (never echoe
 Earn: ways to earn as short rows (Pays, Qualifies, Next); the FAQ stays on /about.
 Live panel: the open epoch with its answer countdown and three KPIs (Joined today, Pass rate, Median to pay) with the joins per hour history.
 
-Backend (agreed in the issue 147 thread, not on main yet): 7a GET /api/v1/agents/{addr}/lifecycle -> {stage, joined_ts, first_answer_ts, first_seal_ts, first_payout_ts}
-(404 on unknown), 7b GET /api/v1/agents/joiners?days=7 -> {joins_per_hour:[[hour_ts,n]], median_s_to_first_pass, median_s_to_first_pay}.
+Backend (agreed in the issue 147 thread, not on main yet): 7a GET /api/v1/agents/{addr}/lifecycle -> {stage (paid|grading|answering|joined), joined_ts, first_answer_ts, first_seal_ts, first_payout_ts}
+(404 on unknown), 7b GET /api/v1/agents/joiners?days=7 -> {joins_per_hour:[[hour_ts,n]], median_s_to_first_pass, median_s_to_first_pay, joiners, reached_first_pass, reached_first_pay}. Both are staged as PR 179.
 Until those land the same fields are computed here from the local archive (cached, no upstream read), through lifecycle() and joiners();
 LIFECYCLE_FN and JOINERS_FN take Build's readers when they exist."""
 import time, re, statistics
@@ -54,7 +54,7 @@ def lifecycle(addr):
         r = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type=? AND from_addr=? AND ts>0", (tp, addr)); return int(r["t"]) if r and r["t"] else None
     d = dict(joined_ts=joined, first_answer_ts=first("challenge"), first_seal_ts=first("grade-sealed"), first_payout_ts=_first_pay().get(addr))
     done = [k for k, _ in STAGES if d.get(k)]
-    d["stage"] = {"joined_ts": "joined", "first_answer_ts": "answered", "first_seal_ts": "sealed", "first_payout_ts": "paid"}[done[-1]] if done else "unknown"
+    d["stage"] = {"joined_ts": "joined", "first_answer_ts": "answering", "first_seal_ts": "grading", "first_payout_ts": "paid"}[done[-1]] if done else "unknown"   # Build's 7a vocabulary (staged PR 179)
     return d
 
 @A.cached("start_joiners", 300)
@@ -77,7 +77,8 @@ def joiners(days=7):
         if x and x["t"]: fans[r["a"]] = x["t"] - r["t"]
     cohort = [r for r in rows if r["t"] >= since]
     return dict(joins_per_hour=sorted([h, n] for h, n in hours.items()), median_s_to_first_pass=(statistics.median(fans.values()) if fans else None),
-                median_s_to_first_pay=(statistics.median(pay) if pay else None), joined=len(cohort), paid=len(pay))
+                median_s_to_first_pay=(statistics.median(pay) if pay else None), joiners=len(cohort),
+                reached_first_pass=len(fans), reached_first_pay=len(pay))   # local: first pass is read as the first answer; Build's 7b (staged PR 179) counts the first passed answer
 
 # ---------------- live panel ----------------
 def live_panel():
@@ -86,7 +87,7 @@ def live_panel():
     f = min(1.0, max(0.0, 1 - left / per)) if (left is not None and per) else 0
     j = joiners() or {}; hrs = j.get("joins_per_hour") or []
     today = sum(n for h, n in hrs if h >= now - 86400)
-    pay = j.get("median_s_to_first_pay"); paid = (j.get("paid") or 0) / j["joined"] if j.get("joined") else None
+    pay = j.get("median_s_to_first_pay"); paid = (j.get("reached_first_pass") or 0) / j["joiners"] if j.get("joiners") else None
     cd = (f'<span class="lbl">Answer in</span><b class="num stcd" data-left="{left}" data-at="{int(now)}">{dur(left)}</b>' if left and left > 0 else "")
     tk = ('<circle class="mk2" cx="120" cy="120" r="111" pathLength="96" stroke-dasharray=".25 1.75"/>'
           '<circle class="hk" cx="120" cy="120" r="112.5" pathLength="96" stroke-dasharray=".5 15.5" stroke-dashoffset=".25"/>')
