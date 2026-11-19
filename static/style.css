@@ -1906,7 +1906,6 @@ footer.wrap.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:
 /* 1.26.322: Token page market view (ask-only book and fill history) */
 
 /* Home: the one POASwap link where the Market card was */
-.mtrade{margin:14px 0 0;text-align:center}.mtrade a{display:inline-flex;align-items:center;gap:8px;font:600 var(--t13)/1.2 var(--ui);color:var(--gold)}
 
 /* epoch story: the steps of a closed epoch under its hourly chart */
 .estory{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}

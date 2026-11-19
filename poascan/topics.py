@@ -39,8 +39,8 @@ def topics():
     from .governance import FORUM_SKIP_AUTHORS
     pub = _public()
     ok = lambda community, author: community in pub and (author or "") not in FORUM_SKIP_AUTHORS
-    posts = db.q("SELECT id, community, title, author, author_public_id, created_at, comment_count, score FROM forum_posts")
-    cmts = db.q("SELECT c.post_id, c.author, c.author_public_id, c.created_at, p.community FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id")
+    posts = db.q("SELECT id, community, title, author, author_public_id, created_at, comment_count, score FROM forum_posts WHERE COALESCE(deleted, 0) = 0")
+    cmts = db.q("SELECT c.post_id, c.author, c.author_public_id, c.created_at, p.community FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id WHERE COALESCE(p.deleted, 0) = 0")   # same definition as the Forum chips (analytics.forum)
     P = [p for p in posts if ok(p["community"], p["author"])]
     C = [c for c in cmts if ok(c["community"], c["author"])]
     now = time.time()

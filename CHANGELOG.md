@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.405] - 2026-11-19
+
+### Changed
+- The Trade on POASwap link above the footer is gone (the header POASWAP pill stays).
+- Start reads the last join from the joiners data (last_join_at). The Check stage reads First seal cast: a grading action, not a step before payout, so a paid Agent no longer waits on it.
+- The Forum and Topics tabs read one definition: public communities only (archived ones are left out as well as poa-archive), system authors out, deleted posts and their comments out. Posts, comments, communities and participants now match on both. /api/v1/forum carries the same counts.
+- Network details, Earned and the latest three closed epoch pages join the warmed pages, so the first visitor after a deploy or a close no longer waits on a cold render.
+
 ## [1.26.404] - 2026-11-19
 
 ### Added

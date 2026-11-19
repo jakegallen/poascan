@@ -566,6 +566,7 @@ HC.register_tabs("/governance", [k for k, _ in GV.TABS])
 HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
 HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
 HC.register_tabs("/agents/census", ["journey", "rates"])
+HC.LATEST_EPOCH = lambda: max((int(r["epoch"]) for r in A.epoch_rows()), default=None)   # 1.26.405: the warm pass also keeps the latest closed epoch pages
 # 1.26.288 (P0): the page a human gets when every slot is held and no copy of the page is stored. Self-contained (no
 # DB, no render, no request), reloads itself; the API and MCP keep the plain text 503 their clients parse.
 BUSY_HTML = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'

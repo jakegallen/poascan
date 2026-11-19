@@ -110,6 +110,16 @@ check("CSV flat columns, no nested JSON, no body", cs.splitlines()[0].startswith
 check("Topics is a Community sub-tab", "topics" in dict(V.COMMUNITY_TABS) and dict(V.COMMUNITY_TABS)["topics"] == "Topics")
 check("GOV_API registers the endpoint params", SV.GOV_API.get("/api/governance/community-topics") == {"range"})
 
+# Forum and Topics read one definition: public communities (not archived, not poa-archive), no system author, no deleted post or its comments
+A._cache.clear(); f = A.forum(); t = TP.topics()
+check("Forum and Topics agree on communities, posts, comments and participants",
+      (f["communities"], f["posts"], f["comments"], f["participants"]) == (t["communities"], t["posts"], t["comments"], t["participants"]) and f["communities"] == 3)
+db.write("UPDATE forum_posts SET deleted=1 WHERE id=1")   # post 1 had 4 comments in public communities (one by the system author)
+A._cache.clear(); f = A.forum(); t = TP.topics()
+check("a deleted post and its comments leave both Forum and Topics, which still agree",
+      t["posts"] == 8 and t["comments"] == 5 and (f["posts"], f["comments"], f["participants"]) == (t["posts"], t["comments"], t["participants"]))
+check("governance forum_stats skips archived communities too", "old" in GV.skip_communities() and "poa-archive" in GV.skip_communities())
+
 src = open(os.path.join(ROOT, "poascan", "topics.py")).read()
 check("topics.py: no em or en dash, says Agents not Accounts, reads only titles", "\u2014" not in src and "\u2013" not in src and "Accounts" not in src and "p[\"body\"]" not in src and "c[\"body\"]" not in src)
 print("all passed" if not fails else f"{len(fails)} failed")

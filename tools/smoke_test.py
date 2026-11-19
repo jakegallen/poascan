@@ -200,8 +200,7 @@ def main():
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
               for u in ("/", "/chain", "/about")) and b'src="/static/poaswap-mark.svg?v=1"' in _hm[1] and _mk[0] == 200 and b"#35C9D0" in _mk[1] and b"<script" not in _mk[1])
         _ab, _pv = req(base + "/about")[1], req(base + "/privacy")[1]
-        check("home: no Market card, one Trade on POASwap link (new tab, mark), not /swaps", b'class="card mtile"' not in _hm[1] and _hm[1].count(b">Trade on POASwap \xe2\x86\x92</a>") == 1
-              and b'<p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1"' in _hm[1])
+        check("home: no Market card and no Trade on POASwap link above the footer", b'class="card mtile"' not in _hm[1] and b"Trade on POASwap" not in _hm[1] and b"mtrade" not in _hm[1])
         check("/about price history points to POASwap; /privacy says swaps and wallet setup are on POASwap, no /swaps link", b"<b>Price history</b> (/swaps)" not in _ab
               and b'<b>Price history</b> (on POASwap at <a href="https://poaswap.io" target="_blank" rel="noopener noreferrer">poaswap.io</a>)' in _ab
               and b'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>.' in _pv and b'href="/swaps' not in _pv and b"not sold" not in _pv.lower())

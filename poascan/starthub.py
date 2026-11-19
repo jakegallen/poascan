@@ -2,13 +2,13 @@
 
 Join: the existing /start card (startv2.body(), 1.26.246: name, app, then what that app needs), unchanged except that its own heading and tab chips are not drawn. The prompt text, its hashes (join template 32f96b73, combined f9205f0f), the key warning copy
 and every link that carries a key are untouched; only the old /start heading and the Sign up and Start earning chips moved into the tabs.
-Check: paste one address, read its lifecycle as a vertical stepper (joined, first answer, first seal, first payout) with a Watching dot that re-reads
+Check: paste one address, read its lifecycle as a vertical stepper (joined, first answer, first seal cast, first payout) with a Watching dot that re-reads
 until the last stage lands. The address is checked for format first (never echoed when wrong); an unknown address says so.
 Earn: ways to earn as short rows (Pays, Qualifies, Next); the FAQ stays on /about.
 Live panel: the open epoch with its answer countdown and three KPIs (Joined today, Pass rate, Median to pay) with the joins per hour history.
 
 Data: Build's 7a lifecycle (agents.agent_lifecycle) and 7b joiners (agents.joiners), read in process, the same data as /api/v1/agents/{addr}/lifecycle and /api/v1/agents/joiners."""
-import time, re, statistics
+import time, re, statistics, calendar
 from html import escape as E
 from . import db, analytics as A, kit as KIT, segments as SG
 from .ui import *
@@ -16,7 +16,7 @@ from . import ui as _ui
 
 TABS = [("join", "/start", "Join"), ("check", "/start?tab=check", "Check"), ("earn", "/start?tab=earn", "Earn")]
 HEAD = '<link rel="stylesheet" href="/static/start.css?v={}"><script src="/static/start.js?v={}" defer></script>'
-STAGES = [("joined_ts", "Joined"), ("first_answer_ts", "First answer"), ("first_seal_ts", "First seal"), ("first_payout_ts", "First payout")]
+STAGES = [("joined_ts", "Joined"), ("first_answer_ts", "First answer"), ("first_seal_cast_ts", "First seal cast"), ("first_payout_ts", "First payout")]
 
 def _asset_v(name):
     import hashlib, os
@@ -41,6 +41,11 @@ def joiners(days=30):
     except Exception: return None
 
 def _last_join():
+    """Latest join on the ledger as a timestamp: last_join_at from Build's joiners data (ISO UTC), else the maintenance value."""
+    try:
+        v = (joiners() or {}).get("last_join_at")
+        if v: return calendar.timegm(time.strptime(v, "%Y-%m-%dT%H:%M:%SZ"))
+    except Exception: pass
     try:
         from . import maint
         return maint.last_join()
@@ -115,7 +120,10 @@ def check_body(qs):
     if not ADDR_RX.match(raw): return form + na("That is not a poa1 address. Paste the address only, never a key.")
     d = lifecycle(raw)
     if not d: return form + na("No Agent found for that address.")
-    now = time.time(); done = [k for k, _ in STAGES if d.get(k)]; nxt = next((k for k, _ in STAGES if not d.get(k)), None)
+    d = dict(d); d["first_seal_cast_ts"] = d.get("first_seal_cast_ts") or d.get("first_seal_ts")   # older payloads carry first_seal_ts only
+    now = time.time(); done = [k for k, _ in STAGES if d.get(k)]
+    # a seal cast is a grading action an Agent may do after it is paid: once paid, a missing seal is never the "next" stage
+    nxt = next((k for k, _ in STAGES if not d.get(k) and not (k == "first_seal_cast_ts" and d.get("first_payout_ts"))), None)
     li = []
     for i, (k, t) in enumerate(STAGES, 1):
         ts = d.get(k)

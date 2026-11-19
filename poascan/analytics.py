@@ -949,7 +949,12 @@ def utc_to_ts(s):
 def forum():
     comms = db.get_blob("communities")[0] or []
     posts = db.q("SELECT * FROM forum_posts"); cmts = db.q("SELECT c.*, p.community FROM forum_comments c JOIN forum_posts p ON p.id=c.post_id")
-    live = [p for p in posts if p["community"] != "poa-archive"]; lc = [c for c in cmts if c["community"] != "poa-archive"]
+    # one definition with the Topics tab (topics.topics): public communities only (not archived, not poa-archive), system authors left out,
+    # deleted posts and the comments on them left out, so Forum and Topics read the same communities, comments and participants
+    from . import governance as _GOV
+    skip = set(_GOV.skip_communities()); gone = {p["id"] for p in posts if p["deleted"]}
+    live = [p for p in posts if p["community"] not in skip and not p["deleted"] and (p["author"] or "") not in _GOV.FORUM_SKIP_AUTHORS]
+    lc = [c for c in cmts if c["community"] not in skip and c["post_id"] not in gone and (c["author"] or "") not in _GOV.FORUM_SKIP_AUTHORS]
     pa = {p["author_public_id"] for p in live}; ca = {c["author_public_id"] for c in lc}
     day = collections.defaultdict(lambda: [0, 0])
     for p in live: day[dt.datetime.fromtimestamp(utc_to_ts(p["created_at"]), dt.timezone.utc).date().isoformat()][0] += 1
@@ -962,7 +967,7 @@ def forum():
     tot_items = sum(au.values())
     now = time.time()
     last24 = sum(1 for p in live if now - utc_to_ts(p["created_at"]) < 86400) + sum(1 for c in lc if now - utc_to_ts(c["created_at"]) < 86400)
-    return dict(communities=len(comms), active_communities=sum(1 for c in comms if not int(c.get("archived") or 0)),
+    return dict(communities=sum(1 for c in comms if c.get("slug") not in skip), active_communities=sum(1 for c in comms if not int(c.get("archived") or 0)),
                 posts=len(live), comments=len(lc), replies=sum(1 for c in lc if c["parent_id"]), deleted=sum(1 for p in posts if p["deleted"]),
                 archive_posts=len(posts) - len(live), archive_comments=len(cmts) - len(lc),
                 posters=len(pa), commenters=len(ca), participants=len(pa | ca),

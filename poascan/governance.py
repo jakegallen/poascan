@@ -368,13 +368,21 @@ def operator_ids():
     from . import signed as SGN
     return {SGN.TRUSTED_G0}
 
+def skip_communities():
+    """Communities the forum numbers leave out: the fixed skip list plus any community flagged archived. Topics reads the same set
+    (topics._public keeps only archived == 0 and not in FORUM_SKIP_COMMUNITIES), so Forum and Topics count the same comments, communities and participants."""
+    try: comms = db.get_blob("communities")[0] or []
+    except Exception: comms = []
+    return tuple(dict.fromkeys(list(FORUM_SKIP_COMMUNITIES) + [c["slug"] for c in comms if c.get("slug") and int(c.get("archived") or 0)]))
+
 @A.cached("gov_forum", 300)
 def forum_stats(rng):
     span = dict((k, v) for k, _, v in RANGES).get(rng); t0 = (time.time() - span) if span else 0
-    ph = ",".join("?" * len(FORUM_SKIP_COMMUNITIES))
-    posts = [dict(r) for r in db.q(f"SELECT id, community, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community NOT IN ({ph}) AND COALESCE(deleted, 0) = 0", FORUM_SKIP_COMMUNITIES)]
+    SKIP = skip_communities()
+    ph = ",".join("?" * len(SKIP))
+    posts = [dict(r) for r in db.q(f"SELECT id, community, author, author_public_id AS pid, created_at, comment_count FROM forum_posts WHERE community NOT IN ({ph}) AND COALESCE(deleted, 0) = 0", SKIP)]
     pmap = {p["id"]: p for p in posts}
-    coms = [dict(r) for r in db.q(f"SELECT c.id, c.post_id, c.author, c.author_public_id AS pid, c.created_at FROM forum_comments c JOIN forum_posts p ON p.id = c.post_id WHERE p.community NOT IN ({ph})", FORUM_SKIP_COMMUNITIES)]
+    coms = [dict(r) for r in db.q(f"SELECT c.id, c.post_id, c.author, c.author_public_id AS pid, c.created_at FROM forum_comments c JOIN forum_posts p ON p.id = c.post_id WHERE p.community NOT IN ({ph})", SKIP)]
     for x in posts + coms: x["t"] = _ts(x["created_at"])
     ok = lambda x: x["t"] is not None and x["t"] >= t0 and (x["author"] or "") not in FORUM_SKIP_AUTHORS
     P = [p for p in posts if ok(p)]; C = [c for c in coms if ok(c) and c["post_id"] in pmap]
