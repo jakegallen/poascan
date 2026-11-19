@@ -214,7 +214,7 @@ def live():
         dl = get("/governance?tab=directory&sort=consistency&dir=asc")[1]
         check("Directory: CSV link carries sort and dir; part columns", "/api/v1/governance/directory.csv?sort=consistency&amp;dir=asc" in dl and '>Consistency<i class="ha"' in dl and '>Standing<i class="ha"' in dl)
         rk = get("/agents/top?tab=graders&sort=standing&dir=asc")[1]
-        check("Rankings: CSV and API links carry sort and dir; Score and parts columns", "/api/leaderboard/graders.csv?sort=standing&amp;dir=asc" in rk and "/api/v1/leaderboard/graders?sort=standing&amp;dir=asc" in rk and '>Standing<i class="ha"' in rk)
+        check("Rankings: header sort links carry sort and dir (the module has no CSV or API header links); Score and parts columns", "/agents/top?tab=graders&amp;sort=grading&amp;dir=asc" in rk or "/agents/top?tab=graders&amp;sort=score" in rk and "/api/leaderboard/graders.csv" not in rk and '>Standing<i class="ha"' in rk)
         apis2 = {}
         for u in ("/api/v1/governance/established?sort=standing&dir=asc", "/api/v1/governance/directory?sort=grading&dir=desc", "/api/v1/governance/at-risk?sort=score&dir=asc",
                   "/api/v1/governance/graders?sort=forum", "/api/v1/governance/forum?range=all&sort=consistency&dir=asc", "/api/v1/leaderboard/richlist?sort=score&dir=asc"):
