@@ -142,6 +142,7 @@ def page(page_fn):
     body = {"join": join_body, "check": lambda: check_body(qs), "earn": earn_body}[tab]()
     mod = KIT.tabmod([(k, h, t, None) for k, h, t in TABS], tab, body, "", id="stmod", label="Start")
     mod = mod.replace(' data-kit-tab="join"', "")   # the wizard binds on load: Join is a full page load, never an in-place swap
+    if tab == "join": mod = mod.replace('data-kit="tabs"', 'data-kit="join"', 1)   # app.js reloads on popstate while a tabs module exists; the wizard steps back with the hash, so Join is not one
     html = f'<div class="sthub"><div class="stmain">{mod}</div>{live_panel()}</div>'
     v2 = (f'<link rel="stylesheet" href="/static/startv2.css?v={_asset_v("startv2.css")}"><script src="/static/startv2.js?v={_asset_v("startv2.js")}" defer></script>' if tab == "join" else "")
     return page_fn("Start", f'<div class="sechead"><h1 class="sr-only">Start</h1></div>{html}', "/start", head=v2 + HEAD.format(_asset_v("start.css"), _asset_v("start.js")))
