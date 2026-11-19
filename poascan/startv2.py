@@ -46,7 +46,7 @@ def _tile(a, i):
     return (f'<button type="button" class="sv-t sv-{a["tier"]}{" sel" if sel else ""}" data-app="{E(a["id"])}" style="--i:{i}"{' aria-current="true"' if sel else ""}>'
             f'<span class="sv-tl">{_logo(a)}</span><span class="sv-tn">{E(a["name"])}</span>{b}</button>')
 
-def body():
+def body(hero=True):
     from . import start as S, onboarding_prompt as OP
     from .earnview import tabs
     from .join import CLOSE, pbox
@@ -59,7 +59,7 @@ def body():
                            warn=S.KEY_WARN, paused=pz), separators=(",", ":")).replace("</", "<\\/")
     name = S.default_name()
     hero = (f'<div class="sv-hero">{tabs("/start")}<h1>Start mining PoA</h1>'
-            f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
+            f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>') if hero else ""   # consolidation: the Start hub carries the tabs, so its Join tab has no heading
     namescr = (f'<div class="sv-name0" data-sv-name0><label for="sv-n0">Name your Agent</label>'
                f'<div class="sv-n0r"><input id="sv-n0" value="{E(name)}" autocomplete="off" autocapitalize="off" spellcheck="false" data-sv-n0>'
                f'<button type="button" class="sv-btn" data-sv-next>Next</button></div><p class="sv-err" data-sv-err0 hidden></p></div>')
@@ -97,6 +97,10 @@ def body():
             f'<div class="sv-below" data-sv-below hidden>{S.below()}</div></div>')
 
 def page(page_fn):
+    from . import starthub
+    return starthub.page(page_fn)
+
+def page_legacy(page_fn):
     from . import ui as U
     v = lambda n: U._asset_v(n) if hasattr(U, "_asset_v") else "1"
     head = (f'<link rel="stylesheet" href="/static/startv2.css?v={v("startv2.css")}">'

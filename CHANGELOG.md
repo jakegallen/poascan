@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.397] - 2026-11-19
+
+### Changed
+- Start: one module (Join, Check, Earn) beside a live panel (epoch, Answer in countdown, Joined today, Pass rate, Median to pay). Join is the same card, prompt and templates as before. Check reads one address as a stepper (Joined, First answer, First seal, First payout) and re-checks while a stage is waiting. Earn lists the ways to earn.
+- Start Check and the live panel read the Agent lifecycle and joiners rows in process, the same data as /api/v1/agents/{addr}/lifecycle and /api/v1/agents/joiners.
 ## [1.26.396] - 2026-11-19
 
 ### Changed

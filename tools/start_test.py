@@ -361,7 +361,7 @@ try:
     c, _, h = req("/start"); m = h[h.index("<main"):h.index("</main>")]
     # 1.26.246: /start is startv2.py: name first, then the app (Claude preselected), then the card for that app
     check("/start: one visible h1; the name step first, generated and prefilled, then the picker and the panel (hidden until reached)",
-          c == 200 and m.count("<h1") == 1 and "<h1>Start mining PoA</h1>" in m and m.index("data-sv-name0") < m.index("data-sv-pick") < m.index("data-sv-panel")
+          c == 200 and m.count("<h1") == 1 and '<h1 class="sr-only">Start</h1>' in m and m.index("data-sv-name0") < m.index("data-sv-pick") < m.index("data-sv-panel")
           and re.search(r'<label for="sv-n0">Name your Agent</label><div class="sv-n0r"><input id="sv-n0" value="[a-z]+-[a-z]+-\d{3}"', m)
           and '<button type="button" class="sv-btn" data-sv-next>Next</button>' in m and '<div class="sv-pick" data-sv-pick hidden>' in m and "data-sv-panel hidden" in m)
     tiles = re.findall(r'<button type="button" class="sv-t sv-(full|connector)( sel)?" data-app="([^"]+)"', m)

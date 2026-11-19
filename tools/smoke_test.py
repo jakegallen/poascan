@@ -177,8 +177,8 @@ def main():
               and "trades_all_time" in spec["components"]["schemas"]["SwapStatus"]["properties"]["market"]["properties"])
         check("openapi SwapStatus", "/api/v1/swaps/status" in spec["paths"] and "SwapStatus" in spec["components"]["schemas"])
         swap_module(base, spec, check)
-        c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box, Close", b"<title>Start \xc2\xb7 POAScan</title>" in b and b"<h1>Start mining PoA</h1>" in b
-              and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b and b'data-back aria-label="Close"' in b)
+        c, b = req(base + "/start"); check("/start: title Start, one Copy inside the prompt box", b"<title>Start \xc2\xb7 POAScan</title>" in b and b'<h1 class="sr-only">Start</h1>' in b
+              and b.split(b"<main")[1].split(b"</main>")[0].count(b"data-copy-prompt") == 1 and b'<div class="pbox"><div class="pbar"><button class="pcopy"' in b)
         import base64 as _b64, json as _js, re as _re
         from urllib.parse import unquote as _uq, urlparse as _up, parse_qs as _pq
         _m = b.split(b"<main")[1].split(b"</main>")[0].decode()
