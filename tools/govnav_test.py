@@ -124,9 +124,9 @@ def live():
         check("Chain: epoch tabs and type chips use the new routes", 'href="/chain?tab=pending"' in ch and 'href="/epochs' not in ch and 'href="/txs' not in tx and 'href="/chain/txs?type=' in tx)
         # Network: Token tab, Overview and Health intact
         c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]; hl = get("/network?tab=health")[1]
-        check("Network: Token tab renders the token page under the Network chips", c == 200 and 'href="/network?tab=token" class="chip on"' in tk and "Proof of Agent" in tk
-              and "Min-activity Agents" in tk and tk.count("<h1") == 1)
-        check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats four netov"' in ov and "Feeds</h2>" in hl)
+        check("Network (1.26.392): Token tab is one tab of the Network module, POA only, one h1", c == 200 and 'href="/network?tab=token" class="chip on" data-kit-tab="token"' in tk
+              and "Concentration" in tk and "Vesting" in tk and 'class="usd"' not in tk and tk.count("<h1") == 1)
+        check("Network (1.26.392): Overview opens Health, with the live hero and the Feeds chip", 'href="/network" class="chip on" data-kit-tab="health"' in ov and "Last anchor" in ov and 'data-kit-sub="feeds"' in hl)
         # Agents sub-tabs no longer carry Graders or At risk
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance tabs

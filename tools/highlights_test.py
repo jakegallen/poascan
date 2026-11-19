@@ -34,8 +34,10 @@ check("most joins in one day: 2", P["ever"]["records"]["join_day"]["value"] == 2
 f = {x["key"]: x for x in d["firsts"]}
 check("firsts: first answer, first join, first answer of open epoch E3, first seal after the E2 close",
       f["first_answer"]["who"] == ad(1) and f["first_join"]["who"] == ad(1) and f["open_answer"]["who"] == ad(6) and f["close_seal"]["found"])
-h = V.network("records"); h = h if isinstance(h, str) else h[1]
-check("Network, Records tab renders both cards and the chip", 'id="records"' in h and 'id="firsts"' in h and "?tab=records" in h)
+V.REQ.qs = {"type": ["record"]}
+h = V.network("records"); h = h if isinstance(h, str) else str(h)   # 1.26.392: Records folded into the Anchors events feed (type record)
+check("Network, Anchors feed carries the Record type chip (segment firsts and records)", "type=record" in h and 'data-kit-tab="anchors"' in h and "/network?tab=records" not in h.split("netmod")[1])
+V.REQ.qs = {}
 check("MCP get_highlights listed", "get_highlights" in {t[0] for t in AG.TOOLS})
 check("neutral wording: no accusatory words", not any(w in h.lower() for w in ("suspicious", "abuse", "cheat", "farm", "sybil")))
 print("FAILS:", fails) if fails else print("ALL OK")

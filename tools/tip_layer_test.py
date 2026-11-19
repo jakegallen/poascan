@@ -221,7 +221,7 @@ def run(base, p, w, h, mobile, kinds):
             if wb_ok and wb_ok == len(ids): kinds.add("wallet binding")
         # Route halts (routewatch): the Stale tag on a Health Routes row, opened on its own
         if "tab=health" in path:
-            sel = '#routes li[data-route="path_actions"] details.qtip'
+            sel = 'ul.nrt li[data-route="path_actions"] details.qtip'
             pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
             try:
                 s = pg.locator(sel + " > summary").first; s.scroll_into_view_if_needed(timeout=3000); (s.tap if mobile else s.click)(timeout=3000); pg.wait_for_timeout(150)

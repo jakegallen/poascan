@@ -17,28 +17,17 @@ def money(v, n=3):
 
 def price(): return SC.price()
 
+# Consolidation: POA only. The page UI shows no USD, no POA/USD toggle and no reference label. The public /api/v1/price,
+# /api/v1/swaps/* and the MCP price fields are served by swapclient and agentapi and are untouched. The three helpers stay so
+# every caller keeps working; they render nothing.
 def usd_of(amount):
-    """Muted ≈$ beside a POA amount, or "" when no price is shown. Same figure rounding as the price itself."""
-    p = SC.price()
-    if not p.get("shown") or amount is None: return ""
-    try: v = float(amount) * p["usd_per_poa"]
-    except (TypeError, ValueError): return ""
-    return f'<span class="usd">≈{money(v, p["sig_figs"])}</span>'
+    return ""
 
 def usd_src():
-    """One label per page that shows ≈$: links to the method on /about. "" when no price is shown."""
-    p = SC.price()
-    if not p.get("shown"): return ""
-    t = "thin" if p["thin"] else "ref"
-    return f'<a class="usdsrc{" thin" if p["thin"] else ""}" href="/about#market">USD · {t}</a>'
+    return ""
 
 def usd_toggle():
-    """POA | USD switch for a dense table's card header; the browser converts columns marked .pc with this reference. "" when no price is shown."""
-    p = SC.price()
-    if not p.get("shown"): return ""
-    return (f'<span class="utog{" thin" if p["thin"] else ""}" role="group" aria-label="Amounts in" data-usd="{p["usd_per_poa"]}" data-sig="{p["sig_figs"]}">'
-            f'<button type="button" aria-pressed="true" data-u="poa">POA</button>'
-            f'<button type="button" aria-pressed="false" data-u="usd" title="Reference price{" (thin)" if p["thin"] else ""}: /about#market">USD</button></span>')
+    return ""
 
 # ---------------- price formatting, from /api/v1/swaps/status ----------------
 from .views2 import ICON_SWAP   # noqa: E402

@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.394] - 2026-11-19
+
+### Changed
+- Network: one module under a live header. Health (routes, feeds, incidents, Details), Charts (one chart with metric and range chips), Anchors (releases and the protocol badge) and Token (supply, vesting, concentration) swap in place.
+- Network is POA only: the POA and USD toggle and the swap-derived price cards are gone. The public price and swaps APIs are unchanged.
+
 ## [1.26.393] - 2026-11-19
 
 ### Changed
