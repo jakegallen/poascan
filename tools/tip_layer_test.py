@@ -138,6 +138,7 @@ def run(base, p, w, h, mobile, kinds):
             check(f"{w}: a click on the status pill opens Health", "/network?tab=health" in pg.url)
             pg.goto(base + path, wait_until="domcontentloaded", timeout=60000); pg.wait_for_timeout(400); pg.mouse.move(640, 790)
         # chart hover readouts (.xt) at the left edge, middle and right edge of up to 4 charts
+        pg.evaluate("()=>{document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'));if(document.activeElement&&document.activeElement.blur)document.activeElement.blur()}"); pg.mouse.move(1, 1); pg.wait_for_timeout(250)   # 1.26.397: a status pill note still open from the hover step above (slow runner) covered the hero chart readout
         nch = pg.evaluate("()=>{let n=0;document.querySelectorAll('.chartbox').forEach((c,i)=>{const r=c.getBoundingClientRect();if(r.width&&r.height&&n<4){c.dataset.tc=n++}});return n}")
         for i in range(nch):
             c = pg.locator(f'.chartbox[data-tc="{i}"]').first
