@@ -335,7 +335,7 @@ def token_body():
                    ("Holders", intc(st.get("holders"))), ("Median", f'<span class="num">{_n(h["median"])}</span>'), ("Gini", f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···")])
     mb = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("gold", "ember"))
     u = V3.unlock_data(); tot = u["total"] or 1
-    cal = table(["At close", f"Time ({TZ})", "Circulating", "Share"], [[f"E{j}", utc(t, "%m-%d %H:%M"), _n(c_), pct(c_ / tot)] for j, t, c_, d_ in u["fut"][:12]])
+    cal = table(["At close", f"Time ({TZ})", "Unlocked", "Share"], [[f"E{j}", utc(t, "%m-%d %H:%M"), _n(c_), pct(c_ / tot)] for j, t, c_, d_ in u["fut"][:12]])
     conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20)) + "</div>")
     return (fg + KIT.split('<span class="lbl">Per epoch</span>' + mb, '<span class="lbl">Vesting</span>' + V3.unlock_chart())
             + KIT.split('<span class="lbl">Calendar</span>' + cal, '<span class="lbl">Concentration</span>' + conc))
