@@ -11,15 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ## [1.26.402] - 2026-11-19
 
 ### Added
 - Chain Pending opens with an Expiry strip: one bar per close from the next close to the pending TTL, the height is the answers that expire then, the next close is gold with its count (close records only; left out when the TTL is unknown).
 - Agent pages carry one Intake line in the header facts: Admitted E97 for the newest close that admitted the Agent, or Held to E105 while the waitlist keeps its place. Nothing when no close names the Agent.
 
-=======
->>>>>>> origin/main
 ## [1.26.401] - 2026-11-19
 
 ### Changed
