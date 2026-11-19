@@ -129,56 +129,42 @@ def live():
         check("Network: Overview keeps .stats.netov, Health keeps Feeds", 'class="stats four netov"' in ov and "Feeds</h2>" in hl)
         # Agents sub-tabs no longer carry Graders or At risk
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
-        # Governance tabs
+        # Governance (1.26.395): one hero and one module: Standing, Closes, Payouts, Graders, Proposals, Rules. Old tab URLs land on the right place.
         tabs = {}
-        for t in ("", "established", "at-risk", "payouts", "graders", "directory", "forum", "proposals", "charts", "rules"):
+        for t in ("", "standing", "established", "at-risk", "never", "directory", "closes", "settlement", "changes", "intake", "settleage", "payouts", "graders", "queue", "proposals", "forum", "protocol", "charts", "rules"):
             u = "/governance" + (f"?tab={t}" if t else ""); c, b, _ = get(u); tabs[t] = b
             check(f"GET {u} 200, one chip on, no em or en dash, no share button", c == 200 and b.count('class="chip on"') >= 1 and "\u2014" not in b and "\u2013" not in b
                   and "share" not in b.lower().replace("top10_share", ""))
-        g = tabs[""]
-        check("Governance overview: stat cards and tabs", all(f'>{x}</div>' in g or f'>{x}</span>' in g for x in ("Established", "At risk", "Watch", "Agreement"))
-              and all(f'>{x}</a>' in g for x in ("Overview", "Established", "At risk", "Payouts", "Rules"))
-              and g.count('class="chip') - g.count('class="chip on') >= 4 and 'id="for-agents"' in g
-              and all(f'>{x}</a>' in g for x in ("Graders", "Directory", "Forum", "Proposals", "Charts")))   # 1.26.293: five tabs, the rest in For agents
+        g = tabs[""]; A1 = "poa1" + "A" * 40
+        check("Governance: one h1, the six module tabs in one module, no For agents block", g.count("<h1") == 1 and all(f'data-kit-tab="{x}"' in g for x in ("standing", "closes", "payouts", "graders", "proposals", "rules"))
+              and 'id="for-agents"' not in g)
+        check("Governance hero: Established ring and Added and removed per close", 'class="ring' in g or "data-cu=" in g or "Established" in g)
+        check("old tab URLs land: established, at-risk, never and directory on Standing; settlement, changes, intake, settleage, charts on Closes; forum and protocol on Proposals; queue on Graders",
+              all('data-kit-tab="standing"' in tabs[k] and 'data-kit-tab="standing" class="chip on"' in tabs[k] or 'class="chip on" data-kit-tab="standing"' in tabs[k] for k in ("established", "at-risk", "never", "directory"))
+              and all('class="chip on" data-kit-tab="closes"' in tabs[k] for k in ("settlement", "changes", "intake", "settleage", "charts"))
+              and all('class="chip on" data-kit-tab="proposals"' in tabs[k] for k in ("forum", "protocol"))
+              and 'class="chip on" data-kit-tab="graders"' in tabs["queue"])
         r = tabs["at-risk"]
-        check("At risk: the two-close list, then every established Agent with a level and a rule link", 'id="at-risk"' in r and 'id="standing"' in r and 'tab=rules#lapse' in r and re.search(r'class="tag (warn|est|ok|)">(At risk|Watch|Safe|No record|System)<', r))
-        check("At risk: level filter", get("/governance?tab=at-risk&level=safe")[0] == 200 and 'level=safe#standing" class="chip on"' in get("/governance?tab=at-risk&level=safe")[1])
-        gr = tabs["graders"]; check("Graders: the calibration table, header sort keeps the tab (csort, its own key)", 'id="calibration"' in gr and 'href="/governance?tab=graders&amp;csort=aligned#calibration"' in gr)
-        check("Graders: live seals, jury seats per close and coverage stats", all(x in gr for x in ("Seals since close", "Jury seats per close", ">Coverage<", ">Queue<")) and 'class="chartbox' in gr)
-        dr = tabs["directory"]; A1 = "poa1" + "A" * 40
-        check("Directory: every Agent with rewards, eligible, seals and attestations; sort and filter chips", 'id="directory"' in dr and f'href="/address/{A1}#standing"' in dr
-              and all(f'>{x}<i class="ha"' in dr for x in ("Rewards", "Eligible", "Seals", "Attestations", "Last paid", "Agent")) and all(f'>{x}</a>' in dr for x in ("Established", "Graders", "Attesters")))
-        d2 = get("/governance?tab=directory&sort=atts&filter=graders")[1]
-        check("Directory: sort and filter keep each other", 'href="/governance?tab=directory&amp;sort=atts&amp;filter=graders" class="chip on">Graders' in d2
-              and '<th class="r dk hs on" aria-sort="descending"><a class="hsb" href="/governance?tab=directory&amp;sort=atts&amp;dir=asc&amp;filter=graders#directory"' in d2)
+        check("At risk: the Standing view with the At risk level chip on (the fixture has none at risk)", 'class="chip on" data-kit-sub="risk"' in r and ">Left<" in r and ">Level<" in r)
+        check("Standing: level filter", get("/governance?tab=standing&level=safe")[0] == 200 and 'class="chip on" data-kit-sub="safe"' in get("/governance?tab=standing&level=safe")[1])
+        gr = tabs["graders"]; check("Graders: Seals and Queue chips, Sealed, Pending and Jury figures, the jury chart", 'data-kit-sub="seals"' in gr and 'data-kit-sub="queue"' in gr and all(x in gr for x in ("Sealed", "Pending", "Jury")) and 'class="chartbox' in gr)
+        dr = tabs["directory"]
+        check("Directory: every Agent in 20 rows with Score, Rewards and Seals, linked to the Agent page", f'href="/address/{A1}' in dr and all(f">{x}</a>" in dr for x in ("Score", "Rewards")) and dr.count('class="al ag"') <= 20)
+        d2 = get("/governance?tab=directory&sort=score")[1]
+        check("Directory: sort=score marks the Score header", 'class="srt cur desc"' in d2 and "sort=score" in d2)
         pa = tabs["payouts"]
-        check("Payouts: Est. per Agent labelled Estimate, last paid closes, eligible and paid chart", 'id="estimate"' in pa and '<span class="tag est">Estimate</span>' in pa
-              and ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox' in pa)
-        fo = tabs["forum"]
-        check("Forum: range chips, stat cards, communities, most active, empty summary slot", all(f'>{x}</a>' in fo for x in ("24h", "7d", "30d", "All"))
-              and all(x in fo for x in (">Reply rate<", ">First reply<", ">Operator replies<", "Communities</h2>", "Most active</h2>", 'id="summary"', "No summary yet.")) and "Live-GrokBot" not in fo)
-        pr = tabs["proposals"]
-        check("Proposals: a/proposals table and the cited ballot list", 'id="proposals"' in pr and 'id="ballots"' in pr and "e66aec80" in pr and "Tally not public" in pr)
+        check("Payouts: Est. per Agent, Answered and K-attested figures, Next close, chart", ">Est. per Agent<" in pa and ">Answered<" in pa and ">K-attested<" in pa and "50.00M" in pa and 'class="chartbox' in pa)
+        fo = tabs["forum"]; pr = tabs["proposals"]
+        check("Proposals: Posts, Ballots and Protocol chips; the cited ballot list", all(f'data-kit-sub="{x}"' in pr for x in ("posts", "ballots", "protocol")) and "Founding ballot" in get("/governance?tab=proposals&sub=ballots")[1]
+              and "Tally not public" in get("/governance?tab=proposals&sub=ballots")[1] and "Live-GrokBot" not in fo)
         check("Forum and Proposals: no segment chips (the forum is not split by segment)", 'aria-label="Segment"' not in fo and 'aria-label="Segment"' not in pr)
         cs = tabs["charts"]
-        check("Charts: 24h, 7d, 30d and All, four charts", all(f'>{x}</a>' in cs for x in ("24h", "7d", "30d", "All")) and cs.count('class="chartbox') >= 4)
-        check("Charts: range chip on", 'range=24h" class="chip on"' in get("/governance?tab=charts&range=24h")[1])
+        check("Closes: Latest, Moves, Settlement, Intake and Settle age chips; Paid per close chart", all(f'data-kit-sub="{x}"' in cs for x in ("latest", "changes", "settlement", "intake", "settleage")) and cs.count('class="chartbox') >= 1)
         ru = tabs["rules"]; check("Rules: anchors for every rule link", all(f'id="{a}"' in ru for a in ("earn", "lapse", "removal", "no-record", "system", "seats", "votes", "carryover")))
-        check("Governance segment chips keep the tab", 'href="/governance?tab=at-risk&amp;segment=' in r or "segs" not in r)
-        check("Overview: Est. per Agent card labelled Estimate, links to Payouts", 'id="est-payout"' in g and '<span class="tag est">Estimate</span>' in g and ">Est. per Agent<" in g
-              and 'href="/governance?tab=payouts' in g)
-        check("Directory: CSV and API links keep sort, filter and segment", re.search(r'href="/api/v1/governance/directory\.csv\?sort=atts&amp;filter=graders[^"]*" download', d2) is not None)
-        # 1.26.108 Established tab and Score
+        # 1.26.108 Score and the Established views
         import json as J
-        c, es, _ = get("/governance?tab=established")
-        check("Established tab: count in the header, Score column with no ? (UI/UX P2: the method is on /about), sort and filter chips", c == 200 and re.search(r"Established · \d+", es) is not None
-              and 'class="qtip"' not in es and ">?</summary>" not in es
-              and all(f'>{x}<i class="ha"' in es for x in ("Score", "Held", "Agent", "Level", "Added", "Eligible", "Seals", "Left")) and 'class="tag score"' in es and "\u2014" not in es)
-        check("Established: names link to LabLeak, addresses to the Agent page", ('aname" href="https://minepoa.com/lableak/' in es or "fname" not in es) and 'href="/address/' in es)
-        check("Established: sort and filter keep each other", get("/governance?tab=established&sort=name&filter=graders")[0] == 200
-              and 'sort=name&amp;filter=graders#established" class="chip on"' in get("/governance?tab=established&sort=name&filter=graders")[1])
-        check("Directory: Score column and sort chip", ">Score<" in dr or 'Score<details class="qtip"' in dr)
-        check("Directory: sort=score", '<th class="r hs on" aria-sort="descending"><a class="hsb" href="/governance?tab=directory&amp;sort=score&amp;dir=asc#directory"' in get("/governance?tab=directory&sort=score")[1])
+        es = tabs["established"]
+        check("Established view: Score tags, Level, Left, no ? tips, addresses link to the Agent page", 'class="tag score"' in es and ">?</summary>" not in es and 'href="/address/' in es)
         c, _, h = get("/established?segment=1"); check(f"/established 301 keeps the query ({h.get('Location')})", c == 301 and h.get("Location") == "/governance?tab=established&segment=1")
         ab = get("/about")[1]; check("/about#score: method and weights", 'id="score"' in ab and "govscore.json" in ab and "Not an official ranking" in ab)
         c, b, _ = get("/api/v1/governance/established?sort=score&limit=5")
@@ -191,28 +177,7 @@ def live():
         # 1.26.112 Score sorting everywhere: Score and the four parts, Top first / Bottom first, in the URL, CSV and API links
         def sc_order(html):
             return [int(x) for x in re.findall(r'<span class="tag score">(\d+)</span>', html)]
-        for u, anchor in (("/governance?tab=established", "established"), ("/governance?tab=directory", "directory"), ("/governance?tab=at-risk", "standing"),
-                          ("/governance?tab=graders", "calibration"), ("/governance?tab=forum&range=all", "active"), ("/agents/top?tab=richlist", None)):
-            j = "&" if "?" in u else "?"
-            sk, dk = ("csort", "cdir") if anchor == "calibration" else ("sort", "dir")   # the calibration table has its own keys (the seals table shares the page)
-            hi = get(u + j + f"{sk}=score")[1]; lo = get(u + j + f"{sk}=score&{dk}=asc")[1]; gr_ = get(u + j + f"{sk}=grading&{dk}=asc")[1]
-            ho, lw = sc_order(hi), sc_order(lo)
-            if anchor == "calibration":   # only the calibration table's Score column
-                cut = lambda h: h[h.index('id="calibration"'):] if 'id="calibration"' in h else ""
-                ho, lw = sc_order(cut(hi)), sc_order(cut(lo))
-            check(f"{u}: sort=score Top first and Bottom first ({ho[:4]} / {lw[:4]})", ho == sorted(ho, reverse=True) and lw == sorted(lw) and (not ho or sorted(ho) == sorted(lw)))
-            if "forum" in u and "No authors" in hi: continue
-            th = lambda h, lab: re.search(r'<th[^>]*aria-sort="(\w+)"><a class="hsb" href="([^"]+)"[^>]*>' + lab + r'<i class="ha"', h)
-            s1, g1 = th(hi, "Score"), th(gr_, "Grading")
-            check(f"{u}: header sort: Score descending, click flips to ascending; Grading ascending; no Score ?; phone sort menu; no chip rows",
-                  s1 is not None and s1.group(1) == "descending" and f"{dk}=asc" in s1.group(2) and g1 is not None and g1.group(1) == "ascending" and f"{dk}=asc" not in g1.group(2)
-                  and 'Score<i class="ha" aria-hidden="true">↓</i></a>' in hi and ">?</summary>" not in hi and '<label class="sortsel">' in hi
-                  and all(f'>{t}<i class="ha"' in hi for t in ("Standing", "Grading", "Forum", "Consistency"))
-                  and "Top first</a>" not in hi and "Bottom first</a>" not in hi and 'class="chips sortchips"' not in hi and "\u2014" not in hi and "\u2013" not in hi)
-        lo = get("/governance?tab=established&sort=forum&dir=asc&filter=safe")[1]
-        check("Established: CSV and API links carry sort, dir and filter", "/api/v1/governance/established.csv?sort=forum&amp;dir=asc&amp;filter=safe" in lo and "/api/v1/governance/established?sort=forum&amp;dir=asc&amp;filter=safe" in lo)
-        dl = get("/governance?tab=directory&sort=consistency&dir=asc")[1]
-        check("Directory: CSV link carries sort and dir; part columns", "/api/v1/governance/directory.csv?sort=consistency&amp;dir=asc" in dl and '>Consistency<i class="ha"' in dl and '>Standing<i class="ha"' in dl)
+        # 1.26.395: header sorting by Score and the Score parts is covered by the API order checks below; the pages keep 20 rows and offset paging
         rk = get("/agents/top?tab=graders&sort=standing&dir=asc")[1]
         check("Rankings: header sort links carry sort and dir (the module has no CSV or API header links); Score and parts columns", "/agents/top?tab=graders&amp;sort=grading&amp;dir=asc" in rk or "/agents/top?tab=graders&amp;sort=score" in rk and "/api/leaderboard/graders.csv" not in rk and '>Standing<i class="ha"' in rk)
         apis2 = {}

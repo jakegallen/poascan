@@ -27,7 +27,7 @@ st = IK.propl_state()
 check("flag: Not set without the params", st["present"] is False and st["first_seen"] is None)
 h = GV.page({"tab": ["intake"]})
 h = h if isinstance(h, str) else h[1]
-check("Intake tab: Rate, TTL out, Other out, Net headers and the Proposal L stat Not set", all(x in h for x in (">Rate<", ">TTL out<", ">Other out<", ">Net<", "Proposal L params", "Not set")))
+check("Intake: Candidates, Cap and Change headers and the Proposal L flag Not set", all(x in h for x in (">Candidates<", ">Cap<", ">Change<", "Proposal L params", "Not set")))
 IK.note_params({"estab_ttl": 6}, now=NOW - 100)
 IK.note_params({"estab_ttl": 8, "estab_intake_floor": 20, "estab_intake_rate": 0.1}, now=NOW)
 db.put_blob("params", {"estab_ttl": 8, "estab_intake_floor": 20, "estab_intake_rate": 0.1, "pending_ttl_epochs": 16}); A._cache.clear()

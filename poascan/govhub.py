@@ -5,10 +5,10 @@ Module: Standing, Closes, Payouts, Graders, Proposals and Rules as tabs (kit.tab
 the old /governance?tab= links open the right place (established, at-risk, queue, directory and never land on Standing; settlement, changes,
 intake, settleage and charts on Closes; forum and protocol on Proposals). Every list shows 20 rows and pages by offset.
 One word once per screen (Jake's standing order): a state is a coloured dot whose chip carries the word, an epoch number is shown once.
-Backend still to come from Build (agreed in the issue 147 thread, not on main yet): 5b per-Agent standing moves (GET /api/v1/governance/standing-changes
-rows {address, name, from, to}, limit 20 + offset) and 5a counts (computed here from the same rows, so no wait). The Moves chip shows an
-empty state until 5b is live; tools/fixtures/gov_moves.json drives the fixture screenshots (POASCAN_PAGES_FIXTURE=1, never set in production)."""
+Data: standing rows and counts come from governance.standing_rows (in process); the Moves chip reads Build's 5b/5c rows through
+governance.api_standing_moves, the same data as /api/v1/governance/standing-moves (limit 20, offset paging)."""
 import os, json, time
+from . import closepause as CPZ
 from html import escape as E
 from . import db, analytics as A, kit as KIT, segments as SG, standing as SD, calibration as CA, governance as GOV, govv2 as GV2, grading as GR, gradingview as GVW, scoresort as SS
 from .ui import *
@@ -51,19 +51,10 @@ def dot(level, word=None):
 
 # ---------------- Build's 5b contract (moves) ----------------
 def moves(limit=20, offset=0):
-    """Per-Agent standing change since the last close: {rows:[{address, name, from, to}], total}, vocabulary safe, watch, at_risk, removed, changed rows only.
-    Source: Build's endpoint when it lands (hook MOVES_FN); fixture in a screenshot run; else None (empty state)."""
-    fn = globals().get("MOVES_FN")
-    if fn:
-        try: return fn(limit, offset)
-        except Exception: return None
-    if os.environ.get("POASCAN_PAGES_FIXTURE") == "1":
-        try:
-            rows = json.load(open(os.path.join(os.path.dirname(__file__), "..", "tools", "fixtures", "gov_moves.json")))["rows"]
-            return dict(rows=rows[offset:offset + limit], total=len(rows))
-        except OSError: return None
-    return None
-MOVES_FN = None
+    """Changed standing rows from Build's 5b/5c data (governance.api_standing_moves, the same rows as /api/v1/governance/standing-moves):
+    {rows:[{address, name, level watch|at_risk|removed, left, close}], total}, off safe, biggest change first."""
+    try: return GOV.api_standing_moves(limit, offset)
+    except Exception: return None
 
 # ---------------- hero ----------------
 def _day(ts):
@@ -147,16 +138,17 @@ CL_SUBS = [("latest", "/governance?tab=closes", "Latest"), ("changes", "/governa
 def moves_body(qs):
     off = _off(qs); m = moves(PAGE, off)
     if not m or not m["rows"]: return na("No standing moves at the last close.")
-    lab = {"safe": "Safe", "watch": "Watch", "at_risk": "At risk", "removed": "Removed"}
-    cls = {"safe": "ok", "watch": "warn", "at_risk": "bad", "removed": "nd"}
-    dt_ = lambda k: f'<i class="sd {cls.get(k, "nd")}" role="img" aria-label="{lab.get(k, k)}" title="{lab.get(k, k)}"></i>'
-    tb = table(["Agent", "Moved"], [[agent(r["address"], r.get("name") or ""), f'{dt_(r["from"])}<span class="arr" aria-hidden="true"></span>{dt_(r["to"])}'] for r in m["rows"]], cls="gtbl")
+    lab = {"watch": "Watch", "at_risk": "At risk", "removed": "Removed"}
+    cls = {"watch": "warn", "at_risk": "bad", "removed": "nd"}
+    dot = lambda k: f'<i class="sd {cls.get(k, "nd")}" role="img" aria-label="{lab.get(k, k)}" title="{lab.get(k, k)}"></i>'
+    cell = lambda r: (f'E{r["close"]}' if r["level"] == "removed" and r.get("close") is not None else (intc(r["left"]) if r.get("left") is not None else "···"))
+    tb = table(["Agent", "Level", "Closes left"], [[agent(r["address"], r.get("name") or ""), dot(r["level"]), cell(r)] for r in m["rows"]], cls="gtbl")
     return tb + pager(m["total"], off, lambda o: "/governance?tab=changes" + (f"&amp;offset={o}" if o else ""))
 
 def latest_body(qs):
     ep = A.epoch_rows(); off = _off(qs); rows = list(reversed(ep)); total = len(rows)
     sel = rows[off:off + PAGE]
-    tb = table(["Close", "Paid", "Per Agent", "Max"], [[f'<a href="/epoch/{r["epoch"]}{SG.qs()}">E{r["epoch"]}</a>', intc(r["paid"]), compact(r["median"]) if r.get("median") else "···", compact(r["max"]) if r.get("max") else "···"] for r in sel], cls="gtbl")
+    tb = table(["Close", "Paid", "Per Agent", "Max"], [[f'<a href="/epoch/{r["epoch"]}{SG.qs()}">E{r["epoch"]}</a>{CPZ.tag(r.get("pause"))}', intc(r["paid"]), compact(r["median"]) if r.get("median") else "···", compact(r["max"]) if r.get("max") else "···"] for r in sel], cls="gtbl")
     ch = bars([("", [r["paid"]]) for r in ep[-48:]], height=240, colors=("gold",), fmt=lambda z: f"{z:,.0f}") if ep else na("No close record yet.")
     u = lambda o: "/governance?tab=closes" + (f"&amp;offset={o}" if o else "")
     return KIT.split('<span class="lbl">Closes</span>' + tb + pager(total, off, u), '<span class="lbl">Paid per close</span>' + ch).replace('<span class="lbl">Closes</span>', "", 1)
@@ -164,7 +156,7 @@ def latest_body(qs):
 def settlement_body(qs):
     rows = GV2.settlement_closes(); off = _off(qs); rows = list(reversed(rows)); total = len(rows)
     sel = rows[off:off + PAGE]
-    tb = table(["Close", "Settled", "Not paid", "Expired", "Open"], [[f'<a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>', intc(r["settled"]), intc(r["not_paid"]), intc(r["expired_no_jury"]), intc(r["open"])] for r in sel], cls="gtbl")
+    tb = table(["Close", "Settled", "Not paid", "Expired", "Open"], [[f'<a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>{CPZ.tag_for(r["close"])}', intc(r["settled"]), intc(r["not_paid"]), intc(r["expired_no_jury"]), intc(r["open"])] for r in sel], cls="gtbl")
     return tb + pager(total, off, lambda o: "/governance?tab=settlement" + (f"&amp;offset={o}" if o else ""))
 
 def _flat(html): return f'<div class="gflat">{html}</div>'
@@ -193,7 +185,7 @@ def queue_body(qs):
     if GR.is_retired(): return na("minepoa retired its grading list.")
     if not GR.usable(): return na("The grading list has not been read yet.")
     s = GR.summary(); off = _off(qs); rows = GVW.queue_select("", "need", "desc"); total = len(rows); sel = rows[off:off + PAGE]; qn = s["quorum"]
-    fg = KIT.figs([("Pending", intc(s["pending"])), ("Ready", intc(s["ready_next_close"])), ("Carried", intc(s["at_quorum_queued"])),
+    fg = KIT.figs([("Pending", intc(s["pending"]) + GVW.stale_flag()), ("Ready", intc(s["ready_next_close"])), ("Carried", intc(s["at_quorum_queued"])),
                    ("Trusted", pct(s["trusted_share"]) if s.get("trusted_share") is not None else "···")])
     dim = '<span class="dim">···</span>'
     tb = table(["Answer", "Quorum", "Age", "Expires"], [[GVW.ans_link(r["id"]), GVW.qprog(r, qn), intc(r["age"]) if r.get("age") is not None else dim,
@@ -220,9 +212,10 @@ def intake_body(qs):
     from . import intake as IK
     cs = [c for c in IK.closes() if c["eligible"] or c["admitted"]]; off = _off(qs); rows = list(reversed(cs)); sel = rows[off:off + PAGE]
     if not cs: return na("No intake at any close yet.")
-    tb = table(["Close", "Candidates", "Cap", "Change"], [[f'<a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>', intc(r["eligible"]), intc(r["cap"]), f'{r["net"]:+,}'] for r in sel], cls="gtbl")
+    tb = table(["Close", "Candidates", "Cap", "Change"], [[f'<a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>{CPZ.tag_for(r["close"])}', intc(r["eligible"]), intc(r["cap"]), f'{r["net"]:+,}'] for r in sel], cls="gtbl")
     ch = bars([("", [r["admitted"], r["not_admitted"]]) for r in cs[-48:]], height=240, colors=("verd", "gold"), fmt=lambda z: f"{z:,.0f}", legend=["Admitted", "Waiting"])
-    return KIT.split(tb + pager(len(rows), off, lambda o: "/governance?tab=intake" + (f"&amp;offset={o}" if o else "")), ch)
+    fl = KIT.figs([("Proposal L params", "Set" if IK.propl_state()["present"] else "Not set")])   # the Set flag stays (1.26.110 intake contract)
+    return fl + KIT.split(tb + pager(len(rows), off, lambda o: "/governance?tab=intake" + (f"&amp;offset={o}" if o else "")), ch)
 
 def settleage_body(qs):
     from . import settleage as SA
@@ -234,11 +227,20 @@ def settleage_body(qs):
     tb = table(["Age", "Answers", ""], [[E(str(r["band"])), intc(r["answers"]), f'<span class="gbar" style="--w:{100 * r["answers"] / top:.1f}%"></span>'] for r in rows], cls="gtbl")
     return fg + tb
 
-PR_SUBS = [("posts", "/governance?tab=proposals", "Posts"), ("ballots", "/governance?tab=proposals&amp;sub=ballots", "Ballots")]
+PR_SUBS = [("posts", "/governance?tab=proposals", "Posts"), ("ballots", "/governance?tab=proposals&amp;sub=ballots", "Ballots"), ("protocol", "/governance?tab=protocol", "Protocol")]
 
 def dot_(cls, word): return f'<i class="sd {cls}" role="img" aria-label="{word}" title="{word}"></i> '
 
+def protocol_body(qs):
+    """Protocol timeline as a Proposals chip: stats, kind chips, header sort, 20 rows by offset (the CSV and API stay at /api/v1/protocol)."""
+    from . import protocolview as PV
+    off = _off(qs); k = _q(qs, "kind"); by = PV.SS.page_sort(qs, dict(PV.SORTS), "when"); d = PV.SS.page_dir(qs)
+    total = len(PV.select(k if k in dict(PV.FILTERS) else "", by, d))
+    q = lambda o: GOV.href("protocol", **dict(sort=by if by != "when" else "", dir="asc" if d == "asc" else "", kind=k, offset=str(o) if o else ""))
+    return sub_chips(PR_SUBS, "protocol", "Proposals") + PV.tab(qs, GOV.href, GOV.qsx, n=PAGE, off=off, links=False) + pager(total, off, lambda o: q(o))
+
 def proposals_body(qs):
+    if _q(qs, "sub") == "protocol" or _q(qs, "tab") == "protocol": return protocol_body(qs)
     rows, live = GOV.proposals_data(); sub = "ballots" if _q(qs, "sub") == "ballots" else "posts"
     if sub == "ballots":
         bl = [[E(b["name"]), (GOV.lt(GOV._iso(b["ends"])) if GOV._iso(b["ends"]) else E(b["ends"][5:16].replace("T", " "))),

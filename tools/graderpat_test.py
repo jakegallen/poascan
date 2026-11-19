@@ -81,10 +81,13 @@ with SG.use(1):
 A._cache.clear()
 
 # HTML
-h = GV.page({"tab": ["graders"]})
+# 1.26.395: the Graders tab is Seals and Queue (20 rows); the Grader patterns card renders from its own module (the API and CSV below are unchanged)
+_g = GV.page({"tab": ["graders"]}); _g = _g if isinstance(_g, str) else _g[1]
+check("Graders tab: Seals and Queue chips, no patterns card on the page", 'data-kit-sub="queue"' in _g and 'id="patterns"' not in _g)
+h = GP.section({}, lambda tab=None, **kw: GV.href("graders", **kw))
 sec = h[h.index('id="patterns"'):]
 card = sec[sec.index('id="patterns"'):]; card = card[:card.index("</section>")]
-check("Graders tab: Grader patterns card after Calibration", h.index('id="calibration"') < h.index('id="patterns"') and "Grader patterns · 4" in card)
+check("Grader patterns card: header with the grader count", "Grader patterns · 4" in card)
 check("A to Z by default: active Agent header, names before addresses", 'aria-sort="ascending"' in card.split("<tbody>")[0] and card.index(G[0]) < card.index(G[1]) < card.index(G[2]))
 check("system tag, low n hidden by default with the count", '<span class="tag">system</span>' in card and G[3] not in card and "1 under n 20 hidden" in card)
 check("Advisory tag and note, method link, percentile on hover", "Advisory" in card and 'href="/about#grader-patterns"' in card and 'title="Percentile 100 of 3 graders"' in card)

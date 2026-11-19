@@ -81,10 +81,9 @@ rs = [r["id"] for r in GVW.queue_select("", "sealed", "desc")]
 check(f"sort by Sealed, newest first, blanks last", rs[:2] == [aid(5), aid(3)] and set(rs[2:]) == {aid(4), aid(6)})
 rs = [r["id"] for r in GVW.queue_select("", "graded", "asc")]
 check("sort by Graded, oldest first, blanks last", rs[:2] == [aid(3), aid(5)])
-h = GV.page({"tab": ["queue"]})
-check("queue page: Sealed and Graded headers sort", ">Sealed<" in h and ">Graded<" in h and "sort=sealed" in h and "sort=graded" in h)
-check("queue page: times in the visitor's zone (time.lt), muted placeholder when blank", f'data-ts="{t0 + 300}" data-f="d"' in h and f'data-ts="{t0 + 300}" data-f="t"' in h and '<span class="dim">···</span>' in h)
-check("queue page: footer names the close record", "Sealed and Graded: first and latest seal in the E1 close record" in h)
+# 1.26.395: the Queue view is a 20 row list (Answer, Quorum, Age, Expires); Sealed and Graded stay in the API and CSV (checked above)
+h = GV.page({"tab": ["queue"]}); h = h if isinstance(h, str) else h[1]
+check("queue page: no Sealed or Graded columns, sort lives in the API", ">Sealed<" not in h and ">Graded<" not in h and "sort=sealed" not in h)
 check("queue page: never a pending score, no em or en dash", str(SCORE_MARK) not in h and "\u2014" not in h and "\u2013" not in h)
 qa = SV.api("/api/governance/queue", {"sort": ["sealed"]})[0]
 check("queue API: sealed_ts, graded_ts and seal_times on rows; sort=sealed", qa["rows"][0]["id"] == aid(5) and all(k in qa["rows"][0] for k in ("sealed_ts", "graded_ts", "seal_times")))
