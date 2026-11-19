@@ -577,7 +577,8 @@ a.aname:hover,a.aname:focus-visible,:where(.ag)>a.agn:hover,:where(.ag)>a.agn:fo
 .foot{display:block;padding:14px 24px;font-size:var(--t12);line-height:1.9}
 .frow{display:flex;flex-wrap:wrap;align-items:center;row-gap:2px}.frow a{color:var(--mute);text-decoration:none;white-space:nowrap}.frow a:hover{color:var(--amber)}
 
-@media(max-width:640px){.foot{padding:12px 16px}}
+.fsep{margin:0 6px;color:var(--line2)}
+@media(max-width:640px){.foot{padding:12px 16px}.fsep{margin:0 4px}}
 .sechead:has(>h1.sr-only:only-child){margin:0}
 
 /* pair selector + network marks */
