@@ -2140,6 +2140,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .kit-tbl{margin-bottom:6px}.kit-tbl .tw{max-height:none}
 .kit-tg{display:flex;gap:6px;margin-bottom:10px}.kit-tg .chip{min-height:30px;padding:2px 12px;font-size:var(--t12);cursor:pointer}
 .kit-pane[hidden]{display:none}
+.kit-sr{margin:-6px 0 10px}
 .kit-flat .card{background:none;border:0;box-shadow:none;border-radius:0;padding:0;margin:18px 0 0}
 .kit-flat .card::before,.kit-flat .card::after{display:none}
 .kit-flat .card>.ch{padding:0 0 8px;border:0;background:none;min-height:0}

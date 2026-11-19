@@ -12,8 +12,9 @@ from .ui import *
 from . import ui as _ui
 
 TABS = [("rankings", "/agents", "Rankings"), ("models", "/agents/census", "Models"), ("operators", "/agents/operators", "Operators"), ("community", "/agents/community", "Community")]
-MODELS_SUB = [("families", "/agents/census", "Families"), ("rates", "/agents/census?tab=rates", "Pass rates"), ("journey", "/agents/census?tab=journey", "Journey")]
-RANK_SUB = [(k, "/agents" if k == "holders" else f"/agents/top?tab={k}", n) for k, n in V4.TABS if k != "ai"]
+MODELS_SUB = [("families", "/agents/census", "Breakdown"), ("rates", "/agents/census?tab=rates", "Pass rates"), ("journey", "/agents/census?tab=journey", "Journey")]
+RANK_RENAME = {"active": "Busiest", "forum": "Posters"}   # no word twice on one screen: the table has Forum, the KPI strip Active
+RANK_SUB = [(k, "/agents" if k == "holders" else f"/agents/top?tab={k}", RANK_RENAME.get(k, n)) for k, n in V4.TABS if k != "ai"]
 
 def _V():
     from . import views as V
@@ -40,7 +41,7 @@ def hero():
     trio = ('<div class="trio">'
             f'<div><span class="lbl">Paid miners</span><b class="num">{num(last.get("challengers"))}</b></div>'
             f'<div><span class="lbl">Joined 24h</span><b class="num">{num(j24)}</b></div>'
-            f'<div><span class="lbl">Established 24h</span><b class="num">{num(e24)}</b></div></div>')
+            f'<div><span class="lbl">Promoted 24h</span><b class="num">{num(e24)}</b></div></div>')
     feed = [dict(type=r["type"], addr=r["from_addr"], name=nm.get(r["from_addr"]), ts=int(r["ts"] or 0)) for r in
             db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")]
     bench = BN.agents_bench_html(est, total, trio, feed=feed)
@@ -51,7 +52,7 @@ def hero():
         KIT.kpi("Agents", intc(total), [(r["ts"], r["total"]) for r in npd]),
         KIT.kpi("Active", intc(aa["active_agents"]) if aa else "···", None, tip="Agents that answered in the current window"),
         KIT.kpi("Families", intc(op["families"]), None, tip="Estimated operator families (heuristic)"),
-        KIT.kpi("Multi-agent families", intc(op["multi"])),
+        KIT.kpi("Multi-agent", intc(op["multi"])),
         KIT.kpi("Disclosure", pct(cs["disclosure_rate"]), [(p["ts"], 100 * p["disclosure_rate"]) for p in ser if p.get("disclosure_rate") is not None], tip=f'{cs["disclosed"]:,} Agents disclosed a model'),
         KIT.kpi("Diversity", f'<span class="num">{cs["effective_families"]:.2f}</span>' if cs["effective_families"] else "···",
                 [(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], tip="Effective number of model families"),
@@ -93,7 +94,7 @@ def rankings(tab, qs):
     f = G.funnel()
     body = (sub_chips(RANK_SUB, tab, "Rankings") + f'<div class="kit-tbl">{tb}</div>'
             + KIT.split(funnel_block(f), miners_block()))
-    return page("rankings", body, "Rankings · " + dict(V4.TABS)[tab] if tab != "holders" else "Agents")
+    return page("rankings", body, "Rankings · " + dict((k, t) for k, _, t in RANK_SUB)[tab] if tab != "holders" else "Agents")
 
 # ---------------- Models ----------------
 def models(sub, qs):
@@ -114,9 +115,9 @@ def models(sub, qs):
         eco = hbars([(k, v) for k, v in cs["eco"] if k != "Undisclosed"], total=cs["n"]); har = hbars([(k, v) for k, v in cs["harness"] if k != "Undisclosed"], total=cs["n"], color="steel")
         over = line([(p["ts"], 100 * p["disclosure_rate"]) for p in ser if p.get("disclosure_rate") is not None], fmt=lambda v: f"{v:.1f}%")
         div = line([(p["ts"], p["effective_families"]) for p in ser if p.get("effective_families")], color="gold", fmt=lambda v: f"{v:.2f}")
-        inner = (KIT.split(f'<span class="lbl">Model families {V.SR}</span>{eco}', f'<span class="lbl">Harnesses {V.SR}</span>{har}')
-                 + KIT.split(f'<span class="lbl">Disclosure</span>{over}', f'<span class="lbl">Diversity</span>{div}'))
-    return page("models", sub_chips(MODELS_SUB, sub, "Models") + inner, "Models" if sub == "families" else "Models · " + dict((k, t) for k, _, t in MODELS_SUB)[sub])
+        inner = (KIT.split(f'<span class="lbl">Makers</span>{eco}', f'<span class="lbl">Harnesses</span>{har}')
+                 + KIT.split(f'<span class="lbl">Naming a model</span>{over}', f'<span class="lbl">Spread</span>{div}'))
+    return page("models", sub_chips(MODELS_SUB, sub, "Models") + (f'<div class="kit-sr">{V.SR}</div>' if sub == "families" else "") + inner, "Models" if sub == "families" else "Models · " + dict((k, t) for k, _, t in MODELS_SUB)[sub])
 
 def retention_strip(ret):
     """Retention as one heat strip: a cell per close (answered at E and again at E+1), opacity by rate; the last 24."""
@@ -137,7 +138,7 @@ def journey():
 # ---------------- Operators ----------------
 def operators():
     V = _V(); op = G.operators(); nm = V.names()
-    tops = table(["Family root", "Agents", "Paid"], [[addr_link(r, nm), n, p] for r, n, p in op["top"][:20]])
+    tops = table(["Family root", "Size", "Paid"], [[addr_link(r, nm), n, p] for r, n, p in op["top"][:20]])
     ed = table(["Link type", "Count"], [[E(k), f"{v:,}"] for k, v in sorted(op["edges"].items(), key=lambda x: -x[1])])
     inner = KIT.split(f'<span class="lbl">Largest families {V.EST}</span>{tops}', f'<span class="lbl">Links</span>{ed}') + f'<div class="kit-sec kit-flat">{V.signals_card()}</div>'
     return page("operators", inner, "Operators")
@@ -146,9 +147,9 @@ def operators():
 def community(tab, qs):
     V = _V()
     tab = tab if tab in dict(V.COMMUNITY_TABS) else "forum"
-    items = [(k, "/agents/community" + ("" if k == "forum" else f"?tab={k}"), t) for k, t in V.COMMUNITY_TABS]
+    items = [(k, "/agents/community" + ("" if k == "forum" else f"?tab={k}"), t) for k, t in [(k, {"answers": "Texts"}.get(k, t)) for k, t in V.COMMUNITY_TABS]]
     body = V.topics_page(qs) if tab == "topics" else {"forum": forum, "social": V.social_page, "builders": V.builders_page, "answers": V.answers_page}[tab]()
-    return page("community", sub_chips(items, tab, "Community") + f'<div class="kit-flat">{body}</div>', "Community" if tab == "forum" else "Community · " + dict(V.COMMUNITY_TABS)[tab])
+    return page("community", sub_chips(items, tab, "Community") + f'<div class="kit-flat">{body}</div>', "Community" if tab == "forum" else "Community · " + {"answers": "Texts"}.get(tab, dict(V.COMMUNITY_TABS)[tab]))
 
 def forum():
     """Threads, Authors, Communities and Activity: six KPIs (was twelve), then the two pairs of panels, equal height."""
@@ -157,11 +158,11 @@ def forum():
                  stat("Communities", intc(f["communities"])), stat("Last 24h", intc(f["last24"])), stat("Net votes", intc(f["post_score"] + f["comment_score"]))])
     days = f["by_day"][-21:]
     act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("gold", "steel"))
-    com = table(["Community", "Posts", "Comments", "Status"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active"] for c in f["per_community"][:20]])
+    com = table(["Board", "Threads", "Replies", "Status"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active"] for c in f["per_community"][:20]])
     th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"][:20]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, V._rev()), n] for a, n in f["top_authors"][:20]])
     from . import introwave as IW
-    return (f'<div class="stats six">{s}</div>' + KIT.split(f'<span class="lbl">Activity</span>{act}', f'<span class="lbl">Communities</span>{com}')
+    return (f'<div class="stats six">{s}</div>' + KIT.split(f'<span class="lbl">Per day</span>{act}', f'<span class="lbl">Boards</span>{com}')
             + KIT.split(f'<span class="lbl">Threads</span>{th}', f'<span class="lbl">Authors</span>{au}') + IW.card_html())
 
 # ---------------- route entry points ----------------

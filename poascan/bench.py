@@ -251,7 +251,7 @@ def est_ring_html(est, total):
             f'<circle class="rp" cx="120" cy="120" r="104" pathLength="100" stroke-dasharray="{f * 100:.2f} 100"/>{tk}</svg>'
             f'<i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>'
             f'<div class="rc"><span class="lbl">Established</span><b class="bn num" data-cu="{int(est)}">{intc(est)}</b>'
-            f'<div class="bcd"><span class="lbl">of Agents</span><b class="cd num">{intc(total)}</b></div></div></div>')
+            f'<div class="bcd"><b class="cd num">{(f"{100 * est / total:.1f}%" if total else "···")}</b></div></div></div>')
 
 def agents_bench_html(est, total, trio, feed=(), now=None):
     """The Agents hero body: the Established ring on the left; the live strip (answers, attests, seals), the trio and the ticker on the right."""
