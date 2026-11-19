@@ -1732,17 +1732,34 @@ def api_groups():
 _DOC = {}   # 1.26.303: name -> (ts, html) for the /api and /api/reference HTML pages
 DOC_TTL, DOC_MAX = 300, 3600
 
+def _doc_key(name):
+    """name plus the explorer's state (tab, group, sel, offset, run). A search text is never kept (unbounded), so it renders live."""
+    if name != "api": return name, False
+    from . import ui as U
+    q = getattr(U.REQ, "qs", None) or {}
+    if (q.get("q") or [""])[0].strip(): return name, True
+    return name + "?" + "&".join(f"{k}={(q.get(k) or [''])[0][:80]}" for k in ("tab", "group", "sel", "offset", "run")), False
+
 def doc_page(name, render):
     """The page from memory when younger than DOC_TTL, else rendered and stored. The routes it lists change only with a build."""
-    hit = _DOC.get(name)
+    key, live = _doc_key(name)
+    if live: return render()
+    hit = _DOC.get(key)
     if hit and time.time() - hit[0] < DOC_TTL: return hit[1]
-    h = render(); _DOC[name] = (time.time(), h); return h
+    h = render()
+    if len(_DOC) > 400: _DOC.clear()
+    _DOC[key] = (time.time(), h); return h
 
 def doc_ready(name):
     """True when a copy under DOC_MAX old is stored: the server may serve it without a slot (doc_page refreshes it past DOC_TTL)."""
-    hit = _DOC.get(name); return bool(hit) and time.time() - hit[0] < DOC_MAX
+    key, live = _doc_key(name); hit = _DOC.get(key); return (not live) and bool(hit) and time.time() - hit[0] < DOC_MAX
 
 def api_page(page, card):
+    """1.26.390 consolidation: the hero and the explorer module (apihub.py). The previous page is api_page_legacy."""
+    from . import apihub, ui as U
+    return apihub.page(getattr(U.REQ, "qs", None) or {}, page)
+
+def api_page_legacy(page, card):
     from . import ui as U
     groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)
     def row(m, path, purpose, smp):
