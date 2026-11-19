@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.393] - 2026-11-19
+
+### Changed
+- Agents: the Journey funnel's Established stage is now the engine's Established set, the same number as the hero ring (it counted only the part of the set that is in the archive table, 98 fewer). Pass rates shows one table at a time (Makers or Harnesses) instead of three lists; Journey shows its cohorts as one table; repeated labels trimmed (Count, Answering, Earners, Samples); the hero trio no longer wraps its labels at phone width.
+- Cache: Journey, Pass rates and Operators join the warm list, so the 38 s cold render of Journey is no longer paid by a visitor.
+- Agents Pass rates: one table with a makers and harness toggle in place of two tables; the Journey cohort table keeps Cohort, Archive, Answering, Passed, Earners and Est.; the Promoted 24H label no longer wraps at 390 px.
+
 ## [1.26.392] - 2026-11-19
 
 ### Added

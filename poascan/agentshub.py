@@ -71,6 +71,7 @@ def page(cur, body, title="Agents"):
 # ---------------- Rankings ----------------
 def funnel_block(f):
     st = [("Archive" if i == 0 else n, v) for i, (n, v) in enumerate(f["overall"])]   # first stage is every address in the archive, not the live chain count
+    st[-1] = (st[-1][0], len(A.established_set()))   # 1.26.392: Established is the engine's set (the hero ring), not only the part of it that is in the archive table
     return '<span class="lbl">Journey</span>' + _V().funnel_html(st)
 
 def miners_block():
@@ -101,13 +102,7 @@ def models(sub, qs):
     V = _V(); SS = V4._SS()
     sub = sub if sub in dict((k, 0) for k, _, _ in MODELS_SUB) else "families"
     if sub == "rates":
-        so = SS.q(qs, "sort"); so = so if so in V4.sorts("models") and so != "rank" else ""; d = SS.page_dir(qs)
-        base = "/agents/census?tab=rates"
-        def link(k, dd):
-            qq = [x for x in ((f"sort={k}" if k not in ("", "rank") else ""), ("dir=asc" if dd == "asc" else "")) if x]
-            return base + ("&amp;" + "&amp;".join(qq) if qq else "")
-        tb, n = V4.table_html("models", 20, so, d, link)
-        inner = f'<div class="kit-tbl">{tb}</div><div class="kit-flat">{V.ai_cards()}</div>'
+        inner = rates_view()
     elif sub == "journey":
         inner = journey()
     else:
@@ -119,6 +114,19 @@ def models(sub, qs):
                  + KIT.split(f'<span class="lbl">Naming a model</span>{over}', f'<span class="lbl">Spread</span>{div}'))
     return page("models", sub_chips(MODELS_SUB, sub, "Models") + (f'<div class="kit-sr">{V.SR}</div>' if sub == "families" else "") + inner, "Models" if sub == "families" else "Models · " + dict((k, t) for k, _, t in MODELS_SUB)[sub])
 
+def rates_view():
+    """Pass rates: model family or harness, one table at a time (a toggle), so no header row repeats on a screen."""
+    lb = G.leaderboard()
+    def tb(rows):
+        return table(["Group", "Count", "Answering", "Earners", "Earner %", "Juried", "Pass rate", "Total", "Per agent"],
+                     [[E(x["key"]), f'{x["accounts"]:,}', f'{x["answered"]:,}', f'{x["paid"]:,}', pct(x["paid_rate"]), f'{x["passed"] + x["failed"]:,}',
+                       pct(x["pass_rate"]) if x["pass_rate"] is not None else '<span class="na">···</span>',
+                       poa(x["earned"], mined=True), num(x["earned_per_account"])] for x in rows])
+    tg = ('<div class="kit-tg" role="group" aria-label="Group by"><button type="button" class="chip on" data-pane="m" aria-pressed="true">Makers</button>'
+          '<button type="button" class="chip" data-pane="n" aria-pressed="false">Harnesses</button></div>')
+    return (f'<div class="kit-sr">{_V().SR}</div><div class="kit-blk">{tg}<div class="kit-pane" data-p="m"><div class="kit-tbl">{tb(lb["by_family"])}</div></div>'
+            f'<div class="kit-pane" data-p="n" hidden><div class="kit-tbl">{tb(lb["by_harness"])}</div></div></div>')
+
 def retention_strip(ret):
     """Retention as one heat strip: a cell per close (answered at E and again at E+1), opacity by rate; the last 24."""
     mx = max((r["rate"] for r in ret[-24:]), default=0) or 1   # scaled to the best close in view so a low rate still reads
@@ -128,9 +136,9 @@ def retention_strip(ret):
 def journey():
     V = _V()
     f = G.funnel(); ret = G.retention(); tta = G.time_to_answer(); cu = G.custody()
-    coh = "".join(f'<h3>Cohort {E(k)}</h3>' + V.funnel_html([("Archive" if i == 0 else n, v) for i, (n, v) in enumerate(s)]) for k, s in f["cohorts"][-3:])
-    cust = table(["Type", "Agents"], [[E(r["custody"] or "unknown"), r["n"]] for r in cu["observed"]] + [["External wallet linked", cu["linked_external"]]], cls="wrapt")
-    tt = table(["Epoch", "Answers", "p25", "Median", "p75"], [[f'E{x["epoch"]}', x["n"], f'{x["p25"]:.0f} min', f'{x["median"]:.0f} min', f'{x["p75"]:.0f} min'] for x in tta[-20:][::-1]])
+    coh = table(["Cohort", "Archive", "Answering", "Passed", "Earners", "Est."], [[E(k)] + [f"{v:,}" for _, v in st] for k, st in [c for c in f["cohorts"] if c[0] == "pre-archive"] + [c for c in f["cohorts"] if c[0] != "pre-archive"][-11:][::-1]])   # one header row for every cohort, not a funnel per cohort
+    cust = table(["Type", "Count"], [[E(r["custody"] or "unknown"), r["n"]] for r in cu["observed"]] + [["External wallet linked", cu["linked_external"]]], cls="wrapt")
+    tt = table(["Epoch", "Samples", "p25", "Median", "p75"], [[f'E{x["epoch"]}', x["n"], f'{x["p25"]:.0f} min', f'{x["median"]:.0f} min', f'{x["p75"]:.0f} min'] for x in tta[-20:][::-1]])
     return (KIT.split(f'<span class="lbl">Funnel by cohort</span>{coh}', f'<span class="lbl">Custody</span>{cust}')
             + f'<div class="kit-sec"><span class="lbl">Retention</span>{retention_strip(ret) if ret else skel(2)}</div>'
             + f'<div class="kit-sec"><span class="lbl">Time to answer</span>{tt if tta else skel(2)}</div>')
