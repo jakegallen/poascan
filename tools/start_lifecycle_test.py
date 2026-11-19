@@ -29,6 +29,7 @@ check("7a joined_ts from the first join tx", lc["joined_ts"] == now - 6 * day)
 check("7a first_answer_ts from the first challenge tx", lc["first_answer_ts"] == now - 6 * day + 3600)
 check("7a first_seal_ts from the first grade-sealed tx", lc["first_seal_ts"] == now - 6 * day + 7200)
 check("7a first_payout_ts from the earliest paying close", lc["first_payout_ts"] == now - 6 * day + 10000)
+check("7a first_seal_cast_ts aliases first_seal_ts (the cast seal, not an answer seal)", lc["first_seal_cast_ts"] == lc["first_seal_ts"])
 check("7a malformed address returns badaddr sentinel", G.agent_lifecycle("not-an-addr") == "badaddr")
 G.accounts_all = lambda: {}
 check("7a unknown address with no footprint returns None (route 404s)", G.agent_lifecycle(CCC) is None)
@@ -45,6 +46,9 @@ check("7b median seconds to first pass = pass close ts minus join ts", j["median
 check("7b median seconds to first pay = payout ts minus join ts", j["median_s_to_first_pay"] == 10000)
 check("7b reached_first_pass counts only joiners who passed", j["reached_first_pass"] == 1)
 check("7b joins_per_hour buckets sum to the joiner count", sum(n for _h, n in j["joins_per_hour"]) == 2)
+check("7b last_join_at is an ISO UTC string of the most recent join", isinstance(j["last_join_at"], str) and j["last_join_at"].endswith("Z") and len(j["last_join_at"]) == 20)
+A._cache.clear()
+check("7b default window is 30 days", G.joiners()["days"] == 30)
 
 srv = open(os.path.join(ROOT, "poascan", "server.py")).read()
 check("server routes /api/agents/joiners to G.joiners", '"/api/agents/joiners"' in srv and "G.joiners(" in srv)
