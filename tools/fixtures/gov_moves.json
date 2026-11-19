@@ -1,0 +1,210 @@
+{
+ "rows": [
+  {
+   "address": "poa1GQfpUF9yR41X7RfoTHJkTDiYufmU4M6G6FWKuuRQCc2w",
+   "name": null,
+   "from": "at_risk",
+   "to": "safe"
+  },
+  {
+   "address": "poa1G8KcCVhrPVNiNCFMnaXpyCjDDoewQRyrvt796kxoaJKa",
+   "name": null,
+   "from": "at_risk",
+   "to": "removed"
+  },
+  {
+   "address": "poa16cfDVAFAsmhkxk4nmhBnE8s2srWLmyBS32dtXMAA4yq3",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa17QhkNHQm5vX1WrshLMuNeFviCQUuwFRnnCzYtFNQpiMz",
+   "name": null,
+   "from": "at_risk",
+   "to": "removed"
+  },
+  {
+   "address": "poa1D9Ubb7Bqo4fH7HFagdkLLcXUYGaGfHgSbb9kwc47hJ6S",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa16XKkTDSDTrnrS13M53p7j5QuCdDJPA7iDgxF7qweGzUX",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa192Zv1dHoQ5UcRqpmRsGWpmNkV84g8R8N814G4jxoHQfo",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa19Kemke6G7QJ4FGGp8Cvuzu2e51PuWgBG2GUVdzZtTUzg",
+   "name": null,
+   "from": "at_risk",
+   "to": "safe"
+  },
+  {
+   "address": "poa13HqFB5153rifWnq3MmW74oJogcLnrgkvCq1CwmJa43Mu",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa17RVAtj9BMLGJnHKFWq3RBHMb5Xpme9dWXsv6AJgABdCM",
+   "name": null,
+   "from": "watch",
+   "to": "safe"
+  },
+  {
+   "address": "poa16KUYkEAQYqH81rTU6vLiVHynt3X49LDHNsee2sQmWUZ9",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa19DDNoZkDMfxnXXant9LzY47ND2BHMWLkR1y4wxPDr5iN",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa1F8EkBxSwvrr2DKRohqhX5ipeqmTo7Y9D3nj9HfD4AV2K",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa1PNKrSeog79jNUFqrj6va3Lk2kPhGaNQa7ymaEdLg4sk",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa1A5AKwH5q6xbaarcW2mQ4B1XwYPGhriM292n1jtvPG7iS",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa1EHt12TrKzrYANe2fLbqmcRXZnuG8gyu2bwYhBZeXJrne",
+   "name": null,
+   "from": "at_risk",
+   "to": "removed"
+  },
+  {
+   "address": "poa1BT585hmm6QPTeGGahR2MsncmBLHGhbsV6UbFV5E3Vqo5",
+   "name": null,
+   "from": "watch",
+   "to": "safe"
+  },
+  {
+   "address": "poa1DH98ZZ3RA5TuRxicRj9ygTJs9esWEX16emciYp3LrdkS",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa169z9r55C33n8bhwUXJwTnMutdATCV8sVR7Lm2SMXXZBC",
+   "name": null,
+   "from": "watch",
+   "to": "safe"
+  },
+  {
+   "address": "poa17X7VzdxTj2XVJ3KXBUzaH4HY3DRViwB4FdYKfFYKuLwW",
+   "name": null,
+   "from": "at_risk",
+   "to": "safe"
+  },
+  {
+   "address": "poa1AgCqVGDAfaqzS2MKV6b95N7R7tpLi3x8mfAaE1Fxwq1X",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa1EdYbMRXUDogZznEYQp7wBNM9Ao51bqEg4ERJiMrRfcXp",
+   "name": null,
+   "from": "at_risk",
+   "to": "safe"
+  },
+  {
+   "address": "poa1GYsUbyvRbDUQegb9duTKpL1cSDZpTWd1LQhATpJxsg5A",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa12uay72GBr7TUEGrzP9Vchr4HHtKEmKhQyw2BPdZsyfJE",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa1C4D4dEUdSdyofD1nyqNzPNd4ipogZAbkiPYuN3YALwFH",
+   "name": null,
+   "from": "safe",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa19P93zPt9evradSD1toKJeHbrm7eFUwtvgtzXbPBJNHr6",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa1B7YvTT6uFSQpM26Xh5DugjDFomUidxh6LUqGTQbve15q",
+   "name": null,
+   "from": "watch",
+   "to": "safe"
+  },
+  {
+   "address": "poa19ma67ed1hM7gcpDLohVr25JBpvg9eTuPx2nf3ZmwGYsx",
+   "name": null,
+   "from": "at_risk",
+   "to": "removed"
+  },
+  {
+   "address": "poa14YurMpGxhzczN8uYwHt5UxjGSSoHtunN8Uq4H3rkTwjZ",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa1HPvnDmGFYwnptLM7aaHYdfZqNuWKA7uKbvNS1taH131w",
+   "name": null,
+   "from": "watch",
+   "to": "safe"
+  },
+  {
+   "address": "poa12ibnF5shKw3oqja8RXYLCQy7MTxGz74NQ4rHrwM5vbKL",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa12jd6xJWG3zG1SGY2A198GzCTksA2MkoJujkPJpREAb59",
+   "name": null,
+   "from": "safe",
+   "to": "watch"
+  },
+  {
+   "address": "poa13YUqWLYxEv7rfXcJKWUAAJgaK3Vd5nYyHVH8mKwvia7B",
+   "name": null,
+   "from": "watch",
+   "to": "at_risk"
+  },
+  {
+   "address": "poa15d1XrDVAoxdPTVXqzH6w6DeHbFU4eaEAL6KbfkEffBue",
+   "name": null,
+   "from": "at_risk",
+   "to": "safe"
+  }
+ ],
+ "total": 34,
+ "note": "FIXTURE: shape of the agreed 5b contract; not real data"
+}

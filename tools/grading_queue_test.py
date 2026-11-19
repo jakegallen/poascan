@@ -62,18 +62,18 @@ def main():
     check("sort by untrusted desc", GVW.queue_select("", "untrusted", "desc")[0]["id"] == "d" * 64)
 
     h = GV.page({"tab": ["queue"]}); t = txt(h); nodash("queue page", h)
-    check("queue page: four stats, no sub-lines", all(w in t for w in ("At quorum", "Pending", "Trusted share", "E4 close")) and 'class="sub"' not in h.split('id="queue"')[0])
-    check("queue page: watermark-bearing stat cards", h.count('class="stat') >= 4)
-    check("queue page: countdown in the visitor's time", 'class="cd num"' in h and "data-close=" in h and "<time" in h)
-    check("queue page: header sorting and phone sort menu", 'class="sorth' in h or "sort=" in h)
-    check("queue page: shared sort select", "<select" in h)
+    check("queue page (1.26.395): Pending, Ready, Carried and Trusted figures, no sub-lines", all(w in t for w in ("Pending", "Ready", "Carried", "Trusted")) and 'class="sub"' not in h and 'data-kit-sub="queue"' in h)
+    check("queue page: one 20 row table with Answer, Quorum, Age and Expires", all(f">{w}<" in h for w in ("Answer", "Quorum", "Age", "Expires")) and h.count("<tr>") <= 21)
+    check("queue page: no header shortcut links (CSV and API stay at /api/v1/governance/queue)", 'class="more"' not in h)
+    check("queue page: the Pending figure counts the pending rows", ">3<" in h)
+
     check("queue page: 4 step progress with trusted and untrusted pips", 'class="qp"' in h and '<i class="t"' in h and '<i class="u"' in h and f"4/{GR.grade_quorum()}" in t)
-    check("queue page: trusted and untrusted are wide-screen columns, Need and Expires stay at 390 (1.26.138)", '<td class="r dk">1</td><td class="r dk">4</td>' in h)
-    check("queue page: ready row marked", "class=rdy" in h and "Ready" in t)
-    check("queue page: need chips with counts", "Need 3" in t and "Open epoch" in t)
-    check("queue page: CSV and API links", "/api/v1/governance/queue.csv" in h and "/api/v1/governance/queue" in h)
-    check("queue page: Agent names link to LabLeak or address", "/address/" in h)
-    check("queue tab in nav and sitemap", 'tab=queue' in GV.page({"tab": ["overview"]}) and "/governance?tab=queue" in open(SV.__file__).read())
+
+    check("queue page: Ready figure and no Need chips", "Ready" in t and "Need 3" not in t)
+
+
+    check("queue page: each Answer links to its page", "/answer/" in h or "/tx/" in h)
+    check("queue chip in the Graders tab and the sitemap", 'sub=queue' in GV.page({"tab": ["graders"]}) and "/governance?tab=queue" in open(SV.__file__).read())
     # settle window (1.26.139): only the oldest settle_cap_per_close rows by (since, id) are evaluated at a close
     from poascan import analytics as AN
     real = AN.params
@@ -85,8 +85,8 @@ def main():
     sm = GR.summary()
     check("summary: ready_next_close 0, at_quorum_queued 1, upstream at_quorum kept", sm["ready_next_close"] == 0 and sm["at_quorum_queued"] == 1 and sm["at_quorum"] == 1)
     hq = GV.page({"tab": ["queue"]})
-    check("queue page: Queued tag and carry over note", ">Queued<" in hq and "carry over" in hq and "+1 queued" in hq)
-    check("queue page: queued chip", "At quorum, queued" in txt(hq))
+    check("queue page: Carried figure counts the at quorum row held back by the settle cap", re.search(r"Carried\s*1\b", txt(hq)) is not None)
+
     check("API: settle fields", GV.api_queue()["at_quorum_queued"] == 1 and GV.api_queue()["settle_cap"] == 1 and "in_settle_window" in GV.api_queue()["rows"][0])
     check("need filter queued", [r["id"] for r in GV.api_queue(need="queued")["rows"]] == ["d" * 64])
     check("need reads grade_quorum", GR.summary()["quorum"] == 4)
@@ -97,14 +97,14 @@ def main():
     check("q tooltip: counts at the next close", "Counts at the next close" in GVW._yesno(True))
     # overview
     h = GV.page({"tab": ["overview"]}); nodash("overview", h)
-    check("overview: grading stats row", "At quorum" in txt(h) and "Trusted share" in txt(h))
+    check("overview API: grading stats row", GV.api_overview()["grading"]["pending"] == 3)
     # graders exact
     g = GV.api_graders()
     check("graders API: exact source with as of", g["seals_source"] == "minepoa_grading" and g["upstream_as_of"] and g["fetched_at"])
     row = {x["address"]: x for x in g["seals_since_close"]}
     check("graders API: qual, rate, pending, avg, trusted", G1 in row and row[G1]["qual"] == 1 and row[G1]["qual_rate"] == 1.0 and "minepoa_avg" in row[G1] and "trusted_listed" in row[G1])
     h = GV.page({"tab": ["graders"]}); nodash("graders", h)
-    check("graders page: exact columns, no lower bound mark", "Jury avg" in h and "On queue" in h and "\u2265" not in txt(h).split("Seals since close")[-1][:2000])
+    check("graders page: Seals view with Agent, Count and Score, no lower bound mark", all(f">{w}<" in h for w in ("Agent", "Count", "Score")) and "\u2265" not in txt(h))
     # agent
     ag = GV.api_agent(fixture.A1)["grading"]
     check("agent API: pending answers", [x["id"] for x in ag["pending_answers"]] == ["d" * 64])
@@ -134,7 +134,7 @@ def main():
     # archived segment hides the live list
     from poascan import segments as SG
     with SG.use(1):
-        check("archived segment: queue not shown", "current segment only" in GV.page({"tab": ["queue"]}))
+        check("archived segment: queue not shown", "live network" in GV.page({"tab": ["queue"]}))
     # stale
     cur["fetched_at"] = NOW - 7200
     db.put_blob(GR.BLOB, cur); db.put_blob(GR.META, dict(GR.meta(), last_check=NOW - 7200)); GR._cur.clear(); A._cache.clear()   # 1.26.184: Stale follows the last check

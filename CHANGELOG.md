@@ -16,6 +16,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed
 - Start: one module (Join, Check, Earn) beside a live panel (epoch, Answer in countdown, Joined today, Pass rate, Median to pay). Join is the same card, prompt and templates as before. Check reads one address as a stepper (Joined, First answer, First seal, First payout) and re-checks while a stage is waiting. Earn lists the ways to earn.
 - Start Check and the live panel read the Agent lifecycle and joiners rows in process, the same data as /api/v1/agents/{addr}/lifecycle and /api/v1/agents/joiners.
+## [1.26.395] - 2026-11-19
+
+### Changed
+- Governance: one hero (the Established ring, the Added and removed per close chart, six numbers) and one module. Standing (Established, At risk, Moves, Queue, Directory, Never), Closes (settlement, changes, intake, settle age, charts), Payouts, Graders, Proposals (forum, protocol timeline) and Rules swap in place. Every list shows 20 rows and pages by offset. Old /governance?tab= links open the matching place.
+- Governance Moves reads the standing-moves rows in process, the same data as /api/v1/governance/standing-moves.
+- Governance no longer draws the calibration table, the Grader patterns card, the Expiry horizon card, the queue board, the Sealed and Graded queue columns or the intake per Agent draw list. The API and CSV exports are unchanged.
 
 ## [1.26.394] - 2026-11-19
 
