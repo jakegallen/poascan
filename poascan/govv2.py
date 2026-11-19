@@ -55,11 +55,6 @@ def add_panel_age(rows, open_epoch):
         r["seal_times"] = list(ts); r["sealed_ts"] = ts[0] if ts else None; r["graded_ts"] = ts[-1] if ts else None
     return rows
 
-# ---------------------------------------------------------------- (e) settlement by origin epoch, per close
-def _origin(aid, prev, tx_ep):
-    if aid in prev: return A.since_of(aid, prev[aid])
-    return tx_ep.get(aid)
-
 @A.cached("govv2_settlement", 300)
 def settlement():
     """One row per (close, origin epoch) in the selected segment: settled rows of that close (basis.settled), how many had a
@@ -298,31 +293,6 @@ def settlement_tab(qs, href, qsx):
     sub = f'E{cl if cl is not None else last["close"]} by origin'
     return (f'<div class="stats four">{s}</div><div class="grid2">' + card("Paid per close", ch) + card(sub, ch2) + "</div>"
             + card(f"Settlement · {len(rs):,}", f'<div class="chips scroll">{chips}</div>' + tb + cov, links, cls="histc", id="settlement"))
-
-def changes_tab(qs, href, qsx):
-    rows = standing_changes()
-    if not rows: return card("Changes", '<p class="na">No close record in this segment yet.</p>')
-    by = SS.page_sort(qs, dict(CHG_SORTS), "close"); d = SS.page_dir(qs)
-    rs = SS.sort_rows(list(rows), lambda r: r[by], "num", d, tie=lambda r: -r["close"])
-    link = lambda k, dd: href("changes", sort=k if k != "close" else "", dir="asc" if dd == "asc" else "") + "#changes"
-    last = rows[-1]
-    s = "".join([stat("Established", intc(last["after"]), tip=f'After the E{last["close"]} close'), stat("Added", intc(last["added"]), tip=f'At E{last["close"]}'),
-                 stat("Removed", intc(last["removed"]), tip=f'At E{last["close"]}'), stat("Net", f'<span class="num">{last["net"]:+,}</span>', tip=f'At E{last["close"]}')])
-    ch = bars([(f'E{r["close"]}', [r["added"], r["removed"]]) for r in rows], height=150, colors=("verd", "ember"), fmt=lambda z: f"{z:,.0f}", legend=["Added", "Removed"], stacked=False)
-    sel = _q(qs, "close"); one = next((r for r in rows if str(r["close"]) == sel), None)
-    trs = "".join(f'<tr><td><a href="{href("changes", close=str(r["close"]))}#changes-list">E{r["close"]}</a>{CPZ.tag(r.get("pause"))}</td><td class="r dk">{_n(r["before"])}</td><td class="r">{_n(r["added"])}</td>'
-                  f'<td class="r">{_n(r["removed"])}</td><td class="r">{r["net"]:+,}</td><td class="r">{_n(r["after"])}</td></tr>' for r in rs)
-    tb = SS.select(CHG_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(CHG_COLS, by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
-    q = qsx(sort=by if by != "close" else "", dir="asc" if d == "asc" else "")
-    links = f'<a class="more" href="/api/v1/governance/standing-changes.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/standing-changes{q}">API →</a>'
-    cov = f'<p class="cov dim small">minepoa\'s engine, one close at a time: genesis import, plus established_after, minus established_removed. Relisted rows are not counted as added. <a href="{METHOD}">Method</a></p>'
-    det = ""
-    if one:
-        nm = A.forum_names()
-        li = lambda xs: "".join(f'<li>{agent(a, nm.get(a) or "")}</li>' for a in xs) or '<li class="dim">None</li>'
-        det = card(f'E{one["close"]} changes', f'<div class="grid2"><div><h3>Added · {one["added"]:,}</h3><ul class="plain">{li(one["added_list"])}</ul></div>'
-                   f'<div><h3>Removed · {one["removed"]:,}</h3><ul class="plain">{li(one["removed_list"])}</ul></div></div>', id="changes-list")
-    return f'<div class="stats four">{s}</div>' + card("Added and removed per close", ch) + card(f"Changes · {len(rs):,}", tb + cov, links, cls="histc", id="changes") + det
 
 def never_tab(qs, href, qsx):
     if SG.archived(): return card("Never established", '<p class="na">Shown for the current segment only.</p>')

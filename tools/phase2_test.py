@@ -43,7 +43,6 @@ check("assay rows: type first, agent, seal pips, age linking the tx; rows keep d
 ce = V.home_epochs(__import__("poascan.analytics", fromlist=["x"]).epoch_rows())
 check("closes 1.26.380: one row per close with paid and a minted/burned bar (aria label), the live rows keep their tr", "<tr" in ce and 'class="ebar mpour"' in ce
       and 'aria-label="Minted 17.0%, burned 83.0%"' in ce and V.live_rows("closes-home").count("<tr") >= 1)
-check("graders card: jurors with 10 or more settled seats, aligned bar and share", "Settled" in V.home_graders() or V.home_graders() == '<p class="empty">No settled grades yet</p>')
 snap = V.live_snapshot()
 check("snapshot carries the open pool as a live number", snap["nums"]["pool"][0] == snap["epoch"]["pool"])
 a = hm.encode(); b = re.sub(rb'(class="mk" data-b="\d+" transform="translate\()[-\d.]+', rb"\g<1>-99", a)

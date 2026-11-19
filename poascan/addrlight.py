@@ -122,36 +122,6 @@ def payload(addr, reason="cache"):
     _remember(row)
     return row
 
-def wrap_mcp(raw, reason="busy"):
-    """JSON-RPC response for a single get_address tools/call, served from payload(). None if the body is not that call."""
-    from . import agentapi as AG
-    try: msg = json_load(raw)
-    except Exception:
-        return None
-    if not isinstance(msg, dict) or msg.get("method") != "tools/call": return None
-    p = msg.get("params") or {}
-    if p.get("name") != "get_address": return None
-    i = msg.get("id") if "id" in msg else None
-    args = p.get("arguments") or {}
-    if not isinstance(args, dict):
-        return 400, AG._err(i, -32602, "arguments must be an object")
-    a = str(args.get("address") or "").strip()
-    if not a:
-        return 200, _mcp_ok(i, {"error": "address is required"}, True, AG)
-    row = payload(a, reason=reason)
-    if row is None:
-        return 200, _mcp_ok(i, {"error": "address not found in the POAScan archive"}, True, AG)
-    data = AG._clean(__import__("json").loads(__import__("json").dumps(row, default=str)))
-    if isinstance(data, dict): data.setdefault("meta", AG.meta())
-    return 200, _mcp_ok(i, data, False, AG)
-
-def _mcp_ok(i, data, is_err, AG):
-    text = data.get("error") if is_err else AG.plainjson(__import__("json").dumps(data))
-    body = {"content": [{"type": "text", "text": str(text)}], "structuredContent": data if not is_err else {"error": data.get("error"), "meta": data.get("meta") or AG.meta()}, "isError": is_err}
-    if not is_err:
-        body["structuredContent"] = data
-    return {"jsonrpc": "2.0", "id": i, "result": body}
-
 def json_load(raw):
     import json
     if isinstance(raw, (bytes, bytearray)): raw = raw.decode("utf-8", "replace")

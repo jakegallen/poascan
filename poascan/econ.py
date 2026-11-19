@@ -75,9 +75,6 @@ def ranges(seg=None):
 def cap_of(size, floor, rate):
     return max(int(floor), math.ceil(float(rate) * int(size) - 1e-9))
 
-def intake_cap(size, epoch=None, seg=None):
-    r = at(epoch, seg); return cap_of(size, r["intake_floor"], r["intake_rate"])
-
 def door_text(epoch=None, seg=None):
     """'max(25, ceil(25% of the set))' for the rule at `epoch`."""
     r = at(epoch, seg); pct = r["intake_rate"] * 100

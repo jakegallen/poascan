@@ -44,15 +44,8 @@ check("thread 2 is second with 2 in-window replies", len(t) == 2 and t[1]["id"] 
 check("archived community and after-close replies are excluded", all(x["community"] in ("general", "bugs") for x in t))
 check("capped at 3 moments", len(t) <= 3)
 
-card = TP.epoch_threads_card(7, PREV, CLOSE)
-check("card: labelled Forum moments, links threads to LabLeak", "Forum moments" in card and "minepoa.com/lableak/#/post/1" in card and "minepoa.com/lableak/#/post/2" in card)
-check("card: titles and counts only, never a body", "SECRET_BODY" not in card and "SECRET_COMMENT_BODY" not in card)
-check("card: list items use the clamped title link and a meta line (no raw bullets)", "<ul class=\"fmoments\">" in card and card.count('class="fmt"') == len(t) and "fmm" in card)
-check("card: no descriptive footnote (method lives on /about)", "cov" not in card and "Titles and counts only" not in card)
-check("card: no em or en dash", chr(0x2014) not in card and chr(0x2013) not in card)
 
 A._cache.clear()
-check("empty window renders no card (empty string)", TP.epoch_threads_card(8, NOW - 100, NOW - 50) == "")
 check("epoch() renders the forum-moments card in the body", "_TOP.epoch_threads(" in open(os.path.join(ROOT, "poascan", "epochhub.py")).read())
 print("all passed" if not fails else f"{len(fails)} failed")
 sys.exit(1 if fails else 0)

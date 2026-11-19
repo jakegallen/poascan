@@ -159,8 +159,6 @@ def settlement_body(qs):
     tb = table(["Close", "Settled", "Not paid", "Expired", "Open"], [[f'<a href="/epoch/{r["close"]}{SG.qs()}">E{r["close"]}</a>{CPZ.tag_for(r["close"])}', intc(r["settled"]), intc(r["not_paid"]), intc(r["expired_no_jury"]), intc(r["open"])] for r in sel], cls="gtbl")
     return tb + pager(total, off, lambda o: "/governance?tab=settlement" + (f"&amp;offset={o}" if o else ""))
 
-def _flat(html): return f'<div class="gflat">{html}</div>'
-
 def closes_body(qs, sub):
     if sub == "changes": inner = moves_body(qs)
     elif sub == "settlement": inner = settlement_body(qs)

@@ -930,11 +930,6 @@ def _xlab(p, txt, attrs=""):
     if p > 95: return f'<span class="xl r"{attrs}>{txt}</span>'
     return f'<span class="xl c"{attrs} style="left:{p:.2f}%">{txt}</span>'
 
-def _marks(marks, X, x0, x1):
-    """1.26.291 (UI/UX P3, Jake): charts are bare, so no milestone line, chip or legend is drawn on any chart. Kept as a
-    no-op so callers that still pass marks render the same chart."""
-    return "", "", "", 0
-
 def _tag(cls, x, y, txt, title="", sub=""):
     """An HTML value label pinned to a plot point (x, y in viewBox units): .lv the latest value, a glass chip in the line's
     color beside the plot; .ex a high or low callout on a hairline leader. sub: the period change (from _chg) as a quiet

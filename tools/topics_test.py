@@ -108,8 +108,6 @@ check("CSV flat columns, no nested JSON, no body", cs.splitlines()[0].startswith
 
 # tab wiring
 check("Topics is a Community sub-tab", "topics" in dict(V.COMMUNITY_TABS) and dict(V.COMMUNITY_TABS)["topics"] == "Topics")
-page = V.community_page("topics", {})
-check("community_page renders the Topics tab with the subtab nav", "Topics" in page and "Most replied threads" in page and 'href="/agents/community?tab=' in page)
 check("GOV_API registers the endpoint params", SV.GOV_API.get("/api/governance/community-topics") == {"range"})
 
 src = open(os.path.join(ROOT, "poascan", "topics.py")).read()

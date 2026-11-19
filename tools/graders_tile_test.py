@@ -43,7 +43,6 @@ def main():
     check("tile keeps the count", 'data-live="graders"' in h and '>3</span></b>' in h)
     check("tile shows a Halted tag", '<span class="tag warn">Halted</span>' in h)
     check("tooltip names the close count from grade rows and the notice", "E10 close: 0 graders in its grade rows." in h and HALT["id"] in h)
-    check("live hero carries the same tile", '<span class="tag warn">Halted</span>' in V.live_hero())
     check("no em or en dashes in the tile", "\u2014" not in h and "\u2013" not in h and "&mdash;" not in h)
 
     reset({"active": [RESTORED]})

@@ -206,9 +206,6 @@ def gather(a, get, forum_fn=None):
         except Exception: out["forum"] = None
     return out
 
-def gather_remote(a):
-    return gather(a, lambda p, qs: _remote(p + ("?" + "&".join(f"{k}={v[0]}" for k, v in qs.items()) if qs else "")), forum_rows_fixture if FORUM_FIXTURE else None)
-
 # ---------------------------------------------------------------- the check
 def _f(v):
     try: return float(v)

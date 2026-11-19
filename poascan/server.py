@@ -533,8 +533,7 @@ def page(path, qs):
     if m: return V.address(m.group(1))
     if path in ("/start", "/join", "/onboarding"):
         from . import startv2 as SV2
-        if SV2.on(): return SV2.page(V.page)   # preview only: POASCAN_STARTV2=1
-        return ST.page(V.page)
+        return SV2.page(V.page)
     if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return AH.top_page(qs.get("tab", [""])[0], qs)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")

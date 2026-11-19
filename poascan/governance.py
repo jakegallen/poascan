@@ -117,96 +117,10 @@ def est_source():
     aset, _ = NF.authoritative_established(d)
     return dict(list="/api/established", count=len(aset), set=aset, close=d.get("computed_at_close") if isinstance(d, dict) else None, as_of=int(ts) if ts else None)
 
-def est_tip(n):
-    s = est_source()
-    if not s: return "POAScan's fold of the close records. minepoa's /api/established not read yet."
-    at = f" at the E{s['close']} close" if s["close"] is not None else ""
-    return f"POAScan's fold of the close records: {n:,}. Checked against /api/established (the engine's set{at}): {s['count']:,}."
-
-def unconfirmed_flag(addrs):
-    """The Unconfirmed tag for an Established count: Agents not in /api/established, else (no copy) not on minepoa's
-    grading list."""
-    s = est_source()
-    if s is not None:
-        miss = [a for a in addrs if a not in s["set"]]
-        return GR.tag_html(f"{len(miss):,} not in /api/established (the engine's set). Hosted /me is the authority.") if miss else ""
-    c = GR.conflict_summary(addrs)
-    if not c or not c["conflict"]: return ""
-    q = sum(1 for a in addrs if a not in GR.index()["established"] and (GR.index()["by_g"].get(a) or {}).get("qual"))
-    lead = "minepoa's grading list shows none" if c["list_empty"] else f"{c['conflict']:,} not on minepoa's grading list"
-    return GR.tag_html(lead + (f"; seals from {q:,} of these Agents still count toward quorum." if q else "; hosted /me is the authority."))
-
-def _ep(n): return f'<a href="/epoch/{n}{SG.qs()}">E{n}</a>' if n is not None else '<span class="dim">···</span>'
-
 def _lvl(k): return f'<span class="tag {LEVEL_TAG[k]}">{dict(LEVELS)[k]}</span>'
 
 RISK_COLS = [AGENT_COL] + [None] + [SS.Col("level", "Level", "cat", "r"), SS.Col("left", "Closes left", "low", "r"), SS.Col("missed", "Missed", "num", "r dk"),
                                     SS.Col("last", "Last cleared", "num", "r dk"), SS.Col("drop", "Drops at", "num", "r"), SS.Col(None, "Rule", "num", "r dk")]
-
-def risk_cols(): return [c for x in RISK_COLS for c in ([x] if x else score_cols())]
-
-def standing_table(rows, limit=None, sort=None, d="desc", link=None):
-    """Standing rows with Score and parts (scores of the selected segment). link(key, dir): sortable headers; None: plain."""
-    rs = rows[:limit] if limit else rows; sc = scores()["rows"]
-    trs = "".join(f'<tr><td>{_agent(r, True)}</td>{score_cells(parts_of(r["address"], sc))}<td class="r">{_lvl(r["level"])}</td><td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td>'
-                  f'<td class="r dk">{r["missed"] if r["missed"] is not None else "<span class=dim>···</span>"}</td><td class="r dk">{_ep(r["last"])}</td><td class="r">{_ep(r["drop"])}</td>'
-                  f'<td class="r dk"><a href="{href("rules")}#{RULE[r["level"]]}">Rule</a></td></tr>' for r in rs)
-    return ((SS.select(risk_cols(), sort, d, link) if link else "") + f'<div class="tw"><table class="hist cal risk gov"><thead><tr>{SS.heads(risk_cols(), sort, d, link)}</tr></thead>'
-            f'<tbody>{trs or "<tr><td colspan=12 class=na>No established Agents in this segment yet.</td></tr>"}</tbody></table></div>')
-
-def seg_chips(tab):
-    return ""   # 1.26.301: one history, no segment toggle
-    if not SG.has_cut(): return ""
-    cur = SG.selected(); out = []
-    for n in reversed(SG.NUMBERS):
-        q = ([] if tab == "overview" else [f"tab={tab}"]) + ([] if n == SG.CURRENT else [f"segment={n}"])
-        h = "/governance" + ("?" + "&amp;".join(q) if q else "")
-        out.append(f'<a href="{h}" class="chip {"on" if n == cur else ""}"{" aria-current=\"page\"" if n == cur else ""}>{E(SG.label(n))}</a>')
-    return '<nav class="chips segs" aria-label="Segment">' + "".join(out) + "</nav>"
-
-def overview():
-    d = standing_rows(); c = d["counts"]; cal = CA.calibration(); ep = A.epoch_rows()
-    f2 = lambda v: pct(v) if v is not None else "···"
-    s = "".join([stat("Established", intc(len(d["rows"])), tip=est_tip(len(d["rows"])), flag_html=unconfirmed_flag([r["address"] for r in d["rows"]])), stat("At risk", intc(c["risk"]), tip=f"Estimated to drop within the next {SD.AT_RISK_CLOSES} closes"),
-                 stat("Watch", intc(c["watch"]), tip=f"Estimated to drop in {SD.AT_RISK_CLOSES + 1} closes"),
-                 stat("Agreement", f2(cal.get("aligned_rate")), tip="Jury seats that agreed with the settled outcome, advisory")])
-    risky = [r for r in d["rows"] if r["level"] in ("risk", "watch")]
-    t = standing_table(risky, 8) if risky else '<p class="na">No established Agent is estimated to drop in the next 3 closes.</p>'
-    last = [[_ep(r["epoch"]), intc(r["established"]), intc(r["established_removed"]), intc(r["challenge_eligible"]), intc(r["paid"])] for r in reversed(ep[-6:])]
-    lt = table(["Close", "Added", "Removed", "Eligible", "Paid"], last) if last else '<p class="na">No closes in this segment yet.</p>'
-    return (f'<div class="stats four">{s}</div>' + GVW.stats_row() + '<div class="grid2">'
-            + card("At risk and Watch", t, cls="histc")
-            + estimate_card() + "</div>"
-            + card("Latest closes", lt) + for_agents())
-
-def for_agents():
-    """Governance detail for agents: each former tab as its page link and its JSON endpoint (the pages still render)."""
-    li = "".join(f'<li><a href="{href(k)}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, k, u in AGENT_API)
-    return card("For agents", f'<ul class="fagents">{li}</ul>', '<a class="more" href="/api#governance">API →</a>', id="for-agents")
-
-def _pager(tab, kw, pg, pages, anchor):
-    if pages <= 1: return ""
-    return ('<div class="chips pager2">' + (f'<a class="chip" href="{href(tab, **kw(page=str(pg - 1) if pg > 2 else ""))}#{anchor}">Prev</a>' if pg > 1 else "")
-            + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href(tab, **kw(page=str(pg + 1)))}#{anchor}">Next</a>' if pg < pages else "") + "</div>")
-
-def _page_of(qs, n):
-    try: pg = max(1, int(_q(qs, "page", "1")))
-    except ValueError: pg = 1
-    pages = max(1, -(-n // GOV_PAGE)); pg = min(pg, pages)
-    return pg, pages, slice((pg - 1) * GOV_PAGE, pg * GOV_PAGE)
-
-def estimate_card():
-    """Overview: the next close's Est. per Agent, labelled Estimate, with its basis closes (current segment; none in an archived one)."""
-    tag = '<span class="tag est">Estimate</span>'
-    if SG.archived(): return card("Est. per Agent " + tag, '<p class="na">Shown for the current segment only.</p>', id="est-payout")
-    pe = payout_estimate(); o, K, ans = answered_since_close(); other = pe["basis_segment"] != SG.CURRENT
-    v = f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···"
-    basis = ", ".join(f'E{b["epoch"]}' for b in pe["basis"]) or "none"
-    s = "".join([stat("Est. per Agent", v, tip="Estimate: " + pe["method"]), stat("Answered", intc(ans["n"]) if ans else "···", tip="Agents with a challenge answer since the last close"),
-                 stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Answers with {K} or more attestations")])
-    seg = f" (segment {pe['basis_segment']})" if other else ""
-    foot = f'<p class="cov dim small">Next close E{o.get("epoch")} · basis {E(basis)}{seg} · until the close record lands</p>'
-    return card("Est. per Agent " + tag, f'<div class="stats three">{s}</div>' + foot, id="est-payout")
 
 RISK_SORTS = [("level", "Level")] + SS.PARTS + [("name", "Agent"), ("left", "Closes left"), ("missed", "Missed"), ("last", "Last cleared"), ("drop", "Drops at")]
 
@@ -219,25 +133,6 @@ def standing_select(level="", by="level", d="desc"):
     if by in SS.KEYS:
         sc = scores()["rows"]; return SS.sort_rows(rows, lambda r: parts_of(r["address"], sc)[by], "num", d, tie=_nm_tie), data
     return SS.sort_rows(rows, lambda r: r[by], "low" if by == "left" else "num", d, tie=_nm_tie), data
-
-def at_risk(qs):
-    """The two-close at-risk list (standing.at_risk, as on the address page), then every established Agent with its level."""
-    f = _q(qs, "level"); f = f if f in dict(LEVELS) else ""
-    by = SS.page_sort(qs, dict(RISK_SORTS), "level"); d = SS.page_dir(qs)
-    rows, data = standing_select(f, by, d); c = data["counts"]
-    keep = dict(sort=by if by != "level" else "", dir="asc" if d == "asc" else "")
-    chips = f'<a href="{href("at-risk", **keep)}#standing" class="chip {"on" if not f else ""}">All</a>' + "".join(
-        f'<a href="{href("at-risk", level=k, **keep)}#standing" class="chip {"on" if k == f else ""}">{t} <small>{c[k]:,}</small></a>' for k, t in LEVELS if c[k] or k == f)
-    link = lambda k, dd: href("at-risk", level=f, sort=k if k != "level" else "", dir="asc" if dd == "asc" else "") + "#standing"
-    foot = f'<p class="cov dim small">Reference E{data["open_epoch"]} · <a href="{href("rules")}#lapse">Rule</a></p>' if data["open_epoch"] is not None else ""
-    q = qsx(level=LEVEL_KEYS.get(f, ""), sort=by if by != "level" else "", dir="asc" if d == "asc" else "")
-    links = f'<a class="more" href="/api/v1/governance/at-risk.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/at-risk{q}">API →</a>'
-    # One segment (no cut): the two-close list as on the address page first. With a cut, standing starts fresh in each
-    # segment, so the level chips on the one table are the at-risk view.
-    top = "" if SG.has_cut() else V.at_risk_body(qs, href("at-risk"))
-    pg, pages, sl = _page_of(qs, len(rows))
-    nav = _pager("at-risk", lambda **o: dict(dict(level=f, **keep), **o), pg, pages, "standing")
-    return top + card(f"Standing · {len(rows):,}", f'<div class="chips">{chips}</div>' + standing_table(rows[sl], sort=by, d=d, link=link) + nav + foot, links, cls="histc", id="standing")
 
 def _js_step(out, e, pend, pe, pp):
     b = e.get("basis", {}) or {}; js = [j for x in (b.get("settled") or []) for j in (x.get("jury") or [])]
@@ -341,36 +236,8 @@ def answered_since_close():
     ans = db.q1("SELECT COUNT(DISTINCT from_addr) AS n, COUNT(DISTINCT CASE WHEN atts >= ? THEN from_addr END) AS k FROM txs WHERE type='challenge' AND ts > ?" + w, (K, t0) + a) if t0 else None
     return o, K, ans
 
-def payouts(qs):
-    pe = payout_estimate(); o, K, ans = answered_since_close()
-    tag = '<span class="tag est">Estimate</span>'
-    other = pe["basis_segment"] != SG.CURRENT
-    est = (f'<span class="num">{compact(pe["estimate"])}</span>' if pe["estimate"] is not None else "···")
-    ec = o.get("est_close")
-    nxt = (f'<time class="t" data-ts="{int(ec)}" title="{utc_text(ec)}, estimate">~{max(0, int(ec - time.time())) // 3600}h {max(0, int(ec - time.time())) % 3600 // 60}m</time>') if ec else "···"
-    s = "".join([stat(f"E{o['epoch']} close" if o.get("epoch") is not None else "Next close", nxt, tip="Last close plus auto_epoch_seconds, an estimate"),
-                 stat("Answered", intc(ans["n"]) if ans else "···", tip="Agents with a challenge answer since the last close"),
-                 stat("K-attested", intc(ans["k"]) if ans else "···", tip=f"Of those, answers with {K} or more attestations"),
-                 stat("Est. per Agent", est, tip="Estimate: " + pe["method"] + (f", segment {pe['basis_segment']}" if other else "")),
-                 stat("Pool", compact(o.get("pool")) if o.get("pool") else "···", tip="E0 halved every halving_epochs")])
-    pcols = [SS.Col("epoch", "Close"), SS.Col("paid", "Paid"), SS.Col("median", "Per Agent"), SS.Col("max", "Max"), SS.Col("burn_pct", "Burned")]
-    pby = _q(qs, "sort", "epoch"); pby = pby if pby in [c.key for c in pcols] else "epoch"; pd_ = SS.page_dir(qs)
-    basis = SS.sort_rows(list(pe["basis"]), lambda r: r.get(pby), "num", pd_, tie=lambda r: -r["epoch"])
-    plink = lambda k, dd: href("payouts", sort=k if k != "epoch" else "", dir="asc" if dd == "asc" else "") + "#estimate"
-    rows = [[f'<a href="/epoch/{r["epoch"]}{SG.qs(r["segment"])}">E{r["epoch"]}</a>' + (f' <span class="tag">S{r["segment"]}</span>' if other else ""), intc(r["paid"]), compact(r["median"]), compact(r["max"]),
-             f'{r["burn_pct"]:.1f}%' if r["burn_pct"] is not None else "···"] for r in basis]
-    bt = table([], rows, sort=(pcols, pby, pd_, plink)) if rows else '<p class="na">No paid closes yet.</p>'
-    ep = A.epoch_rows()
-    pc = bars([(f'E{r["epoch"]}', [r["challenge_eligible"], r["paid"]]) for r in ep], height=150, colors=("gold", "steel"), fmt=lambda v: f"{v:,.0f}", stacked=False, legend=["Eligible", "Paid"]) if ep else '<p class="na">No closes in this segment yet.</p>'
-    head = "" if SG.archived() else f'<div class="stats five">{s}</div>'
-    return (head + '<div class="grid2">' + card("Last paid closes " + tag, bt, cls="histc", id="estimate")
-            + card("Eligible and paid per close", pc) + "</div>")
-
 DIR_SORTS = [("rewards", "Rewards"), ("eligible", "Eligible closes"), ("seals", "Seals"), ("atts", "Attestations")] + SS.PARTS + [("name", "Agent"), ("last_paid", "Last paid")]
 
-def dir_cols():
-    return [AGENT_COL] + score_cols() + [SS.Col("rewards", "Rewards", "num", "r"), SS.Col("last_paid", "Last paid", "num", "r dk"), SS.Col("eligible", "Eligible", "num", "r"),
-                                         SS.Col("seals", "Seals", "num", "r"), SS.Col("atts", "Attestations", "num", "r dk")]
 DIR_FILTERS = [("", "All"), ("established", "Established"), ("graders", "Graders"), ("attesters", "Attesters")]
 DIR_PAGE = 100
 
@@ -404,32 +271,6 @@ def directory_select(by="rewards", f="", d="desc"):
     rows = [r for r in directory_rows() if keep(r)]
     if by == "name": return SS.sort_rows(rows, lambda r: SS.text_key(r["name"]), "text", d, tie=_nm_tie)
     return SS.sort_rows(rows, lambda r: r[by], "num", d, tie=_nm_tie)
-
-def directory(qs):
-    rows = directory_rows(); by = SS.page_sort(qs, dict(DIR_SORTS), "rewards"); d = SS.page_dir(qs)
-    f = _q(qs, "filter"); f = f if f in dict(DIR_FILTERS) else ""
-    rs = directory_select(by, f, d)
-    try: pg = max(1, int(_q(qs, "page", "1")))
-    except ValueError: pg = 1
-    pages = max(1, -(-len(rs) // DIR_PAGE)); pg = min(pg, pages); cur = rs[(pg - 1) * DIR_PAGE: pg * DIR_PAGE]
-    kw = lambda **o: dict(dict(sort=by if by != "rewards" else "", dir="asc" if d == "asc" else "", filter=f), **o)
-    link = lambda k, dd: href("directory", **kw(sort=k if k != "rewards" else "", dir="asc" if dd == "asc" else "", page="")) + "#directory"
-    fc = "".join(f'<a href="{href("directory", **kw(filter=k))}" class="chip {"on" if k == f else ""}">{t}</a>' for k, t in DIR_FILTERS)
-    tags = lambda r: (' <span class="tag ok">Established</span>' + GR.tag_html(GR.established_check(r["address"])[2]) if r["established"] else "") + (' <span class="tag">Grader</span>' if r["seats"] or r["seals"] else "")
-    trs = "".join(f'<tr><td>{_agent(r)}{tags(r)}</td>{score_cells(r)}<td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>0</span>"}</td><td class="r dk">{_ep(r["last_paid"])}</td>'
-                  f'<td class="r">{r["eligible"]:,}</td><td class="r">{r["seals"]:,}</td><td class="r dk">{r["atts"]:,}</td></tr>' for r in cur)
-    tb = (SS.select(dir_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(dir_cols(), by, d, link)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=11 class=na>No Agents in this segment yet.</td></tr>"}</tbody></table></div>')
-    nav = ""
-    if pages > 1:
-        nav = ('<div class="chips">' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg - 1) if pg > 2 else ""))}">Newer</a>' if pg > 1 else "")
-               + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("directory", **kw(page=str(pg + 1)))}">More</a>' if pg < pages else "") + "</div>")
-    s = "".join([stat("Agents", intc(len(rows))), stat("Established", intc(sum(1 for r in rows if r["established"]))),
-                 stat("Graders", intc(sum(1 for r in rows if r["seats"] or r["seals"]))), stat("Attesters", intc(sum(1 for r in rows if r["atts"])))])
-    q = qsx(sort=by if by != "rewards" else "", dir="asc" if d == "asc" else "", filter=f)
-    links = (f'<a class="more" href="/api/v1/governance/directory.csv{q}" download>CSV →</a>'
-             f'<a class="more" href="/api/v1/governance/directory{q}">API →</a>')
-    return f'<div class="stats four">{s}</div>' + card(f"Directory · {len(rs):,}", f'<div class="chips">{fc}</div>' + tb + nav, links, cls="histc", id="directory")
 
 SCORE_METHOD = "/about#score"
 def score_tip(): return qtip(GS.TIP, SCORE_METHOD, "About Score")
@@ -514,54 +355,6 @@ def established_select(by="score", f="", d="desc"):
     rs = SS.sort_rows(rs, val, SS.kind_of(est_cols(), by), d, tie=_nm_tie)
     return rs, rows, data
 
-def established(qs):
-    by = SS.page_sort(qs, dict(EST_SORTS), "score"); d = SS.page_dir(qs)
-    f = _q(qs, "filter"); f = f if f in dict(EST_FILTERS) else ""
-    rs, rows, data = established_select(by, f, d)
-    pg, pages, sl = _page_of(qs, len(rs))
-    kw = lambda **o: dict(dict(sort=by if by != "score" else "", dir="asc" if d == "asc" else "", filter=f), **o)
-    cnt = collections.Counter(r["level"] for r in rows); ng = sum(1 for r in rows if r["seats"] or r["seals"])
-    fc = "".join(f'<a href="{href("established", **kw(filter=k))}#established" class="chip {"on" if k == f else ""}">{t}'
-                 + f' <small>{(ng if k == "graders" else cnt.get(k, 0)) if k else len(rows):,}</small></a>'
-                 for k, t in EST_FILTERS if not k or k == f or (ng if k == "graders" else cnt.get(k)))
-    link = lambda k, dd: href("established", **kw(sort=k if k != "score" else "", dir="asc" if dd == "asc" else "")) + "#established"
-    trs = "".join(f'<tr><td>{_agent(r, True)}</td>{score_cells(r)}<td class="r">{_lvl(r["level"])}</td><td class="r dk">{_ep(r["since"])}</td>'
-                  f'<td class="r">{r["held"]:,}</td><td class="r dk">{r["eligible"]:,}</td><td class="r dk">{r["seals"]:,}</td>'
-                  f'<td class="r">{r["left"] if r["left"] is not None else "<span class=dim>···</span>"}</td></tr>' for r in rs[sl])
-    tb = (SS.select(est_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov est"><thead><tr>{SS.heads(est_cols(), by, d, link)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=12 class=na>No established Agents in this segment yet.</td></tr>"}</tbody></table></div>')
-    q = qsx(sort=by if by != "score" else "", dir="asc" if d == "asc" else "", filter=LEVEL_KEYS.get(f, f))
-    links = (f'<a class="more" href="/api/v1/governance/established.csv{q}" download>CSV →</a>'
-             f'<a class="more" href="/api/v1/governance/established{q}">API →</a>')
-    foot = f'<p class="cov dim small">Reference E{data["open_epoch"]} · <a href="{href("rules")}#earn">Rules</a></p>' if data["open_epoch"] is not None else ""
-    from . import carry as CY   # 1.26.209: genesis cut carry, per address, from records only
-    nav = _pager("established", kw, pg, pages, "established")
-    return card(f"Established · {len(rows):,}", f'<div class="chips">{fc}</div>' + tb + nav + foot, links, cls="histc", id="established") + ("" if SG.archived() else CY.card_html(qs, href))
-
-def charts(qs):
-    rng = _q(qs, "range", "all"); rng = rng if rng in [k for k, _, _ in RANGES] else "all"
-    span = dict((k, v) for k, _, v in RANGES)[rng]; t0 = time.time() - span if span else 0
-    ep = A.epoch_rows(); run = 0; est = []
-    for r in ep: run += (r["established"] or 0) - (r["established_removed"] or 0); est.append((r["close_ts"], run))
-    cut = lambda pts: [(t, v) for t, v in pts if t >= t0]
-    xf = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%m-%d %H:%M")
-    series = [("Established", "gov-est", est, "gold"),
-              ("Paid per close", "gov-paid", [(r["close_ts"], r["paid"]) for r in ep], "gold"),
-              ("Grading queue", "gov-queue", [(r["close_ts"], r["pending"]) for r in ep], "gold"),
-              ("Panel coverage", "gov-cover", [(r["close_ts"], 100 * (1 - r["pending_empty_panel"] / r["pending"])) for r in ep if r["pending"]], "gold")]
-    def chart(title, key, pts, color):
-        p = cut(pts)
-        if len(p) < 2: body = f'<p class="na">Needs 2 closes in {dict((k, t) for k, t, _ in RANGES)[rng]}.</p>'
-        else:
-            from . import milestones as MS   # only the milestones that affect this chart (milestones.json), grouped as on Network > Charts
-            mk = MS.group([e for e in MS.events(key) if e["ts"] >= t0], p[0][0], p[-1][0])
-            body = line(p, height=140, color=color, fmt=(lambda v: f"{v:.0f}%") if key == "gov-cover" else (lambda v: f"{v:,.0f}"), xfmt=xf, y0=0, marks=mk)
-            if mk: body = body.replace('<div class="chartbox', '<div class="chartbox end', 1)   # 390px: open at the newest end, where the markers are
-        return card(title, body)
-    chips = "".join(f'<a href="{href("charts", range=k if k != "all" else "")}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
-    return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="grid2 smalls">'
-            + "".join(chart(*s) for s in series) + "</div>")
-
 # ---------------- Forum (LabLeak mirror; no new forum reads) ----------------
 FORUM_SKIP_AUTHORS = {"Live-GrokBot"}   # excluded from forum analytics
 FORUM_SKIP_COMMUNITIES = ("poa-archive",)
@@ -613,14 +406,7 @@ def forum_stats(rng):
                 communities=sorted(((k, a, b, len(c)) for k, (a, b, c) in comm.items()), key=lambda r: (-(r[1] + r[2]), r[0])),
                 per_day=sorted(day.items()))
 
-def _dur(s):
-    if s is None: return "···"
-    return f"{s // 60}m" if s < 3600 else f"{s / 3600:.1f}h" if s < 86400 else f"{s / 86400:.1f}d"
-
 FORUM_SORTS = [("items", "Items")] + SS.PARTS + [("name", "Agent"), ("posts", "Posts"), ("comments", "Comments"), ("received", "Replies")]
-
-def forum_cols():
-    return [AGENT_COL, SS.Col("posts", "Posts", "num", "r"), SS.Col("comments", "Comments", "num", "r"), SS.Col("received", "Replies", "num", "r dk")] + score_cols()
 
 def most_active_select(top, by="items", d="desc"):
     """Most active authors (forum_stats top) with Score and parts across all segments (the forum is not split by segment)."""
@@ -629,31 +415,6 @@ def most_active_select(top, by="items", d="desc"):
     if by == "items": return list(reversed(rows)) if d == "asc" else rows
     if by == "name": return SS.sort_rows(rows, lambda r: SS.text_key(r["name"]), "text", d, tie=_nm_tie)
     return SS.sort_rows(rows, lambda r: r[by], "num", d, tie=_nm_tie)
-
-def forum(qs):
-    rng = _q(qs, "range", "7d"); rng = rng if rng in [k for k, _, _ in RANGES] else "7d"
-    f = forum_stats(rng)
-    chips = "".join(f'<a href="{href("forum", range=k if k != "7d" else "")}" class="chip {"on" if k == rng else ""}">{t}</a>' for k, t, _ in RANGES)
-    s = "".join([stat("Posts", intc(f["posts"])), stat("Comments", intc(f["comments"])), stat("Agents", intc(f["agents"]), tip="Distinct authors of posts or comments"),
-                 stat("Reply rate", pct(f["reply_rate"]) if f["reply_rate"] is not None else "···", tip="Posts with a comment by another author"),
-                 stat("First reply", _dur(f["median_wait"]), tip="Median time to the first comment by another author"),
-                 stat("Operator replies", intc(f["operator_replied"]), tip="Posts with a comment by an official network account (G0)")])
-    pd = bars([(dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%b %-d"), [n]) for t, n in f["per_day"]], height=140, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if f["per_day"] else '<p class="na">No forum activity in this range.</p>'
-    ct = table(["Community", "Posts", "Comments", "Agents"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(k)}" target="_blank" rel="noopener noreferrer">a/{E(k)}</a>', intc(a), intc(b), intc(n)] for k, a, b, n in f["communities"]]) if f["communities"] else '<p class="na">No posts in this range.</p>'
-    def who(r):
-        pid = r["pid"]
-        if ADDR_RX.match(pid or ""): return agent(pid, r["name"] or "")
-        n = r["name"] or short(pid, 6, 4); return author_link(n, {n: pid})
-    by = SS.page_sort(qs, dict(FORUM_SORTS), "items"); d = SS.page_dir(qs)
-    top = most_active_select(f["top"], by, d)
-    trs = "".join(f'<tr><td>{who(r)}</td><td class="r">{intc(r["posts"])}</td><td class="r">{intc(r["comments"])}</td><td class="r dk">{intc(r["received"])}</td>{score_cells(r)}</tr>' for r in top)
-    link = lambda k, dd: href("forum", range=rng if rng != "7d" else "", sort=k if k != "items" else "", dir="asc" if dd == "asc" else "") + "#active"
-    tt = (SS.select(forum_cols(), by, d, link) + f'<div class="tw"><table class="hist cal gov"><thead><tr>{SS.heads(forum_cols(), by, d, link)}</tr></thead><tbody>{trs}</tbody></table></div>'
-          if top else '<p class="na">No authors in this range.</p>')
-    summ = '<p class="na">No summary yet.</p>'
-    return (f'<div class="chips rng" role="group" aria-label="Range">{chips}</div><div class="stats six">{s}</div><div class="grid2">'
-            + card("Posts and comments per day", pd) + card("Communities", ct)
-            + "</div>" + card("Most active", tt, cls="histc", id="active") + card("Summary", summ, id="summary"))
 
 # ---------------- Proposals (a/proposals plus a hand-kept, cited ballot list) ----------------
 POST = "https://minepoa.com/lableak/#/post/{}"
@@ -679,24 +440,6 @@ def _effect(b):
     tip = f"{txt}. Spendable balances do not change." if CC.done() else f"{txt}. Balances move only from the E{CC.CLOSE} close record."
     return (f'<div class="small"><span title="{E(tip)}">E{CC.CLOSE} burn {amt / 1e6:,.2f}M</span>'
             f' <span class="tag {tag}">{E(word)}</span></div>')
-
-def proposals(qs):
-    rows, live = proposals_data()
-    def status(r):
-        if r["status"] == "ballot": return f'<span class="tag ok">Ballot</span> <span class="mono">{E(r["ballot"])}</span>'
-        return '<span class="tag est">Discussion</span>' if r["status"] == "discussion" else '<span class="tag">Posted</span>'
-    s = "".join([stat("Proposals", intc(len(rows)), tip="Posts in a/proposals"), stat("Discussion", intc(sum(1 for r in rows if r["status"] == "discussion")), tip="Under 24 hours old, not on a ballot"),
-                 stat("On a ballot", intc(sum(1 for r in rows if r["status"] == "ballot"))), stat("Open ballots", intc(len(live)), tip="GET /api/ballots")])
-    def who(r):
-        pid = r["pid"]; return author_link(r["author"], {r["author"]: pid}) if r["author"] else "···"
-    tb = table(["Post", "Title", "Author", "Status", "Comments", "Posted"],
-               [[_post(r["id"]), E(_nodash(r["title"])[:90]), who(r), status(r), intc(r["comment_count"]), E(str(r["created_at"] or "")[:16].replace("T", " "))] for r in rows[:40]], pri=(0, 3, 4)) if rows else '<p class="na">No proposals in the mirror yet.</p>'
-    bl = [[f'<span class="mono">{E(b["id"])}</span> {E(b["name"])}', ", ".join(_post(t, k) for t, k in b["topics"]), "Ended " + (lt(_iso(b["ends"])) if _iso(b["ends"]) else E(b["ends"][5:16].replace("T", " ") + " UTC")),
-           ('<span class="na">Tally not public</span> ' + _post(b["voting_post"], "post " + str(b["voting_post"]))) if b["tally"] is None else E(b["tally"]) + _effect(b)] for b in BALLOTS]
-    bl += [[f'<span class="mono">{E(str(b.get("id") or b.get("ballot_id") or "")[:8])}</span>', intc(len(b.get("topics") or [])), E(str(b.get("status") or "open")), '<span class="na">Open</span>'] for b in live]
-    bt = table(["Ballot", "Topics", "Window", "Tally"], bl, pri=(0, 3))
-    return (f'<div class="stats four">{s}</div>' + card("a/proposals", tb, f'<a class="more" href="https://minepoa.com/lableak/#/a/proposals" target="_blank" rel="noopener noreferrer">LabLeak ↗</a>', cls="histc", id="proposals")
-            + card("Ballots", bt, _post(1068, "Charter"), id="ballots"))
 
 import threading as _th
 _COLLECT = _th.local()   # govhub.rules_rows() collects each rule's (id, title, docs, obs) instead of rendering a card
@@ -745,13 +488,6 @@ TITLES = {"overview": "Governance", "established": "Governance · Established", 
 def page(qs=None):
     from . import govhub
     return govhub.page(qs)   # consolidation: one hero and one module; the body below is the previous page, kept until the cut-over is confirmed
-
-def page_legacy(qs=None):
-    tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
-    chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS if k in NAV_TABS or k == tab)
-    head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
-    body = {"overview": overview, "rules": rules}.get(tab, lambda: None)() if tab in ("overview", "rules") else {"established": established, "at-risk": at_risk, "queue": lambda q: GVW.queue_tab(q, href, qsx), "settlement": lambda q: GV2.settlement_tab(q, href, qsx), "changes": lambda q: GV2.changes_tab(q, href, qsx), "intake": lambda q: IK.tab(q, href, qsx), "settleage": lambda q: SA.tab(q, href, qsx), "never": lambda q: GV2.never_tab(q, href, qsx), "protocol": lambda q: PV.tab(q, href, qsx), "payouts": payouts, "graders": graders, "directory": directory, "forum": forum, "proposals": proposals, "charts": charts}[tab](qs)
-    return V.page(TITLES[tab], head + body, "/governance")
 
 # ---------------- API and MCP (1.26.106): the same numbers as the tabs, as JSON ----------------
 BASE = "https://poascan.io"
@@ -839,8 +575,6 @@ def api_graders(limit=100, sort="seals", d="desc"):
 
 EST_FILTER_IN = dict({v: k for k, v in LEVEL_KEYS.items()}, graders="graders")
 
-def _parts(r): return {k: r.get(k) for k, _ in GS.PARTS}
-
 def api_established(sort="score", filt="", limit=1000, offset=0, d="desc"):
     rs, rows, data = established_select(sort, EST_FILTER_IN.get(filt, "") if filt else "", d)
     out = [dict(_std(r), **_sflat(r), added_epoch=r["since"], closes_held=r["held"], eligible_closes=r["eligible"], seals=r["seals"],
@@ -902,8 +636,6 @@ def agent_data(a, scope="segment"):
         lbl = lambda e: f"E{e}"; lv = {r["address"]: r for r in standing_rows()["rows"]}.get(a)
     f = dict(f) if f else dict(GS._blank(), **GS.EMPTY_TX, **GS.EMPTY_FORUM, level="none", score=0, standing=0, grading=0, forum=0, consistency=0)
     return dict(address=a, scope=scope, f=f, std=lv, lbl=lbl, last_close=sc["last_close"], closes=sc["closes"])
-
-def _yn(v): return '<span class="tag ok">Yes</span>' if v else '<span class="tag">No</span>'
 
 def agent_tab(a, qs):
     """Address page Governance tab: segment chips plus All, Score with its four parts, then Standing, Grading, Forum."""

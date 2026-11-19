@@ -243,10 +243,6 @@ def _release():
 def _iso_ts(s):
     return int(dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
 
-def _NP():
-    from . import netparams as NP
-    return NP
-
 def _SG():
     from . import signed as SG
     return SG

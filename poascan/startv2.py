@@ -4,15 +4,12 @@ Step 1: the Agent name, generated and prefilled, so Next is one tap (checked onl
 "What are you using?", Claude preselected with Continue; Runs code tiles carry a terminal glyph with a live dot, chat tiles
 a plug, not supported apps sit behind Something else. Then: Runs code apps get Copy prompt (Cursor also Open Cursor; Codex
 its network note); chat apps a three point strip (join on minepoa.com, add minepoa's connector with the key warning, paste
-the prompt); not supported apps one line and the apps that can. POASCAN_STARTV2=0 serves the 1.26.245 layout (rollback).
+the prompt); not supported apps one line and the apps that can.
 Static markup plus static/startv2.js and static/startv2.css. POAScan never sees, asks for or links a key."""
-import json, os
+import json
 from html import escape as _e
 
 def E(s): return _e(str(s), quote=True)
-
-FLAG = "POASCAN_STARTV2"
-def on(): return os.environ.get(FLAG, "1") != "0"
 
 def _apps():
     from . import start as S, clients as C
@@ -99,10 +96,3 @@ def body(hero=True):
 def page(page_fn):
     from . import starthub
     return starthub.page(page_fn)
-
-def page_legacy(page_fn):
-    from . import ui as U
-    v = lambda n: U._asset_v(n) if hasattr(U, "_asset_v") else "1"
-    head = (f'<link rel="stylesheet" href="/static/startv2.css?v={v("startv2.css")}">'
-            f'<script src="/static/startv2.js?v={v("startv2.js")}" defer></script>')
-    return page_fn("Start", body(), "/start", head=head)

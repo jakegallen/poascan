@@ -320,11 +320,6 @@ def nopath_panel():
     b = "".join(f'<button class="npb" type="button" data-pick="{E(C.BY_ID[a]["name"])}">{label(C.BY_ID[a]["name"])}</button>' for a in C.NOPATH["alternatives"])
     return f'<div class="nopath" data-nopath role="status" hidden><p>{E(C.NOPATH["line"])}</p><div class="npg">{b}</div></div>'
 
-def variant_templates():
-    """The three variant templates, untagged with the {NAME} slot, for app.js to render the picked client's prompt."""
-    from . import onboarding_prompt as OP
-    return "".join(f'<pre hidden data-variant="{v}">{E(t)}</pre>' for v, t in OP.VARIANTS.items())
-
 GROUP_CAP = {"full": "One prompt creates your Agent and starts mining.",
              "connector": "Add the PoA connector, then paste one prompt to join and mine.",
              "none": "Can't run an Agent yet."}
@@ -489,38 +484,6 @@ def join_halt_html():
         return ""
     tip = "Joining is paused by the operators or during a network pause. MCP joins resume when the operators reopen them."
     return f'<p class="sthalt" role="status" data-joinhalt title="{E(tip)}"><span class="tag warn">Joins paused</span><span>{E(PAUSED)}</span></p>'
-
-def _step(n, title, body, cls=""):
-    return (f'<li class="sts {cls}"><span class="stn" aria-hidden="true">{n}</span><div class="stb">'
-            f'<h2 class="stt" id="st{n}">{title}</h2>{body}</div></li>')
-
-def page(page_fn, card=None, apps=None):
-    """/start: three numbered steps. 1 name, 2 where it runs, 3 one button that opens the client with the prompt
-    (or copies it where no deeplink works). The full prompt and every step sit behind View prompt and All steps."""
-    from . import maint as M, onboarding_prompt as OP, prompthist as PH
-    from .join import CLOSE, pbox
-    nm = default_name()
-    # no maxlength: a longer name is reported, never cut (app.js checks 1 to 32 of A-Z a-z 0-9 _ -, like POASwap)
-    field = (f'<input id="stname" class="stin" name="label" value="{E(nm)}" aria-labelledby="st1" aria-describedby="stname-hint stname-err" aria-invalid="false" '
-             f'autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[A-Za-z0-9_\\-]{{1,32}}" required enterkeyhint="next" data-name>'
-             '<p class="sthint" id="stname-hint">Letters, numbers, - and _</p>'
-             '<p class="sterr" id="stname-err" data-nameerr role="status" aria-live="assertive" hidden></p>')
-    pick = f'<div class="clw" role="radiogroup" aria-labelledby="st2">{clients()}</div>'
-    c0 = default_client()
-    go = (go_block(c0)
-          + WALLET_LINK + f'<p class="stkey" data-stkey>{LOCK}<span>{KEYLINE}</span></p>' + notice() + phash()
-          + '<details class="stview" data-stview><summary>View prompt</summary>'
-          # v2.5: the HTML carries the YOUR_NAME placeholder; app.js puts the visitor's name in (render() on load), so the
-          # page text only ever names the placeholder, never a fresh name each hour.
-          + pbox(f'<pre class="pc-text jm-p" tabindex="0">{E(prompt("YOUR_NAME", c0["variant"] or "full"))}</pre>') + '</details>' + HELP_LINE)
-    steps = ("<ol class=\"stl\">" + _step(1, "Name your agent", field) + _step(2, "Pick where it runs", pick)
-             + _step(3, "Start mining", go, "st3") + "</ol>")
-    from .earnview import tabs as _etabs
-    hero = (f'<div class="sthero">{_etabs("/start")}<h1>{E(TITLE)}</h1><p>Three steps. Your agent does the rest.</p>'
-            f'<a class="jm-x" href="/" data-back aria-label="Close">{CLOSE}</a></div>')
-    body = (f'<div class="stv2"><section class="stp2" data-pcard data-pid="start"{' data-paused="1"' if paused() else ""}>{hero}{steps}</section>'
-            + below() + '</div>')
-    return page_fn("Start", body, "/start")
 
 def below():
     """Under the /start card (both layouts): what the prompt does, All steps (with self-custody and sources), prompt history."""

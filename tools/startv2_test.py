@@ -1,4 +1,4 @@
-"""/start (1.26.246, startv2.py): on by default (POASCAN_STARTV2=0 rolls back); it renders the name step first, the picker, the templates and the data, with no key,
+"""/start (1.26.246, startv2.py): it renders the name step first, the picker, the templates and the data, with no key,
 token or referral in any link, no em or en dash, and the key warning for chat apps."""
 import os, sys, re, json
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, ROOT)
@@ -7,13 +7,9 @@ from poascan import startv2 as SV, start as S
 bad = 0
 def check(n, ok):
     global bad; print(("ok   " if ok else "FAIL ") + n); bad += not ok
-os.environ[SV.FLAG] = "0"
-check("POASCAN_STARTV2=0 rolls back to the 1.26.245 layout", not SV.on())
-os.environ.pop(SV.FLAG, None)
-check("on by default", SV.on())
 h = SV.body()
 d = json.loads(re.search(r'<script type="application/json" data-sv-json>(.*?)</script>', h, re.S).group(1))
-check("on: picker with every supported app as a tile, not supported behind Something else", SV.on() and h.count('class="sv-t ') == sum(a["tier"] != "none" for a in d["apps"])
+check("picker with every supported app as a tile, not supported behind Something else", h.count('class="sv-t ') == sum(a["tier"] != "none" for a in d["apps"])
       and h.count('class="sv-o"') == sum(a["tier"] == "none" for a in d["apps"]) and "Something else" in h)
 check("name first: the name step shows, prefilled; the picker and panel start hidden", '<div class="sv-name0" data-sv-name0>' in h and 'data-sv-n0' in h
       and re.search(r'id="sv-n0" value="[a-z]+-[a-z]+-\d{3}"', h) and '<div class="sv-pick" data-sv-pick hidden>' in h and 'data-sv-panel hidden' in h and "Next</button>" in h)

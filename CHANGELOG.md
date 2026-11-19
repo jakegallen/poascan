@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.403] - 2026-11-19
+
+### Changed
+- Removed code nothing calls: the Governance tab renderers from before the consolidation (the tabs are served by govhub), the legacy API page and Start rollback pages, the POASCAN_STARTV2 switch, unused Home, Agents and Network helpers, and unused CSS classes. No page, API route, MCP tool or number changes.
+
 ## [1.26.402] - 2026-11-19
 
 ### Added
