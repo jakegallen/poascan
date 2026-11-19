@@ -228,24 +228,3 @@ def table_html(tab, limit=PAGE, sort="", d="desc", link=None):
     nx = _next(tab, limit, len(rs), sort, d)
     more = f'<button type="button" class="btn ghost more-btn" data-more="{E(nx)}">Load more</button>' if nx else ""
     return ((SS.select(hc, sort or "rank", d, link) if link else "") + f'<div class="tw"><table class="lb pri"><thead><tr>{th}</tr></thead><tbody>{_rows_html(tab, rs[:limit], nm, sort) or "<tr><td colspan=14 class=na>No rows yet.</td></tr>"}</tbody></table></div>{more}', len(rs))
-
-def leaderboard_page(tab, apage, qs=None):
-    tab = ALIAS.get(tab, tab); tab = PAGE_ALIAS.get(tab, tab); tab = tab if tab in dict(TABS) else "holders"
-    SS = _SS(); key0 = "models" if tab == "ai" else tab
-    so = SS.q(qs, "sort"); so = so if so in sorts(key0) and so != "rank" else ""; d = SS.page_dir(qs)
-    base = "/agents/top" + ("" if tab == "holders" else f"?tab={tab}")
-    def link(k, dd):
-        qq = [x for x in ((f"sort={k}" if k not in ("", "rank") else ""), ("dir=asc" if dd == "asc" else "")) if x]
-        return base + (("&amp;" if "?" in base else "?") + "&amp;".join(qq) if qq else "")
-    chips = "".join(f'<a href="/agents/top{"" if k == "holders" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{n}</a>' for k, n in TABS)
-    key = "models" if tab == "ai" else tab
-    tb, n = table_html(key, PAGE, so, d, link)
-    cq = "&".join(x for x in ((f"sort={so}" if so else ""), ("dir=asc" if d == "asc" else "")) if x)
-    title = dict(TABS)[tab]
-    body = (f'<nav class="chips lbtabs scroll" aria-label="Rankings">{chips}</nav>'
-            + card(f"{'Rewards' if tab == 'ai' else 'Top'} · {n:,}", tb, (X.usd_toggle() if any(k == "poa" for _, _, k in COLS[key]) else "") + f'<a class="more" href="/api/leaderboard/{key}.csv{"?" + cq.replace("&", "&amp;") if cq else ""}" download>CSV →</a>'
-                + f'<a class="more" href="/api/v1/leaderboard/{key}{"?" + cq.replace("&", "&amp;") if cq else ""}">API →</a>'))
-    if tab == "ai":
-        from . import views as V
-        body += V.ai_cards()
-    return apage("Rankings · " + title, body, "/agents/top")

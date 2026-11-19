@@ -1771,43 +1771,6 @@ def api_page(page, card):
     from . import apihub, ui as U
     return apihub.page(getattr(U.REQ, "qs", None) or {}, page)
 
-def api_page_legacy(page, card):
-    from . import ui as U
-    groups = api_groups(); nrest = sum(len(r) for _, _, r in groups)
-    def row(m, path, purpose, smp):
-        url = BASE + (smp or path)
-        cp = U.copy(f"curl -s '{url}'") if smp else U.copy(url)
-        fold = (f'<details class="apis" data-src="{E(smp)}"><summary>Sample</summary><pre class="apip" tabindex="0">Opens on demand.</pre></details>' if smp else "")
-        return (f'<li class="apir"><div class="apih"><span class="apim">{m}</span><code class="apipath">{E(path)}</code>{cp}</div>'
-                f'<p class="apid">{E(purpose)}</p>{fold}</li>')
-    jump = "".join(f'<a class="chip" href="#{a}">{E(t)}</a>' for a, t in [("connect", "Connect")] + [(a, t) for a, t, _ in groups] + [("mcp", "MCP tools")])
-    snip = json.dumps({"mcpServers": {"poascan": {"url": MCP_URL}}}, indent=2)
-    connect = (f'<div class="apik"><span class="lbl">MCP</span><code>{E(MCP_URL)}</code>{U.copy(MCP_URL)}</div>'
-               f'<div class="apik"><span class="lbl">REST</span><code>{E(BASE + API_PREFIX)}</code>{U.copy(BASE + API_PREFIX)}</div>'
-               f'<div class="apisn"><pre class="apip" tabindex="0">{E(snip)}</pre>{U.copy(snip)}</div>'
-               f'<p class="dim small">Streamable HTTP. Spec: <a href="/openapi.json">openapi.json</a> · <a href="/llms.txt">llms.txt</a> · '
-               f'<a href="/.well-known/mcp.json">mcp.json</a> · <a href="/api/reference">Interactive reference</a></p>')
-    from . import oneclick as OC
-    body = ('<div class="sechead"><h1>API</h1></div>'
-            + '<p class="apin">Read-only. No keys. JSON; add <code>.csv</code> to lists. Cache and poll at most once a minute; bursts over 20 requests in 10 s get a 429.</p>'
-            + f'<nav class="chips apijump" aria-label="Sections">{jump}</nav>'
-            + card("Connect", connect + OC.html("poascan", MCP_URL), id="connect"))
-    for a, t, rows in groups:
-        body += card(f"{t} · {len(rows)}", '<ul class="apil">' + "".join(row(*r) for r in rows) + "</ul>", id=a)
-    def trow(name, title, desc, schema):
-        call = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": {}}}, indent=2)
-        req = [k for k in (schema or {}).get("required") or []]
-        args = ", ".join(sorted((schema or {}).get("properties") or {}))
-        return (f'<li class="apir"><div class="apih"><span class="apim">MCP</span><code class="apipath">{E(name)}</code>{U.copy(name)}</div>'
-                f'<p class="apid">{E(_purpose(desc))}</p>'
-                f'<details class="apis"><summary>Call</summary><pre class="apip" tabindex="0">{E(call)}</pre>'
-                + (f'<p class="dim small">Arguments: {E(args)}' + (f'. Required: {E(", ".join(req))}' if req else "") + '</p>' if args else "")
-                + '</details></li>')
-    body += card(f"MCP tools · {len(TOOLS)}", '<ul class="apil">' + "".join(trow(n, t, d, sc) for n, t, d, sc, _ in TOOLS) + "</ul>",
-                 '<a class="more" href="/.well-known/mcp.json">mcp.json →</a>', id="mcp")
-    body += f'<p class="dim small">{nrest} endpoints and {len(TOOLS)} tools, generated from the routes this build serves (v{VERSION}).</p>'
-    return page("API", body, "/api")
-
 def reference_page(page, card):
     """Interactive API reference: /openapi.json rendered client-side into grouped,
     expandable endpoint cards with a live Try for read-only GET calls. The renderer

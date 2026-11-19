@@ -495,81 +495,6 @@ def _badge(cc):
     return flag(word, det, tone=tone)
 
 
-def render_card(now=None):
-    """The Network facts card for Network > Overview. Fails soft: with no facts it shows POAScan's derived hashes with an
-    "authoritative source unavailable" note and never raises. Returns a full card section."""
-    from .ui import card, flag, short, E
-    facts, ts = cached(now)
-    cc = crosscheck(facts)
-    hrow = lambda name: next((r for r in cc["rows"] if r["name"] == name), {})
-
-    def hash_kv(name, label):
-        r = hrow(name)
-        d, a = r.get("derived"), r.get("authoritative")
-        st = r.get("state")
-        tag = flag("match", "Derived equals authoritative", tone="ok") if st == "match" else (
-              flag("drift", "Derived differs from authoritative", tone="bad") if st == "drift" else "")
-        val = (f'<span class="mono" title="authoritative {E(a)}">{E(short(a, 8, 6))}</span>' if a
-               else (f'<span class="mono dim" title="derived {E(d)}">{E(short(d, 8, 6))}</span>' if d else '<span class="na">-</span>'))
-        return f'<div class="kv"><span>{E(label)}</span><div>{val} {tag}</div></div>'
-
-    note = ("" if facts is not None else
-            '<p class="na">Authoritative source unavailable; showing POAScan\'s derived values. The cross check needs a '
-            '/api/network-facts read.</p>')
-    head = f'<div class="kv"><span>Integrity</span><div>{_badge(cc)}</div></div>'
-    hashes = hash_kv("engine", "Engine hash") + hash_kv("params", "Params hash")
-
-    econ_rows = economics(facts)
-    def ev(v): return f'<b>{E(str(v))}</b>' if v is not None else '<span class="na">-</span>'
-    px = "".join(f'<div><span title="/api/params {E(x["key"])}">{E(x["label"])}</span><b>{E(x["text"])}</b></div>' for x in params_extra())
-    econ = ('<div class="sy">' + "".join(f'<div><span>{E(e["label"])}</span>{ev(e["value"])}</div>' for e in econ_rows) + px + '</div>'
-            if facts is not None else ('<div class="sy">' + px + '</div>' if px else '<p class="na">No economics params without a facts read.</p>'))
-
-    accts = system_accounts(facts)
-    def live_tag(a):
-        if a["live"] is True: return flag("live", "Reported live by the network facts", tone="ok")
-        if a["live"] is False: return flag("down", "Reported not live by the network facts", tone="bad")
-        return flag("unknown", "The facts do not report this account's liveness", tone="warn")
-    acct_html = ("".join(f'<div class="kv"><span>{E(a["id"])}</span><div>'
-                         + (f'<span class="mono">{E(short(a["address"], 6, 4))}</span> ' if a.get("address") else "")
-                         + live_tag(a) + '</div></div>' for a in accts)
-                 if accts else '<p class="na">No system accounts in the facts read.</p>')
-
-    tg = trusted_graders(facts)
-    tg_html = f'<div class="kv"><span>Trusted graders</span><div><b>{len(tg)}</b></div></div>'
-
-    extra = f'<span class="na small" title="Read {E(PATH)} hourly; derived from the signed release">authoritative</span>'
-    body = (f'{head}{hashes}{tg_html}'
-            f'<h3>Economics</h3>{econ}'
-            f'<h3>System accounts</h3>{acct_html}'
-            f'{_established_block()}{note}')
-    return card("Network facts · authoritative", body, extra)
-
-
-def _established_block():
-    """The established set reconciliation sub-block for the facts card (derived vs authoritative /api/established)."""
-    from .ui import flag, short, E
-    rec = established_reconcile()
-    if not rec["available"]:
-        tag = flag("unknown", "Authoritative /api/established not read; POAScan shows its derived set.", tone="warn")
-        return f'<h3>Established set</h3><div class="kv"><span>Reconciliation</span><div>{tag} <span class="na">derived {rec["derived_size"]}</span></div></div>'
-    if rec["agree"]:
-        badge = flag("Matches derivation", "The authoritative established set equals POAScan's derived set.", tone="ok")
-    else:
-        badge = flag("Differs", f"{len(rec['only_derived'])} only in POAScan's derivation, {len(rec['only_authoritative'])} only authoritative. A real signal.", tone="bad")
-    rows = f'<div class="kv"><span>Reconciliation</span><div>{badge}</div></div>'
-    rows += f'<div class="kv"><span>Size, derived / authoritative</span><div><b>{rec["derived_size"]}</b> / <b>{rec["authoritative_size"]}</b></div></div>'
-
-    def addrs(label, lst):
-        if not lst: return ""
-        shown = " ".join(f'<a class="mono" href="/address/{E(x)}">{E(short(x, 6, 4))}</a>' for x in lst[:6])
-        more = f' <span class="dim">+{len(lst) - 6}</span>' if len(lst) > 6 else ""
-        return f'<div class="kv"><span>{label}</span><div>{shown}{more}</div></div>'
-
-    rows += addrs("Only in derivation", rec["only_derived"]) + addrs("Only authoritative", rec["only_authoritative"])
-    return f'<h3>Established set</h3>{rows}'
-
-
 def addr_row(a, derived_established):
     """(label, value) for the Established (authoritative) row on the address page, or None when no facts are cached.
     Shows established since and expires after from the cached /api/established copy, and a Drift tag when the
@@ -589,48 +514,6 @@ def addr_row(a, derived_established):
 
 # ---------------------------------------------------------------- close report card (Network > Overview)
 _CLOSE_VERDICT = {"match": ("ok", "Matches close stats"), "differ": ("bad", "Differs"), "unknown": ("warn", "Authoritative source unavailable")}
-
-
-def render_close_card(now=None):
-    """The authoritative last close card: the settled split (passed, failed, expired), grades cast, rows reaching
-    quorum and grader concentration (n_eff, top-grader share), each preferring the authoritative figure and falling
-    back to POAScan's derived one, with a match or differ badge against POAScan's own close stats. Fails soft."""
-    from .ui import card, flag, stat, E
-    cc = close_crosscheck(now)
-    tone, word = _CLOSE_VERDICT[cc["verdict"]]
-    if cc["verdict"] == "match":
-        det = "The authoritative settled split and grade counts equal POAScan's own close stats."
-    elif cc["verdict"] == "differ":
-        bad = ", ".join(r["label"] for r in cc["rows"] if r["state"] == "differ")
-        det = f"The authoritative close differs from POAScan's close stats for: {bad}. A real signal worth a look."
-    else:
-        det = "POAScan keeps its own derived close stats; the authoritative /api/close-report was not read."
-    ep = cc["epoch"]
-    head = (f'<div class="kv"><span>{"Close E" + str(E(str(ep))) if ep is not None else "Last close"}</span>'
-            f'<div>{flag(word, det, tone=tone)}</div></div>')
-    pref = cc["preferred"]
-    def v(k): return pref.get(k)
-    def row(label, val, tip=None):
-        shown = f'<b>{E(str(val))}</b>' if val is not None else '<span class="na">-</span>'
-        t = f' title="{E(tip)}"' if tip else ""
-        return f'<div class="kv"><span{t}>{E(label)}</span><div>{shown}</div></div>'
-    juried = None
-    if v("passed") is not None and v("failed") is not None:
-        juried = v("passed") + v("failed")
-    rate = f'{round(100 * v("passed") / juried)}%' if juried else None
-    body = (head
-            + row("Settled", v("settled"))
-            + row("Passed / failed / expired", f'{_n(v("passed"))} / {_n(v("failed"))} / {_n(v("expired"))}')
-            + (row("Pass rate (juried)", rate) if rate is not None else "")
-            + row("Grades cast", v("grades")) + row("Graders", v("graders"))
-            + row("Rows at quorum", cc["quorum_rows"], tip="Pending rows that reached grade_quorum (authoritative)")
-            + row("Effective graders (n_eff)", cc["n_eff"], tip="Herfindahl effective grader count; low means a few graders cast most grades")
-            + row("Top grader share", f'{round(100 * cc["top_grader_share"])}%' if cc["top_grader_share"] is not None else None, tip="Share of this close's grades cast by the single busiest grader"))
-    if not cc["available"]:
-        body += ('<p class="na">Authoritative source unavailable; showing POAScan\'s derived close stats. The cross check '
-                 'needs a /api/close-report read.</p>')
-    extra = '<span class="na small" title="Read /api/close-report and /api/settled hourly">authoritative</span>'
-    return card("Last close · authoritative", body, extra)
 
 
 def _n(v): return str(v) if v is not None else "-"
@@ -698,32 +581,3 @@ def expiry_crosscheck(now=None):
 _EXPIRY_VERDICT = {"match": ("ok", "Matches derived horizon"), "differ": ("bad", "Differs from derived horizon"),
                    "unknown": ("warn", "Not cross checked")}
 
-
-def render_expiry_card(now=None):
-    """The authoritative forward expiry schedule: pending answers by expiry close, with the total cross checked against
-    POAScan's derived horizon. Fails soft to a note pointing at the derived horizon when the schedule is unavailable."""
-    from .ui import card, flag, table, E
-    sched = expiry_schedule(now); cc = expiry_crosscheck(now)
-    if not sched["available"]:
-        body = ('<p class="na">Authoritative source unavailable; POAScan shows its derived expiry horizon on Governance, '
-                'Queue. The forward curve needs a /api/expiry-schedule read.</p>')
-        return card("Expiry schedule · authoritative", body, '<span class="na small">authoritative</span>')
-    tone, word = _EXPIRY_VERDICT[cc["verdict"]]
-    if cc["verdict"] == "match":
-        det = "The authoritative total pending equals POAScan's derived horizon total."
-    elif cc["verdict"] == "differ":
-        det = f"Authoritative total {cc['authoritative_total']}, POAScan's derived horizon {cc['derived_total']}. A real signal worth a look."
-    else:
-        det = "POAScan has no derived horizon total to compare yet."
-    head = f'<div class="kv"><span>Total pending</span><div><b>{sched["total"]}</b> {flag(word, det, tone=tone)}</div></div>'
-    rows = [[f'E{E(str(r["close"]))}', f'{r["pending"]:,}', _bar(r["pending"], sched["rows"])] for r in sched["rows"]]
-    tbl = table(["Expiry close", "Pending", ""], rows, cls="wrapt") if rows else '<p class="na">No pending cohorts scheduled to expire.</p>'
-    extra = '<span class="na small" title="Read /api/expiry-schedule hourly">authoritative</span>'
-    return card("Expiry schedule · authoritative", head + tbl, extra)
-
-
-def _bar(n, rows):
-    """A plain unicode block bar for one schedule row, scaled to the largest pending count (no CSS, no color)."""
-    mx = max((r["pending"] for r in rows), default=0) or 1
-    width = max(1, round(12 * n / mx)) if n else 0
-    return f'<span class="mono dim" aria-hidden="true">{"█" * width}</span>'

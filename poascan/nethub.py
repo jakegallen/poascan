@@ -74,20 +74,9 @@ def anchor_ring(eta, now):
             f'<div class="rc"><span class="lbl">Last anchor</span><b class="bn num{" long" if age is not None and len(short_age(age)) > 5 else ""}" data-aage>{short_age(age)}</b>'
             f'</div></div>')
 
-def _chain_age(now):
-    out = {}
-    for r in db.q("SELECT chain, MAX(anchored_at) AS t FROM anchors WHERE segment=? GROUP BY chain", (SG.CURRENT,)):
-        ts = _iso_ts(r["t"])
-        if ts: out[(r["chain"] or "").lower()] = ts
-    return out
-
 def _iso_ts(s):
     try: return int(dt.datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
     except (ValueError, TypeError): return None
-
-def _age_of(ages, key, now):
-    t = next((v for k, v in ages.items() if key in k), None)
-    return short_age(now - t) if t else '<span class="na">···</span>'
 
 DOT = {"open": "ok", "halted": "bad", "down": "bad", "unknown": "nd"}
 

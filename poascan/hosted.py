@@ -110,7 +110,6 @@ def counts():
     """(open, known) over the route list. open counts only routes answering now: a slow route is not counted as open."""
     c = current(); return sum(1 for v in c.values() if v["state"] == "open" and not v["slow"]), sum(1 for v in c.values() if v["state"] != "unknown" or v["slow"])
 def slow(): return [k for k, v in current().items() if v["slow"]]
-def any_known(): return any(r["state"] != "unknown" for r in current().values())
 def checked_at():
     t = [r["checked"] for r in current().values() if r.get("checked")]
     return max(t) if t else None

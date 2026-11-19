@@ -46,10 +46,6 @@ def qprog(r, q=4):
 def agent_cell(a, name):
     return agent(a, name or "")   # the shared Agent cell (1.26.152)
 
-def _ts_cell(t):
-    """Date over time in the visitor's zone (app.js; the hover has both and the zone), muted ··· when blank."""
-    return f'{lt(t, "d")}<small>{lt(t, "t")}</small>' if t else '<span class="dim">···</span>'
-
 def ans_link(i): return f'<a class="mono" href="/tx/{E(i)}" title="{E(i)}">{E(short(i, 6, 4))}</a>'
 
 PANEL_TIP = "Panel size at the last close, from its close record. Blank when the answer was not pending then."
@@ -75,57 +71,6 @@ def queue_select(f="", by="need", d="desc"):
     kind = SS.kind_of(QUEUE_COLS, by)
     tie = lambda r: (r["need"], r["born"] if r["born"] is not None else 1 << 30, -(r["last_seal_ts"] or 0), r["id"])
     return SS.sort_rows(rows, _VAL.get(by, _VAL["need"]), kind, d, tie=tie)
-
-def _last_close():
-    from . import govv2 as GV2
-    return GV2.panels()[1]
-
-def queue_tab(qs, href, qsx):
-    """Governance, Queue: every pending answer with quorum progress, trusted and untrusted seals, need and expiry."""
-    q1 = lambda k, dflt="": ((qs or {}).get(k) or [dflt])[0]
-    from . import horizon as HZ   # 1.26.186: expiry horizon per pending cohort, from close records (every segment)
-    hz = HZ.card_html(qs, href)
-    if SG.archived(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">The grading list is the live network\'s: shown for the current segment only.</p>')
-    if GR.is_retired(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">minepoa retired its grading list on 2026-11-01. A replacement is planned; the queue board above is from the close records.</p>')
-    if not GR.usable(): return __import__("poascan.board", fromlist=["x"]).card_html() + hz + card("Settle queue", '<p class="na">minepoa\'s grading list has not been read yet. It is checked every 10 minutes.</p>')
-    by = SS.page_sort(qs, dict(QUEUE_SORTS), "need"); d = SS.page_dir(qs)
-    f = q1("need"); f = f if f in dict(QUEUE_FILTERS) else ""
-    rs = queue_select(f, by, d); allr = GR.queue_rows(); s = GR.summary(); qn = s["quorum"]
-    try: pg = max(1, int(q1("page", "1")))
-    except ValueError: pg = 1
-    pages = max(1, -(-len(rs) // QUEUE_PAGE)); pg = min(pg, pages); cur = rs[(pg - 1) * QUEUE_PAGE: pg * QUEUE_PAGE]
-    keep = lambda **o: dict(dict(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f), **o)
-    link = lambda k, dd: href("queue", **keep(sort=k if k != "need" else "", dir="asc" if dd == "asc" else "", page="")) + "#queue"
-    pend = [r for r in allr if not r["open"]]
-    cnt = {"": len(pend), "ready": sum(1 for r in pend if r["ready_next_close"]), "queued": sum(1 for r in pend if r["queued_at_quorum"]), **{str(n): sum(1 for r in pend if r["need"] == n) for n in (1, 2, 3, 4)}, "open": len(allr) - len(pend)}
-    chips = "".join(f'<a href="{href("queue", **keep(need=k, page=""))}#queue" class="chip {"on" if k == f else ""}">{t} <small>{cnt[k]:,}</small></a>'
-                    for k, t in QUEUE_FILTERS if cnt[k] or k == f)
-    def need_cell(r): return (READY if r["ready_next_close"] else QUEUED) if r["need"] == 0 else f'<span class="num">{r["need"]}</span>'
-    def exp_cell(r):
-        if r["expires"] is None: return '<span class="dim">···</span>'
-        return f'E{r["expires"]}' + (f' <small class="dim">in {r["expires_in"]}</small>' if r["expires_in"] is not None else "")
-    trs = "".join(f'<tr{" class=rdy" if r["ready_next_close"] else ""}><td>{ans_link(r["id"])}</td><td class="dk">{agent_cell(r["author"], r["name"]) if r["author"] else "···"}</td>'
-                  f'<td class="qpc">{qprog(r, qn)}</td><td class="r dk">{r["trusted_seals"]:,}</td><td class="r dk">{r["untrusted_seals"]:,}</td><td class="r">{need_cell(r)}</td>'
-                  f'<td class="r">{r["panel"] if r.get("panel") is not None else "<span class=dim>···</span>"}</td><td class="r dk">{str(r["age"]) if r.get("age") is not None else "<span class=dim>···</span>"}</td>'
-                  f'<td class="r dk">{"E" + str(r["born"]) if r["born"] is not None else "···"}</td><td class="r">{exp_cell(r)}</td>'
-                  f'<td class="r dk">{rel(r["last_seal_ts"]) if r["last_seal_ts"] else "<span class=dim>···</span>"}</td>'
-                  f'<td class="r">{_ts_cell(r.get("sealed_ts"))}</td><td class="r">{_ts_cell(r.get("graded_ts"))}</td></tr>' for r in cur)
-    tb = (SS.select(QUEUE_COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov queue"><thead><tr>{SS.heads(QUEUE_COLS, by, d, link)}</tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=13 class=na>No answers in this view.</td></tr>"}</tbody></table></div>')
-    nav = ""
-    if pages > 1:
-        nav = ('<div class="chips">' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg - 1) if pg > 2 else ""))}#queue">Previous</a>' if pg > 1 else "")
-               + f'<span class="dim small">Page {pg} of {pages}</span>' + (f'<a class="chip" href="{href("queue", **keep(page=str(pg + 1)))}#queue">More</a>' if pg < pages else "") + "</div>")
-    ct = s["next_close_ts"]; cl = _last_close()
-    foot = (f'<p class="cov dim small">E{s["epoch"]} closes about {lt(ct, "t")}, in {countdown(ct)}, an estimate · '
-            + (f'It evaluates the oldest {s["settle_cap"]:,} pending rows: {s["ready_next_close"]:,} at quorum there' if s["settle_cap"] else f'It evaluates every pending row (no settle cap): {s["ready_next_close"]:,} at quorum')
-            + (f', {s["at_quorum_queued"]:,} more at quorum carry over' if s["at_quorum_queued"] else "") + ' · '
-            f'Checked {lt(s["checked_at"] or s["fetched_at"], "t")}, minepoa as of {lt(s["upstream_as_of"], "t")} · '
-            f'Sealed and Graded: first and latest seal in the {"E" + str(cl) + " " if cl is not None else ""}close record · <a href="/about#grading-list">Method</a></p>') if ct else ""
-    q = qsx(sort=by if by != "need" else "", dir="asc" if d == "asc" else "", need=f)
-    links = (f'<a class="more" href="/api/v1/governance/queue.csv{q}" download>CSV →</a><a class="more" href="/api/v1/governance/queue{q}">API →</a>')
-    from . import board as BD   # 1.26.206: queue board (coverage by birth band, at 3 of 4, expiring, neutral closes)
-    return stats_row() + BD.card_html() + hz + card(f"Settle queue · {len(rs):,}", f'<div class="chips">{chips}</div>' + tb + nav + foot, links, cls="histc", id="queue")
 
 # ---------------------------------------------------------------- Graders: exact counts from the list
 GR_COLS = [SS.Col(None, "Agent", "text"), SS.Col("seals", "Seals", "num", "r"), SS.Col("counting", "Count", "num", "r"),

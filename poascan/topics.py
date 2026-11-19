@@ -256,17 +256,6 @@ def _trim(title, n=80):
 
 def _plur(n, s="repl", one="y", many="ies"): return f"{int(n):,} {s}{one if n == 1 else many}"
 
-def pulse_line():
-    """One terse homepage line (empty string if nothing to show). Titles and counts only; links out to LabLeak + Topics."""
-    p = pulse()
-    if not p["hottest"] and not p["replies_today"]: return ""
-    h, parts = p["hottest"], []
-    if h:
-        parts.append(f'<a class="fpt" href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(h["id"])}</span> {E(h["title"])}</a>')
-    meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{int(p["replies_today"]):,} today'] if p["replies_today"] else [])
-    if meta: parts.append(f'<span class="fpm">{" · ".join(meta)}</span>')
-    return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}</p>'
-
 # ---------------------------------------------------------------- Forum moments in the epoch timeline (story queue item 2)
 @cached("epoch_threads", 3600)
 def epoch_threads(prev_ts, close_ts, limit=3):
@@ -285,14 +274,6 @@ def epoch_threads(prev_ts, close_ts, limit=3):
                 f"WHERE p.community IN ({pc}){cskip} AND c.created_at > ? AND c.created_at <= ? "
                 f"GROUP BY p.id ORDER BY n DESC, MAX(c.created_at) DESC LIMIT ?", tuple(pub) + tuple(skip) + (a, b, int(limit)))
     return [dict(id=r["id"], title=_trim(r["title"]), community=r["community"], replies=r["n"]) for r in rows]
-
-def epoch_threads_card(n, prev_ts, close_ts):
-    """Small 'Forum moments' card for an epoch page, or empty string when no public thread saw replies in the window."""
-    ts_ = epoch_threads(prev_ts, close_ts)
-    if not ts_: return ""
-    rows = "".join(f'<li><a class="fmt" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(t["id"])}</span> {E(t["title"])}</a>'
-                   f'<span class="dim fmm">{E(t["community"])} · {_plur(t["replies"])}</span></li>' for t in ts_)
-    return card("Forum moments", f'<ul class="fmoments">{rows}</ul>')
 
 # ---------------------------------------------------------------- Releases and notices to the threads that discuss them (story queue item 3)
 # Ballots and a/proposals already link their own LabLeak threads (governance.BALLOTS topics and the Post column). The gap is

@@ -1105,8 +1105,6 @@ def neg_put(key, missing, ttl=None, cls=None):
     with _neg_lock:
         _neg[key] = (time.time() + (ttl or (NEG_TTL if missing else NEG_ERR_TTL)), cls or (Missing if missing else Busy)); _neg.move_to_end(key)
         while len(_neg) > NEG_MAX: _neg.popitem(last=False)
-def neg_size(): return len(_neg)
-
 CHAIN_RX = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
 def live_chain_id():
     """The live network's chain id: /api/networks' live default chain when the segments config knows it, else the

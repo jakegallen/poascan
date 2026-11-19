@@ -48,11 +48,6 @@ def stub_obj(n):
 def is_stub(obj):
     return isinstance(obj, dict) and obj.get("v") == STUB_V and obj.get("rows") == "close_rows"
 
-def rows_canonical(kind):
-    """True when close_rows are the store and the blobs row is (or should be) a stub."""
-    m = meta(kind)
-    return bool(m and int(m["ver"]) >= STUB_V)
-
 def count(kind):
     m = meta(kind)
     if m: return int(m["n"])
@@ -211,17 +206,6 @@ def _write_row(row):
                 c.rollback(); raise
     finally:
         c.close()
-
-def apply_sigs(kind, sigs):
-    """After the blob is stored: rewrite only the closes whose sha1 changed, then pend_ix and close_meta.
-    sigs is sha1(json.dumps(record)) per position, the same text sig_of stores. One close is parsed at a time."""
-    with _lock:
-        have = {r["pos"]: r["sig"] for r in db.q("SELECT pos, sig FROM close_rows WHERE kind=? ORDER BY pos", (kind,))}
-        n = 0
-        for e in iter_blob(kind):
-            if have.get(n) != (sigs[n] if n < len(sigs) else None): _write_row(_row(kind, n, e))
-            n += 1
-        _finish(kind, blob_src(kind), n)
 
 def _index(kind):
     """pend_ix: for each answer, the runs of consecutive closes where its pending row is unchanged (rows grow with distinct

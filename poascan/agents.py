@@ -238,15 +238,6 @@ def funnel():
     return dict(overall=stages(acc), cohorts=sorted(((k, stages(v)) for k, v in cohorts.items()), key=lambda x: (x[0] != "pre-archive", x[0])),
                 not_in_agents=len((answered | paid) - set(acc)))
 
-def newcomers(days=7):
-    now = time.time(); rb = A.rewards_by_addr()
-    j = db.q("SELECT addr, ts FROM labels WHERE source='join memo' AND ts > ?", (now - days * 86400,))
-    paid = sum(1 for r in j if sum(rb.get(r["addr"], {}).values()) > 0)
-    acc = accounts_all(); allpaid = sum(1 for a in acc if sum(rb.get(a, {}).values()) > 0)
-    first = db.q1("SELECT MIN(ts) AS t FROM labels WHERE source='join memo' AND ts>0")["t"]
-    return dict(observed_joins=len(j), observed_paid=paid, rate=paid / len(j) if j else None, since=first,
-                network_accounts=len(acc), network_paid=allpaid, network_rate=allpaid / len(acc) if acc else None)
-
 # ---------------- retention, streaks, time-to-answer ----------------
 def retention():
     ans = answerers(); ks = sorted(ans); out = []

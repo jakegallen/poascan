@@ -71,22 +71,6 @@ def tracker_html(score=True):
             db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")] if score else ()
     return BN.bench_html(o, graders_tile(o), feed=feed, score=score)
 
-def burnmeter_html():
-    o = A.open_epoch(); ep = A.epoch_rows(); last = ep[-1] if ep else None
-    start, per = o.get("last_close"), o.get("period") or 21600
-    frac = min(1.0, max(0.0, (time.time() - start) / per)) if start else 0
-    cur = (f'<div class="bm-hd"><span class="lbl" title="Epoch {o["epoch"]} pool, filling as the epoch runs">Pool</span><b data-live="pool">{poa(o["pool"], dec=2)}</b></div>'
-           f'<div class="vessel" data-start="{start or ""}" data-close="{o.get("est_close") or ""}"><i class="molten" style="width:{frac*100:.2f}%"></i><span class="vp num">{frac*100:.0f}%</span></div>')
-    if not last: return cur + skel(2)
-    bp = last["burn_pct"] or 0
-    done = (f'<div class="bm-hd"><a class="lbl" href="/epoch/{last["epoch"]}" title="Epoch {last["epoch"]}, the latest close">Settled</a><b>{poa(last["pool"], dec=2)}</b></div>'
-            f'<div class="vessel split"><i class="minted" style="width:{(100 * last["minted"] / last["pool"]) if last["pool"] else 0:.2f}%"></i><i class="burned" style="width:{bp:.2f}%"></i></div>'
-            f'<div class="bm-leg"><span><i class="sw m"></i><span class="lbl">Minted</span><b class="num mined">{compact(last["minted"])}</b></span>'
-            f'<span><i class="sw b"></i><span class="lbl">Burned</span><b class="num red">{compact(last["burned"])}</b></span>'
-            f'<span title="Burn share of the settled pool"><b class="num red">{bp:.1f}%</b></span></div>')
-    return f'<div class="bm" id="burnmeter">{cur}{done}</div>'
-
-
 def headline():
     st = A.status(); ep = A.epoch_rows(); last = ep[-1] if ep else {}; sp = A.supply_split(); nw = A.networks()
     anc = A.anchor_summary(); lag = (nw.get("height") or 0) - (nw.get("checkpoint_height") or 0) if nw else None
@@ -285,29 +269,7 @@ def _step_cell(r):
     t = f"Node supply changed by {full(st)} POA across this close (POAScan's /api/status reads). The record's mint is not published yet."
     return f'<span class="num dim" title="{E(t)}">{"+" if st >= 0 else ""}{compact(st, 1)}</span>'
 
-def home_graders(n=5):
-    """Graders on Home: the most aligned jurors with at least 10 settled seats (agents.graders, cached 300 s)."""
-    g = [x for x in G.graders()["graders"] if x[1] >= 10]; nm = names()
-    g = sorted(g, key=lambda x: (-x[3], -x[1]))[:n]
-    if not g: return '<p class="empty">No settled grades yet</p>'
-    return table(["Agent", "Settled", "Aligned"],
-                 [[addr_link(a, nm, (6, 4)), intc(k), f'<span class="rate" aria-hidden="true"><i style="width:{r * 100:.0f}%"></i></span><span class="num">{r * 100:.1f}%</span>']
-                  for a, k, al, r, *_ in g], cls="grs")
-
 HOME_EPOCHS = 40
-
-def home_answers():
-    """1.26.309: Home's wide chart, Answers per closed epoch (answer txs in POAScan's archive by epoch, both runs as one
-    history), v2 bars. It replaced the Supply line, which repeated Total mined. POASwap fills are too few to chart (6 in
-    total, the last on Oct 21), so trading is not the series yet. The open epoch is left out: it is still filling."""
-    from . import ui as _U
-    o = A.open_epoch().get("epoch"); g = V3.growth_data()
-    cur = SG.gkey(o, SG.CURRENT) if o is not None else None
-    rows = [(k, a) for k, a, _p in g["per_ep"] if cur is None or k < cur][-HOME_EPOCHS:]
-    ser = [(SG.ep_label(k), [a]) for k, a in rows]
-    body = _U.bars(ser, height=220, colors=("gold",), fmt=lambda v: f"{int(round(v)):,}", legend=None) if len(ser) > 1 else skel(2)
-    return card(ICON_FEED + "Answers per epoch", f'<div class="cpw" data-chart="answers">{body}</div>',
-                _U.pop_btn("answers", "Answers per epoch"), cls="supc ansc")
 
 HOME_EPOCHS_MINI = 24
 ICON_VOICE = _ui._ic('<path d="M8 10h8M8 13h5"/><path d="M7 7.5h10a1.2 1.2 0 0 1 1.2 1.2v5.6A1.2 1.2 0 0 1 17 15.5h-4.6L9.5 18v-2.5H7a1.2 1.2 0 0 1-1.2-1.2V8.7A1.2 1.2 0 0 1 7 7.5z"/>')
@@ -1197,16 +1159,6 @@ def ledger(cur, body, toolbar=""):
     tabs = [("closed", "/chain", "Epochs", closed), ("txs", "/chain/txs", "Txs", None), ("pending", "/chain?tab=pending", "Pending", pend.get("total")), ("grading", "/chain?tab=grading", "Grading", None)]
     return KIT.tabmod(tabs, cur, body, toolbar, id="ledger", label="Chain")
 
-def live_hero():
-    """The open epoch: ring, countdown and live counts. Top of /epochs (it replaced /live)."""
-    o = A.open_epoch(); now = time.time(); left = (o["est_close"] - now) if o["est_close"] else None
-    cd = f'<b class="cd num" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
-    return (f'<section class="card livehero" id="tracker"><div class="lh-ring">{ring(o, big=True)}<div class="lh-ep"><span class="lbl">Epoch</span><b class="num" data-live="epoch">{o["epoch"]}</b></div></div>'
-            f'<div class="lh-cd"><span class="lbl">Closes in</span>{cd}</div>'
-            f'<div class="lh-k"><div><span class="lbl">Answers</span><b class="num" data-live="answers">{intc(o["answers"])}</b></div>'
-            f'<div>{graders_tile(o)}</div>'
-            f'<div><span class="lbl">Pool</span><b>{poa(o["pool"], dec=2)}</b></div></div></section>')
-
 def cut_note(link_seg1=True):
     """1.26.301: one history, no cut banner (the restart is told once on /about)."""
     return ""
@@ -1331,63 +1283,12 @@ def apage(title, body, active):
 def collecting(since, what):
     return skel(3)
 
-def health_card():
-    """Is it real? Network health and the sybil-resistance numbers in one card (was two: home's Is it real? and Network health here)."""
-    h = G.network_health(); sy = A.sybil(); est = len(A.established_set())
-    inv = sy["invited"]; k = sy["inviter_count"] or 0; top5 = sum(x["n"] for x in sy["inviters"])
-    run, ser = 0, []
-    for r in A.epoch_rows(): run += (r["established"] or 0) - (r["established_removed"] or 0); ser.append((r["close_ts"], run))
-    s = "".join([spark_in(stat("Established", intc(est)), ser), stat("Est. operators", intc(h["families"])),
-                 stat("Agents / operator", f'<span class="num">{h["accounts"]/max(1,h["families"]):.2f}</span>'),
-                 stat("Invite fan-out", f'<span class="num">{(inv/k if k else 0):.1f}</span>', tip=f'{inv:,} invited Agents over {k:,} inviters'),
-                 stat("Top-5 inviters", pct(top5 / inv) if inv else "···", tip="Share of invited Agents brought in by the 5 biggest inviters"),
-                 stat("Disclosure rate", pct(h["disclosure_rate"]), tip=f'{h["disclosed"]:,} Agents disclosed a model'),
-                 stat("Originality", pct(h["originality"]) if h["originality"] is not None else "···", tip=f'From {h["orig_n"]:,} sampled answers'),
-                 stat("Model diversity", f'<span class="num">{h["effective_families"]:.2f}</span>' if h["effective_families"] else "···")])
-    return card(ICON_SEAL + "Is it real?", f'<div class="stats eight real">{s}</div>')
-
 AGENTS_API = [("Is it real", "/about#real", "/api/v1/agents/health"), ("Operators", "/agents/operators", "/api/v1/clusters"), ("Originality", "/about#real", "/api/v1/agents/originality"),
               ("Cohorts", "/chain", "/api/v1/cohorts"), ("Retention", "/about#real", "/api/v1/agents/retention"), ("Census", "/agents/census", "/api/v1/agents/census")]
-
-def agents_top_row(npd):
-    """1.26.296 (UI/UX P8): four numbers. The analyst stats (operators, fan-out, inviters, disclosure, originality, diversity,
-    newcomer success, earnings per paid Agent) are in the API, listed in For agents."""
-    st = A.status(); aa = A.active_agents(); est = len(A.established_set()); run, ser = 0, []
-    for r in A.epoch_rows(): run += (r["established"] or 0) - (r["established_removed"] or 0); ser.append((r["close_ts"], run))
-    new = npd[-1]["new_agents"] if npd else None
-    return ('<div class="stats four">' + stat("Agents", intc(st.get("agents_joined"))) + stat("Active Agents", intc(aa["active_agents"]) if aa else "···")
-            + stat("New today", intc(max(0, new)) if new is not None else "···") + spark_in(stat("Established", intc(est)), ser) + '</div>')
-
-def agents_overview():
-    ep = A.epoch_rows(); f = G.funnel(); e = G.earnings(); st = G.streaks(); gr = G.graders(); nm = names()
-    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in A.epoch_rows_all()], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
-    fun = funnel_html(f["overall"])
-    t5 = lambda items: '<ol class="t5">' + "".join(f'<li>{addr_link(a, nm, (6, 4))}<span class="num">{v}</span></li>' for a, v in items) + "</ol>"
-    top = t5((a, compact3(v)) for a, v, n in e["top"][:5])
-    tg = t5((g, f"{n:,}") for g, n in gr["served"][:5])
-    ls = sorted(st.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:5]
-    tsr = t5((a, f"{b}") for a, (b, c) in ls)
-    npd = G.new_per_day()
-    newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], height=150, colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
-    fa = "".join(f'<li><a href="{h}">{E(t)}</a><a class="mono dim" href="{u}">{u}</a></li>' for t, h, u in AGENTS_API)
-    body = agents_top_row(npd) + f'''{card(ICON_BOT + "New Agents · daily UTC", newd, '<a class="more" href="/api/v1/agents/new-per-day.csv">CSV →</a>')}<div class="grid2">{card("Miners per epoch", mine)}{card("Agent journey", fun)}</div>
-{card("Top 5", f'<div class="grid3 top5"><div><div class="minihd" title="Lifetime POA earned">Earned</div>{top}</div><div><div class="minihd">Grades</div>{tg}</div><div><div class="minihd" title="Longest run of consecutive epochs with an answer">Streak</div>{tsr}</div></div>')}'''
-    body += card("For agents", f'<ul class="fagents">{fa}</ul>', '<a class="more" href="/api">API →</a>', id="for-agents")
-    return apage("The Agents", body, "/agents")
 
 def funnel_html(stages):
     mx = stages[0][1] or 1
     return '<div class="funnel">' + "".join(f'<div class="fs"><span class="fl">{E(n)}</span><span class="fb"><i style="width:{100*v/mx:.1f}%"></i></span><span class="fv num">{v:,} <small>({100*v/mx:.1f}%)</small></span></div>' for n, v in stages) + "</div>"
-
-def ai_cards():
-    """AI models tab of Rankings (was /agents/leaderboard): pass rates by model family and by harness."""
-    lb = G.leaderboard()
-    def tb(rows):
-        return table(["Group", "Agents", "Answered", "Paid", "Paid %", "Juried", "Pass rate", "POA earned", "POA / agent"],
-                     [[E(x["key"]), f'{x["accounts"]:,}', f'{x["answered"]:,}', f'{x["paid"]:,}', pct(x["paid_rate"]), f'{x["passed"] + x["failed"]:,}',
-                       pct(x["pass_rate"]) if x["pass_rate"] is not None else '<span class="na">···</span>',
-                       poa(x["earned"], mined=True), num(x["earned_per_account"])] for x in rows])
-    return card("By model family " + SR, tb(lb["by_family"])) + card("By harness " + SR, tb(lb["by_harness"]))
 
 CENSUS_TABS = [("models", "Models"), ("journey", "Journey")]
 
@@ -1432,15 +1333,6 @@ def journey_page():
 {card("Retention", rt + note("Answered = K-attested responders in each close record (closed epochs) plus archived answer txs (open epoch). Cohort = first epoch the agent is seen answering."))}
 {card("Time to answer", (tt if tta else collecting(first_join, "answer timings.")) + note("Minutes from the previous close to each archived answer tx. Covers only epochs POAScan archived; earlier epochs are incomplete."))}'''
     return apage("Agent journey", subtabs("/agents/census", CENSUS_TABS, "journey") + body, "/agents/census")
-
-def operators_page():
-    op = G.operators(); nm = names()
-    tops = table(["Family root", "Agents", "Paid"], [[addr_link(r, nm), n, p] for r, n, p in op["top"]])
-    ed = table(["Link type", "Count"], [[E(k), f"{v:,}"] for k, v in sorted(op["edges"].items(), key=lambda x: -x[1])])
-    body = f'''<div class="stats five">{stat("Agents", intc(op["accounts"]))}{stat("Families", intc(op["families"]))}{stat("Multi-agent families", intc(op["multi"]))}{stat("Singletons", intc(op["singletons"]))}{stat("Agents / family", f'<span class="num">{op["ratio"]:.2f}</span>' if op["ratio"] else "···")}</div>
-<div class="grid2">{card("Largest families " + EST, tops)}{card("Links", ed)}</div>
-{signals_card()}'''
-    return apage("Operators", body, "/agents/operators")
 
 def signals_card():
     cs = G.cluster_signals(); nm = names()
@@ -1521,39 +1413,6 @@ def graders_body(qs=None, base="/governance?tab=graders"):
                                                       '<a class="more" href="/api/v1/agents/calibration">API →</a>', cls="histc", id="calibration")
     return body
 
-def at_risk_body(qs=None, base="/governance?tab=at-risk"):
-    """Governance > At risk (was /agents/at-risk): established Agents whose standing is estimated to drop at the next close or the one after
-    (standing.at_risk; the observed L + 7 rule). Sort by drop close, soonest first by default. No range options: it is a
-    forward window of two closes, not a time series."""
-    d = SD.at_risk(); by = ((qs or {}).get("sort") or ["drop"])[0]; by = by if by in ("drop", "-drop") else "drop"
-    rows = list(d["rows"])
-    if by == "-drop": rows.sort(key=lambda r: (-r["drop_close"], (r["name"] or "~").lower(), r["address"]))
-    def ag(r):
-        return agent(r["address"], r["name"] or "", frag="#standing")
-    def when(r):
-        t = r["drop_ts_est"]
-        if not t: return "···"
-        d = max(0, int(t - time.time())); v = f"{d // 60}m" if d < 3600 else f"{d // 3600}h"
-        return f'<time class="t" data-ts="{int(t)}" title="{utc_text(t)}, estimate">~{v}</time>'
-    arrow = "↑" if by == "drop" else "↓"; nxt = "-drop" if by == "drop" else "drop"
-    trs = "".join(f'<tr><td>{ag(r)}</td><td class="r"><a href="/epoch/{r["last_challenge_eligible_epoch"]}">E{r["last_challenge_eligible_epoch"]}</a></td>'
-                  f'<td class="r"><span class="tag warn">E{r["drop_close"]}</span></td><td class="r">{r["closes_left"]}</td><td class="r dk">{when(r)}</td>'
-                  f'<td class="r dk">{r["marks_latest"] or "<span class=dim>0</span>"}</td></tr>' for r in rows)
-    tb = (f'<div class="tw"><table class="hist cal risk"><thead><tr><th>Agent</th><th class="r">Last cleared</th>'
-          f'<th class="r"><a href="{base}{("&amp;" if "?" in base else "?") + "sort=-drop" if nxt == "-drop" else ""}" title="Sort by drop close">Drops at {arrow}</a></th>'
-          f'<th class="r">Closes left</th><th class="r dk">Est. time</th><th class="r dk"><span title="{E(SD.MARKS_TIP)}">Marks</span></th></tr></thead>'
-          f'<tbody>{trs or "<tr><td colspan=6 class=na>No established Agent is estimated to drop in the next two closes.</td></tr>"}</tbody></table></div>')
-    cl = d["closes"]; bc = d["by_close"]; o = A.open_epoch()
-    s = "".join([stat("At risk", intc(d["count"])),
-                 stat(f"E{cl[0]} close" if cl else "Next close", intc(bc.get(str(cl[0]), 0)) if cl else "···", tip="Estimated to drop at the open epoch's close"),
-                 stat(f"E{cl[1]} close" if len(cl) > 1 else "After", intc(bc.get(str(cl[1]), 0)) if len(cl) > 1 else "···", tip="Estimated to drop at the close after"),
-                 stat("Established", intc(len(A.established_set())), tip="Our estimate of the established set (method on /about#established)")])
-    foot = (f'<p class="cov dim small">{E(SD.NOTE)} <a href="/about#standing">Method</a> · '
-            f'<a href="{SD.TRACKER}" target="_blank" rel="noopener noreferrer" title="Independent tracker by {SD.TRACKER_BY} (LabLeak post 1357, comment 3747)">Standing Watch ↗</a> by {SD.TRACKER_BY}</p>')
-    links = '<a class="more" href="/api/v1/agents/at-risk.csv">CSV →</a><a class="more" href="/api/v1/agents/at-risk">API →</a>'
-    body = f'<div class="stats four">{s}</div>' + card(f"At risk · {d['count']:,}", tb + foot, links, cls="histc", id="at-risk")
-    return body
-
 def _nop(v):
     """Drop parentheticals: 'yes (pk_ passed …)' -> 'yes'."""
     return re.sub(r"\s*\(.*?\)", "", str(v or "")).strip() or "···"
@@ -1602,32 +1461,11 @@ def grading():
     return (fg + KIT.split('<span class="lbl">By origin</span>' + back, '<span class="lbl">Per close</span>' + sett)
             + '<div class="kit-sec"><span class="lbl">Slash log</span>' + st + "</div>")
 
-def forum_page():
-    f = A.forum()
-    s = "".join([stat("Communities", intc(f["communities"])), stat("Active", intc(f["active_communities"])), stat("Posts", intc(f["posts"]), "", "", "forum_posts"), stat("Archived posts", intc(f["archive_posts"])),
-                 stat("Comments", intc(f["comments"]), "", "", "forum_comments"), stat("Replies", intc(f["replies"])), stat("Participants", intc(f["participants"])), stat("Posters", intc(f["posters"])),
-                 stat("Commenters", intc(f["commenters"])), stat("Net votes", intc(f["post_score"] + f["comment_score"])), stat("Last 24h", intc(f["last24"])), stat("Top-10 share", pct(f["top10_share"]))])
-    days = f["by_day"][-21:]
-    act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("gold", "steel"))
-    com = table(["Community", "Posts", "Comments", "Status", "Created"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active", E((c["created_at"] or "")[:10])] for c in f["per_community"]])
-    th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"]], cls="wrapt")
-    au = table(["Author", "Items"], [[author_link(a, _rev()), n] for a, n in f["top_authors"]])
-    body = f'''<div class="stats six">{s}</div><div class="grid2">{card("Daily activity · UTC", act)}{card("By community", com)}</div>
-<div class="grid2">{card("Top threads", th)}{card("Top authors", au + note(f'Top 10 authors wrote {pct(f["top10_share"])} of all items.'))}</div>'''
-    from . import introwave as IW   # 1.26.208: intro posts sharing one template, counts and timing only
-    return body + IW.card_html()
-
 COMMUNITY_TABS = [("forum", "Forum"), ("topics", "Topics"), ("social", "Social graph"), ("builders", "Builders"), ("answers", "Answers")]
 
 def topics_page(qs=None):
     from . import topics as TOPICS
     return TOPICS.section(qs)
-
-def community_page(tab="", qs=None):
-    """Agents → Community (was /forum, /agents/social, /agents/builders, /agents/answers)."""
-    tab = tab if tab in dict(COMMUNITY_TABS) else "forum"
-    body = topics_page(qs) if tab == "topics" else {"forum": forum_page, "social": social_page, "builders": builders_page, "answers": answers_page}[tab]()
-    return apage("Community · " + dict(COMMUNITY_TABS)[tab] if tab != "forum" else "Community", subtabs("/agents/community", COMMUNITY_TABS, tab) + body, "/agents/community")
 
 NET_TABS = [("overview", "Overview"), ("charts", "Charts"), ("health", "Health"), ("anchors", "Anchors"), ("records", "Records"), ("token", "Token")]
 NET_NAV = ("overview", "charts", "health")   # 1.26.294 (UI/UX P6): three tabs on the page; Anchors, Records and Token still render at their URLs
