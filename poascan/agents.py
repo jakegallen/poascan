@@ -612,15 +612,20 @@ def agent_lifecycle(addr):
     pay = _paid_first_ts().get(addr)
     if not known and not any((joined, answer, seal, pay)): return None
     stage = "paid" if pay else "grading" if seal else "answering" if answer else "joined"
-    return dict(address=addr, stage=stage, joined_ts=joined, first_answer_ts=answer, first_seal_ts=seal, first_payout_ts=pay,
-                basis="txs (join, challenge, grade-sealed casts) and close-record rewards; archive only")
+    return dict(address=addr, stage=stage, joined_ts=joined, first_answer_ts=answer, first_seal_ts=seal,
+                first_seal_cast_ts=seal, first_payout_ts=pay,
+                basis="txs (join, challenge, grade-sealed casts) and close-record rewards; archive only",
+                note="first_seal_cast_ts (alias of first_seal_ts) is the first grade seal this Agent CAST as a grader, not a "
+                     "seal on its own answer; it can land after first_payout_ts, so label it as a grading action in the timeline")
 
 @cached("joiners", 300)
-def joiners(days=7):
+def joiners(days=30):
     """POASCAN data ask 7b: join-memo joins per UTC hour over the window, plus the median seconds from join to first pass
-    (a settled answer that passed) and to first payout, for the Agents who joined in the window. Archive only, no upstream."""
+    (a settled answer that passed) and to first payout, for the Agents who joined in the window. last_join_at is the most
+    recent join tx overall (ISO UTC, the same value as maintenance.last_join_at). Default window 30 days: the median to
+    first pass runs a few days, so a 7-day window reads 0 passed right after a joining halt. Archive only, no upstream."""
     try: days = max(1, min(90, int(days)))
-    except (ValueError, TypeError): days = 7
+    except (ValueError, TypeError): days = 30
     cut = int(time.time()) - days * 86400
     join_ts = {r["a"]: int(r["t"]) for r in db.q("SELECT from_addr AS a, MIN(ts) AS t FROM txs WHERE type='join' AND ts > ? GROUP BY from_addr", (cut,)) if r["a"] and r["t"]}
     jph = [[int(r["h"]), r["n"]] for r in db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM txs WHERE type='join' AND ts > ? GROUP BY h ORDER BY h", (cut,))]
@@ -635,8 +640,11 @@ def joiners(days=7):
         if fp is not None and fp >= jt: to_pass.append(fp - jt)
         if paid.get(a) is not None and paid[a] >= jt: to_pay.append(paid[a] - jt)
     med = lambda xs: int(statistics.median(xs)) if xs else None
+    _lj = db.q1("SELECT MAX(ts) AS t FROM txs WHERE type='join'")   # most recent join overall, same value as maintenance.last_join_at
+    _lj = int(_lj["t"]) if _lj and _lj["t"] else None
     return dict(days=days, joiners=len(join_ts), joins_per_hour=jph, median_s_to_first_pass=med(to_pass),
-                median_s_to_first_pay=med(to_pay), reached_first_pass=len(to_pass), reached_first_pay=len(to_pay))
+                median_s_to_first_pay=med(to_pay), reached_first_pass=len(to_pass), reached_first_pay=len(to_pay),
+                last_join_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(_lj)) if _lj else None)
 
 # ---------------- profile ----------------
 def profile(addr):

@@ -422,7 +422,7 @@ def api(path, qs):
     if path == "/api/agents/health": return G.network_health(), False
     if path == "/api/agents/totals": return G.agent_totals(), False   # POASCAN data ask 3a: chain agents vs archive_agents
     if path == "/api/agents/joiners":   # POASCAN data ask 7b: joins per hour + median time to first pass/pay for recent joiners
-        return G.joiners((qs.get("days") or ["7"])[0]), False
+        return G.joiners((qs.get("days") or ["30"])[0]), False
     if path == "/api/agents/hourly":   # POASCAN data ask 3c: hourly joins + established adds
         return A.agents_hourly((qs.get("hours") or ["168"])[0]), False
     if path == "/api/agents/rank":   # POASCAN data ask 3b: per-close rank snapshot (top 200/metric, prune >8 closes)

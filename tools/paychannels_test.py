@@ -423,6 +423,9 @@ check("version is 1.26.402 and the changelog records it",
 check("version is 1.26.403 and the changelog records it",
       _ver >= (1, 26, 403) and "## [1.26.403]" in cl and "Removed code nothing calls" in cl
       and not any(ch in cl.split("## [1.26.403]")[1].split("## [")[0] for ch in dash))
+check("version is 1.26.404 and the changelog records it",
+      _ver >= (1, 26, 404) and "## [1.26.404]" in cl and "last_join_at" in cl and "first_seal_cast_ts" in cl
+      and not any(ch in cl.split("## [1.26.404]")[1].split("## [")[0] for ch in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
