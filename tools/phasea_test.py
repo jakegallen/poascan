@@ -81,7 +81,7 @@ check(f"Chain Transactions sorts this page by Epoch ({eps[:5]})", st == 200 and 
 st, tx = get("/chain/txs")
 check("Chain Transactions: headers are sort links, nofollow", 'rel="nofollow" role="button"' in tx and "sort=epoch" in tx)
 st, cz = get("/agents/census")
-check("Census Snapshots sorts by header", st == 200 and 'id="snapshots"' in cz and "#snapshots" in heads(cz, 'id="snapshots"'))
+check("Census (Models) renders in the Agents module; the Snapshots table is API only", st == 200 and 'id="snapshots"' not in cz and 'id="colony"' in cz)
 st, ul = get("/unlocks?sort=unlocks")
 check("Unlock calendar sorts by header on /unlocks", st == 200 and 'id="calendar"' in ul and "/unlocks?" in heads(ul, 'id="calendar"'))
 st, tk = get("/network?tab=token")

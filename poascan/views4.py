@@ -70,6 +70,22 @@ def rows(tab, sort="", d="desc"):
     for i, x in enumerate(out, 1): x["rank"] = i
     return out
 
+MOVE_METRIC = {"holders": "balance", "richlist": "earnings"}   # Rankings tabs that show a rank arrow since the previous close (agents.agent_rank snapshot)
+
+def _moves(tab, out):
+    """1.26.389: x["mv"] = places gained since the previous close (positive up), "new" for an address that was not on the board,
+    from the per-close snapshot (agents.agent_rank, top 200). Only the first 200 rows can move; no arrow when there is no previous close."""
+    try:
+        r = G.agent_rank(MOVE_METRIC[tab], 200)
+        if r.get("prev_close") is None: return
+        sn = {x["address"]: x for x in r["rows"]}
+        for x in out:
+            y = sn.get(x["addr"])
+            if y is None: continue
+            x["mv"] = "new" if y["prev_rank"] is None else y["prev_rank"] - y["rank"]
+    except Exception:
+        return
+
 def _rows(tab):
     tab = ALIAS.get(tab, tab)
     rb, acc, last, kids = _base(); nm = _nm(); out = []
@@ -169,13 +185,19 @@ def _score_tds(x, sort):
     return (f'<td data-v="{x.get("score", 0)}" class="{p}"><span class="tag score">{x.get("score", 0)}</span></td>'
             + "".join(f'<td data-v="{x.get(k, 0)}">{x.get(k, 0)}</td>' for k in SS.SUBS))
 
+def _mv(v):
+    """The rank arrow beside a rank number: up or down with the places moved, or New. Nothing when it did not move."""
+    if v is None or v == 0: return ""
+    if v == "new": return ' <i class="mv nw" title="New to the top 200 since the last close">New</i>'
+    return f' <i class="mv {"up" if v > 0 else "dn"}" title="{"Up" if v > 0 else "Down"} {abs(v)} since the last close">{"&#9650;" if v > 0 else "&#9660;"}{abs(v)}</i>'
+
 def _rows_html(tab, rs, nm, sort=""):
     cols = COLS[tab]; body = []
     cl = lambda i, k: " ".join(x for x in ("p" if i == 0 else "", "pc" if k == "poa" else "") if x)
     for x in rs:
         who = (f'<td data-v="{E(x["name"])}" class="p">{E(x["name"])}</td>' if tab == "models"
                else f'<td data-v="{E(x.get("name") or x["addr"])}" class="p">{addr_link(x["addr"], nm)}</td>')
-        tr = f'<td data-v="{x["rank"]}" class="rk p">{x["rank"]}</td>' + who + "".join(_cell(k, x.get(c)).replace("<td ", f'<td class="{cl(i, k)}" ', 1) for i, (c, _, k) in enumerate(cols))
+        tr = f'<td data-v="{x["rank"]}" class="rk p">{x["rank"]}{_mv(x.get("mv"))}</td>' + who + "".join(_cell(k, x.get(c)).replace("<td ", f'<td class="{cl(i, k)}" ', 1) for i, (c, _, k) in enumerate(cols))
         if tab != "models": tr += _score_tds(x, sort)
         if tab == "referrals": tr += f'<td><a class="more" href="/address/{E(x["addr"])}#invites">tree →</a></td>' if ADDR_RX.match(x["addr"] or "") else '<td></td>'
         body.append(f"<tr>{tr}</tr>")
@@ -193,11 +215,13 @@ def fragment(qs):
     so = qs.get("sort", [""])[0]; d = qs.get("dir", ["desc"])[0]
     if so not in sorts(tab) or d not in ("desc", "asc"): raise ValueError("sort")
     rs = rows(tab, so, d)
+    if so in ("", "rank") and d == "desc" and tab in MOVE_METRIC: _moves(tab, rs[off:off + PAGE])
     return dict(html=_rows_html(tab, rs[off:off + PAGE], _nm(), so), next=_next(tab, off + PAGE, len(rs), so, d))
 
 def table_html(tab, limit=PAGE, sort="", d="desc", link=None):
     """The Rankings table: header links (link(key, dir)) sort server-side, so Load more continues the same order."""
     rs = rows(tab, sort, d); nm = _nm()
+    if sort in ("", "rank") and d == "desc" and tab in MOVE_METRIC: _moves(tab, rs[:limit])
     SS = _SS(); hc = cols(tab)
     if sort in SS.KEYS: hc = [c._replace(cls=(c.cls + " p").strip()) if c.key == "score" else c for c in hc]   # Score stays visible at 390 when it is the sort
     th = SS.heads(hc, sort or "rank", d, link)

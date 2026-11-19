@@ -188,7 +188,16 @@ def score_html(now=None, ticker=""):
                        f'{grid}<line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>{seal_layer([r[1] for r in mine], b, lo, now)}</div>'
                        f'<b class="c num">{n}</b></div>')
             continue
-        marks = "".join(_mark(*r, b) for r in mine)
+        if k == "a":
+            # 1.26.388: a busy chain draws hundreds of answer lines (one SVG element each, 400+ at peak, which put Home over
+            # 1,000 elements). Answers older than the last 4 minutes are drawn as two paths (dim, final); the newest stay lines
+            # so app.js still slides, prunes and animates them. Same pixels, a few hundred fewer nodes.
+            cut = int(now) - 240; old = [r for r in mine if r[1] < cut]; mine = [r for r in mine if r[1] >= cut]
+            xs = lambda fin: [r[1] - b for r in old if bool(r[3]) == fin]   # data-x: app.js counts them in the lane total and drops the path once all have slid out
+            marks = "".join(f'<path class="ma{" f" if fin else ""}" data-x="{",".join(map(str, v))}" d="{"".join(f"M{x} 12V40" for x in v)}"/>' for fin in (False, True) for v in [xs(fin)] if v)
+            marks += "".join(_mark(*r, b) for r in mine)
+        else:
+            marks = "".join(_mark(*r, b) for r in mine)
         out.append(f'<div class="lane" data-k="{k}"><span class="lbl">{label}{tip("lane_" + k)}</span><svg viewBox="0 0 {WIN} 52" preserveAspectRatio="none" aria-hidden="true">'
                    f'{grid}<g class="mk" data-b="{b}" transform="translate({b - lo:.0f} 0)">{marks}</g><line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>'
                    f'<b class="c num">{n}</b></div>')
@@ -239,6 +248,27 @@ def bench_html(o, graders, now=None, feed=(), score=True):
             f'<div class="bl">{ring_html(o, cd, now)}</div>'
             f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
             f'<span class="legend">{leg}</span></div>{strip}{trio}</div></div>')
+
+def est_ring_html(est, total):
+    """1.26.389 Agents hero: the Heartbeat ring as a share gauge. Established Agents fill it against the live chain total
+    (status.agents_joined). Same ring SVG and ripples as the epoch ring; no countdown, app.js counts the numeral up once."""
+    f = min(1.0, max(0.0, est / total)) if total else 0
+    tk = ('<circle class="mk2" cx="120" cy="120" r="111" pathLength="96" stroke-dasharray=".25 1.75"/>'
+          '<circle class="hk" cx="120" cy="120" r="112.5" pathLength="96" stroke-dasharray=".5 15.5" stroke-dashoffset=".25"/>')
+    return (f'<div class="ring hring ering" style="--f:{f:.4f}">'
+            f'<svg viewBox="0 0 240 240" aria-hidden="true"><circle class="rt" cx="120" cy="120" r="104"/>'
+            f'<circle class="rp" cx="120" cy="120" r="104" pathLength="100" stroke-dasharray="{f * 100:.2f} 100"/>{tk}</svg>'
+            f'<i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>'
+            f'<div class="rc"><span class="lbl">Established</span><b class="bn num" data-cu="{int(est)}">{intc(est)}</b>'
+            f'<div class="bcd"><b class="cd num">{(f"{100 * est / total:.1f}%" if total else "···")}</b></div></div></div>')
+
+def agents_bench_html(est, total, trio, feed=(), now=None):
+    """The Agents hero body: the Established ring on the left; the live strip (answers, attests, seals), the trio and the ticker on the right."""
+    now = time.time() if now is None else now
+    leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for n, k in (("Answer", "a"), ("Attest", "t"), ("Seal", "s")))
+    return (f'<div class="bench"><div class="bl">{est_ring_html(est, total)}</div>'
+            f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
+            f'<span class="legend">{leg}</span></div>{score_html(now, ticker_html(feed, now))}{trio}</div></div>')
 
 def pour_html(last):
     """The latest close's pool, split into minted (gold) and burned (slag)."""

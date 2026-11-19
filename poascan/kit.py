@@ -15,9 +15,9 @@ def kpi(label, value, series=None, icon="", tip=None):
     s = stat(label, value, icon=icon, tip=tip)
     return spark_in(s, series) if series else s
 
-def pulse(bench, kpis="", label="Open epoch", attrs=""):
+def pulse(bench, kpis="", label="Open epoch", attrs="", n=5):
     """The hero card. bench: bench.bench_html() or any .bench markup; kpis: joined kpi() cards (the strip is left out when empty)."""
-    strip = f'<section class="stats four kpis" role="group" aria-label="Headline numbers"{attrs}>{kpis}</section>' if kpis else ""
+    strip = f'<section class="stats four kpis{" six" if n == 6 else ""}" role="group" aria-label="Headline numbers"{attrs}>{kpis}</section>' if kpis else ""
     return f'<section id="tracker" class="card benchc hpulse" aria-label="{E(label)}">{bench}{strip}</section>'
 
 def tabmod(tabs, cur, body, toolbar="", id="ledger", label="Tabs"):
