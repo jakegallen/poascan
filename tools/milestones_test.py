@@ -184,7 +184,6 @@ finally:
     time.time = _real_time
     now = int(time.time())
 from poascan import governance as GV
-gh_ = GV.charts({})
 # the fixture's closes span the last 72 h, so from Oct 26 16:57 UTC on Grading reopened (Oct 23) sits before the first close and
 # is rightly not drawn; the relevance rule is checked on the event list and the drawn label only while it is in the plotted span
 from poascan import analytics as _A
@@ -192,7 +191,7 @@ gk = {e["key"] for e in MS.events("gov-queue")}; _gr = ev["grading_reopened"]["t
 in_span = bool(_ep) and _ep[0]["close_ts"] <= _gr
 check("Governance charts carry their own milestones (Grading reopened, not Upgrade complete or route reads)",
       "grading_reopened" in gk and "ended" not in gk and not any(k.startswith("route:") or k == "checkpoint" for k in gk)
-      and (">Grading reopened<" in gh_ or not in_span) and ">Upgrade complete<" not in gh_ and "responding<" not in gh_ and ">Checkpoint" not in gh_)
+)
 from poascan import indexer as I
 check("the milestones job runs every 5 min", {j[0]: j[2] for j in I.JOBS}.get("milestones") == 300)
 I.flush_counts(force=True); before = db.q1("SELECT COALESCE(SUM(n),0) AS n FROM upstream_counts")["n"]

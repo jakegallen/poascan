@@ -118,4 +118,15 @@ HZ.horizon = lambda: dict(ttl=0, rows=[])
 check("horizon strip: left out when the TTL is unknown", V.horizon_strip() == "")
 check("horizon strip is drawn above the queue", V.pending_body.__code__.co_names.count("horizon_strip") == 1)
 
+# ---- batch 5: dead code removed ----
+import ast as _ast
+def _fns(path): return {n.name for n in _ast.parse(SRC(path)).body if isinstance(n, _ast.FunctionDef)}
+check("governance.py: the pre-consolidation tab renderers are gone, the data helpers stay",
+      not (_fns("poascan/governance.py") & {"overview", "at_risk", "payouts", "directory", "established", "charts", "forum", "proposals", "page_legacy", "standing_table", "estimate_card"})
+      and {"scores", "standing_rows", "rules", "proposals_data", "api_proposals"} <= _fns("poascan/governance.py"))
+check("agentapi, startv2 and start: the legacy and rollback pages are gone", "api_page_legacy" not in _fns("poascan/agentapi.py") and "page_legacy" not in _fns("poascan/startv2.py")
+      and "page" not in _fns("poascan/start.py") and "POASCAN_STARTV2" not in SRC("poascan/startv2.py") and "ST.page(" not in SRC("poascan/server.py"))
+check("views.py: the unused home and agents helpers are gone", not (_fns("poascan/views.py") & {"burnmeter_html", "home_answers", "health_card", "agents_overview", "operators_page", "forum_page", "community_page", "live_hero", "home_graders", "ai_cards", "at_risk_body"}))
+check("style.css: a sample of the unused classes is gone and the shared rules stay", not any(c in SRC("static/style.css") for c in (".herogrid", ".bm-hd", ".okdot", ".findf", ".lbtabs", ".navsrc")) and ".stat" in SRC("static/style.css"))
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

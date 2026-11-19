@@ -6,7 +6,7 @@ Usage: python3 tools/joinhalt_test.py"""
 import os, sys, tempfile, time, re
 os.environ["POASCAN_DB"] = os.path.join(tempfile.mkdtemp(), "d.db"); os.environ.setdefault("POASCAN_INDEXER", "0")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from poascan import db, indexer as I, routewatch as RW, maint as M, start as S, onboarding_prompt as OP
+from poascan import db, indexer as I, routewatch as RW, maint as M, start as S, startv2 as SV2, onboarding_prompt as OP
 fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
@@ -36,7 +36,7 @@ _jpr = M.join_pow_route()
 check("join_pow_route: halted true with since and as_of; note names MCP joins as unaffected",
       _jpr["halted"] is True and _jpr["since"] and _jpr["as_of"] and "poa_register" in _jpr["note"] and "GET /api/join-pow" in _jpr["note"])
 check("the HTTP-route halt does not show the /start Joins paused banner (MCP joins open)",
-      M.join_open() is True and S.join_halt_html() == "" and "data-joinhalt" not in S.page(lambda title, body, *a, **k: body))
+      M.join_open() is True and S.join_halt_html() == "" and "data-joinhalt" not in SV2.page(lambda title, body, *a, **k: body))
 st = M.state()
 check("API join_state not halted from the HTTP-route 503; join_pow_route carries the route; join_open stays a bool",
       st["join_state"] in ("open", "paused") and st["join_state"] != "halted" and st["join_pow_route"]["halted"] is True and isinstance(st["join_open"], bool) and M.join_state() in ("open", "paused"))
@@ -103,7 +103,7 @@ _jo = M.join_open
 try:
     db.write("UPDATE fetch_log SET last_ok=?, fails=0 WHERE endpoint=?", (now + 800, "/api/join-pow")); RW.job(now + 800)
     M.join_open = lambda: False
-    page = S.page(lambda title, body, *a, **k: body)
+    page = SV2.page(lambda title, body, *a, **k: body)
     card = S.go_block(S.default_client())
     check("HTTP 200: no signup notice and no copy button off, even when the tracker says paused",
           S.paused() is False and S.join_halt_html() == "" and "data-paused" not in page and "data-pzoff" not in card and "Signups are paused" not in card)

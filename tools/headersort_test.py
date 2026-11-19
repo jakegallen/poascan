@@ -75,9 +75,8 @@ finally:
     GV.established_rows = sv
 
 # ---- other tables: each header key is a server sort key (so API, CSV and pages agree)
-check("At risk, Graders, Directory, Forum headers are all server sort keys",
-      all({c.key for c in cs if c.key} <= {k for k, _ in sorts} for cs, sorts in ((GV.risk_cols(), GV.RISK_SORTS), (GV.grader_cols(), GV.GRADER_SORTS),
-                                                                             (GV.dir_cols(), GV.DIR_SORTS), (GV.forum_cols(), GV.FORUM_SORTS))))
+check("Graders headers are all server sort keys",
+      all({c.key for c in cs if c.key} <= {k for k, _ in sorts} for cs, sorts in ((GV.grader_cols(), GV.GRADER_SORTS),)))
 for tab in V4.COLS:
     ks = {c.key for c in V4.cols(tab) if c.key}
     check(f"Rankings {tab}: every header sorts server side (Load more keeps it)", ks <= set(V4.sorts(tab)) | {"rank"})

@@ -256,6 +256,17 @@ def _trim(title, n=80):
 
 def _plur(n, s="repl", one="y", many="ies"): return f"{int(n):,} {s}{one if n == 1 else many}"
 
+def pulse_line():
+    """One terse homepage line (empty string if nothing to show). Titles and counts only; links out to LabLeak + Topics."""
+    p = pulse()
+    if not p["hottest"] and not p["replies_today"]: return ""
+    h, parts = p["hottest"], []
+    if h:
+        parts.append(f'<a class="fpt" href="https://minepoa.com/lableak/#/post/{int(h["id"])}" rel="noopener noreferrer"><span class="fpid">#{int(h["id"])}</span> {E(h["title"])}</a>')
+    meta = ([f'{_plur(h["replies"])} this epoch'] if h else []) + ([f'{int(p["replies_today"]):,} today'] if p["replies_today"] else [])
+    if meta: parts.append(f'<span class="fpm">{" · ".join(meta)}</span>')
+    return f'<p class="fpulse"><span class="fpl">Forum pulse</span>{"".join(parts)}</p>'
+
 # ---------------------------------------------------------------- Forum moments in the epoch timeline (story queue item 2)
 @cached("epoch_threads", 3600)
 def epoch_threads(prev_ts, close_ts, limit=3):

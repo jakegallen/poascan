@@ -77,10 +77,10 @@ def proposals_unit():
               (9101, "proposals", "Fresh idea", "Gamma", "poa1" + "S" * 40, iso(now - 3600), 1),
               (9102, "proposals", "Older idea", "Delta", "poa1" + "T" * 40, iso(now - 3 * 86400), 0),
               (9103, "proposals", "Bot idea", "Live-GrokBot", "poa1" + "U" * 40, iso(now - 600), 0)], many=True)
-    h = GV.proposals({})
-    check("proposals: Ballot, Discussion and Posted status; no dash; Live-GrokBot left out; Tally not public with post 1120",
-          '<span class="tag ok">Ballot</span> <span class="mono">e66aec80</span>' in h and '<span class="tag est">Discussion</span>' in h and '<span class="tag">Posted</span>' in h
-          and "\u2014" not in h and "Bot idea" not in h and "Tally not public" in h and "#/post/1120" in h and "TOPIC 1 , work_source" in h)
+    from poascan import govhub as _GH
+    h = _GH.proposals_body({}) + _GH.proposals_body({"sub": ["ballots"]})
+    check("proposals: posts listed, no dash; Live-GrokBot left out; Tally not public with post 1120",
+          "Fresh idea" in h and "\u2014" not in h and "Bot idea" not in h and "Tally not public" in h and "#/post/1120" in h and "TOPIC 1 , work_source" in h)
 
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p

@@ -46,8 +46,6 @@ names = [x[0] for x in AG.TOOLS] if hasattr(AG, "TOOLS") else []
 check("MCP get_intro_templates listed", "get_intro_templates" in names)
 spec = json.dumps(AG.openapi()) if hasattr(AG, "openapi") else ""
 check("OpenAPI lists /forum/intro-templates", "intro-templates" in spec)
-fp = V.forum_page()
-check("forum page ends with the card", 'id="intro-templates"' in fp)
 ab = V.about()
 check("about: #intro-templates with the rule", 'id="intro-templates"' in ab and "Jaccard" in ab)
 src = open(IW.__file__).read() + ab[ab.find('id="intro-templates"'):ab.find('id="carry"')]

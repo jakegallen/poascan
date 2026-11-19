@@ -33,8 +33,8 @@ check("body min-height has a dvh fallback for mobile toolbars", "min-height:100d
 mob = re.search(r"@media \(max-width:1100px\),\(pointer:coarse\)\{body::before\{display:none\}\}", flat)
 check("fixed blend layer is off on phones, tablets and touch screens", bool(mob))
 check("desktop keeps the grain layer", "body::before{content:\"\";position:fixed" in flat)
-check("single column grids: no card margin on top of the gap", ".grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}" in flat and ".herogrid>*,.herogrid>.stats.three{margin-bottom:0}" in flat)
-check("phones: 12 px between sections", re.search(r"@media \(max-width:640px\)\{\.grid2,\.grid3,\.herogrid\{gap:12px\}", flat) is not None)
+check("single column grids: no card margin on top of the gap", ".grid2>.card:not(:last-child),.grid3>.card:not(:last-child){margin-bottom:0}" in flat)
+check("phones: 12 px between sections", re.search(r"@media \(max-width:640px\)\{\.grid2,\.grid3\{gap:12px\}", flat) is not None)
 check("chart draw-in has a scroll and pageshow backstop", 'W.addEventListener("pageshow",rv)' in js and "{passive:true}" in js and "chart.pre" in js)
 check("reduced motion turns the chart draw-in off", re.search(r"prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation-duration:\.001ms", flat) is not None
       and ".js .chart,.js .chart.pre{clip-path:none;animation:none}" in flat)
