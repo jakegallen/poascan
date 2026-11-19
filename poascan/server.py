@@ -22,6 +22,7 @@ from . import htmlcache as HC
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 from . import addrlight as AL
 from . import apitel as APT
+from . import apisamples as ASM
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -363,6 +364,8 @@ def api(path, qs):
                     segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), diagnostics=diag, **V.joins_fields()), False
     if path == "/api/telemetry":   # 6a: in-process API telemetry (per-minute counts by surface, success rate, p50/p95, top route templates)
         return APT.snapshot((qs.get("minutes") or ["60"])[0]), False
+    if path == "/api/reference/samples":   # 6b: stored example responses, so the API page's Run pane never hits the live API
+        return ASM.samples(), False
     m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]

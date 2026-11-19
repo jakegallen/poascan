@@ -94,6 +94,21 @@ def live():
               all("poa1" not in t["endpoint"] for t in j.get("top_endpoints", [])))
         c2, b2, _ = req(base + "/api/v1/telemetry?minutes=5")
         check("/api/v1/telemetry alias resolves to the same route", c2 == 200 and json.loads(b2).get("window_minutes") == 5)
+
+        # 6b: stored samples
+        c3, b3, ct3 = req(base + "/api/v1/reference/samples")
+        j3 = json.loads(b3)
+        check("/api/v1/reference/samples serves JSON (200)", c3 == 200 and "json" in ct3)
+        check("samples carries a per-endpoint list with a ttl and generated_ts",
+              isinstance(j3.get("samples"), list) and j3.get("count") == len(j3["samples"]) and j3.get("ttl") == 3600 and j3.get("generated_ts"))
+        check("every sample names a public /api/v1 endpoint and a status",
+              all(s.get("endpoint", "").startswith("/api/v1/") and "status" in s for s in j3["samples"]))
+        check("samples includes the cheap cached endpoints (health, summary)",
+              any(s["endpoint"].startswith("/api/v1/health") for s in j3["samples"])
+              and any(s["endpoint"].startswith("/api/v1/summary") for s in j3["samples"]))
+        c4, b4, _ = req(base + "/api/v1/reference/samples")
+        check("samples is cached (same generated_ts on a second read within the hour)",
+              json.loads(b4).get("generated_ts") == j3.get("generated_ts"))
     finally:
         p.terminate()
         try: p.wait(timeout=5)
