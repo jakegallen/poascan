@@ -32,8 +32,8 @@ db.put_blob("epochs", [e11, e12]); A._cache.clear()
 r = A.epoch_rows()[-1]
 check("epoch row: graders and grades from the rows, the record's figure kept as *_official", r["graders"] == 3 and r["grades"] == 4 and r["graders_official"] == 1 and r["grades_official"] == 2)
 check("epoch row: paid_at_max from the rewards row (2), not final_payout.capped (3)", r["paid_at_max"] == 2 and r["ceiling_capped"] == 3)
-src = open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read()
-check("Max reward stat reads paid_at_max", 'stat("Max reward", intc(r.get("paid_at_max", 0))' in src and 'intc(r["ceiling_capped"]), tip="Agents paid the per-epoch maximum"' not in src)
+src = open(os.path.join(ROOT, "poascan", "epochhub.py"), encoding="utf-8").read()
+check("Top reward row reads paid_at_max", 'r.get("paid_at_max", 0)' in src and 'ceiling_capped' not in src)
 
 # ---- failed jobs retry soon
 I.JOB_RETRY_S = 30

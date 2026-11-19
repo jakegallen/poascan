@@ -53,6 +53,6 @@ check("card: no em or en dash", chr(0x2014) not in card and chr(0x2013) not in c
 
 A._cache.clear()
 check("empty window renders no card (empty string)", TP.epoch_threads_card(8, NOW - 100, NOW - 50) == "")
-check("epoch() renders the forum-moments card in the body", "_TOP.epoch_threads_card(" in open(os.path.join(ROOT, "poascan", "views.py")).read())
+check("epoch() renders the forum-moments card in the body", "_TOP.epoch_threads(" in open(os.path.join(ROOT, "poascan", "epochhub.py")).read())
 print("all passed" if not fails else f"{len(fails)} failed")
 sys.exit(1 if fails else 0)

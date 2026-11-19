@@ -170,7 +170,8 @@ for rel in ("poascan/paychannels.py", "poascan/views.py", "poascan/views3.py", "
 
 src = open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read()
 check("close page uses the terse labels and the Split pending tag",
-      'stat("Answer pay"' in src and 'stat("Grading pay"' in src and 'stat("Referral pay"' in src and "Split pending" in src)
+      all(k in open(os.path.join(ROOT, "poascan", "epochhub.py"), encoding="utf-8").read()
+          for k in ('"Answer pay"', '"Grading pay"', '"Referral pay"', '["Split"', ">Pending<")))
 # the about text must say we never infer
 about = src.split('id="pay-channels"')[1][:2000]
 check("about#pay-channels says the split is never inferred and names Answer pay / Grading pay",
@@ -411,8 +412,11 @@ check("version is 1.26.399 and the changelog records it",
       _ver >= (1, 26, 399) and "## [1.26.399]" in cl and "header shortcut" in cl and "Submitted" in cl and "Per close" in cl
       and not any(ch in cl.split("## [1.26.399]")[1].split("## [")[0] for ch in dash))
 check("version is 1.26.400 and the changelog records it",
-      _ver >= (1, 26, 400) and "## [1.26.400]" in cl and "moved into Start" in cl and "/start?tab=earn" in cl
+      _ver >= (1, 26, 400) and "## [1.26.400]" in cl and "moved into Start" in cl and "Earn tab" in cl
       and not any(ch in cl.split("## [1.26.400]")[1].split("## [")[0] for ch in dash))
+check("version is 1.26.401 and the changelog records it",
+      _ver >= (1, 26, 401) and "## [1.26.401]" in cl and "Epoch page rebuilt" in cl
+      and not any(ch in cl.split("## [1.26.401]")[1].split("## [")[0] for ch in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
