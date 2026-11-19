@@ -17,6 +17,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 - API: a Connect header (MCP and REST addresses with copy, client chips, live call lanes, five numbers) and one explorer module (REST, MCP, Spec). Search as you type, group chips with counts, a 20 row list with paging, and a pane with a stored sample, Copy curl and Run. Every state is its own URL.
 - API lanes and numbers read the in-process call counters (/api/v1/telemetry) and the pane reads the hourly stored samples; the lanes show the last 3 hours. Run replays the stored sample and never calls a live endpoint.
 - Cache: the default /api view is warmed under the key it is served from, so the first visitor no longer pays a cold render.
+## [1.26.395] - 2026-11-19
+
+### Changed
+- Governance: one hero (the Established ring, the Added and removed per close chart, six numbers) and one module. Standing (Established, At risk, Moves, Queue, Directory, Never), Closes (settlement, changes, intake, settle age, charts), Payouts, Graders, Proposals (forum, protocol timeline) and Rules swap in place. Every list shows 20 rows and pages by offset. Old /governance?tab= links open the matching place.
+- Governance Moves reads the standing-moves rows in process, the same data as /api/v1/governance/standing-moves.
+- Governance no longer draws the calibration table, the Grader patterns card, the Expiry horizon card, the queue board, the Sealed and Graded queue columns or the intake per Agent draw list. The API and CSV exports are unchanged.
 
 ## [1.26.394] - 2026-11-19
 

@@ -59,28 +59,13 @@ check("params without from_epoch: the rule the draw confirms (E1 engine default,
 db.put_blob("params", {"auto_epoch_seconds": 21600, "estab_ttl": 6}); A._cache.clear()
 
 # the tab
-h = GV.page({"tab": ["intake"]})
-check("Governance has an Intake tab", '>Intake</a>' in h and 'id="intake"' in h and 'id="intake-list"' in h)
-check("stat cards: Eligible, Cap, Admitted, Not admitted, latest close with intake (E3), no sub-lines", all(f">{w}<" in h for w in ("Eligible", "Cap", "Admitted", "Not admitted")) and 'class="ss"' not in h)
-check("per close table: terse sortable headers, Binding, Match and Differs", all(w in h for w in ("Close", "Set", "Door", "Check", "Binding", ">Match<", ">Differs<")) and "sort=eligible" in h)
-h1 = GV.page({"tab": ["intake"], "close": ["1"]})
-check("E1 Agents: Admitted and Eligible, not admitted tags, draw places, state chips", "E1 intake · 6 of 30, cap 6" in h1 and h1.count(">Eligible, not admitted<") >= 24 and ">Admitted<" in h1 and "state=not_admitted" in h1)
-check("Agent cell links a named Agent to its LabLeak profile", f'href="https://minepoa.com/lableak/#/u/{adm1[0]}"' in h1 and ">Cinderwren<" in h1)
-hn = GV.page({"tab": ["intake"], "close": ["1"], "state": ["not_admitted"]})
-check("state filter: only Eligible, not admitted", ">Admitted</span>" not in hn.split('id="intake-list"')[1] and hn.split('id="intake-list"')[1].count(">Eligible, not admitted</span>") == 24)
-import poascan.intake as _IK
-_IK.PAGE = 10
-hp = GV.page({"tab": ["intake"], "close": ["1"]}).split('id="intake-list"')[1]
-hp2 = GV.page({"tab": ["intake"], "close": ["1"], "apage": ["3"]}).split('id="intake-list"')[1]
-check("Agents list pages (10 a page here): page 1 of 3, More keeps close and sort", "Page 1 of 3" in hp and "apage=2" in hp and "Page 3 of 3" in hp2 and draw(CAND, 1)[29] in hp2 and draw(CAND, 1)[29] not in hp)
-_IK.PAGE = 100
-hs = GV.page({"tab": ["intake"], "close": ["1"], "asort": ["draw"], "adir": ["asc"]})
-lst = hs.split('id="intake-list"')[1]
-check("Agents sort by draw, reversed with adir=asc (place 30 first)", lst.index(draw(CAND, 1)[29]) < lst.index(draw(CAND, 1)[0]))
-hc = GV.page({"tab": ["intake"], "sort": ["not_admitted"]})
-tb = hc.split('id="intake"')[1].split("</table>")[0]
-check("closes sort by Not admitted (E1 first)", tb.index(">E1<") < tb.index(">E2<"))
-check("no em or en dash, no Accounts, no pending score", "\u2014" not in h1 and "\u2013" not in h1 and "Accounts" not in h1 and str(SCORE_MARK) not in h1)
+# 1.26.395: Intake is a chip under Closes: one 20 row table (Close, Candidates, Cap, Change) and the admitted and waiting chart. The per Agent draw list
+# and the per close Binding, Match and Differs columns live on in the API and CSV (checked below), not on the page.
+h = GV.page({"tab": ["intake"]}); h = h if isinstance(h, str) else h[1]
+check("Governance has Intake under Closes, one table with terse headers", 'data-kit-sub="intake"' in h and all(f">{w}<" in h for w in ("Close", "Candidates", "Cap", "Change")) and 'class="ss"' not in h)
+check("table rows: newest close first, Candidates is the eligible funnel (E1: 30), Cap 6", h.index(">E3<") < h.index(">E1<") and ">30<" in h and ">6<" in h)
+check("Proposal L params flag on the page", "Proposal L params" in h)
+check("no em or en dash, no Accounts, no pending score", "\u2014" not in h and "\u2013" not in h and "Accounts" not in h and str(SCORE_MARK) not in h)
 
 # API, CSV, MCP
 d = SV.governance_api("/api/governance/intake", {})

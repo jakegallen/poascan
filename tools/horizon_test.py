@@ -100,8 +100,10 @@ check("a list that expires 26 after entry: Differs", [w for w, _ in NP.flags(NP.
 
 # 7. the Queue tab card
 seed(P)
-q = GV.page({"tab": ["queue"]})
-check("Queue tab carries the Expiry horizon card with one line per cohort", 'id="horizon"' in q and "Expiry horizon · 5" in q and q.count("<tr class=hw>") == 3)
+q = HZ.card_html({}, GV.href)   # 1.26.395: the card is no longer on the Queue view (a 20 row list); it renders from its own module
+_qp = GV.page({"tab": ["queue"]}); _qp = _qp if isinstance(_qp, str) else _qp[1]
+check("Queue view is a 20 row list under Graders and does not carry the horizon card", 'id="horizon"' not in _qp and "Expiry horizon" not in _qp)
+check("Expiry horizon card with one line per cohort", 'id="horizon"' in q and "Expiry horizon · 5" in q and q.count("<tr class=hw>") == 3)
 check("terse headers, sortable, own sort keys (hsort, hdir)", all(f">{w}<" in q or f">{w}</a>" in q or f"{w}<" in q for w in ("Cohort", "Pending", "No seal", "Expires", "Left", "In")) and "hsort=pending" in q)
 hs = HZ.card_html({"hsort": ["pending"]}, GV.href)
 check("sort by Pending puts the largest cohort first", hs.index(">E2<") < hs.index(">E3<") < hs.index(">E4<"))
@@ -109,7 +111,7 @@ check("note cites comment 6150 and post 1582; Watched tag; countdown ticks", "co
 check("TTL line: Pending TTL 16 from /api/params, Establishment TTL 6", "Pending TTL <b class=\"num\">16</b> closes, /api/params" in q and "Establishment TTL <b class=\"num\">6</b>" in q)
 check("no em or en dash, no Accounts, no score", "\u2014" not in HZ.card_html({}, GV.href) and "\u2013" not in HZ.card_html({}, GV.href) and "Accounts" not in HZ.card_html({}, GV.href) and str(SCORE_MARK) not in q)
 with SG.use(1):
-    A._cache.clear(); qa = GV.page({"tab": ["queue"], "segment": ["1"]}); ha = HZ.horizon()
+    A._cache.clear(); qa = HZ.card_html({}, GV.href); ha = HZ.horizon()
     check("segment 1: its own cohorts and TTL from segments.json, ended, no countdown", ha["archived"] and ha["rows"][0]["cohort"] == 13 and ha["rows"][0]["expires_close"] == 29
           and ha["rows"][0]["closes_left"] is None and "segments.json" in ha["ttl_source"] and ">Ended<" in qa and not any(r["watched"] for r in ha["rows"]))
 A._cache.clear()
