@@ -2094,5 +2094,3 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .hzb{flex:1;min-width:2px;background:color-mix(in srgb,var(--gold) 38%,transparent);border-radius:var(--r-sm) var(--r-sm) 0 0}
 .hzb.nx{background:var(--gold)}
 .hzx{display:flex;justify-content:space-between;margin-top:4px;font-size:.72rem;color:var(--mute)}
-
-:is(.stat,.chartbox,.hbars,.funnel,.bmcard .cb,.xempty,.uph,.stp2):has(details.qtip[open]){z-index:81}
