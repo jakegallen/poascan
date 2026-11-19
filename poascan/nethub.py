@@ -99,7 +99,7 @@ def routes_strip(now):
     for r in d["routes"]:
         st = r["state"]; seen().new(r["label"])
         why = f'{r["label"]}: {RW.WORD.get(st, st)}' + (f' since {time.strftime("%b %-d %H:%MZ", time.gmtime(r["since_ts"]))}' if st in ("halted", "down") and r.get("since_ts") else "")
-        rows.append(f'<li data-route="{E(r["id"])}" data-st="{st}"><span class="rn"><i class="sd {DOT.get(st, "nd")}" title="{E(why)}" role="img" aria-label="{E(why)}"></i>{E(r["label"])}</span>'
+        rows.append(f'<li data-route="{E(r["id"])}" data-st="{st}"><span class="rn"><i class="sd {DOT.get(st, "nd")}" title="{E(why)}" role="img" aria-label="{E(why)}"></i>{E(r["label"])}</span>{V2.flag("Stale", r.get("stale_reason") or "Last read over 2 h ago") if r.get("stale") else ""}'
                     f'{V2._route_strip(r["id"], r["label"], now)}</li>')
     halted = len([r for r in d["routes"] if r["state"] in ("halted", "down")])
     return halted, f'<ul class="nrt" aria-label="Routes">{"".join(rows)}</ul>'
@@ -134,7 +134,7 @@ def kpis(sd, now):
     lagser = [(t, v) for t, v in sd["lag"] if t > now - 86400]
     fmtc = lambda v: compact(v) if v is not None else "···"
     return "".join([KIT.kpi("Height", f'<span class="num">{fmtc(h)}</span>', height_series(now)),
-                    KIT.kpi("Finalized", f'<span class="num">{fmtc(fin)}</span>'),
+                    KIT.kpi("Finalized", f'<span class="num">{fmtc(fin)}</span>' + _V2().cp_flag()),   # Parked or Stalled stays on the finalized height
                     KIT.kpi("Lag", f'<span class="num">{intc(lag)}</span>', lagser, tip="Blocks between the chain height and the finalized height"),
                     KIT.kpi("Success 1h", f'<span class="num">{pct(sum(s1) / len(s1))}</span>' if s1 else '<span class="num">···</span>'),
                     KIT.kpi("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else '<span class="num">···</span>', [(h_, v) for h_, v in sd["lat"]] if sd["lat"] else None)])
@@ -189,6 +189,10 @@ def _incidents(sd, now, n=20):
     return table(["Incident", "Count", "Latest", "Total"], [[f'<code>{E(w)}</code>' + (' <i class="sd bad" title="Ongoing" role="img" aria-label="Ongoing"></i>' if r["on"] else ""),
                  r["n"], utc(r["last"], "%m-%d %H:%M"), dur(r["secs"])] for w, r in rows], cls="wrapt")
 
+def _V2():
+    from . import views2
+    return views2
+
 def health_body(view=""):
     from . import views2 as V2
     sd = V2.status_data(); now = time.time()
@@ -203,6 +207,7 @@ def health_body(view=""):
         latc = bars([(dt.datetime.fromtimestamp(h, dt.timezone.utc).strftime("%H:00"), [v], h) for h, v in sd["lat"]], colors=("gold",), fmt=lambda v: f"{v:,.0f}ms")
         d.append(f'<div class="kit-sec"><span class="lbl">Endpoints</span>{tb}</div>')
         d.append(KIT.split('<span class="lbl">Finality lag · 24h</span>' + lagc, '<span class="lbl">Latency p50 · hourly</span>' + latc))
+        d.append(KIT.split('<span class="lbl">Uptime · daily UTC</span>' + V2.uptime_chart_html(), '<span class="lbl">Last 7d</span>' + V2.uptime_table_html()))   # the uptime history stays on Health
         return "".join(d)
     return KIT.split(_feed_rows(), _incidents(sd, now))
 
@@ -337,17 +342,20 @@ def token_body():
     u = V3.unlock_data(); tot = u["total"] or 1
     cal = table(["At close", f"Time ({TZ})", "Unlocked", "Share"], [[f"E{j}", utc(t, "%m-%d %H:%M"), _n(c_), pct(c_ / tot)] for j, t, c_, d_ in u["fut"][:12]])
     conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20)) + "</div>")
-    return (fg + KIT.split('<span class="lbl">Per epoch</span>' + mb, '<span class="lbl">Vesting</span>' + V3.unlock_chart())
+    return (fg + KIT.split(f'<span class="lbl" title="Close records only.{E(_V()._pend_tip())}">Per epoch</span>' + mb, '<span class="lbl">Vesting</span>' + V3.unlock_chart())
             + KIT.split('<span class="lbl">Calendar</span>' + cal, '<span class="lbl">Concentration</span>' + conc))
 
 # ---------------- page ----------------
 def module(tab, qs):
     if tab == "charts": body = charts_body(qs); tools = ""
-    elif tab == "anchors": body = events_body(qs); tools = ""
+    elif tab == "anchors":
+        from . import protocolview as PV
+        body = events_body(qs); tools = PV.badge()   # the client-versus-release badge stays with the releases it describes
     elif tab == "token": body = token_body(); tools = '<span class="kit-n" title="Amounts are in POA">POA</span>'
     else:
         view = (qs.get("view") or [""])[0]; view = view if view == "details" else ""
-        body = health_body(view)
+        from . import views2 as _V2
+        body = _V2.upgrade_line() + _V().cut_note() + health_body(view)   # the recovery line and the segment cut note stay on Health
         tools = (f'<a href="/network" class="chip {"" if view else "on"}" data-kit-sub="feeds">Feeds</a>'
                  f'<a href="/network?view=details" class="chip {"on" if view else ""}" data-kit-sub="details">Details</a>')
     tabs = [(k, h, t, None) for k, h, t in TABS]

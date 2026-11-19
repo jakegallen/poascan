@@ -162,7 +162,7 @@ def main():
               and b.index(b'class="card benchc hpulse"') < b.index(b'class="chips kit-tabs"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
         check("/epochs in sitemap + llms; 1.26.382: no header links or Ask agent on Home", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
               and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive"' not in req(base + "/")[1] and b'class="askb"' not in req(base + "/")[1])
-        check("/token concentration card", b"Min-activity Agents" in req(base + "/network?tab=token")[1])
+        check("/token concentration (Top 1, 5, 10, 20 shares)", b"Concentration" in req(base + "/network?tab=token")[1] and b"Top 20" in req(base + "/network?tab=token")[1])
         import re as _re, sys as _sys, os as _os2
         _sys.path.insert(0, _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), ".."))
         from poascan import agentapi as _AG, indexer as _IX
@@ -251,7 +251,7 @@ def main():
             c, h, b = reqh(base + u); check(f"history {u} -> {c}", c == 200 and "X-API-Version" in h and (u.endswith(".csv") or isinstance(json.loads(b), list)))
             if "/swaps/" in u: check(f"openapi leaves out {u} (kept, undocumented)", u not in spec["paths"]); continue
             check(f"openapi has {u.split('?')[0].replace('.csv', '')}", u.split("?")[0].replace(".csv", "") in spec["paths"])
-        check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/status")[1])
+        check("history charts", b"New Agents" in req(base + "/agents")[1] and b"Uptime" in req(base + "/network?view=details")[1])
         mk = json.loads(req(base + "/api/swaps/status")[1]).get("market") or {}; check("swap market api", all(k in mk for k in ("market_cap_usd", "fdv_usd", "trades_24h", "volume_24h_usd")))
         pe = json.loads(req(base + "/api/v1/pending-by-epoch")[1]); check("pending by epoch api", all(k in pe for k in ("current_epoch", "total", "stale_total", "rows")) and isinstance(pe["rows"], list))
         lv = req(base + "/chain?tab=pending")[1]; check("Pending tab: the queue", b'class="pendc"' in lv and b"\xe2\x80\x94" not in lv and b'class="chip on" data-kit-tab="pending"' in lv)
@@ -505,9 +505,9 @@ def reconcile(base, check):
     pc = {p["epoch"]: p for p in d["per_close"]}
     check("reconcile: mint per close matches a supply step and flags a short one", pc[10]["state"] == "match" and pc[10]["supply_step"] == pc[10]["record_mint"]
           and pc[9]["state"] == "differs" and abs(pc[9]["diff"] - 1) < 1e-6 and pc[3]["state"] == "no_reads")
-    c, h, b = reqh(base + "/api/v1/reconcile.csv"); pg = req(base + "/status")[1].decode()
+    c, h, b = reqh(base + "/api/v1/reconcile.csv"); pg = req(base + "/network?view=details")[1].decode()
     card = pg[pg.index('id="reconcile"'):]; card = card[:card.index("</section>")]
-    check("/status: Reconciliation card with states, reasons, mint per close and method; CSV rows",
+    check("Health details: Reconciliation card with states, reasons, mint per close and method; CSV rows",
           c == 200 and b.decode().count("\n") == 13 and ">Node only<" in card and ">Match<" in card and "Mint per close" in card and 'href="/about#reconcile"' in card
           and card.count("<th>") + card.count("<th ") == 8 and "\u2014" not in pg and b'id="reconcile"' in req(base + "/about")[1])
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
@@ -605,14 +605,14 @@ def swap_module(base, spec, check):
 def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
-    n = req(base + "/network")[1].decode(); s = req(base + "/status")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
+    n = req(base + "/network")[1].decode(); s = req(base + "/network?view=details")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
     check("maintenance: the header status shows Upgrading (1.26.181: no strip; its note carries the reason), one live indicator for app.js, checkpoint Parked not Stalled",
           'id="livepill"><summary class="pill up" aria-label="Status: Upgrading">' in n and 'href="/upgrade">Details</a>' in n[n.index('id="livepill"'):n.index("</details>", n.index('id="livepill"'))] and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'aria-label="Parked: ' in n and ">Parked</summary>" in n and ">Stalled<" not in n)
     u = req(base + "/upgrade")[1].decode(); um = u[u.index("<main"):u.index("</main>")]
     check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
-          s.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in s and 'id="upgrade"' not in s and 'class="uph"' not in s and 'class="grp' not in s
-          and 'class="stats eight"' in s and s.index('class="uphl"') < s.index('class="stats eight"'))
+          n.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in n and 'id="upgrade"' not in n and 'class="uph"' not in n and 'class="grp' not in n
+          and "Latency p50" in s and "Uptime" in s)   # 1.26.392: the recovery line leads Health; uptime and latency sit on its Details view
     check("maintenance: /upgrade is its own page: hero, routes meter, Working and Still paused, tiles, details with the post and one prompt box; no Health tab strip or panels",
           um.count('class="uph"') == 1 and um.count('class="seg"') == 6 and 'data-grp="working"' in um and 'data-grp="paused"' in um and 'class="stats four uptiles"' in um
           and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
@@ -697,9 +697,9 @@ def fixture_pages(check):
         pr = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else {}
         n_, st_, th_, dp_ = (pr.get(k) or {} for k in ("none", "stale", "thin", "deep"))
         check(f"price: asks alone show nothing; a fill older than 7 days hides USD {r.stderr[-300:]}", n_.get("shown") is False and n_.get("usd_per_poa") is None and st_.get("shown") is False and n_.get("asks_used") is False)
-        check(f"price: one small fill is thin, last_fill basis, 2 significant figures ({th_.get('usd_per_poa')}, {pr.get('usd_of')})",
+        check(f"price: one small fill is thin, last_fill basis, 2 significant figures in the API; pages carry no USD ({th_.get('usd_per_poa')}, {pr.get('usd_of')})",
               th_.get("thin") is True and th_.get("basis") == "last_fill" and th_.get("sig_figs") == 2 and th_.get("usd_per_poa") == 1e-05
-              and ">≈$43<" in (pr.get("usd_of") or "") and "USD · thin" in (pr.get("src") or "") and 'href="/about#market"' in (pr.get("src") or ""))
+              and not (pr.get("usd_of") or "") and not (pr.get("src") or ""))   # 1.26.392: the API keeps the price; pages are POA only, so no USD text and no source line
         check(f"price: 5+ fills in 7 days use the median of the last 5; over $100 volume is not thin ({dp_.get('basis')}, {dp_.get('thin')}, {dp_.get('usd_per_poa')})",
               dp_.get("basis") == "median_last_5_fills" and dp_.get("thin") is False and dp_.get("sig_figs") == 3 and dp_.get("usd_per_poa") == 0.4)
         js = json.loads(req(base + "/api/v1/price")[1])
@@ -726,7 +726,7 @@ def fixture_pages(check):
         hm2 = req(base + "/")[1].decode()
         check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
               not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
-              and ">Finalized height<" in req(base + "/network")[1].decode() and ">Checkpoint<" not in hm2)
+              and ">Finalized<" in req(base + "/network")[1].decode() and ">Checkpoint<" not in hm2)
         hm = req(base + "/")[1].decode(); tk = req(base + "/network?tab=token")[1].decode()
         check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
         check("token: no Transfers card", ">Transfers<" not in tk)
@@ -742,12 +742,11 @@ def fixture_pages(check):
         check(f"1.26.382: no Ask agent button on these pages {_asks}", set(_asks.values()) == {0})
         from poascan import prompts as _PR
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
-        _n = req(base + "/network")[1].decode(); _s = req(base + "/status")[1].decode(); _ab = req(base + "/about")[1].decode()
+        _n = req(base + "/network")[1].decode(); _s = req(base + "/network?view=details")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
               'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "<span>Chain</span><b>Slow</b>" in _n and "Finalized height unchanged" not in _n[_n.index('id="livepill"'):_n.index("</details>", _n.index('id="livepill"'))] and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
-        check("/network: read age on the K and Version label hover, checkpoint flagged with a Stalled tag, no sub-lines",
-              re.search(r'title="Read \d+m ago">Version<', _n) is not None
-              and '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
+        check("/network: checkpoint flagged with a Stalled tag, no sub-lines",
+              '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)
         _snap = json.loads(req(base + "/api/v1/summary")[1]); check("summary carries the pill state", _snap.get("pill", {}).get("state") == "lag")
@@ -763,7 +762,7 @@ def fixture_pages(check):
         _jobs = {j[0]: j[2] for j in _IX.JOBS}
         check("probe: only / and /go.md, every 10 min, first 1 KB", _IX.PROBES == ["/", "/go.md"] and _jobs["probe"] == 600
               and _IX.uptime_name("/api/status") == "probe /api/status" and _IX.uptime_name("/api/params") == "/api/params")
-        _st = req(base + "/status")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
+        _st = req(base + "/network?view=details")[1].decode(); _csv = req(base + "/api/v1/uptime.csv")[1].decode()
         check("uptime: derived /api/status folds into one continuous series", ",/api/status,probe,25,25," in _csv and ",/api/status,fetch" not in _csv)
         check("fixture: Epochs → Grading has an h1", b"<h1" in g and b">Chain</h1>" in g)
         check("fixture: vesting shows days on /unlocks and in the FAQ", "≈25 days".encode() in req(base + "/unlocks")[1] and "over 100 epochs (≈25 days)".encode() in req(base + "/what-is-proof-of-agent")[1] and "≈ 25 days".encode() in req(base + "/about")[1])

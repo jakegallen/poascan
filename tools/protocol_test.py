@@ -177,8 +177,8 @@ def ui_checks():
     check("stale: ui.flag Stale tag on the badge and stats", "Stale" in PV.badge() and 'class="tag warn"' in PV.badge() and "Stale" in GV.page({"tab": ["protocol"]}))
     db.put_blob(PT.META, dict(m, last_ok=int(time.time())))
     check("fresh: no Stale tag", "Stale" not in PV.badge())
-    n = V.network("")
-    check("Network overview carries the badge", "pbadge" in n and "/governance?tab=protocol" in n)
+    n = str(V.network("anchors"))   # 1.26.392: the badge sits with the releases, on the Anchors tab
+    check("Network Anchors tab carries the badge", "pbadge" in n and "/governance?tab=protocol" in n)
     files = {"client": dict(m["files"]["client"], sha="00" * 32), "web_client": m["files"]["web_client"]}
     db.put_blob(PT.META, dict(m, files=files, last_ok=int(time.time())))
     check("unreleased hash: amber badge 'Unreleased client change'", "Unreleased client change" in PV.badge() and "pbadge warn" in PV.badge())
