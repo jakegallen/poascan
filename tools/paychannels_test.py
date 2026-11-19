@@ -410,6 +410,9 @@ check("version is 1.26.398 and the changelog records it",
 check("version is 1.26.399 and the changelog records it",
       _ver >= (1, 26, 399) and "## [1.26.399]" in cl and "header shortcut" in cl and "Submitted" in cl and "Per close" in cl
       and not any(ch in cl.split("## [1.26.399]")[1].split("## [")[0] for ch in dash))
+check("version is 1.26.400 and the changelog records it",
+      _ver >= (1, 26, 400) and "## [1.26.400]" in cl and "moved into Start" in cl and "/start?tab=earn" in cl
+      and not any(ch in cl.split("## [1.26.400]")[1].split("## [")[0] for ch in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
