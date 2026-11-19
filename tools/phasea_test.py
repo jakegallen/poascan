@@ -69,12 +69,10 @@ check("MCP get_epoch_rewards: an unknown close is a tool error", bad.get("result
 # ---- sort headers
 def heads(html, frag):
     i = html.find(frag); return html[i:i + 6000] if i >= 0 else ""
-st, h = get("/network?tab=health")
-eh = heads(h, 'id="endpoints"'); ih = heads(h, 'id="incidents"')
-check("Health Endpoints sorts by header (?esort=)", 'class="hsb"' in eh and "esort=" in eh)
-check("Health Incidents sorts by header (?isort=) when it has rows", 'id="incidents"' in h)
-st, h2 = get("/network?tab=health&esort=p50&isort=dur")
-check("Health: one table's sort keeps the other's in its links", st == 200 and "isort=dur" in heads(h2, 'id="endpoints"') and "esort=p50" in heads(h2, 'id="incidents"'))
+st, h = get("/network?view=details")
+eh = heads(h, "Endpoints")
+check("Network Health Details (1.26.392): one Endpoints table with its header row, no sort links and no Incidents table (the consolidation keeps them short)",
+      st == 200 and "<th>Endpoint</th>" in eh and "<th>p95</th>" in eh and 'class="hsb"' not in eh and 'id="incidents"' not in h and h.count("<th>Endpoint</th>") == 2)   # Endpoints, plus the 7d uptime table
 st, tx = get("/chain/txs?sort=epoch&dir=asc")
 eps = [int(x) for x in re.findall(r"<td[^>]*>E(\d+)</td>", tx)]
 check(f"Chain Transactions sorts this page by Epoch ({eps[:5]})", st == 200 and eps == sorted(eps) and 'aria-sort="ascending"' in tx)
@@ -85,7 +83,7 @@ check("Census (Models) renders in the Agents module; the Snapshots table is API 
 st, ul = get("/unlocks?sort=unlocks")
 check("Unlock calendar sorts by header on /unlocks", st == 200 and 'id="calendar"' in ul and "/unlocks?" in heads(ul, 'id="calendar"'))
 st, tk = get("/network?tab=token")
-check("Unlock calendar links stay on the Token tab", "/network?tab=token&amp;sort=" in heads(tk, 'id="calendar"'))
+check("Token tab (1.26.392): the unlock calendar is a short table of the next closes (the full sortable one stays on /unlocks)", st == 200 and "<th>At close</th>" in heads(tk, "Calendar") and "<th>Unlocked</th>" in heads(tk, "Calendar"))
 check("no em or en dashes in Phase A copy", all("\u2014" not in x and "\u2013" not in x for x in (disc.group(1) if disc else "", rb, llms.split("Health status codes")[1][:300])))
 
 print("\n%d failed" % len(fails) if fails else "\nall passed"); sys.exit(1 if fails else 0)

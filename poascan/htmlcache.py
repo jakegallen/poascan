@@ -58,7 +58,7 @@ CANON_QS = {"/": (), "/index.html": (), "/start": (), "/join": (), "/onboarding"
             "/unlocks": (), "/upgrade": (), "/agents": (), "/agents/operators": (),
             "/help": ("address", "sort", "dir"), "/wallet": ("address",),
             "/chain": ("tab", "state", "sort", "dir"), "/chain/txs": ("page", "type", "sort", "dir"),
-            "/network": ("tab", "range", "esort", "edir", "isort", "idir"),
+            "/network": ("tab", "range", "metric", "ov", "type", "view"),
             "/agents/top": ("tab", "sort", "dir"), "/agents/census": ("tab",), "/agents/community": ("tab",),
             "/governance": ("tab", "sort", "dir", "filter", "level", "page", "range", "close", "state", "kind", "need",
                             "carry", "csort", "cdir", "asort", "adir", "apage", "offset", "sub")}

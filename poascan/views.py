@@ -1693,6 +1693,9 @@ NET_AGENT_API = [("Anchors", "/network?tab=anchors", "/api/v1/anchors/timeline")
 def network(tab="", rng="", title=None):
     """Network: Overview, Health (was /status), Charts (was /growth) and Token (was /token, 1.26.96)."""
     tab = tab if tab in dict(NET_TABS) else "overview"
+    if title is None:   # consolidation: one hero and one module (nethub.py); the old per-tab bodies below stay for the status page callers that pass a title
+        from . import nethub as NH
+        return NH.page(tab, getattr(REQ, "qs", None) or {})
     chips = "".join(f'<a href="/network{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in NET_TABS if k in NET_NAV or k == tab)
     head = f'<div class="sechead"><h1>Network</h1></div><nav class="chips atabs scroll" aria-label="Network">{chips}</nav>'
     if tab == "health":

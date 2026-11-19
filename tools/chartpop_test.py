@@ -122,8 +122,12 @@ check("home 1.26.380: the Epochs panel opens with a light Answers per epoch char
       and '"Supply"' not in home and ">Supply<" not in home)
 _ans = home[home.find('class="cpw emini"'):]; _ans = _ans[:_ans.find("</section>")]
 check("home 1.26.309: the card has no em or en dash and no milestone marks", not re.search("[\u2013\u2014]", _ans) and 'class="mk' not in _ans)
-net = str(V.network("charts", "7d"))
-for k in ("agents", "holders", "supply", "txs", "answers"): check(f"Network > Charts: {k} card opens the pop-out (card and Expand button)", f'class="cpw" data-chart="{k}"' in net and f'class="cpx" data-chart="{k}"' in net)
+# 1.26.392: Network > Charts is one chart with metric chips (the pop-out cards are gone); each metric draws its own chart
+_q0 = getattr(V.REQ, "qs", None)
+for k in ("agents", "holders", "supply", "txs", "answers"):
+    V.REQ.qs = {"metric": [k]}; _n = str(V.network("charts", "7d"))
+    check(f"Network > Charts: the {k} chip draws one chart with its own range chips", f'data-metric="{k}"' in _n and 'class="chartbox' in _n and f'metric={k}' in _n and 'data-chart="' not in _n[_n.find('class="ncw"'):])
+V.REQ.qs = _q0
 tok = str(V.token())
 for k in ("supply", "holders", "circ"): check(f"/token: {k} stat opens the pop-out", f'data-chart="{k}"' in tok)
 blk = js[js.index("/* chart pop-out"):js.index("if(wantLive)connect();")]
