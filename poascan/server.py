@@ -263,6 +263,13 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a) or not LK.known(a): raise NotFound("unknown agent")
         return dict(agent=a, addresses=LK.addresses(a), upstream_notice=chains_notice()), False
+    m = re.match(r"^/api/agents/([^/]{1,80})/lifecycle$", path)   # POASCAN data ask 7a: stage + joined/first-answer/first-seal/first-payout
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise NotFound("unknown agent")
+        r = G.agent_lifecycle(a)
+        if not isinstance(r, dict): raise NotFound("unknown agent")
+        return r, False
     m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
     if m:
         tid = m.group(1).lower(); r = RC.receipt(tid, fetch=True)
@@ -407,6 +414,8 @@ def api(path, qs):
         return d, False
     if path == "/api/agents/health": return G.network_health(), False
     if path == "/api/agents/totals": return G.agent_totals(), False   # POASCAN data ask 3a: chain agents vs archive_agents
+    if path == "/api/agents/joiners":   # POASCAN data ask 7b: joins per hour + median time to first pass/pay for recent joiners
+        return G.joiners((qs.get("days") or ["7"])[0]), False
     if path == "/api/agents/hourly":   # POASCAN data ask 3c: hourly joins + established adds
         return A.agents_hourly((qs.get("hours") or ["168"])[0]), False
     if path == "/api/agents/rank":   # POASCAN data ask 3b: per-close rank snapshot (top 200/metric, prune >8 closes)
