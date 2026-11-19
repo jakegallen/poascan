@@ -21,6 +21,7 @@ from . import segments as SG
 from . import htmlcache as HC
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 from . import addrlight as AL
+from . import agentshub as AH
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -522,17 +523,18 @@ def page(path, qs):
     if path == EA.ROUTE: return EV.page(qs, V.page, earn_check)   # Start earning: the earn check and the starter guide
     if path == WB.ROUTE: return WV.page(qs, V.page)   # 1.26.187: Check my wallet, /wallet?address=poa1... (stable; POASwap /start links here)
     if path == "/governance": return GV.page(qs)
-    if path == "/agents/top": return V4.leaderboard_page(qs.get("tab", [""])[0], V.apage, qs)
+    if path == "/agents/top": return AH.top_page(qs.get("tab", [""])[0], qs)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/upgrade": return V2.status_page("Network upgrade")
     if path == "/chain": return V.epochs_page(qs)
     m = re.match(r"^/epoch/(\d+)$", path)
     if m: return V.epoch(int(m.group(1)))
     tab = (qs.get("tab") or [""])[0]
-    if path == "/agents/census": return V.census_page(tab)
-    if path == "/agents/community": return V.community_page(tab, qs)
+    if path == "/agents/census": return AH.census_page(tab, qs)
+    if path == "/agents/community": return AH.community(tab, qs)
     if path == "/network": return V.network(tab, (qs.get("range") or [""])[0])
-    routes = {"/agents": V.agents_overview, "/agents/operators": V.operators_page, "/about": V.about, "/privacy": V.privacy}
+    if path == "/agents": return AH.top_page("", qs)
+    routes = {"/agents/operators": AH.operators, "/about": V.about, "/privacy": V.privacy}
     if path in routes: return routes[path]()
     return None
 
@@ -551,7 +553,7 @@ HC.register_tabs("/network", [k for k, _ in V.NET_TABS])
 HC.register_tabs("/governance", [k for k, _ in GV.TABS])
 HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
 HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
-HC.register_tabs("/agents/census", ["journey"])
+HC.register_tabs("/agents/census", ["journey", "rates"])
 # 1.26.288 (P0): the page a human gets when every slot is held and no copy of the page is stored. Self-contained (no
 # DB, no render, no request), reloads itself; the API and MCP keep the plain text 503 their clients parse.
 BUSY_HTML = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
