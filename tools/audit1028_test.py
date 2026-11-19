@@ -81,7 +81,7 @@ check(f"every minepoa.com API link is nofollow ({len(links)})", links and all("n
 
 # ---- canonical and descriptions
 st, body, _ = get("/governance?tab=at-risk")
-check("governance at-risk tab is its own canonical", 'rel="canonical" href="https://poascan.io/governance?tab=at-risk"' in body)
+check("governance at-risk tab is an alias of Standing: its canonical is the bare page", 'rel="canonical" href="https://poascan.io/governance"' in body)
 st, body, _ = get("/governance")
 check("governance overview canonical is the bare path", 'rel="canonical" href="https://poascan.io/governance"' in body)
 st, body, _ = get("/help")
@@ -117,7 +117,7 @@ spec = json.loads(get("/openapi.json")[1]); ek = next((k for k in spec["paths"] 
 check(f"OpenAPI lists the rewards route and epochs from and limit ({ek})", any(k.endswith("/epoch/{n}/rewards") for k in spec["paths"])
       and ek and '"from"' in json.dumps(spec["paths"][ek]) and '"limit"' in json.dumps(spec["paths"][ek]))
 st, body, _ = get("/epoch/3")
-check("epoch page Payouts card links the rewards CSV", "/api/v1/epoch/3/rewards.csv" in body)
+check("epoch page Payouts card has no header CSV link (the route stays)", "/api/v1/epoch/3/rewards.csv" not in body)
 pay = body[body.index('id="payouts"'):] if 'id="payouts"' in body else ""
 check("Payouts headers sort (aria-sort, links to ?sort=)", 'aria-sort="ascending"' in pay[:6000] and 'href="/epoch/3?sort=reward#payouts"' in pay and 'href="/epoch/3?sort=agent#payouts"' in pay)
 st, body, _ = get("/epoch/3?sort=reward&dir=asc"); pay = body[body.index('id="payouts"'):]

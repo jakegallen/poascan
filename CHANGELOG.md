@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.399] - 2026-11-19
+
+### Changed
+- No header shortcut links: an API or CSV link in a card head is no longer drawn on any page (the routes, the API, the CSV files and the For agents card stay). The Topics and intro template notes drop their API and CSV links too.
+- Repeated labels: the Home and Chain epoch row reads Submitted (Answers stays the lane label), the Home Epochs chart reads Per close, the Agents chart legend reads Miners. The Chain epochs table drops its Status column while every close is Finalized and shows it when a record is pending, paused or paid nothing.
+- Sitemap lists only real Governance tabs (Closes added, eight aliases removed); an old Governance tab URL names the tab it renders as its canonical.
+- Warmed in the page cache: Community Social, Answers and Topics, Rankings Active and Rising, Network Anchors and Charts, Governance Closes and Settle age (first visitors waited 4 to 20 s).
+- Network Charts opens on Answers; Agents Joined 24h reads Last join with the age when no one joined.
 ## [1.26.398] - 2026-11-19
 
 ### Changed
