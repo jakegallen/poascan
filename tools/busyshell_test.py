@@ -38,9 +38,9 @@ while GD.cheap is not None and GD.cheap.acquire(blocking=False): cheap.append(1)
 seg = SG.selected()
 HC._c.clear(); HC._pin.clear(); HC._bytes[0] = 0
 # an unwarmed page with an old FIFO copy (older than CHEAP_STALE, so _html_hit says no)
-k = HC.key("/agents/operators", {}, seg, False)
+k = HC.key("/unlocks", {}, seg, False)
 HC.put(k, "<html>OPS-COPY</html>", now=time.time() - 3600)
-r = Req("/agents/operators"); ran = []
+r = Req("/unlocks"); ran = []
 r._gated(lambda: (ran.append(1), "X")[1])
 code, body, ctype, hd = r.sent[-1]
 ok(code == 200 and "OPS-COPY" in body and not ran, f"a stored copy is served instead of a 503 ({code})")
@@ -56,9 +56,9 @@ r = Req("/network?tab=charts"); r._gated(lambda: "X")
 code, body, ctype, hd = r.sent[-1]
 ok(code == 503 and body == B and ctype.startswith("text/html"), f"a page with no copy gets the busy page ({code})")
 # 1.26.316: a crawler reuses the visitor last-good copy instead of getting the Busy card
-k3 = HC.key("/agents/operators", {}, seg, False)
+k3 = HC.key("/unlocks", {}, seg, False)
 HC.put(k3, "<html>OPS-COPY</html>", now=time.time() - 3600)
-r = Req("/agents/operators"); r.headers = {"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"}
+r = Req("/unlocks"); r.headers = {"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"}
 ran = []
 r._gated(lambda: (ran.append(1), "X")[1])
 code, body, ctype, hd = r.sent[-1]

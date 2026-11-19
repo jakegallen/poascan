@@ -383,9 +383,15 @@ check("version is at least 1.26.389 and the changelog records the WebKit apt spl
 check("version is 1.26.390 and the changelog records the Home lane and Cadence cap",
       _ver >= (1, 26, 390) and "## [1.26.390]" in cl and "two paths" in cl
       and not any(c in cl.split("## [1.26.390]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.391 and the changelog records the Agents consolidation",
-      _ver == (1, 26, 391) and "## [1.26.391]" in cl and "Agents consolidation" in cl
+check("version is at least 1.26.391 and the changelog records the Agents consolidation",
+      _ver >= (1, 26, 391) and "## [1.26.391]" in cl and "Agents consolidation" in cl
       and not any(c in cl.split("## [1.26.391]")[1].split("## [")[0] for c in dash))
+check("version is at least 1.26.392 and the changelog records the API telemetry and governance standing-moves data asks",
+      _ver >= (1, 26, 392) and "## [1.26.392]" in cl and "standing-moves" in cl and "/api/v1/telemetry" in cl
+      and not any(c in cl.split("## [1.26.392]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.393 and the changelog records the Agents polish (Established matches the ring, Pass rates one table)",
+      _ver == (1, 26, 393) and "## [1.26.393]" in cl and "Established stage" in cl and "Pass rates" in cl
+      and not any(c in cl.split("## [1.26.393]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

@@ -11,6 +11,20 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.393] - 2026-11-19
+
+### Changed
+- Agents: the Journey funnel's Established stage is now the engine's Established set, the same number as the hero ring (it counted only the part of the set that is in the archive table, 98 fewer). Pass rates shows one table at a time (Makers or Harnesses) instead of three lists; Journey shows its cohorts as one table; repeated labels trimmed (Count, Answering, Earners, Samples); the hero trio no longer wraps its labels at phone width.
+- Cache: Journey, Pass rates and Operators join the warm list, so the 38 s cold render of Journey is no longer paid by a visitor.
+- Agents Pass rates: one table with a makers and harness toggle in place of two tables; the Journey cohort table keeps Cohort, Archive, Answering, Passed, Earners and Est.; the Promoted 24H label no longer wraps at 390 px.
+
+## [1.26.392] - 2026-11-19
+
+### Added
+- API telemetry: GET /api/v1/telemetry reports POAScan's own API request counts by surface (rest, mcp, csv), success rate, p50 and p95 latency and the busiest route templates, from a bounded in-process ring keyed by route template only (concrete addresses, hashes and ids collapse to placeholders, no client identifiers), reset on restart. GET /api/v1/reference/samples serves one trimmed example response per endpoint from a cached allowlist, refreshed hourly, so the API page Run pane never calls the live API.
+- Governance standing: GET /api/v1/governance/standing is the counts only headline (safe, watch, at_risk, closing next, established total). GET /api/v1/governance/standing-moves is the changed rows only feed (watch and at_risk from the current fold, plus Agents removed at the last close) with limit (default 20, cap 100) and offset paging.
+- Start: GET /api/v1/agents/{address}/lifecycle gives the Agent stage and its joined, first answer, first seal and first payout timestamps (404 on an unknown address). GET /api/v1/agents/joiners reports joins per hour and the median seconds to first pass and first pay. All additive, archive and read only.
+
 ## [1.26.391] - 2026-11-19
 
 ### Changed

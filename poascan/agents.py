@@ -591,6 +591,62 @@ def agent_rank(metric="earnings", limit=20):
                           (metric, ce, limit))]
     return dict(metric=metric, metrics=list(RANK_METRICS), close_epoch=ce, prev_close=prev_close, rows=rows)
 
+# ---------------- lifecycle + joiners (data asks 7a, 7b) ----------------
+_POA_RX = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
+
+def _first_tx_ts(typ, addr):
+    r = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type=? AND from_addr=?", (typ, addr))
+    return int(r["t"]) if r and r["t"] else None
+
+def _paid_first_ts():
+    """addr -> earliest close ts that paid it a positive reward, one pass over every segment's close records."""
+    out = {}
+    for n in _SG.NUMBERS:
+        for e in A.segment_closes(n):
+            t = int(e.get("ts") or 0)
+            if not t: continue
+            for a, v in (e.get("rewards") or {}).items():
+                try: fv = float(v)
+                except (TypeError, ValueError): continue
+                if fv > 0 and (a not in out or t < out[a]): out[a] = t
+    return out
+
+def agent_lifecycle(addr):
+    """POASCAN data ask 7a: one Agent's lifecycle stage plus the timestamps for joined, first answer, first grade seal it
+    cast, and first payout. Archive only (txs and close records), no upstream read. "badaddr" for a malformed address,
+    None when the address has no footprint (the route then serves 404)."""
+    if not _POA_RX.match(addr or ""): return "badaddr"
+    known = (addr in accounts_all()) or (addr in record_agents())
+    joined = _first_tx_ts("join", addr); answer = _first_tx_ts("challenge", addr); seal = _first_tx_ts("grade-sealed", addr)
+    pay = _paid_first_ts().get(addr)
+    if not known and not any((joined, answer, seal, pay)): return None
+    stage = "paid" if pay else "grading" if seal else "answering" if answer else "joined"
+    return dict(address=addr, stage=stage, joined_ts=joined, first_answer_ts=answer, first_seal_ts=seal, first_payout_ts=pay,
+                basis="txs (join, challenge, grade-sealed casts) and close-record rewards; archive only")
+
+@cached("joiners", 300)
+def joiners(days=7):
+    """POASCAN data ask 7b: join-memo joins per UTC hour over the window, plus the median seconds from join to first pass
+    (a settled answer that passed) and to first payout, for the Agents who joined in the window. Archive only, no upstream."""
+    try: days = max(1, min(90, int(days)))
+    except (ValueError, TypeError): days = 7
+    cut = int(time.time()) - days * 86400
+    join_ts = {r["a"]: int(r["t"]) for r in db.q("SELECT from_addr AS a, MIN(ts) AS t FROM txs WHERE type='join' AND ts > ? GROUP BY from_addr", (cut,)) if r["a"] and r["t"]}
+    jph = [[int(r["h"]), r["n"]] for r in db.q("SELECT (ts/3600)*3600 AS h, COUNT(*) AS n FROM txs WHERE type='join' AND ts > ? GROUP BY h ORDER BY h", (cut,))]
+    ep_ts = {int(e["epoch"]): int(e["close_ts"]) for e in A.epoch_rows() if e.get("close_ts")}   # current segment; the window lives here
+    recs = settled_records(); by, _gr = settled_index(); paid = _paid_first_ts()
+    to_pass, to_pay = [], []
+    for a, jt in join_ts.items():
+        fp = None
+        for i in by.get(a, ()):
+            ep, _an, _au, passed, _j, _oc = recs[i]
+            if passed and ep in ep_ts and (fp is None or ep_ts[ep] < fp): fp = ep_ts[ep]
+        if fp is not None and fp >= jt: to_pass.append(fp - jt)
+        if paid.get(a) is not None and paid[a] >= jt: to_pay.append(paid[a] - jt)
+    med = lambda xs: int(statistics.median(xs)) if xs else None
+    return dict(days=days, joiners=len(join_ts), joins_per_hour=jph, median_s_to_first_pass=med(to_pass),
+                median_s_to_first_pay=med(to_pay), reached_first_pass=len(to_pass), reached_first_pay=len(to_pay))
+
 # ---------------- profile ----------------
 def profile(addr):
     cen = census_now().get(addr); rb = A.rewards_by_addr().get(addr, {})
