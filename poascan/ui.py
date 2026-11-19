@@ -279,8 +279,6 @@ DESCS = {
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
     "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
     "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",
-    "/help": "Start earning on Proof of Agent: check why an Agent is not earning, from public network data, and every way to earn. Read only, never asks for a key.",
-    "/wallet": "Check a Proof of Agent wallet: the Agent behind a poa1 address and the external wallets linked to it, with how each was verified. Read only.",
 }
 TAB_DESCS = {   # tabbed pages whose tabs are their own canonical URLs (canonical()): a description per tab
     ("/network", "anchors"): "Proof of Agent anchor timeline: every checkpoint anchored on Base and Solana, the gap between them and a cross check of each state root.",

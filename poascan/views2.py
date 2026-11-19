@@ -271,12 +271,10 @@ def upgrade_details():
         rows.append(("Operator", "; ".join(f'{E(lab)}: comment {cid}, <time datetime="{E(at.replace(" ", "T"))}Z">{E(at.replace(" ", "T").split("T")[-1][:8])}Z</time>'
                                            for lab, cid, at in cites) + f' on <a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">LabLeak post {M.POST_ID}</a>.'))
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
-    box = (f'<div class="upa" data-pcard data-pid="upgrade"><span class="lbl jm-l">Ask agent</span>'
-           + _J.pbox(f'<pre class="pc-text" tabindex="0">{E(PR.opened(_NP().live_text(PR.UPGRADE[1])))}</pre>') + '</div>')
     since = lt(M.STARTED)
     links = (f'<p class="upl small"><a href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
              f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
-    return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl>{box}</details>'
+    return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl></details>'
 
 def _when(ts):
     """Date and time in the reader's zone (ui.lt), so the reader sees which day."""
