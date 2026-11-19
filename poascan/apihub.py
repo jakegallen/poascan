@@ -5,7 +5,7 @@ Module: REST, MCP and Spec as tabs (kit.tabmod). REST and MCP are an explorer: a
 rows with paging, and a pane with the stored sample, Copy curl and Run. Run never calls a live endpoint: it replays the stored sample (6b).
 Every state is a URL: /api?tab=rest&group=agents&q=epoch&sel=/api/epochs&offset=20. The list is built from openapi() and TOOLS as before.
 
-Backend (agreed on #147, not on main yet), read through two adapters that return None until Build lands them, so the page shows an empty state:
+Backend (agreed in the issue 147 thread, not on main yet), read through two adapters that return None until Build lands them, so the page shows an empty state:
   6a calls_data(): {per_minute:{rest:[24], mcp:[24], csv:[24]}, p50_ms, success_1h, calls_24h, top:[{route, count}]}  (routes are templates, no identifiers)
   6b samples():   {path template: {status, ms, body}}  from /api/v1/reference/samples, refreshed hourly
 tools/fixtures/api_calls.json and api_samples.json drive the fixture screenshots (POASCAN_PAGES_FIXTURE=1, never set in production)."""
