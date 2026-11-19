@@ -1504,8 +1504,7 @@ def signals_card():
         s = " ".join(addr_link(a, nm, (6, 4)) for a in m[:2])
         return s + (f' <span class="dim small">+{len(m) - 2}</span>' if len(m) > 2 else "")
     rows = [[f'<span class="tag">{E(g["signal"])}</span>', f'<span class="num">{g["size"]}</span>', who(g["agents"])] for g in cs["groups"][:12]]
-    return card(f'Cluster signals · {cs["agents_flagged"]:,} Agents', f'<div class="minis">{chips}</div>' + table(["Signal", "Agents", "Members"], rows, cls="sigt"),
-                '<a class="more" href="/api/v1/clusters">API →</a>')
+    return card(f'Cluster signals · {cs["agents_flagged"]:,} Agents', f'<div class="minis">{chips}</div>' + table(["Signal", "Agents", "Members"], rows, cls="sigt"))
 
 def _operators_method():
     return f'''
