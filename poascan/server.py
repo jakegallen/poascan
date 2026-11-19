@@ -611,8 +611,8 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
 STATIC_ROUTES = ["/", "/start", "/help", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
-                 "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=at-risk", "/governance?tab=payouts", "/governance?tab=graders",
-                 "/governance?tab=established", "/governance?tab=queue", "/governance?tab=directory", "/governance?tab=forum", "/governance?tab=proposals", "/governance?tab=protocol", "/governance?tab=settleage", "/governance?tab=charts", "/governance?tab=rules", "/about", "/privacy", "/api"]
+                 "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
+                 "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
 MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",

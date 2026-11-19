@@ -255,7 +255,7 @@ def live():
         # sitemap and llms.txt
         sm = get("/sitemap.xml")[1]; ll = get("/llms.txt")[1]
         locs = re.findall(r"<loc>https://poascan.io([^<]*)</loc>", sm)
-        check("sitemap: /chain, /chain/txs, /network?tab=token, /governance, Established; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=established"))
+        check("sitemap: /chain, /chain/txs, /network?tab=token, /governance, Established; no old list URLs", all(x in locs for x in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=closes"))
               and not any(x in locs for x in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
         check("llms.txt: Chain, Governance and Token pages", "/chain the open epoch" in ll and "/governance where established Agents stand" in ll and "(?tab=directory)" in ll and "(?tab=payouts)" in ll and "(?tab=forum)" in ll and "(?tab=proposals)" in ll and "(?tab=token)" in ll
               and "/epochs the" not in ll and "poascan.io/agents/at-risk" not in ll)

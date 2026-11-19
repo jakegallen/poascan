@@ -293,10 +293,16 @@ NOINDEX = {"Not found", "Search", "Bad address", "Tx not found"}
 def req_path():
     return getattr(REQ, "path", "/") or "/"
 
+GOV_CANON_TAB = {"overview": "", "standing": "", "established": "", "at-risk": "", "directory": "", "never": "", "queue": "graders", "settlement": "closes", "changes": "closes",
+                 "intake": "closes", "settleage": "closes", "charts": "closes", "forum": "proposals", "protocol": "proposals"}
+
 def canonical():
     p = req_path(); p = CANON.get(p, p); qs = getattr(REQ, "qs", None) or {}
     tab = (qs.get("tab") or [""])[0]   # tabbed pages: each tab is its own canonical URL; the default tab is the bare path
     dflt = {"/agents/top": "holders", "/chain": "closed", "/network": "overview", "/governance": "overview", "/agents/census": "models", "/agents/community": "forum"}
+    if p == "/governance":   # 1.26.399: an old tab URL that renders another tab names that tab as its canonical
+        tab = GOV_CANON_TAB.get(tab, tab)
+        if tab not in ("", "closes", "payouts", "graders", "proposals", "rules"): tab = ""
     if p in dflt and tab not in ("", dflt[p]) and re.match(r"^[a-z][a-z-]{0,30}$", tab): return f"{SITE_URL.rstrip('/')}{p}?tab={tab}"
     return SITE_URL.rstrip("/") + p
 
@@ -652,7 +658,11 @@ def _asset_v(name):
     except OSError: return "0"
 ASSET_V = {n: _asset_v(n) for n in ("style.css", "app.js")}
 
+SHORTCUT_RX = re.compile(r'<a class="more"[^>]*>(?:API|CSV)(?: \u2192)?</a>\s*')
+
 def card(title, body, extra="", cls="", id=""):
+    """1.26.399: no header shortcut links. An API or CSV link in a card head is not drawn (the routes and the For agents card stay)."""
+    if id != "for-agents" and extra: extra = SHORTCUT_RX.sub("", extra)
     return f'<section class="card {cls}"{f' id="{id}"' if id else ""}><div class="ch"><h2>{title}</h2><div class="cx">{extra}</div></div><div class="cb">{body}</div></section>'
 
 NUM_RX = re.compile(r'(<span class="num[^"]*"(?: title="([^"]*)")?>)([^<]*)(</span>)')

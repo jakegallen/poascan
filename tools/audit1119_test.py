@@ -48,6 +48,29 @@ check("Check stage times read in days past 48 hours", SH._ago(now - 358 * 3600, 
 
 # ---- batch 1: Chain labels ----
 check("Chain Backlog KPI says at close and the Pending tab stays the live count", 'KIT.kpi("Backlog at close"' in SRC("poascan/views.py") and 'KIT.kpi("Backlog",' not in SRC("poascan/views.py"))
+# ---- batch 4: medium cleanup ----
+from poascan import ui as UI, views as V, bench as BN, htmlcache as HC, nethub as NH
+card = UI.card("t", "b", '<a class="more" href="/x.csv" download>CSV \u2192</a><a class="more" href="/x">API \u2192</a><a class="more" href="/y">Source JSON</a>')
+check("card(): API and CSV header links are not drawn, other header links stay", "CSV" not in card and "API" not in card and "Source JSON" in card)
+check("card(): the For agents card keeps its API link", "API" in UI.card("For agents", "b", '<a class="more" href="/api">API \u2192</a>', id="for-agents"))
+check("Home and Chain: the open epoch row says Submitted, so Answers is the lane label only", "Submitted" in BN.bench_html.__code__.co_consts.__repr__() or "Submitted" in SRC("poascan/bench.py"))
+check("Home Epochs chart reads Per close, not Answers", "Per close</span>" in SRC("poascan/views.py"))
+rows = [dict(epoch=e, close_ts=now - (5 - e) * 21600, paid=10, minted=1.0, burned=1.0, burn_pct=14.0, median=1.0, pause=None, segment=2, g=e) for e in range(3)]
+t = V.epochs_table(rows, qs={}, base="/chain")
+check("epochs table: no status column when every close is Finalized", "FINALIZED" not in t and ">Status<" not in t and ">Minted<" in t)
+t = V.epochs_table(rows, qs={}, base="/chain", pend=[dict(epoch=3, close_ts=now)])
+check("epochs table: the status column returns while a record is pending", "RECORD PENDING" in t and ">Status<" in t)
+check("Network Charts opens on Answers, not the flat Joins line", NH.DEFAULT_METRIC == "answers")
+UI.REQ.path = "/governance"; UI.REQ.qs = {"tab": ["at-risk"]}
+check("canonical: an old Governance tab URL names the tab it renders", UI.canonical().endswith("/governance"))
+UI.REQ.qs = {"tab": ["settleage"]}; check("canonical: settleage is Closes", UI.canonical().endswith("/governance?tab=closes"))
+UI.REQ.qs = {"tab": ["nonsense"]}; check("canonical: an unknown tab is the bare page", UI.canonical().endswith("/governance"))
+UI.REQ.qs = {"tab": ["payouts"]}; check("canonical: a real tab is its own", UI.canonical().endswith("/governance?tab=payouts"))
+from poascan import server as S
+dead = ("at-risk", "established", "queue", "directory", "forum", "protocol", "settleage", "charts")
+check("sitemap: the eight Governance aliases are gone, Closes is in", not any(f"/governance?tab={d}" == r for d in dead for r in S.STATIC_ROUTES) and "/governance?tab=closes" in S.STATIC_ROUTES)
+check("warm list: the slow first renders are warmed and the two Standing aliases are not", all(u in HC.WARM for u in ("/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors")) and "/governance?tab=at-risk" not in HC.WARM)
+
 for p in ("poascan/starthub.py", "static/start.css"):
     check(f"no em or en dash in {p}", not re.search("[\u2013\u2014]", SRC(p)))
 

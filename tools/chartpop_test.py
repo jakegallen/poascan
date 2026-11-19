@@ -118,7 +118,7 @@ home = V.home()["body"] if isinstance(V.home(), dict) else str(V.home())
 for k in ("mined", "agents", "active", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
 check("home: no Agents / hr opener (Active Agents card since 1.26.116)", 'data-chart="joins"' not in home)
 check("home 1.26.380: the Epochs panel opens with a light Answers per epoch chart that opens the answers pop-out; no Supply line",
-      'class="cpw emini" data-chart="answers"' in home and 'class="cpx" data-chart="answers"' in home and ">Answers<" in home[home.find('class="cpw emini"'):]
+      'class="cpw emini" data-chart="answers"' in home and 'class="cpx" data-chart="answers"' in home and ">Per close<" in home[home.find('class="cpw emini"'):]
       and '"Supply"' not in home and ">Supply<" not in home)
 _ans = home[home.find('class="cpw emini"'):]; _ans = _ans[:_ans.find("</section>")]
 check("home 1.26.309: the card has no em or en dash and no milestone marks", not re.search("[\u2013\u2014]", _ans) and 'class="mk' not in _ans)
@@ -126,7 +126,7 @@ check("home 1.26.309: the card has no em or en dash and no milestone marks", not
 _q0 = getattr(V.REQ, "qs", None)
 for k in ("agents", "holders", "supply", "txs", "answers"):
     V.REQ.qs = {"metric": [k]}; _n = str(V.network("charts", "7d"))
-    check(f"Network > Charts: the {k} chip draws one chart with its own range chips", f'data-metric="{k}"' in _n and 'class="chartbox' in _n and f'metric={k}' in _n and 'data-chart="' not in _n[_n.find('class="ncw"'):])
+    check(f"Network > Charts: the {k} chip draws one chart with its own range chips", f'data-metric="{k}"' in _n and 'class="chartbox' in _n and (f'metric={k}' in _n or k == "answers") and 'data-chart="' not in _n[_n.find('class="ncw"'):])
 V.REQ.qs = _q0
 tok = str(V.token())
 for k in ("supply", "holders", "circ"): check(f"/token: {k} stat opens the pop-out", f'data-chart="{k}"' in tok)

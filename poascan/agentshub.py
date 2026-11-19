@@ -29,6 +29,9 @@ def sub_chips(items, cur, label):
     return ('<nav class="chips kit-sub scroll" aria-label="%s">' % E(label) + "".join(
         f'<a href="{E(h)}" class="chip {"on" if k == cur else ""}" data-kit-sub="{E(k)}"{" aria-current=\"page\"" if k == cur else ""}>{E(t)}</a>' for k, h, t in items) + "</nav>")
 
+def _since(s):
+    s = int(s); return f"{s // 60}m" if s < 3600 else f"{s // 3600}h" if s < 48 * 3600 else f"{s / 86400:.1f}d"
+
 def hero():
     V = _V(); nm = V.names()
     est = len(A.established_set()); total = _total()
@@ -38,9 +41,15 @@ def hero():
     except Exception:
         j24 = e24 = None
     num = lambda v: intc(v) if v is not None else "···"
+    joined = f'<div><span class="lbl">Joined 24h</span><b class="num">{num(j24)}</b></div>'
+    if j24 == 0:   # 1.26.399: a halt reads as the time since the last join, not a bare 0
+        try:
+            from . import maint; lj = maint.last_join()
+        except Exception: lj = None
+        if lj: joined = f'<div><span class="lbl">Last join</span><b class="num">{_since(time.time() - lj)}</b></div>'
     trio = ('<div class="trio">'
             f'<div><span class="lbl">Paid miners</span><b class="num">{num(last.get("challengers"))}</b></div>'
-            f'<div><span class="lbl">Joined 24h</span><b class="num">{num(j24)}</b></div>'
+            f'{joined}'
             f'<div><span class="lbl">Promoted 24h</span><b class="num">{num(e24)}</b></div></div>')
     feed = [dict(type=r["type"], addr=r["from_addr"], name=nm.get(r["from_addr"]), ts=int(r["ts"] or 0)) for r in
             db.q("SELECT type, from_addr, ts FROM txs WHERE type IN ('challenge','attest-batch','grade-sealed','join') ORDER BY ts DESC LIMIT 8")]
@@ -76,7 +85,7 @@ def funnel_block(f):
 
 def miners_block():
     V = _V()
-    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in A.epoch_rows_all()], legend=["Paid miners", "Newly established"], colors=("gold", "steel"), stacked=False)
+    mine = bars([(f"E{r['epoch']}", [r["challengers"], r["established"]]) for r in A.epoch_rows_all()], legend=["Miners", "Newly established"], colors=("gold", "steel"), stacked=False)
     npd = G.new_per_day()
     newd = bars([(r["day"][5:], [max(0, r["new_agents"])]) for r in npd], colors=("gold",), fmt=lambda v: f"{v:,.0f}") if npd else skel()
     tg = ('<div class="kit-tg" role="group" aria-label="Chart"><button type="button" class="chip on" data-pane="m" aria-pressed="true">Miners per epoch</button>'
