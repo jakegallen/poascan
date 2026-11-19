@@ -1,0 +1,11 @@
+/* Epoch page on the kit (epochhub.py): a finished ring and the hourly chart in the hero, then one tabbed module. */
+.ebench .bl{align-items:center;justify-content:center}
+.ebench .br{display:flex;flex-direction:column;min-width:0}
+.ebench .br .chartbox,.ebench .br .cb{min-width:0}
+.eclosed .rp{filter:none}
+.eclosed .rc .ect{font:500 var(--t13)/1.2 var(--ui);color:var(--dim);margin-top:6px}
+.ests{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:4px 0 0}
+.kit-tools .epn{min-width:36px;text-align:center}
+.fmoments{list-style:none;margin:0;padding:0}.fmoments li{padding:10px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.fmoments li:last-child{border-bottom:0}.fmoments .fmt{color:var(--hi)}.fmoments .fpid{color:var(--dim);font-family:var(--mono)}
+@media (max-width:640px){.ebench .xl.xo{display:none}}

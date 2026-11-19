@@ -109,7 +109,9 @@ check("settlement API: closes carry failed and not_paid", all("failed" in x and 
 check("settlement: no em or en dashes", nodash(st) and nodash(api["definitions"]))
 
 # ---------------- pages ----------------
+V.REQ.qs = {"tab": ["record"]}
 ep = V.epoch(n); ep = ep[1] if isinstance(ep, tuple) else ep
+V.REQ.qs = {}
 check("epoch page: Passed / failed / expired row", "Passed / failed / expired" in ep and f'{r["settled_passed"]:,} / {r["settled_failed"]:,} / {r["settled_expired_no_jury"]:,}' in ep)
 gp = V.grading()
 check("grading tab: Failed and Expired stats, three series", ">Expired<" in gp and "Expired, no jury" in gp and ">Failed<" in gp)

@@ -134,7 +134,9 @@ from poascan import cohorts as CO, views as V
 CO._cache = None if hasattr(CO, "_cache") else None
 co = {c["birth"]: c for c in CO.cohorts()["cohorts"]}
 check("cohorts: the since-less E3 answers form the E3 cohort", 3 in co and co[3]["answers"] == 2)
+V.REQ.qs = {"tab": ["record"]}
 html = V.epoch(3) if hasattr(V, "epoch") else ""
+V.REQ.qs = {}
 check("epoch view: Dropped at close row with the count, linked to /about#dropped", '<a href="/about#dropped">Dropped at close</a>' in html and ">1<" in html.split("Dropped at close", 1)[1][:200])
 check("epoch view: no Dropped row when nothing dropped", "Dropped at close" not in V.epoch(1))
 ab = V.about() if hasattr(V, "about") else ""

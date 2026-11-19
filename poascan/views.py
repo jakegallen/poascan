@@ -1297,83 +1297,8 @@ def epoch(n):
         hint = "".join(f' <a href="/epoch/{n}?segment={m}">{E(SG.label(m))} E{n} →</a>' for m in old)
         return 404, page("Epoch not found", card("Epoch", na(f"Epoch {n} has not closed in {SG.label()} (latest closed is {max(rows) if rows else '···'}).{hint}" if SG.has_cut()
                                                           else f"Epoch {n} has not closed (latest closed is {max(rows) if rows else '···'}).")), "/epochs")
-    e = A.epoch_detail(n); nm = names()
-    rw = sorted(((a, float(v)) for a, v in e.get("rewards", {}).items()), key=lambda x: -x[1])
-    unp = r["slashed"] - len((A.params().get("slash_pardons") or {}).get(str(n), []))   # red only when some slash was not pardoned
-    zeropay = r["paid"] == 0 and r["minted"] == 0   # a zero-payout close: no answer reached the grading quorum, nothing paid (the 100% burned figure is derived, not an explicit reason)
-    from . import paychannels as PCH
-    ch = PCH.for_close(n, rec=e, segment=r.get("segment"))
-    split_stats = []
-    if ch["answer_pay"] is not None:
-        split_stats.append(stat("Answer pay", poa(ch["answer_pay"], mined=True) + X.usd_of(ch["answer_pay"])))
-    if ch["grading_pay"] is not None:
-        split_stats.append(stat("Grading pay", poa(ch["grading_pay"], mined=True) + X.usd_of(ch["grading_pay"])))
-    if ch["referral_pay"] is not None:
-        split_stats.append(stat("Referral pay", poa(ch["referral_pay"], mined=True) + X.usd_of(ch["referral_pay"])))
-    split_tag = (' <span class="tag" title="Answer pay, Grading pay and Referral pay are not in the public close record or close report yet">Split pending</span>'
-                 if ch["state"] == "pending" else "")
-    rew = ([stat("Median reward", num(r["median"]) + X.usd_of(r["median"])), stat("Top reward", num(r["max"]) + X.usd_of(r["max"]))] if r["max"] != r["median"]
-           else [stat("Reward", num(r["median"]) + X.usd_of(r["median"]))])   # one card when every paid Agent got the same
-    # Burned amount and burn share are one fact: the amount is a card, the share is in the header line. Paid Agents is in the header line too.
-    s = "".join([stat("Pool", poa(r["pool"]) + X.usd_of(r["pool"])), stat("Minted", poa(r["minted"], mined=True) + X.usd_of(r["minted"]))] + split_stats + [
-                 stat("Burned", f'<span class="num red" title="{full(r["burned"])} POA">{compact(r["burned"])}</span>' + X.usd_of(r["burned"]))]
-                + ([stat("Correction", f'<span class="num red" title="{full(r["correction"])} POA">{compact(r["correction"])}</span>',
-                         tip="Ballot 2464: burned from Agents' locked at this close. Spendable unchanged", flag_html=flag("Applied", "Ballot 2464 carry correction, applied at this close", tone="ok"))]
-                   if r.get("correction") else [])   # 1.26.261
-                + rew + [stat("Max reward", intc(r.get("paid_at_max", 0)), tip="Agents paid this close's top reward, from its rewards row"),
-                 stat("Attestations", intc(r["attestations"])), stat("Attesters", intc(r["attesters"])),
-                 stat("Slashed", f'<span class="num{" red" if unp > 0 else ""}">{r["slashed"]}</span>', tip="Graders slashed at this close; red when some were not pardoned"),
-                 stat("Audit sampled", intc(r["audit_sampled"]), tip="Answers drawn for audit at this close")])
-    T = lambda label, tip: f'<span title="{E(tip)}">{label}</span>'
-    det = table(["Field", "Value"], [[T("Paid for answers", "Agents paid for an answer this epoch (others were paid for grading or referrals)"), intc(r["challengers"])],
-        [T("Answers eligible", "Answers that met the attestation bar to earn the challenge share"), intc(r["challenge_eligible"])],
-        ["Newly established", intc(r["established"])], ["Established removed", intc(r["established_removed"])],
-        [T("Decided", "Answers whose grading finished at this close"), intc(r["settled"])],
-        [T("Passed / failed / expired", "Passed and failed by a jury, and expired with no jury"),
-         f'{r["settled_passed"]:,} / {r.get("settled_failed", 0):,} / {r.get("settled_expired_no_jury", 0):,}'],
-        [T("Pending", "Answers still waiting for a grade"), f'{r["pending"]:,}'], ["Pending appeals", intc(r["pending_appeal"])],
-        *([['<a href="/about#dropped">Dropped at close</a>', f'{r["dropped"]:,}']] if r.get("dropped") else []),
-        [T("Awaiting graders", "Pending answers with no grading panel assigned yet"), intc(r["pending_empty_panel"])],
-        ["Graders who served / grades", f'{r["graders"]} / {r["grades"]:,}'], ["Referral payouts", intc(r["referral_paid"])], ["Top-10 share / Gini", f'{pct(r["top10_share"])} / {r["gini"]:.3f}' if r["gini"] is not None else "···"],
-        ["Distinct payouts", intc(r["distinct_amounts"])]])
-    # 1.26.200: Payouts sort by header (#, Agent, Reward) with the shared component; ?sort=&dir= keep the page URL
-    from . import scoresort as SS
-    by = ch.get("by_addr") or {}
-    pkeys = ("rank", "agent", "reward") + (("answer_pay", "grading_pay") if by else ())
-    pcols = [SS.Col("rank", "#", "rank"), SS.Col("agent", "Agent", "text"), SS.Col("reward", "Reward", "num")]
-    if by:
-        pcols += [SS.Col("answer_pay", "Answer pay", "num"), SS.Col("grading_pay", "Grading pay", "num")]
-    pq = getattr(REQ, "qs", None) or {}; psrt = SS.page_sort(pq, pkeys, "rank"); pdir = SS.page_dir(pq)
-    pval = {"rank": lambda x: x[0], "agent": lambda x: SS.text_key(nm.get(x[1][0]) or x[1][0]), "reward": lambda x: x[1][1],
-            "answer_pay": lambda x: (by.get(x[1][0]) or {}).get("answer_pay"),
-            "grading_pay": lambda x: (by.get(x[1][0]) or {}).get("grading_pay")}[psrt]
-    prow = SS.sort_rows(list(enumerate(rw[:100], 1)), pval, SS.kind_of(pcols, psrt), pdir, tie=lambda x: x[0])
-    plink = SS.link_fn(f"/epoch/{n}", "rank", "#payouts", **({"segment": SG.selected()} if SG.qs() else {}))
-    def _ch(a, k):
-        v = (by.get(a) or {}).get(k)
-        return poa(v, mined=True, dec=4) if v is not None else '<span class="dim">···</span>'
-    cells = (lambda i, a, v: [i, addr_link(a, nm), poa(v, mined=True, dec=4)] + ([_ch(a, "answer_pay"), _ch(a, "grading_pay")] if by else []))
-    rt = table([], [cells(i, a, v) for i, (a, v) in prow], usd=(2, 3, 4) if by else (2,), pri=(0, 1, 2) if by else None, sort=(pcols, psrt, pdir, plink))
-    nav = (f'<a class="more epn" href="/epoch/{n-1}" aria-label="Epoch {n-1}" title="Epoch {n-1}">‹</a>'
-           f'<a class="more epn" href="/epoch/{n+1}" aria-label="Epoch {n+1}" title="Epoch {n+1}">›</a>')
-    t = _pt(r["close_ts"])
-    sgt = (f'<a class="tag{" warn" if arch else ""} segt" href="/chain{SG.qs()}">{E(SG.label())}</a> ') if SG.has_cut() else ""
-    unc = SG.unconfirmed(n)   # rewards not confirmed in later balances (segments config)
-    sgt += '<span class="tag warn" title="Rewards not confirmed in later balances">Unconfirmed</span> ' if unc else ""
-    sgt += CPZ.tag(r.get("pause")).lstrip() + (" " if r.get("paused") else "")   # 1.26.192: the close record flags a halt (closepause.py)
-    sgt += nopay_tag(r).lstrip() + (" " if zeropay else "")   # 1.26.251: a zero-payout close is tagged, not read as missing data
-    burn_clause = " · no payout" if zeropay else f' · <span class="red">{sig3_pct(f"{r["burn_pct"]:.2f}%")} burned</span>'   # do not assert the derived 100% burned as fact for a zero-payout close
-    line = (f'<h1 class="ephd">{sgt}Epoch {n} · <span>closed {lt(r["close_ts"])}</span>'
-            f' · {r["paid"]:,} Agents paid{burn_clause}{split_tag}</h1>')
-    payouts = na("Closed, no payout (no answer reached quorum).") if zeropay else ((note("Unconfirmed: these rewards are not confirmed in later balances.") if unc else "") + rt)
-    from . import epochstory as EST_   # the story card: answers and grades per hour, then the close (epochstory.py)
-    from . import topics as _TOP        # story queue item 2: forum moments (most-replied public threads) in this epoch's window
-    body = (f'<div class="card trk"><div class="tracker">{MK.hall_img(r, 56, "hmark big")}{line}<span class="sp"></span>{X.usd_src()}{nav}</div></div>'
-            + EST_.card_html(n, r, (rows.get(n - 1) or {}).get("close_ts")) +
-            f'<div class="stats six">{s}</div>'
-            + _TOP.epoch_threads_card(n, (rows.get(n - 1) or {}).get("close_ts"), r["close_ts"])   # story item 1 review: under the stat row, not the page bottom
-            + f'<div class="grid2">{card("Close record", det)}{card("Payouts", payouts, X.usd_toggle() + f'<a class="more" href="/api/v1/epoch/{n}/rewards.csv{SG.qs()}">CSV →</a>', id="payouts")}</div>')
-    return page(f"Epoch {n}" + (f" · {SG.label()}" if arch else ""), body, "/epochs")
+    from . import epochhub as EH   # 1.26.401: the closed epoch page is one hero and one tabbed module (epochhub.py)
+    return EH.page(n, r, rows, arch, names(), getattr(REQ, "qs", None) or {}, page)
 
 # ---------------- The Agents ----------------
 SUB = [("/agents", "Overview"), ("/agents/top", "Rankings"), ("/agents/operators", "Operators"),

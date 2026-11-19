@@ -28,7 +28,7 @@ check("img tags: decorative, sized, lazy, URL carries the seed", MK.hall_img(r, 
 hm = V.home(); ch = V.epochs_table(A.epoch_rows()[-3:])
 check("hallmarks in Home Closes and the Chain table", hm.count('class="hmark"') >= 1 and 'src="/hallmark/' in hm and ch.count('class="hmark"') == 3)
 ep = A.epoch_rows()[-1]["epoch"]; eh = V.epoch(ep); eh = eh[1] if isinstance(eh, tuple) else eh
-check("epoch header carries its hallmark at 56 px", 'class="hmark big"' in eh and 'width="56"' in eh)
+check("epoch hero carries its hallmark at 28 px", 'class="hmark"' in eh and 'width="28"' in eh)
 check("no em or en dashes in marks.py", "\u2014" not in open(os.path.join(ROOT, "poascan/marks.py")).read() and "\u2013" not in open(os.path.join(ROOT, "poascan/marks.py")).read())
 js = open(os.path.join(ROOT, "static/app.js")).read(); css = open(os.path.join(ROOT, "static/style.css")).read()
 check("the Pour: a new close refetches the card, the bar splits, the new hallmark draws in; reduced motion skips it",
