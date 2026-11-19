@@ -111,7 +111,7 @@ def check_body(qs):
             f'spellcheck="false" maxlength="64" enterkeyhint="search" required></form>')
     if not raw:
         pre = "".join(f'<li class="stl-wait"><i class="stdot" aria-hidden="true">{i}</i><b>{t}</b></li>' for i, (_, t) in enumerate(STAGES, 1))
-        return form + f'<ol class="stper stnext" aria-label="Stages">{pre}</ol>'
+        return form + f'<ol class="stper stnext" aria-label="Stages">{pre}</ol>' + _ask(None)
     if not ADDR_RX.match(raw): return form + na("That is not a poa1 address. Paste the address only, never a key.")
     d = lifecycle(raw)
     if not d: return form + na("No Agent found for that address.")
@@ -125,12 +125,18 @@ def check_body(qs):
     watching = nxt is not None
     head = f'<div class="stw {"on" if watching else ""}"><i class="ldot" aria-hidden="true"></i><span class="lbl">{"Watching" if watching else "Complete"}</span></div>'
     from . import walletview as WV
-    return form + head + f'<ol class="stper" data-stper data-watch="{1 if watching else 0}">{"".join(li)}</ol>' + WV.binding_card(raw, lookup=True)
+    return form + head + f'<ol class="stper" data-stper data-watch="{1 if watching else 0}">{"".join(li)}</ol>' + WV.binding_card(raw, lookup=True) + _ask(raw)
+
+def _ask(addr):
+    """The one Ask agent button on the site (the earn check prompt), here in Start only."""
+    from . import prompts as PR
+    from .earnview import ask_item
+    return f'<div class="stask">{PR.ask([ask_item(addr)])}</div>'
 
 def earn_body():
     from . import earn as EA
     rows = "".join(f'<tr><td>{E(w["label"])}</td><td>{E(w["pays"])}</td><td>{E(w["qualifies"])}</td><td>{E(w["next"])}</td></tr>' for w in EA.ways())
-    return f'<div class="tw"><table class="hist stearn"><thead><tr><th>Way</th><th>Pays</th><th>Qualifies</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    return _ask(None) + f'<div class="tw"><table class="hist stearn"><thead><tr><th>Way</th><th>Pays</th><th>Qualifies</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table></div>'
 
 NEXT = ["Pick app", "Paste prompt", "Get graded", "Get paid"]
 
