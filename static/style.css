@@ -1104,6 +1104,7 @@ td a.mono{display:inline-block;min-width:24px}
 .bl .bezel+.trio{margin-top:24px}
 .trio .lbl{margin-bottom:10px}.trio b{font:400 var(--t28)/1 var(--fig);color:var(--bone);font-variant-numeric:tabular-nums lining-nums}
 .trio .num{font-family:var(--fig)}
+@media(max-width:480px){.trio{gap:8px}.trio .lbl{white-space:nowrap;letter-spacing:.04em}}
 .trio small{font:500 var(--t12)/1 var(--ui);color:var(--bone-3);margin-left:4px;letter-spacing:.04em}
 .ldot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--gold);flex:none;animation:ldot 2.4s ease-in-out infinite}
 @keyframes ldot{0%,100%{opacity:1}50%{opacity:.35}}
