@@ -384,8 +384,11 @@ check("version is 1.26.390 and the changelog records the Home lane and Cadence c
       _ver >= (1, 26, 390) and "## [1.26.390]" in cl and "two paths" in cl
       and not any(c in cl.split("## [1.26.390]")[1].split("## [")[0] for c in dash))
 check("version is 1.26.391 and the changelog records the Agents consolidation",
-      _ver == (1, 26, 391) and "## [1.26.391]" in cl and "Agents consolidation" in cl
+      _ver >= (1, 26, 391) and "## [1.26.391]" in cl and "Agents consolidation" in cl
       and not any(c in cl.split("## [1.26.391]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.392 and the changelog records the Agents polish",
+      _ver == (1, 26, 392) and "## [1.26.392]" in cl and "Pass rates shows one table" in cl
+      and not any(c in cl.split("## [1.26.392]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
