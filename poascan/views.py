@@ -969,6 +969,17 @@ def _pending_table(pd):
     more = f'<p class="cov dim small">{pd["count"] - len(pd["answers"]):,} more in the Standing API</p>' if pd["count"] > len(pd["answers"]) else ""
     return table(["Pending answer", "Since", "Panel", "Grades"], rows, cls="rcpt pend") + more
 
+def intake_fact(a, f):
+    """One Intake line in the Agent header facts: Admitted E97, or Held to E105 while the waitlist keeps its place. Nothing when no close names it."""
+    try:
+        from . import intake as _IK
+        i = _IK.intake_of(a)
+    except Exception:
+        return ""
+    if not i: return ""
+    if i["state"] == "admitted": return f("Intake", f'Admitted E{i["close"]}', f'Admitted at the E{i["close"]} close')
+    return f("Intake", f'Held to E{i["keeps_until"]}', f'Eligible at the E{i["close"]} close, not admitted. Keeps its place to the E{i["keeps_until"]} close.')
+
 def addr_meta(a, bal, p):
     """Header facts: rank by balance, current streak, paid epochs, first and last seen on the ledger. A fact with no data is left out."""
     rk = db.q1("SELECT COUNT(*) + 1 AS r FROM accounts WHERE balance > ?", (bal,))["r"] if bal else None
@@ -980,6 +991,7 @@ def addr_meta(a, bal, p):
     parts = [f("Rank", f'<a href="/agents/top?tab=holders">#{rk:,}</a>', "Rank among holders by balance") if rk else "",
              f("Streak", f'{cur:,}', "Consecutive paid epochs up to the latest close") if cur else "",
              f("Paid epochs", f'{paid:,}') if paid else "",
+             intake_fact(a, f),
              f("First seen", lt(first, "d")) if first else "",
              f("Last seen", rel(last)) if last else ""]
     parts = [x for x in parts if x]
@@ -1903,6 +1915,26 @@ def _pt(ts):
     on = sun(3, 2).replace(hour=10, tzinfo=dt.timezone.utc); off = sun(11, 1).replace(hour=9, tzinfo=dt.timezone.utc)
     return u + dt.timedelta(hours=-7 if on <= u < off else -8)
 
+def horizon_strip():
+    """Chain > Pending: what expires in the next closes, one bar per close from now to the pending TTL (horizon.py rows, close records only).
+    Left out when the TTL or the cohorts are unknown. Bars are answers by closes until they expire; the next close is the gold one."""
+    try:
+        from . import horizon as HZ
+        h = HZ.horizon()
+    except Exception:
+        return ""
+    ttl = int(h.get("ttl") or 0)
+    rows = [r for r in h.get("rows") or [] if r.get("source") == "close" and r.get("closes_left") is not None]
+    if ttl < 2 or not rows: return ""
+    by = {}
+    for r in rows: by[min(max(0, r["closes_left"]), ttl - 1)] = by.get(min(max(0, r["closes_left"]), ttl - 1), 0) + int(r["pending"])
+    mx = max(by.values()) or 1
+    bars = "".join(f'<i class="hzb{" nx" if k == 0 else ""}" style="height:{max(4, round(100 * by.get(k, 0) / mx))}%" title="{by.get(k, 0):,} in {k + 1} close{"" if k == 0 else "s"}"></i>' for k in range(ttl))
+    nxt = by.get(0, 0)
+    return (f'<div class="chartbox hz" role="img" aria-label="Answers by closes left until they expire, {nxt:,} at the next close"><div class="hzh"><span class="lbl">Expiry</span>'
+            f'<b class="num" title="Answers that expire at the next close">{nxt:,}</b></div><div class="hzp">{bars}</div>'
+            f'<div class="hzx"><span>1</span><span class="dim">closes left</span><span>{ttl}</span></div></div>')
+
 def pending_body():
     """Chain > Pending: the queue by origin epoch, with seal counts and expiry (a tab of the Chain module)."""
     d = A.pending_by_epoch(); rows = d["rows"]
@@ -1931,4 +1963,4 @@ def pending_body():
                 f'<div><span class="lbl">Grew</span><b class="num">{lc["grew"]:,}</b></div>'
                 f'<div><span class="lbl">Dropped</span><b class="num">{lc["dropped"]:,}</b></div></div>'
                 + "".join(f'<p class="dim small" title="Seal count not in the close record">{k}: {n:,} row{"" if n == 1 else "s"}</p>' for k, n in xs if n))
-    return f'<div class="pendc">{t}{foot}</div>'
+    return f'<div class="pendc">{horizon_strip()}{t}{foot}</div>'

@@ -96,4 +96,26 @@ check("epoch hub: no em or en dash", not re.search("[\u2013\u2014]", EHS) and no
 check("epoch page: views.epoch hands off to the hub", "EH.page(" in SRC("poascan/views.py") and "split_stats" not in SRC("poascan/views.py"))
 check("epoch.css respects reduced motion", "prefers-reduced-motion" in SRC("static/epoch.css") or "animation" not in SRC("static/epoch.css"))
 
+# ---- batch 6: the expiry horizon strip on Chain Pending and the Intake line on the Agent page ----
+from poascan import intake as IK, horizon as HZ, views as V
+IK.closes = lambda: [dict(close=40, waitlist_epochs=3, rows=[dict(address="poa1X", state="admitted"), dict(address="poa1Y", state="not_admitted")]),
+                     dict(close=41, waitlist_epochs=3, rows=[dict(address="poa1Z", state="not_admitted"), dict(address="poa1W", state="admitted_unlisted")]),
+                     dict(close=45, waitlist_epochs=3, rows=[])]
+check("intake_of: the newest admitting close", IK.intake_of("poa1X") == dict(state="admitted", close=40) and IK.intake_of("poa1W") == dict(state="admitted", close=41))
+check("intake_of: nothing once the waitlist lapsed or when no close names the Agent", IK.intake_of("poa1Y") is None and IK.intake_of("poa1Z") is None and IK.intake_of("poa1Q") is None)
+IK.closes = lambda: [dict(close=40, waitlist_epochs=3, rows=[dict(address="poa1Z", state="not_admitted")]), dict(close=41, waitlist_epochs=3, rows=[])]
+check("intake_of: a waitlisted Agent reads Held with its last close", IK.intake_of("poa1Z") == dict(state="held", close=40, keeps_until=43))
+fact = lambda k, v, t="": f"<{k}|{v}|{t}>"
+check("intake line: Admitted E40, Held to E43, empty when unknown", V.intake_fact("poa1Z", fact).startswith("<Intake|Held to E43|")
+      and (setattr(IK, "closes", lambda: [dict(close=40, waitlist_epochs=0, rows=[dict(address="poa1X", state="admitted")])]) or V.intake_fact("poa1X", fact).startswith("<Intake|Admitted E40|"))
+      and V.intake_fact("poa1none", fact) == "")
+HZ.horizon = lambda: dict(ttl=16, rows=[dict(source="close", pending=500, closes_left=0), dict(source="close", pending=100, closes_left=5), dict(source="close", pending=50, closes_left=15),
+                                        dict(source="open", pending=999, closes_left=16)])
+hs = V.horizon_strip()
+check("horizon strip: 16 bars, the next close gold with its count, the open cohort left out", hs.count('<i class="hzb') == 16 and 'hzb nx' in hs and ">500<" in hs and "999" not in hs and "Expiry" in hs)
+check("horizon strip: tallest bar is full height, empty closes keep a stub", 'height:100%' in hs and 'height:4%' in hs)
+HZ.horizon = lambda: dict(ttl=0, rows=[])
+check("horizon strip: left out when the TTL is unknown", V.horizon_strip() == "")
+check("horizon strip is drawn above the queue", V.pending_body.__code__.co_names.count("horizon_strip") == 1)
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

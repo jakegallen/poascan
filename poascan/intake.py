@@ -137,6 +137,21 @@ def waitlist_of(a):
         if r: return dict(close=c["close"], draw=r["draw"], waitlist_epochs=wl, keeps_until=c["close"] + wl)
     return None
 
+def intake_of(a):
+    """The Agent's latest intake outcome from the close records, for one profile line: {state: admitted, close} for the newest close that
+    admitted it, {state: held, close, keeps_until} while a waitlist still holds its place (Proposal L), else None."""
+    cs = closes()
+    if not cs: return None
+    last = cs[-1]["close"]
+    for c in reversed(cs):
+        r = next((r for r in c["rows"] if r["address"] == a), None)
+        if not r: continue
+        if r["state"].startswith("admitted"): return dict(state="admitted", close=c["close"])
+        wl = c.get("waitlist_epochs") or 0
+        if r["state"] == "not_admitted" and wl and c["close"] + wl > last: return dict(state="held", close=c["close"], keeps_until=c["close"] + wl)
+        return None
+    return None
+
 COLS = [SS.Col("close", "Close", "num"), SS.Col("set", "Set", "num", "r dk"), SS.Col("eligible", "Eligible", "num", "r"), SS.Col("cap", "Cap", "num", "r"),
         SS.Col("admitted", "Admitted", "num", "r"), SS.Col("not_admitted", "Not admitted", "num", "r"), SS.Col("rate", "Rate", "num", "r dk"),
         SS.Col("removed_ttl", "TTL out", "num", "r"), SS.Col("removed_other", "Other out", "num", "r dk"), SS.Col("net", "Net", "num", "r"),
