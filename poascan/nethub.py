@@ -20,6 +20,23 @@ RANGES = [("24h", "24h", 86400), ("7d", "7d", 7 * 86400), ("30d", "30d", 30 * 86
 EV_TYPES = [("", "All"), ("anchor", "Anchor"), ("release", "Release"), ("notice", "Notice"), ("record", "Record")]
 HEAD = '<link rel="stylesheet" href="/static/net.css?v={}"><script src="/static/net.js?v={}" defer></script>'
 
+class Seen:
+    """Jake's standing order: the same word or reference is never shown twice on one screen. Everything that prints a label
+    (hero routes, feed names, chips) asks here first; the tab names are taken before anything else."""
+    def __init__(self, *taken): self.s = {self.k(t) for t in taken}
+    @staticmethod
+    def k(t): return " ".join(str(t).lower().split())
+    def new(self, t):
+        k = self.k(t)
+        if k in self.s: return False
+        self.s.add(k); return True
+
+import threading
+_tl = threading.local()
+def seen():
+    if not hasattr(_tl, "s"): _tl.s = Seen()
+    return _tl.s
+
 def _V():
     from . import views as V
     return V
@@ -55,7 +72,7 @@ def anchor_ring(eta, now):
             f'<circle class="rp" cx="120" cy="120" r="104" pathLength="100" stroke-dasharray="{f * 100:.2f} 100"/>{tk}</svg>'
             f'<i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>'
             f'<div class="rc"><span class="lbl">Last anchor</span><b class="bn num{" long" if age is not None and len(short_age(age)) > 5 else ""}" data-aage>{short_age(age)}</b>'
-            f'<div class="bcd"><span class="lbl">Version</span><b class="cd num mono">{E(ver) if ver else "···"}</b></div></div></div>')
+            f'</div></div>')
 
 def _chain_age(now):
     out = {}
@@ -72,17 +89,17 @@ def _age_of(ages, key, now):
     t = next((v for k, v in ages.items() if key in k), None)
     return short_age(now - t) if t else '<span class="na">···</span>'
 
-STATE_TAG = {"open": ("ok", "OPEN"), "halted": ("bad", "HALTED"), "down": ("bad", "DOWN"), "unknown": ("", "NO READ")}
+DOT = {"open": "ok", "halted": "bad", "down": "bad", "unknown": "nd"}
 
 def routes_strip(now):
-    """Right side of the hero: each watched route with its state and last 24 h (routewatch.history, one cell per 15 min)."""
+    """Right side of the hero: each watched route as a state dot, its name and its last 24 h (routewatch.history, one cell per 15 min).
+    The state word is the legend in the header, so no row repeats Open, Halted or Down."""
     from . import routewatch as RW, views2 as V2
     d = RW.state(now); rows = []
     for r in d["routes"]:
-        st = r["state"]; cls, word = STATE_TAG.get(st, ("", st.upper()))
-        if r.get("covered_by") and st in ("halted", "down"): cls, word = "warn", "DEGRADED"
-        since = f'<span class="dim small">since {lt(r["since_ts"])}</span>' if st in ("halted", "down") and r.get("since_ts") else ""
-        rows.append(f'<li data-route="{E(r["id"])}" data-st="{st}"><span class="rn">{E(r["label"])}</span><span class="rg">{since}<span class="tag {cls}">{word}</span></span>'
+        st = r["state"]; seen().new(r["label"])
+        why = f'{r["label"]}: {RW.WORD.get(st, st)}' + (f' since {time.strftime("%b %-d %H:%MZ", time.gmtime(r["since_ts"]))}' if st in ("halted", "down") and r.get("since_ts") else "")
+        rows.append(f'<li data-route="{E(r["id"])}" data-st="{st}"><span class="rn"><i class="sd {DOT.get(st, "nd")}" title="{E(why)}" role="img" aria-label="{E(why)}"></i>{E(r["label"])}</span>'
                     f'{V2._route_strip(r["id"], r["label"], now)}</li>')
     halted = len([r for r in d["routes"] if r["state"] in ("halted", "down")])
     return halted, f'<ul class="nrt" aria-label="Routes">{"".join(rows)}</ul>'
@@ -97,8 +114,8 @@ def minute_strip(now, minutes=60):
         o, h, d = v; cls = "bad" if (h or d) and not o else "warn" if (h or d) else "ok"
         cells.append(f'<i class="{cls}" title="{E(time.strftime("%H:%MZ", time.gmtime(m)))} open {o}, halted {h}, down {d}"></i>')
     seen = bool(by)
-    return (f'<div class="nmin" data-minutes="{minutes}"><span class="lbl">Probes · 60m</span>'
-            + (f'<span class="nstrip" role="img" aria-label="Route probes, last hour">{"".join(cells)}</span>' if seen else '<span class="na">No probes this hour</span>') + '</div>')
+    return (f'<div class="nmin" data-minutes="{minutes}"><span class="lbl">Last hour</span>'
+            + (f'<span class="nstrip" role="img" aria-label="Route probes">{"".join(cells)}</span>' if seen else '<span class="na">No probes this hour</span>') + '</div>')
 
 def height_series(now, hours=24, n=48):
     """Chain height over the last day from the snapshots POAScan already stores (one number per snapshot), thinned to about n points."""
@@ -108,62 +125,69 @@ def height_series(now, hours=24, n=48):
     return pts if len(pts) > 1 else None
 
 def kpis(sd, now):
-    """Six KPI cards. History only where POAScan keeps a series (finality lag and latency from status_data)."""
-    V = _V(); nw = A.networks(); fd = A.feeds()
+    """Five KPI cards. History only where POAScan keeps a series (height from the snapshots, lag and latency from status_data)."""
+    nw = A.networks()
     h = nw.get("height"); fin = nw.get("checkpoint_height"); lag = (h - fin) if (h and fin) else None
     core = [e for e in sd["eps"] if e["ep"].startswith("probe")] or sd["eps"]
     s1 = [e["s1"] for e in core if e["s1"] is not None]; p50s = [e["p50"] for e in core if e["p50"]]
     p50 = sorted(p50s)[len(p50s) // 2] if p50s else None
     lagser = [(t, v) for t, v in sd["lag"] if t > now - 86400]
-    hser = height_series(now)
-    ac = _chain_age(now); last = max(ac.values()) if ac else None
     fmtc = lambda v: compact(v) if v is not None else "···"
-    cards = [KIT.kpi("Height", f'<span class="num">{fmtc(h)}</span>', hser),
-             KIT.kpi("Finalized", f'<span class="num">{fmtc(fin)}</span>'),
-             KIT.kpi("Lag", f'<span class="num">{intc(lag)}</span>', lagser, tip="Blocks between the chain height and the finalized height"),
-             KIT.kpi("Last anchor", f'<span class="num">{short_age(now - last) + " ago" if last else "···"}</span>'),
-             KIT.kpi("Success 1h", f'<span class="num">{pct(sum(s1) / len(s1))}</span>' if s1 else '<span class="num">···</span>'),
-             KIT.kpi("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else '<span class="num">···</span>', [(h_, v) for h_, v in sd["lat"]] if sd["lat"] else None)]
-    return "".join(cards)
+    return "".join([KIT.kpi("Height", f'<span class="num">{fmtc(h)}</span>', height_series(now)),
+                    KIT.kpi("Finalized", f'<span class="num">{fmtc(fin)}</span>'),
+                    KIT.kpi("Lag", f'<span class="num">{intc(lag)}</span>', lagser, tip="Blocks between the chain height and the finalized height"),
+                    KIT.kpi("Success 1h", f'<span class="num">{pct(sum(s1) / len(s1))}</span>' if s1 else '<span class="num">···</span>'),
+                    KIT.kpi("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else '<span class="num">···</span>', [(h_, v) for h_, v in sd["lat"]] if sd["lat"] else None)])
 
 def hero():
-    now = time.time(); V = _V()
+    now = time.time()
     from . import views2 as V2
     try: sd = V2.status_data()
     except Exception: sd = dict(eps=[], inc=[], lag=[], lat=[], anchors=[])
-    eta = A.anchor_eta(); ages = _chain_age(now); fd = A.feeds()
-    up = fd["state"]; upc = {"OK": "ok", "Partial": "warn", "Degraded": "warn", "Down": "bad"}.get(up, "")
+    eta = A.anchor_eta()
+    nxt = eta.get("next_anchor_eta"); cad = eta.get("cadence_s")
+    nx = ("due" if nxt <= now else short_age(nxt - now)) if nxt else "···"
     figs = ('<div class="trio">'
-            f'<div><span class="lbl">Base</span><b class="num">{_age_of(ages, "base", now)}</b></div>'
-            f'<div><span class="lbl">Solana</span><b class="num">{_age_of(ages, "sol", now)}</b></div>'
-            f'<div><span class="lbl">Upstream</span><b class="num"><span class="tag {upc}">{E(up)}</span></b></div></div>')
+            f'<div><span class="lbl">Next</span><b class="num" data-anext="{int(nxt or 0)}">{nx}</b></div>'
+            f'<div><span class="lbl">Cadence</span><b class="num">{short_age(cad) if cad else "···"}</b></div>'
+            f'<div><span class="lbl">Anchored</span><b class="num">{intc(eta.get("anchors_in_window"))}</b></div></div>')
     halted, rl = routes_strip(now)
     leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for n, k in (("Open", "o"), ("Halted", "h"), ("Down", "d")))
     bench = (f'<div class="bench nbench"><div class="bl">{anchor_ring(eta, now)}{figs}</div>'
              f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Routes · 24h</span>'
-             f'<span class="lbl">Halted</span><span class="tag {"bad" if halted else "ok"}" data-halted="{halted}">{halted}</span>'
              f'<span class="legend">{leg}</span></div>{rl}{minute_strip(now)}</div></div>')
-    strip = f'<section class="stats four kpis six" role="group" aria-label="Headline numbers">{kpis(sd, now)}</section>'
+    strip = f'<section class="stats four kpis" role="group" aria-label="Headline numbers">{kpis(sd, now)}</section>'
     return f'<section id="tracker" class="card benchc hpulse nethero" aria-label="Network">{bench}{strip}</section>'
 
 # ---------------- tab bodies ----------------
+GROUP = [("down", "Failing", "bad"), ("degraded", "Degraded", "warn"), ("ok", "OK", "ok"), ("other", "Idle", "")]
+
 def _feed_rows():
+    """Feeds and route health in one list, grouped by state so no row repeats a state word. A name already shown in the hero (a route) or
+    on a tab is left out here; the age of the last good read is in each name's tooltip."""
     from . import views2 as V2
-    fd = A.feeds(); TAG = V2.FEED_TAG
-    li = "".join(f'<li data-feed="{E(f["label"])}"><b>{E(f["label"])}</b><span class="tag {TAG[f["state"]]}">{f["state"]}</span>'
-                 + (f'<span class="tag warn" title="No good read in {dur(f["stale_s"])}">Stale</span>' if f.get("stale") else "")
-                 + f'<span class="fdt">{rel(f["last_ok"]) if f["last_ok"] else "never"}</span></li>' for f in fd["feeds"])
-    RT = {"ok": ("ok", "OK"), "degraded": ("warn", "Degraded"), "down": ("bad", "Down"), "unknown": ("", "No read")}
-    rli = "".join(f'<li data-rh="{E(r["id"])}"><b>{E(r["label"])}</b><span class="tag {RT[r["state"]][0]}" title="{E(r["detail"])}">{RT[r["state"]][1]}</span>'
-                  + ('<span class="tag" title="Decides OK vs Partial">Core</span>' if r["core"] else "<span></span>") + f'<span class="fdt">{E(r["detail"])}</span></li>' for r in fd.get("routes") or [])
-    head_ = (f'<div class="fdh"><span class="lbl">Health</span><span class="tag {TAG[fd["state"]]}" data-health="{fd["state"]}">{fd["state"]}</span>'
-             f'<span class="lbl">Chain</span><span class="tag {TAG[fd["chain"]]}">{fd["chain"]}</span></div>')
-    return head_ + (f'<ul class="feeds nf rhl" aria-label="Route health">{rli}</ul>' if rli else "") + f'<ul class="feeds nf" aria-label="Feeds">{li}</ul>'
+    fd = A.feeds(); g = {k: [] for k, _, _ in GROUP}
+    def put(label, state, tip):
+        st = {"OK": "ok", "Down": "down", "Stale": "down"}.get(state, "degraded" if state in ("Degraded", "Partial", "degraded") else state if state in g else "other")
+        if seen().new(label): g[st].append(f'<li><span title="{E(tip)}">{E(label)}</span></li>')
+    for r in fd.get("routes") or []: put(r["label"], r["state"].capitalize() if r["state"] != "unknown" else "other", f'{r["label"]}: {r["detail"]}')
+    for f in fd["feeds"]:
+        put(f["label"], f["state"], f'{f["label"]}: ' + (f'last good read {time.strftime("%b %-d %H:%MZ", time.gmtime(f["last_ok"]))}' if f.get("last_ok") else "no read yet"))
+    out = []
+    for k, word, cls in GROUP:
+        if g[k]: out.append(f'<div class="ngrp"><div class="ngh"><span class="tag {cls}">{word}</span><b class="num">{len(g[k])}</b></div><ul class="nchips">{"".join(g[k])}</ul></div>')
+    return "".join(out) or na("No feeds yet.")
 
 def _incidents(sd, now, n=20):
-    if not sd["inc"]: return '<span class="lbl">Incidents · 14d</span>' + na("No incidents in 14 days.")
-    rows = [[utc(a, "%m-%d %H:%M"), ('<span class="tag bad">ONGOING</span>' if b is None or now - b < 600 else dur(b - a)), E(w.replace("probe ", ""))] for a, b, w, f in sd["inc"][:n]]
-    return '<span class="lbl">Incidents · 14d</span>' + table([f"Start ({TZ})", "Duration", "What"], rows, cls="wrapt")
+    """14 days of incidents, one row per endpoint: how many, the latest start, the total time down. No endpoint is listed twice."""
+    if not sd["inc"]: return na("No incidents in 14 days.")
+    by = {}
+    for a, b, w, f in sd["inc"]:
+        r = by.setdefault(w.replace("probe ", ""), dict(n=0, last=0, secs=0, on=False))
+        r["n"] += 1; r["last"] = max(r["last"], a); r["secs"] += ((b or now) - a); r["on"] = r["on"] or b is None or now - b < 600
+    rows = sorted(by.items(), key=lambda kv: -kv[1]["last"])[:n]
+    return table(["Incident", "Count", "Latest", "Total"], [[f'<code>{E(w)}</code>' + (' <i class="sd bad" title="Ongoing" role="img" aria-label="Ongoing"></i>' if r["on"] else ""),
+                 r["n"], utc(r["last"], "%m-%d %H:%M"), dur(r["secs"])] for w, r in rows], cls="wrapt")
 
 def health_body(view=""):
     from . import views2 as V2
@@ -251,52 +275,76 @@ def charts_body(qs):
     rchips = "".join(f'<a href="{url(range=k)}" class="chip {"on" if k == rng else ""}" data-kit-sub="r{k}">{t}</a>' for k, t, _ in RANGES)
     tg = ""
     if metric == "joins" and rng != "24h":
-        tg = f'<a href="{url(ov="0") if ov else url()}" class="chip ovt {"on" if ov else ""}" role="switch" aria-checked="{"true" if ov else "false"}" data-kit-sub="ov">Forum</a>'
+        tg = f'<a href="{url(ov="0") if ov else url()}" class="chip ovt {"on" if ov else ""}" role="switch" aria-checked="{"true" if ov else "false"}" data-kit-sub="ov">{"<i class=\'ev f\' aria-hidden=\'true\'></i>" if ov else ""}Overlay</a>'
     if kind == "line":
         ch = line(pts, height=300, color="gold", **kw) if len(pts) > 1 else na("No data in this range.")
         if ov and len(pts) > 1: ch = overlay(ch, _forum(rng, pts[0][0], pts[-1][0]), pts[0][0], pts[-1][0])
     else:
         ch = bars(pts, height=300, colors=kw.pop("colors", ("gold",)), **kw) if pts else na("No data in this range.")
-    legend = '<span class="legend ovl"><span><i class="sw a"></i>Joins</span><span><i class="sw f"></i>Forum</span></span>' if ov else ""
+    legend = ""
     tools = f'<nav class="chips kit-sub scroll ncc" aria-label="Metric">{mchips}</nav>'
     rr = f'<nav class="chips kit-sub ncr" aria-label="Range">{rchips}{tg}</nav>'
     return f'{tools}<div class="ncbar">{rr}{legend}</div><div class="ncw" data-metric="{metric}" data-range="{rng}">{ch}</div>'
 
+EV_DOT = {"anchor": "a", "release": "r", "notice": "n", "record": "k"}
+
 def events_body(qs):
+    """One feed of the four event kinds (/api/v1/network/events), newest first, 20 rows. The kind is a coloured dot that matches the dot on its
+    filter chip; the two anchors of one checkpoint height (Base and Solana) are one row; each day is named once."""
     ty = (qs.get("type") or [""])[0]; ty = ty if ty in [k for k, _ in EV_TYPES if k] else ""
-    d = A.network_events(ty or None, 20); now = time.time()
-    chips = "".join(f'<a href="/network?tab=anchors{"&amp;type=" + k if k else ""}" class="chip {"on" if k == ty else ""}" data-kit-sub="e{k or "all"}">{t}</a>' for k, t in EV_TYPES)
-    def row(e):
-        u = e.get("url")
-        lab = E(e["label"])
-        if u: lab = f'<a href="{E(u)}"' + (' target="_blank" rel="noopener noreferrer"' if u.startswith("http") else "") + f'>{lab}</a>'
-        return (f'<li data-type="{e["type"]}"><span class="tag {"" if e["type"] != "notice" else "warn"}">{e["type"].upper()}</span><span class="el">{lab}</span>'
-                f'<span class="fdt">{rel(e["ts"]) if e.get("ts") else "···"}</span></li>')
-    rows = "".join(row(e) for e in d["events"][:20]) or ""
-    body = f'<ul class="nev" aria-label="Events">{rows}</ul>' if rows else na("No events yet.")
+    d = A.network_events(ty or None, 20)
+    chips = "".join(f'<a href="/network?tab=anchors{"&amp;type=" + k if k else ""}" class="chip {"on" if k == ty else ""}" data-kit-sub="e{k or "all"}">'
+                    + (f'<i class="ev {EV_DOT[k]}" aria-hidden="true"></i>' if k else "") + f'{t}</a>' for k, t in EV_TYPES)
+    rows = []; seen_h = {}
+    for e in d["events"][:20]:
+        lab = e["label"]; u = e.get("url")
+        if e["type"] == "anchor":
+            import re
+            m = re.match(r"Checkpoint (\d+) anchored to (\w+)", lab); h = m.group(1) if m else lab; ch = (m.group(2) if m else "").lower()
+            ico = "net-solana" if "sol" in ch else "net-base" if "base" in ch else None
+            link = (f'<a class="chn" href="{E(u)}" target="_blank" rel="noopener noreferrer" title="{E(m.group(2) if m else "")}"><img src="/static/{ico}.svg" width="16" height="16" alt="{E(m.group(2) if m else "")}"></a>' if u and ico else "")
+            if h in seen_h: seen_h[h][1].append(link); continue
+            seen_h[h] = [e, [link], f'<span class="mono">{intc(int(h)) if h.isdigit() else E(h)}</span>']
+            rows.append(h); continue
+        if e["type"] == "release": lab = lab.replace("Release ", "", 1)
+        txt = E(lab)
+        if u: txt = f'<a href="{E(u)}"' + (' target="_blank" rel="noopener noreferrer"' if u.startswith("http") else "") + f'>{txt}</a>'
+        rows.append((e, txt))
+    out = []; last_day = None; last_tm = None
+    for r in rows:
+        if isinstance(r, str): e, links, txt = seen_h[r]; txt = txt + " " + "".join(links)
+        else: e, txt = r
+        day = time.strftime("%b %-d", time.gmtime(e["ts"])) if e.get("ts") else ""
+        if day != last_day:
+            out.append(f'<li class="nday" aria-hidden="true">{day}</li>'); last_day = day
+        tt = time.strftime("%H:%MZ", time.gmtime(e["ts"])) if e.get("ts") else ""
+        tm = f'<time class="t" data-ts="{int(e["ts"])}">{tt}</time>' if tt and tt != last_tm else ""; last_tm = tt
+        out.append(f'<li data-type="{e["type"]}"><i class="ev {EV_DOT[e["type"]]}" role="img" aria-label="{e["type"]}" title="{e["type"]}"></i><span class="el">{txt}</span><span class="fdt">{tm}</span></li>')
+    body = f'<ul class="nev" aria-label="Events">{"".join(out)}</ul>' if out else na("No events yet.")
     return f'<nav class="chips kit-sub scroll" aria-label="Event type">{chips}</nav>{body}'
 
+def _n(v, dec=2):
+    """A POA amount as a bare number: the unit is named once, in the module header."""
+    return compact(v, dec) if v is not None else "···"
+
 def token_body():
-    from . import views3 as V3, econ as X
-    V = _V(); st = A.status(); ep = A.epoch_rows(); sp = A.supply_split(); p = A.params(); h = A.holders(); c = A.concentration()
+    from . import views3 as V3
+    st = A.status(); ep = A.epoch_rows(); sp = A.supply_split(); h = A.holders(); c = A.concentration()
     sup = float(st.get("supply") or 0); er = [r for r in A.epoch_rows_all() if not SG.unconfirmed(r["epoch"], r["segment"])]
-    mint_t = sum(float(r.get("minted") or 0) for r in er); burn_t = sum(float(r.get("burned") or 0) for r in er)
-    g = V3.growth_data()
-    fg = KIT.figs([("Supply", poa(sup, mined=True)), ("Circulating", poa(sp["spendable"])), ("Locked", poa(sp["locked"])), ("Holders", intc(st.get("holders"))),
-                   ("Minted", poa(mint_t, mined=True)), ("Burned", poa(burn_t))])
+    fg = KIT.figs([("Supply", f'<span class="num">{_n(sup)}</span>'), ("Circulating", f'<span class="num">{_n(sp["spendable"])}</span>'), ("Locked", f'<span class="num">{_n(sp["locked"])}</span>'),
+                   ("Holders", intc(st.get("holders"))), ("Median", f'<span class="num">{_n(h["median"])}</span>'), ("Gini", f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···")])
     mb = bars([(f"E{r['epoch']}", [r["minted"], r["burned"]]) for r in ep], legend=["Minted", "Burned"], colors=("gold", "ember"))
-    gi = f'<span class="num">{c["gini"]:.3f}</span>' if c["gini"] is not None else "···"
-    conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20))
-            + f'<div><span class="lbl">Gini</span>{gi}</div><div><span class="lbl">Median</span><span class="num">{num(h["median"])}</span></div></div>')
-    unl = V3.unlock_chart(); cal = V3.unlock_calendar(nrows=12)
-    return (fg + KIT.split('<span class="lbl">Minted vs burned</span>' + mb, '<span class="lbl">Circulating</span>' + unl)
-            + KIT.split('<span class="lbl">Unlock calendar</span>' + cal, '<span class="lbl">Concentration</span>' + conc))
+    u = V3.unlock_data(); tot = u["total"] or 1
+    cal = table(["At close", f"Time ({TZ})", "Circulating", "Share"], [[f"E{j}", utc(t, "%m-%d %H:%M"), _n(c_), pct(c_ / tot)] for j, t, c_, d_ in u["fut"][:12]])
+    conc = ('<div class="minis conc">' + "".join(f'<div><span class="lbl">Top {n}</span>{pct(c[f"top{n}_share"], 2)}</div>' for n in (1, 5, 10, 20)) + "</div>")
+    return (fg + KIT.split('<span class="lbl">Per epoch</span>' + mb, '<span class="lbl">Vesting</span>' + V3.unlock_chart())
+            + KIT.split('<span class="lbl">Calendar</span>' + cal, '<span class="lbl">Concentration</span>' + conc))
 
 # ---------------- page ----------------
 def module(tab, qs):
     if tab == "charts": body = charts_body(qs); tools = ""
     elif tab == "anchors": body = events_body(qs); tools = ""
-    elif tab == "token": body = token_body(); tools = ""
+    elif tab == "token": body = token_body(); tools = '<span class="kit-n" title="Amounts are in POA">POA</span>'
     else:
         view = (qs.get("view") or [""])[0]; view = view if view == "details" else ""
         body = health_body(view)
@@ -306,6 +354,7 @@ def module(tab, qs):
     return KIT.tabmod(tabs, tab, body, tools, id="netmod", label="Network")
 
 def page(tab, qs):
+    _tl.s = Seen(*[t for _, _, t in TABS], "Live", "Last anchor", "Next", "Cadence", "Anchored", "Routes", "Last hour", "Open", "Halted", "Down", "Feeds", "Details")
     V = _V(); tab = ALIAS.get(tab, tab); tab = tab if tab in dict((k, 0) for k, _, _ in TABS) else "health"
     title = {"health": "Network", "charts": "Network charts", "anchors": "Network events", "token": "POA token"}[tab]
     body = f'<div class="sechead"><h1 class="sr-only">Network</h1></div>{hero()}{module(tab, qs)}'
