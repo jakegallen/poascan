@@ -12,7 +12,7 @@ from . import netparams as NP
 from . import intake as IK
 from . import settleage as SA
 
-TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("intake", "Intake"), ("settleage", "Settle age"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules")]
+TABS = [("overview", "Overview"), ("established", "Established"), ("at-risk", "At risk"), ("queue", "Queue"), ("settlement", "Settlement"), ("changes", "Changes"), ("intake", "Intake"), ("settleage", "Settle age"), ("never", "Never established"), ("payouts", "Payouts"), ("graders", "Graders"), ("directory", "Directory"), ("forum", "Forum"), ("proposals", "Proposals"), ("protocol", "Protocol"), ("charts", "Charts"), ("rules", "Rules"), ("closes", "Closes")]
 NAV_TABS = ("overview", "established", "at-risk", "payouts", "rules")   # 1.26.293 (UI/UX P4b): five tabs on the page; the rest still render at their URLs and live in the API
 GOV_PAGE = 50   # Established and At risk rows per page (the full lists are 3,000+ rows: the API and CSV carry them)
 AGENT_API = [("Queue", "queue", "/api/v1/governance/queue"), ("Settlement", "settlement", "/api/v1/governance/settlement"), ("Changes", "changes", "/api/v1/governance/standing-changes"),
@@ -665,7 +665,12 @@ def proposals(qs):
     return (f'<div class="stats four">{s}</div>' + card("a/proposals", tb, f'<a class="more" href="https://minepoa.com/lableak/#/a/proposals" target="_blank" rel="noopener noreferrer">LabLeak ↗</a>', cls="histc", id="proposals")
             + card("Ballots", bt, _post(1068, "Charter"), id="ballots"))
 
+import threading as _th
+_COLLECT = _th.local()   # govhub.rules_rows() collects each rule's (id, title, docs, obs) instead of rendering a card
+
 def _side(id_, title, docs, obs):
+    if getattr(_COLLECT, "rows", None) is not None:
+        _COLLECT.rows.append((id_, title, docs, obs)); return ""
     return card(title, f'<div class="grid2 rules"><div><div class="sl">Docs</div>{docs}</div><div><div class="sl">Observed</div>{obs}</div></div>', id=id_)
 
 RULE_LABEL = {"estab_ttl": "estab_ttl", "intake_floor": "intake floor", "intake_rate": "intake rate", "waitlist_epochs": "waitlist",
@@ -705,6 +710,10 @@ def rules():
 TITLES = {"overview": "Governance", "established": "Governance · Established", "at-risk": "Governance · At risk", "queue": "Governance · Queue", "settlement": "Governance · Settlement", "changes": "Governance · Changes", "intake": "Governance · Intake", "settleage": "Governance · Settle age", "never": "Governance · Never established", "graders": "Governance · Graders", "payouts": "Governance · Payouts", "directory": "Governance · Directory", "forum": "Governance · Forum", "proposals": "Governance · Proposals", "protocol": "Governance · Protocol", "charts": "Governance · Charts", "rules": "Governance · Rules"}
 
 def page(qs=None):
+    from . import govhub
+    return govhub.page(qs)   # consolidation: one hero and one module; the body below is the previous page, kept until the cut-over is confirmed
+
+def page_legacy(qs=None):
     tab = _q(qs, "tab", "overview"); tab = tab if tab in dict(TABS) else "overview"
     chips = "".join(f'<a href="{href(k)}" class="chip {"on" if k == tab else ""}">{t}</a>' for k, t in TABS if k in NAV_TABS or k == tab)
     head = f'<div class="sechead"><h1>Governance</h1>{"" if tab in ("forum", "proposals", "protocol") else seg_chips(tab)}</div><nav class="chips atabs scroll" aria-label="Governance">{chips}</nav>'
