@@ -120,8 +120,8 @@ try:
           lst == 200 and {r["offer_id"] for r in opens} == {"live-ask"})
 
     html = get("/network?tab=token")[1].decode()
-    check("Token page keeps Last fill; the ask book, fill history and Open depth are gone (swaps live on POASwap)",
-          "Last fill" in html and "Open depth" not in html and 'id="token-market"' not in html and "Fill history" not in html and "Best ask" not in html and 'data-offer=' not in html)
+    check("Token tab (1.26.392): no swap-derived price cards (Last fill), no ask book, fill history or Open depth (swaps live on POASwap)",
+          "Last fill" not in html and "Open depth" not in html and 'id="token-market"' not in html and "Fill history" not in html and "Best ask" not in html and 'data-offer=' not in html)
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
@@ -147,7 +147,7 @@ try:
                 shot = os.path.join(shot_dir, f"token-{w}.png"); pg.screenshot(path=shot)
                 check(f"{w} px screenshot path wrote {os.path.basename(shot)} ({os.path.getsize(shot)} bytes)",
                       os.path.isfile(shot) and os.path.getsize(shot) > 1000)
-                check(f"{w} px: Last fill on the page, no market view", visible["lastFill"] and not visible["market"])
+                check(f"{w} px: no Last fill card and no market view", not visible["lastFill"] and not visible["market"])
                 check(f"{w} px: no horizontal overflow (ox={visible['ox']})", visible["ox"] <= 0)
                 check(f"{w} px: no page errors {errs[:2]}", not errs)
                 pg.close()

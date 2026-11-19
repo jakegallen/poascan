@@ -116,7 +116,7 @@ try:
     check("no USD on the headline row (audit SC-020)", 'class="usd"' not in k and "\u2248$" not in k)
     from poascan import views as V
     lc = V.live_snapshot()["cards"]
-    check("live cards: circ (home) has no USD; vest (token page) keeps it", 'class="usd"' not in lc.get("circ", "x usd") and 'data-live="circ"' in lc["circ"] and 'class="usd"' in lc["vest"])
+    check("live cards: circ (home) and vest carry no USD (1.26.392: POA only, the toggle is gone)", 'class="usd"' not in lc.get("circ", "x usd") and 'data-live="circ"' in lc["circ"] and 'class="usd"' not in lc["vest"])
     check("Holders on the home page; heights moved to /network (1.26.292)", 'data-live="holders"' in home and 'data-live="height"' not in home)
     ab = get("/about"); sec = ab[ab.index('id="home"'):] if 'id="home"' in ab else ""; sec = sec[:sec.index("</ul>")] if sec else ""
     check("/about#home explains all four and the API join rate", all(x in sec for x in ("Total mined", "Circulating supply", "<b>Agents</b>", "<b>Active Agents</b>", "agent_joins_per_hour", "2 h", "1 h")))
