@@ -5,10 +5,8 @@ Module: REST, MCP and Spec as tabs (kit.tabmod). REST and MCP are an explorer: a
 rows with paging, and a pane with the stored sample, Copy curl and Run. Run never calls a live endpoint: it replays the stored sample (6b).
 Every state is a URL: /api?tab=rest&group=agents&q=epoch&sel=/api/epochs&offset=20. The list is built from openapi() and TOOLS as before.
 
-Backend (agreed in the issue 147 thread, not on main yet), read through two adapters that return None until Build lands them, so the page shows an empty state:
-  6a calls_data(): {per_minute:{rest:[24], mcp:[24], csv:[24]}, p50_ms, success_1h, calls_24h, top:[{route, count}]}  (routes are templates, no identifiers)
-  6b samples():   {path template: {status, ms, body}}  from /api/v1/reference/samples, refreshed hourly
-tools/fixtures/api_calls.json and api_samples.json drive the fixture screenshots (POASCAN_PAGES_FIXTURE=1, never set in production)."""
+Data: Build's 6a ring (apitel.py) feeds the live lanes, Latency p50, Success 1h, Calls 3h and the Top chip; Build's 6b samples (apisamples.py, the
+same data as /api/v1/reference/samples) feed the pane. Both read in process; the lanes and the pane show an empty state until there is data."""
 import os, json, time, urllib.parse
 from html import escape as E
 from . import kit as KIT
@@ -28,24 +26,35 @@ def _asset_v(name):
 
 def _q(qs, k, d=""): return ((qs or {}).get(k) or [d])[0]
 
-def _fixture(name):
-    if os.environ.get("POASCAN_PAGES_FIXTURE") != "1": return None
-    try: return json.load(open(os.path.join(FIX, name)))
-    except (OSError, ValueError): return None
-
-CALLS_FN = None; SAMPLES_FN = None   # Build's 6a and 6b readers, set when those land
-
 def calls_data():
-    if CALLS_FN:
-        try: return CALLS_FN()
-        except Exception: return None
-    return _fixture("api_calls.json")
+    """Build's 6a ring (apitel.py, in process): per minute counts by surface for the last 24 minutes, p50, success over the last hour, calls over the
+    ring's 3 h window and the top routes. None until the ring has a request (it resets on restart)."""
+    try:
+        from . import apitel as T
+        snap = T.snapshot(60)
+        if not snap.get("requests"): return None
+        now_m = (int(time.time()) // 60) * 60; lanes = {k: [] for k, _ in LANES}
+        with T._lock: mins = dict(T._mins)
+        for m in range(now_m - 23 * 60, now_m + 60, 60):
+            b = mins.get(m) or {}
+            for k in lanes: lanes[k].append((b.get("surf") or {}).get(k, 0))
+        return dict(per_minute=lanes, p50_ms=snap.get("p50_ms"), success_1h=snap.get("success_rate"), calls_3h=T.snapshot(T.KEEP_MIN).get("requests"),
+                    top=[dict(route=t["endpoint"], count=t["count"]) for t in snap.get("top_endpoints") or []])
+    except Exception:
+        return None
 
 def samples():
-    if SAMPLES_FN:
-        try: return SAMPLES_FN() or {}
-        except Exception: return {}
-    return (_fixture("api_samples.json") or {}).get("samples") or {}
+    """Build's 6b stored samples (apisamples.py): {path: {status, ms, body}}; a sample too large to store carries its top level keys."""
+    try:
+        from . import apisamples as SM
+        out = {}
+        for r in SM.samples().get("samples") or []:
+            p = (r.get("endpoint") or "").split("?")[0]
+            if r.get("status") == 200 and "sample" in r: out[p] = dict(status=200, ms=None, body=r["sample"])
+            elif r.get("status") == 200: out[p] = dict(status=200, ms=None, body={"top_level_keys": r.get("top_level_keys")})
+        return out
+    except Exception:
+        return {}
 
 # ---------------- hero ----------------
 def _lane(key, label, series):
@@ -72,12 +81,12 @@ def hero(groups, tools):
     else:
         lanes = na("No call counts yet."); axis = ""; live = '<span class="lbl">Last 24 min</span>'
     right = f'<div class="br"><div class="bh">{live}<span class="legend">{leg if pm else ""}</span></div>{lanes}{axis}</div>'
-    c24 = (cd or {}).get("calls_24h"); p50 = (cd or {}).get("p50_ms"); ok = (cd or {}).get("success_1h")
+    c24 = (cd or {}).get("calls_3h"); p50 = (cd or {}).get("p50_ms"); ok = (cd or {}).get("success_1h")
     tot = [sum(x) for x in zip(*[pm.get(k) or [0] * 24 for k, _ in LANES])] if pm else None
     cards = [KIT.kpi("Endpoints", intc(nrest)), KIT.kpi("MCP tools", intc(len(tools))),
              KIT.kpi("Latency p50", f'<span class="num">{int(p50):,} ms</span>' if p50 is not None else "···"),
              KIT.kpi("Success 1h", f'<span class="num">{100 * float(ok):.1f}%</span>' if ok is not None else "···"),
-             KIT.kpi("Calls 24h", f'<span class="num">{compact(c24)}</span>' if c24 is not None else "···", [(i, v) for i, v in enumerate(tot)] if tot else None)]
+             KIT.kpi("Calls 3h", f'<span class="num">{compact(c24)}</span>' if c24 is not None else "···", [(i, v) for i, v in enumerate(tot)] if tot else None)]
     strip = f'<section class="stats four kpis five" role="group" aria-label="Headline numbers">{"".join(cards)}</section>'
     return f'<section id="tracker" class="card benchc hpulse apihero" aria-label="API"><div class="bench abench">{conn}{right}</div>{strip}</section>'
 
@@ -124,7 +133,8 @@ def rest_body(qs, groups):
     from . import agentapi as AG
     order, g = _grouped(groups); smp = samples(); cd = calls_data()
     q = _q(qs, "q").strip()[:60].lower(); grp = _q(qs, "group"); top = [t["route"] for t in ((cd or {}).get("top") or [])][:5]
-    if top: order = order + ["Top"]; g["Top"] = [r for _, _, rs in groups for r in rs if r[1] in top]
+    tr = [r for _, _, rs in groups for r in rs if r[1] in top] if top else []
+    if tr: order = order + ["Top"]; g["Top"] = tr
     grp = grp if grp in order else order[0]
     pool = [r for t in order if t != "Top" for r in g[t]] if q else g[grp]
     rows = [r for r in pool if not q or q in r[1].lower() or q in (r[2] or "").lower()]

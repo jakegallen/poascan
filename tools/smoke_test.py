@@ -211,7 +211,9 @@ def main():
         _lm = _re.search(r'data-href="(lmstudio://add_mcp\?[^"]+)"', _m); _ki = _re.search(r'data-href="(https://kiro\.dev/launch/mcp/add\?[^"]+)"', _m)
         check("/start: not supported apps behind one closed Something else; no connector deeplinks", _m.count('<details class="sv-other">') == 1 and "Something else" in _m and '>Other clients<' not in _m
               and not (_lm or _ki) and all(f'class="sv-o" data-app="{n}"' in _m for n in ("kimi", "z-ai", "deepseek", "huggingchat", "muse")) and 'data-app="le-chat"' in _m)
-        check("/api: POAScan MCP install options", all(x in req(base + "/api")[1] for x in (b'data-mcp="cursor"', b'data-mcp="goose"', b"codex mcp add poascan --url https://poascan.io/mcp", b">Other clients<")))
+        _api0 = req(base + "/api")[1]; _api1 = req(base + "/api?tab=spec")[1]
+        check("/api: POAScan MCP install options (client chips and an Other chip in the hero, the codex command under Clients on the Spec tab)",
+              b'data-mcp="cursor"' in _api0 and b'data-mcp="goose"' in _api0 and b"codex mcp add poascan --url https://poascan.io/mcp" in _api1 and b">Other</a>" in _api0 and b">Clients<" in _api1)
         _pb = [req(base + u)[1] for u in ("/start", "/about", "/api", "/how-to-mine-poa")]
         check("one prompt box: Copy inside every prompt, no bottom Copy prompt button", all(b"Copy prompt</button>" not in x.replace(b'<button class="gocp" type="button" data-gocopy>Copy prompt</button>', b"") and x.count(b'<div class="pbox"><div class="pbar"><button class="pcopy"') >= 1 for x in _pb)
               and all(x.count(b'class="pcopy"') == x.count(b'<div class="pbox">') for x in _pb))
