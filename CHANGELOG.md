@@ -11,11 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.388] - 2026-11-18
+## [1.26.390] - 2026-11-19
 
 ### Changed
 - Home: the Answers lane draws answers older than four minutes as two paths (dim and final) instead of one line each, so a busy chain no longer pushes Home past 1,000 elements. Lane counts, sliding and the newest-answer animation are unchanged.
 - Chain: the Cadence chart caps its scale at about twice the 90th percentile, so one stalled gap (4,007 hours) no longer flattens the normal rhythm. The clipped column still reads its true value in the tip and the callout.
+
 ## [1.26.389] - 2026-11-19
 
 ### Changed
