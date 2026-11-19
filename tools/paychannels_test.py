@@ -392,9 +392,12 @@ check("version is at least 1.26.392 and the changelog records the API telemetry 
 check("version is at least 1.26.393 and the changelog records the Agents polish (Established matches the ring, Pass rates one table)",
       _ver >= (1, 26, 393) and "## [1.26.393]" in cl and "Established stage" in cl and "Pass rates" in cl
       and not any(c in cl.split("## [1.26.393]")[1].split("## [")[0] for c in dash))
-check("version is 1.26.394 and the changelog records the Network consolidation",
-      _ver == (1, 26, 394) and "## [1.26.394]" in cl and "Network is POA only" in cl
+check("version is at least 1.26.394 and the changelog records the Network consolidation",
+      _ver >= (1, 26, 394) and "## [1.26.394]" in cl and "Network is POA only" in cl
       and not any(c in cl.split("## [1.26.394]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.395 and the changelog records the Governance consolidation",
+      _ver == (1, 26, 395) and "## [1.26.395]" in cl and "standing-moves" in cl and "Moves" in cl
+      and not any(c in cl.split("## [1.26.395]")[1].split("## [")[0] for c in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
