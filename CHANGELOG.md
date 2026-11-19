@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.392] - 2026-11-19
+
+### Added
+- API telemetry: GET /api/v1/telemetry reports POAScan's own API request counts by surface (rest, mcp, csv), success rate, p50 and p95 latency and the busiest route templates, from a bounded in-process ring keyed by route template only (concrete addresses, hashes and ids collapse to placeholders, no client identifiers), reset on restart. GET /api/v1/reference/samples serves one trimmed example response per endpoint from a cached allowlist, refreshed hourly, so the API page Run pane never calls the live API.
+- Governance standing: GET /api/v1/governance/standing is the counts only headline (safe, watch, at_risk, closing next, established total). GET /api/v1/governance/standing-moves is the changed rows only feed (watch and at_risk from the current fold, plus Agents removed at the last close) with limit (default 20, cap 100) and offset paging.
+- Start: GET /api/v1/agents/{address}/lifecycle gives the Agent stage and its joined, first answer, first seal and first payout timestamps (404 on an unknown address). GET /api/v1/agents/joiners reports joins per hour and the median seconds to first pass and first pay. All additive, archive and read only.
+
 ## [1.26.391] - 2026-11-19
 
 ### Changed
