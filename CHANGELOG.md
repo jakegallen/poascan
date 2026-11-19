@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.398] - 2026-11-19
+
+### Changed
+- Start: while direct joining is halted the live panel says so with two tags (Direct halted since the date, MCP open) and shows the last join and a zero filled 14 day line instead of 0, 0% and a dash. Pass rate and Median to pay read the last 30 days; Pass rate counts only joiners older than the median wait and reads n/a below 20 of them. The Check tab previews its four stages before an address is entered, and stage times read in days past 48 hours.
+- Chain: the first KPI reads Backlog at close, so it no longer sits beside the live Pending count unlabeled.
 ## [1.26.397] - 2026-11-19
 
 ### Changed
