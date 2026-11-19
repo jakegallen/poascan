@@ -71,10 +71,9 @@ finally:
     else: os.environ["POASCAN_HEAVY_CAP"] = old
 
 # ---------------------------------------------------------------- A1: CANON_QS covers the remaining page routes
-for p in ("/index.html", "/join", "/onboarding", "/unlocks", "/upgrade", "/wallet"):
+for p in ("/index.html", "/join", "/onboarding", "/unlocks", "/upgrade"):
     ok(p in HC.CANON_QS, f"CANON_QS covers {p}")
 ok(HC.canon_qs("/join", {"utm_source": ["x"], "nocache": ["1"]}) == {}, "a buster on /join drops to the canonical empty query")
-ok(HC.canon_qs("/wallet", {"address": ["poa1AAA"], "ref": ["x"]}) == {"address": ["poa1AAA"]}, "/wallet keeps only ?address")
 seg = 0
 k_plain = HC.key("/unlocks", HC.canon_qs("/unlocks", {}), seg, False)
 k_bust = HC.key("/unlocks", HC.canon_qs("/unlocks", {"x": ["1"]}), seg, False)

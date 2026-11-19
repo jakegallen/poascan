@@ -613,11 +613,11 @@ def maintenance(base, root, env, check):
     check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
           n.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in n and 'id="upgrade"' not in n and 'class="uph"' not in n and 'class="grp' not in n
           and "Latency p50" in s and "Uptime" in s)   # 1.26.392: the recovery line leads Health; uptime and latency sit on its Details view
-    check("maintenance: /upgrade is its own page: hero, routes meter, Working and Still paused, tiles, details with the post and one prompt box; no Health tab strip or panels",
+    check("maintenance: /upgrade is its own page: hero, routes meter, Working and Still paused, tiles, details with the post and no prompt box (Ask agent lives only in /start); no Health tab strip or panels",
           um.count('class="uph"') == 1 and um.count('class="seg"') == 6 and 'data-grp="working"' in um and 'data-grp="paused"' in um and 'class="stats four uptiles"' in um
           and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
-          and "lableak/#/post/1357" in um and um.count('class="pbox"') == 1 and "data-copy-prompt" in um and "24 to 72" not in um and ">Checkpoint<" in um
-          and "api/receipt/TXID" in um and "system_notice" in um and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
+          and "lableak/#/post/1357" in um and um.count('class="pbox"') == 0 and "data-copy-prompt" not in um and "24 to 72" not in um and ">Checkpoint<" in um
+          and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
     check("maintenance: /start keeps the prompt, no status strip (the header status note carries the state, no repeat under the button); the prompt backs off and checks hourly at a random minute",
           'class="upstrip' not in stf and '<summary class="pill up"' in stf and 'stjl' not in st and 'class="upn"' not in st and 'href="/upgrade">Details</a>' in stf and "Hosted mining" in stf and st.count('class="pbox"') == 1
           and "at most once an hour, at a random minute" in stf and "never send a second register POST while that result is unknown, even if the name looks free" in stf and "answered_txid is its id" in stf and "api/receipt/TXID" not in stf

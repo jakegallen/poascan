@@ -1,6 +1,6 @@
 """Audit fixes (1.26.199): a crawler's page view never spends the on-demand minepoa.com or fast index budget (the
 archive answers it; API and MCP callers keep their reads); minepoa.com API links carry rel=nofollow; every tab of a
-tabbed page is its own canonical URL (hyphenated tabs too) and /help, /wallet and the Network tabs have their own
+tabbed page is its own canonical URL (hyphenated tabs too) and the Network tabs have their own
 descriptions; /api/v1/epochs pages with from and limit; /api/v1/epoch/<n>/rewards lists one close's rewards (CSV,
 limit, offset, 404 for an unknown close); llms.txt has the new Agent loop, the read table, the small epochs line and
 never tells anyone to put a credential in a URL; /about names the official links and no other account.
@@ -84,10 +84,6 @@ st, body, _ = get("/governance?tab=at-risk")
 check("governance at-risk tab is an alias of Standing: its canonical is the bare page", 'rel="canonical" href="https://poascan.io/governance"' in body)
 st, body, _ = get("/governance")
 check("governance overview canonical is the bare path", 'rel="canonical" href="https://poascan.io/governance"' in body)
-st, body, _ = get("/help")
-check("/help has its own description", 'name="description" content="Start earning on Proof of Agent' in body)
-st, body, _ = get("/wallet")
-check("/wallet has its own description", 'name="description" content="Check a Proof of Agent wallet' in body)
 st, body, _ = get("/network?tab=anchors")
 check("Network anchors tab has its own description", 'name="description" content="Proof of Agent anchor timeline' in body)
 

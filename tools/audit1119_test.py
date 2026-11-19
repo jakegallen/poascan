@@ -71,6 +71,17 @@ dead = ("at-risk", "established", "queue", "directory", "forum", "protocol", "se
 check("sitemap: the eight Governance aliases are gone, Closes is in", not any(f"/governance?tab={d}" == r for d in dead for r in S.STATIC_ROUTES) and "/governance?tab=closes" in S.STATIC_ROUTES)
 check("warm list: the slow first renders are warmed and the two Standing aliases are not", all(u in HC.WARM for u in ("/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors")) and "/governance?tab=at-risk" not in HC.WARM)
 
+# ---- batch 3: /help and /wallet move into Start ----
+a = "poa1" + "A" * 40
+check("/help 301s to Start Earn", S.moved("/help", {}) == "/start?tab=earn")
+check("/help?address= keeps a valid address on the Check tab", S.moved("/help", {"address": [a]}) == f"/start?tab=check&address={a}")
+check("/wallet 301s to Start Check and keeps a valid address", S.moved("/wallet", {}) == "/start?tab=check" and S.moved("/wallet", {"address": [a]}) == f"/start?tab=check&address={a}")
+check("a key-shaped or junk address is dropped from the redirect, never echoed", S.moved("/wallet", {"address": ["pk_" + "Q" * 30]}) == "/start?tab=check" and S.moved("/help", {"address": ["<script>"]}) == "/start?tab=earn")
+check("sitemap: /help and /wallet are out", "/help" not in S.STATIC_ROUTES and "/wallet" not in S.STATIC_ROUTES)
+check("the Earn and Check tabs are the Start tabs", [t[0] for t in SH.TABS] == ["join", "check", "earn"])
+check("/upgrade carries no Ask agent prompt box; the one Ask agent is in Start", "Ask agent" not in SRC("poascan/views2.py") and "pbox" not in SRC("poascan/views2.py") and "PR.ask(" in SRC("poascan/starthub.py") and "PR.ask(" not in SRC("poascan/views.py"))
+check("Agent pages link the earn check to the Check tab", '/help?address=' not in SRC("poascan/views.py").replace('<code>/help?address=&lt;poa1 address&gt;</code>', ''))
+
 for p in ("poascan/starthub.py", "static/start.css"):
     check(f"no em or en dash in {p}", not re.search("[\u2013\u2014]", SRC(p)))
 

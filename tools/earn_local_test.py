@@ -30,9 +30,9 @@ check(f"/api/v1/earn: 200 with disclaimer ({c})", c == 200 and d.get("disclaimer
 check("history from the stored close records", d.get("history") and all("close" in r and "lines" in r for r in d["history"]) and d["history"][-1]["close"] >= d["history"][0]["close"])
 check("grading and ways in the result", isinstance(d.get("grading"), dict) and [w["key"] for w in d.get("ways") or []][:3] == ["answers", "attest", "grading"])
 c, b, _ = get(f"/help?address={fixture.A1}")
-check(f"/help?address=: 200 with history, Grading, Ways to earn and the disclaimer ({c})", c == 200 and 'id="history"' in b and 'id="grading"' in b and "Ways to earn" in b and "Unofficial guidance." in b)
+check(f"/help?address= follows its 301 to the Start Check tab ({c})", c == 200 and "data-stper" in b)
 c, b, _ = get(f"/help?address={fixture.A1}&sort=paid&dir=asc")
-check("sorted history renders", c == 200 and 'aria-sort="ascending"' in b)
+check("/help?address=&sort= also lands on Check", c == 200 and "data-stper" in b)
 r = AG.call_tool("get_earn_check", {"address": fixture.A1}) if hasattr(AG, "call_tool") else AG.t_earn({"address": fixture.A1})
 r = r if isinstance(r, dict) else {}
 check("MCP get_earn_check carries the disclaimer", (r.get("disclaimer") or json.dumps(r).find("Unofficial guidance") >= 0))

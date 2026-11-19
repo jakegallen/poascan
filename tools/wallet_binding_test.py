@@ -79,7 +79,7 @@ def main():
     check("/wallet with a key-shaped value: 400, never echoed", isinstance(r, tuple) and r[0] == 400 and secret not in r[1] and "QQQQ" not in r[1])
     r = WV.page({"address": ["<script>"]}, lambda t, b, a: b)
     check("/wallet with junk: 400, never echoed", r[0] == 400 and "<script>" not in r[1])
-    check("route is wired", SV.page("/wallet", {}) is not None and "/wallet" in SV.STATIC_ROUTES)
+    check("route moved into Start: /wallet 301s to the Check tab and keeps a poa1 address", SV.moved("/wallet", {}) == "/start?tab=check" and SV.moved("/wallet", {"address": [L1]}) == f"/start?tab=check&address={L1}" and "/wallet" not in SV.STATIC_ROUTES)
 
     # API and MCP
     d, _ = SV.api("/api/wallet/" + L1, {})

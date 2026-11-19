@@ -64,7 +64,7 @@ heavy, cheap = [], []
 # HTTP: stored inner pages, a real summary, and the shed paths
 seg = SG.selected()
 age = time.time() - 500   # past TTL and warm grace, inside CHEAP_STALE
-for path, marker in (("/start", "START-COPY"), ("/help", "HELP-COPY"), ("/about", "ABOUT-COPY"), ("/agents", "AGENTS-COPY")):
+for path, marker in (("/start", "START-COPY"), ("/about", "ABOUT-COPY"), ("/agents", "AGENTS-COPY")):
     HC.put(HC.key(path, {}, seg, False), "<html>" + marker + "</html>", now=age)
 calls = []
 def bomb(p, qs):
@@ -85,7 +85,7 @@ def get(path, headers=None):
     except Exception as e:
         return None, {}, str(e), time.time() - t0
 
-for path, marker in (("/start", "START-COPY"), ("/start?nocache=1", "START-COPY"), ("/help", "HELP-COPY"),
+for path, marker in (("/start", "START-COPY"), ("/start?nocache=1", "START-COPY"),
                      ("/about", "ABOUT-COPY"), ("/agents", "AGENTS-COPY")):
     c, _, body, dt = get(path)
     ok(c == 200 and marker in body and dt < 1.0, f"{path} serves the stored copy ({c}, {dt*1000:.0f} ms)")

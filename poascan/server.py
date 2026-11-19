@@ -535,8 +535,6 @@ def page(path, qs):
         from . import startv2 as SV2
         if SV2.on(): return SV2.page(V.page)   # preview only: POASCAN_STARTV2=1
         return ST.page(V.page)
-    if path == EA.ROUTE: return EV.page(qs, V.page, earn_check)   # Start earning: the earn check and the starter guide
-    if path == WB.ROUTE: return WV.page(qs, V.page)   # 1.26.187: Check my wallet, /wallet?address=poa1... (stable; POASwap /start links here)
     if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return AH.top_page(qs.get("tab", [""])[0], qs)
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
@@ -610,7 +608,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/help", "/wallet", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
@@ -745,7 +743,15 @@ def keep_query(target, qs):
     rest = [(k, v) for k, vs in (qs or {}).items() if k not in own for v in vs]
     q = urllib.parse.urlencode([(k, v) for k, vs in own.items() for v in vs] + rest)
     return base + ("?" + q if q else "")
+# 1.26.399: /help (Start earning) and /wallet (Check my wallet) moved into Start: Earn and Check. A poa1 address in the query is kept (POASwap links /wallet?address=...).
+MOVED_START = ("/help", "/wallet")
+def start_move(path, qs):
+    a = ((qs or {}).get("address") or [""])[0].strip()
+    ok = bool(WB.ADDR_RX.match(a))
+    if path == "/help": return f"/start?tab=check&address={a}" if ok else "/start?tab=earn"
+    return f"/start?tab=check&address={a}" if ok else "/start?tab=check"
 def moved(path, qs):
+    if path in MOVED_START: return start_move(path, qs)
     if path == "/find":
         q = (qs.get("q", [""])[0] or "").strip()
         return "/search?" + urllib.parse.urlencode({"q": q}) if q else "/#find"
@@ -1202,7 +1208,7 @@ class H(BaseHTTPRequestHandler):
     # /api/health (the v1 prefix is rewritten only later, inside _get). /api/summary is the homepage live snapshot.
     HEALTH_PATHS = ("/healthz", "/api/health")
     SNAPSHOT_PATHS = ("/api/summary",)   # in-memory live snapshot the homepage polls; both /api and /api/v1
-    CHEAP_PATHS = {"/", "/chain", "/chain/txs", "/start", "/help", "/about", "/agents"}
+    CHEAP_PATHS = {"/", "/chain", "/chain/txs", "/start", "/about", "/agents"}
     CHEAP_STALE = 900   # a cheap page this many seconds old is still served when its slot is full (a close can run longer than the TTL)
     # 1.26.275: address, tx, and one close's record or rewards. Still a heavy slot, but only SCRAPE_MAX at once.
     _SCRAPE_RX = re.compile(r"^/api/(?:address(?:/|$)|tx(?:/|$)|epoch/\d+/(?:rewards|record)(?:\.csv)?$|epoch-records(?:\.csv)?$)")
@@ -1266,7 +1272,7 @@ class H(BaseHTTPRequestHandler):
     def _is_moved(self):
         """A fixed 301 (including /status to Network Health). No worker: the redirect is a dict lookup."""
         p = self._path_only()
-        return p in MOVED or p in MOVED_Q
+        return p in MOVED or p in MOVED_Q or p in MOVED_START
     def _is_scrape(self):
         """Per-address, per-tx, and epoch record or rewards work, including the HTML page that triggers the same read."""
         if self._SCRAPE_RX.match(self._norm()): return True
@@ -1486,7 +1492,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/epoch" or p.startswith("/epoch/"): return "epoch_html"
         if p == "/agents" or p.startswith("/agents/"): return "agents_html"
         if p == "/chain" or p.startswith("/chain"): return "chain_html"
-        if p in ("/", "/start", "/help", "/about") or p == "/governance" or p.startswith("/governance"): return "page_html"
+        if p in ("/", "/start", "/about") or p == "/governance" or p.startswith("/governance"): return "page_html"
         return "other"
     def _kind(self):
         try: return VS.kind(self._path_only(), self.headers.get("User-Agent") or "")
