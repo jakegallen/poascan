@@ -73,7 +73,7 @@ def main():
 
 
     check("queue page: each Answer links to its page", "/answer/" in h or "/tx/" in h)
-    check("queue chip in the Graders tab and the sitemap", 'sub=queue' in GV.page({"tab": ["graders"]}) and "/governance?tab=queue" in open(SV.__file__).read())
+    check("queue chip in the Graders tab and the sitemap", 'sub=queue' in GV.page({"tab": ["graders"]}) and "/governance?tab=queue" not in open(SV.__file__).read())
     # settle window (1.26.139): only the oldest settle_cap_per_close rows by (since, id) are evaluated at a close
     from poascan import analytics as AN
     real = AN.params

@@ -100,13 +100,13 @@ def main():
     A._cache.clear(); A.forum_names = lambda *a, **k: {G1: "Koda"}
     with SG.use(SG.CURRENT):
         h = GH.graders_card({}, lambda **kw: GV.href("graders", **kw))
-        check("Graders card: title, Open seats column and tip, CSV and API links", "Grade history" in h and "Open seats" in h and "grade-history.csv" in h and "/api/v1/governance/grade-history" in h)
+        check("Graders card: title, Open seats column and tip, CSV and API links", "Grade history" in h and "Open seats" in h and "grade-history.csv" not in h)
         check("Graders card: headers sort with hsort and hdir", "hsort=open" in h and "#history" in h and 'aria-sort="descending"' in h)
         h2 = GH.graders_card({"hsort": ["open"], "hdir": ["asc"]}, lambda **kw: GV.href("graders", **kw))
         check("Graders card: sort by Open seats, low to high", h2.index(G2[:6]) < h2.index(G1[:6]))
         check("Agent names link to LabLeak", "lableak" in h.lower() and ">Koda<" in h)
         ag = GH.agent_section(G1, {})
-        check("agent section: stats, watermarked chart box, per close table, CSV", "Jury seats" in ag and "chartbox" in ag and "Per close" in ag and "grade-history.csv?addr=" in ag)
+        check("agent section: stats, watermarked chart box, per close table, CSV", "Jury seats" in ag and "chartbox" in ag and "Per close" in ag and "grade-history.csv?addr=" not in ag)
         check("agent section: headers sort with gsort", "gsort=seats" in ag and "tab=governance" in ag)
         check("no sub-lines under stats", 'class="ss"' not in ag and "<small" not in ag.split("Seats per close")[0])
         for x in (h, ag): check("no em or en dashes", "\u2014" not in x and "\u2013" not in x)

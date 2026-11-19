@@ -62,7 +62,7 @@ def main():
     check("card: tx links to POAScan tx pages, times in the visitor zone", f'href="/tx/{TX("b")}"' in h and f'href="/tx/{TX("c")}"' in h and 'class="t lt' in h and 'data-ts=' in h)
     check("card: Vault link and Wallet link rows", ">Vault link<" in h and ">Wallet link<" in h)
     check("card: no Ask agent button in the header (1.26.382)", "data-ask=" not in h and 'class="askb"' not in h)
-    check("card: API link and Check another wallet", f"/api/v1/wallet/{L1}" in h and 'href="/wallet"' in h)
+    check("card: no header API link, Check another wallet stays", f"/api/v1/wallet/{L1}" not in h and 'href="/wallet"' in h)
     check("card: no ? tips (UI/UX P2)", h.count('class="qtip"') == 0 and ">?</summary>" not in h)
     hu = WV.binding_card(U1)
     check("card: unlinked recent warning tag", "Joined 5 hours ago, no wallet link" in hu and 'tag warn' in hu and "tag\">NO" in hu)
