@@ -105,7 +105,7 @@ check("MCP summary swaps block: status, source, fetched_at", s["swaps"]["status"
 check("llms.txt: swap line uses url", "Swaps and wallet setup are on POASwap: https://poaswap.io/start." in AG.llms_txt())
 from poascan import views as V
 hm = V.home()
-check("home: no Market card, one Trade on POASwap link", hm.count(">Trade on POASwap →</a>") == 1 and 'class="more mswap"' not in hm and ">Market<" not in hm)
+check("home: no Market card and no Trade on POASwap link above the footer", "Trade on POASwap" not in hm and "mtrade" not in hm and 'class="more mswap"' not in hm and ">Market<" not in hm)
 
 # POAScan only reads: every request was a plain GET with no body
 check("only GETs, no request body, nothing sent to POASwap", SEEN and all(m == "GET" and n == 0 for m, _, _, n in SEEN))

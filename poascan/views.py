@@ -339,8 +339,7 @@ def home():
 <div class="grid2 hgrid">
 {card(ICON_FEED + 'Stream', '<div class="fhd" aria-hidden="true"><span>Type</span><span>Agent</span><span>Seals</span><span>Age</span></div>' + f'<div id="feed" class="feed" data-n="8">{feed_rows(8)}</div>', cls="assay")}
 {card(ICON_CUBE + "Epochs", home_answers_mini() + home_open_row(A.open_epoch()) + f'<div data-liverows="closes-home" data-top="{ep[-1]["epoch"] if ep else ""}">{home_epochs(ep) if ep else '<p class="empty">No closes yet</p>'}</div>', burn + _ui.pop_btn("answers", "Answers per epoch"), cls="epochc")}
-</div>
-<p class="mtrade"><a href="https://poaswap.io/" target="_blank" rel="noopener noreferrer"><img src="/static/poaswap-mark.svg?v=1" width="14" height="14" alt="" aria-hidden="true">Trade on POASwap →</a></p>'''
+</div>'''
     return page("Proof of Agent explorer", body, "/")
 
 def upgrade_live():

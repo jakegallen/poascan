@@ -129,4 +129,39 @@ check("agentapi, startv2 and start: the legacy and rollback pages are gone", "ap
 check("views.py: the unused home and agents helpers are gone", not (_fns("poascan/views.py") & {"burnmeter_html", "home_answers", "health_card", "agents_overview", "operators_page", "forum_page", "community_page", "live_hero", "home_graders", "ai_cards", "at_risk_body"}))
 check("style.css: a sample of the unused classes is gone and the shared rules stay", not any(c in SRC("static/style.css") for c in (".herogrid", ".bm-hd", ".okdot", ".findf", ".lbtabs", ".navsrc")) and ".stat" in SRC("static/style.css"))
 
+# ---- 1.26.405: Trade link gone, Start reads last_join_at, seal cast label, warm list ----
+import importlib
+check("home: no Trade on POASwap link above the footer, the CSS for it is gone", "Trade on POASwap" not in SRC("poascan/views.py") and "mtrade" not in SRC("poascan/views.py") and "mtrade" not in SRC("static/style.css"))
+check("footer separator CSS is present", ".fsep{" in SRC("static/style.css"))
+SH = importlib.reload(SH)   # drop the stubs above: read the real _last_join and stage code
+from poascan import agents as AGN
+SH.joiners = lambda days=30: dict(days=30, joiners=1, joins_per_hour=[], last_join_at="2026-11-10T12:00:00Z")
+check("Start Last join reads last_join_at from the joiners data", SH._last_join() == _cal.timegm((2026, 11, 10, 12, 0, 0)) if (_cal := __import__("calendar")) else False)
+SH.joiners = lambda days=30: dict(days=30, joiners=1, joins_per_hour=[])
+maint.last_join = lambda: 12345
+check("Start Last join falls back to the maintenance value when the joiners data has none", SH._last_join() == 12345)
+check("Check stage is labelled First seal cast, not First seal", ("first_seal_cast_ts", "First seal cast") in SH.STAGES and not any(t == "First seal" for _, t in SH.STAGES))
+lc = dict(joined_ts=now - 9 * day, first_answer_ts=now - 8 * day, first_seal_cast_ts=None, first_seal_ts=None, first_payout_ts=now - 2 * day)
+SH.lifecycle = lambda a: lc
+SH.WV = None
+c = SH.check_body({"address": ["poa1" + "A" * 40]})
+check("a paid Agent with no seal cast is Complete: the seal cast is not waiting before payout", "Complete" in c and "Watching" not in c and "First seal cast" in c)
+lc2 = dict(lc, first_payout_ts=None)
+SH.lifecycle = lambda a: lc2
+c2 = SH.check_body({"address": ["poa1" + "A" * 40]})
+check("an unpaid Agent with no seal cast still watches the seal cast stage", "Watching" in c2 and "stl-now" in c2)
+SH.lifecycle = lambda a: dict(lc, first_seal_cast_ts=None, first_seal_ts=now - 3 * day)
+check("an older payload that carries first_seal_ts only still fills the stage", SH.check_body({"address": ["poa1" + "A" * 40]}).count("stl-done") >= 4)
+check("warm list: Network details, Earned and the latest epoch pages", "/network?view=details" in HC.WARM and "/agents/top?tab=richlist" in HC.WARM
+      and all(u in HC.WARM for u in ("/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/governance?tab=settleage", "/agents/top?tab=active", "/agents/top?tab=rising")))
+HC.LATEST_EPOCH = lambda: 105
+HC._refresh_extra()
+check("warm list: the latest three closed epochs join, and the set follows a new close", HC.EXTRA == ["/epoch/105", "/epoch/104", "/epoch/103"] and ("/epoch/105", ()) in HC._warm_pairs())
+HC.LATEST_EPOCH = lambda: 106
+HC._refresh_extra()
+check("warm list: E106 replaces E103", HC.EXTRA == ["/epoch/106", "/epoch/105", "/epoch/104"] and ("/epoch/103", ()) not in HC._warm_pairs())
+HC.LATEST_EPOCH = lambda: None; HC._refresh_extra()
+check("warm list: no closes means no epoch pages", HC.EXTRA == [])
+HC.EXTRA[:] = []; HC.LATEST_EPOCH = None; HC._warm_set.clear(); HC._warm_url_by.clear()
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

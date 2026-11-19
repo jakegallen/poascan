@@ -18,8 +18,23 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/chain/txs", "/start", "/about", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts"]   # 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/chain/txs", "/start", "/about", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/network?view=details", "/agents/top?tab=richlist"]   # 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
+# 1.26.405: the latest few closed epoch pages are warmed too (a cold /epoch/N render read every close for the first visitor). The
+# numbers change at each close, so they live in EXTRA, rebuilt at the start of each warm pass from LATEST_EPOCH (set by server.py).
+EPOCH_WARM_N = 3
+EXTRA = []
+LATEST_EPOCH = None   # callable -> the newest closed epoch number, or None
+
+def _all_warm(): return WARM + EXTRA
+
+def _refresh_extra():
+    if not LATEST_EPOCH: return
+    try: n = LATEST_EPOCH()
+    except Exception: return
+    want = [f"/epoch/{i}" for i in range(int(n), max(int(n) - EPOCH_WARM_N, -1), -1)] if n is not None else []
+    if want != EXTRA:
+        EXTRA[:] = want; _warm_set.clear(); _warm_url_by.clear()
 # 1.26.308: /chain/txs warmed (a visitor saw the full page Busy card: no pinned copy and no free slot). 1.26.306: /network?tab=token warmed too; a new tab with no pin could not get a slot under an API storm and served the busy page
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.284 (E5): the pin set is kept only in memory, so every deploy or OOM restart serves heavy pages cold until the
@@ -101,7 +116,7 @@ def _pctl(vals, q):
 def _warm_pairs():
     if not _warm_set:
         import urllib.parse
-        for u in WARM:
+        for u in _all_warm():
             p, _, q = u.partition("?"); pr = (p, tuple(sorted((k, tuple(v)) for k, v in urllib.parse.parse_qs(q).items())))
             _warm_set.add(pr); _warm_url_by.setdefault(pr, u)
     return _warm_set
@@ -330,7 +345,7 @@ def state():
         wp = {u: dict(d, last_warm_age_s=(int(now - d["last_ok"]) if d["last_ok"] else None)) for u, d in warm_paths.items()}
         ms = list(_warm_ms)
         base = dict(stats, entries=len(_c), bytes=_bytes[0], pinned=len(_pin), enabled=ENABLED)
-    base["warm_total_paths"] = len(WARM)
+    base["warm_total_paths"] = len(_all_warm())
     base["warm_paths"] = wp
     # poascan's OWN warm-render latency (distinct from the upstream minepoa probe p50/p95 on /api/status.endpoints)
     base["self_render_ms"] = dict(p50=_pctl(ms, 0.5), p95=_pctl(ms, 0.95), n=len(ms))
@@ -341,7 +356,8 @@ def warm_once(render_path, seg=lambda: None, force=False):
     stays readable for the whole rebuild."""
     import urllib.parse
     n = 0
-    for u in WARM:
+    _refresh_extra()
+    for u in _all_warm():
         p, _, q = u.partition("?"); qs = urllib.parse.parse_qs(q)
         k = key(p, qs, seg(), False); t = ttl(p, qs)
         with _lock: e = _entry(k)
