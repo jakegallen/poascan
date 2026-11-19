@@ -37,3 +37,6 @@
 .gtbl td .sd{margin-right:8px}
 .gtbl .arr::before{content:"\2192"}
 .kit-sub .chip.on .dim{color:inherit;opacity:.7}
+.srt{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.srt:hover{color:var(--hi)}
+.srt.cur{color:var(--hi)}.srt.cur::after{content:"\2193";font-size:var(--t12);color:var(--gold)}.srt.cur.asc::after{content:"\2191"}
+.gtbl th.r{text-align:right}.gtbl th.r .srt{justify-content:flex-end}

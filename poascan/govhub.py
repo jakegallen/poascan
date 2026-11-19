@@ -10,14 +10,14 @@ rows {address, name, from, to}, limit 20 + offset) and 5a counts (computed here 
 empty state until 5b is live; tools/fixtures/gov_moves.json drives the fixture screenshots (POASCAN_PAGES_FIXTURE=1, never set in production)."""
 import os, json, time
 from html import escape as E
-from . import db, analytics as A, kit as KIT, segments as SG, standing as SD, calibration as CA, governance as GOV, govv2 as GV2, grading as GR, scoresort as SS
+from . import db, analytics as A, kit as KIT, segments as SG, standing as SD, calibration as CA, governance as GOV, govv2 as GV2, grading as GR, gradingview as GVW, scoresort as SS
 from .ui import *
 from . import ui as _ui
 
 PAGE = 20
 TABS = [("standing", "/governance", "Standing"), ("closes", "/governance?tab=closes", "Closes"), ("payouts", "/governance?tab=payouts", "Payouts"),
         ("graders", "/governance?tab=graders", "Graders"), ("proposals", "/governance?tab=proposals", "Proposals"), ("rules", "/governance?tab=rules", "Rules")]
-ALIAS = {"": "standing", "overview": "standing", "established": "standing", "at-risk": "standing", "queue": "standing", "directory": "standing", "never": "standing",
+ALIAS = {"": "standing", "overview": "standing", "established": "standing", "at-risk": "standing", "queue": "graders", "directory": "standing", "never": "standing",
          "settlement": "closes", "changes": "closes", "intake": "closes", "settleage": "closes", "charts": "closes", "forum": "proposals", "protocol": "proposals"}
 SUBTAB = {"settlement": "settlement", "changes": "changes", "intake": "intake", "settleage": "settleage"}
 LEVEL_CLS = {"risk": "bad", "watch": "warn", "safe": "ok", "norecord": "nd", "system": "nd"}
@@ -101,15 +101,32 @@ def hero():
     return f'<section id="tracker" class="card benchc hpulse govhero" aria-label="Governance">{bench}{strip}</section>'
 
 # ---------------- Standing ----------------
-LV_CHIPS = [("", "All"), ("safe", "Safe"), ("watch", "Watch"), ("risk", "At risk"), ("never", "Never established")]
+LV_CHIPS = [("", "All"), ("safe", "Safe"), ("watch", "Watch"), ("risk", "At risk"), ("never", "Never established"), ("directory", "Directory")]
+DIR_COLS = [("name", "Agent", ""), ("score", "Score", "r"), ("rewards", "Rewards", "r"), ("seals", "Seals", "r dk")]
 
 def standing_body(qs):
-    d = GOV.standing_rows(); c = d["counts"]; lv = _q(qs, "level"); lv = lv if lv in ("safe", "watch", "risk", "never") else ""
+    d = GOV.standing_rows(); c = d["counts"]; lv = _q(qs, "level"); lv = lv if lv in ("safe", "watch", "risk", "never", "directory") else ""
+    if _q(qs, "tab") == "directory" and not lv: lv = "directory"
     if _q(qs, "tab") == "at-risk" and not lv: lv = "risk"
     if _q(qs, "tab") == "never" and not lv: lv = "never"
-    off = _off(qs); nm = A.forum_names()
-    cnt = {"": len(d["rows"]), "safe": c["safe"], "watch": c["watch"], "risk": c["risk"], "never": None}
-    if lv == "never":
+    off = _off(qs)
+    def u(**o):
+        p = dict(tab="standing", level=lv, sort=_q(qs, "sort"), dir=_q(qs, "dir")); p.update(o)
+        q = [f"{k}={v}" for k, v in p.items() if v and not (k == "tab" and v == "standing")]
+        return "/governance" + ("?" + "&amp;".join(q) if q else "")
+    cnt = {"": len(d["rows"]), "safe": c["safe"], "watch": c["watch"], "risk": c["risk"], "never": None, "directory": None}
+    by = _q(qs, "sort"); by = by if by in dict((k, 0) for k, _, _ in DIR_COLS) else "rewards"; dr = "asc" if _q(qs, "dir") == "asc" else "desc"
+    if lv == "directory":
+        drows = GOV.directory_rows(); cnt["directory"] = len(drows)
+        rows = GOV.directory_select(by, "", dr); total = len(rows); sel = rows[off:off + PAGE]
+        def th(k, t, c):
+            nd = "asc" if (by == k and dr == "desc") else "desc"
+            if k == "name" and by != "name": nd = "asc"
+            return (f'<th class="{c}"><a class="srt{" cur " + dr if by == k else ""}" href="{u(sort=k, dir=nd, offset="")}" data-kit-sub="s{k}{nd}">{t}</a></th>')
+        tb = ('<div class="tw"><table class="hist cal gtbl"><thead><tr>' + "".join(th(*x) for x in DIR_COLS) + "</tr></thead><tbody>"
+              + "".join(f'<tr><td>{agent(r["address"], r.get("name") or "")}</td><td class="r">{GOV._score_cell(r.get("score"))}</td><td class="r">{compact(r["rewards"]) if r["rewards"] else "<span class=dim>···</span>"}</td>'
+                        f'<td class="r dk">{intc(r["seals"]) if r["seals"] else "<span class=dim>···</span>"}</td></tr>' for r in sel) + "</tbody></table></div>")
+    elif lv == "never":
         rows = GV2.never_established(); total = len(rows)
         sel = rows[off:off + PAGE]
         tb = table(["Agent", "Answers"], [[agent(r["address"], r.get("name") or ""), intc(r["answers"])] for r in sel], cls="gtbl")
@@ -119,11 +136,7 @@ def standing_body(qs):
         sc = GOV.scores()["rows"]; sel = rows[off:off + PAGE]
         tb = table(["Agent", "Score", "Level", "Left"], [[GOV._agent(r, True), GOV._score_cell(GOV.parts_of(r["address"], sc).get("score")), dot(r["level"]),
                                                         intc(r["left"]) if r["left"] is not None else "···"] for r in sel], cls="gtbl")
-    def u(**o):
-        p = dict(tab="standing", level=lv); p.update(o)
-        q = [f"{k}={v}" for k, v in p.items() if v and not (k == "tab" and v == "standing")]
-        return "/governance" + ("?" + "&amp;".join(q) if q else "")
-    chips = sub_chips([(k, u(level=k, offset=""), (f'<i class="sd {LEVEL_CLS.get(k, "")}" aria-hidden="true"></i>' if k in ("safe", "watch", "risk") else "") + t
+    chips = sub_chips([(k, u(level=k, offset="", sort="", dir=""), (f'<i class="sd {LEVEL_CLS.get(k, "")}" aria-hidden="true"></i>' if k in ("safe", "watch", "risk") else "") + t
                         + (f' <span class="dim">{cnt[k]:,}</span>' if cnt.get(k) is not None else "")) for k, t in LV_CHIPS], lv, "Level")
     return chips + tb + pager(total, off, lambda o: u(offset=str(o) if o else ""))
 
@@ -173,11 +186,29 @@ def payouts_body(qs):
     rows = [[f'<a href="/epoch/{r["epoch"]}{SG.qs(r["segment"])}">E{r["epoch"]}</a>', intc(r["paid"]), compact(r["median"]), compact(r["max"])] for r in pe["basis"]]
     return fg + '<span class="lbl">Basis</span>' + (table(["Close", "Paid", "Per Agent", "Max"], rows, cls="gtbl") if rows else na("No paid closes yet."))
 
+GR_SUBS = [("seals", "/governance?tab=graders", "Seals"), ("queue", "/governance?tab=graders&amp;sub=queue", "Queue")]
+
+def queue_body(qs):
+    if SG.archived(): return na("The grading list is the live network's.")
+    if GR.is_retired(): return na("minepoa retired its grading list.")
+    if not GR.usable(): return na("The grading list has not been read yet.")
+    s = GR.summary(); off = _off(qs); rows = GVW.queue_select("", "need", "desc"); total = len(rows); sel = rows[off:off + PAGE]; qn = s["quorum"]
+    fg = KIT.figs([("Pending", intc(s["pending"])), ("Ready", intc(s["ready_next_close"])), ("Carried", intc(s["at_quorum_queued"])),
+                   ("Trusted", pct(s["trusted_share"]) if s.get("trusted_share") is not None else "···")])
+    dim = '<span class="dim">···</span>'
+    tb = table(["Answer", "Quorum", "Age", "Expires"], [[GVW.ans_link(r["id"]), GVW.qprog(r, qn), intc(r["age"]) if r.get("age") is not None else dim,
+                                                        intc(r["expires_in"]) if r.get("expires_in") is not None else dim] for r in sel], cls="gtbl gq") if sel else na("No answers pending.")
+    return fg + tb + pager(total, off, lambda o: "/governance?tab=graders&amp;sub=queue" + (f"&amp;offset={o}" if o else ""))
+
 def graders_body(qs):
+    sub = "queue" if (_q(qs, "sub") == "queue" or _q(qs, "tab") == "queue") else "seals"
+    return sub_chips(GR_SUBS, sub, "Graders") + (queue_body(qs) if sub == "queue" else seals_body(qs))
+
+def seals_body(qs):
     js = GOV.jury_series(); t, rows = GOV.seals_select("seals", "desc"); nm = A.forum_names(); exact = GR.usable()
     gs = GR.summary() if exact else None; last = js[-1] if js else None
     ns = sum(r["seals"] for r in rows)
-    fg = KIT.figs([("Active", intc(len(rows))), ("Sealed", intc(ns)), ("Queue", intc(gs["pending"]) if gs else (intc(last["queue"]) if last else "···")),
+    fg = KIT.figs([("Active", intc(len(rows))), ("Sealed", intc(ns)), ("Pending", intc(gs["pending"]) if gs else (intc(last["queue"]) if last else "···")),
                    ("Counting", pct(sum(r.get("counting", 0) for r in rows) / ns) if (exact and ns) else "···")])
     seats = sum(x["aligned"] + x["other"] for x in js)
     ch = bars([("", [x["aligned"], x["other"]]) for x in js[-48:]], height=200, colors=("verd", "ember"), fmt=lambda v: f"{v:,.0f}", legend=["Aligned", "Not aligned"]) if seats else na("No settled jury seats yet.")
