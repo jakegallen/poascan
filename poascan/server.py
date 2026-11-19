@@ -816,7 +816,8 @@ PAGE_VOLATILE = [(MPID, b""), (re.compile(rb'(data-close="[\d.]+">)[^<]*'), rb"\
                  (re.compile(rb'(<div class="sk" data-b="\d+" data-s="[^"]*" style="transform:translateX\()[-\d.]+'), rb"\1"),
                  (re.compile(rb'(<i class="sm(?: s1)?" style="left:)[\d.]+'), rb"\1"),   # the Bench strip slide and the Seals clusters held inside the now line (bench.py)
                  (re.compile(rb'(<div class="bzw" style="--f:)[\d.]+'), rb"\1"), (re.compile(rb'(<time class="tkt" data-ts="\d+">)[^<]*'), rb"\1"),   # the bezel head and ticker ages (1.26.145)
-                 (re.compile(rb'(<span class="sp-f"><span class="upts">Updated <time )data-upts="\d+" datetime="[^"]+">[^<]*'), rb"\1")]   # the header status note's read time (1.26.169)
+                 (re.compile(rb'(<span class="sp-f"><span class="upts">Updated <time )data-upts="\d+" datetime="[^"]+">[^<]*'), rb"\1"),
+                 (re.compile(rb'(<div class="ring hring ering aring" style="--f:)[\d.]+(" data-aring data-now=")\d+'), rb"\1\2")]   # the header status note's read time (1.26.169); the Network anchor ring's fill and now stamp, which app.js redraws every second (1.26.397)
 PAGE_CACHE = "public, max-age=15, s-maxage=30, stale-while-revalidate=15"
 def page_etag(b):
     for r, k in PAGE_VOLATILE: b = r.sub(k, b)
