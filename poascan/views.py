@@ -1224,7 +1224,7 @@ def epochs_page(qs=None):
     else:
         # 1.26.303: the first close after the restart has no gap_s of its own; its gap is the time since the close before it, so no hole at the cut
         gp = [r["gap_s"] or ((r["close_ts"] - epa[i - 1]["close_ts"]) if i and r.get("close_ts") and epa[i - 1].get("close_ts") else 0) for i, r in enumerate(epa)]
-        cad = bars([(f"E{r['epoch']}", [g / 3600 if g else 0]) for r, g in zip(epa, gp)], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
+        cad = cadence_chart([(f"E{r['epoch']}", g / 3600 if g else 0) for r, g in zip(epa, gp)])
         nc = int(A.status().get("epochs_closed") or 0)   # /api/status counts closes before /api/epochs lists their records
         pz = " minepoa.com paused this list; balances safe." if A.epochs_paused() else ""   # 1.26.280: explain the gap when minepoa paused /api/epochs
         unl = (f"E0 to E{nc - 1}" if nc > 1 else "E0") + " closed. Record not listed by /api/epochs yet." + pz
@@ -1250,10 +1250,22 @@ def seg_about():
             'history in close order: totals, charts and lists span both and count each close once. An earlier close keeps its own epoch number, so its link adds '
             '<code>?segment=1</code>. The API and MCP still take <code>segment</code> to read one run.' + ucs + '</p>')
 
+def cadence_chart(rows):
+    """Chain Cadence: close gaps in hours per close. One stalled gap (a 4,007 h outlier after the restart) used to flatten the
+    chart, so the scale tops out at about twice the 90th percentile and taller columns are clipped, still read true in the tip
+    and the callout (1.26.388)."""
+    vals = sorted(v for _, v in rows if v)
+    ymax = None
+    if len(vals) >= 8:
+        p90 = vals[int(len(vals) * 0.9) - 1]; top = vals[-1]
+        if top > 3 * p90:
+            _, ymax, _nk = _ui._nice(0, p90 * 2)
+    return bars([(l, [v]) for l, v in rows], colors=("gold",), fmt=lambda v: f"{v:.2f}h", ymax=ymax, clip=bool(ymax))
+
 def epochs_archived():
     """An archived segment's closes: History and Cadence from its own close records, labelled, read only."""
     ep = A.epoch_rows(); sg = SG.selected(); info = SG.info(sg)
-    cad = bars([(f"E{r['epoch']}", [r["gap_s"] / 3600 if r["gap_s"] else 0]) for r in ep], colors=("gold",), fmt=lambda v: f"{v:.2f}h")
+    cad = cadence_chart([(f"E{r['epoch']}", r["gap_s"] / 3600 if r["gap_s"] else 0) for r in ep])
     s = "".join([stat("Closes", intc(len(ep))), stat("Last close", rel(ep[-1]["close_ts"]) if ep else "···"),
                  stat("Final checkpoint", intc(info.get("cut_height"))), stat("Minted", poa(sum(r["minted"] for r in ep), mined=True))])
     arch = f'<a class="more" href="{E(info["archive_url"])}" rel="noopener noreferrer">Archive ↗</a>' if info.get("archive_url") else ""

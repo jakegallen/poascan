@@ -188,7 +188,16 @@ def score_html(now=None, ticker=""):
                        f'{grid}<line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>{seal_layer([r[1] for r in mine], b, lo, now)}</div>'
                        f'<b class="c num">{n}</b></div>')
             continue
-        marks = "".join(_mark(*r, b) for r in mine)
+        if k == "a":
+            # 1.26.388: a busy chain draws hundreds of answer lines (one SVG element each, 400+ at peak, which put Home over
+            # 1,000 elements). Answers older than the last 4 minutes are drawn as two paths (dim, final); the newest stay lines
+            # so app.js still slides, prunes and animates them. Same pixels, a few hundred fewer nodes.
+            cut = int(now) - 240; old = [r for r in mine if r[1] < cut]; mine = [r for r in mine if r[1] >= cut]
+            xs = lambda fin: [r[1] - b for r in old if bool(r[3]) == fin]   # data-x: app.js counts them in the lane total and drops the path once all have slid out
+            marks = "".join(f'<path class="ma{" f" if fin else ""}" data-x="{",".join(map(str, v))}" d="{"".join(f"M{x} 12V40" for x in v)}"/>' for fin in (False, True) for v in [xs(fin)] if v)
+            marks += "".join(_mark(*r, b) for r in mine)
+        else:
+            marks = "".join(_mark(*r, b) for r in mine)
         out.append(f'<div class="lane" data-k="{k}"><span class="lbl">{label}{tip("lane_" + k)}</span><svg viewBox="0 0 {WIN} 52" preserveAspectRatio="none" aria-hidden="true">'
                    f'{grid}<g class="mk" data-b="{b}" transform="translate({b - lo:.0f} 0)">{marks}</g><line class="now" x1="{WIN - 1}" x2="{WIN - 1}" y1="0" y2="52"/></svg>'
                    f'<b class="c num">{n}</b></div>')
