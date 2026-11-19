@@ -456,11 +456,13 @@ jobs:
           CI: "true"
         run: python tools/tip_layer_test.py
       - name: Install WebKit (pinned Playwright) for the mobile menu check
-        # fail fast and retry once: the browser download (not apt) has hung here before; a cache hit makes it near-instant
-        timeout-minutes: 5
+        # split apt from the browser download: apt can be slow on a bad mirror (needs room), the browser download is the
+        # part that hangs, so only it is time-boxed and retried. A cache hit makes the download near-instant.
+        timeout-minutes: 10
         run: |
-          install() { timeout 120 python -m playwright install --with-deps webkit; }
-          install || { echo "WebKit install timed out or failed, retrying once"; install; }
+          python -m playwright install-deps webkit
+          dl() { timeout 150 python -m playwright install webkit; }
+          dl || { echo "WebKit browser download timed out, retrying once"; dl; }
       - name: Mobile menu at 360 and 390 px (opens under the header with visible, clickable links on a fresh load and after scrolling; Chromium and WebKit)
         env:
           CI: "true"

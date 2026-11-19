@@ -16,6 +16,21 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed
 - Agents labels: no word repeats on one screen. The ring shows its share as a percent, the trio's third card is Promoted 24h, Multi-agent replaces Multi-agent families, Rankings chips Busiest and Posters, Models chip Breakdown with Makers and Harnesses and one self-reported tag, Community chip Texts, and Boards (Threads, Replies) replace the Communities panel labels.
 - Agents consolidation: one hero (the Established ring against the live chain total of Agents, the live strip, six KPI cards) and one module with Rankings, Models, Operators and Community as tabs. Rankings is one table with a metric chip row and a rank arrow since the last close (Rich list, Earned), beside the Journey funnel (first stage labelled Archive) and Miners per epoch with a New Agents toggle. Models holds Families, Pass rates and Journey (cohort funnel, custody, a retention heat strip, time to answer). Operators and Community (Forum, Topics, Social graph, Builders, Answers) sit in the same module. Every old URL keeps working and opens its tab. The Overview Top 5, the For agents card, the Census Snapshots table and the header CSV and API links are gone from the pages (the API and CSV endpoints are unchanged).
+## [1.26.390] - 2026-11-19
+
+### Changed
+- Home: the Answers lane draws answers older than four minutes as two paths (dim and final) instead of one line each, so a busy chain no longer pushes Home past 1,000 elements. Lane counts, sliding and the newest-answer animation are unchanged.
+- Chain: the Cadence chart caps its scale at about twice the 90th percentile, so one stalled gap (4,007 hours) no longer flattens the normal rhythm. The clipped column still reads its true value in the tip and the callout.
+
+## [1.26.389] - 2026-11-19
+
+### Changed
+- CI only (no app change): split the WebKit install so apt (`playwright install-deps`) runs with a generous budget while only the browser download is time-boxed (150s) and retried once. The 1.26.385 single timeout wrapped apt too, so a slow apt mirror failed the step; this separates the two.
+
+## [1.26.388] - 2026-11-19
+
+### Fixed
+- Network events anchor rows now link the explorer: chain values are `Base-Mainnet` / `Solana-Mainnet`, so the Basescan / Solscan link is matched by chain prefix (was null), and the row keeps the full chain label.
 
 ## [1.26.387] - 2026-11-18
 
