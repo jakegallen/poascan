@@ -81,11 +81,11 @@ check("epoch page E2: Paused tag in the header with the local-time window", ptag
 check("epoch page E1: no Paused tag", ptags(h1) == 0)
 hc = V.epochs_page({}); hc = hc[1] if isinstance(hc, tuple) else hc
 check(f"/chain close history: Paused on E2 and E3 only ({ptags(hc)})", ptags(hc) == 2)
-hs = GV.page({"tab": ["settlement"]}).split('id="settlement"')[1]
+hs = GV.page({"tab": ["settlement"]})
 trs = re.findall(r"<tr><td><a href=\"/epoch/(\d+)[^\"]*\">E\d+</a>(.*?)</td>", hs)
 check(f"Governance Settlement: Paused on every E2 and E3 close cell, never on E0 or E1 ({trs})", trs and all(("ptag" in t) == (int(n) >= 2) for n, t in trs) and {int(n) for n, _ in trs} == {0, 1, 2, 3})
-hg = GV.page({"tab": ["changes"]})
-check(f"Governance Changes: Paused on E2 and E3 ({ptags(hg)})", ptags(hg) == 2)
+hg = GV.page({"tab": ["closes"]})
+check(f"Governance Closes (Latest): Paused on E2 and E3 ({ptags(hg)})", ptags(hg) == 2)
 hi = GV.page({"tab": ["intake"]})
 check(f"Governance Intake: Paused on E2 and E3 ({ptags(hi)})", ptags(hi) == 2)
 sa = SV.governance_api("/api/governance/settlement", {})

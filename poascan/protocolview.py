@@ -90,7 +90,7 @@ def select(kind="", by="when", d="desc"):
     tie = lambda r: (-r["ts"], -r["id"])
     return SS.sort_rows(rows, _VAL.get(by, _VAL["when"]), SS.kind_of(COLS, by), d, tie=tie)
 
-def tab(qs, href, qsx):
+def tab(qs, href, qsx, n=500, off=0, links=True):
     """Governance, Protocol: stats, the badge and the timeline (header sorting, kind chips, CSV and API links)."""
     q1 = lambda k, dflt="": ((qs or {}).get(k) or [dflt])[0]
     by = SS.page_sort(qs, dict(SORTS), "when"); d = SS.page_dir(qs)
@@ -102,10 +102,10 @@ def tab(qs, href, qsx):
     chips = "".join(f'<a href="{href("protocol", **keep(kind=x))}#timeline" class="chip {"on" if x == k else ""}">{t} <small>{cnt[x]:,}</small></a>'
                     for x, t in FILTERS if cnt[x] or x == k)
     trs = "".join(f'<tr><td>{lt(r["ts"])}</td><td>{E(KIND_LABEL.get(r["kind"], r["kind"]))}</td><td class="dk">{E(r["file"] or "")}</td>'
-                  f'<td class="dk">{_sha_cell(r)}</td><td>{_rel_cell(r)}</td><td class="dk">{_note(r)}</td></tr>' for r in rows[:500])
+                  f'<td class="dk">{_sha_cell(r)}</td><td>{_rel_cell(r)}</td><td class="dk">{_note(r)}</td></tr>' for r in rows[off:off + n])
     tb = (SS.select(COLS, by, d, link) + f'<div class="tw"><table class="hist cal gov proto"><thead><tr>{SS.heads(COLS, by, d, link)}</tr></thead>'
           f'<tbody>{trs or "<tr><td colspan=6 class=na>No events in this view.</td></tr>"}</tbody></table></div>')
     q = qsx(kind=k)
-    links = (f'{badge(False)}<a class="more" href="/api/v1/protocol.csv{q}" download>CSV →</a><a class="more" href="/api/v1/protocol{q}">API →</a>')
+    links = (f'{badge(False)}<a class="more" href="/api/v1/protocol.csv{q}" download>CSV →</a><a class="more" href="/api/v1/protocol{q}">API →</a>') if links else ""
     foot = '<p class="cov dim small">Hourly check of minepoa.com/client/poa.mjs and /poa-web.mjs; bytes are hashed, never run · <a href="/about#protocol">Method</a></p>'
     return stats_row() + card(f"Protocol timeline · {len(rows):,}", f'<div class="chips">{chips}</div>' + tb + foot, links, cls="histc", id="timeline")

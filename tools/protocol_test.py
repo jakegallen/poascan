@@ -157,8 +157,8 @@ def ui_checks():
     from poascan import governance as GV, views as V, protocolview as PV
     txt = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h))
     h = GV.page({"tab": ["protocol"]}); t = txt(h)
-    check("tab: Protocol chip and title", 'tab=protocol' in h and "Governance · Protocol" in h)
-    check("tab: timeline card with CSV and API links", "Protocol timeline" in t and "/api/v1/protocol.csv" in h and "/api/v1/protocol" in h)
+    check("tab: Protocol chip under Proposals", 'data-kit-sub="protocol"' in h and 'href="/governance?tab=protocol"' in h and "Governance proposals" in h)
+    check("tab: timeline card, no header shortcut links (CSV and API stay at /api/v1/protocol)", "Protocol timeline" in t and 'class="more"' not in h)
     check("tab: header sorting (aria-sort, phone menu)", "aria-sort" in h and 'class="sortsel"' in h)
     check("tab: visitor-local times", '<time class="t lt' in h)
     check("tab: kind chips", "Releases" in t and "Source" in t)

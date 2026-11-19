@@ -159,15 +159,14 @@ def main():
         c, h2, _ = get(f"/address/{LATER}")
         check("address page: no Swaps card without offers, no AT RISK when 3 closes out", c == 200 and 'id="swaps"' not in h2 and ">AT RISK<" not in h2)
         c, h, _ = get("/governance?tab=at-risk")
-        tb = re.search(r'<table class="hist cal risk">(.*?)</table>', h, re.S)
-        check(f"/agents/at-risk ({c}): table with Drops at sort link, rows soonest first", c == 200 and tb is not None and 'href="/governance?tab=at-risk&amp;sort=-drop"' in tb.group(1)
-              and [int(x) for x in re.findall(r'<span class="tag warn">E(\d+)</span>', tb.group(1))] == [12, 12, 13])
-        check("/agents/at-risk: Agent names link to their LabLeak profile", f'href="https://minepoa.com/lableak/#/u/{NAMED}"' in h and ">Lantern-Test<" in h)
-        check("/agents/at-risk: stat cards (watermarked .stat), no range options, no share buttons", h.count('<div class="stat">') >= 4 and "range=" not in tb.group(1) and "24h" not in tb.group(1) and "share" not in h.lower().replace("shared", ""))
-        check("/agents/at-risk: Standing Watch credited by handle, CSV and API links, At risk sub-tab on", f'href="{SD.TRACKER}"' in h and "by EmBot-Lantern" in h
-              and "/api/v1/agents/at-risk.csv" in h and 'class="chip on">At risk<' in h)
-        c, h3, _ = get("/governance?tab=at-risk&sort=-drop"); tb3 = re.search(r'<table class="hist cal risk">(.*?)</table>', h3, re.S)
-        check("/agents/at-risk?sort=-drop: latest drop first", tb3 is not None and [int(x) for x in re.findall(r'<span class="tag warn">E(\d+)</span>', tb3.group(1))] == [13, 12, 12])
+        TBR = r'<table class="[^"]*gtbl[^"]*">(.*?)</table>'
+        tb = re.search(TBR, h, re.S)
+        lefts = lambda t: [int(x) for x in re.findall(r'<td><span class="num" title="\d+">(\d+)</span></td></tr>', t)]
+        check(f"/governance?tab=at-risk ({c}): the Standing table with Agent, Score, Level and Left, soonest first", c == 200 and tb is not None and all(f">{w}<" in tb.group(1) for w in ("Agent", "Score", "Level", "Left"))
+              and lefts(tb.group(1)) == sorted(lefts(tb.group(1))) and len(lefts(tb.group(1))) == 3)
+        check("/governance?tab=at-risk: Agent names link to their LabLeak profile", f'href="https://minepoa.com/lableak/#/u/{NAMED}"' in h and ">Lantern-Test<" in h)
+        check("/governance?tab=at-risk: no range options, no share buttons, the At risk level chip is on", "range=" not in tb.group(1) and "24h" not in tb.group(1) and "share" not in h.lower().replace("shared", "")
+              and 'data-kit-sub="risk"' in h and 'class="chip on"' in h)
         c, _, hd = get("/at-risk")
         check(f"/at-risk is a 301 to /governance?tab=at-risk ({c})", c == 301 and hd.get("Location", "").endswith("/governance?tab=at-risk"))
         c, ab, _ = get("/about"); st = re.search(r'<p id="standing">(.*?)</p>', ab, re.S)

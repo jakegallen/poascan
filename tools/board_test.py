@@ -48,8 +48,10 @@ api = json.dumps(BD.api())
 check("API counts only: no pending score", str(SCORE) not in api and '"score"' not in api)
 tools = {t[0] for t in AG.TOOLS}
 check("MCP get_grading_board listed", "get_grading_board" in tools)
-h = GV.page({"tab": ["queue"]}); h = h if isinstance(h, str) else h[1]
-check("Queue tab shows the board", 'id="board"' in h and "Birth panel by closes waited" in h and "neutral_grading" in h and str(SCORE) not in h)
+h = BD.card_html()   # 1.26.395: the board card renders from its own module; the Queue view is a 20 row list
+check("Board card: birth panel by closes waited, neutral_grading, no score", 'id="board"' in h and "Birth panel by closes waited" in h and "neutral_grading" in h and str(SCORE) not in h)
+_qv = GV.page({"tab": ["queue"]}); _qv = _qv if isinstance(_qv, str) else _qv[1]
+check("Queue view: the Graders Queue chip is on, no board card", 'data-kit-sub="queue"' in _qv and 'id="board"' not in _qv)
 _d = dict(BD.data()); _real = BD.data
 BD.data = lambda: dict(_d, at_three_record=304, grading_list=dict(at_three=5, at_quorum=8, pending=9, as_of=(_d.get("last_close_ts") or 0) - 600))
 _h = BD.card_html()
