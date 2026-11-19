@@ -72,7 +72,7 @@ if sync_playwright:
             runs = [(eng, b, 390) for eng, b in engines] + [("chromium", engines[0][1], 1280)]
             for eng, b, w in runs:
                 mob = w < 600
-                for path, sel in (("/", '.kpis [data-chart="active"]'), ("/", '.kpis [data-chart="agents"]'), ("/network?tab=charts", '[data-chart="supply"]')):
+                for path, sel in (("/", '.kpis [data-chart="active"]'), ("/", '.kpis [data-chart="agents"]'), ("/", '.kpis [data-chart="holders"]')):
                     tag = f"{eng} {w} {path} {sel.split('=')[-1].strip(']')}"
                     ctx = b.new_context(viewport={"width": w, "height": 844 if mob else 900}, is_mobile=mob and eng == "chromium", has_touch=mob, device_scale_factor=2 if mob else 1)
                     ctx.add_init_script("window.POASCAN_CPT_MS=1500")
