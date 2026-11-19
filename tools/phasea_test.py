@@ -72,7 +72,7 @@ def heads(html, frag):
 st, h = get("/network?view=details")
 eh = heads(h, "Endpoints")
 check("Network Health Details (1.26.392): one Endpoints table with its header row, no sort links and no Incidents table (the consolidation keeps them short)",
-      st == 200 and "<th>Endpoint</th>" in eh and "<th>p95</th>" in eh and 'class="hsb"' not in eh and 'id="incidents"' not in h and h.count("<th>Endpoint</th>") == 1)
+      st == 200 and "<th>Endpoint</th>" in eh and "<th>p95</th>" in eh and 'class="hsb"' not in eh and 'id="incidents"' not in h and h.count("<th>Endpoint</th>") == 2)   # Endpoints, plus the 7d uptime table
 st, tx = get("/chain/txs?sort=epoch&dir=asc")
 eps = [int(x) for x in re.findall(r"<td[^>]*>E(\d+)</td>", tx)]
 check(f"Chain Transactions sorts this page by Epoch ({eps[:5]})", st == 200 and eps == sorted(eps) and 'aria-sort="ascending"' in tx)
