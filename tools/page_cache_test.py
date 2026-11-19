@@ -43,6 +43,7 @@ try:
         except Exception: time.sleep(0.2)
     for p in ("/", "/start", "/about", "/chain", "/agents", "/network?tab=token", "/unlocks"):
         c, h, body = get(base, p, {"Accept-Encoding": "gzip"}); et = h.get("etag", "")
+        if p.startswith("/network"): time.sleep(1.3)   # 1.26.397: the Network anchor ring stamps now into the page; the ETag must ignore it
         c2, h2, b2 = get(base, p); c3, h3, _ = get(base, p, {"If-None-Match": et}); c4, _, _ = get(base, p, {"If-None-Match": et.removeprefix("W/")})
         c5, _, _ = get(base, p, {"If-None-Match": 'W/"0000000000000000"'})
         check(f"{p}: weak ETag, page Cache-Control, Vary once; same ETag on a second render; 304 weak and strong form; 200 on another tag ({c} {c3} {c4} {c5})",
