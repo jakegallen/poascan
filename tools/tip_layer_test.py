@@ -48,9 +48,9 @@ ch["poa1" + "A" * 40] = {"solana": {"addr": "J6kWfKRfvJGBJQu5EbZiYiURgUDWPZih2zv
 db.put_blob("chains", ch)
 db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final) VALUES(?,?,?,?,1)", [("b" * 64, "identity-link", "poa1" + "A" * 40, now - 7200), ("c" * 64, "chains-update", "poa1" + "A" * 40, now - 7100), ("d" * 64, "join", "poa1" + "B" * 40, now - 3700)], many=True)
 """
-PAGES = ["/", "/wallet", "/wallet?address=poa1" + "A" * 40, "/wallet?address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=intake", "/governance?tab=graders",
+PAGES = ["/", "/start?tab=check", "/start?tab=check&address=poa1" + "A" * 40, "/start?tab=check&address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=intake", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
-         "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10", "/help"]
+         "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10", "/start?tab=earn"]
 
 # Is box the topmost element at its centre and four inset corners, and fully inside the viewport? Notes that ignore the
 # pointer (chart readouts) take pointer events for the measurement only, since elementFromPoint skips pointer-events:none.

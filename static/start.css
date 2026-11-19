@@ -47,3 +47,4 @@
 .ststate{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 14px 14px}
 .stq+.stnext{margin-top:8px}
 .ststate time{font:inherit;letter-spacing:inherit}
+.stask{margin:12px 0 0}.stask:first-child{margin:0 0 12px}
