@@ -1,0 +1,37 @@
+/* Start hub (starthub.py): the Join, Check and Earn module beside the live panel. Loaded on /start only. */
+.sthub{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:var(--gap,16px);align-items:stretch}
+@media (max-width:900px){.sthub{grid-template-columns:minmax(0,1fr)}}
+.stmain,.stmain .kit-mod{min-width:0;height:100%}
+.sthub .stp2{border:0;background:none;box-shadow:none;padding:6px 0 0;overflow:visible;border-radius:0}
+.sthub .stp2::before{display:none}
+.stlive{display:flex;flex-direction:column;height:100%}
+.stlive .string{display:flex;justify-content:center;padding:18px 0 8px;flex:1;align-items:center}
+.stlive .ring{width:min(100%,250px)}
+.stlive .rc .bn{font-size:clamp(46px,25cqw,96px)}
+.stlive .rc .stcd{color:var(--gold);font-size:var(--t20)}
+.stlive .kpis.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stlive .kpis.three .stat{padding-left:14px;padding-right:14px}
+@media (max-width:420px){.stlive .kpis.three{grid-template-columns:minmax(0,1fr)}.stlive .kpis.three .stat:nth-child(n){border-left:0;border-top:var(--hair)}}
+.stq{margin:0 0 14px}
+.stq input{width:100%;min-height:44px;padding:0 16px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--ink-2);color:var(--hi);font:400 var(--t14)/1 var(--mono)}
+.stq input:focus{outline:2px solid var(--gold);outline-offset:1px}
+.stw{display:flex;align-items:center;gap:8px;margin:0 0 10px;justify-content:flex-end}
+.stper{list-style:none;margin:0 0 18px;padding:0;display:flex;flex-direction:column}
+.stper li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line);position:relative}
+.stper li b{font-weight:500;color:var(--hi)}
+.stper .stdot{width:24px;height:24px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;font:400 var(--t12)/1 var(--mono);color:var(--dim);font-style:normal}
+.stper .stl-done .stdot{border-color:var(--verd);background:color-mix(in srgb,var(--verd) 18%,transparent)}
+.stper .stl-done .stdot::after{content:"";width:6px;height:10px;border:solid var(--verd);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.stper .stl-now .stdot{border-color:var(--gold);box-shadow:0 0 10px color-mix(in srgb,var(--gold) 45%,transparent);color:var(--gold)}
+.stper .stl-wait b{color:var(--dim)}
+@media (prefers-reduced-motion:no-preference){.stper .stl-now .stdot{animation:stpulse 1.8s ease-in-out infinite}.stper .stl-done .stdot{animation:stpop .5s var(--ease) both}.stper li{animation:stin .4s var(--ease) both}.stper li:nth-child(2){animation-delay:60ms}.stper li:nth-child(3){animation-delay:120ms}.stper li:nth-child(4){animation-delay:180ms}}
+@keyframes stpulse{50%{box-shadow:0 0 2px color-mix(in srgb,var(--gold) 20%,transparent)}}
+@keyframes stpop{from{transform:scale(.6)}}
+@keyframes stin{from{opacity:0;transform:translateY(6px)}}
+.stearn td{white-space:normal;vertical-align:top}
+.stearn td:first-child{color:var(--hi);white-space:nowrap}
+.kit-sub{margin:0 0 14px}
+/* the Join tab carries the existing card (startv2.css) without its own frame, heading or centring */
+.sthub .s2v{min-height:0;padding:0;max-width:none;display:block}
+.sthub .sv-card{border:0;background:none;box-shadow:none;padding:6px 0 0;overflow:visible;border-radius:0}
+.sthub .sv-card::before{display:none}
