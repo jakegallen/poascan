@@ -5,7 +5,7 @@ Module: Standing, Closes, Payouts, Graders, Proposals and Rules as tabs (kit.tab
 the old /governance?tab= links open the right place (established, at-risk, queue, directory and never land on Standing; settlement, changes,
 intake, settleage and charts on Closes; forum and protocol on Proposals). Every list shows 20 rows and pages by offset.
 One word once per screen (Jake's standing order): a state is a coloured dot whose chip carries the word, an epoch number is shown once.
-Backend still to come from Build (agreed on #147, not on main yet): 5b per-Agent standing moves (GET /api/v1/governance/standing-changes
+Backend still to come from Build (agreed in the issue 147 thread, not on main yet): 5b per-Agent standing moves (GET /api/v1/governance/standing-changes
 rows {address, name, from, to}, limit 20 + offset) and 5a counts (computed here from the same rows, so no wait). The Moves chip shows an
 empty state until 5b is live; tools/fixtures/gov_moves.json drives the fixture screenshots (POASCAN_PAGES_FIXTURE=1, never set in production)."""
 import os, json, time
