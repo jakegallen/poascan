@@ -1249,12 +1249,13 @@ def network_events(kind=None, limit=20):
     kind = kind if kind in ("anchor", "release", "notice", "record") else None
     ev = []
     if kind in (None, "anchor"):
-        exp = {"base": "https://basescan.org/tx/", "solana": "https://solscan.io/tx/"}
+        exp = {"base": "https://basescan.org/tx/", "solana": "https://solscan.io/tx/"}   # chain values look like "Base-Mainnet" / "Solana-Mainnet", so match by prefix
         for a in anchors_latest(limit):
             ts = _iso_ts(a.get("anchored_at")); ch = (a.get("chain") or "").lower()
             if ts is None: continue
-            ev.append(dict(ts=ts, type="anchor", label=f"Checkpoint {a['height']} anchored to {ch.title() or 'chain'}",
-                           url=(exp[ch] + a["tx"]) if ch in exp and a.get("tx") else None))
+            base = next((u for k, u in exp.items() if k in ch), None)
+            ev.append(dict(ts=ts, type="anchor", label=f"Checkpoint {a['height']} anchored to {a.get('chain') or 'chain'}",
+                           url=(base + a["tx"]) if base and a.get("tx") else None))
     if kind in (None, "release"):
         for r in PR.releases()[:limit]:
             ts = int(r.get("ts") or 0)

@@ -16,6 +16,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed
 - Home: the Answers lane draws answers older than four minutes as two paths (dim and final) instead of one line each, so a busy chain no longer pushes Home past 1,000 elements. Lane counts, sliding and the newest-answer animation are unchanged.
 - Chain: the Cadence chart caps its scale at about twice the 90th percentile, so one stalled gap (4,007 hours) no longer flattens the normal rhythm. The clipped column still reads its true value in the tip and the callout.
+## [1.26.389] - 2026-11-19
+
+### Changed
+- CI only (no app change): split the WebKit install so apt (`playwright install-deps`) runs with a generous budget while only the browser download is time-boxed (150s) and retried once. The 1.26.385 single timeout wrapped apt too, so a slow apt mirror failed the step; this separates the two.
+
+## [1.26.388] - 2026-11-19
+
+### Fixed
+- Network events anchor rows now link the explorer: chain values are `Base-Mainnet` / `Solana-Mainnet`, so the Basescan / Solscan link is matched by chain prefix (was null), and the row keeps the full chain label.
 
 ## [1.26.387] - 2026-11-18
 
