@@ -7,10 +7,7 @@ until the last stage lands. The address is checked for format first (never echoe
 Earn: ways to earn as short rows (Pays, Qualifies, Next); the FAQ stays on /about.
 Live panel: the open epoch with its answer countdown and three KPIs (Joined today, Pass rate, Median to pay) with the joins per hour history.
 
-Backend (agreed in the issue 147 thread, not on main yet): 7a GET /api/v1/agents/{addr}/lifecycle -> {stage (paid|grading|answering|joined), joined_ts, first_answer_ts, first_seal_ts, first_payout_ts}
-(404 on unknown), 7b GET /api/v1/agents/joiners?days=7 -> {joins_per_hour:[[hour_ts,n]], median_s_to_first_pass, median_s_to_first_pay, joiners, reached_first_pass, reached_first_pay}. Both are staged as PR 179.
-Until those land the same fields are computed here from the local archive (cached, no upstream read), through lifecycle() and joiners();
-LIFECYCLE_FN and JOINERS_FN take Build's readers when they exist."""
+Data: Build's 7a lifecycle (agents.agent_lifecycle) and 7b joiners (agents.joiners), read in process, the same data as /api/v1/agents/{addr}/lifecycle and /api/v1/agents/joiners."""
 import time, re, statistics
 from html import escape as E
 from . import db, analytics as A, kit as KIT, segments as SG
@@ -19,7 +16,6 @@ from . import ui as _ui
 
 TABS = [("join", "/start", "Join"), ("check", "/start?tab=check", "Check"), ("earn", "/start?tab=earn", "Earn")]
 HEAD = '<link rel="stylesheet" href="/static/start.css?v={}"><script src="/static/start.js?v={}" defer></script>'
-LIFECYCLE_FN = None; JOINERS_FN = None
 STAGES = [("joined_ts", "Joined"), ("first_answer_ts", "First answer"), ("first_seal_ts", "First seal"), ("first_payout_ts", "First payout")]
 
 def _asset_v(name):
@@ -29,56 +25,19 @@ def _asset_v(name):
 
 def _q(qs, k, d=""): return ((qs or {}).get(k) or [d])[0]
 
-# ---------------- 7a, 7b (local until Build's endpoints land) ----------------
-@A.cached("start_first_pay", 600)
-def _first_pay():
-    """address -> ts of the first close that paid it, over every segment."""
-    out = {}
-    for n in SG.NUMBERS:
-        for e in sorted(A.segment_closes(n), key=lambda e: int(e.get("ts") or 0)):
-            t = int(e.get("ts") or 0)
-            for a, v in (e.get("rewards") or {}).items():
-                if a not in out and float(v or 0) > 0: out[a] = t
-    return out
-
+# ---------------- 7a, 7b (Build's readers, in process) ----------------
 def lifecycle(addr):
-    """None for an unknown address, else the 7a fields. Archive only."""
-    if LIFECYCLE_FN:
-        try: return LIFECYCLE_FN(addr)
-        except Exception: return None
-    j = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='join' AND from_addr=? AND ts>0", (addr,))
-    acc = db.q1("SELECT api_ts, first_seen FROM accounts WHERE addr=?", (addr,))
-    if not (j and j["t"]) and not acc: return None
-    joined = int((j or {}).get("t") or (acc or {}).get("api_ts") or (acc or {}).get("first_seen") or 0) or None
-    def first(tp):
-        r = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type=? AND from_addr=? AND ts>0", (tp, addr)); return int(r["t"]) if r and r["t"] else None
-    d = dict(joined_ts=joined, first_answer_ts=first("challenge"), first_seal_ts=first("grade-sealed"), first_payout_ts=_first_pay().get(addr))
-    done = [k for k, _ in STAGES if d.get(k)]
-    d["stage"] = {"joined_ts": "joined", "first_answer_ts": "answering", "first_seal_ts": "grading", "first_payout_ts": "paid"}[done[-1]] if done else "unknown"   # Build's 7a vocabulary (staged PR 179)
-    return d
+    """None for an unknown or malformed address, else Build's 7a fields (agents.agent_lifecycle, the same data as /api/v1/agents/{addr}/lifecycle)."""
+    from . import agents as AGN
+    try: r = AGN.agent_lifecycle(addr)
+    except Exception: return None
+    return None if r in (None, "badaddr") else r
 
-@A.cached("start_joiners", 300)
 def joiners(days=7):
-    if JOINERS_FN:
-        try: return JOINERS_FN(days)
-        except Exception: return None
-    import os
-    if os.environ.get("POASCAN_PAGES_FIXTURE") == "1": days = 28   # fixture screenshots only: the copy has no join in the last 7 days
-    now = int(time.time()); since = now - days * 86400
-    rows = db.q("SELECT from_addr AS a, MIN(ts) AS t FROM txs WHERE type='join' AND ts>? AND from_addr IS NOT NULL GROUP BY from_addr", (since - 86400,))
-    hours = {}
-    for r in rows:
-        if r["t"] >= since: h = int(r["t"]) // 3600 * 3600; hours[h] = hours.get(h, 0) + 1
-    fp = _first_pay(); pay = [fp[r["a"]] - r["t"] for r in rows if r["t"] >= since and r["a"] in fp and fp[r["a"]] >= r["t"]]
-    fans = {}
-    for r in rows:
-        if r["t"] < since: continue
-        x = db.q1("SELECT MIN(ts) AS t FROM txs WHERE type='challenge' AND from_addr=? AND ts>=?", (r["a"], r["t"]))
-        if x and x["t"]: fans[r["a"]] = x["t"] - r["t"]
-    cohort = [r for r in rows if r["t"] >= since]
-    return dict(joins_per_hour=sorted([h, n] for h, n in hours.items()), median_s_to_first_pass=(statistics.median(fans.values()) if fans else None),
-                median_s_to_first_pay=(statistics.median(pay) if pay else None), joiners=len(cohort),
-                reached_first_pass=len(fans), reached_first_pay=len(pay))   # local: first pass is read as the first answer; Build's 7b (staged PR 179) counts the first passed answer
+    """Build's 7b (agents.joiners, the same data as /api/v1/agents/joiners?days=7): joins per hour, medians to first pass and first pay. Cached 5 minutes there."""
+    from . import agents as AGN
+    try: return AGN.joiners(days)
+    except Exception: return None
 
 # ---------------- live panel ----------------
 def live_panel():
