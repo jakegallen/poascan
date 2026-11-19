@@ -79,7 +79,7 @@ check("/wallet 301s to Start Check and keeps a valid address", S.moved("/wallet"
 check("a key-shaped or junk address is dropped from the redirect, never echoed", S.moved("/wallet", {"address": ["pk_" + "Q" * 30]}) == "/start?tab=check" and S.moved("/help", {"address": ["<script>"]}) == "/start?tab=earn")
 check("sitemap: /help and /wallet are out", "/help" not in S.STATIC_ROUTES and "/wallet" not in S.STATIC_ROUTES)
 check("the Earn and Check tabs are the Start tabs", [t[0] for t in SH.TABS] == ["join", "check", "earn"])
-check("/upgrade carries no Ask agent prompt box", "Ask agent" not in SRC("poascan/views2.py") and "pbox" not in SRC("poascan/views2.py"))
+check("/upgrade carries no Ask agent prompt box; the one Ask agent is in Start", "Ask agent" not in SRC("poascan/views2.py") and "pbox" not in SRC("poascan/views2.py") and "PR.ask(" in SRC("poascan/starthub.py") and "PR.ask(" not in SRC("poascan/views.py"))
 check("Agent pages link the earn check to the Check tab", '/help?address=' not in SRC("poascan/views.py").replace('<code>/help?address=&lt;poa1 address&gt;</code>', ''))
 
 for p in ("poascan/starthub.py", "static/start.css"):
