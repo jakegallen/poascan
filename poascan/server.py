@@ -21,6 +21,8 @@ from . import segments as SG
 from . import htmlcache as HC
 from . import db, analytics as A, agents as G, indexer as I, views as V, views2 as V2, views3 as V3, views4 as V4, live as L, agentapi as AG, start as ST, faq as FQ, ui as UI, og as OG, receipts as RC, records as RR, history as HI, calibration as CA, cohorts as CO, reconcile as RE, maint as MT, swap as SW, swapclient as SC, links as LK
 from . import addrlight as AL
+from . import apitel as APT
+from . import apisamples as ASM
 from . import agentshub as AH
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -264,6 +266,13 @@ def api(path, qs):
         a = m.group(1)
         if not V.ADDR_RX.match(a) or not LK.known(a): raise NotFound("unknown agent")
         return dict(agent=a, addresses=LK.addresses(a), upstream_notice=chains_notice()), False
+    m = re.match(r"^/api/agents/([^/]{1,80})/lifecycle$", path)   # POASCAN data ask 7a: stage + joined/first-answer/first-seal/first-payout
+    if m:
+        a = m.group(1)
+        if not V.ADDR_RX.match(a): raise NotFound("unknown agent")
+        r = G.agent_lifecycle(a)
+        if not isinstance(r, dict): raise NotFound("unknown agent")
+        return r, False
     m = re.match(r"^/api/receipt/([0-9a-fA-F]{64})$", path)
     if m:
         tid = m.group(1).lower(); r = RC.receipt(tid, fetch=True)
@@ -361,6 +370,10 @@ def api(path, qs):
                     note="endpoints[].p50/p95 are the upstream minepoa probe; page_cache.self_render_ms and page_cache.warm_paths are POAScan's own render latency and warm-set health")
         return dict(endpoints=d["eps"], incidents=[dict(start=a, end=b, what=w, fails=f) for a, b, w, f in d["inc"]], anchors=d["anchors"], last_checkpoint_change=d["last_cp_change"],
                     segment=SG.CURRENT, segments=SG.all_info(), genesis_cut=SG.cut(), diagnostics=diag, **V.joins_fields()), False
+    if path == "/api/telemetry":   # 6a: in-process API telemetry (per-minute counts by surface, success rate, p50/p95, top route templates)
+        return APT.snapshot((qs.get("minutes") or ["60"])[0]), False
+    if path == "/api/reference/samples":   # 6b: stored example responses, so the API page's Run pane never hits the live API
+        return ASM.samples(), False
     m = re.match(r"^/api/epoch/(\d{1,9})$", path)
     if m:
         r = [x for x in A.epoch_rows() if x["epoch"] == int(m.group(1))]
@@ -408,6 +421,8 @@ def api(path, qs):
         return d, False
     if path == "/api/agents/health": return G.network_health(), False
     if path == "/api/agents/totals": return G.agent_totals(), False   # POASCAN data ask 3a: chain agents vs archive_agents
+    if path == "/api/agents/joiners":   # POASCAN data ask 7b: joins per hour + median time to first pass/pay for recent joiners
+        return G.joiners((qs.get("days") or ["7"])[0]), False
     if path == "/api/agents/hourly":   # POASCAN data ask 3c: hourly joins + established adds
         return A.agents_hourly((qs.get("hours") or ["168"])[0]), False
     if path == "/api/agents/rank":   # POASCAN data ask 3b: per-close rank snapshot (top 200/metric, prune >8 closes)
@@ -624,6 +639,7 @@ GOV_API = {"/api/governance": set(), "/api/governance/established": {"sort", "di
            "/api/governance/intake": {"close", "state", "sort", "dir", "limit", "offset"}, "/api/governance/econ": set(),
            "/api/governance/settle-age": {"sort", "dir"},
            "/api/governance/settlement": {"close", "sort", "dir", "limit", "offset"}, "/api/governance/standing-changes": {"close", "sort", "dir"},
+           "/api/governance/standing": set(), "/api/governance/standing-moves": {"limit", "offset"},
            "/api/governance/never-established": {"sort", "dir", "limit", "offset"}}
 def governance_api(path, qs):
     """Governance tabs as JSON (?segment= is read before routing). Unknown parameters and values are a 400."""
@@ -653,6 +669,9 @@ def governance_api(path, qs):
         so, d = sd(GV.EST_SORTS, "score")
         return GV.api_established(so, pick("filter", [""] + list(GV.EST_FILTER_IN), ""), num("limit", 1000, 1, 5000), num("offset", 0, 0, 10 ** 6), d)
     if path == "/api/governance/payouts": return GV.api_payouts()
+    if path == "/api/governance/standing": return GV.api_standing_summary()   # 5a: standing headline counts only
+    if path == "/api/governance/standing-moves":   # 5b changed rows only (off safe) + removed; 5c offset paging (default 20, cap 100)
+        return GV.api_standing_moves(num("limit", 20, 1, 100), num("offset", 0, 0, 10 ** 6))
     if path == "/api/governance/graders":
         so, d = sd(GV.GRADER_SORTS, "seals")
         return GV.api_graders(num("limit", 100, 1, 1000), so, d)
@@ -900,6 +919,7 @@ class H(BaseHTTPRequestHandler):
         try:
             ms = (time.monotonic() - self._t0) * 1000 if getattr(self, "_t0", None) else None
             VS.COUNTER.hit(self.command, code, self.path, self.headers.get("User-Agent"), self.headers.get("Referer"), self.client_ip, ms, self.headers.get("Fly-Region"))
+            APT.record(self.path, code, ms, ctype)   # 6a: in-process API telemetry (route-template keys only, no client ids)
         except Exception: pass   # counting never breaks a response
         b = self.prep(body, ctype)
         gz = (len(b) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and

@@ -69,6 +69,39 @@ def standing_rows():
     return dict(rows=rows, open_epoch=cur, ttl=ttl, last_close=last,
                 counts={k: sum(1 for r in rows if r["level"] == k) for k, _ in LEVELS})
 
+def api_standing_summary():
+    """5a: the standing headline counts only (safe / watch / at_risk), how many close next and the established total."""
+    s = standing_rows(); c = s["counts"]
+    closing_next = sum(1 for r in s["rows"] if r.get("left") == 1)
+    return dict(safe=c.get("safe", 0), watch=c.get("watch", 0), at_risk=c.get("risk", 0), closing_next=closing_next,
+                established=sum(c.get(k, 0) for k in ("safe", "watch", "risk")), open_epoch=s["open_epoch"],
+                last_close=s["last_close"], ttl=s["ttl"], segment=SG.selected(), method=METHOD,
+                note="counts only; closing_next is Agents one close from dropping; see /api/v1/governance/standing-moves for the rows.")
+
+def api_standing_moves(limit=20, offset=0):
+    """5b: the changed rows only (off safe), biggest change first: Agents now at watch or at_risk from the current
+    standing fold, plus Agents removed at the most recent close. 5c: limit/offset paging; total is before paging."""
+    s = standing_rows(); nm = A.forum_names(); out = []
+    for r in s["rows"]:
+        if r["level"] in ("risk", "watch"):
+            out.append(dict(address=r["address"], name=r["name"], level=("at_risk" if r["level"] == "risk" else "watch"),
+                            left=r["left"], drop=r["drop"], last=r["last"], missed=r["missed"], close=None, close_ts=None))
+    last = s["last_close"]
+    try: chg = GV2.standing_changes()
+    except Exception: chg = []
+    for row in chg:
+        if last is not None and row.get("close") == last:
+            for a in row.get("removed_list") or []:
+                out.append(dict(address=a, name=nm.get(a), level="removed", left=None, drop=None, last=None,
+                                missed=None, close=row["close"], close_ts=row.get("close_ts")))
+    rank = {"removed": 0, "at_risk": 1, "watch": 2}
+    out.sort(key=lambda r: (rank[r["level"]], r["left"] if r["left"] is not None else -1, (r["name"] or "~").lower(), r["address"]))
+    total = len(out); counts = {k: sum(1 for r in out if r["level"] == k) for k in ("removed", "at_risk", "watch")}
+    return dict(rows=out[offset:offset + limit], total=total, limit=limit, offset=offset, counts=counts,
+                open_epoch=s["open_epoch"], last_close=last, ttl=s["ttl"], segment=SG.selected(), method=METHOD,
+                note="changed rows only (off safe): Agents now at watch or at_risk, plus Agents removed at the last close; safe Agents are omitted. "
+                     "removed rows carry close and close_ts; watch and at_risk carry left, drop, last, missed.")
+
 def _agent(r, est=False):
     """Agent cell: name (LabLeak) with the short address under it. est: an established row, tagged Unconfirmed when
     minepoa's grading list does not have it (grading.established_check)."""
