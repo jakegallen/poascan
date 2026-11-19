@@ -85,4 +85,15 @@ check("Agent pages link the earn check to the Check tab", '/help?address=' not i
 for p in ("poascan/starthub.py", "static/start.css"):
     check(f"no em or en dash in {p}", not re.search("[\u2013\u2014]", SRC(p)))
 
+# ---- batch 2: the epoch page on the kit ----
+from poascan import epochhub as EH
+EHS = SRC("poascan/epochhub.py")
+check("epoch hub: Payouts capped at 20 rows with offset paging", EH.PAGE == 20 and "allr[off:off + PAGE]" in EHS)
+pg = EH._pager(45, 20, lambda o: f"/x?offset={o}")
+check("epoch pager: Prev and Next with the range", "offset=0" in pg and "offset=40" in pg and "21 to 40 of 45" in pg and EH._pager(20, 0, lambda o: "") == "")
+check("epoch hub: six KPI cards, Payouts, Record and Forum tabs, no header CSV link", EHS.count("KIT.kpi(") == 6 and "KIT.tabmod(" in EHS and "rewards.csv" not in EHS.replace("the CSV route stays at /api/v1/epoch/N/rewards.csv", ""))
+check("epoch hub: no em or en dash", not re.search("[\u2013\u2014]", EHS) and not re.search("[\u2013\u2014]", SRC("static/epoch.css")))
+check("epoch page: views.epoch hands off to the hub", "EH.page(" in SRC("poascan/views.py") and "split_stats" not in SRC("poascan/views.py"))
+check("epoch.css respects reduced motion", "prefers-reduced-motion" in SRC("static/epoch.css") or "animation" not in SRC("static/epoch.css"))
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

@@ -710,14 +710,15 @@ def fixture_pages(check):
             check("tx: one summary line says who did what, epoch, status and attestations; those rows are not repeated",
                   tp.count('<h1 class="txsum">') == 1 and " of 5 attestations" in tp and "<span>Status</span>" not in tp and "<span>Attestations</span>" not in tp and "\u2014" not in tp)
         ep7 = req(base + "/epoch/7")[1].decode()
-        check("epoch: header line (closed at a visitor-local time, Agents paid, burned), one Burned card, plain labels, Payouts table converts to USD",
-              '<h1 class="ephd">Epoch 7 · ' in ep7 and 'closed <time class="t lt" datetime="' in ep7 and "Agents paid" in ep7 and "% burned" in ep7 and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7
-              and ">Max reward<" in ep7 and ">At ceiling<" not in ep7 and ">Awaiting graders<" in ep7 and ">No panel<" not in ep7 and ">Decided<" in ep7 and ">Passed / failed / expired<" in ep7
+        ep7r = req(base + "/epoch/7?tab=record")[1].decode()
+        check("epoch: hero ring with a visitor-local close time, six headline cards, plain labels, Payouts table converts to USD",
+              ">Epoch</span>" in ep7 and 'class="ring hring' in ep7 and '<time class="t lt" datetime="' in ep7 and ">Agents paid<" in ep7 and ">Burned<" in ep7
+              and ">Burn %<" not in ep7 and ">Paid agents<" not in ep7 and ">At ceiling<" not in ep7 and ">No panel<" not in ep7
+              and ">Awaiting graders<" in ep7r and ">Passed / failed / expired<" in ep7r and ">Decided<" not in ep7r
               and re.search(r'<th class="pc hs"[^>]*><a class="hsb"[^>]*>Reward<', ep7) and 'title="&lt;' not in ep7)
-        st = ep7.split('id="story"', 1)[1].split("</section>", 1)[0] if 'id="story"' in ep7 else ""
-        check("epoch story: one card above the stat cards, steps from the close row, terse labels, no dashes",
-              ep7.count('id="story"') == 1 and ep7.index('id="story"') < ep7.index('class="stats six"') and '<ol class="estory">' in st
-              and '<span class="esl">Closed</span>' in st and "\u2014" not in st and "\u2013" not in st and "<small" not in st)
+        check("epoch: hourly chart in the hero above the cards, Payouts and Record tabs as links, no dashes",
+              ep7.count('id="tracker"') == 1 and ep7.index('id="tracker"') < ep7.index('id="emod"') and 'data-kit-tab="payouts"' in ep7 and 'data-kit-tab="record"' in ep7
+              and "\u2014" not in ep7 and "\u2013" not in ep7 and "/rewards.csv" not in ep7)
         tx_ = req(base + "/chain/txs")[1].decode()
         check("txs: one scrollable chip row with plain type names, priority columns at 390px",
               'class="chips scroll"' in tx_ and ">Answer <small>" in tx_ and ">challenge <small>" not in tx_ and 'class="pri"' in tx_ and '<th class="p">Tx hash</th>' in tx_)

@@ -114,9 +114,9 @@ check(f"OpenAPI lists the rewards route and epochs from and limit ({ek})", any(k
       and ek and '"from"' in json.dumps(spec["paths"][ek]) and '"limit"' in json.dumps(spec["paths"][ek]))
 st, body, _ = get("/epoch/3")
 check("epoch page Payouts card has no header CSV link (the route stays)", "/api/v1/epoch/3/rewards.csv" not in body)
-pay = body[body.index('id="payouts"'):] if 'id="payouts"' in body else ""
-check("Payouts headers sort (aria-sort, links to ?sort=)", 'aria-sort="ascending"' in pay[:6000] and 'href="/epoch/3?sort=reward#payouts"' in pay and 'href="/epoch/3?sort=agent#payouts"' in pay)
-st, body, _ = get("/epoch/3?sort=reward&dir=asc"); pay = body[body.index('id="payouts"'):]
+pay = body[body.index('id="emod"'):] if 'id="emod"' in body else ""
+check("Payouts headers sort (aria-sort, links to ?sort=)", 'aria-sort="ascending"' in pay[:6000] and 'href="/epoch/3?sort=reward#emod"' in pay and 'href="/epoch/3?sort=agent#emod"' in pay)
+st, body, _ = get("/epoch/3?sort=reward&dir=asc"); pay = body[body.index('id="emod"'):]
 i1, i3 = pay.find(fixture.A1), pay.find(fixture.A3)
 check(f"Payouts ?sort=reward&dir=asc puts the smallest first ({i3} < {i1})", st == 200 and 0 < i3 < i1)
 

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.401] - 2026-11-19
+
+### Changed
+- Epoch page rebuilt on the shared kit: one hero (a finished ring with the epoch number and close time, the hourly chart, six cards with 16 close sparklines) and one tabbed module, Payouts (20 rows, Prev and Next, header sort), Record (the close record) and Forum (only when the window has threads). Each tab is its own URL. The header CSV link is gone (the CSV route stays). The stat card wall is six cards; the rest moved into Record.
+
 ## [1.26.400] - 2026-11-19
 
 ### Changed
@@ -458,19 +463,16 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Added
 - Pay by channel from E76 (`payout_channels_from_epoch`): the close page, the Agent payout tracker, the earn-check history and `/api/v1` show **Answer pay** and **Grading pay** when a public close record or close report publishes those amounts. Before E76 the pay stays a single combined total. When E76 or later has no published split, the total is unchanged and the close is tagged Split pending; `answer_pay`, `grading_pay` and per-Agent split fields are null, never inferred from pool shares or seal counts. `pay_split` on epoch rows is `off`, `pending` or `split`. A Pay by channel chart on the Token page appears only once a close publishes both amounts; Total mined and Minted vs burned run on with no gap. Method: `/about#pay-channels`. Prompt hashes unchanged.
 
-
 ## [1.26.317] - 2026-11-11
 
 ### Fixed
 - MCP discovery files (`/.well-known/mcp.json`, `/mcp/server-card`, `/.well-known/ai-catalog.json`, `/.well-known/agent-card.json` and their aliases) are served without a heavy slot, the same way the MCP handshake and tools/list have been since 1.26.273. Under load they were answering "server busy", and `/mcp/server-card` was getting the HTML Busy page. Response bytes are unchanged.
-
 
 ## [1.26.316] - 2026-11-11
 
 ### Fixed
 - Sitemap and robots.txt agree: `/sitemap.xml` lists only allowed, indexable URLs (static routes and every epoch close). `/address/` and `/tx/` stay disallowed for crawlers and are no longer in the sitemap (they are heavy and scrapers hit them).
 - A search crawler that would have been shed with the Busy card now gets the visitor last-good copy of the same page when one is in memory (the warmer stores the visitor key). If there is no copy, Googlebot gets the Busy page as 503 with Retry-After 60, never as 200 or 403.
-
 
 ## [1.26.315] - 2026-11-10
 

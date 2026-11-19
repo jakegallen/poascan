@@ -45,6 +45,19 @@ def _step(label, value, tip="", cls=""):
     t = (f' class="{cls}"' if cls else "") + (f' title="{E(tip)}"' if tip else "")
     return f'<li{t}><span class="esl">{label}</span><b>{value}</b></li>'
 
+def _chart(d):
+    hrs = d["hours"]
+    ch = (bars([(time.strftime("%H:%M UTC", time.gmtime(t)), [x, y], t) for t, x, y in hrs], legend=["Answers", "Grades"],
+               colors=("gold", "ember"), xk="t", stacked=False, head=False) if len(hrs) >= 2 else "")
+    if ch:   # every other hour label hides on a phone (style.css), so the times never run together
+        k = iter(range(10 ** 6)); ch = re.sub(r'class="xl ', lambda m: 'class="xl xo ' if next(k) % 2 else m.group(0), ch)
+    return ch
+
+def chart_html(n, r, open_ts):
+    """Answers and grades per hour as a bare chart (the epoch hero's right side), empty when the archive has nothing for the epoch."""
+    try: return _chart(data(n, r, open_ts))
+    except Exception: return ""
+
 def card_html(n, r, open_ts):
     try: d = data(n, r, open_ts)
     except Exception: return ""   # the story is extra: a failed read never breaks the epoch page
@@ -58,9 +71,5 @@ def card_html(n, r, open_ts):
     if r.get("paid") is not None: steps.append(_step("Paid", f'{intc(r["paid"])} Agents'))
     if r.get("established"): steps.append(_step("Established", f'+{intc(r["established"])}'))
     if r.get("established_removed"): steps.append(_step("Removed", intc(r["established_removed"]), tip="Agents whose Established status ended at this close"))
-    hrs = d["hours"]
-    ch = (bars([(time.strftime("%H:%M UTC", time.gmtime(t)), [x, y], t) for t, x, y in hrs], legend=["Answers", "Grades"],
-               colors=("gold", "ember"), xk="t", stacked=False, head=False) if len(hrs) >= 2 else "")
-    if ch:   # every other hour label hides on a phone (style.css), so the times never run together
-        k = iter(range(10 ** 6)); ch = re.sub(r'class="xl ', lambda m: 'class="xl xo ' if next(k) % 2 else m.group(0), ch)
+    ch = _chart(d)
     return card("Story", ch + f'<ol class="estory">{"".join(steps)}</ol>', id="story")
