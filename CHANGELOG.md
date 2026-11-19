@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.404] - 2026-11-19
+
+### Added
+- /api/agents/joiners carries last_join_at (the most recent join, UTC) and its default window is 30 days.
+- /api/agents/{addr}/lifecycle carries first_seal_cast_ts, the first grade seal the Agent cast as a grader.
+
 ## [1.26.403] - 2026-11-19
 
 ### Changed
