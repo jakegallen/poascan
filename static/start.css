@@ -35,3 +35,11 @@
 .sthub .s2v{min-height:0;padding:0;max-width:none;display:block}
 .sthub .sv-card{border:0;background:none;box-shadow:none;padding:6px 0 0;overflow:visible;border-radius:0}
 .sthub .sv-card::before{display:none}
+/* Join: the road-ahead stepper fills the panel under the name step and hides once the wizard moves on; the live panel's ring is capped so the two panels balance */
+.stlive .ring{max-width:300px;margin:0 auto}
+.sthub .kit-mod[data-kit="join"],.sthub .kit-mod[data-kit="join"] .kit-body,.sthub .s2v,.sthub .sv-card{display:flex;flex-direction:column;flex:1;min-height:0}
+.sthub .kit-mod[data-kit="join"] .kit-body{padding-top:0}
+.stnext{flex:1;margin:22px 0 0}
+.stnext li{flex:1;border-bottom:1px solid var(--line)}.stnext li:last-child{border-bottom:0}
+.sv-name0[hidden]+.stnext{display:none}
+.sthub .s2v,.sthub .sv-card,.sthub .kit-mod[data-kit="join"] .kit-body{align-items:stretch;width:100%;max-width:none;margin:0}

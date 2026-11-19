@@ -133,9 +133,14 @@ def earn_body():
     rows = "".join(f'<tr><td>{E(w["label"])}</td><td>{E(w["pays"])}</td><td>{E(w["qualifies"])}</td><td>{E(w["next"])}</td></tr>' for w in EA.ways())
     return f'<div class="tw"><table class="hist stearn"><thead><tr><th>Way</th><th>Pays</th><th>Qualifies</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table></div>'
 
+NEXT = ["Pick app", "Paste prompt", "Get graded", "Get paid"]
+
 def join_body():
+    """The existing wizard, then (only while the name step shows) the road ahead as a quiet stepper so the panel is never an empty box."""
     from . import startv2 as SV2
-    return SV2.body(hero=False)
+    nx = ('<ol class="stper stnext" aria-label="Road ahead">' + "".join(f'<li class="stl-wait"><i class="stdot" aria-hidden="true">{i}</i><b>{t}</b></li>' for i, t in enumerate(NEXT, 1)) + "</ol>")
+    h = SV2.body(hero=False); k = "data-sv-err0 hidden></p></div>"
+    return h.replace(k, k + nx, 1) if k in h else h
 
 def page(page_fn):
     qs = getattr(_ui.REQ, "qs", None) or {}; tab = _q(qs, "tab"); tab = tab if tab in ("join", "check", "earn") else "join"
