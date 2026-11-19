@@ -267,14 +267,16 @@ def _series(metric, rng):
     tmid = int(now // 86400) * 86400
     return ("line", [(ts, p + c) for ts, p, c in TOP.posts_daily() if t0 <= ts < tmid], dict(fmt=fn, xfmt=xf, y0=0))
 
+DEFAULT_METRIC = "answers"   # 1.26.399: Joins reads a flat zero while joining is halted; Answers always has data
+
 def charts_body(qs):
-    metric = (qs.get("metric") or ["joins"])[0]; metric = metric if metric in dict(METRICS) else "joins"
+    metric = (qs.get("metric") or [DEFAULT_METRIC])[0]; metric = metric if metric in dict(METRICS) else DEFAULT_METRIC
     rng = (qs.get("range") or ["7d"])[0]; rng = rng if rng in [k for k, _, _ in RANGES] else "7d"
     ov = (qs.get("ov") or ["1"])[0] != "0" and metric == "joins" and rng != "24h"
     kind, pts, kw = _series(metric, rng)
     def url(**o):
         p = dict(metric=metric, range=rng, ov=None); p.update(o)
-        q = [f"{k}={v}" for k, v in p.items() if v is not None and not (k == "metric" and v == "joins") and not (k == "range" and v == "7d")]
+        q = [f"{k}={v}" for k, v in p.items() if v is not None and not (k == "metric" and v == DEFAULT_METRIC) and not (k == "range" and v == "7d")]
         return "/network?tab=charts" + "".join("&amp;" + x for x in q)
     mchips = "".join(f'<a href="{url(metric=k)}" class="chip {"on" if k == metric else ""}" data-kit-sub="m{k}">{t}</a>' for k, t in METRICS)
     rchips = "".join(f'<a href="{url(range=k)}" class="chip {"on" if k == rng else ""}" data-kit-sub="r{k}">{t}</a>' for k, t, _ in RANGES)

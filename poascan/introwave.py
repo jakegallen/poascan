@@ -109,7 +109,7 @@ def card_html():
     ch = bars([(time.strftime("%d %H:00 UTC", time.gmtime(t)), [n], t) for t, n in hrs], legend=["Posts per hour"], colors=("gold",), xk="t") if hrs else ""
     other = "".join(f'<li>{x["posts"]:,} posts, {x["authors"]:,} authors, {lt(x["first_ts"], "dt")} to {lt(x["last_ts"], "dt")}</li>' for x in d["groups"][1:5])
     foot = (f'<p class="cov dim small">Largest group: {lt(g["first_ts"], "dt")} to {lt(g["last_ts"], "dt")} · {g["authors_with_join"]:,} of its authors have a join tx and {g["authors_with_answer"]:,} an answer tx · '
-            f'Counts only, no author named, no post quoted · <a href="{METHOD}">Method</a> · <a href="/api/v1/forum/intro-templates">API</a></p>')
+            f'Counts only, no author named, no post quoted · <a href="{METHOD}">Method</a></p>')
     return card("Intro templates", f'<div class="stats six">{s}</div>' + ch + (f'<h3 class="rech">Other groups</h3><ul class="dim small">{other}</ul>' if other else "") + foot, id="intro-templates")
 
 def api():

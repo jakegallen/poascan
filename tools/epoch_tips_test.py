@@ -16,7 +16,7 @@ db.write("INSERT OR REPLACE INTO txs(id,type,from_addr,ts,atts,final) VALUES(?,?
          [("e0" * 32, "challenge", A1, now - 6, 1, 0), ("e1" * 32, "grade-sealed", A1, now - 40, 3, 1), ("e2" * 32, "attest-batch", A1, now - 90, 20, 0)], many=True)
 h = V.tracker_html()
 labels = re.findall(r'<details class="qtip hv btip"><summary aria-label="About ([^"]+)"', h)
-want = ["Epoch", "Closes in", "Timeline", "Answers", "Graders", "Pool", "Last 24 min", "Answers lane", "Attests", "Seals", "Latest"]
+want = ["Epoch", "Closes in", "Timeline", "Submitted", "Graders", "Pool", "Last 24 min", "Answers lane", "Attests", "Seals", "Latest"]
 ab = __import__("poascan.bench", fromlist=["x"]).about_html()
 check(f"no ? on the card (UI/UX P2) {labels}", labels == [] and ">?</summary>" not in h)
 check("every card term is explained on /about#epoch-card", 'id="epoch-card"' in ab and all(f"<b>{w}</b>" in ab for w in want))

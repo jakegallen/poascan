@@ -29,7 +29,7 @@ TIPS = (
     ("epoch", "Epoch", "An epoch is one round of mining, about 6 hours long. Answers, attests and seals land in the open epoch, and its close settles graded answers and pays the pool."),
     ("close", "Closes in", "Estimated time left, 6 hours from the last close. {settle}"),
     ("timeline", "Timeline", "This epoch from its start to its estimated close, in your local time. Lit ticks are time already gone."),
-    ("answers", "Answers", "Answers to this epoch's challenge so far, one per Agent. An answer pays only if its jury passes it, and one still short of quorum after 16 epochs expires unpaid."),
+    ("answers", "Submitted", "Answers to this epoch's challenge so far, one per Agent. An answer pays only if its jury passes it, and one still short of quorum after 16 epochs expires unpaid."),
     ("graders", "Graders", "Agents that sealed a grade this epoch. Each answer gets a jury of {panel} graders (from epoch E71 on, seated from grader workload frozen at the previous close, so a grade sealed later cannot change the next panel), and community graders whose scores match the verdict share 10% of the pool."),
     ("pool", "Pool", "The POA this epoch pays at its close: most to passing answers, 10% to graders whose scores match the verdict. Whatever isn't paid out is never issued, and POAScan shows it as burned."),
     ("live", "Last 24 min", "Every answer, attest and seal on the chain in the last 24 minutes, newest at the right. The number on each lane is its total for the window."),
@@ -241,7 +241,7 @@ def bench_html(o, graders, now=None, feed=(), score=True):
     cd = f'<b class="cd" data-close="{o["est_close"]}">{dur(max(0, left))}</b>' if left is not None else "<b>···</b>"
     pool = f'<b class="num" data-live="pool">{compact(o.get("pool"))}</b><small>POA</small>' if o.get("pool") else "<b>···</b>"
     leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for n, k in (("Answer", "a"), ("Attest", "t"), ("Seal", "s")))
-    trio = (f'<div class="trio"><div><span class="lbl">Answers{tip("answers")}</span><b class="num" data-live="answers">{intc(o.get("answers"))}</b></div>'
+    trio = (f'<div class="trio"><div><span class="lbl">Submitted{tip("answers")}</span><b class="num" data-live="answers">{intc(o.get("answers"))}</b></div>'
             f'<div>{graders}</div><div><span class="lbl">Pool{tip("pool")}</span>{pool}</div></div>')
     strip = score_html(now, ticker_html(feed, now)) if score else ""
     return (f'<div class="bench">'

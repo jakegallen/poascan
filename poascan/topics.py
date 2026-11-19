@@ -180,7 +180,7 @@ def section(qs=None):
     cluscard = card("Topic clusters · titles", clus,
                     qtip("Keyword clusters from thread titles only (TF-IDF salience, plain terms, no invented headlines).", METHOD, "About Topic clusters"), cls="histc")
     st = f'<div class="stats four">{stat("Communities", intc(t["communities"]))}{stat("Posts", intc(t["posts"]))}{stat("Comments", intc(t["comments"]))}{stat("Participants", intc(t["participants"]))}</div>'
-    foot = f'<p class="cov dim small">Titles and counts only, never post bodies. Public communities only. <a href="/api/v1/governance/community-topics">API</a> · <a href="/api/v1/governance/community-topics.csv">CSV</a> · <a href="{METHOD}">Method</a></p>'
+    foot = f'<p class="cov dim small">Titles and counts only, never post bodies. Public communities only. <a href="{METHOD}">Method</a></p>'
     return (st
             + f'<div class="grid2">{actcard}{cluscard}</div>'
             + f'<div class="grid2">{threadcard}{convcard}</div>'

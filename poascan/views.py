@@ -190,9 +190,17 @@ def epochs_table(rows, link=True, qs=None, base=None, pend=None):
     na_ = '<span class="dim">···</span>'
     pend = [] if (by != "epoch" or d != "desc" or pend is None) else list(reversed(pend))   # 1.26.307: closes with no record yet, on top in the default order
     prow = [[f'<span class="mono" title="{E(PEND_TIP)}">E{r["epoch"]}</span>', f'<span class="tag warn" title="{E(PEND_TIP)}">RECORD PENDING</span>', utc(r["close_ts"]), na_, _step_cell(r), na_, na_, na_] for r in pend]
-    return table([], prow + [[f'<a href="{A.epoch_href(r)}" class="mono hallk"{_pre_title(r)}>{MK.hall_img(r, 24)}E{r["epoch"]}</a>', '<span class="tag ok">FINALIZED</span>' + CPZ.tag(r.get("pause")) + nopay_tag(r), utc(r["close_ts"]), intc(r["paid"]),
-                   poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
-                   num(r["median"])] for r in rs], pri=(0, 4, 6), usd=(4, 5, 7), sort=(epoch_cols(), by, d, lk))
+    # 1.26.399: a status column that reads FINALIZED on every row says nothing; it shows only while a row has something to say (record pending, paused, no payout)
+    note = lambda r: CPZ.tag(r.get("pause")) + nopay_tag(r)
+    st = bool(prow) or any(note(r) for r in rs)
+    body = [[f'<a href="{A.epoch_href(r)}" class="mono hallk"{_pre_title(r)}>{MK.hall_img(r, 24)}E{r["epoch"]}</a>', note(r).strip() or '<span class="dim">···</span>', utc(r["close_ts"]), intc(r["paid"]),
+             poa(r["minted"], mined=True), f'<span class="red">{num(r["burned"])}</span>', f'<span class="red">{r["burn_pct"]:.2f}%</span>' if r["burn_pct"] is not None else '<span class="dim">···</span>',
+             num(r["median"])] for r in rs]
+    cols = epoch_cols(); pri = (0, 4, 6); usd = (4, 5, 7)
+    if not st:
+        drop = lambda row: row[:1] + row[2:]
+        body = [drop(r) for r in body]; cols = drop(cols); pri = (0, 3, 5); usd = (3, 4, 6)
+    return table([], prow + body, pri=pri, usd=usd, sort=(cols, by, d, lk))
 
 def raw_fields(extra):
     """Short scalar fields inline; long blobs collapsed behind a 'show raw' toggle."""
@@ -318,7 +326,7 @@ def home_answers_mini():
     ch = (100 * (last - prev) / prev) if prev else 0
     chg = f'<span class="{"up" if ch >= 0 else "dn"}">{"+" if ch >= 0 else "\u2212"}{abs(ch):.1f}%</span>'
     ax = "".join(f"<span>{E(SG.ep_label(rows[i][0]))}</span>" for i in (0, n // 2, n - 1))
-    return (f'<div class="cpw emini" data-chart="answers"><div class="emh"><span class="lbl"><i class="sw a"></i>Answers</span><b class="num">{last:,}</b>{chg}</div>'
+    return (f'<div class="cpw emini" data-chart="answers"><div class="emh"><span class="lbl"><i class="sw a"></i>Per close</span><b class="num">{last:,}</b>{chg}</div>'
             f'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{bars}</svg><div class="emx">{ax}</div></div>')
 
 def home_sparks():
