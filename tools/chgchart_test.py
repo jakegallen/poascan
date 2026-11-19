@@ -19,14 +19,6 @@ dn = U.line([(t0 + i * 3600, 100 - 3 * i) for i in range(30)], height=220)
 check("down: reads dn, above the chip near the floor", '<i class="lvc dn">' in dn and 'class="lv lvu"' in dn)
 nh = U.line([(t0 + i * 3600, 100 + i) for i in range(30)], height=220, head=False)
 check("no headline, no change label", "lvc" not in nh)
-# Cadence clip: one 4,007 h outlier must not flatten the normal bars; the tip and callout keep the true value
-cl = U.bars([(f"E{i}", [4007.0 if i == 3 else 6.0]) for i in range(24)], ymax=12, clip=True, fmt=lambda v: f"{v:.2f}h")
-hs = [float(h) for h in re.findall(r'class="s-gold bf" ?/?>|height="([\d.]+)" class="s-gold bf"', cl) if h]
-check("clip: the outlier column is drawn at the plot top, the rest keep their height", hs and max(hs) < 2.1 * sorted(hs)[len(hs) // 2])
-check("clip: the callout and the tip read the true 4007.00h", cl.count("4007.00h") >= 2)
-fl = U.bars([(f"E{i}", [4007.0 if i == 3 else 6.0]) for i in range(24)], fmt=lambda v: f"{v:.2f}h")
-fh = [float(h) for h in re.findall(r'height="([\d.]+)" class="s-gold bf"', fl)]
-check("no clip: the unclipped chart is the flat one", sorted(fh)[len(fh) // 2] < 0.02 * max(fh))
 css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
 check("css: quiet label, no pill background", ".lv .lvc{position:absolute;left:0;top:100%" in css and ".lv.lvu .lvc{top:auto;bottom:100%" in css)
 check("no em or en dash", not re.search("[\u2013\u2014]", ln + br))

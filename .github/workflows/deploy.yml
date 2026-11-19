@@ -267,6 +267,8 @@ jobs:
         run: python tools/routehealth_test.py
       - name: Network data asks (4b merged anchor/release/notice/record events feed, labels and links only; 4c per-minute open/halted/down route-check buckets; 1b /api/summary snapshot carries closing_in + open-epoch answers/graders; additive, counts only)
         run: python tools/network_data_test.py
+      - name: API telemetry (6a in-process ring; /api/telemetry per-minute counts by surface rest/mcp/csv, success rate, p50/p95, top route TEMPLATES only; bounded memory, no client ids, resets on restart)
+        run: python tools/api_telemetry_test.py
       - name: Stale feed tag on the health view (no good read in max(15 min, 3x interval) shows Stale with the age; Retired is not stale)
         run: python tools/stale_feed_test.py
       - name: Epochs mirror (latest n, row links, one full upstream read per close at most every 20 min)
