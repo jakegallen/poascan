@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.388] - 2026-11-19
+
+### Fixed
+- Network events anchor rows now link the explorer: chain values are `Base-Mainnet` / `Solana-Mainnet`, so the Basescan / Solscan link is matched by chain prefix (was null), and the row keeps the full chain label.
+
 ## [1.26.387] - 2026-11-18
 
 ### Added
