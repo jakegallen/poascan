@@ -517,7 +517,7 @@ try:
     VS.API_SRC = lambda: AG.openapi()["paths"]; VS._API[0] = None
     check("counted as its own API route (OpenAPI path), docs and llms list it, not an MCP tool",
           VS.api_route("/api/v1/prompts/join") == "/api/v1/prompts/join" and "/api/v1/prompts/join" in req("/openapi.json")[2] and "/prompts/join" in req("/llms.txt")[2]
-          and "/api/v1/prompts/join" in req("/api")[2] and "prompts/join" not in json.dumps(AG.TOOLS, default=str))
+          and "/api/v1/prompts/join" in req("/api?q=prompts/join")[2] and "prompts/join" not in json.dumps(AG.TOOLS, default=str))
 
     # ---- name-available over HTTP
     na = "/api/v1/agents/name-available?name="
@@ -532,7 +532,7 @@ try:
     check(f"GET name-available: rate limited per IP ({codes.count(429)} of 60 got 429)", 429 in codes and codes[0] == 200)
     check("name-available: counted as its own API route, in OpenAPI, /api and llms.txt, not an MCP tool",
           VS.api_route("/api/v1/agents/name-available") == "/api/v1/agents/name-available" and "/api/v1/agents/name-available" in req("/openapi.json")[2]
-          and "NameAvailable" in req("/openapi.json")[2] and "/api/v1/agents/name-available" in req("/api")[2] and "/agents/name-available?name=" in req("/llms.txt")[2]
+          and "NameAvailable" in req("/openapi.json")[2] and "/api/v1/agents/name-available" in req("/api?q=name-available")[2] and "/agents/name-available?name=" in req("/llms.txt")[2]
           and "name-available" not in json.dumps(AG.TOOLS, default=str))
     check("client: the generated name is checked once against POAScan's archive and swapped on a hit; a typed name is checked on Next; errors never block",
           "avail(NAME,function(d){if(d&&d.valid&&d.available===false" in js and "NAME=gen()" in js and "busy=true;avail(v,function(d){busy=false;" in js

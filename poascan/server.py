@@ -1903,7 +1903,7 @@ def _doc_warm(stop=None, every=240, first=15):
     A.background(); time.sleep(first)
     while True:
         for name, fn in (("api", lambda: AG.api_page(V.page, V.card)), ("reference", lambda: AG.reference_page(V.page, V.card))):
-            try: AG._DOC[name] = (time.time(), fn())
+            try: AG._DOC[AG._doc_key(name)[0]] = (time.time(), fn())   # 1.26.395: /api is keyed on the explorer state; warm the default view
             except Exception as e: log.warning("doc warm %s: %s", name, type(e).__name__)
         if stop is not None and stop.is_set(): return
         time.sleep(every)

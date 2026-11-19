@@ -40,7 +40,7 @@ def main():
         check("static renderer is served as JavaScript", c == 200 and "javascript" in ct and "openapi.json" in jb)
 
         c, ap, _ = req(base + "/api")
-        check("the /api index links to the interactive reference", c == 200 and "/api/reference" in ap)
+        check("the /api Spec tab links to the interactive reference", c == 200 and "/api/reference" in req(base + "/api?tab=spec")[1])
 
         _, rob, _ = req(base + "/robots.txt")
         ai = rob.split("User-agent: GPTBot", 1)[-1]
@@ -67,7 +67,7 @@ def main():
     try: _SV._doc_warm(stop=_st, every=0, first=0)
     except Exception as e: print("doc warm raised", type(e).__name__)
     check("1.26.306: /api and /api/reference are rendered off the request (docwarm), so the first copy after a deploy needs no slot",
-          _AG.doc_ready("api") and _AG.doc_ready("reference") and "Connect" in _AG._DOC["api"][1])
+          _AG.doc_ready("api") and _AG.doc_ready("reference") and 'id="tracker"' in _AG._DOC["api?tab=&group=&sel=&offset=&run="][1])   # 1.26.395: the page is keyed on the explorer state
     print(("all passed" if not FAILS else f"{len(FAILS)} failure(s)"))
     sys.exit(1 if FAILS else 0)
 

@@ -398,6 +398,9 @@ check("version is at least 1.26.394 and the changelog records the Network consol
 check("version is 1.26.395 and the changelog records the Governance consolidation",
       _ver >= (1, 26, 395) and "## [1.26.395]" in cl and "standing-moves" in cl and "Moves" in cl
       and not any(c in cl.split("## [1.26.395]")[1].split("## [")[0] for c in dash))
+check("version is 1.26.396 and the changelog records the API consolidation",
+      _ver >= (1, 26, 396) and "## [1.26.396]" in cl and "/api/v1/telemetry" in cl and "Connect header" in cl
+      and not any(c in cl.split("## [1.26.396]")[1].split("## [")[0] for c in dash))
 check("version is 1.26.397 and the changelog records the Start consolidation",
       _ver == (1, 26, 397) and "## [1.26.397]" in cl and "/api/v1/agents/joiners" in cl and "Check reads one address" in cl
       and not any(c in cl.split("## [1.26.397]")[1].split("## [")[0] for c in dash))

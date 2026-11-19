@@ -1,0 +1,109 @@
+{
+ "note": "FIXTURE: shape of the agreed 6a contract; not production data",
+ "window_min": 24,
+ "per_minute": {
+  "rest": [
+   17,
+   9,
+   6,
+   9,
+   0,
+   11,
+   11,
+   25,
+   12,
+   12,
+   11,
+   14,
+   14,
+   13,
+   19,
+   5,
+   15,
+   16,
+   9,
+   25,
+   2,
+   13,
+   17,
+   12
+  ],
+  "mcp": [
+   4,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1,
+   0,
+   0,
+   0,
+   0,
+   3,
+   0,
+   4,
+   4,
+   5,
+   5,
+   4,
+   8,
+   0,
+   4,
+   2,
+   5,
+   0
+  ],
+  "csv": [
+   0,
+   0,
+   0,
+   2,
+   0,
+   0,
+   2,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ },
+ "p50_ms": 41,
+ "success_1h": 0.987,
+ "calls_24h": 48213,
+ "top": [
+  {
+   "route": "/api/v1/summary",
+   "count": 900
+  },
+  {
+   "route": "/api/v1/txs",
+   "count": 760
+  },
+  {
+   "route": "/api/v1/tx/{hash}",
+   "count": 620
+  },
+  {
+   "route": "/api/v1/address/{address}",
+   "count": 480
+  },
+  {
+   "route": "/api/v1/anchors/timeline",
+   "count": 340
+  }
+ ]
+}

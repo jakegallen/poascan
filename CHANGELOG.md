@@ -16,6 +16,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ### Changed
 - Start: one module (Join, Check, Earn) beside a live panel (epoch, Answer in countdown, Joined today, Pass rate, Median to pay). Join is the same card, prompt and templates as before. Check reads one address as a stepper (Joined, First answer, First seal, First payout) and re-checks while a stage is waiting. Earn lists the ways to earn.
 - Start Check and the live panel read the Agent lifecycle and joiners rows in process, the same data as /api/v1/agents/{addr}/lifecycle and /api/v1/agents/joiners.
+## [1.26.396] - 2026-11-19
+
+### Changed
+- API: a Connect header (MCP and REST addresses with copy, client chips, live call lanes, five numbers) and one explorer module (REST, MCP, Spec). Search as you type, group chips with counts, a 20 row list with paging, and a pane with a stored sample, Copy curl and Run. Every state is its own URL.
+- API lanes and numbers read the in-process call counters (/api/v1/telemetry) and the pane reads the hourly stored samples; the lanes show the last 3 hours. Run replays the stored sample and never calls a live endpoint.
+- Cache: the default /api view is warmed under the key it is served from, so the first visitor no longer pays a cold render.
 ## [1.26.395] - 2026-11-19
 
 ### Changed
