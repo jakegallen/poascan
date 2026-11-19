@@ -417,6 +417,9 @@ check("version is 1.26.400 and the changelog records it",
 check("version is 1.26.401 and the changelog records it",
       _ver >= (1, 26, 401) and "## [1.26.401]" in cl and "Epoch page rebuilt" in cl
       and not any(ch in cl.split("## [1.26.401]")[1].split("## [")[0] for ch in dash))
+check("version is 1.26.402 and the changelog records it",
+      _ver >= (1, 26, 402) and "## [1.26.402]" in cl and "Expiry strip" in cl and "Intake line" in cl
+      and not any(ch in cl.split("## [1.26.402]")[1].split("## [")[0] for ch in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap
