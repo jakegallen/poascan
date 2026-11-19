@@ -38,8 +38,8 @@ check("server routes /api/network/route-buckets", '"/api/network/route-buckets"'
 
 # ---- 4b: merged anchor | release | notice | record feed ----
 A.anchors_latest = lambda n=20: [
-    dict(height=44010, chain="base", tx="0xabc", anchored_at="2026-11-18T20:00:00+00:00"),
-    dict(height=44011, chain="solana", tx="sig123", anchored_at="2026-11-18T20:05:00Z")]
+    dict(height=44010, chain="Base-Mainnet", tx="0xabc", anchored_at="2026-11-18T20:00:00+00:00"),
+    dict(height=44011, chain="Solana-Mainnet", tx="sig123", anchored_at="2026-11-18T20:05:00Z")]
 PR.releases = lambda rel=None: [dict(version="v1.9", ts=1795000000, txid="reltx")]
 M._active_notices = lambda: [dict(id="n1", msg="Grading paused for hardening", issued_ts=1795000500)]
 HL.data = lambda now=None: dict(firsts=[dict(label="First answer in this segment", ts=1795000900, tx="ftx", found=True),
@@ -48,8 +48,8 @@ ev = A.network_events(None, 20)["events"]
 by = {}
 for e in ev: by.setdefault(e["type"], []).append(e)
 check("4b carries all four kinds", set(by) == {"anchor", "release", "notice", "record"})
-check("4b anchor labels the chain and links the explorer", any(e["label"] == "Checkpoint 44010 anchored to Base" and e["url"] == "https://basescan.org/tx/0xabc" for e in by["anchor"]))
-check("4b anchor handles the Z suffix and Solana explorer", any(e["url"] == "https://solscan.io/tx/sig123" for e in by["anchor"]))
+check("4b anchor keeps the full chain label and links the explorer by chain prefix", any(e["label"] == "Checkpoint 44010 anchored to Base-Mainnet" and e["url"] == "https://basescan.org/tx/0xabc" for e in by["anchor"]))
+check("4b anchor handles the Z suffix and Solana explorer (prefix match)", any(e["url"] == "https://solscan.io/tx/sig123" for e in by["anchor"]))
 check("4b release labels the version and links the POA tx", by["release"][0] == dict(ts=1795000000, type="release", label="Release v1.9", url="/tx/reltx"))
 check("4b notice shows its short text, no url", by["notice"][0]["label"] == "Grading paused for hardening" and by["notice"][0]["url"] is None)
 check("4b record keeps only found firsts and links the tx", len(by["record"]) == 1 and by["record"][0]["url"] == "/tx/ftx")
