@@ -219,4 +219,30 @@ _s = _sw()
 check("feeds: a halt recorded for the tx template does not relabel a swap key that timed out", _s["state"] != "Paused upstream")
 _STX.reset(); db.write("DELETE FROM fetch_log")
 
+# ---- 1.26.409: new params keys in the read-only view, refund empty state, v2 not on, lag flag ----
+from poascan import netfacts as NF, swaprefund as SR, nethub as NH
+_p = {"escrow_autorefund_from_epoch": 107, "escrow_autorefund_per_close": 500,
+      "escrow_fill_seen_backfill": {"through_ts": now - 100, "offers": [], "sha256": "aa"},
+      "att_distinct_verifier_from_ts": now, "close_ts_derived_from_epoch": 108, "swap_fee_bp": 100}
+_px = {x["key"]: x for x in NF.params_extra(_p)}
+check("params extra: auto-refund from E107 and 500 per close", _px["escrow_autorefund_from_epoch"]["text"] == "E107" and _px["escrow_autorefund_per_close"]["text"] == "500")
+check("params extra: an empty fill-backfill object is a count, not a dumped table", _px["escrow_fill_seen_backfill"]["text"].startswith("0 offers") and "through_ts" not in _px["escrow_fill_seen_backfill"]["text"])
+check("params extra: distinct verifier and close-time-derived keys render", "att_distinct_verifier_from_ts" in _px and _px["close_ts_derived_from_epoch"]["text"] == "E108")
+check("params extra: no em or en dash in the new labels", not re.search("[\\u2013\\u2014]", "".join(x["label"] + x["text"] for x in _px.values())))
+_v2 = SR.swap_v2_state(_p)
+check("swap v2: Shipped, not active when swap_v2_from_ts is absent", _v2["state"] == "shipped" and _v2["label"] == "Shipped, not active")
+check("swap v2: still not on when the key is in the future", SR.swap_v2_state(dict(_p, swap_v2_from_ts=now + 3600), now=now)["state"] == "shipped")
+check("fee text is 1% from swap_fee_bp 100", SR.fee_text(_p) == "1%")
+check("refund rows stay empty while the close field is unnamed", SR.CLOSE_FIELD is None and SR.refunds() == [])
+_lag = NH.checkpoint_lag({"height": 1366456, "checkpoint_height": 1349590}, {"checkpoint_height": 1349590})
+check("checkpoint lag: 2000-block threshold flags 16866 behind", _lag["lag"] == 16866 and _lag["behind"] is True)
+check("checkpoint lag: a small gap is not flagged", NH.checkpoint_lag({"height": 1000, "checkpoint_height": 900}, {"checkpoint_height": 900})["behind"] is False)
+# prefer /api/status checkpoint over networks when they differ
+_lag2 = NH.checkpoint_lag({"height": 5000, "checkpoint_height": 4000}, {"checkpoint_height": 4500})
+check("checkpoint lag: status checkpoint wins over networks", _lag2["checkpoint"] == 4500 and _lag2["lag"] == 500)
+db.put_blob("params", _p); A._cache.clear()
+html = SR.page_html()
+check("swaps page: empty refund state, v2 shipped, 1% fee, no dash", "No close has named refunds yet." in html and "Shipped, not active" in html and ">1%<" in html
+      and "on<" not in html.lower() and not re.search("[\\u2013\\u2014]", html) and "Refunds" in html)
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

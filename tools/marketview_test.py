@@ -99,7 +99,7 @@ try:
         code, loc = 200, ""
     except urllib.error.HTTPError as e:
         code, loc = e.code, e.headers.get("Location") or e.headers.get("location") or ""
-    check("/swaps still redirects to POASwap", code in (301, 302) and "poaswap.io" in (loc or ""))
+    check("/swaps is the explorer", code == 200)
 
     mkt, stc = {}, 0
     for _ in range(20):

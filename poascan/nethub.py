@@ -113,6 +113,25 @@ def height_series(now, hours=24, n=48):
     if len(pts) > n: pts = pts[::-(-len(pts) // n)] + [pts[-1]]
     return pts if len(pts) > 1 else None
 
+
+# 1.26.409: flag when the live chain height is this many blocks ahead of /api/status checkpoint_height.
+# /api/status has no head height; the live height is the default chain on /api/networks (already mirrored).
+CP_LAG_BLOCKS = 2000
+
+def checkpoint_lag(nw=None, st=None):
+    """{height, checkpoint, lag, behind} from the stored networks and status copies. behind when lag >= CP_LAG_BLOCKS."""
+    if nw is None: nw = A.networks() or {}
+    if st is None: st = A.status() or {}
+    h = nw.get("height")
+    fin = st.get("checkpoint_height")
+    if fin is None: fin = nw.get("checkpoint_height")
+    try:
+        h, fin = int(h), int(fin)
+    except (TypeError, ValueError):
+        return dict(height=h, checkpoint=fin, lag=None, behind=False)
+    lag = h - fin
+    return dict(height=h, checkpoint=fin, lag=lag, behind=lag >= CP_LAG_BLOCKS)
+
 def kpis(sd, now):
     """Five KPI cards. History only where POAScan keeps a series (height from the snapshots, lag and latency from status_data)."""
     nw = A.networks()
@@ -122,9 +141,12 @@ def kpis(sd, now):
     p50 = sorted(p50s)[len(p50s) // 2] if p50s else None
     lagser = [(t, v) for t, v in sd["lag"] if t > now - 86400]
     fmtc = lambda v: compact(v) if v is not None else "···"
+    cp = checkpoint_lag(nw, A.status())
+    lag = cp["lag"] if cp["lag"] is not None else lag
+    behind = flag("Behind", f"{cp['lag']:,} blocks ahead of the checkpoint") if cp["behind"] else ""
     return "".join([KIT.kpi("Height", f'<span class="num">{fmtc(h)}</span>', height_series(now)),
                     KIT.kpi("Finalized", f'<span class="num">{fmtc(fin)}</span>' + _V2().cp_flag()),   # Parked or Stalled stays on the finalized height
-                    KIT.kpi("Lag", f'<span class="num">{intc(lag)}</span>', lagser, tip="Blocks between the chain height and the finalized height"),
+                    KIT.spark_in(stat("Lag", f'<span class="num">{intc(lag)}</span>', tip="Blocks between the chain height and the finalized height", flag_html=behind), lagser),
                     KIT.kpi("Success 1h", f'<span class="num">{pct(sum(s1) / len(s1))}</span>' if s1 else '<span class="num">···</span>'),
                     KIT.kpi("Latency p50", f'<span class="num">{p50:,} ms</span>' if p50 else '<span class="num">···</span>', [(h_, v) for h_, v in sd["lat"]] if sd["lat"] else None)])
 

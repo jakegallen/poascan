@@ -137,7 +137,7 @@ def main():
               and (sw.get("available") is True or (sw.get("writes") or {}).get("swap_offer", {}).get("state") != "open"))
         c, b = req(base + "/api/v1/summary"); sm = json.loads(b).get("swaps") or {}
         check("summary swaps block", sm.get("state") in ("available", "upgrading", "unknown") and (sm.get("available") is not True or sm.get("write_ok") is True))
-        check("/swaps (HTML) 301s to POASwap; swap data stays in the API", req0(base + "/swaps") == (301, "https://poaswap.io/") and req0(base + "/swaps/?a=1") == (301, "https://poaswap.io/"))
+        check("/swaps is the explorer (200); swap data stays in the API", req0(base + "/swaps")[0] == 200 and req0(base + "/swaps/?a=1")[0] == 200)
         c, b = req(base + "/api/v1/concentration"); cj = json.loads(b) if c == 200 else {}
         check(f"concentration -> {c}", c == 200 and {"top1_share", "top5_share", "top10_share", "top20_share", "gini", "min_activity", "meta"} <= set(cj))
         check("summary concentration + openapi", "concentration" in json.loads(req(base + "/api/v1/summary")[1]) and "/api/v1/concentration" in spec["paths"] and "Concentration" in spec["components"]["schemas"])
@@ -194,7 +194,7 @@ def main():
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
         _hm = req(base + "/")
-        check("no Swap tab in the nav (swaps live on POASwap); /swaps 301s there", req0(base + "/swaps")[0] == 301 and all(b"/swaps" not in _nv(h) and b">Swap<" not in _nv(h) for h in (_hm[1],)))
+        check("no Swap tab in the nav; /swaps is the explorer", req0(base + "/swaps")[0] == 200 and all(b">Swap<" not in _nv(h) for h in (_hm[1],)))
         _sb = b'<a class="swaplink" href="https://poaswap.io" target="_blank" rel="noopener noreferrer"'
         _mk = req(base + "/static/poaswap-mark.svg?v=1")
         check("header: POASwap button on every page (its own mark, self-hosted), no GitHub icon", all(req(base + u)[1].count(_sb) == 1 and b'class="ghlink"' not in req(base + u)[1]
@@ -581,8 +581,8 @@ def swap_module(base, spec, check):
     check(f"swap boundary: explorer reads swaps via the API, the module enters POAScan only via host.py {bad}", not bad
           and not os.path.exists(os.path.join(root, "poascan", "swapx.py")) and not os.path.exists(os.path.join(root, "static", "swap.js")))
     c2, css = req(base + "/static/swap.css"); c3, _ = req(base + "/static/swap.js")
-    check("swap pages are gone: /swaps, /swap/<id> and /offer/<id> 301 to POASwap, swap.css and swap.js 404",
-          req0(base + "/swaps")[0] == 301 and req0(base + "/swap/" + "ab" * 32) == (301, "https://poaswap.io/") and req0(base + "/offer/x1") == (301, "https://poaswap.io/")
+    check("offer pages stay on POASwap; swap.css and swap.js 404; /swaps is the explorer",
+          req0(base + "/swaps")[0] == 200 and req0(base + "/swap/" + "ab" * 32) == (301, "https://poaswap.io/") and req0(base + "/offer/x1") == (301, "https://poaswap.io/")
           and c2 == 404 and c3 == 404 and b".xgrid{" not in req(base + "/static/style.css")[1])
     st = json.loads(req(base + "/api/v1/swaps/status")[1]); oid = (json.loads(req(base + "/api/v1/swaps")[1]) or [{}])[0].get("offer_id")
     m = st["market"]
