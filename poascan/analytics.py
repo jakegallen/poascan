@@ -1155,12 +1155,9 @@ def _apply_paused(row, eps, now):
 
 def _key_halted(ep, r, now):
     """1.26.407: True when this one fetch_log key's own newest failure is a minepoa halt that is still in force: the durable row
-    reads '... halted' with its back-off not over, or the live halt record for the key's template is newer than the key's last
-    good read. A sibling key's halt, or an older halt a later good read has passed, does not count."""
-    from . import strain as ST
-    if str(r.get("err") or "").endswith(" halted") and (r.get("next_at") or 0) > now and (r.get("last_err") or 0) >= (r.get("last_ok") or 0): return True
-    h = ST.halted(ST.template(ep.split(" (")[0]), now)
-    return bool(h and (h.get("last_seen") or 0) >= (r.get("last_ok") or 0) and (r.get("last_err") or 0) >= (r.get("last_ok") or 0))
+    reads '... halted' with its back-off not over and newer than its last good read. The live halt record is per template, so it is
+    not used here: a sibling key's halt, or an older halt a later good read has passed, does not count (1.26.408)."""
+    return str(r.get("err") or "").endswith(" halted") and (r.get("next_at") or 0) > now and (r.get("last_err") or 0) >= (r.get("last_ok") or 0)
 
 def _apply_paused_keys(row, keys, now):
     """1.26.407: relabel a not-OK feed row as Paused upstream only when EVERY failing key of the feed is held by a live minepoa halt.

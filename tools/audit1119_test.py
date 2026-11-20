@@ -209,4 +209,14 @@ _pc = next((r for r in _rr if r[0] == "process"), None)
 check("governance rules: a Proposals card with max(25, 1% of established), 8 epochs, every 4 closes, G0 ballot, straw poll", bool(_pc) and all(t in _pc[2] for t in ("max(25, 1% of established)", "8 epochs", "every 4 closes", "G0 ballot", "straw poll")))
 check("governance rules: the new card has no em or en dash", bool(_pc) and not re.search("[\u2013\u2014]", _pc[2] + _pc[3]))
 
+# ---- 1.26.408: a live halt record on the shared tx template does not label a sibling key that failed another way ----
+from poascan import strain as _STX
+db.write("DELETE FROM fetch_log")
+_fl("/api/swaps", now - 60, None, 0, 0, None)
+_fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now - 100, "TimeoutError: The read operation timed out")
+_STX.record_halt("/api/explorer/tx/abc", {"text": "endpoint temporarily halted"}, now - 30)
+_s = _sw()
+check("feeds: a halt recorded for the tx template does not relabel a swap key that timed out", _s["state"] != "Paused upstream")
+_STX.reset(); db.write("DELETE FROM fetch_log")
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

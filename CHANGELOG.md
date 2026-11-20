@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.408] - 2026-11-19
+
+### Changed
+- Health feeds: the Paused upstream label no longer borrows a halt recorded by a sibling read of the same tx path. Each key counts only its own halt, so Tx lookup and Swaps show the real state while the scheduled tx sample is halted and the visitor read is not.
+
 ## [1.26.407] - 2026-11-19
 
 ### Changed
