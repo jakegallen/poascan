@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.406] - 2026-11-19
+
+### Changed
+- The Forum tab Boards table leaves out archived boards and poa-archive, so it lists the same 11 communities as the chips and its rows add up to the Posts and Comments counts. The Status column is gone (every board left is active). /api/v1/forum per_community follows.
+
 ## [1.26.405] - 2026-11-19
 
 ### Changed

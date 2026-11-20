@@ -961,8 +961,9 @@ def forum():
     for c in lc: day[dt.datetime.fromtimestamp(utc_to_ts(c["created_at"]), dt.timezone.utc).date().isoformat()][1] += 1
     per = []
     for c in comms:
+        if c.get("slug") in skip: continue   # archived boards and poa-archive are out of the Boards table, as they are out of the counts
         per.append(dict(slug=c["slug"], name=c.get("name"), archived=int(c.get("archived") or 0), created_at=c.get("created_at"),
-                        posts=sum(1 for p in posts if p["community"] == c["slug"]), comments=sum(1 for x in cmts if x["community"] == c["slug"])))
+                        posts=sum(1 for p in live if p["community"] == c["slug"]), comments=sum(1 for x in lc if x["community"] == c["slug"])))   # rows add up to the chips
     au = collections.Counter(p["author"] for p in live) + collections.Counter(c["author"] for c in lc)
     tot_items = sum(au.values())
     now = time.time()
