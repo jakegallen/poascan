@@ -145,6 +145,14 @@ def api(path, qs):
         return _RW.public(), False
     if path == "/api/summary":
         s = V.summary_json(); return s, False
+    if path == "/api/atp20" or path.startswith("/api/atp20/"):
+        try:
+            from . import atp20 as _ATP
+            return _ATP.http(path, qs), False
+        except ValueError as e:
+            raise BadRequest(str(e) or "bad request")
+        except LookupError as e:
+            raise NotFound(str(e) or "not found")
     if path == "/api/txs":
         ov = (qs.get("offset") or [""])[0]
         if INT_RX.match(ov or "") and int(ov) > OFFSET_MAX: raise BadRequest(f"offset must be at most {OFFSET_MAX}; page deeper with /api/v1/address/<a>/txs?cursor=")   # 1.26.285: never silently clamp (a clamp served the wrong page)

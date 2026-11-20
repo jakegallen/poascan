@@ -15,6 +15,7 @@ Assumptions (easy to change: ORDERING, BURN_DEBIT, sort_key, burn_account):
 """
 import re, threading, time
 from . import db
+from . import history as HI
 
 ORDERING = "ts_id"          # "ts_id" or "anchor_nonce_txid"
 BURN_DEBIT = "from_addr"    # "from_addr" or "deployer"
@@ -537,3 +538,167 @@ def ops(tick=None, final=None, valid=None):
 
 def pending(tick=None):
     return ops(tick=tick, valid="pending")
+
+
+LIMIT_DEFAULT = 20
+LIMIT_MAX = 200
+_QS_PAGE = {"cursor", "limit", "format"}
+_QS_NONE = {"format"}
+
+
+def _limit(qs):
+    v = ((qs or {}).get("limit") or [""])[0].strip()
+    if v == "":
+        return LIMIT_DEFAULT
+    if not re.fullmatch(r"-?[0-9]+", v):
+        raise ValueError("limit must be an integer from 1 to 200")
+    return max(1, min(LIMIT_MAX, int(v)))
+
+
+def _cursor(qs, n):
+    c = ((qs or {}).get("cursor") or [""])[0] or None
+    if not c:
+        return None
+    try:
+        return HI.dec(c, n)
+    except ValueError:
+        raise ValueError("bad cursor")
+
+
+def _params(qs, allowed):
+    bad = set(qs or {}) - allowed
+    if bad:
+        raise ValueError("unknown parameter: " + ", ".join(sorted(bad)))
+
+
+def _envelope(**extra):
+    ensure_fresh()
+    cv = coverage()
+    out = dict(official=OFFICIAL, official_note=OFFICIAL_NOTE, coverage=cv)
+    out.update(extra)
+    return out
+
+
+def ensure_fresh():
+    """Create tables and backfill once if this process has never replayed. Local database only."""
+    _ensure()
+    if not _get_state().get("replayed_at"):
+        backfill()
+
+
+def tokens_page(cursor=None, limit=LIMIT_DEFAULT):
+    ensure_fresh()
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "", []
+    if cursor:
+        ts, tick = cursor
+        w = " WHERE (deploy_ts > ? OR (deploy_ts = ? AND tick > ?))"
+        a = [int(ts), int(ts), str(tick)]
+    rows = db.q("SELECT * FROM atp20_tokens" + w + " ORDER BY deploy_ts ASC, tick ASC LIMIT ?", tuple(a) + (limit + 1,))
+    page = [_token_row(r) for r in rows[:limit]]
+    nxt = HI.enc(page[-1]["deploy_ts"], page[-1]["tick"]) if len(rows) > limit else None
+    return page, nxt
+
+
+def holders_page(tick, cursor=None, limit=LIMIT_DEFAULT):
+    ensure_fresh()
+    if not TICK_RE.fullmatch(tick or ""):
+        raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
+    if token(tick) is None:
+        raise LookupError("unknown tick")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "tick=? AND CAST(amount AS INTEGER) > 0", [tick]
+    if cursor:
+        amt, addr = cursor
+        w += " AND (CAST(amount AS INTEGER) < ? OR (CAST(amount AS INTEGER) = ? AND addr > ?))"
+        a += [int(amt), int(amt), str(addr)]
+    rows = db.q("SELECT tick, addr, amount, mint_count FROM atp20_balances WHERE " + w +
+                " ORDER BY CAST(amount AS INTEGER) DESC, addr ASC LIMIT ?", tuple(a) + (limit + 1,))
+    page = [_bal_row(r) for r in rows[:limit]]
+    nxt = HI.enc(int(page[-1]["amount"]), page[-1]["addr"]) if len(rows) > limit else None
+    return page, nxt
+
+
+def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT):
+    """Final ops for a tick, newest first, including ignored ones (valid=0 and reason). Pending ops are on /pending."""
+    ensure_fresh()
+    if not TICK_RE.fullmatch(tick or ""):
+        raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
+    if token(tick) is None:
+        raise LookupError("unknown tick")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "tick=? AND final=1", [tick]
+    if cursor:
+        ts, txid = cursor
+        w += " AND (ts < ? OR (ts = ? AND txid < ?))"
+        a += [int(ts), int(ts), str(txid)]
+    rows = db.q("SELECT txid, tick, op, from_addr, to_addr, amt, memo, ts, nonce, final, valid, reason "
+                "FROM atp20_ops WHERE " + w + " ORDER BY ts DESC, txid DESC LIMIT ?", tuple(a) + (limit + 1,))
+    page = [dict(r) for r in rows[:limit]]
+    nxt = HI.enc(page[-1]["ts"], page[-1]["txid"]) if len(rows) > limit else None
+    return page, nxt
+
+
+def pending_page(tick, cursor=None, limit=LIMIT_DEFAULT):
+    ensure_fresh()
+    if not TICK_RE.fullmatch(tick or ""):
+        raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
+    if token(tick) is None:
+        raise LookupError("unknown tick")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "tick=? AND valid IS NULL", [tick]
+    if cursor:
+        ts, txid = cursor
+        w += " AND (ts > ? OR (ts = ? AND txid > ?))"
+        a += [int(ts), int(ts), str(txid)]
+    rows = db.q("SELECT txid, tick, op, from_addr, to_addr, amt, memo, ts, nonce, final, valid, reason "
+                "FROM atp20_ops WHERE " + w + " ORDER BY ts ASC, txid ASC LIMIT ?", tuple(a) + (limit + 1,))
+    page = [dict(r) for r in rows[:limit]]
+    nxt = HI.enc(page[-1]["ts"], page[-1]["txid"]) if len(rows) > limit else None
+    return page, nxt
+
+
+def http(path, qs):
+    """JSON bodies for /api/atp20/* (and the /api/v1 alias). Raises ValueError for 400, LookupError for 404."""
+    ensure_fresh()
+    if path == "/api/atp20/tokens":
+        _params(qs, _QS_PAGE)
+        rows, nxt = tokens_page(_cursor(qs, 2), _limit(qs))
+        return _envelope(tokens=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})$", path)
+    if m:
+        _params(qs, _QS_NONE)
+        tick = m.group(1)
+        tok = token(tick)
+        if tok is None:
+            raise LookupError("unknown tick")
+        return _envelope(tick=tick, token=tok)
+    m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})/holders$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        tick = m.group(1)
+        rows, nxt = holders_page(tick, _cursor(qs, 2), _limit(qs))
+        return _envelope(tick=tick, holders=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})/txs$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        tick = m.group(1)
+        rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs))
+        return _envelope(tick=tick, txs=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp20/pending/([A-Z0-9]{3,12})$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        tick = m.group(1)
+        rows, nxt = pending_page(tick, _cursor(qs, 2), _limit(qs))
+        return _envelope(tick=tick, pending=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp20/balance/([A-Z0-9]{3,12})/(poa1[1-9A-HJ-NP-Za-km-z]{20,60})$", path)
+    if m:
+        _params(qs, _QS_NONE)
+        tick, addr = m.group(1), m.group(2)
+        row = balance(tick, addr)
+        if row is None:
+            raise LookupError("unknown tick")
+        return _envelope(tick=tick, address=addr, amount=row["amount"], mint_count=row["mint_count"], official=OFFICIAL, official_note=OFFICIAL_NOTE)
+    if path.startswith("/api/atp20/"):
+        raise LookupError("unknown endpoint")
+    raise LookupError("unknown endpoint")
