@@ -572,6 +572,11 @@ def upsert_txs(rows, source):
             source=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.source ELSE labels.source END,
             ts=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.ts ELSE labels.ts END,
             label=CASE WHEN excluded.label != '' OR COALESCE(labels.label, '') = '' THEN excluded.label ELSE labels.label END""", labs, many=True)
+    try:
+        from . import atp20 as _ATP
+        _ATP.ingest(rows, source)
+    except Exception:
+        log.exception("atp20 ingest")
     return len(out)
 
 def _known(ids):
@@ -1348,6 +1353,11 @@ EVERY = {"/api/explorer/txs": TXLIST_S, "/api/status": STATUS_S, "/api/networks"
          "/api/network-facts": 3600, "/api/established": 3600, "/api/close-report": 3600, "/api/settled": 3600, "/api/expiry-schedule": 3600}   # grading.py reads every 10 min (5 near a close) and backs off to 30 min: Down after 45 min without a good read
 
 _SWAP_JOBS = __import__("poascan.swap.indexer", fromlist=["x"]).JOBS   # the swap module's jobs, at their old slots
+def job_atp20():
+    """Refresh unofficial ATP-20 state from transfer memos already in txs. Local only; no upstream."""
+    from . import atp20 as _ATP
+    _ATP.backfill()
+
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("live", job_live, live_every, None),   # LIVE_S, or LIVE_DEGRADED_S while upstream is degraded; each read backs off on its own
     _SWAP_JOBS[0][:2] + (SWAPS_S,) + _SWAP_JOBS[0][3:],   # swaps: open-offer book, SWAPS_S (60 s)
@@ -1368,6 +1378,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("hourly_retry", job_hourly_retry, 300, None),
     ("release_nudge", lambda: __import__("poascan.protocol", fromlist=["x"]).release_nudge(), 300, None),   # 1.26.226: an indexed G0 release tx not yet in /api/release triggers one early read   # health-fix 1026: a failed hourly read retried after its backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
+    ("atp20", job_atp20, 300, None),   # unofficial ATP-20 replay from the local txs table; no minepoa traffic
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
     ("vault_links", lambda: __import__("poascan.wallet", fromlist=["x"]).job(), 600, "/api/links"),   # 1.26.187: bulk /api/links (about 1 KB) every 10 min
@@ -1456,6 +1467,10 @@ def start(seed_dir=None):
     db.init()
     try: __import__("poascan.kin", fromlist=["x"]).sync()   # kin claims from the archive (clears them when no claim post is set)
     except Exception as e: log.warning("kin sync: %s", type(e).__name__)
+    try:
+        from . import atp20 as _ATP
+        _ATP.backfill()   # unofficial ATP-20 state from already-stored transfer memos; no upstream read
+    except Exception as e: log.warning("atp20 backfill: %s", type(e).__name__)
     try: log.info("join labels repaired: %d", repair_join_labels())
     except Exception as e: log.warning("join label repair: %s", type(e).__name__)
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()
