@@ -45,6 +45,7 @@ load(
     row(3, "AC1|m|p1test03|02/03|Part two, still going. ", B, ts=1795180910),
     row(4, "AC1|m|p1test03|03/03|Part three done.", B, ts=1795180920),
     row(5, "AC1|t|pending only", A, ts=1795181100, final=0),
+    row(6, "DICE1:BET:under:1:x", A, ts=1795181200),
     *FIX["txs"],
 )
 items = AP.posts(20)
@@ -60,34 +61,38 @@ disc = AP.DISCLAIMER
 html = AP.page_html({})
 html_posts = AP.page_html({"tab": ["posts"]})
 html_games = AP.page_html({"tab": ["games"]})
+html_atp = AP.page_html({"tab": ["atp20"]})
 html_bad = AP.page_html({"tab": ["nope"]})
 
 def nodash(s):
     return all(ch not in s for ch in DASH)
 
-check("default tab is ATP-20 and shows the tokens card", b"Tokens" in html.encode() if False else ("Tokens" in html and 'aria-current="page"' in html and "ATP-20" in html))
-check("unknown tab falls back to ATP-20", "Tokens" in html_bad)
+check("default tab is Games and shows the storefront", "POA Dice" in html and "app-store" in html and 'aria-current="page"' in html and "Games" in html)
+check("unknown tab falls back to Games", "app-store" in html_bad and "POA Dice" in html_bad)
 check("disclaimer appears once on each tab", html.count(E(disc)) == 1 and html_posts.count(E(disc)) == 1 and html_games.count(E(disc)) == 1)
 check("disclaimer is exact", disc in html.replace("&amp;", "&") or E(disc) in html)
 # The disclaimer has no chars that need escape except maybe none. It's plain ASCII.
 check("disclaimer raw exact on the page", disc in html)
-check("disclaimer is not repeated as unofficial", "Unofficial" not in disc and html.split(disc, 1)[1].count("Unofficial") == 1)
+check("games tab has no unofficial line", "Unofficial" not in html.split(disc, 1)[1])
+check("ATP-20 source says unofficial once", "Unofficial" not in disc and html_atp.split(disc, 1)[1].count("Unofficial") == 1)
+check("posts source says unofficial once", html_posts.split(disc, 1)[1].count("Unofficial") == 1)
 check("posts tab escapes svg and script",
       "&lt;svg&gt;&lt;script&gt;x&lt;/script&gt;&lt;/svg&gt;" in html_posts
       and "<svg><script>x</script></svg>" not in html_posts
       and "<script>x</script>" not in html_posts)
 check("posts tab shows grouped excerpt", "part one" in html_posts)
-check("games tab labels every row third-party, unendorsed", html_games.count("Third-party, unendorsed") == len(AP.GAMES))
+check("games tab labels every catalog entry unendorsed", html_games.count("Unendorsed") == len(AP.GAMES))
+check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
 check("games include POA Dice outbound host", "poadice.grok.me" in html_games and "rel=\"noopener noreferrer\"" in html_games)
 check("games have no wallet-connect or payment CTA",
       "wallet-connect" not in html_games.lower() and "walletconnect" not in html_games.lower()
       and "deposit" not in html_games.lower() and "connect wallet" not in html_games.lower())
 check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games and "None attributed" in html_games)
-check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games))
+check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
 check("version is 1.26.411", AG.VERSION == "1.26.411")
 
 # ATP-20 list uses official=false figures from the replay tables
-check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html and "MAM" in html)
+check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
 seal_page = AP.page_html({"tab": ["atp20"], "tick": ["SEAL"]})
 check("tick drill-down shows unofficial SEAL holders", "SEAL" in seal_page and "Holder" in seal_page and disc in seal_page)
 check("20-row cap constant", AP.LIMIT == 20)

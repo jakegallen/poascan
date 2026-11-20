@@ -620,7 +620,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=posts", "/apps?tab=games", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=atp20", "/apps?tab=posts", "/apps?tab=games", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
