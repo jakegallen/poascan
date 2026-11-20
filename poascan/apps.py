@@ -1,6 +1,6 @@
 """Unofficial Apps tab (1.26.411): local memo decoders for ATP-20, PoAPost text, and a
-third-party games catalog, shown as a storefront. No art rasters, no remote fetches,
-no third-party indexer calls."""
+community games catalog, shown as a storefront. Logos are local static rasters. No
+remote fetches, no third-party indexer calls."""
 import re
 from html import escape as E
 from urllib.parse import urlparse
@@ -11,14 +11,20 @@ from .ui import agent, table, tx_link, lt, stat
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
-TABS = [("games", "Games"), ("atp20", "ATP-20"), ("posts", "Posts")]
+TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20")]
 TAB_SET = {k for k, _ in TABS}
-DEFAULT_TAB = "games"
+DEFAULT_TAB = "posts"
 LIMIT = 20
 EXCERPT = 220
-# txids omitted from the Posts list; the rows stay in the archive.
 HIDE = frozenset()
-_ACCENTS = ("var(--gold)", "var(--swap)", "var(--verd)", "var(--note)", "var(--copper)")
+_ACCENTS = ("var(--gold)", "var(--verd)", "var(--apps-teal)", "var(--apps-violet)", "var(--apps-magenta)")
+BARS = 14
+DAY = 86400
+
+# Compact stat glyphs for catalog cards (labels live on the featured hero only).
+_IC_MEMO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 6.5h5M5.5 9h3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
+_IC_AGENT = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="2.1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.8 12.4c.7-2 2.3-3 4.2-3s3.5 1 4.2 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
+_IC_TIME = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.2V8l2 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
 
 
 def _ico(paths):
@@ -26,13 +32,14 @@ def _ico(paths):
             f'stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">{paths}</svg>')
 
 
-# Recurring prefixes and public LabLeak titles only. Each entry is third-party, unendorsed.
+# Recurring prefixes and public LabLeak titles only. Logos and socials are from each app's public site.
 GAMES = [
     dict(
         id="poa-dice",
         name="POA Dice",
         cat="Play",
         accent="var(--gold)",
+        logo="apps/dice.png",
         glyph=_ico(
             '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/>'
             '<circle cx="9" cy="9" r="1.15" fill="currentColor" stroke="none"/>'
@@ -43,6 +50,8 @@ GAMES = [
         ),
         blurb="Dice bets, wins, liquidity adds and refunds written as transfer memos.",
         url="https://poadice.grok.me",
+        url_label="Website",
+        socials=(("GitHub", "https://github.com/maximusmaximus/poa-dice", "GitHub"),),
         prefixes=("DICE1:",),
         addrs=("poa1Cb7xuTy5QhCXvg65noJSxTebgkWwyVDTN9eqgM9h2xnd",),
         posts=(2201,),
@@ -52,10 +61,13 @@ GAMES = [
         id="betai",
         name="BetAI",
         cat="Markets",
-        accent="var(--swap)",
+        accent="var(--verd)",
+        logo="apps/betai.webp",
         glyph=_ico('<path d="M5 16 9.5 11.5l3 3L19 8"/><path d="M14.5 8H19v4.5"/>'),
         blurb="A prediction market using betai memos, including payouts and refunds.",
-        url="https://minepoa.com/lableak/#/post/2522",
+        url="https://build-c8d9b17a1452a09b7be7b3be.emblem.build/pub/garra/betai/",
+        url_label="Website",
+        socials=(),
         prefixes=("betai",),
         addrs=("poa17jT76YdV7MrYVE6j4VC96fSKhUzf9xgCStptzZ42hzVE",),
         posts=(2237, 2522),
@@ -65,10 +77,16 @@ GAMES = [
         id="agent-league",
         name="Agent League",
         cat="League",
-        accent="var(--note)",
+        accent="var(--apps-violet)",
+        logo="apps/league.webp",
         glyph=_ico('<path d="M12 4.5 18.2 7v5.1c0 3.3-2.5 5.7-6.2 7.2-3.7-1.5-6.2-3.9-6.2-7.2V7z"/>'),
         blurb="A league that includes chess matches, with ante, registration, win and refund memos.",
-        url="https://minepoa.com/lableak/#/post/2780",
+        url="https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/",
+        url_label="Website",
+        socials=(
+            ("X", "https://x.com/DCTreeofLife", "X @DCTreeofLife"),
+            ("Telegram", "https://t.me/VaultGameHub", "Telegram"),
+        ),
         prefixes=("al:", "al-reg:", "al-ante:"),
         addrs=("poa1EA48SCx3NNNzVp3RvFFpcfUPcoTRtqe7S47YhQZ9BRr",),
         posts=(2780,),
@@ -78,14 +96,17 @@ GAMES = [
         id="cg-trivia",
         name="CG Trivia",
         cat="Trivia",
-        accent="var(--verd)",
+        accent="var(--apps-teal)",
+        logo="apps/trivia.png",
         glyph=_ico(
             '<circle cx="12" cy="12" r="7.5"/>'
             '<path d="M9.8 10.2c0-1.35 1.05-2.35 2.3-2.35 1.2 0 2.2.85 2.2 2.15 0 1.15-.95 1.7-2.15 2.25v.9"/>'
             '<circle cx="12" cy="16.15" r="0.9" fill="currentColor" stroke="none"/>'
         ),
         blurb="Free trivia duels. Pool and prize transfers use fixed memo text.",
-        url="https://minepoa.com/lableak/#/post/2964",
+        url="https://cgtrivia.creativegrace.tech/",
+        url_label="Website",
+        socials=(),
         prefixes=("CG Trivia pool", "CG Trivia prize"),
         addrs=("poa13Xc9g1644vzvfQoMkr4T8e7PwNfJSeMsrMW7QtSvEhEa",),
         posts=(2964, 2965, 2967),
@@ -95,10 +116,13 @@ GAMES = [
         id="proof-pit",
         name="PROOF PIT",
         cat="Arena",
-        accent="var(--copper)",
-        glyph=_ico('<path d="M8 6 4 12l4 6"/><path d="M16 6l4 6-4 6"/><path d="M10 12h4"/>'),
-        blurb="An arena announced in public LabLeak posts. No memo prefix is attributed yet.",
-        url="https://minepoa.com/lableak/#/post/1437",
+        accent="var(--apps-magenta)",
+        logo="",
+        glyph='<span class="app-mono">P</span>',
+        blurb="An arena with a live survival board. No memo prefix is attributed yet.",
+        url="https://master-zomon.github.io/proof-pit/",
+        url_label="Website",
+        socials=(),
         prefixes=(),
         addrs=(),
         posts=(1437, 1441, 1442),
@@ -213,21 +237,21 @@ def _qty(units, dec):
     return f"{int(whole):,}." + (frac if frac else "0")
 
 
-def _out_link(url, cls="app-go"):
-    """Visible host, new tab, no payment or wallet-connect affordance."""
+def _out_link(url, label=None, cls="app-go"):
+    """Visible host or given label, new tab, no payment or wallet-connect affordance."""
     host = urlparse(url).netloc or url
     if host.startswith("www."):
         host = host[4:]
-    label = host
-    if "lableak" in url.lower() and "#/post/" in url:
-        label = "LabLeak " + url.rsplit("/", 1)[-1]
+    text = label or host
+    if not label and "lableak" in url.lower() and "#/post/" in url:
+        text = "Post " + url.rsplit("/", 1)[-1]
     return (f'<a class="{E(cls)}" href="{E(url)}" target="_blank" rel="noopener noreferrer" '
-            f'title="{E(url)}">{E(label)}</a>')
+            f'title="{E(url)}">{E(text)}</a>')
 
 
 def _source(tab):
     if tab == "games":
-        return '<p class="pnote apps-src">POAScan catalog.</p>'
+        return ""
     return '<p class="pnote apps-src">POAScan decoder. Unofficial.</p>'
 
 
@@ -247,29 +271,44 @@ def _memo_hit(memo, prefixes):
     return False
 
 
-@A.cached("apps_game_stats", 60, light=True)
-def game_stats():
-    """Memo count, distinct senders and last activity per catalog entry, from final transfers."""
+@A.cached("apps_catalog_stats", 60, light=True)
+def catalog_stats():
+    """Per-app memo counts, distinct senders, last activity, and a 14-day write strip."""
     rows = db.q(
         "SELECT memo, from_addr, ts FROM txs "
         "WHERE type='transfer' AND final=1 AND memo IS NOT NULL AND memo!=''"
     )
-    out = {g["id"]: dict(memos=0, agents=0, last=0, addrs=set()) for g in GAMES}
+    games = {g["id"]: dict(memos=0, agents=0, last=0, addrs=set(), times=[]) for g in GAMES}
     rules = [(g["id"], g["prefixes"]) for g in GAMES if g["prefixes"]]
     for r in rows:
         memo = r["memo"] or ""
         for gid, prefixes in rules:
             if _memo_hit(memo, prefixes):
-                s = out[gid]
+                s = games[gid]
                 s["memos"] += 1
                 s["addrs"].add(r["from_addr"])
                 ts = int(r["ts"] or 0)
-                if ts > s["last"]:
-                    s["last"] = ts
+                if ts:
+                    s["times"].append(ts)
+                    if ts > s["last"]:
+                        s["last"] = ts
                 break
-    for s in out.values():
-        s["agents"] = len(s.pop("addrs"))
-    return out
+    asof = max((s["last"] for s in games.values()), default=0)
+    start = (asof // DAY) * DAY - (BARS - 1) * DAY if asof else 0
+    out = {}
+    for gid, s in games.items():
+        series = [0] * BARS
+        if asof:
+            for t in s["times"]:
+                i = (t - start) // DAY
+                if 0 <= i < BARS:
+                    series[i] += 1
+        out[gid] = dict(memos=s["memos"], agents=len(s["addrs"]), last=s["last"], series=series)
+    return dict(asof=asof, games=out)
+
+
+def game_stats():
+    return catalog_stats()["games"]
 
 
 def _ranked(stats):
@@ -279,61 +318,108 @@ def _ranked(stats):
     return sorted(GAMES, key=key)
 
 
-def _app_card(g, names, s, feat=False):
+def _logo(g):
+    if g.get("logo"):
+        return (f'<div class="app-ico has-logo"><img src="/static/{E(g["logo"])}" alt="" '
+                f'width="112" height="112"></div>')
+    return f'<div class="app-ico" aria-hidden="true">{g["glyph"]}</div>'
+
+
+def _bars(series):
+    series = list(series or [])
+    if len(series) < BARS:
+        series = [0] * (BARS - len(series)) + series
+    peak = max(series) if series else 0
+    bits = []
+    for n in series:
+        h = 0 if not peak or not n else max(12, int(round(100 * n / peak)))
+        bits.append(f'<i style="--h:{h}%"></i>')
+    return f'<div class="app-bars" aria-hidden="true">{"".join(bits)}</div>'
+
+
+def _links(g):
+    bits = []
+    if g.get("url"):
+        bits.append(_out_link(g["url"], g.get("url_label")))
+    posts = g.get("posts") or ()
+    if posts:
+        bits.append(_out_link(f"https://minepoa.com/lableak/#/post/{posts[0]}", f"Post {posts[0]}"))
+    for _kind, href, label in g.get("socials") or ():
+        bits.append(_out_link(href, label))
+    return bits
+
+
+def _app_card(g, names, s, asof, feat=False):
     memos = int(s.get("memos") or 0)
     agents = int(s.get("agents") or 0)
     last = s.get("last") or 0
     last_html = lt(last) if last else '<span class="na">None</span>'
+    live = bool(asof and last and last >= asof - DAY)
+    pulse = '<i class="app-pulse" title="Wrote in the latest day of this archive"></i>' if live else ""
     if feat:
         nums = (
             '<section class="stats three app-stats" aria-label="Onchain">'
-            + stat("Memos", f'<span class="num">{memos:,}</span>')
-            + stat("Agents", f'<span class="num">{agents:,}</span>')
+            + stat("Memos", f'<span class="num" data-cu="{memos}">{memos:,}</span>')
+            + stat("Agents", f'<span class="num" data-cu="{agents}">{agents:,}</span>')
             + stat("Last", last_html)
             + "</section>"
         )
     else:
         nums = (
-            f'<ul class="app-nums" aria-label="Onchain">'
-            f'<li><b class="num">{memos:,}</b><span class="lbl">Memos</span></li>'
-            f'<li><b class="num">{agents:,}</b><span class="lbl">Agents</span></li>'
-            f'<li><b class="num">{last_html}</b><span class="lbl">Last</span></li>'
+            f'<ul class="app-nums">'
+            f'<li title="Memos">{_IC_MEMO}<b class="num">{memos:,}</b></li>'
+            f'<li title="Agents">{_IC_AGENT}<b class="num">{agents:,}</b></li>'
+            f'<li title="Last">{_IC_TIME}<b class="num">{last_html}</b></li>'
             f"</ul>"
         )
-    prefs = ", ".join(g["prefixes"]) or "None attributed"
-    who = " ".join(agent(a, names=names) for a in g["addrs"])
-    tag = '<span class="tag app-tag">Unendorsed</span>'
-    cat = f'<span class="app-cat">{E(g["cat"])}</span>'
     typ = "h2" if feat else "h3"
+    links = "".join(_links(g))
     return (
         f'<article class="app-card{" feat" if feat else ""}" data-app="{E(g["id"])}" '
-        f'data-memos="{memos}" style="--app:{E(g["accent"])}">'
-        f'<div class="app-ico" aria-hidden="true">{g["glyph"]}</div>'
+        f'data-memos="{memos}" data-live="{1 if live else 0}" style="--app:{E(g["accent"])}">'
+        f'{_logo(g)}'
         f'<div class="app-body">'
-        f'<div class="app-meta">{cat}{tag}</div>'
+        f'<div class="app-meta"><span class="app-cat">{E(g["cat"])}</span>{pulse}</div>'
         f'<{typ} class="app-name">{E(g["name"])}</{typ}>'
         f'<p class="app-blurb">{E(g["blurb"])}</p>'
-        f'<p class="app-ref">{_out_link(g["url"])}'
-        f'<span class="app-pfx">{E(prefs)}</span>'
-        + (f'<span class="app-who">{who}</span>' if who else "")
-        + f'</p></div>{nums}</article>'
+        f'<p class="app-ref">{links}</p>{_bars(s.get("series"))}</div>{nums}</article>'
     )
 
 
-def _games_list(names):
-    stats = game_stats()
+def _tagline(bundle):
+    stats = bundle.get("games") or {}
+    writes = sum(int((stats.get(g["id"]) or {}).get("memos") or 0) for g in GAMES)
+    n = len(GAMES)
+    if writes:
+        return f'{writes:,} onchain writes across {n} catalogs in this archive.'
+    return f'{n} catalogs in this archive.'
+
+
+def _hero(bundle):
+    tag = _tagline(bundle)
+    return (
+        f'<section class="card benchc hpulse appshero" aria-label="Apps">'
+        f'<div class="apps-wash" aria-hidden="true"></div>'
+        f'<div class="apps-hero-copy"><h1>Apps</h1>'
+        f'<p class="apps-tag"><i class="app-pulse" aria-hidden="true"></i>{E(tag)}</p>'
+        f'<p class="apps-disc">{E(DISCLAIMER)}</p></div></section>'
+    )
+
+
+def _games_list(names, bundle):
+    stats = bundle.get("games") or {}
+    asof = int(bundle.get("asof") or 0)
     ranked = _ranked(stats)
     live = [g for g in ranked if int((stats.get(g["id"]) or {}).get("memos") or 0) > 0]
     feat = live[0] if live else ranked[0]
     rest = [g for g in ranked if g["id"] != feat["id"]]
     order = " ".join(g["id"] for g in live)
-    feat_html = _app_card(feat, names, stats.get(feat["id"]) or {}, feat=True)
-    grid = "".join(_app_card(g, names, stats.get(g["id"]) or {}, feat=False) for g in rest)
+    feat_html = _app_card(feat, names, stats.get(feat["id"]) or {}, asof, feat=True)
+    grid = "".join(_app_card(g, names, stats.get(g["id"]) or {}, asof, feat=False) for g in rest)
     return (
         f'<div class="app-store" data-apps-rotate data-order="{E(order)}">'
         f'<div class="app-feat-slot">{feat_html}</div>'
-        f'<div class="app-grid">{grid}</div>'
-        f'{_source("games")}</div>'
+        f'<div class="app-grid">{grid}</div></div>'
     )
 
 
@@ -409,11 +495,11 @@ def _atp20_list(names, tick=""):
     page_rows, nxt = T.tokens_page(limit=LIMIT)
     if not page_rows:
         empty = (
-            '<div class="app-empty">'
-            '<p class="na">No ticks in this archive yet.</p>'
+            '<div class="app-empty app-soon">'
+            '<p class="app-soon-line">Tokens arrive with the next index</p>'
             '</div>'
         )
-        return cov_line + empty + _source("atp20")
+        return empty + cov_line + _source("atp20")
     more = '<p class="pnote">More on the API.</p>' if nxt else ""
     grid = "".join(_tok_card(r, names) for r in page_rows)
     return cov_line + f'<div class="tok-grid">{grid}</div>' + more + _source("atp20")
@@ -444,17 +530,17 @@ def page_html(qs=None):
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""
     names = A.forum_names()
-    if tab == "posts":
-        body = _posts_list(names)
-        title = "Apps, posts"
+    bundle = catalog_stats() if tab in ("games", "posts", "atp20") else dict(asof=0, games={})
+    if tab == "games":
+        body = _games_list(names, bundle)
+        title = "Apps, games"
     elif tab == "atp20":
         body = _atp20_list(names, tick)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
     else:
-        body = _games_list(names)
+        body = _posts_list(names)
         title = "Apps"
-    disc = f'<p class="apps-disc">{E(DISCLAIMER)}</p>'
-    head = '<div class="sechead"><h1>Apps</h1></div>' + disc
+    head = _hero(bundle)
     tabs = [(k, "/apps" if k == DEFAULT_TAB else "/apps?tab=" + k, lab, None) for k, lab in TABS]
     mod = KIT.tabmod(tabs, tab, body, "", id="apps", label="Views")
     return page(title, head + mod, "/apps")

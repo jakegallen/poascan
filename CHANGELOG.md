@@ -14,7 +14,7 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 ## [1.26.411] - 2026-11-20
 
 ### Added
-- Unofficial Apps page at /apps, opening on a Games storefront: a featured hero (rotated by activity, static under reduced motion), accented catalog cards with glyph, category, unendorsed tag and live memo stats, ATP-20 tick cards with mint bars, and Posts as an escaped typographic feed. ATP-20 lists unofficial token state from the local memo replay. Games stay third-party and unendorsed, with memo prefixes and outbound links, no wallet-connect or payment links. Local decoder only: no art rasters and no third-party indexer calls.
+- Unofficial Apps page at /apps, opening on Posts, then Games, then ATP-20. A shared hero carries a live tagline and the page disclaimer. Games is a storefront: a featured hero (rotated by activity, static under reduced motion), per-app color, local logos where a public mark exists, live memo stats, 14-day write bars, and outbound site, LabLeak and public social links. ATP-20 tick cards have mint bars, or a quiet empty card when the archive has no ticks. Posts is an escaped typographic feed. Local decoder only: no art rasters from inscriptions and no third-party indexer calls. No wallet-connect or payment links.
 
 ## [1.26.410] - 2026-11-20
 

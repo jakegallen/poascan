@@ -67,13 +67,14 @@ html_bad = AP.page_html({"tab": ["nope"]})
 def nodash(s):
     return all(ch not in s for ch in DASH)
 
-check("default tab is Games and shows the storefront", "POA Dice" in html and "app-store" in html and 'aria-current="page"' in html and "Games" in html)
-check("unknown tab falls back to Games", "app-store" in html_bad and "POA Dice" in html_bad)
+check("default tab is Posts and shows the feed", "post-feed" in html and "post-text" in html and 'aria-current="page"' in html and "Posts" in html)
+check("unknown tab falls back to Posts", "post-feed" in html_bad)
 check("disclaimer appears once on each tab", html.count(E(disc)) == 1 and html_posts.count(E(disc)) == 1 and html_games.count(E(disc)) == 1)
 check("disclaimer is exact", disc in html.replace("&amp;", "&") or E(disc) in html)
 # The disclaimer has no chars that need escape except maybe none. It's plain ASCII.
 check("disclaimer raw exact on the page", disc in html)
-check("games tab has no unofficial line", "Unofficial" not in html.split(disc, 1)[1])
+check("games tab has no unofficial line", "Unofficial" not in html_games.split(disc, 1)[1])
+check("default posts source says unofficial once", html.split(disc, 1)[1].count("Unofficial") == 1)
 check("ATP-20 source says unofficial once", "Unofficial" not in disc and html_atp.split(disc, 1)[1].count("Unofficial") == 1)
 check("posts source says unofficial once", html_posts.split(disc, 1)[1].count("Unofficial") == 1)
 check("posts tab escapes svg and script",
@@ -81,13 +82,16 @@ check("posts tab escapes svg and script",
       and "<svg><script>x</script></svg>" not in html_posts
       and "<script>x</script>" not in html_posts)
 check("posts tab shows grouped excerpt", "part one" in html_posts)
-check("games tab labels every catalog entry unendorsed", html_games.count("Unendorsed") == len(AP.GAMES))
+check("games tab has no unendorsed or third-party tag", "Unendorsed" not in html_games and "Third-party" not in html_games.split(disc, 1)[-1])
+check("games tab has no catalog source line", "POAScan catalog." not in html_games)
 check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
+check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games)
+check("games link official sites and socials", "poadice.grok.me" in html_games and "cgtrivia.creativegrace.tech" in html_games and "x.com/DCTreeofLife" in html_games and "t.me/VaultGameHub" in html_games and "github.com/maximusmaximus/poa-dice" in html_games)
 check("games include POA Dice outbound host", "poadice.grok.me" in html_games and "rel=\"noopener noreferrer\"" in html_games)
 check("games have no wallet-connect or payment CTA",
       "wallet-connect" not in html_games.lower() and "walletconnect" not in html_games.lower()
       and "deposit" not in html_games.lower() and "connect wallet" not in html_games.lower())
-check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games and "None attributed" in html_games)
+check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games and "proof-pit" in html_games)
 check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
 check("version is 1.26.411", AG.VERSION == "1.26.411")
 
