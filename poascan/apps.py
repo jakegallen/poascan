@@ -7,6 +7,7 @@ from html import escape as E
 from urllib.parse import urlparse
 from . import db, analytics as A, kit as KIT
 from .ui import agent, table, tx_link, lt, stat, short, idn, PROFILE_URL
+from .govhub import pager, PAGE
 
 # Exact disclaimer, Jake via Plus1, 2026-11-20 1:43 PM PT.
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
@@ -15,7 +16,7 @@ DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party pro
 TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20")]
 TAB_SET = {k for k, _ in TABS}
 DEFAULT_TAB = "posts"
-LIMIT = 20
+LIMIT = PAGE
 EXCERPT = 220
 HIDE = frozenset()
 _ACCENTS = ("var(--gold)", "var(--verd)", "var(--apps-teal)", "var(--apps-violet)", "var(--apps-magenta)")
@@ -161,6 +162,23 @@ def _tick(qs):
     return t if re.fullmatch(r"[A-Z0-9]{3,12}", t) else ""
 
 
+def _off(qs):
+    try:
+        return max(0, int(((qs or {}).get("offset") or ["0"])[0]))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _list_url(tab, off=0, tick=""):
+    """Same offset query the rest of the site uses: ?tab=&tick=&offset= (offset omitted on the first page)."""
+    bits = ["tab=" + tab]
+    if tick:
+        bits.append("tick=" + tick)
+    if off:
+        bits.append("offset=" + str(int(off)))
+    return "/apps?" + "&amp;".join(bits)
+
+
 def parse_ac1(memo):
     """Parse AC1 multipart (m) and inline text (t) memos. Other ops are ignored for this tab."""
     if not memo or not memo.startswith("AC1|"):
@@ -198,12 +216,13 @@ def _hidden(txid, cid=None):
     return False
 
 
-def posts(limit=LIMIT):
-    """Newest 20 PoAPost / AC1 text items from archived transfer memos. Multipart rows are grouped."""
+def posts(limit=LIMIT, offset=0, count=False):
+    """PoAPost / AC1 text items from archived transfer memos, newest first. Multipart rows are grouped.
+    Default is one page of 20. Pass count=True to get (page, total) for the shared offset pager."""
     rows = db.q(
         "SELECT id, from_addr, to_addr, amount, memo, ts, final FROM txs "
         "WHERE type='transfer' AND final=1 AND (memo LIKE 'AC1|m|%' OR memo LIKE 'AC1|t|%') "
-        "ORDER BY ts DESC, id DESC LIMIT 400"
+        "ORDER BY ts DESC, id DESC"
     )
     groups = {}
     singles = []
@@ -237,7 +256,10 @@ def posts(limit=LIMIT):
                           addr=g["addr"], ts=g["ts"], amount=g["amount"], text=text,
                           parts=g["parts"], have=g["have"]))
     items.sort(key=lambda x: (-int(x["ts"] or 0), x["txid"] or ""))
-    return items[:limit]
+    off = max(0, int(offset or 0))
+    lim = max(0, int(limit))
+    page = items[off:off + lim]
+    return (page, len(items)) if count else page
 
 
 def _qty(units, dec):
@@ -501,18 +523,22 @@ def _tok_card(r, names):
     )
 
 
-def _atp20_list(names, tick=""):
+def _atp20_list(names, tick="", qs=None):
     from . import atp20 as T
     T.ensure_fresh()
     cov = T.coverage()
     cov_line = (f'<p class="pnote">{int(cov.get("tokens") or 0):,} ticks · '
                 f'{int(cov.get("applied") or 0):,} applied · '
                 f'order {E(str(cov.get("ordering") or ""))}</p>')
+    off = _off(qs)
     if tick:
         tok = T.token(tick)
         if not tok:
             return cov_line + '<div class="app-empty"><p class="na">No such tick in the archive.</p></div>' + _source("atp20")
-        holders, _ = T.holders_page(tick, limit=LIMIT)
+        total = int(tok.get("holder_count") or 0)
+        if total and off >= total:
+            off = (total - 1) // PAGE * PAGE
+        holders = T.holders_offset(tick, offset=off, limit=PAGE)
         who = agent(tok.get("deployer"), names=names)
         head = (
             f'<div class="tok-hero" style="--app:{_tok_accent(tick)}">'
@@ -531,8 +557,12 @@ def _atp20_list(names, tick=""):
                 for h in holders]
         tbl = table(["Holder", "Balance"], rows, cls="wrapt", pri=[0, 1])
         back = '<p class="pnote"><a href="/apps?tab=atp20">All ticks</a></p>'
-        return back + head + cov_line + tbl + _source("atp20")
-    page_rows, nxt = T.tokens_page(limit=LIMIT)
+        pg = pager(total, off, lambda o: _list_url("atp20", o, tick))
+        return back + head + cov_line + tbl + pg + _source("atp20")
+    total = T.tokens_count()
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    page_rows = T.tokens_offset(offset=off, limit=PAGE)
     if not page_rows:
         empty = (
             '<div class="app-empty app-soon">'
@@ -540,9 +570,9 @@ def _atp20_list(names, tick=""):
             '</div>'
         )
         return empty + cov_line + _source("atp20")
-    more = '<p class="pnote">More on the API.</p>' if nxt else ""
     grid = "".join(_tok_card(r, names) for r in page_rows)
-    return cov_line + f'<div class="tok-grid">{grid}</div>' + more + _source("atp20")
+    pg = pager(total, off, lambda o: _list_url("atp20", o))
+    return cov_line + f'<div class="tok-grid">{grid}</div>' + pg + _source("atp20")
 
 
 def _ago(ts, asof):
@@ -575,8 +605,12 @@ def _post_who(addr, names):
             f'rel="noopener noreferrer" title="LabLeak profile">{E(short(addr))}</a>')
 
 
-def _posts_list(names, bundle):
-    items = posts(LIMIT)
+def _posts_list(names, bundle, qs=None):
+    off = _off(qs)
+    items, total = posts(PAGE, offset=off, count=True)
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+        items, total = posts(PAGE, offset=off, count=True)
     stats = bundle.get("posts") or {}
     asof = int(bundle.get("posts_asof") or stats.get("last") or 0)
     feat = _app_card(POSTS_APP, names, stats, asof, feat=True)
@@ -605,10 +639,11 @@ def _posts_list(names, bundle):
             f'<p class="post-text{long}">{E(text)}</p>'
             f'</div></article>'
         )
+    pg = pager(total, off, lambda o: _list_url("posts", o))
     return (
         f'<div class="post-store">'
         f'<div class="app-feat-slot">{feat}</div>'
-        f'<div class="post-feed">{"".join(bits)}</div></div>'
+        f'<div class="post-feed">{"".join(bits)}</div>{pg}</div>'
     )
 
 
@@ -622,10 +657,10 @@ def page_html(qs=None):
         body = _games_list(names, bundle)
         title = "Apps, games"
     elif tab == "atp20":
-        body = _atp20_list(names, tick)
+        body = _atp20_list(names, tick, qs)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
     else:
-        body = _posts_list(names, bundle)
+        body = _posts_list(names, bundle, qs)
         title = "Apps"
     head = _hero(bundle)
     tabs = [(k, "/apps" if k == DEFAULT_TAB else "/apps?tab=" + k, lab, None) for k, lab in TABS]

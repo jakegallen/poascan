@@ -1847,6 +1847,9 @@ header.top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height
 .fagents li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:var(--hair);min-width:0}
 .fagents li .mono{font-size:var(--t12);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pager2{margin-top:12px;align-items:center}
+.gpager{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end}
+.gpager .chip{min-height:32px;padding:3px 12px;font-size:var(--t12)}
+#apps.kit-mod .gpager{margin:14px 18px 16px}
 /* Agent and tx pages (UI/UX P7): For agents chips, Details and Raw folds */
 .fachips{margin:0 0 16px;align-items:center;gap:8px}.fachips .lbl{margin-right:4px}
 .adetail,.txraw{margin:0 0 16px}.adetail>summary,.txraw>summary{list-style:none;cursor:pointer;display:inline-flex;margin-bottom:12px}
@@ -2217,6 +2220,7 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
  .app-grid,.tok-grid{grid-template-columns:1fr;margin:14px 12px 0;gap:12px}
  .app-src,.tok-hero,.app-empty,.post-feed{margin-left:12px;margin-right:12px}
  .post-feed{margin-top:12px;gap:8px}
+ #apps.kit-mod .gpager{margin-left:12px;margin-right:12px}
  .post-card{grid-template-columns:40px minmax(0,1fr);gap:10px 12px;padding:12px}
  .post-ava{width:40px;height:40px}
  .post-ava .idn,.post-ava .idn svg{width:32px;height:32px}

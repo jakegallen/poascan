@@ -83,6 +83,7 @@ check("posts tab escapes svg and script",
       and "<svg><script>x</script></svg>" not in html_posts
       and "<script>x</script>" not in html_posts)
 check("posts tab shows grouped excerpt", "part one" in html_posts)
+check("short posts list has no pager", "gpager" not in html and "gpager" not in html_posts)
 check("games tab has no unendorsed or third-party tag", "Unendorsed" not in html_games and "Third-party" not in html_games.split(disc, 1)[-1])
 check("games tab has no catalog source line", "POAScan catalog." not in html_games)
 check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
@@ -105,9 +106,20 @@ seal_page = AP.page_html({"tab": ["atp20"], "tick": ["SEAL"]})
 check("tick drill-down shows unofficial SEAL holders", "SEAL" in seal_page and "Holder" in seal_page and disc in seal_page)
 check("20-row cap constant", AP.LIMIT == 20)
 
-# flood of inline posts stays capped
+# flood of inline posts stays capped and pages with the shared 20-row offset pager
 load(*[row(100 + i, f"AC1|t|note {i}", A, ts=1795182000 + i) for i in range(40)])
 check("posts list caps at 20", len(AP.posts(20)) == 20)
+page, total = AP.posts(AP.LIMIT, offset=0, count=True)
+check("posts count includes the flood", total >= 40 and len(page) == 20)
+html_p1 = AP.page_html({})
+html_p2 = AP.page_html({"offset": ["20"]})
+check("first posts page uses the shared pager", "gpager" in html_p1 and "pager2" in html_p1 and "1 to 20 of" in html_p1 and ">Next</a>" in html_p1)
+check("first posts page has no Prev", "Prev" not in html_p1)
+check("first posts page is 20 rows", html_p1.count("post-card") == 20)
+check("Next uses the offset param", "offset=20" in html_p1)
+check("second posts page has Prev and the range", "Prev" in html_p2 and "21 to 40 of" in html_p2 and "offset=40" in html_p2)
+check("second posts page stays at 20 rows", html_p2.count("post-card") == 20)
+check("a short list has no pager", "gpager" not in html_games)
 
 # no raw svg path even if someone put svg in a game blurb (catalog is escaped)
 check("game blurbs are escaped in HTML", all(E(g["blurb"]) in html_games or g["blurb"] in html_games for g in AP.GAMES))
