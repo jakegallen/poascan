@@ -175,7 +175,7 @@ def forum():
                  stat("Communities", intc(f["communities"])), stat("Last 24h", intc(f["last24"])), stat("Net votes", intc(f["post_score"] + f["comment_score"]))])
     days = f["by_day"][-21:]
     act = bars([(d[5:], [p, c]) for d, p, c in days], legend=["Posts", "Comments"], colors=("gold", "steel"))
-    com = table(["Board", "Threads", "Replies", "Status"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"], "archived" if c["archived"] else "active"] for c in f["per_community"][:20]])
+    com = table(["Board", "Threads", "Replies"], [[f'<a href="https://minepoa.com/lableak/#/a/{E(c["slug"])}" rel="noopener noreferrer">a/{E(c["slug"])}</a>', c["posts"], c["comments"]] for c in f["per_community"][:20]])
     th = table(["Thread", "Community", "Comments", "Score"], [[f'<a href="https://minepoa.com/lableak/#/post/{p["id"]}" rel="noopener noreferrer">#{p["id"]} {E((p["title"] or "")[:70])}</a>', E(p["community"]), p["comment_count"], p["score"]] for p in f["top_threads"][:20]], cls="wrapt")
     au = table(["Author", "Items"], [[author_link(a, V._rev()), n] for a, n in f["top_authors"][:20]])
     from . import introwave as IW

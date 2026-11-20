@@ -196,11 +196,11 @@ def raw_fields(extra):
             f'<pre class="wrappre">{E(raw[:20000])}</pre></details>')
 
 def _thread_line(t, cls="eth"):
-    """One forum thread under an epoch row: #id, title (clamped by CSS), reply count. Titles and counts only, public threads."""
+    """One forum thread under an epoch row: #id and title (clamped by CSS); the reply count is the link's tooltip. Titles only, public threads."""
     if not t: return ""
     n = int(t.get("replies") or 0)
     return (f'<a class="{cls}" href="https://minepoa.com/lableak/#/post/{int(t["id"])}" rel="noopener noreferrer" title="{n:,} repl{"y" if n == 1 else "ies"}">'
-            f'<span class="fpid">#{int(t["id"])}</span><span class="ett">{E(t.get("title") or "")}</span><b class="num">{n:,}</b></a>')
+            f'<span class="fpid">#{int(t["id"])}</span><span class="ett">{E(t.get("title") or "")}</span></a>')
 
 def _release_epochs(rows):
     """{epoch: version} for signed minepoa releases that landed inside a close's window (prev close, close], from the stored
@@ -226,11 +226,11 @@ def home_open_row(o):
     f = min(1.0, max(0.0, (time.time() - s) / (o.get("period") or 21600))) if s else 0
     return (f'<div class="er open"><span class="en"><i class="ldot" aria-hidden="true"></i><span>E<span data-live="bm_ep">{o.get("epoch")}</span></span></span>'
             f'<span class="et">Open</span><span class="ebar vessel" data-start="{s or ""}" data-close="{c or ""}"><i class="molten" style="width:{f * 100:.2f}%"></i></span>'
-            f'<span class="ep"><b class="num" data-live="answers">{intc(o.get("answers"))}</b></span><span class="epl">answers</span>{_thread_line(hot)}</div>')
+            f'{_thread_line(hot)}</div>')
 
 def home_epochs(ep, with_pending=True):
     """1.26.380 Heartbeat: the Epochs panel rows, newest first: hallmark and epoch, close time, the pour bar (minted against
-    burned), Agents paid, a release tag when a signed minepoa release landed in the window, and the epoch's most replied
+    burned), a release tag when a signed minepoa release landed in the window, and the epoch's most replied
     public thread (topics.epoch_threads, cached hourly). One <tr> per close so the live row merge (/fragment/rows) keeps working."""
     from . import closepend as CPD, topics as _TOP
     pend = list(reversed(CPD.rows()))[:6] if with_pending else []   # 1.26.307: closes counted with no record yet, newest first
@@ -241,7 +241,7 @@ def home_epochs(ep, with_pending=True):
     for r in pend:
         out.append(f'<tr class="pendr"><td><div class="er"><a href="/chain#history" class="en mono" title="{E(PEND_TIP)}">E{r["epoch"]}</a>'
                    f'<span class="et">{utc(r["close_ts"], "%b %d %H:%M")}<span class="tag warn" title="{E(PEND_TIP)}">Record pending</span></span>'
-                   f'<span class="ebar"></span><span class="ep">{_step_cell(r)}</span><span class="epl"></span></div></td></tr>')
+                   f'</div></td></tr>')
     for r in rows:
         pool = float(r.get("pool") or 0); m = 100 * float(r.get("minted") or 0) / pool if pool else 0
         t = f"Minted {m:.1f}%, burned {100 - m:.1f}%"
@@ -251,7 +251,7 @@ def home_epochs(ep, with_pending=True):
         out.append(f'<tr><td><div class="er"><a href="/epoch/{r["epoch"]}" class="en mono hallk" title="Epoch {r["epoch"]}, finalized">{MK.hall_img(r, 22)}E{r["epoch"]}</a>'
                    f'<span class="et">{utc(r["close_ts"], "%b %d %H:%M")}{tag}{nopay_tag(r)}</span>'
                    f'<span class="ebar mpour" role="img" aria-label="{t}" title="{t}"><i style="width:{m:.1f}%"></i></span>'
-                   f'<span class="ep">{intc(r["paid"])}</span><span class="epl">paid</span>{_thread_line(th)}</div></td></tr>')
+                   f'{_thread_line(th)}</div></td></tr>')
     return f'<table class="erows"><tbody>{"".join(out)}</tbody></table>'
 
 def _pend_tip():

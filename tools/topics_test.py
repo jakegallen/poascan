@@ -120,6 +120,12 @@ check("a deleted post and its comments leave both Forum and Topics, which still 
       t["posts"] == 8 and t["comments"] == 5 and (f["posts"], f["comments"], f["participants"]) == (t["posts"], t["comments"], t["participants"]))
 check("governance forum_stats skips archived communities too", "old" in GV.skip_communities() and "poa-archive" in GV.skip_communities())
 
+A._cache.clear(); f = A.forum()
+check("Forum Boards: archived boards and poa-archive are out, the rows add up to the chips",
+      {c["slug"] for c in f["per_community"]} == {"general", "bugs", "proposals"} and sum(c["posts"] for c in f["per_community"]) == f["posts"] and sum(c["comments"] for c in f["per_community"]) == f["comments"])
+from poascan import agentshub as _AH
+_fh = _AH.forum()
+check("Forum Boards table has no archived board and no Status column", "a/old" not in _fh and "a/poa-archive" not in _fh and ">Status<" not in _fh and "a/general" in _fh)
 src = open(os.path.join(ROOT, "poascan", "topics.py")).read()
 check("topics.py: no em or en dash, says Agents not Accounts, reads only titles", "\u2014" not in src and "\u2013" not in src and "Accounts" not in src and "p[\"body\"]" not in src and "c[\"body\"]" not in src)
 print("all passed" if not fails else f"{len(fails)} failed")
