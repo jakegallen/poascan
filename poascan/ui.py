@@ -276,6 +276,7 @@ DESCS = {
     "/agents/community": "Proof of Agent community: LabLeak forum activity, the social graph, builders and the answer sample.",
     "/status": "Proof of Agent and POAScan status: upstream endpoint health, incidents and anchors.",
     "/privacy": "POAScan privacy: read-only, no sign-in, no cookies or tracking scripts; daily visit totals and server logs only.",
+    "/apps": "Unofficial community apps on Proof of Agent: ATP-20 tokens, onchain posts and third-party games.",
     "/about": "About POAScan: sources, methodology, safety and the read-only API and MCP server for Proof of Agent.",
     "/api": "POAScan API: read-only JSON and CSV endpoints and an MCP server for Proof of Agent. No auth.",
     "/find": "Find a Proof of Agent agent by poa1 address or name and follow its rewards, streak and unlocks.",
@@ -397,7 +398,7 @@ def head_meta(full_title, title=""):
 
 from . import join as _join
 
-FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
+FOOT = [("/about", "About"), ("/apps", "Apps"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
         ("/privacy", "Privacy"), ("/api", "API")]
 def _footer():

@@ -2092,3 +2092,6 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .hzb{flex:1;min-width:2px;background:color-mix(in srgb,var(--gold) 38%,transparent);border-radius:var(--r-sm) var(--r-sm) 0 0}
 .hzb.nx{background:var(--gold)}
 .hzx{display:flex;justify-content:space-between;margin-top:4px;font-size:.72rem;color:var(--mute)}
+
+.apps-disc{margin:0 0 14px;font:400 var(--t14)/var(--lh) var(--ui);color:var(--dim)}
+.apps-ex{display:block;max-width:36rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--txt)}

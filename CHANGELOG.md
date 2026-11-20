@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.411] - 2026-11-20
+
+### Added
+- Unofficial Apps page at /apps, with ATP-20, Posts and Games views. ATP-20 lists unofficial token state from the local memo replay. Posts shows escaped AC1 text inscriptions. Games is a catalog of third-party, unendorsed apps with memo prefixes and outbound links, no wallet-connect or payment links. Local decoder only: no art rasters and no third-party indexer calls.
+
 ## [1.26.410] - 2026-11-20
 
 ### Added
