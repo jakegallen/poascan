@@ -1,0 +1,11 @@
+{
+  "comment": "ATP-20 v1.0 and v1.1 fixture cases for the unofficial local replay. Times and ids are synthetic except the two public deploy txids, which match LabLeak posts 3201 and 3202.",
+  "deployer": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg",
+  "holder": "poa1HOLDER00000000000000000000000000000000001",
+  "other": "poa1OTHER000000000000000000000000000000000001",
+  "txs": [
+    {"id": "a03e3f0e75f746745472790f14bbe2deb44b2e57f8e0426ee2f854691333fc68", "type": "transfer", "from_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "to_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "amount": "0.000001", "memo": "ATP-20|d|SEAL|21000000|8|1000", "ts": 1795174507, "final": 1, "nonce": 889},
+    {"id": "75cdac601b9fdf56e00f0087b810d9bbb2b12d133e78488862fe1adef9c17a7b", "type": "transfer", "from_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "to_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "amount": "0.000001", "memo": "ATP-20|m|SEAL|1000", "ts": 1795175185, "final": 1, "nonce": 890},
+    {"id": "c133fb64b7d75bffc497396927b2ce84fcad9db6e22bdbf96c32e73013bf3c18", "type": "transfer", "from_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "to_addr": "poa1DLtfHN8rajwqj7VdDHYLQ8MFwJGguXww6XU1tn7KNRVg", "amount": "0.000001", "memo": "ATP-20|d|MAM|21000000|0||open:1000:5", "ts": 1795178150, "final": 1, "nonce": 891}
+  ]
+}

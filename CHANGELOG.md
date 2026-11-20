@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.410] - 2026-11-20
+
+### Added
+- Unofficial ATP-20 token state is replayed from transfer memos already stored in the archive (LabLeak posts 3201 and 3202). The indexer upsert hook and a local backfill feed it. No new reads of minepoa.com. Balances and holder figures are unofficial and may differ from other indexers. Replay order is (ts, id); a burn debits the signer. No public API or pages in this step.
+
 ## [1.26.409] - 2026-11-20
 
 ### Changed

@@ -154,6 +154,8 @@ def init():
         conn().executescript(SCHEMA)
         from .swap import store as _swap_store   # the swap module owns and migrates its own tables
         _swap_store.init(conn())
+        from . import atp20 as _ATP
+        _ATP.init(conn())
         _visit_counts_pjoin()
         _segments()
         fl = {r[1] for r in conn().execute("PRAGMA table_info(fetch_log)")}   # 1.26.147: hard_err (the last failure that slows the feed), run401
