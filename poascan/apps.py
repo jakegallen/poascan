@@ -1,11 +1,12 @@
 """Unofficial Apps tab (1.26.411): local memo decoders for ATP-20, PoAPost text, and a
 community games catalog, shown as a storefront. Logos are local static rasters. No
 remote fetches, no third-party indexer calls."""
+import datetime as dt
 import re
 from html import escape as E
 from urllib.parse import urlparse
 from . import db, analytics as A, kit as KIT
-from .ui import agent, table, tx_link, lt, stat
+from .ui import agent, table, tx_link, lt, stat, short, idn, PROFILE_URL
 
 # Exact disclaimer, Jake via Plus1, 2026-11-20 1:43 PM PT.
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
@@ -131,6 +132,25 @@ GAMES = [
 ]
 
 
+# The Posts catalog is PoAPost / AC1, announced in public LabLeak post 2915.
+# Logo is a raster of the official masthead emblem on the public site. No official X is listed there.
+POSTS_APP = dict(
+    id="poapost",
+    name="POAPost",
+    cat="Messages",
+    accent="var(--gold)",
+    logo="apps/poapost.png",
+    glyph='<span class="app-mono">P</span>',
+    blurb="A public vault of record.",
+    url="https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/",
+    url_label="Website",
+    socials=(),
+    prefixes=(),
+    addrs=(),
+    posts=(2915,),
+)
+
+
 def _tab(qs):
     t = ((qs or {}).get("tab") or [""])[0].strip()
     return t if t in TAB_SET else DEFAULT_TAB
@@ -250,7 +270,7 @@ def _out_link(url, label=None, cls="app-go"):
 
 
 def _source(tab):
-    if tab == "games":
+    if tab in ("games", "posts"):
         return ""
     return '<p class="pnote apps-src">POAScan decoder. Unofficial.</p>'
 
@@ -279,32 +299,48 @@ def catalog_stats():
         "WHERE type='transfer' AND final=1 AND memo IS NOT NULL AND memo!=''"
     )
     games = {g["id"]: dict(memos=0, agents=0, last=0, addrs=set(), times=[]) for g in GAMES}
+    posts = dict(memos=0, addrs=set(), last=0, times=[])
     rules = [(g["id"], g["prefixes"]) for g in GAMES if g["prefixes"]]
     for r in rows:
         memo = r["memo"] or ""
+        ts = int(r["ts"] or 0)
+        parsed = parse_ac1(memo)
+        if parsed and parsed.get("op") in ("t", "m"):
+            posts["memos"] += 1
+            posts["addrs"].add(r["from_addr"])
+            if ts:
+                posts["times"].append(ts)
+                if ts > posts["last"]:
+                    posts["last"] = ts
         for gid, prefixes in rules:
             if _memo_hit(memo, prefixes):
                 s = games[gid]
                 s["memos"] += 1
                 s["addrs"].add(r["from_addr"])
-                ts = int(r["ts"] or 0)
                 if ts:
                     s["times"].append(ts)
                     if ts > s["last"]:
                         s["last"] = ts
                 break
     asof = max((s["last"] for s in games.values()), default=0)
-    start = (asof // DAY) * DAY - (BARS - 1) * DAY if asof else 0
-    out = {}
-    for gid, s in games.items():
+    posts_asof = int(posts["last"] or 0)
+
+    def _series(times, end):
         series = [0] * BARS
-        if asof:
-            for t in s["times"]:
+        start = (end // DAY) * DAY - (BARS - 1) * DAY if end else 0
+        if end:
+            for t in times:
                 i = (t - start) // DAY
                 if 0 <= i < BARS:
                     series[i] += 1
-        out[gid] = dict(memos=s["memos"], agents=len(s["addrs"]), last=s["last"], series=series)
-    return dict(asof=asof, games=out)
+        return series
+
+    out = {}
+    for gid, s in games.items():
+        out[gid] = dict(memos=s["memos"], agents=len(s["addrs"]), last=s["last"], series=_series(s["times"], asof))
+    post_stats = dict(memos=posts["memos"], agents=len(posts["addrs"]), last=posts["last"],
+                      series=_series(posts["times"], posts_asof))
+    return dict(asof=asof, games=out, posts=post_stats, posts_asof=posts_asof)
 
 
 def game_stats():
@@ -364,7 +400,7 @@ def _app_card(g, names, s, asof, feat=False):
             + stat("Last", last_html)
             + "</section>"
         )
-    else:
+    elif memos:
         nums = (
             f'<ul class="app-nums">'
             f'<li title="Memos">{_IC_MEMO}<b class="num">{memos:,}</b></li>'
@@ -372,6 +408,8 @@ def _app_card(g, names, s, asof, feat=False):
             f'<li title="Last">{_IC_TIME}<b class="num">{last_html}</b></li>'
             f"</ul>"
         )
+    else:
+        nums = ""
     typ = "h2" if feat else "h3"
     links = "".join(_links(g))
     return (
@@ -382,7 +420,9 @@ def _app_card(g, names, s, asof, feat=False):
         f'<div class="app-meta"><span class="app-cat">{E(g["cat"])}</span>{pulse}</div>'
         f'<{typ} class="app-name">{E(g["name"])}</{typ}>'
         f'<p class="app-blurb">{E(g["blurb"])}</p>'
-        f'<p class="app-ref">{links}</p>{_bars(s.get("series"))}</div>{nums}</article>'
+        f'<p class="app-ref">{links}</p>'
+        + (_bars(s.get("series")) if memos else "")
+        + f'</div>{nums}</article>'
     )
 
 
@@ -505,24 +545,71 @@ def _atp20_list(names, tick=""):
     return cov_line + f'<div class="tok-grid">{grid}</div>' + more + _source("atp20")
 
 
-def _posts_list(names):
+def _ago(ts, asof):
+    """Age relative to the catalog tip, so a lagging archive still reads as live."""
+    try:
+        d = max(0, int(asof or 0) - int(ts or 0))
+    except (TypeError, ValueError):
+        return ""
+    if d < 10:
+        return "just now"
+    if d < 60:
+        return f"{d // 10 * 10}s ago"
+    if d < 3600:
+        return f"{d // 60}m ago"
+    if d < 86400:
+        h, m = d // 3600, (d % 3600) // 60
+        return f"{h}h {m}m ago" if m else f"{h}h ago"
+    return f"{d // 86400}d ago"
+
+
+def _post_who(addr, names):
+    if not addr:
+        return '<span class="na">Unknown</span>'
+    name = (names or {}).get(addr)
+    href = PROFILE_URL.format(addr)
+    if name:
+        return (f'<a class="post-who aname" href="{E(href)}" target="_blank" '
+                f'rel="noopener noreferrer" title="{E(name)} on LabLeak">{E(name)}</a>')
+    return (f'<a class="post-who mono" href="{E(href)}" target="_blank" '
+            f'rel="noopener noreferrer" title="LabLeak profile">{E(short(addr))}</a>')
+
+
+def _posts_list(names, bundle):
     items = posts(LIMIT)
+    stats = bundle.get("posts") or {}
+    asof = int(bundle.get("posts_asof") or stats.get("last") or 0)
+    feat = _app_card(POSTS_APP, names, stats, asof, feat=True)
     if not items:
         body = '<div class="app-empty"><p class="na">No onchain posts in this archive yet.</p></div>'
-        return body + _source("posts")
+        return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{body}</div>'
     bits = []
-    for it in items:
-        parts = "" if it["kind"] == "t" else f'<span>{it["have"]}/{it["parts"]}</span>'
+    for i, it in enumerate(items):
+        text = _excerpt(it["text"])
+        long = " is-long" if len(text) > 140 else ""
+        ago = _ago(it["ts"], asof)
+        iso = ""
+        try:
+            iso = dt.datetime.fromtimestamp(int(it["ts"] or 0), dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (TypeError, ValueError, OSError, OverflowError):
+            iso = ""
+        when = (f'<time datetime="{E(iso)}" title="{E(iso)}">{E(ago)}</time>' if ago else "")
+        tx = it.get("txid") or ""
+        txl = (f'<a class="post-tx mono" href="/tx/{E(tx)}" title="{E(tx)}">{E(short(tx, 4, 3))}</a>') if tx else ""
         bits.append(
-            f'<article class="post-row">'
-            f'<div class="post-meta">{agent(it["addr"], names=names)}'
-            f'<span class="dot" aria-hidden="true"></span>{lt(it["ts"])}'
-            + (f'<span class="dot" aria-hidden="true"></span>{parts}' if parts else "")
-            + f'<span class="dot" aria-hidden="true"></span>{tx_link(it["txid"])}</div>'
-            f'<p class="post-text">{E(_excerpt(it["text"]))}</p>'
-            f'</article>'
+            f'<article class="post-card" style="--i:{i}">'
+            f'<div class="post-ava">{idn(it["addr"])}</div>'
+            f'<div class="post-main">'
+            f'<div class="post-meta"><i class="post-chip" aria-hidden="true"></i>'
+            f'{_post_who(it["addr"], names)}{when}{txl}</div>'
+            f'<p class="post-text{long}">{E(text)}</p>'
+            f'</div></article>'
         )
-    return f'<div class="post-feed">{"".join(bits)}</div>' + _source("posts")
+    return (
+        f'<div class="post-store">'
+        f'<div class="app-feat-slot">{feat}</div>'
+        f'<div class="post-feed">{"".join(bits)}</div></div>'
+    )
 
 
 def page_html(qs=None):
@@ -538,7 +625,7 @@ def page_html(qs=None):
         body = _atp20_list(names, tick)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
     else:
-        body = _posts_list(names)
+        body = _posts_list(names, bundle)
         title = "Apps"
     head = _hero(bundle)
     tabs = [(k, "/apps" if k == DEFAULT_TAB else "/apps?tab=" + k, lab, None) for k, lab in TABS]

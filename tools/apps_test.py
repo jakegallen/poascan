@@ -67,16 +67,17 @@ html_bad = AP.page_html({"tab": ["nope"]})
 def nodash(s):
     return all(ch not in s for ch in DASH)
 
-check("default tab is Posts and shows the feed", "post-feed" in html and "post-text" in html and 'aria-current="page"' in html and "Posts" in html)
-check("unknown tab falls back to Posts", "post-feed" in html_bad)
+check("default tab is Posts and shows the feed", "post-feed" in html and "post-text" in html and "post-card" in html and 'aria-current="page"' in html and "Posts" in html)
+check("unknown tab falls back to Posts", "post-feed" in html_bad and "post-card" in html_bad)
+check("posts tab features POAPost", 'data-app="poapost"' in html and "POAPost" in html and "/static/apps/poapost.png" in html)
+check("posts tab links the official site and LabLeak post", "poapost/" in html and "2915" in html)
 check("disclaimer appears once on each tab", html.count(E(disc)) == 1 and html_posts.count(E(disc)) == 1 and html_games.count(E(disc)) == 1)
 check("disclaimer is exact", disc in html.replace("&amp;", "&") or E(disc) in html)
 # The disclaimer has no chars that need escape except maybe none. It's plain ASCII.
 check("disclaimer raw exact on the page", disc in html)
 check("games tab has no unofficial line", "Unofficial" not in html_games.split(disc, 1)[1])
-check("default posts source says unofficial once", html.split(disc, 1)[1].count("Unofficial") == 1)
+check("posts tab has no unofficial line", "Unofficial" not in html.split(disc, 1)[1] and "Unofficial" not in html_posts.split(disc, 1)[1])
 check("ATP-20 source says unofficial once", "Unofficial" not in disc and html_atp.split(disc, 1)[1].count("Unofficial") == 1)
-check("posts source says unofficial once", html_posts.split(disc, 1)[1].count("Unofficial") == 1)
 check("posts tab escapes svg and script",
       "&lt;svg&gt;&lt;script&gt;x&lt;/script&gt;&lt;/svg&gt;" in html_posts
       and "<svg><script>x</script></svg>" not in html_posts
@@ -92,6 +93,9 @@ check("games have no wallet-connect or payment CTA",
       "wallet-connect" not in html_games.lower() and "walletconnect" not in html_games.lower()
       and "deposit" not in html_games.lower() and "connect wallet" not in html_games.lower())
 check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games and "proof-pit" in html_games)
+import re as _re
+_pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
+check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
 check("version is 1.26.411", AG.VERSION == "1.26.411")
 

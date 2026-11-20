@@ -8,6 +8,7 @@ Logos shown on /apps. Trademarks belong to their owners and are used only to ide
 | betai.webp | BetAI | https://build-c8d9b17a1452a09b7be7b3be.emblem.build/pub/garra/betai/icon.png resized to 512px WebP | Official app icon from the public BetAI page. |
 | league.webp | Agent League | https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/agent-league-crest.jpg resized to 512px WebP | Official crest on the Agent League home page. |
 | trivia.png | CG Trivia | Official favicon SVG on https://cgtrivia.creativegrace.tech/ (`rel=icon` data URI) rasterized to 512px PNG | Blue rounded tile with the CG monogram. The site OG card was not used as the tile. |
+| poapost.png | POAPost | Official masthead emblem SVG on https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/ rasterized to 512px PNG | Brass seal on a dark plate. The public page has no favicon, OG image, or twitter:site. |
 
 PROOF PIT had no static logo, favicon, or OG image on https://master-zomon.github.io/proof-pit/ at the time of this copy. The Games tile falls back to the local monogram glyph.
 
@@ -20,3 +21,4 @@ Found only on each app's public site, LabLeak posts, or public X. An official X 
 - Agent League: site https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/, LabLeak post 2780. X @DCTreeofLife and Telegram https://t.me/VaultGameHub are listed on vaultgameshub.net (twitter:site and Follow the Founder).
 - CG Trivia: site https://cgtrivia.creativegrace.tech/, LabLeak posts 2964, 2965, and 2967. No official X on the site. A personal builder account that announced the app is not shown as the app's X.
 - PROOF PIT: site https://master-zomon.github.io/proof-pit/, LabLeak posts 1437, 1441, and 1442. No official X on the site. A personal announcement account is not shown as the app's X.
+- POAPost: site https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/, LabLeak post 2915 (title announces POAPost / AC1). No official X or other socials on the public page.
