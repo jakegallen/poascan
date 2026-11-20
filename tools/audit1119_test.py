@@ -164,4 +164,16 @@ HC.LATEST_EPOCH = lambda: None; HC._refresh_extra()
 check("warm list: no closes means no epoch pages", HC.EXTRA == [])
 HC.EXTRA[:] = []; HC.LATEST_EPOCH = None; HC._warm_set.clear(); HC._warm_url_by.clear()
 
+# ---- 1.26.406: Home Epochs rows carry no answers/paid count and no trailing reply number ----
+from poascan import views as V, topics as TOPX
+_hot = {"id": 12, "title": "A thread", "replies": 55}
+_o = V.home_open_row({"epoch": 9, "answers": 1428, "last_close": now - 100, "est_close": now + 100, "period": 200})
+_c = V.home_epochs([{"epoch": 8, "close_ts": now - 9, "pool": 100, "minted": 20, "paid": 2458}], with_pending=False)
+_t = V._thread_line(_hot)
+check("home epochs: the open row has no answers count or label", 'class="ep"' not in _o and 'class="epl"' not in _o and "1,428" not in _o and ">answers<" not in _o)
+check("home epochs: a closed row has no paid count or label", 'class="ep"' not in _c and 'class="epl"' not in _c and "2,458" not in _c and ">paid<" not in _c)
+check("home epochs: the thread line keeps id and title, the reply count moves to the tooltip", "#12" in _t and "A thread" in _t and "<b" not in _t and "55 replies" in _t)
+_css = SRC("static/style.css")
+check("home epochs: the grid has no count columns and no dead .ep/.epl/.eth b rules", "92px 52px 32px" not in _css and ".er .ep{" not in _css and ".er .epl" not in _css and ".eth b{" not in _css)
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)
