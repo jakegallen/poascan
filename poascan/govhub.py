@@ -235,7 +235,13 @@ def protocol_body(qs):
     off = _off(qs); k = _q(qs, "kind"); by = PV.SS.page_sort(qs, dict(PV.SORTS), "when"); d = PV.SS.page_dir(qs)
     total = len(PV.select(k if k in dict(PV.FILTERS) else "", by, d))
     q = lambda o: GOV.href("protocol", **dict(sort=by if by != "when" else "", dir="asc" if d == "asc" else "", kind=k, offset=str(o) if o else ""))
-    return sub_chips(PR_SUBS, "protocol", "Proposals") + PV.tab(qs, GOV.href, GOV.qsx, n=PAGE, off=off, links=False) + pager(total, off, lambda o: q(o))
+    from . import netfacts as NF
+    px = NF.params_extra()
+    extra = ""
+    if px:
+        rows = "".join(f'<div><span title="/api/params {E(x["key"])}">{E(x["label"])}</span><b>{E(x["text"])}</b></div>' for x in px)
+        extra = '<div class="kit-sec"><span class="lbl">Current</span><div class="sy">' + rows + '</div></div>'
+    return sub_chips(PR_SUBS, "protocol", "Proposals") + extra + PV.tab(qs, GOV.href, GOV.qsx, n=PAGE, off=off, links=False) + pager(total, off, lambda o: q(o))
 
 def proposals_body(qs):
     if _q(qs, "sub") == "protocol" or _q(qs, "tab") == "protocol": return protocol_body(qs)

@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.409] - 2026-11-20
+
+### Changed
+- The params view lists the new /api/params keys (auto-refund from and per close, fill backfill, distinct verifier from, close time derived from) as terse labels. Object values render as a short count, not a dumped table. /api/v1/params already passed them through.
+- /swaps is a read-only explorer view: the 1% fee, v2 as Shipped, not active until swap_v2_from_ts appears, and a refunds table (offer, maker, amount, close height, refund tx) that stays empty until a close names the refund field. Trading stays on POASwap; /swap/<id> and /offer/<id> still go there. No Swap tab in the nav.
+- Network Health flags Lag as Behind when the live chain height is 2,000 or more blocks ahead of the /api/status checkpoint.
+
 ## [1.26.408] - 2026-11-19
 
 ### Changed

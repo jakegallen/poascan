@@ -1,6 +1,6 @@
-"""Swap HTML cutover (1.26.17): /swaps and /how-to-buy-poa 301 to POASwap (GET and HEAD, trailing slash, any query, www),
+"""Swap HTML cutover (1.26.17, /swaps explorer since 1.26.409): /how-to-buy-poa 301 to POASwap (GET and HEAD, trailing slash, any query, www),
 while every swap data route (/api/v1/swaps*, /api/swaps, /api/v1/price, price-history) stays 200 JSON here and never redirects.
-Also: no internal link to /swaps or /swaps#xemb is left in the pages, llms.txt, sitemap or the MCP swap tool text.
+/swaps is a read-only explorer view (200). Offer pages still 301 to POASwap. No /swaps#xemb link in the pages or llms.
 Usage: python3 tools/swap_cutover_test.py"""
 import http.client, json, os, re, socket, subprocess, sys, tempfile, time, urllib.request
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -21,12 +21,17 @@ try:
     for _ in range(100):
         try: urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2); break
         except Exception: time.sleep(0.2)
-    cases = [("/swaps", "https://poaswap.io/"), ("/swaps/", "https://poaswap.io/"), ("/swaps?pair=SOL&x=1", "https://poaswap.io/"),
-             ("/how-to-buy-poa", "https://poaswap.io/about#faq"), ("/how-to-buy-poa/", "https://poaswap.io/about#faq"), ("/how-to-buy-poa?a=b", "https://poaswap.io/about#faq")]
-    got = [(m, u, h, raw(m, u, h)) for m in ("GET", "HEAD") for u, _ in cases for h in (None, "www.poascan.io")]
-    exp = {u: t for u, t in cases}
+    leave = [("/how-to-buy-poa", "https://poaswap.io/about#faq"), ("/how-to-buy-poa/", "https://poaswap.io/about#faq"), ("/how-to-buy-poa?a=b", "https://poaswap.io/about#faq")]
+    got = [(m, u, h, raw(m, u, h)) for m in ("GET", "HEAD") for u, _ in leave for h in (None, "www.poascan.io")]
+    exp = {u: t for u, t in leave}
     bad = [(m, u, h, s, hd.get("location")) for m, u, h, (s, hd, _) in got if s != 301 or hd.get("location") != exp[u]]
-    check(f"301 to POASwap for GET and HEAD, trailing slash, any query, apex and www (one hop) {bad}", not bad and len(got) == 24)
+    check(f"301 to POASwap for /how-to-buy-poa, GET and HEAD, trailing slash, any query, apex and www (one hop) {bad}", not bad and len(got) == 12)
+    stay = [("/swaps",), ("/swaps/",), ("/swaps?pair=SOL&x=1",)]
+    got = [(m, u, h, raw(m, u[0], h)) for m in ("GET", "HEAD") for u in stay for h in (None, "www.poascan.io")]
+    # www hops to the apex first; apex /swaps is the explorer (200).
+    bad = [(m, u, h, s, hd.get("location")) for m, u, h, (s, hd, b) in got
+           if (h and (s != 301 or not (hd.get("location") or "").endswith(u))) or (not h and s != 200)]
+    check(f"/swaps is the explorer (200 on apex; www hops to apex) {bad}", not bad)
     data = ["/api/v1/swaps", "/api/swaps", "/api/v1/swaps/status", "/api/swaps/status", "/api/v1/price", "/api/price", "/api/v1/swaps/price-history",
             "/api/swaps/price-history", "/api/v1/swaps?format=csv"]
     res = {u: raw("GET", u) for u in data}
@@ -35,10 +40,10 @@ try:
     check(f"swap data routes stay 200 here, never redirect {bad}", not bad)
     check("swap JSON parses", all(json.loads(res[u][2]) is not None for u in data if not u.endswith("csv")))
     pages = {u: raw("GET", u)[2].decode() for u in ("/", "/start", "/network?tab=token", "/about", "/privacy", "/agents", "/api", "/llms.txt", "/llms-full.txt", "/sitemap.xml", "/upgrade")}
-    left = {u: re.findall(r'(?:href="|https://poascan\.io)/swaps(?:#xemb)?\b[^"\s]*', h) for u, h in pages.items()}
+    left = {u: re.findall(r'(?:href="|https://poascan\.io)/swaps(?:#xemb)?\b[^"\s]*', h) for u, h in pages.items() if u != "/sitemap.xml"}
     left = {u: v for u, v in left.items() if v}
-    check(f"no internal /swaps or /swaps#xemb link in pages, llms or sitemap {left}", not left)
-    check("sitemap drops /swaps; /about and /privacy say swaps live on POASwap", "poascan.io/swaps" not in pages["/sitemap.xml"]
+    check(f"no internal /swaps or /swaps#xemb link in pages or llms {left}", not left)
+    check("sitemap lists /swaps; /about and /privacy say trading lives on POASwap", "poascan.io/swaps" in pages["/sitemap.xml"]
           and 'Trading lives on <a href="https://poaswap.io/" rel="noopener noreferrer">POASwap</a>' in pages["/about"]
           and 'Swaps and wallet setup are on <a href="https://poaswap.io/start" rel="noopener noreferrer">POASwap</a>' in pages["/privacy"])
     from poascan import agentapi as AG

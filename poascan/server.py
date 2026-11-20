@@ -537,6 +537,9 @@ def page(path, qs):
         return SV2.page(V.page)
     if path == "/governance": return GV.page(qs)
     if path == "/agents/top": return AH.top_page(qs.get("tab", [""])[0], qs)
+    if path == "/swaps":
+        from . import swaprefund as SR
+        return SR.page()
     if path == "/unlocks": return V.page("Unlocks", '<div class="sechead"><h1>Unlocks</h1></div>' + V3.unlock_section(), "/token")
     if path == "/upgrade": return V2.status_page("Network upgrade")
     if path == "/chain": return V.epochs_page(qs)
@@ -609,7 +612,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
@@ -619,9 +622,9 @@ MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/grow
          "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
          "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", "/at-risk": "/governance?tab=at-risk",
          **FQ.REDIRECTS}
-# The swap HTML moved to POASwap (2026-10-22). Only these HTML paths leave; every /api/v1/swaps*, /api/swaps, /api/price and
-# price-history route stays here unchanged, and so do the swap jobs. Query strings are dropped (the target is fixed).
-OFFSITE = {"/swaps": "https://poaswap.io/", "/how-to-buy-poa": "https://poaswap.io/about#faq"}
+# /how-to-buy-poa and each offer page leave for POASwap. /swaps is a read-only explorer view (1.26.409). Every /api/v1/swaps*,
+# /api/swaps, /api/price and price-history route stays here, and so do the swap jobs. Query strings are dropped (the target is fixed).
+OFFSITE = {"/how-to-buy-poa": "https://poaswap.io/about#faq"}  # 1.26.409: /swaps is a read-only explorer view again; /swap/<id> and /offer/<id> still leave
 OFFSITE_RX = re.compile(r"^/(?:swap|offer)/[^/]+$")   # one swap offer's old page: POASwap holds swaps now
 def offsite(path):
     p = path.rstrip("/") or "/"
