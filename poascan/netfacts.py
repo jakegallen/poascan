@@ -110,6 +110,30 @@ def params_extra(p=None):
     cs = p.get("close_summary_from_epoch") if isinstance(p, dict) else None   # 1.26.270: the epoch close summaries start at (E28); shown terse, no empty summary before it
     if isinstance(cs, int) and not isinstance(cs, bool):
         out.append(dict(key="close_summary_from_epoch", label="Close summary from", value=cs, text=f"E{cs}"))
+    # 1.26.409: keys now published on /api/params (scalars and small objects). Shown terse; the raw copy stays on /api/v1/params.
+    if not isinstance(p, dict): return out
+    import time as _t
+    def _plain_ts(ts):
+        return _t.strftime("%b %d %H:%M UTC", _t.gmtime(int(ts)))
+    ev = p.get("escrow_autorefund_from_epoch")
+    if isinstance(ev, int) and not isinstance(ev, bool):
+        out.append(dict(key="escrow_autorefund_from_epoch", label="Auto-refund from", value=ev, text=f"E{ev}"))
+    n = p.get("escrow_autorefund_per_close")
+    if isinstance(n, int) and not isinstance(n, bool):
+        out.append(dict(key="escrow_autorefund_per_close", label="Auto-refund per close", value=n, text=f"{n:,}"))
+    bf = p.get("escrow_fill_seen_backfill")
+    if isinstance(bf, dict):
+        offers = bf.get("offers") if isinstance(bf.get("offers"), list) else []
+        ts = bf.get("through_ts")
+        when = _plain_ts(ts) if isinstance(ts, (int, float)) and ts else ""
+        out.append(dict(key="escrow_fill_seen_backfill", label="Fill backfill", value=dict(through_ts=ts, offers=len(offers), sha256=bf.get("sha256")),
+                        text=f"{len(offers)} offer{'s' if len(offers) != 1 else ''}" + (f" through {when}" if when else "")))
+    av = p.get("att_distinct_verifier_from_ts")
+    if isinstance(av, (int, float)) and not isinstance(av, bool):
+        out.append(dict(key="att_distinct_verifier_from_ts", label="Distinct verifier from", value=int(av), text=_plain_ts(av)))
+    cd = p.get("close_ts_derived_from_epoch")
+    if isinstance(cd, int) and not isinstance(cd, bool):
+        out.append(dict(key="close_ts_derived_from_epoch", label="Close time derived from", value=cd, text=f"E{cd}"))
     return out
 
 
