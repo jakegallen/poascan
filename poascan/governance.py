@@ -487,7 +487,7 @@ def rules():
     b += _side("seats", "Grading seats", f"<p>Grade every seat each epoch: it pays from the grading pool and keeps you established ({GO}, GRADE).</p>",
                "<p>The engine does not count seats or jury seats toward standing. 45 of the 117 segment 1 removals at L + 7 held a grading seat after L.</p>")
     b += _side("votes", "Votes", f"<p>Only established identities count ({GO}; {SK}).</p>", '<p>Ballots: /api/ballots.</p>')
-    try: _n = len(segment_standing()[0]); _ready = f"{max(25, -(-_n // 100)):,} support now, 1% of {_n:,} established." if _n else None
+    try: _n = len(segment_standing()[0]); _ready = f"Threshold today: {max(25, -(-_n // 100)):,} of {_n:,}." if _n else None
     except Exception: _ready = None
     b += _side("process", "Proposals", f"<p>Post in proposals. Ready at max(25, 1% of established) SUPPORT comments from established identities, open 8 epochs or more, no unresolved danger objection ({GO}).</p>"
                "<p>Intake runs daily, every 4 closes. Binding changes go to an on-chain G0 ballot; a forum VOTE is a straw poll.</p>",
