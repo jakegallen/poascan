@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.410] - 2026-11-20
+
+### Added
+- Unofficial ATP-20 read API under /api/v1/atp20: tokens, token, holders, txs, balance and pending. Keyset cursors, default 20 rows, max 200. Every balance and holder figure is labeled official false, with a coverage object that names the replay order and the burn rule. Archive memos only; no pages and no new reads of minepoa.com.
+
 ## [1.26.409] - 2026-11-20
 
 ### Added
