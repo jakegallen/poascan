@@ -5,20 +5,20 @@ Logos shown on /apps. Trademarks belong to their owners and are used only to ide
 | File | App | Source | Notes |
 |---|---|---|---|
 | dice.png | POA Dice | https://poadice.grok.me/favicon.svg rasterized to 512px PNG | Official die-face favicon from the live site. The site's /__grok/icon-180.png is the Grok host mark, not used. |
-| betai.webp | BetAI | https://build-c8d9b17a1452a09b7be7b3be.emblem.build/pub/garra/betai/icon.png resized to 512px WebP | Official app icon from the public BetAI page. |
-| league.webp | Agent League | https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/agent-league-crest.jpg resized to 512px WebP | Official crest on the Agent League home page. |
+| betai.webp | BetAI | Official app icon from the public BetAI page, resized to 512px WebP | The page had no other public mark. |
+| league.webp | Agent League | Official crest from the Agent League home page, resized to 512px WebP | Used as the catalog tile. |
 | trivia.png | CG Trivia | Official favicon SVG on https://cgtrivia.creativegrace.tech/ (`rel=icon` data URI) rasterized to 512px PNG | Blue rounded tile with the CG monogram. The site OG card was not used as the tile. |
-| poapost.png | POAPost | Official masthead emblem SVG on https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/ rasterized to 512px PNG | Brass seal on a dark plate. The public page has no favicon, OG image, or twitter:site. |
+| poapost.png | POAPost | Official masthead emblem SVG from the public POAPost page, rasterized to 512px PNG | Brass seal on a dark plate. The public page has no favicon, OG image, or twitter:site. |
 
 PROOF PIT had no static logo, favicon, or OG image on https://master-zomon.github.io/proof-pit/ at the time of this copy. The Games tile falls back to the local monogram glyph.
 
 ## Sites and public socials
 
-Found only on each app's public site, LabLeak posts, or public X. An official X or other social is shown on the card only when the app's own site names it.
+Found only on each app's public site, LabLeak posts, or public X. An official X or other social is shown on the card only when the app's own site names it. A Website link is shown only when a stable public site is listed.
 
 - POA Dice: site https://poadice.grok.me, LabLeak post 2201, GitHub https://github.com/maximusmaximus/poa-dice (linked from the site). No official X on the site.
-- BetAI: public app https://build-c8d9b17a1452a09b7be7b3be.emblem.build/pub/garra/betai/, LabLeak posts 2237 and 2522. No official X or other socials on the public page. The emblem.build root is a login dashboard and is not used as the site link.
-- Agent League: site https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/, LabLeak post 2780. X @DCTreeofLife and Telegram https://t.me/VaultGameHub are listed on vaultgameshub.net (twitter:site and Follow the Founder).
+- BetAI: LabLeak posts 2237 and 2522. No stable public website is listed on the card. No official X or other socials found on a public page.
+- Agent League: site https://vaultgameshub.net, LabLeak post 2780. X @DCTreeofLife and Telegram https://t.me/VaultGameHub are listed on that site (twitter:site and Follow the Founder).
 - CG Trivia: site https://cgtrivia.creativegrace.tech/, LabLeak posts 2964, 2965, and 2967. No official X on the site. A personal builder account that announced the app is not shown as the app's X.
 - PROOF PIT: site https://master-zomon.github.io/proof-pit/, LabLeak posts 1437, 1441, and 1442. No official X on the site. A personal announcement account is not shown as the app's X.
-- POAPost: site https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/, LabLeak post 2915 (title announces POAPost / AC1). No official X or other socials on the public page.
+- POAPost: LabLeak post 2915 (title announces POAPost / AC1). No stable public website is listed on the card. No official X or other socials found on a public page.

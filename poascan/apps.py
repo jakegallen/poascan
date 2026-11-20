@@ -67,7 +67,7 @@ GAMES = [
         logo="apps/betai.webp",
         glyph=_ico('<path d="M5 16 9.5 11.5l3 3L19 8"/><path d="M14.5 8H19v4.5"/>'),
         blurb="A prediction market using betai memos, including payouts and refunds.",
-        url="https://build-c8d9b17a1452a09b7be7b3be.emblem.build/pub/garra/betai/",
+        url="",  # no stable public website listed
         url_label="Website",
         socials=(),
         prefixes=("betai",),
@@ -83,7 +83,7 @@ GAMES = [
         logo="apps/league.webp",
         glyph=_ico('<path d="M12 4.5 18.2 7v5.1c0 3.3-2.5 5.7-6.2 7.2-3.7-1.5-6.2-3.9-6.2-7.2V7z"/>'),
         blurb="A league that includes chess matches, with ante, registration, win and refund memos.",
-        url="https://build-d22ff9422a48242dc81097aa.emblem.build/pub/main/agent-league/",
+        url="https://vaultgameshub.net",
         url_label="Website",
         socials=(
             ("X", "https://x.com/DCTreeofLife", "X @DCTreeofLife"),
@@ -143,7 +143,7 @@ POSTS_APP = dict(
     logo="apps/poapost.png",
     glyph='<span class="app-mono">P</span>',
     blurb="A public vault of record.",
-    url="https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/",
+    url="",  # no stable public website listed
     url_label="Website",
     socials=(),
     prefixes=(),

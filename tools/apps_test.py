@@ -70,7 +70,7 @@ def nodash(s):
 check("default tab is Posts and shows the feed", "post-feed" in html and "post-text" in html and "post-card" in html and 'aria-current="page"' in html and "Posts" in html)
 check("unknown tab falls back to Posts", "post-feed" in html_bad and "post-card" in html_bad)
 check("posts tab features POAPost", 'data-app="poapost"' in html and "POAPost" in html and "/static/apps/poapost.png" in html)
-check("posts tab links the official site and LabLeak post", "poapost/" in html and "2915" in html)
+check("posts tab links the LabLeak post", "2915" in html)
 check("disclaimer appears once on each tab", html.count(E(disc)) == 1 and html_posts.count(E(disc)) == 1 and html_games.count(E(disc)) == 1)
 check("disclaimer is exact", disc in html.replace("&amp;", "&") or E(disc) in html)
 # The disclaimer has no chars that need escape except maybe none. It's plain ASCII.
