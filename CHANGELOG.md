@@ -11,20 +11,27 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
-## [1.26.411] - 2026-11-20
+## [1.26.412] - 2026-11-20
 
 ### Added
 - Unofficial Apps page at /apps, opening on Posts, then Games, then ATP-20. A shared hero carries a live tagline and the page disclaimer. Games is a storefront: a featured hero (rotated by activity, static under reduced motion), per-app color, local logos where a public mark exists, live memo stats, 14-day write bars, and outbound site, LabLeak and public social links. ATP-20 tick cards have mint bars, or a quiet empty card when the archive has no ticks. Posts opens on a POAPost featured card plus an escaped typographic feed with LabLeak author links, relative time, and clamped excerpts. Posts, the ATP-20 tick list and holders use the shared 20-row offset pager (Prev, Next, and the range). Local decoder only: no art rasters from inscriptions and no third-party indexer calls. No wallet-connect or payment links.
 
-## [1.26.410] - 2026-11-20
+## [1.26.411] - 2026-11-20
 
 ### Added
 - Unofficial ATP-20 read API under /api/v1/atp20: tokens, token, holders, txs, balance and pending. Keyset cursors, default 20 rows, max 200. Every balance and holder figure is labeled official false, with a coverage object that names the replay order and the burn rule. Archive memos only; no pages and no new reads of minepoa.com.
 
-## [1.26.409] - 2026-11-20
+## [1.26.410] - 2026-11-20
 
 ### Added
 - Unofficial ATP-20 token state is replayed from transfer memos already stored in the archive (LabLeak posts 3201 and 3202). The indexer upsert hook and a local backfill feed it. No new reads of minepoa.com. Balances and holder figures are unofficial and may differ from other indexers. Replay order is (ts, id); a burn debits the signer. No public API or pages in this step.
+
+## [1.26.409] - 2026-11-20
+
+### Changed
+- The params view lists the new /api/params keys (auto-refund from and per close, fill backfill, distinct verifier from, close time derived from) as terse labels. Object values render as a short count, not a dumped table. /api/v1/params already passed them through.
+- /swaps is a read-only explorer view: the 1% fee, v2 as Shipped, not active until swap_v2_from_ts appears, and a refunds table (offer, maker, amount, close height, refund tx) that stays empty until a close names the refund field. Trading stays on POASwap; /swap/<id> and /offer/<id> still go there. No Swap tab in the nav.
+- Network Health flags Lag as Behind when the live chain height is 2,000 or more blocks ahead of the /api/status checkpoint.
 
 ## [1.26.408] - 2026-11-19
 
