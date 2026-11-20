@@ -1153,6 +1153,26 @@ def _apply_paused(row, eps, now):
         if pz: row.update(state=PAUSED_UPSTREAM, paused_upstream=True, note=PAUSED_NOTE, upstream_notice=pz.get("text"))
     return row
 
+def _key_halted(ep, r, now):
+    """1.26.407: True when this one fetch_log key's own newest failure is a minepoa halt that is still in force: the durable row
+    reads '... halted' with its back-off not over, or the live halt record for the key's template is newer than the key's last
+    good read. A sibling key's halt, or an older halt a later good read has passed, does not count."""
+    from . import strain as ST
+    if str(r.get("err") or "").endswith(" halted") and (r.get("next_at") or 0) > now and (r.get("last_err") or 0) >= (r.get("last_ok") or 0): return True
+    h = ST.halted(ST.template(ep.split(" (")[0]), now)
+    return bool(h and (h.get("last_seen") or 0) >= (r.get("last_ok") or 0) and (r.get("last_err") or 0) >= (r.get("last_ok") or 0))
+
+def _apply_paused_keys(row, keys, now):
+    """1.26.407: relabel a not-OK feed row as Paused upstream only when EVERY failing key of the feed is held by a live minepoa halt.
+    A timeout or busy answer on one key, or a halt on a sibling key that shares the template (the scheduled tx sample against the
+    on-demand and swap-fill keys), shows the real Degraded or Down state, so the label clears as soon as reads succeed."""
+    if row.get("state") == "OK": return row
+    bad = [(e, r) for e, r, st in keys if st != "OK"]
+    if bad and all(_key_halted(e, r, now) for e, r in bad):
+        h = _feed_paused([e for e, _ in bad], now)
+        row.update(state=PAUSED_UPSTREAM, paused_upstream=True, note=PAUSED_NOTE, upstream_notice=(h or {}).get("text") or "endpoint temporarily halted")
+    return row
+
 def epochs_paused(now=None):
     """True when minepoa has /api/epochs paused (503 'temporarily paused'); display only, makes no request. Used by /chain."""
     return bool(_feed_paused(("/api/epochs",), now or time.time()))
@@ -1162,7 +1182,7 @@ def feeds():
     """Chain state, one row per upstream feed (label, state, last_ok) and the headline: OK only when every feed is OK,
     Partial when the chain is live and any feed is not, Degraded when the chain is not live."""
     from . import indexer as I
-    now = time.time(); rows = {r["endpoint"]: r for r in db.q("SELECT endpoint, last_ok, last_err, fails FROM fetch_log")}
+    now = time.time(); rows = {r["endpoint"]: r for r in db.q("SELECT endpoint, last_ok, last_err, fails, err, next_at FROM fetch_log")}
     out = []
     for label, eps, *mode in FEEDS:
         if not eps:   # Close records: this segment's records cover every close the live network counts
@@ -1185,7 +1205,7 @@ def feeds():
         row = dict(label=label, state=st, last_ok=lo)
         ss = feed_stale_s(lo, max((ev for _, ev in got if ev), default=0), now)   # 1.26.269: surface a silent upstream stall
         if ss: row.update(stale=True, stale_s=ss)
-        _apply_paused(row, eps, now)   # 1.26.280: minepoa paused this feed: show it, not a bare Down
+        _apply_paused_keys(row, [(e, rows[e], _feed_state(rows[e], every(e), now)) for e in eps if e in rows and any(rows[e] is g for g, _ in got)], now)   # 1.26.280, per key since 1.26.407
         out.append(row)
     try:   # 1.26.266: minepoa retired /api/explorer/grading (2026-11-01). Show Retired, never Down, and never degraded.
         from . import grading as GR

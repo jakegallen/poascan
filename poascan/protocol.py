@@ -319,7 +319,7 @@ def state(rel=None):
         v = match["client"]["version"]; st, badge = ("match" if all(in_sync.values()) else "older_release"), f"Client matches release {v}"
     else: st, badge = "unreleased", "Unreleased client change"
     return dict(state=st, badge=badge, release_version=cur.get("version"), release_txid=cur.get("txid"), release_ts=cur.get("ts"),
-                engine_sha256=cur.get("engine_sha256"), client_sha256=cur.get("client_sha256"), web_client_sha256=cur.get("web_client_sha256"),
+                engine_sha256=cur.get("engine_sha256"), server_sha256=cur.get("server_sha256"), params_sha256=cur.get("params_sha256"), client_sha256=cur.get("client_sha256"), web_client_sha256=cur.get("web_client_sha256"),
                 live_client_sha256=live["client"], live_web_client_sha256=live["web_client"],
                 client_matches_release=match["client"]["version"] if match["client"] else None,
                 web_client_matches_release=match["web_client"]["version"] if match["web_client"] else None,

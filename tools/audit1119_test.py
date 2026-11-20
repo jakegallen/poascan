@@ -176,4 +176,37 @@ check("home epochs: the thread line keeps id and title, the reply count moves to
 _css = SRC("static/style.css")
 check("home epochs: the grid has no count columns and no dead .ep/.epl/.eth b rules", "92px 52px 32px" not in _css and ".er .ep{" not in _css and ".er .epl" not in _css and ".eth b{" not in _css)
 
+# ---- 1.26.407: a feed reads Paused upstream only while every failing key is held by its own live halt ----
+def _fl(ep, ok, err, fails, nxt, msg):
+    db.write("INSERT OR REPLACE INTO fetch_log(endpoint,last_ok,last_err,fails,next_at,err) VALUES(?,?,?,?,?,?)", (ep, ok, err, fails, nxt, msg))
+def _sw():
+    A._cache.clear(); return next(f for f in A.feeds()["feeds"] if f["label"] == "Swaps")
+db.write("DELETE FROM fetch_log")
+_fl("/api/swaps", now - 60, None, 0, 0, None)
+_fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now + 600, "HTTP 503 halted")
+check("feeds: a key held by its own halt reads Paused upstream", _sw()["state"] == "Paused upstream")
+_fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now + 600, "TimeoutError: The read operation timed out")
+_fl("/api/explorer/tx/:id", now - 900, now - 100, 2, now + 600, "HTTP 503 halted")
+_s = _sw()
+check("feeds: a timeout on the swap key is not relabeled by a sibling key's halt", _s["state"] != "Paused upstream" and not _s.get("paused_upstream"))
+_fl("/api/explorer/tx/:id (swaps)", now - 5, now - 300, 0, 0, None)
+check("feeds: the label clears once the key reads again", _sw()["state"] == "OK")
+db.write("DELETE FROM fetch_log")
+
+# ---- 1.26.407: protocol.check() names the engine and server hashes of the stored /api/release current, none hardcoded ----
+from poascan import protocol as PRO
+_rel = {"current": {"version": "v0.123-server-1446", "engine_sha256": "ed86480c" + "0" * 56, "server_sha256": "4f347b54" + "0" * 56, "params_sha256": "bc823648" + "0" * 56,
+                    "client_sha256": "ed86480c" + "0" * 56, "web_client_sha256": "911b833b" + "0" * 56, "ts": now, "txid": "e8" * 32}, "history": []}
+_ck = PRO.state(_rel)
+check("protocol state: engine ed86480c and server 4f347b54 come from the stored release", _ck["engine_sha256"].startswith("ed86480c") and _ck["server_sha256"].startswith("4f347b54") and _ck["params_sha256"].startswith("bc823648"))
+check("protocol state: params are not hardcoded to the Oct 25 seed", "4f347b54" not in SRC("poascan/protocol.py") and "ed86480c" not in SRC("poascan/protocol.py"))
+# governance rules: the Proposals process card follows go.md
+from poascan import governance as GOVX, govhub as GH
+GH.GOV._COLLECT.rows = []
+try: GOVX.rules(); _rr = GH.GOV._COLLECT.rows
+finally: GH.GOV._COLLECT.rows = None
+_pc = next((r for r in _rr if r[0] == "process"), None)
+check("governance rules: a Proposals card with max(25, 1% of established), 8 epochs, every 4 closes, G0 ballot, straw poll", bool(_pc) and all(t in _pc[2] for t in ("max(25, 1% of established)", "8 epochs", "every 4 closes", "G0 ballot", "straw poll")))
+check("governance rules: the new card has no em or en dash", bool(_pc) and not re.search("[\u2013\u2014]", _pc[2] + _pc[3]))
+
 print("all passed" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)
