@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.407] - 2026-11-19
+
+### Changed
+- Health feeds: a feed reads Paused upstream only while every one of its failing reads is held by its own live minepoa halt. A timeout on one key, or a halt on a sibling key that shares the tx path, now shows the real Degraded or Down state, so the label clears as soon as the reads succeed. No extra reads of minepoa.
+- /api/v1/params carries swap_fee_bp, swap_fee_from_ts and swap_fee_wallet as upstream publishes them (111 keys). No page prints them; the 1% fee still shows once, on /swaps.
+- Governance Rules has a Proposals card for the new process: post in proposals, ready at max(25, 1% of established) SUPPORT from established identities, open 8 epochs or more, no unresolved danger objection, intake every 4 closes, binding changes to an on-chain G0 ballot, a forum VOTE is a straw poll.
+- /api/v1/protocol current also names server_sha256 and params_sha256 from the stored /api/release (engine ed86480c and server 4f347b54 for v0.123).
+
 ## [1.26.406] - 2026-11-19
 
 ### Changed

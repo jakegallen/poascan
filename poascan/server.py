@@ -111,12 +111,13 @@ def swap_page(rows, qs):
 _PARAMS_LAST = {}   # last non-empty params mirror copy: served if a later blob read is empty, so the mirror never goes blank
 def _params_mirror():
     """The body of /api/params and its /api/v1 alias: the hourly upstream params POAScan already caches in the "params"
-    blob (indexer.job_hourly_meta reads minepoa.com/api/params once an hour and stores the whole copy), minus the
-    swap_fee* keys. Every upstream key passes straight through, including the emission set (seal_load_frozen_from_epoch,
+    blob (indexer.job_hourly_meta reads minepoa.com/api/params once an hour and stores the whole copy). 1.26.407: the
+    swap_fee* keys (swap_fee_bp, swap_fee_from_ts, swap_fee_wallet) pass through too, as upstream publishes them; no page
+    prints them (the 1% fee is shown once, on /swaps). Every upstream key passes straight through, including the emission set (seal_load_frozen_from_epoch,
     emission_ceiling, emission_carry_from_epoch and the rest); nothing is dropped or fabricated. The last non-empty copy
     is kept in memory and served if a later read comes back empty, so the mirror stays reliable (last-good, never
     upstream on the request path). The route is slot-exempt (_is_params), so an API storm never sheds it with 503."""
-    try: d = {k: v for k, v in A.params().items() if not str(k).startswith("swap_fee")}
+    try: d = dict(A.params())
     except Exception: d = {}
     if d: _PARAMS_LAST.clear(); _PARAMS_LAST.update(d)
     elif _PARAMS_LAST: d = dict(_PARAMS_LAST)

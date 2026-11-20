@@ -4,7 +4,7 @@
 Two defects were reported: /api/params intermittently returned 503 (it took a heavy-work slot, so an API storm shed it),
 and /api/v1/params returned 200 without seal_load_frozen_from_epoch.
 
-This covers the fix: the mirror serves the hourly "params" blob POAScan already holds (minus swap_fee*) with a last-good
+This covers the fix: the mirror serves the hourly "params" blob POAScan already holds (swap_fee* included since 1.26.407) with a last-good
 in-memory fallback, it is slot-exempt (served with the heavy pool full, never 503 under load), and /api/params and its
 /api/v1 alias resolve to one route that forwards every upstream key, the emission set (seal_load_frozen_from_epoch,
 emission_ceiling, emission_carry_from_epoch) included.
@@ -24,7 +24,7 @@ db.init()
 fails = []
 def ok(c, m): print(("ok   " if c else "FAIL ") + m); c or fails.append(m)
 
-# A params blob shaped like minepoa's: the emission keys present, two swap_fee* keys that the mirror drops.
+# A params blob shaped like minepoa's: the emission keys present, two swap_fee* keys that the mirror now passes through.
 UP = {"auto_epoch_seconds": 21600, "vesting_epochs": 100, "pending_ttl_epochs": 16,
       "emission_ceiling": "1000000", "emission_carry_from_epoch": 44, "seal_load_frozen_from_epoch": 71,
       "swap_fee_bps": 50, "swap_fee_min": "1"}
@@ -35,7 +35,7 @@ d = S._params_mirror()
 ok(d.get("seal_load_frozen_from_epoch") == 71, "mirror includes seal_load_frozen_from_epoch=71 (not dropped, not fabricated)")
 for k in ("emission_ceiling", "emission_carry_from_epoch"):
     ok(k in d, f"mirror includes the emission key {k}")
-ok(not any(str(k).startswith("swap_fee") for k in d), "mirror drops the swap_fee* keys")
+ok(d.get("swap_fee_bps") == 50 and d.get("swap_fee_min") == "1" and len(d) == len(UP), "mirror passes the swap_fee* keys through (1.26.407), every upstream key present")
 ok(d.get("pending_ttl_epochs") == 16 and d.get("auto_epoch_seconds") == 21600, "every other upstream key passes straight through")
 
 # ---------------------------------------------------------------- 2. /api/params and /api/v1/params are one route, same bytes

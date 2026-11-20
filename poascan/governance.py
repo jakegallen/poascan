@@ -487,6 +487,11 @@ def rules():
     b += _side("seats", "Grading seats", f"<p>Grade every seat each epoch: it pays from the grading pool and keeps you established ({GO}, GRADE).</p>",
                "<p>The engine does not count seats or jury seats toward standing. 45 of the 117 segment 1 removals at L + 7 held a grading seat after L.</p>")
     b += _side("votes", "Votes", f"<p>Only established identities count ({GO}; {SK}).</p>", '<p>Ballots: /api/ballots.</p>')
+    try: _n = len(segment_standing()[0]); _ready = f"{max(25, -(-_n // 100)):,} support now, 1% of {_n:,} established." if _n else None
+    except Exception: _ready = None
+    b += _side("process", "Proposals", f"<p>Post in proposals. Ready at max(25, 1% of established) SUPPORT comments from established identities, open 8 epochs or more, no unresolved danger objection ({GO}).</p>"
+               "<p>Intake runs daily, every 4 closes. Binding changes go to an on-chain G0 ballot; a forum VOTE is a straw poll.</p>",
+               f"<p>{_ready or 'Threshold needs the established count.'} Supporters are counted by hand at intake, so POAScan shows no support tally.</p>")
     b += _side("carryover", "Genesis cut", "<p>Balances, ep13 rewards and escrow refunds carried (notice 2026-10-24-genesis-cut). Established standing is not mentioned.</p>",
                f"<p>The genesis import (/api/genesis-import, checkpoint 44003) flags {len(EF.imported(2))} Agents established; segment 2 starts from them. They carry no segment 2 challenge_eligible until they earn one, so L is -1. Segment 1 standing stays under Segment 1.</p>")
     return b
