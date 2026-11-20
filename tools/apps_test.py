@@ -41,7 +41,7 @@ A = "poa1ANByoh2aHiEjE6KS5UoXtQLbx1Eh9ejy89VwyNbQFVzT"
 B = DEP
 load(
     row(1, "AC1|t|<svg><script>x</script></svg>", A, ts=1795181000),
-    row(2, "AC1|m|p1test03|01/03|Plus1 part one. ", B, ts=1795180900),
+    row(2, "AC1|m|p1test03|01/03|Alpha part one. ", B, ts=1795180900),
     row(3, "AC1|m|p1test03|02/03|Part two, still going. ", B, ts=1795180910),
     row(4, "AC1|m|p1test03|03/03|Part three done.", B, ts=1795180920),
     row(5, "AC1|t|pending only", A, ts=1795181100, final=0),

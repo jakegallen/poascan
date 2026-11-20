@@ -9,7 +9,7 @@ from . import db, analytics as A, kit as KIT
 from .ui import agent, table, tx_link, lt, stat, short, idn, PROFILE_URL
 from .govhub import pager, PAGE
 
-# Exact disclaimer, Jake via Plus1, 2026-11-20 1:43 PM PT.
+# Exact disclaimer, as approved 2026-11-20 1:43 PM PT.
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
