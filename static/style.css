@@ -2241,9 +2241,11 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 .art-pix{--pix:28;width:calc(var(--pix) * 8px);height:calc(var(--pix) * 8px);flex:none;border-radius:var(--r-lg);overflow:hidden;background:#100E0A;border:1px solid color-mix(in srgb,var(--gold) 45%,var(--line));box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 10%,transparent)}
 .art-pix img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .art-pix-still{display:none}
-.art-work,.tok-card.art-col{animation:fadein var(--draw) var(--ease) both}
-.tok-card.art-col{display:flex;gap:16px;padding:18px;text-decoration:none;color:inherit;border:1px solid color-mix(in srgb,var(--gold) 28%,var(--line));background:color-mix(in srgb,var(--gold) 4%,transparent);border-radius:var(--r-lg)}
-.tok-card.art-col .art-tile{width:72px;height:72px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex:none}
+.art-store .tok-hero{animation:fadein var(--draw) var(--ease) both}
+.art-store .tok-hero{margin:0;flex-direction:row;align-items:flex-start}
+.art-store .art-col .art-tile{width:72px;height:72px}
+.art-hero .app-name a{color:inherit;text-decoration:none}
+.art-hero .app-name a:hover{color:var(--gold)}
 @media (max-width:640px){
   .art-hero .art-tile,.art-work .art-tile{width:72px;height:72px}
   .art-pix{width:calc(var(--pix) * 4px);height:calc(var(--pix) * 4px)}
@@ -2251,5 +2253,5 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:reduce){
   .art-pix-anim{display:none}
   .art-pix-still{display:block}
-  .art-work,.tok-card.art-col{animation:none}
+  .art-store .tok-hero{animation:none}
 }

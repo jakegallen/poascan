@@ -715,9 +715,10 @@ def _col_card(names, tok, feat=False):
     if col == "MAM-GENESIS":
         links.append(_out_link(RUNBOOK_3220, "Post 3220"))
     typ = "h2" if feat else "h3"
-    wrap_o, wrap_c = (f'<a class="tok-card art-col" href="{href}" style="--app:var(--gold)">', "</a>") if not feat else (
-        '<div class="tok-hero art-hero" style="--app:var(--gold)">', "</div>"
-    )
+    # Catalog cards are articles, not links, so deploy and LabLeak anchors can sit on the same card.
+    name = E(col) if feat else f'<a href="{href}">{E(col)}</a>'
+    wrap_o = f'<article class="tok-hero art-hero{" art-col" if not feat else ""}" style="--app:var(--gold)">'
+    wrap_c = "</article>"
     fee_bit = f"{int(fee):,} {E(tick)}" if fee is not None and str(fee) != "" and tick else ""
     ref = [f'<span class="num">{holders:,}</span> holders']
     if fee_bit:
@@ -728,7 +729,7 @@ def _col_card(names, tok, feat=False):
     note = "Local tile. File fingerprint unverified." if col == "MAM-GENESIS" else ""
     return (
         f'{wrap_o}{tile}<div class="app-body">'
-        f'<{typ} class="app-name">{E(col)}</{typ}>'
+        f'<{typ} class="app-name">{name}</{typ}>'
         + (f'<p class="app-blurb">{E(title)}</p>' if title else "")
         + f'<p class="tok-fig"><span class="num">{minted:,}</span>'
         f'<span class="tok-of">of {cap:,}</span></p>'
