@@ -12,6 +12,10 @@ Logos shown on /apps. Trademarks belong to their owners and are used only to ide
 
 PROOF PIT had no static logo, favicon, or OG image on https://master-zomon.github.io/proof-pit/ at the time of this copy. The Games tile falls back to the local monogram glyph.
 
+| mam-genesis.webp | MAM-GENESIS | https://raw.githubusercontent.com/NUNDEV555/MAM-GENESIS/master/MAM_GENESIS.png (LabLeak post 3240) resized to 512px WebP | Source 2048px PNG verified offline to sha256 `f24fe8eb6b21cc3f86bd2b3f79b28f65964dbde0fd79f91bee5f644594d59d8e` before resize. |
+
+PAKNO-AGENTICLUB (`7b884afd...`) and XAI-AGENTIC (`02b0d99d...`) have no published raster matching their on-chain sha256 hashes; the ATP-721 tab renders a generated monogram emblem fallback.
+
 ## Sites and public socials
 
 Found only on each app's public site, LabLeak posts, or public X. An official X or other social is shown on the card only when the app's own site names it. A Website link is shown only when a stable public site is listed.

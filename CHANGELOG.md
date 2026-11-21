@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.417] - 2026-11-21
+
+### Changed
+- Apps tabs are Posts, ATP-20, ATP-721, Art, then Games. ATP-721 collections have their own tab; Art keeps only unique sealed AC1 works. Each tab opens with a short definition, memo and Agent counts, latest activity, and a LabLeak link. The page line moves into an accessible info control on the tab bar. ATP-20 is a table of tick, supply, holders, deployer and deploy. Games outbound links are icon buttons. Posts rows no longer show empty avatar squares. MAM-GENESIS uses its verified local artwork; collections without a published raster use a monogram.
+
 ## [1.26.416] - 2026-11-20
 
 ### Added

@@ -823,7 +823,7 @@ cu()})();
 function stop(){if(t){clearInterval(t);t=null}}
 function start(){stop();if(!root)return;t=W.setInterval(tick,8000)}
 function count(){var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
- D.querySelectorAll(".appshero [data-cu], .app-store [data-cu]").forEach(function(n){var v=+n.getAttribute("data-cu");n.removeAttribute("data-cu");if(RM||!(v>0))return;var t0=null,d=900;
+ D.querySelectorAll("#apps [data-cu]").forEach(function(n){var v=+n.getAttribute("data-cu");n.removeAttribute("data-cu");if(RM||!(v>0))return;var t0=null,d=900;
   function f(t){if(t0===null)t0=t;var p=Math.min(1,(t-t0)/d),q=1-Math.pow(1-p,3);n.textContent=Math.round(v*q).toLocaleString("en-US");if(p<1)W.requestAnimationFrame(f)}W.requestAnimationFrame(f)})}
 function tick(){if(paused||!root)return;var slot=root.querySelector(".app-feat-slot"),grid=root.querySelector(".app-grid");if(!slot||!grid)return;
  var order=(root.getAttribute("data-order")||"").trim().split(/\s+/).filter(Boolean);if(order.length<2)return;
@@ -842,3 +842,9 @@ function bind(){stop();root=D.querySelector(".app-store[data-apps-rotate]");coun
 W.poaKit=W.poaKit||{};W.poaKit.apps=bind;
 D.addEventListener("visibilitychange",function(){if(D.hidden)stop();else if(root)start()});
 bind()})();
+
+/* Apps tab bar info popover: close on outside tap or Escape */
+(function(){var D=document;
+D.addEventListener("click",function(e){D.querySelectorAll(".apps-tip[open]").forEach(function(d){if(!d.contains(e.target))d.removeAttribute("open")})});
+D.addEventListener("keydown",function(e){if(e.key==="Escape")D.querySelectorAll(".apps-tip[open]").forEach(function(d){d.removeAttribute("open")})});
+})();
