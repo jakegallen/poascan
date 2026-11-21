@@ -68,7 +68,7 @@ w = R.work("e85fe08f")
 check("known work serves the hash-checked local GIF",
       w["ok"] is True and w["name"] == "Digivatar"
       and w["file_sha"] == "415322abc005eb984a8200868fb4fe6ddf0e126dd024b03e21d3eae7d232d217"
-      and w["gif"] == "/apps/digivatar-e85fe08f.gif" and w["still"] == "/apps/digivatar-e85fe08f.png")
+      and w["gif"] == "/static/apps/digivatar-e85fe08f.gif" and w["still"] == "/static/apps/digivatar-e85fe08f.png")
 
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "ac1art.py"), encoding="utf-8").read()
 check("no em or en dash in ac1art.py", not any(d in src or d in R.OFFICIAL_NOTE for d in DASH))

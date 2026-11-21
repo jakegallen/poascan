@@ -108,7 +108,7 @@ works = api("/api/v1/art/works")
 check("art works unofficial and names Digivatar",
       works["official"] is False and works["coverage"]["official"] is False
       and works["works"][0]["id"] == "e85fe08f" and works["works"][0]["name"] == "Digivatar"
-      and works["works"][0]["ok"] is True and works["works"][0]["gif"] == "/apps/digivatar-e85fe08f.gif")
+      and works["works"][0]["ok"] is True and works["works"][0]["gif"] == "/static/apps/digivatar-e85fe08f.gif")
 onew = api("/api/v1/art/works/e85fe08f")
 check("one work is unofficial and hash-checked",
       onew["official"] is False and onew["work"]["ok"] is True

@@ -96,8 +96,8 @@ def _static_ok(work):
         return None
     if still and not os.path.isfile(still):
         still = None
-    return dict(gif="/" + work["gif"] if work.get("gif") else None,
-                still=("/" + work["still"]) if still else None,
+    return dict(gif="/static/" + work["gif"] if work.get("gif") else None,
+                still=("/static/" + work["still"]) if still else None,
                 via="static")
 
 
