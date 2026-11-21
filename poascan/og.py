@@ -155,7 +155,33 @@ def _hall(r):
     seed, paid = MK.hall_key_seed(MK.hall_seed(r.get("epoch"), r.get("paid"), r.get("minted")))
     return (seed, 3, bool(paid))
 
+def _atp20(tick):
+    from . import atp20 as T
+    tok = T.token(tick)
+    if not tok:
+        return ("ATP-20 token", tick, ["Unknown tick"], []), True
+    def big(v):
+        try:
+            return compact(int(v))
+        except Exception:
+            return str(v or "0")
+    st = [("Minted", big(tok.get("minted"))), ("Supply", big(tok.get("max_supply"))),
+          ("Holders", f'{int(tok.get("holder_count") or 0):,}')]
+    return ("Unofficial ATP-20", tick, ["ATP-20 token on POA"], st), True
+
+
+def _atp721(col):
+    from . import atp721 as C
+    tok = C.collection(col)
+    if not tok:
+        return ("ATP-721 collection", col, ["Unknown collection"], []), True
+    st = [("Minted", f'{int(tok.get("minted") or 0):,}'), ("Supply", f'{int(tok.get("total") or 0):,}'),
+          ("Holders", f'{int(tok.get("holder_count") or 0):,}')]
+    return ("Unofficial ATP-721", tok.get("title") or col, [col] if tok.get("title") else [], st), True
+
+
 ROUTE = re.compile(r"^/og/(tx|address|epoch)/([^/]+)\.png$")
+APPS_ROUTE = re.compile(r"^/apps/og/(atp20|atp721)/([^/]+?)(?:\.png)?$")
 
 def _upgrade():
     from . import maint as M
@@ -185,6 +211,21 @@ def render(path):
         if not _take(): return _fallback(), FALLBACK_AGE
         with _RENDER: png = card(*_upgrade())
         _CACHE[path] = (now + 600, png, 600); return png, 600
+    ma = APPS_ROUTE.match(path)
+    if ma:
+        kind, key = ma.groups()
+        if kind == "atp20" and not re.fullmatch(r"[A-Z0-9]{3,12}", key): return None
+        if kind == "atp721" and not re.fullmatch(r"[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])", key): return None
+        now = time.time(); hit = _CACHE.get(path)
+        if hit and now < hit[0]: _CACHE.move_to_end(path); return hit[1], hit[2]
+        if not _take(): return _fallback(), FALLBACK_AGE
+        with _RENDER:
+            spec, done = (_atp20 if kind == "atp20" else _atp721)(key)
+            png = card(*spec)
+        age = 900
+        _CACHE[path] = (now + age, png, age)
+        while len(_CACHE) > _MAX: _CACHE.popitem(last=False)
+        return png, age
     m = ROUTE.match(path)
     if not m: return None
     kind, key = m.groups()
