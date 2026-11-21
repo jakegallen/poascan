@@ -21,6 +21,7 @@ MINT_SAFE = "Never send payment outside the network."
 SPEC_URL = {
     "atp20": "https://minepoa.com/lableak/#/post/3202",
     "atp721": "https://minepoa.com/lableak/#/post/3218",
+    "posts": "https://minepoa.com/lableak/#/post/2915",
 }
 # Public site from https://x.com/bitcoinizeme/status/2124128462017303007 (root).
 MAGIC_SITE = "https://magicagent.tech"
@@ -1083,6 +1084,53 @@ def _mint_card(kind, item=None):
     )
 
 
+def _post_prompt():
+    url = SPEC_URL["posts"]
+    return (
+        "Help me publish an image as a POAPost.\n"
+        "\n"
+        "Encode a gif, png, or webp of at most 64 KB as a data URI, never SVG:\n"
+        "data:image/<TYPE>;base64,<BYTES>\n"
+        "\n"
+        "If it fits in one memo, write a self-transfer:\n"
+        "AC1|t|<DATA_URI>\n"
+        "\n"
+        "If it does not fit, pick an 8 to 32 character hex id and send the data URI in order, "
+        "each as a self-transfer:\n"
+        "AC1|m|<CID>|<N>/<TOTAL>|<CHUNK>\n"
+        "\n"
+        "Then seal the joined bytes:\n"
+        "AC1|s|<CID>|sha256:<HEX>\n"
+        "\n"
+        "The explorer joins those parts and shows the raster.\n"
+        "\n"
+        f"Use Emblem Wallet:\n{WALLET_CMD}\n"
+        "\n"
+        f"{MINT_SAFE} Never ask me for keys.\n"
+        "\n"
+        f"Spec: {url}\n"
+    )
+
+
+def _post_card():
+    prompt = _post_prompt()
+    lede = ("Write a signed self-transfer in one line or in parts, "
+            "then seal the bytes with sha256.")
+    return (
+        f'<details class="howto-card" id="apps-post">'
+        f'<summary class="mint-sum" aria-expanded="false">'
+        f'<span class="mint-title">How to post</span>'
+        f'<span class="mint-chev" aria-hidden="true"></span>'
+        f'</summary>'
+        f'<div class="mint-body">'
+        f'<p class="mint-lede">{E(lede)}</p>'
+        f'<pre class="mint-prompt" tabindex="0">{E(prompt)}</pre>'
+        f'<div class="mint-actions">'
+        f'<button type="button" class="mint-copy" data-copy-prompt>Copy prompt</button>'
+        f'</div></div></details>'
+    )
+
+
 def _tok_pct(minted, maxs):
     try:
         a, b = int(minted or 0), int(maxs or 0)
@@ -1300,9 +1348,10 @@ def _posts_list(names, bundle, qs=None):
     stats = bundle.get("posts") or {}
     asof = int(bundle.get("posts_asof") or stats.get("last") or 0)
     feat = _app_card(POSTS_APP, names, stats, asof, feat=True)
+    card = _post_card()
     if not items:
         body = '<div class="app-empty"><p class="na">No onchain posts in this archive yet.</p></div>'
-        return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{body}</div>'
+        return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{card}{body}</div>'
     bits = []
     for i, it in enumerate(items):
         body = _post_body(it)
@@ -1327,6 +1376,7 @@ def _posts_list(names, bundle, qs=None):
     return (
         f'<div class="post-store">'
         f'<div class="app-feat-slot">{feat}</div>'
+        f'{card}'
         f'<div class="post-feed">{"".join(bits)}</div>{pg}</div>'
     )
 

@@ -849,7 +849,7 @@ D.addEventListener("click",function(e){D.querySelectorAll(".apps-tip[open]").for
 D.addEventListener("keydown",function(e){if(e.key==="Escape")D.querySelectorAll(".apps-tip[open]").forEach(function(d){d.removeAttribute("open")})});
 })();
 
-/* Apps How to mint: collapsed details, Copy prompt, Mint buttons expand and prefill. */
+/* Apps How to mint / How to post: collapsed details, Copy prompt, Mint buttons expand and prefill. */
 (function(){var D=document,W=window;
 function write(v){if(!v)return Promise.resolve(false);
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb(v)});
@@ -861,10 +861,10 @@ function fill(card,prompt,rules){if(!card)return;var pre=card.querySelector(".mi
  if(pre&&prompt){pre.textContent=prompt}if(r&&rules){r.textContent=rules}openCard(card)}
 function go(card){if(!card)return;var rm=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
  card.scrollIntoView({behavior:rm?"auto":"smooth",block:"nearest"});var b=card.querySelector(".mint-copy");if(b)b.focus()}
-D.querySelectorAll("details.mint-card").forEach(function(card){aria(card);card.addEventListener("toggle",function(){aria(card)})});
+D.querySelectorAll("details.mint-card, details.howto-card").forEach(function(card){aria(card);card.addEventListener("toggle",function(){aria(card)})});
 D.addEventListener("click",function(e){
- var copy=e.target.closest&&e.target.closest("[data-copy-mint]");
- if(copy){e.preventDefault();var card=copy.closest(".mint-card");var pre=card&&card.querySelector(".mint-prompt");var v=pre?pre.textContent:"";
+ var copy=e.target.closest&&e.target.closest("[data-copy-mint], [data-copy-prompt]");
+ if(copy){e.preventDefault();var card=copy.closest(".mint-card, .howto-card");var pre=card&&card.querySelector(".mint-prompt");var v=pre?pre.textContent:"";
   write(v).then(function(ok){copy.classList.remove("ok");void copy.offsetWidth;copy.classList.add("ok");var o=copy.dataset.l||(copy.dataset.l=copy.textContent);copy.textContent=ok?"Copied":"Select and copy";setTimeout(function(){copy.classList.remove("ok");copy.textContent=o},1600)})
   return}
  var btn=e.target.closest&&e.target.closest("[data-mint-prompt]");

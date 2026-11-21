@@ -199,8 +199,40 @@ check("SEAL page prompt is deployer only and has the safety line",
 check("How to mint is not on Posts, Art, or Games",
       "mint-card" not in html and "mint-card" not in html_posts
       and "mint-card" not in html_art and "mint-card" not in html_games
+      and 'id="apps-mint"' not in html_posts
+      and "How to mint" not in html_posts and "How to mint" not in html_art
+      and "How to mint" not in html_games
       and ">Mint</" not in html and ">Mint</" not in html_posts
       and ">Mint</" not in html_art and ">Mint</" not in html_games)
+check("Posts tab has a collapsed How to post card and a generic prompt",
+      'id="apps-post"' in html_posts and "How to post" in html_posts
+      and '<details class="howto-card" id="apps-post"' in html_posts
+      and 'aria-expanded="false"' in html_posts
+      and "<details class=\"howto-card\" id=\"apps-post\" open" not in html_posts
+      and 'id="apps-post" open' not in html_posts
+      and "AC1|m|&lt;CID&gt;|&lt;N&gt;/&lt;TOTAL&gt;|&lt;CHUNK&gt;" in html_posts
+      and "AC1|s|&lt;CID&gt;|sha256:&lt;HEX&gt;" in html_posts
+      and "AC1|t|&lt;DATA_URI&gt;" in html_posts
+      and "Emblem Wallet" in html_posts and AP.WALLET_CMD in html_posts
+      and AP.MINT_SAFE in html_posts and "Never ask me for keys" in html_posts
+      and "/post/2915" in html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0])
+check("wallet and payment lines on How to post live only in the prompt",
+      "mint-wallet" not in html_posts and "mint-safe" not in html_posts and "mint-spec" not in html_posts
+      and html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.WALLET_CMD) == 1
+      and html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.MINT_SAFE) == 1
+      and AP.WALLET_CMD not in html_posts.split("</pre>",1)[1]
+      and AP.MINT_SAFE not in html_posts.split("</pre>",1)[1]
+      and "Never ask me for keys" not in html_posts.split("</pre>",1)[1]
+      and "emblem.build" not in html_posts
+      and "referral" not in html_posts.lower()
+      and html_posts.count("How to post") == 1)
+check("How to post is not on ATP-20, ATP-721, Art, or Games",
+      'id="apps-post"' not in html_atp and 'id="apps-post"' not in html_721
+      and 'id="apps-post"' not in html_art and 'id="apps-post"' not in html_games
+      and "How to post" not in html_atp and "How to post" not in html_721
+      and "How to post" not in html_art and "How to post" not in html_games
+      and "howto-card" not in html_atp and "howto-card" not in html_721
+      and "howto-card" not in html_art and "howto-card" not in html_games)
 check("tab one-liners are the plain language blurbs",
       "Mint and hold fungible tokens onchain." in html_atp
       and "Mint a numbered collectible onchain." in html_721
