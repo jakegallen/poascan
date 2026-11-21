@@ -119,7 +119,7 @@ _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</artic
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML",
       all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
-check("version is 1.26.418", AG.VERSION == "1.26.418")
+check("version is 1.26.419", AG.VERSION == "1.26.419")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
@@ -231,6 +231,20 @@ check("ATP-721 How to mint starts collapsed",
       and 'aria-expanded="false"' in html_721_2
       and 'id="apps-mint" open' not in html_721_2
       and "mint-wallet" not in html_721_2 and "mint-safe" not in html_721_2)
+# ATP-20 table uses circulating (minted minus fee burns) after 721 mints debit MAM
+mam = T.token("MAM")
+mam_minted, mam_burned = int(mam["minted"]), int(mam["burned"])
+mam_circ = mam_minted - mam_burned
+html_atp_circ = AP.page_html({"tab": ["atp20"]})
+check("MAM fee burns are counted after DEMO-ART mints", mam_burned == 25 and mam_circ == mam_minted - 25)
+check("ATP-20 table header is Circulating and shows the post-burn figure, not minted",
+      ">Circulating</th>" in html_atp_circ
+      and f">{mam_circ:,}<" in html_atp_circ
+      and f">{mam_minted:,}<" not in html_atp_circ)
+mam_page = AP.page_html({"tab": ["atp20"], "tick": ["MAM"]})
+check("MAM page headline is circulating",
+      "circulating" in mam_page and f">{mam_circ:,}<" in mam_page)
+
 check("DEMO-ART Mint button prefills fee, burn, and max editions",
       "ATP-721|m|DEMO-ART|&lt;UNIT&gt;" in html_721_2
       and "1 MAM" in html_721_2 and "20% of the fee is burned" in html_721_2

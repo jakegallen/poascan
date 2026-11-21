@@ -1078,14 +1078,29 @@ def _tok_pct(minted, maxs):
     return f"{p:.1f}%"
 
 
+def _circ(tok):
+    """Unofficial circulating units: minted minus burns, including ATP-721 fee burns."""
+    try:
+        m = int((tok or {}).get("minted") or 0)
+    except (TypeError, ValueError):
+        m = 0
+    try:
+        b = int((tok or {}).get("burned") or 0)
+    except (TypeError, ValueError):
+        b = 0
+    return max(0, m - b)
+
+
 def _tok_deck_rows(page_rows, names):
     out = []
     for r in page_rows:
         tick = r["tick"]
         href = "/apps?tab=atp20&amp;tick=" + E(tick)
-        minted = _qty(r.get("minted"), r.get("decimals"))
-        cap = _qty(r.get("max_supply"), r.get("decimals"))
-        pct = _tok_pct(r.get("minted"), r.get("max_supply"))
+        circ = _circ(r)
+        cap_u = r.get("max_supply")
+        circ_s = _qty(circ, r.get("decimals"))
+        cap = _qty(cap_u, r.get("decimals"))
+        pct = _tok_pct(circ, cap_u)
         hold = int(r.get("holder_count") or 0)
         rule = _tok_rule(r.get("mint_auth"), compact=False)
         txid = r.get("deploy_txid") or ""
@@ -1097,10 +1112,10 @@ def _tok_deck_rows(page_rows, names):
             f'<a class="app-ico tok-ico tok-ico-sm" href="{href}" aria-label="{E(tick)}">{_sigil_svg(tick, tick, 2)}</a>'
             f'<div><a class="tok-title-link" href="{href}">{E(tick)}</a>'
             f'<span class="tok-cell-rule">{E(rule)}</span></div></div></td>'
-            f'<td data-l="Progress"><div class="tok-cell-prog">'
-            f'<div class="tok-cell-nums"><span class="num">{minted}</span><span class="tok-of">/ {cap}</span>'
+            f'<td data-l="Circulating"><div class="tok-cell-prog">'
+            f'<div class="tok-cell-nums"><span class="num">{circ_s}</span><span class="tok-of">/ {cap}</span>'
             f'<span class="tok-pct num">{E(pct)}</span></div>'
-            f'{_mint_bar(r.get("minted"), r.get("max_supply"))}</div></td>'
+            f'{_mint_bar(circ, cap_u)}</div></td>'
             f'<td data-l="Holders" class="num">{hold:,}</td>'
             f'<td data-l="Deployer">{dep}</td>'
             f'<td data-l="Deploy">{tx_html}</td>'
@@ -1109,7 +1124,7 @@ def _tok_deck_rows(page_rows, names):
         )
     return (
         '<div class="tok-deck-wrap"><table class="tok-deck">'
-        '<thead><tr><th>Token</th><th>Supply</th><th>Holders</th><th>Deployer</th><th>Deploy</th><th>Mint</th></tr></thead>'
+        '<thead><tr><th>Token</th><th>Circulating</th><th>Holders</th><th>Deployer</th><th>Deploy</th><th>Mint</th></tr></thead>'
         f'<tbody>{"".join(out)}</tbody></table></div>'
     )
 
@@ -1132,7 +1147,8 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
         holders = T.holders_offset(tick, offset=off, limit=PAGE)
         who = agent(tok.get("deployer"), names=names)
         rule = _tok_rule(tok.get("mint_auth"), compact=False)
-        pct = _tok_pct(tok.get("minted"), tok.get("max_supply"))
+        circ = _circ(tok)
+        pct = _tok_pct(circ, tok.get("max_supply"))
         meta_bits = []
         if tok.get("deployer"):
             meta_bits.append(f'Deployer {who}')
@@ -1148,7 +1164,7 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             '<section class="stats three app-stats" aria-label="Token metrics">'
             + stat("Holders", f'<span class="num" data-cu="{total}">{total:,}</span>')
             + stat("Progress", f'<span class="num">{E(pct)}</span>')
-            + stat("Supply", f'<span class="num">{_qty(tok.get("max_supply"), tok.get("decimals"))}</span>')
+            + stat("Cap", f'<span class="num">{_qty(tok.get("max_supply"), tok.get("decimals"))}</span>')
             + "</section>"
         )
         head = (
@@ -1158,9 +1174,9 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             f'<div class="app-body">'
             f'<div class="app-meta"><span class="app-cat">{E(rule)}</span></div>'
             f'<h2 class="app-name">{E(tick)}</h2>'
-            f'<p class="tok-fig"><span class="num">{_qty(tok.get("minted"), tok.get("decimals"))}</span>'
-            f'<span class="tok-of">minted</span></p>'
-            f'{_mint_bar(tok.get("minted"), tok.get("max_supply"))}'
+            f'<p class="tok-fig"><span class="num">{_qty(circ, tok.get("decimals"))}</span>'
+            f'<span class="tok-of">circulating</span></p>'
+            f'{_mint_bar(circ, tok.get("max_supply"))}'
             f'<p class="app-ref">{" · ".join(meta_bits)}</p>'
             f'<p class="mint-row">{_mint_btn("atp20", tok)}</p>'
             f'</div>{nums}</article></div>'
