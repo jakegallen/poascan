@@ -1938,10 +1938,82 @@ def trending(window_s=3600, top=3):
     return dict(official=False, official_note=OFFICIAL_NOTE_FEED,
                 items=items[:max(1, int(top))], window_s=int(window_s), asof=asof)
 
+
+SEARCH_KINDS = ("tick", "collection", "agent")
+
+
+def _search_cursor(raw):
+    """Decode a search cursor "kind|id" to (kind, id). Raises ValueError on a malformed value."""
+    if not raw:
+        return None
+    parts = str(raw).split("|", 1)
+    if len(parts) != 2:
+        raise ValueError("bad cursor")
+    return (parts[0], parts[1])
+
+
+def search(q, kind=None, limit=20, cursor=None):
+    """Search ticks, collections and agents by name. Rows are {kind, id, label}, keyset-paged by (kind, id)."""
+    q = (q or "").strip()
+    if not q:
+        raise ValueError("q is required")
+    if kind and kind not in SEARCH_KINDS:
+        raise ValueError("kind must be one of " + ", ".join(SEARCH_KINDS))
+    kinds = {kind} if kind else set(SEARCH_KINDS)
+    limit = max(1, min(200, int(limit)))
+    esc = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = "%" + esc + "%"
+    want = limit + 1
+    rows = []
+    if "tick" in kinds:
+        from . import atp20 as T
+        T.ensure_fresh()
+        for r in db.q("SELECT tick FROM atp20_tokens WHERE lower(tick) LIKE ? ESCAPE '\\' "
+                      "ORDER BY tick LIMIT ?", (like, want)):
+            rows.append(dict(kind="tick", id=r["tick"], label=r["tick"], official=False))
+    if "collection" in kinds:
+        from . import atp721 as C
+        C.ensure_fresh()
+        for r in db.q("SELECT col, title FROM atp721_collections "
+                      "WHERE lower(col) LIKE ? ESCAPE '\\' OR lower(COALESCE(title,'')) LIKE ? ESCAPE '\\' "
+                      "ORDER BY col LIMIT ?", (like, like, want)):
+            rows.append(dict(kind="collection", id=r["col"], label=r["title"] or r["col"], official=False))
+    if "agent" in kinds:
+        for r in db.q("SELECT addr, label FROM labels WHERE label != '' AND lower(label) LIKE ? ESCAPE '\\' "
+                      "ORDER BY addr LIMIT ?", (like, want)):
+            rows.append(dict(kind="agent", id=r["addr"], label=r["label"], official=False))
+        if q.lower().startswith("poa1"):
+            seen = {x["id"] for x in rows if x["kind"] == "agent"}
+            pref = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            for r in db.q("SELECT DISTINCT addr FROM labels WHERE lower(addr) LIKE ? ESCAPE '\\' "
+                          "ORDER BY addr LIMIT ?", (pref, want)):
+                if r["addr"] not in seen:
+                    rows.append(dict(kind="agent", id=r["addr"], label=r["addr"], official=False))
+    rows.sort(key=lambda x: (x["kind"], str(x["id"])))
+    cur = _search_cursor(cursor) if cursor else None
+    if cur:
+        rows = [x for x in rows if (x["kind"], str(x["id"])) > cur]
+    page = rows[:limit]
+    nxt = None
+    if len(rows) > limit and page:
+        last = page[-1]
+        nxt = "%s|%s" % (last["kind"], last["id"])
+    return page, nxt
+
 def http(path, qs):
     """Unofficial Apps cross-surface read API (/api/apps/*). Raises ValueError for 400, LookupError for 404.
     The SSE stream (/api/apps/feed/stream) is served raw by the server, not through here."""
     from . import ac1art as R
+    if path == "/api/apps/search":
+        for k in (qs or {}):
+            if k not in ("q", "kind", "limit", "cursor"):
+                raise ValueError("unknown parameter")
+        lim = (qs.get("limit") or [""])[0].strip()
+        if lim and not re.fullmatch(r"-?[0-9]+", lim):
+            raise ValueError("limit must be an integer from 1 to 200")
+        rows, nxt = search(q=(qs.get("q") or [""])[0], kind=(qs.get("kind") or [""])[0] or None,
+                           limit=int(lim) if lim else 20, cursor=(qs.get("cursor") or [""])[0] or None)
+        return dict(official=False, official_note=OFFICIAL_NOTE_FEED, results=rows, next_cursor=nxt)
     if path == "/api/apps/trending":
         for k in (qs or {}):
             if k not in ():

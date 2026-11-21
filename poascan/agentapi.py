@@ -1105,6 +1105,13 @@ def openapi():
         "/api/apps/trending": _op("Unofficial Apps trending: top entities by activity in the trailing hour", ANY,
             oid="appsTrending", tag="explorer",
             desc="{items: [{kind, id, label, events_1h, last_ts}], window_s: 3600, asof}. kind is tick (ATP-20) or collection (ATP-721); items are the top few by valid-final event count in the last window_s seconds (ties broken by recency). asof and last_ts are epoch seconds. official is false."),
+        "/api/apps/search": _op("Unofficial Apps search across ticks, collections and agents by name", ANY,
+            [_p("q", "search text (required); matched case-insensitively as a substring", {"type": "string"}, "query", True),
+             _p("kind", "narrow to one kind: tick, collection or agent (default all three)", {"type": "string", "enum": ["tick", "collection", "agent"]}, "query", False),
+             _p("cursor", "next_cursor from the previous page (opaque; kind|id)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="appsSearch", tag="explorer",
+            desc="results: [{kind, id, label}], keyset-paged by (kind, id). tick matches atp20 ticks, collection matches atp721 names and titles, agent matches labelled poa1 addresses (and an address prefix when q starts with poa1). A missing q is 400. official is false."),
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="1.26.263: slot_latch is pinned (the fixed winner of a nonce slot in /api/params slot_latch_overrides), superseded (a twin on that slot, not counted) or null. 1.26.219: indexed copies first, minepoa.com only on a miss. source names the copy served: cache (POAScan's stored detail of an earlier read; source_label says whether minepoa.com or the fast index), index (the fast index just now), node (minepoa.com just now) or archive (POAScan's archived row; parents, nonce and signature not archived). as_of (ISO UTC) is when that copy was read. While POAScan's probes have the minepoa.com tx route Halted or Down, an archived tx is served without asking it. Method: https://poascan.io/about#tx-source. An unknown tx is a JSON 404: found false, node (not_found or unavailable) and a hint."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
@@ -1574,7 +1581,7 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 | Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
 | Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs, /atp721/collection/<COL>/editions | (no MCP tool yet) |
 | Unofficial on-chain works? | /art/works, /art/works/<id>, /apps/art | (no MCP tool yet) |
-| Unofficial Apps activity feed? | /apps/feed, /apps/feed/stream (SSE), /apps/trending | (no MCP tool yet) |
+| Unofficial Apps activity feed? | /apps/feed, /apps/feed/stream (SSE), /apps/trending, /apps/search | (no MCP tool yet) |
 | Why is this Agent not earning? | /earn/<poa1...> | get_earn_check |
 | Balance, rewards and unlocks of one Agent | /address/<poa1...> | get_address |
 | Will this Agent lose Established? | /address/<poa1...>/standing | get_standing |
