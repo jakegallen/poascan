@@ -518,6 +518,28 @@ def units_page(col, cursor=None, limit=LIMIT_DEFAULT):
     return rows, nxt
 
 
+def editions_page(col, cursor=None, limit=LIMIT_DEFAULT, image_ref=None):
+    """Every minted unit with its current owner and the collection art pointer:
+    {unit, owner, image_ref, mint_txid, mint_ts}. image_ref is the collection sha256 art digest
+    (ATP-721 references art by digest, it is not stored inline). Keyset-paged by unit ascending."""
+    ensure_fresh()
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    if cursor:
+        try:
+            unit = int(cursor[0])
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("bad cursor")
+        rows = db.q("SELECT unit, addr, mint_txid, mint_ts FROM atp721_units WHERE col=? AND unit>? ORDER BY unit LIMIT ?",
+                    (col, unit, limit + 1))
+    else:
+        rows = db.q("SELECT unit, addr, mint_txid, mint_ts FROM atp721_units WHERE col=? ORDER BY unit LIMIT ?",
+                    (col, limit + 1))
+    page = [dict(unit=r["unit"], owner=r["addr"], image_ref=image_ref,
+                 mint_txid=r["mint_txid"], mint_ts=r["mint_ts"], official=OFFICIAL) for r in rows[:limit]]
+    nxt = str(page[-1]["unit"]) if len(rows) > limit else None
+    return page, nxt
+
+
 def holders_page(col, cursor=None, limit=LIMIT_DEFAULT):
     ensure_fresh()
     limit = max(1, min(LIMIT_MAX, int(limit)))
@@ -613,6 +635,15 @@ def http(path, qs):
             raise LookupError("unknown collection")
         rows, nxt = txs_page(col, _cursor(qs, 2), _limit(qs))
         return _envelope(collection=col, txs=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/editions$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        col = m.group(1)
+        tok = collection(col)
+        if tok is None:
+            raise LookupError("unknown collection")
+        rows, nxt = editions_page(col, _cursor(qs, 1), _limit(qs), image_ref=tok.get("file_sha"))
+        return _envelope(collection=col, editions=rows, next_cursor=nxt)
     if path.startswith("/api/atp721/"):
         raise LookupError("unknown endpoint")
     raise LookupError("unknown endpoint")

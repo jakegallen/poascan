@@ -4,6 +4,7 @@ remote fetches, no third-party indexer calls."""
 import base64
 import hashlib
 import datetime as dt
+import json
 import re
 import threading
 from html import escape as E
@@ -1617,3 +1618,296 @@ def page_html(qs=None):
 
 def page_route(qs=None):
     return page_html(qs)
+
+
+def art_items():
+    """Unique AC1 works mapped to the Apps card shape: {id, title, owner, image_ref, still_ref, seal}.
+    Only verified works (a raster that matched its on-chain sha256 seal) are listed."""
+    from . import ac1art as R
+    out = []
+    for w in R.works():
+        out.append(dict(
+            id=w.get("id"),
+            title=w.get("name"),
+            owner=w.get("addr"),
+            image_ref=w.get("gif"),
+            still_ref=w.get("still"),
+            seal=w.get("joined_sha"),
+            official=False,
+        ))
+    return out
+
+
+# ---- unified Apps activity feed (read-only, local archive only) ----
+# A "game" type is in the vocabulary for forward compatibility, but there is no discrete
+# on-chain game-event source yet (games are memo-derived aggregates), so it yields nothing.
+FEED_TYPES = ("atp20_deploy", "atp20_mint", "atp20_transfer", "atp20_burn",
+              "atp721_mint", "atp721_transfer", "post", "game")
+_ATP20_TYPE = {"d": "atp20_deploy", "m": "atp20_mint", "t": "atp20_transfer", "b": "atp20_burn"}
+_ATP721_TYPE = {"m": "atp721_mint", "t": "atp721_transfer"}
+_FEED_LIMIT_DEFAULT = 20
+_FEED_LIMIT_MAX = 200
+_FEED_TOP = 1 << 62   # "newest" sentinel ts when there is no cursor
+OFFICIAL_NOTE_FEED = ("Unofficial activity assembled from this archive's ATP-20, ATP-721 and forum rows. "
+                      "official is always false. No remote fetch.")
+
+
+def _iso_epoch(s):
+    """ISO-8601 text (forum created_at) to epoch seconds, or 0 if it cannot be parsed."""
+    if not s:
+        return 0
+    try:
+        return int(dt.datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
+    except (ValueError, TypeError):
+        return 0
+
+
+def _feed_enabled(types):
+    """Validate and expand the types filter to a set of known feed types (all when empty)."""
+    if not types:
+        return set(FEED_TYPES)
+    out = set()
+    for t in types:
+        for part in str(t).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part not in FEED_TYPES:
+                raise ValueError("type must be one of " + ", ".join(FEED_TYPES))
+            out.add(part)
+    return out or set(FEED_TYPES)
+
+
+def _feed_label(type_, tick, col, unit, amt):
+    if type_ == "atp20_deploy":
+        return "Deployed " + (tick or "")
+    if type_ == "atp20_mint":
+        return "Minted %s %s" % (amt, tick)
+    if type_ == "atp20_transfer":
+        return "Transferred %s %s" % (amt, tick)
+    if type_ == "atp20_burn":
+        return "Burned %s %s" % (amt, tick)
+    if type_ == "atp721_mint":
+        return "Minted %s #%s" % (col, unit)
+    if type_ == "atp721_transfer":
+        return "Transferred %s #%s" % (col, unit)
+    return ""
+
+
+def _feed_collect(enabled, before_ts, limit):
+    """Gather up to limit+1 newest rows per enabled source with ts <= before_ts (one normalized shape)."""
+    rows = []
+    want = limit + 1
+    if any(t.startswith("atp20_") for t in enabled):
+        from . import atp20 as T
+        T.ensure_fresh()
+        for r in db.q("SELECT txid, op, tick, amt, to_addr, from_addr, ts FROM atp20_ops "
+                      "WHERE final=1 AND valid=1 AND ts<=? ORDER BY ts DESC, txid DESC LIMIT ?", (before_ts, want)):
+            type_ = _ATP20_TYPE.get(r["op"])
+            if not type_ or type_ not in enabled:
+                continue
+            agent_ = r["to_addr"] if r["op"] == "m" else r["from_addr"]
+            rows.append(dict(id=r["txid"], ts=int(r["ts"] or 0), type=type_, tick=r["tick"], col=None, unit=None,
+                             amt=r["amt"], agent=agent_, txid=r["txid"],
+                             label=_feed_label(type_, r["tick"], None, None, r["amt"]), official=False))
+    if any(t.startswith("atp721_") for t in enabled):
+        from . import atp721 as C
+        C.ensure_fresh()
+        for r in db.q("SELECT txid, op, col, unit, to_addr, from_addr, ts FROM atp721_ops "
+                      "WHERE final=1 AND valid=1 AND ts<=? ORDER BY ts DESC, txid DESC LIMIT ?", (before_ts, want)):
+            type_ = _ATP721_TYPE.get(r["op"])
+            if not type_ or type_ not in enabled:
+                continue
+            agent_ = r["to_addr"] if r["op"] == "m" else r["from_addr"]
+            rows.append(dict(id=r["txid"], ts=int(r["ts"] or 0), type=type_, tick=None, col=r["col"], unit=r["unit"],
+                             amt=None, agent=agent_, txid=r["txid"],
+                             label=_feed_label(type_, None, r["col"], r["unit"], None), official=False))
+    if "post" in enabled:
+        for r in db.q("SELECT id, title, author, author_public_id, created_at FROM forum_posts "
+                      "WHERE community!='poa-archive' AND (deleted IS NULL OR deleted=0) "
+                      "ORDER BY created_at DESC LIMIT ?", (want,)):
+            ts = _iso_epoch(r["created_at"])
+            if ts > before_ts:
+                continue
+            rows.append(dict(id="post:%s" % r["id"], ts=ts, type="post", tick=None, col=None, unit=None, amt=None,
+                             agent=r["author_public_id"] or r["author"], txid=None,
+                             label=r["title"] or "", official=False))
+    return rows
+
+
+def _feed_cursor(raw):
+    """Decode a feed cursor "ts|type|id" to (ts, id). Raises ValueError on a malformed value."""
+    if not raw:
+        return None
+    parts = str(raw).split("|", 2)
+    if len(parts) != 3:
+        raise ValueError("bad cursor")
+    try:
+        return (int(parts[0]), parts[2])
+    except ValueError:
+        raise ValueError("bad cursor")
+
+
+def feed_items(types=None, cursor=None, limit=_FEED_LIMIT_DEFAULT):
+    """Newest-first unified activity: {id, ts, type, tick, col, unit, amt, agent, txid, label}.
+    agent is the actor of the event (mint recipient, transfer/burn sender, deploy deployer, post author)."""
+    enabled = _feed_enabled(types)
+    limit = max(1, min(_FEED_LIMIT_MAX, int(limit)))
+    cur = _feed_cursor(cursor) if cursor else None
+    before_ts = cur[0] if cur else _FEED_TOP
+    rows = _feed_collect(enabled, before_ts, limit)
+    rows.sort(key=lambda r: (r["ts"], r["id"]), reverse=True)
+    if cur:
+        rows = [r for r in rows if (r["ts"], r["id"]) < cur]
+    page = rows[:limit]
+    nxt = None
+    if len(rows) > limit and page:
+        last = page[-1]
+        nxt = "%s|%s|%s" % (last["ts"], last["type"], last["id"])
+    return page, nxt
+
+
+def feed_sse(qs=None, last_event_id=None):
+    """Emit-and-close SSE catch-up: events newer than Last-Event-ID (oldest first), then the stream closes.
+    This is poll/reconnect style on purpose, so a held-open stream never ties up a request slot. The
+    browser EventSource reconnects with Last-Event-ID and picks up where it left off."""
+    qs = qs or {}
+    types = qs.get("type")
+    leid = last_event_id or (qs.get("last_event_id") or [None])[0]
+    try:
+        since = _feed_cursor(leid) if leid else None
+    except ValueError:
+        since = None
+    page, _ = feed_items(types=types, cursor=None, limit=_FEED_LIMIT_MAX if since else 50)
+    if since:
+        page = [r for r in page if (r["ts"], r["id"]) > since]
+    page = list(reversed(page))   # oldest first so the client appends in order
+    out = ["retry: 5000\n", ": apps feed catch-up; reconnect to poll for more\n\n"]
+    for r in page:
+        eid = "%s|%s|%s" % (r["ts"], r["type"], r["id"])
+        out.append("id: %s\nevent: %s\ndata: %s\n\n" % (eid, r["type"], json.dumps(r, separators=(",", ":"))))
+    return "".join(out)
+
+
+def trending(window_s=3600, top=3):
+    """Top entities by activity in the trailing window: {kind, id, label, events_1h, last_ts}.
+    kind is tick (ATP-20) or collection (ATP-721); ranked by event count then recency."""
+    from . import atp20 as T, atp721 as C
+    T.ensure_fresh()
+    C.ensure_fresh()
+    asof = int(dt.datetime.now(dt.timezone.utc).timestamp())
+    floor = asof - int(window_s)
+    items = []
+    for r in db.q("SELECT tick AS id, COUNT(*) AS n, MAX(ts) AS last_ts FROM atp20_ops "
+                  "WHERE final=1 AND valid=1 AND ts>=? AND tick IS NOT NULL GROUP BY tick", (floor,)):
+        items.append(dict(kind="tick", id=r["id"], label=r["id"],
+                          events_1h=int(r["n"]), last_ts=int(r["last_ts"] or 0)))
+    for r in db.q("SELECT col AS id, COUNT(*) AS n, MAX(ts) AS last_ts FROM atp721_ops "
+                  "WHERE final=1 AND valid=1 AND ts>=? AND col IS NOT NULL GROUP BY col", (floor,)):
+        items.append(dict(kind="collection", id=r["id"], label=r["id"],
+                          events_1h=int(r["n"]), last_ts=int(r["last_ts"] or 0)))
+    items.sort(key=lambda x: (x["events_1h"], x["last_ts"]), reverse=True)
+    return dict(official=False, official_note=OFFICIAL_NOTE_FEED,
+                items=items[:max(1, int(top))], window_s=int(window_s), asof=asof)
+
+
+SEARCH_KINDS = ("tick", "collection", "agent")
+
+
+def _search_cursor(raw):
+    """Decode a search cursor "kind|id" to (kind, id). Raises ValueError on a malformed value."""
+    if not raw:
+        return None
+    parts = str(raw).split("|", 1)
+    if len(parts) != 2:
+        raise ValueError("bad cursor")
+    return (parts[0], parts[1])
+
+
+def search(q, kind=None, limit=20, cursor=None):
+    """Search ticks, collections and agents by name. Rows are {kind, id, label}, keyset-paged by (kind, id)."""
+    q = (q or "").strip()
+    if not q:
+        raise ValueError("q is required")
+    if kind and kind not in SEARCH_KINDS:
+        raise ValueError("kind must be one of " + ", ".join(SEARCH_KINDS))
+    kinds = {kind} if kind else set(SEARCH_KINDS)
+    limit = max(1, min(200, int(limit)))
+    esc = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = "%" + esc + "%"
+    want = limit + 1
+    rows = []
+    if "tick" in kinds:
+        from . import atp20 as T
+        T.ensure_fresh()
+        for r in db.q("SELECT tick FROM atp20_tokens WHERE lower(tick) LIKE ? ESCAPE '\\' "
+                      "ORDER BY tick LIMIT ?", (like, want)):
+            rows.append(dict(kind="tick", id=r["tick"], label=r["tick"], official=False))
+    if "collection" in kinds:
+        from . import atp721 as C
+        C.ensure_fresh()
+        for r in db.q("SELECT col, title FROM atp721_collections "
+                      "WHERE lower(col) LIKE ? ESCAPE '\\' OR lower(COALESCE(title,'')) LIKE ? ESCAPE '\\' "
+                      "ORDER BY col LIMIT ?", (like, like, want)):
+            rows.append(dict(kind="collection", id=r["col"], label=r["title"] or r["col"], official=False))
+    if "agent" in kinds:
+        for r in db.q("SELECT addr, label FROM labels WHERE label != '' AND lower(label) LIKE ? ESCAPE '\\' "
+                      "ORDER BY addr LIMIT ?", (like, want)):
+            rows.append(dict(kind="agent", id=r["addr"], label=r["label"], official=False))
+        if q.lower().startswith("poa1"):
+            seen = {x["id"] for x in rows if x["kind"] == "agent"}
+            pref = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            for r in db.q("SELECT DISTINCT addr FROM labels WHERE lower(addr) LIKE ? ESCAPE '\\' "
+                          "ORDER BY addr LIMIT ?", (pref, want)):
+                if r["addr"] not in seen:
+                    rows.append(dict(kind="agent", id=r["addr"], label=r["addr"], official=False))
+    rows.sort(key=lambda x: (x["kind"], str(x["id"])))
+    cur = _search_cursor(cursor) if cursor else None
+    if cur:
+        rows = [x for x in rows if (x["kind"], str(x["id"])) > cur]
+    page = rows[:limit]
+    nxt = None
+    if len(rows) > limit and page:
+        last = page[-1]
+        nxt = "%s|%s" % (last["kind"], last["id"])
+    return page, nxt
+
+
+def http(path, qs):
+    """Unofficial Apps cross-surface read API (/api/apps/*). Raises ValueError for 400, LookupError for 404.
+    The SSE stream (/api/apps/feed/stream) is served raw by the server, not through here."""
+    from . import ac1art as R
+    if path == "/api/apps/search":
+        for k in (qs or {}):
+            if k not in ("q", "kind", "limit", "cursor"):
+                raise ValueError("unknown parameter")
+        lim = (qs.get("limit") or [""])[0].strip()
+        if lim and not re.fullmatch(r"-?[0-9]+", lim):
+            raise ValueError("limit must be an integer from 1 to 200")
+        rows, nxt = search(q=(qs.get("q") or [""])[0], kind=(qs.get("kind") or [""])[0] or None,
+                           limit=int(lim) if lim else 20, cursor=(qs.get("cursor") or [""])[0] or None)
+        return dict(official=False, official_note=OFFICIAL_NOTE_FEED, results=rows, next_cursor=nxt)
+    if path == "/api/apps/trending":
+        for k in (qs or {}):
+            if k not in ():
+                raise ValueError("unknown parameter")
+        return trending()
+    if path == "/api/apps/art":
+        for k in (qs or {}):
+            if k not in ("limit",):
+                raise ValueError("unknown parameter")
+        return dict(official=False, official_note=R.OFFICIAL_NOTE, coverage=R.coverage(), art=art_items())
+    if path == "/api/apps/feed":
+        for k in (qs or {}):
+            if k not in ("type", "cursor", "limit"):
+                raise ValueError("unknown parameter")
+        limit = (qs.get("limit") or [""])[0].strip()
+        if limit and not re.fullmatch(r"-?[0-9]+", limit):
+            raise ValueError("limit must be an integer from 1 to 200")
+        rows, nxt = feed_items(types=qs.get("type"),
+                               cursor=(qs.get("cursor") or [""])[0] or None,
+                               limit=int(limit) if limit else _FEED_LIMIT_DEFAULT)
+        return dict(official=False, official_note=OFFICIAL_NOTE_FEED,
+                    coverage=dict(official=False, source="local_archive"),
+                    types=sorted(_feed_enabled(qs.get("type"))), feed=rows, next_cursor=nxt)
+    raise LookupError("unknown endpoint")
