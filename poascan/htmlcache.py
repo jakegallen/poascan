@@ -91,7 +91,7 @@ CANON_QS = {"/": (), "/index.html": (), "/start": ("tab", "address"), "/join": (
             "/agents/top": ("tab", "sort", "dir"), "/agents/census": ("tab",), "/agents/community": ("tab",),
             "/governance": ("tab", "sort", "dir", "filter", "level", "page", "range", "close", "state", "kind", "need",
                             "carry", "csort", "cdir", "asort", "adir", "apage", "offset", "sub"),
-            "/apps": ("tab", "tick", "col", "offset")}
+            "/apps": ("tab", "tick", "col", "offset", "sort", "dir")}
 # 1.26.280: valid tab values per path, registered from the owning modules (server.py) so there is no import cycle and no
 # drift. An unknown tab renders the default page (the views coerce it), so it is dropped from the key too: ?tab=random1,
 # ?tab=random2 ... all collapse onto the default copy instead of each forcing its own render.
@@ -198,6 +198,12 @@ def _apps_pin(path, qst):
                 return False
         elif k in ("tick", "col"):
             if not v:
+                return False
+        elif k == "sort":
+            if v not in ("tick", "circ", "holders", "deployer", "deploy"):
+                return False
+        elif k == "dir":
+            if v not in ("asc", "desc"):
                 return False
         else:
             return False

@@ -97,6 +97,20 @@ check("ATP-20 and ATP-721 headers add a magicagent.tech website icon next to Lab
       and 'target="_blank"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
       and 'rel="noopener noreferrer"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
       and AP.MAGIC_SITE not in html_posts and AP.MAGIC_SITE not in html_art and AP.MAGIC_SITE not in html_games)
+# Official POA Post URL (Jake, 21 Nov 2026, t729u: "Use anyway"): allowlist this host only.
+_posts_feat = html_posts.split("app-feat-slot",1)[1].split("</article>",1)[0]
+_posts_web = _posts_feat.split('data-kind="website"',1)[1].split(">",1)[0]
+check("Posts header adds the official POA Post website icon next to LabLeak",
+      AP.POAPOST_SITE in html_posts and AP.POAPOST_SITE in _posts_feat
+      and _posts_feat.count('data-kind="website"') == 1
+      and _posts_feat.count('data-kind="lableak"') == 1
+      and _posts_feat.index('data-kind="website"') < _posts_feat.index('data-kind="lableak"')
+      and 'aria-label="Website: POA Post"' in _posts_web
+      and 'title="Website: POA Post"' in _posts_web
+      and 'target="_blank"' in _posts_web
+      and 'rel="noopener noreferrer"' in _posts_web
+      and AP.POAPOST_SITE not in html_atp and AP.POAPOST_SITE not in html_721
+      and AP.POAPOST_SITE not in html_art and AP.POAPOST_SITE not in html_games)
 check("all 5 tabs include category intro header with Memos/Agents/Last",
       all('class="app-feat-slot"' in h and ">Memos<" in h and ">Agents<" in h and ">Last<" in h
           for h in (html_posts, html_atp, html_721, html_art, html_games)))
@@ -223,7 +237,7 @@ check("wallet and payment lines on How to post live only in the prompt",
       and AP.WALLET_CMD not in html_posts.split("</pre>",1)[1]
       and AP.MINT_SAFE not in html_posts.split("</pre>",1)[1]
       and "Never ask me for keys" not in html_posts.split("</pre>",1)[1]
-      and "emblem.build" not in html_posts
+      and html_posts.count("emblem.build") == 1 and html_posts.count(AP.POAPOST_SITE) == 1
       and "referral" not in html_posts.lower()
       and html_posts.count("How to post") == 1)
 check("How to post is not on ATP-20, ATP-721, Art, or Games",
@@ -292,9 +306,45 @@ mam_circ = mam_minted - mam_burned
 html_atp_circ = AP.page_html({"tab": ["atp20"]})
 check("MAM fee burns are counted after DEMO-ART mints", mam_burned == 25 and mam_circ == mam_minted - 25)
 check("ATP-20 table header is Circulating and shows the post-burn figure, not minted",
-      ">Circulating</th>" in html_atp_circ
+      ">Circulating<" in html_atp_circ
       and f">{mam_circ:,}<" in html_atp_circ
       and f">{mam_minted:,}<" not in html_atp_circ)
+def _ticks(h):
+    return _re.findall(r'class="tok-title-link"[^>]*>([^<]+)', h)
+def _th(h, label):
+    bits = _re.findall(r"<th[^>]*>.*?</th>", h, _re.S)
+    for cell in bits:
+        if f">{label}<" in cell or f">{label}</a>" in cell or f">{label}<i" in cell:
+            return cell
+    return ""
+check("ATP-20 headers are sortable with aria-sort, and Mint is not",
+      'class="sortsel"' in html_atp_circ
+      and 'aria-sort="ascending"' in _th(html_atp_circ, "Deploy")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Token")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Circulating")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Holders")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Deployer")
+      and 'href="/apps?tab=atp20&amp;sort=circ"' in _th(html_atp_circ, "Circulating")
+      and "aria-sort" not in _th(html_atp_circ, "Mint") and "hsb" not in _th(html_atp_circ, "Mint")
+      and _ticks(html_atp_circ) == ["SEAL", "MAM"])
+html_tick = AP.page_html({"tab": ["atp20"], "sort": ["tick"]})
+html_tick_rev = AP.page_html({"tab": ["atp20"], "sort": ["tick"], "dir": ["asc"]})
+check("ATP-20 Token sorts A to Z, then Z to A",
+      _ticks(html_tick) == ["MAM", "SEAL"] and 'aria-sort="ascending"' in _th(html_tick, "Token")
+      and _ticks(html_tick_rev) == ["SEAL", "MAM"] and 'aria-sort="descending"' in _th(html_tick_rev, "Token"))
+html_circ_sort = AP.page_html({"tab": ["atp20"], "sort": ["circ"]})
+circ_order = [r["tick"] for r in sorted(T.tokens(), key=lambda r: AP._circ(r), reverse=True)]
+check("ATP-20 Circulating sorts most to least on the first click",
+      _ticks(html_circ_sort) == circ_order
+      and 'aria-sort="descending"' in _th(html_circ_sort, "Circulating")
+      and 'dir=asc' in _th(html_circ_sort, "Circulating"))
+check("ATP-20 pager keeps the chosen sort",
+      AP._list_url("atp20", 20, sort="circ", direction="desc") == "/apps?tab=atp20&amp;sort=circ&amp;offset=20"
+      and "dir=asc" in AP._list_url("atp20", 20, sort="tick", direction="asc")
+      and "sort=nope" not in AP.page_html({"tab": ["atp20"], "sort": ["nope"]})
+      and _ticks(AP.page_html({"tab": ["atp20"], "sort": ["nope"]})) == ["SEAL", "MAM"])
+check("ATP-721 catalog stays a grid, not a collections table",
+      "tok-grid" in html_721_2 and "tok-deck" not in html_721_2)
 mam_page = AP.page_html({"tab": ["atp20"], "tick": ["MAM"]})
 check("MAM page headline is circulating",
       "circulating" in mam_page and f">{mam_circ:,}<" in mam_page)

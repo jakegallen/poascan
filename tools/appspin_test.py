@@ -49,6 +49,11 @@ ok(HC.is_warm("/apps", HC.canon_qs("/apps", {"tab": ["atp20"], "tick": ["MAM"]})
    "a tick page is pinned")
 ok(HC.canon_qs("/apps", {"tab": ["nope"], "cb": ["1"]}) == {},
    "an unknown tab and a cache buster collapse onto the bare page")
+ok(HC.canon_qs("/apps", {"tab": ["atp20"], "sort": ["circ"], "dir": ["asc"], "cb": ["1"]})
+   == {"tab": ["atp20"], "sort": ["circ"], "dir": ["asc"]},
+   "ATP-20 sort and dir survive canon and a cache buster is dropped")
+ok(HC.is_warm("/apps", HC.canon_qs("/apps", {"tab": ["atp20"], "sort": ["holders"]})),
+   "a sorted ATP-20 view is pinned once rendered")
 ok(not HC.is_warm("/address/poa1x", {}), "other pages are unchanged")
 
 # an hour-old pin is served at once; the next copy renders off the request
