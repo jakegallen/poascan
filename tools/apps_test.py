@@ -119,7 +119,7 @@ _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</artic
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML",
       all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
-check("version is 1.26.417", AG.VERSION == "1.26.417")
+check("version is 1.26.418", AG.VERSION == "1.26.418")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
