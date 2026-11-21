@@ -117,7 +117,7 @@ key in an Authorization: Bearer header. That GET works live. POA Tools' repo cal
 there. POA Tools got a 404 when it used POST."""
 
 VERSION = "v2.9.8"
-UPDATED_TS = "2026-11-21T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+UPDATED_TS = "2026-11-16T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
 RELEASE_NOTE = "The key now travels in an Authorization: Bearer header (minepoa's preferred auth), never in a URL; a 401 or 403 saying the key is missing or invalid still means stop and tell me."
