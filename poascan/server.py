@@ -165,6 +165,13 @@ def api(path, qs):
             raise BadRequest(str(e) or "bad request")
         except LookupError as e:
             raise NotFound(str(e) or "not found")
+    if path == "/api/apps" or path.startswith("/api/apps/"):
+        try:
+            return AP.http(path, qs), False
+        except ValueError as e:
+            raise BadRequest(str(e) or "bad request")
+        except LookupError as e:
+            raise NotFound(str(e) or "not found")
     if path == "/api/txs":
         ov = (qs.get("offset") or [""])[0]
         if INT_RX.match(ov or "") and int(ov) > OFFSET_MAX: raise BadRequest(f"offset must be at most {OFFSET_MAX}; page deeper with /api/v1/address/<a>/txs?cursor=")   # 1.26.285: never silently clamp (a clamp served the wrong page)
