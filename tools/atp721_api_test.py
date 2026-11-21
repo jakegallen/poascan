@@ -5,7 +5,7 @@ import os, sys, tempfile, copy, json
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "s.db"), POASCAN_INDEXER="0",
                   POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from poascan import db, atp721 as T, indexer as IX, server as SV, agentapi as AG
+from poascan import db, atp721 as T, atp20 as T20, indexer as IX, server as SV, agentapi as AG
 
 fails = []
 def check(name, ok):
@@ -52,6 +52,10 @@ def expect_404(path, **q):
     except Exception as e:
         return type(e).__name__ + " " + str(e)
 
+load(row(8000, "ATP-20|d|MAM|21000000|0|open", DEP, ts=1795174507))
+load(row(8001, "ATP-20|m|MAM|100000", DEP, ts=1795174508))
+for i, addr in enumerate(HOLDERS):
+    load(row(8100 + i, f"ATP-20|m|MAM|100000", addr, ts=1795174510 + i))
 load(row(1, f"ATP-721|d|MAM-GENESIS|{SHA}|image/png|3333|111|MAM|20|5|THE AGENT AWAKENS", DEP, ts=1795214976))
 for i, addr in enumerate(HOLDERS):
     load(row(100 + i, f"ATP-721|m|MAM-GENESIS|{i+1}", addr, ts=1795218000 + i))
@@ -62,10 +66,11 @@ lst = api("/api/v1/atp721/collections")
 check("collections: unofficial envelope and coverage",
       lst["official"] is False and "Unofficial" in lst["official_note"]
       and lst["coverage"]["official"] is False and lst["coverage"]["ordering"] == "ts_id"
-      and lst["coverage"]["fee_debit"] == "unchecked" and lst["next_cursor"] is None)
+      and lst["coverage"]["fee_debit"] == "minter" and lst["next_cursor"] is None)
 check("collections: MAM-GENESIS unofficial",
       [c["col"] for c in lst["collections"]] == ["MAM-GENESIS"]
-      and lst["collections"][0]["official"] is False and lst["collections"][0]["minted"] == 21)
+      and lst["collections"][0]["official"] is False and lst["collections"][0]["minted"] == 21
+      and lst["collections"][0]["fee_burned"] == "483" and lst["collections"][0]["deployer_fees"] == "1848")
 check("unknown query param is 400", "unknown parameter" in expect_bad("/api/v1/atp721/collections", foo=1))
 
 one = api("/api/v1/atp721/collection/MAM-GENESIS")
@@ -150,7 +155,7 @@ for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-721 and art routes",
       "/atp721/collections" in txt and "/art/works" in txt and "/apps/art" in txt and "official is always false" in txt)
-check("version is 1.26.417", AG.VERSION == "1.26.417")
+check("version is 1.26.419", AG.VERSION == "1.26.419")
 check("no em or en dash in new API strings",
       not any(d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in json.dumps(lst) or d in txt for d in DASH))
 

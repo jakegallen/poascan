@@ -45,7 +45,8 @@ def expect_bad(path, **q):
 # ATP-20 deploy + mint, ATP-721 deploy + mint, one forum post. Ascending ts so order is known.
 load(row(1, "ATP-20|d|SEAL|21000000|0||open:1000:5", DEP, ts=1795180000),
      row(2, "ATP-20|m|SEAL|1000", A1, ts=1795180100))
-load(row(10, f"ATP-721|d|MAM-GENESIS|{'f'*64}|image/png|3333|111|MAM|20|5|AWAKENS", DEP, ts=1795180200),
+# fee 0 so the mint needs no ATP-20 fee balance (ATP-721 mints are fee-gated since 1.26.419)
+load(row(10, f"ATP-721|d|MAM-GENESIS|{'f'*64}|image/png|3333|0|MAM|20|5|AWAKENS", DEP, ts=1795180200),
      row(11, "ATP-721|m|MAM-GENESIS|1", A2, ts=1795180300))
 # a forum post, newest of all
 db.write("INSERT INTO forum_posts(id, community, title, author, author_public_id, created_at, deleted) "
