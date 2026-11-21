@@ -1076,6 +1076,12 @@ def openapi():
              _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
             oid="atp721Txs", tag="explorer",
             desc="Final ops only (valid and ignored, with reason). Ordered by (ts, id) descending. Unknown name is 404."),
+        "/api/atp721/collection/{col}/editions": _op("Unofficial ATP-721 editions: every minted unit with owner and art pointer, keyset-paged", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Editions", tag="explorer",
+            desc="Each minted unit as {unit, owner, image_ref, mint_txid, mint_ts}, ordered by unit ascending. image_ref is the collection sha256 art digest (ATP-721 references art by digest, not stored inline). official is false. Unknown name is 404."),
         "/api/art/works": _op("Unofficial on-chain works assembled from AC1 memos", ANY,
             oid="artWorks", tag="explorer",
             desc="Known AC1 artworks, with official false. A raster path is present only when the joined parts match the on-chain seal (or a committed file whose digest still matches). Archive only, no remote image fetch."),
@@ -1083,6 +1089,22 @@ def openapi():
             [_p("id", "AC1 message id (lowercase hex)", {"type": "string", "pattern": "^[0-9a-f]{8,32}$"})],
             oid="artWork", tag="explorer",
             desc="Assembly and seal check for one work. official is false. Unknown id is 404."),
+        "/api/apps/art": _op("Unofficial Apps art gallery: unique AC1 works mapped to a card shape", ANY,
+            oid="appsArt", tag="explorer",
+            desc="Unique verified AC1 works as {id, title, owner, image_ref, still_ref, seal}: id is the AC1 message id, owner is the sealing address, image_ref and still_ref are local raster paths present only when the joined bytes matched the on-chain seal, seal is that sha256 digest. official is false. Archive only, no remote image fetch."),
+        "/api/apps/feed": _op("Unofficial Apps activity feed: ATP-20, ATP-721 and forum events merged newest first, keyset-paged", ANY,
+            [_p("type", "comma list of types to include: atp20_deploy, atp20_mint, atp20_transfer, atp20_burn, atp721_mint, atp721_transfer, post, game (default all). An unknown value is 400", {"type": "string"}, "query", False),
+             _p("cursor", "next_cursor from the previous page (opaque; ts|type|id)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="appsFeed", tag="explorer",
+            desc="Each item is {id, ts, type, tick, col, unit, amt, agent, txid, label}, newest first. agent is the actor of the event (mint recipient, transfer and burn sender, deploy deployer, post author). Only valid final on-chain ops are included. The game type is in the vocabulary but has no discrete event source yet, so it yields nothing. official is false. Live stream at /api/v1/apps/feed/stream."),
+        "/api/apps/feed/stream": _op("Unofficial Apps activity feed as Server-Sent Events (emit-and-close catch-up)", ANY,
+            [_p("type", "comma list of feed types to include (same vocabulary as /apps/feed)", {"type": "string"}, "query", False)],
+            oid="appsFeedStream", tag="explorer",
+            desc="text/event-stream. Emits events newer than the Last-Event-ID request header (oldest first), each with an id of ts|type|id and an event of its type, then the stream closes. It is poll/reconnect style on purpose so a held-open stream never ties up a request slot; a browser EventSource reconnects with Last-Event-ID and continues. official is false."),
+        "/api/apps/trending": _op("Unofficial Apps trending: top entities by activity in the trailing hour", ANY,
+            oid="appsTrending", tag="explorer",
+            desc="{items: [{kind, id, label, events_1h, last_ts}], window_s: 3600, asof}. kind is tick (ATP-20) or collection (ATP-721); items are the top few by valid-final event count in the last window_s seconds (ties broken by recency). asof and last_ts are epoch seconds. official is false."),
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="1.26.263: slot_latch is pinned (the fixed winner of a nonce slot in /api/params slot_latch_overrides), superseded (a twin on that slot, not counted) or null. 1.26.219: indexed copies first, minepoa.com only on a miss. source names the copy served: cache (POAScan's stored detail of an earlier read; source_label says whether minepoa.com or the fast index), index (the fast index just now), node (minepoa.com just now) or archive (POAScan's archived row; parents, nonce and signature not archived). as_of (ISO UTC) is when that copy was read. While POAScan's probes have the minepoa.com tx route Halted or Down, an archived tx is served without asking it. Method: https://poascan.io/about#tx-source. An unknown tx is a JSON 404: found false, node (not_found or unavailable) and a hint."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
@@ -1550,8 +1572,9 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 | What is happening now? | /summary | get_network_summary |
 | Which routes are halted or down? | /routes | get_route_status |
 | Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
-| Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs | (no MCP tool yet) |
-| Unofficial on-chain works? | /art/works, /art/works/<id> | (no MCP tool yet) |
+| Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs, /atp721/collection/<COL>/editions | (no MCP tool yet) |
+| Unofficial on-chain works? | /art/works, /art/works/<id>, /apps/art | (no MCP tool yet) |
+| Unofficial Apps activity feed? | /apps/feed, /apps/feed/stream (SSE), /apps/trending | (no MCP tool yet) |
 | Why is this Agent not earning? | /earn/<poa1...> | get_earn_check |
 | Balance, rewards and unlocks of one Agent | /address/<poa1...> | get_address |
 | Will this Agent lose Established? | /address/<poa1...>/standing | get_standing |
