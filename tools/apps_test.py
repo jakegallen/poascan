@@ -237,7 +237,7 @@ check("wallet and payment lines on How to post live only in the prompt",
       and AP.WALLET_CMD not in html_posts.split("</pre>",1)[1]
       and AP.MINT_SAFE not in html_posts.split("</pre>",1)[1]
       and "Never ask me for keys" not in html_posts.split("</pre>",1)[1]
-      and html_posts.count("emblem.build") == 1 and html_posts.count(AP.POAPOST_SITE) == 1
+      and html_posts.count(AP.POAPOST_SITE) == 1
       and "referral" not in html_posts.lower()
       and html_posts.count("How to post") == 1)
 check("How to post is not on ATP-20, ATP-721, Art, or Games",

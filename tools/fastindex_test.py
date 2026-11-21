@@ -243,12 +243,16 @@ def main():
     real = ""   # the configured host, read locally when present, never printed
     try: real = urllib.parse.urlparse(open(os.environ.get("FAST_INDEX_URL_FILE", "/workspace/poa/dbexplorer1027/fast_index_url")).read().strip()).hostname or ""
     except OSError: pass
+    # Official POA Post site only. Jake approved this exact URL on 21 Nov 2026 (t729u: "Use anyway").
+    allowed = "https://build-edc433c7fbe8e4520eca2d8f." + host + "/pub/main/poapost/"
     for dp, dn, fn in os.walk(ROOT):
         if ".git" in dp.split(os.sep) or "node_modules" in dp: continue
         for f in fn:
             if f.endswith((".py", ".md", ".json", ".js", ".css", ".html", ".txt", ".toml", ".yml", ".svg")):
                 try: s = open(os.path.join(dp, f), encoding="utf-8", errors="ignore").read()
                 except OSError: continue
+                if allowed in s:
+                    s = s.replace(allowed, "")
                 if host in s or (real and real in s): bad.append(f)
     check(f"no build host name anywhere in the repo ({bad})", not bad)
     for f in ("poascan/fastindex.py", "poascan/anchorsview.py", "tools/fastindex_test.py"):

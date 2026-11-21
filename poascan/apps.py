@@ -25,7 +25,7 @@ SPEC_URL = {
 }
 # Public site from https://x.com/bitcoinizeme/status/2124128462017303007 (root).
 MAGIC_SITE = "https://magicagent.tech"
-# Official POA Post site. Jake approved this exact emblem.build URL on 21 Nov 2026
+# Official POA Post site. Jake approved this exact URL on 21 Nov 2026
 # (t729u: "Use anyway"); there is no public domain yet. Allowlist this URL only.
 POAPOST_SITE = "https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/"
 
