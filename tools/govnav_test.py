@@ -107,15 +107,18 @@ def live():
         home = get("/")[1]
         nav = home[home.index('<nav class="nav" id="nav">'):]; nav = nav[:nav.index("</nav>")]
         links = re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', nav)
-        check(f"nav is Chain, Agents, Network, Governance, API (1.26.302) {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance", "API"]
-              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance", "/api"])
+        check(f"nav is Chain, Agents, Network, Governance, Apps, API (1.26.414) {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance", "Apps", "API"]
+              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance", "/apps", "/api"])
         check("About is in the footer, not the nav", 'href="/about"' not in nav and re.search(r'<footer.*href="/about"', home, re.S) is not None)
+        foot = home[home.index("<footer"):] if "<footer" in home else ""
+        check("Apps is in the nav, not the footer", ('/apps', 'Apps') in links and 'href="/apps"' not in foot)
         def active(u):
             b = get(u)[1]; n = b[b.index('<nav class="nav" id="nav">'):]; n = n[:n.index("</nav>")]
             m = re.search(r'<a href="([^"]+)" class="on"', n); return m.group(1) if m else None
-        act = {u: active(u) for u in ("/chain", "/chain/txs", "/chain?tab=pending", "/epoch/1", "/network?tab=token", "/unlocks", "/governance", "/governance?tab=rules", "/agents/top")}
+        act = {u: active(u) for u in ("/chain", "/chain/txs", "/chain?tab=pending", "/epoch/1", "/network?tab=token", "/unlocks", "/governance", "/governance?tab=rules", "/agents/top", "/apps", "/apps?tab=art")}
         check(f"active tab {act}", act == {"/chain": "/chain", "/chain/txs": "/chain", "/chain?tab=pending": "/chain", "/epoch/1": "/chain", "/network?tab=token": "/network",
-                                           "/unlocks": "/network", "/governance": "/governance", "/governance?tab=rules": "/governance", "/agents/top": "/agents"})
+                                           "/unlocks": "/network", "/governance": "/governance", "/governance?tab=rules": "/governance", "/agents/top": "/agents",
+                                           "/apps": "/apps", "/apps?tab=art": "/apps"})
         # Chain: one tabbed module (kit.tabmod), Epochs, Txs, Pending and Grading as real links, the right one on
         c1, ch, _ = get("/chain"); c2, tx, _ = get("/chain/txs")
         check("Chain: Epochs and Txs tabs in one module, the right one on", c1 == 200 and c2 == 200 and 'aria-label="Chain"' in ch and 'data-kit="tabs"' in ch

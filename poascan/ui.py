@@ -234,7 +234,7 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/chain", "Chain"), ("/agents", "Agents"), ("/network", "Network"), ("/governance", "Governance"), ("/api", "API")]   # Home is the logo; About and Source are in the footer; swaps live on POASwap (header button)
+NAV = [("/chain", "Chain"), ("/agents", "Agents"), ("/network", "Network"), ("/governance", "Governance"), ("/apps", "Apps"), ("/api", "API")]   # Home is the logo; About and Source are in the footer; swaps live on POASwap (header button)
 # Pages that live under a header tab: the tab that shows as active for them (1.26.96 header merge)
 NAV_OF = {"/api/reference": "/api", "/epochs": "/chain", "/txs": "/chain", "/token": "/network", "/unlocks": "/network"}
 
@@ -398,7 +398,7 @@ def head_meta(full_title, title=""):
 
 from . import join as _join
 
-FOOT = [("/about", "About"), ("/apps", "Apps"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
+FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
         ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
         ("/privacy", "Privacy"), ("/api", "API")]
 def _footer():
