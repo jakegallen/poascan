@@ -2,20 +2,21 @@
 community games catalog, shown as a storefront. Logos are local static rasters. No
 remote fetches, no third-party indexer calls."""
 import base64
+import hashlib
 import datetime as dt
 import re
 import threading
 from html import escape as E
 from urllib.parse import urlparse
 from . import db, analytics as A, kit as KIT
-from .ui import agent, table, tx_link, lt, stat, short, idn, PROFILE_URL
+from .ui import agent, table, tx_link, lt, stat, short, PROFILE_URL
 from .govhub import pager, PAGE
 
 # Exact disclaimer, as approved 2026-11-20 1:43 PM PT.
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
-TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20"), ("art", "Art")]
+TABS = [("posts", "Posts"), ("atp20", "ATP-20"), ("atp721", "ATP-721"), ("art", "Art"), ("games", "Games")]
 TAB_SET = {k for k, _ in TABS}
 DEFAULT_TAB = "posts"
 LIMIT = PAGE
@@ -35,6 +36,7 @@ DAY = 86400
 _IC_MEMO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 6.5h5M5.5 9h3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
 _IC_AGENT = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="2.1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.8 12.4c.7-2 2.3-3 4.2-3s3.5 1 4.2 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
 _IC_TIME = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.2V8l2 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
+_IC_INFO = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 7.2v4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.8" r=".95" fill="currentColor"/></svg>'
 
 
 def _ico(paths):
@@ -150,13 +152,85 @@ POSTS_APP = dict(
     accent="var(--gold)",
     logo="apps/poapost.png",
     glyph='<span class="app-mono">P</span>',
-    blurb="A public vault of record.",
+    blurb="A public vault of record. Text and small rasters stored in AC1 transfer memos.",
     url="",  # no stable public website listed
     url_label="Website",
     socials=(),
     prefixes=(),
     addrs=(),
     posts=(2915,),
+    show_post_tag=True,
+)
+
+ATP20_APP = dict(
+    id="atp20",
+    name="ATP-20",
+    cat="Tokens",
+    accent="var(--gold)",
+    logo="",
+    sigil=None,  # populated lazily via _sigil_svg
+    sigil_args=("20", "atp20-cat", 2),
+    blurb="Fungible tokens replayed from deploy, mint, transfer and burn transfer memos.",
+    url="",
+    socials=(),
+    prefixes=(),
+    addrs=(),
+    posts=(3202,),
+    show_post_tag=True,
+)
+
+ATP721_APP = dict(
+    id="atp721",
+    name="ATP-721",
+    cat="Editions",
+    accent="var(--apps-teal)",
+    logo="",
+    sigil=None,
+    sigil_args=("721", "atp721-cat", 3),
+    blurb="Numbered collections replayed from deploy, mint and transfer memos with sha256 seals.",
+    url="",
+    socials=(),
+    prefixes=(),
+    addrs=(),
+    posts=(3218,),
+    show_post_tag=True,
+)
+
+ART_APP = dict(
+    id="art",
+    name="Art",
+    cat="Works",
+    accent="var(--apps-magenta)",
+    logo="",
+    sigil=None,
+    sigil_args=("AC1", "art-cat", 3),
+    blurb="Unique pixel works assembled from AC1 multipart memos and verified against sha256 seals.",
+    url="",
+    socials=(),
+    prefixes=(),
+    addrs=(),
+    posts=(3161,),
+    show_post_tag=True,
+)
+
+GAMES_APP = dict(
+    id="games",
+    name="Games",
+    cat="Catalog",
+    accent="var(--apps-violet)",
+    logo="",
+    glyph=_ico(
+        '<rect x="3.5" y="7" width="17" height="10" rx="4.5"/>'
+        '<path d="M8 10.2v3.6M6.2 12h3.6"/>'
+        '<circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/>'
+        '<circle cx="17" cy="13" r="1" fill="currentColor" stroke="none"/>'
+    ),
+    blurb="Third-party games and arenas writing moves, pools and payouts into transfer memos.",
+    url="",
+    socials=(),
+    prefixes=(),
+    addrs=(),
+    posts=(),
 )
 
 
@@ -433,6 +507,61 @@ def _out_link(url, label=None, cls="app-go"):
             f'title="{E(url)}">{E(text)}</a>')
 
 
+_LINK_SVGS = {
+    "website": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<circle cx="12" cy="12" r="9"/>'
+        '<ellipse cx="12" cy="12" rx="4" ry="9"/>'
+        '<path d="M3.6 9h16.8M3.6 15h16.8"/></svg>'
+    ),
+    "lableak": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M9.5 3.5h5M10.5 3.5v5.1l-5.2 8.7a2 2 0 0 0 1.7 3h10a2 2 0 0 0 1.7-3l-5.2-8.7V3.5"/>'
+        '<path d="M7.4 14.5h9.2"/></svg>'
+    ),
+    "x": (
+        '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        '<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>'
+    ),
+    "telegram": (
+        '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        '<path d="M21.4 4.6 18.2 19.6c-.2 1.0-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1.0.5l.4-5.0 9.1-8.2c.4-.4-.1-.6-.6-.2L5.8 13.3 1.0 11.8c-1.0-.3-1.0-1.0.2-1.5L19.8 3.1c.9-.3 1.8.2 1.6 1.5z"/></svg>'
+    ),
+    "github": (
+        '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        '<path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>'
+    ),
+    "discord": (
+        '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        '<path d="M20.317 4.37a19.8 19.8 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>'
+    ),
+    "payway": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>'
+    ),
+    "link": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 1 0-7.07-7.07L11.2 4.7"/>'
+        '<path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07L12.8 19.3"/></svg>'
+    ),
+}
+
+
+def _icon_link(url, kind, label, tag=""):
+    k = (kind or "link").strip().lower()
+    if k not in _LINK_SVGS:
+        k = "link"
+    svg = _LINK_SVGS[k]
+    cls = "app-icon-btn has-tag" if tag else "app-icon-btn"
+    extra = f'<span class="app-icon-tag mono">{E(tag)}</span>' if tag else ""
+    return (f'<a class="{cls}" data-kind="{E(k)}" href="{E(url)}" target="_blank" '
+            f'rel="noopener noreferrer" aria-label="{E(label)}" title="{E(label)}">{svg}{extra}</a>')
+
+
 def _source(tab):
     if tab in ("games", "posts"):
         return ""
@@ -500,11 +629,16 @@ def catalog_stats():
         return series
 
     out = {}
+    g_addrs, g_times, g_memos = set(), [], 0
     for gid, s in games.items():
         out[gid] = dict(memos=s["memos"], agents=len(s["addrs"]), last=s["last"], series=_series(s["times"], asof))
+        g_memos += s["memos"]
+        g_addrs.update(s["addrs"])
+        g_times.extend(s["times"])
+    games_total = dict(memos=g_memos, agents=len(g_addrs), last=asof, series=_series(g_times, asof))
     post_stats = dict(memos=posts["memos"], agents=len(posts["addrs"]), last=posts["last"],
                       series=_series(posts["times"], posts_asof))
-    return dict(asof=asof, games=out, posts=post_stats, posts_asof=posts_asof)
+    return dict(asof=asof, games=out, games_total=games_total, posts=post_stats, posts_asof=posts_asof)
 
 
 def game_stats():
@@ -522,6 +656,9 @@ def _logo(g):
     if g.get("logo"):
         return (f'<div class="app-ico has-logo"><img src="/static/{E(g["logo"])}" alt="" '
                 f'width="112" height="112"></div>')
+    if g.get("sigil_args"):
+        lbl, seed, mln = g["sigil_args"]
+        return f'<div class="app-ico art-emblem" aria-hidden="true">{_sigil_svg(lbl, seed, mln)}</div>'
     return f'<div class="app-ico" aria-hidden="true">{g["glyph"]}</div>'
 
 
@@ -540,12 +677,17 @@ def _bars(series):
 def _links(g):
     bits = []
     if g.get("url"):
-        bits.append(_out_link(g["url"], g.get("url_label")))
+        host = urlparse(g["url"]).netloc or g["url"]
+        if host.startswith("www."):
+            host = host[4:]
+        bits.append(_icon_link(g["url"], "website", f"{g.get('url_label') or 'Website'}: {host}"))
     posts = g.get("posts") or ()
     if posts:
-        bits.append(_out_link(f"https://minepoa.com/lableak/#/post/{posts[0]}", f"Post {posts[0]}"))
-    for _kind, href, label in g.get("socials") or ():
-        bits.append(_out_link(href, label))
+        tag = f"#{posts[0]}" if g.get("show_post_tag") else ""
+        bits.append(_icon_link(f"https://minepoa.com/lableak/#/post/{posts[0]}", "lableak", f"LabLeak post {posts[0]}", tag=tag))
+    for kind, href, label in g.get("socials") or ():
+        k = (kind or "").strip().lower()
+        bits.append(_icon_link(href, k, label or kind))
     return bits
 
 
@@ -590,45 +732,33 @@ def _app_card(g, names, s, asof, feat=False):
     )
 
 
-def _tagline(bundle, tab=""):
-    if tab == "art":
-        n = int(bundle.get("art_count") or 0)
-        if n == 1:
-            return "1 onchain work in this archive."
-        if n:
-            return f"{n} onchain works in this archive."
-        return "Onchain works in this archive."
-    stats = bundle.get("games") or {}
-    writes = sum(int((stats.get(g["id"]) or {}).get("memos") or 0) for g in GAMES)
-    n = len(GAMES)
-    if writes:
-        return f'{writes:,} onchain writes across {n} catalogs in this archive.'
-    return f'{n} catalogs in this archive.'
-
-
-def _hero(bundle, tab=""):
-    tag = _tagline(bundle, tab)
+def _bar_toolbar(total_writes):
+    n_cat = len(TABS)
+    stat_txt = f'<b class="num">{total_writes:,}</b> writes' if total_writes else f'{n_cat} catalogs'
+    head_txt = (f'<b class="num">{total_writes:,}</b> onchain writes across {n_cat} catalogs'
+                if total_writes else f'{n_cat} catalogs in this archive')
     return (
-        f'<section class="card benchc hpulse appshero" aria-label="Apps">'
-        f'<div class="apps-wash" aria-hidden="true"></div>'
-        f'<div class="apps-hero-copy"><h1>Apps</h1>'
-        f'<p class="apps-tag"><i class="app-pulse" aria-hidden="true"></i>{E(tag)}</p>'
-        f'<p class="apps-disc">{E(DISCLAIMER)}</p></div></section>'
+        f'<details class="apps-tip">'
+        f'<summary class="apps-tip-btn" aria-label="About Apps">'
+        f'<span class="apps-tip-ico" aria-hidden="true">{_IC_INFO}</span>'
+        f'<span class="apps-tip-lbl">{stat_txt} <span class="apps-tip-cat">· {n_cat} catalogs</span></span>'
+        f'</summary>'
+        f'<div class="apps-tip-pop" role="note">'
+        f'<p class="apps-tip-head"><i class="app-pulse" aria-hidden="true"></i>{head_txt}</p>'
+        f'<p class="apps-tip-copy">{E(DISCLAIMER)}</p>'
+        f'</div></details>'
     )
 
 
 def _games_list(names, bundle):
     stats = bundle.get("games") or {}
-    asof = int(bundle.get("asof") or 0)
+    gsum = bundle.get("games_total") or {}
+    asof = int(bundle.get("asof") or gsum.get("last") or 0)
+    feat_html = _app_card(GAMES_APP, names, gsum, asof, feat=True)
     ranked = _ranked(stats)
-    live = [g for g in ranked if int((stats.get(g["id"]) or {}).get("memos") or 0) > 0]
-    feat = live[0] if live else ranked[0]
-    rest = [g for g in ranked if g["id"] != feat["id"]]
-    order = " ".join(g["id"] for g in live)
-    feat_html = _app_card(feat, names, stats.get(feat["id"]) or {}, asof, feat=True)
-    grid = "".join(_app_card(g, names, stats.get(g["id"]) or {}, asof, feat=False) for g in rest)
+    grid = "".join(_app_card(g, names, stats.get(g["id"]) or {}, asof, feat=False) for g in ranked)
     return (
-        f'<div class="app-store" data-apps-rotate data-order="{E(order)}">'
+        f'<div class="app-store">'
         f'<div class="app-feat-slot">{feat_html}</div>'
         f'<div class="app-grid">{grid}</div></div>'
     )
@@ -640,10 +770,11 @@ def _mint_bar(minted, maxs):
     except (TypeError, ValueError):
         a, b = 0, 0
     pct = 0 if b <= 0 else min(100, max(0, 100.0 * a / b))
+    w_pct = 0.0 if a <= 0 or b <= 0 else max(1.5, pct)
     return (
         f'<div class="vessel tok-bar" role="meter" aria-valuemin="0" aria-valuemax="100" '
         f'aria-valuenow="{pct:.0f}" aria-label="Minted share">'
-        f'<i class="molten" style="width:{pct:.1f}%"></i></div>'
+        f'<i class="molten" style="width:{w_pct:.1f}%"></i></div>'
     )
 
 
@@ -651,32 +782,111 @@ def _tok_accent(tick):
     return _ACCENTS[sum(ord(c) for c in (tick or "")) % len(_ACCENTS)]
 
 
-def _tok_card(r, names):
-    tick = r["tick"]
-    href = "/apps?tab=atp20&tick=" + E(tick)
-    mono = E((tick or "?")[:1])
-    minted = _qty(r.get("minted"), r.get("decimals"))
-    cap = _qty(r.get("max_supply"), r.get("decimals"))
-    hold = int(r.get("holder_count") or 0)
+def _sigil_svg(label, seed_key, mono_len=2):
+    """Deterministic geometric emblem SVG using currentColor only (no hardcoded hex)."""
+    raw = (label or "?").strip()
+    parts = [p for p in re.split(r"[^A-Za-z0-9]+", raw) if p]
+    if len(parts) >= 2 and mono_len >= 2:
+        mono = (parts[0][:1] + parts[1][:1]).upper()
+    else:
+        mono = raw[:mono_len].upper()
+    d = hashlib.sha256((seed_key or raw).encode("utf-8")).digest()
+    shape = d[0] % 3
+    rot = (d[1] % 6) * 15
+    if shape == 0:
+        frame = (f'<polygon points="32,5 56,18.5 56,45.5 32,59 8,45.5 8,18.5" '
+                 f'fill="none" stroke="currentColor" stroke-opacity=".42" stroke-width="1.4"/>'
+                 f'<polygon points="32,10 51,21 51,43 32,54 13,43 13,21" '
+                 f'fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-opacity=".22" stroke-width="1"/>')
+    elif shape == 1:
+        frame = (f'<circle cx="32" cy="32" r="25" fill="none" stroke="currentColor" stroke-opacity=".42" stroke-width="1.4"/>'
+                 f'<circle cx="32" cy="32" r="20" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-opacity=".22" stroke-width="1" stroke-dasharray="3 3" transform="rotate({rot} 32 32)"/>')
+    else:
+        frame = (f'<rect x="9" y="9" width="46" height="46" rx="11" fill="none" stroke="currentColor" stroke-opacity=".42" stroke-width="1.4"/>'
+                 f'<rect x="14" y="14" width="36" height="36" rx="8" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-opacity=".22" stroke-width="1"/>')
+    fs = 18 if len(mono) >= 2 else 22
+    return (f'<svg class="emblem-svg" viewBox="0 0 64 64" aria-hidden="true">'
+            f'{frame}'
+            f'<text x="32" y="33" text-anchor="middle" dominant-baseline="central" '
+            f'fill="currentColor" font-family="var(--fig-serif)" font-size="{fs}" font-weight="600" '
+            f'letter-spacing=".04em">{E(mono)}</text></svg>')
+
+
+def _tok_rule(auth, compact=False):
+    s = (auth or "deployer").strip().lower()
+    if s == "deployer" or not s:
+        return "Deployer"
+    if s == "open":
+        return "Open"
+    if s.startswith("open:"):
+        bits = s.split(":")
+        if compact:
+            return "Open"
+        try:
+            per = f"{int(bits[1]):,}" if len(bits) > 1 and bits[1] else ""
+            mx = f"{int(bits[2]):,} max" if len(bits) > 2 and bits[2] else ""
+            extra = " · ".join(x for x in (per, mx) if x)
+            return f"Open · {extra}" if extra else "Open"
+        except ValueError:
+            return "Open"
+    return "Open"
+
+
+def _tok_pct(minted, maxs):
+    try:
+        a, b = int(minted or 0), int(maxs or 0)
+    except (TypeError, ValueError):
+        return "0%"
+    if b <= 0 or a <= 0:
+        return "0%"
+    p = 100.0 * a / b
+    if p < 0.1:
+        return "<0.1%"
+    if p >= 99.95:
+        return "100%"
+    return f"{p:.1f}%"
+
+
+def _tok_deck_rows(page_rows, names):
+    out = []
+    for r in page_rows:
+        tick = r["tick"]
+        href = "/apps?tab=atp20&amp;tick=" + E(tick)
+        minted = _qty(r.get("minted"), r.get("decimals"))
+        cap = _qty(r.get("max_supply"), r.get("decimals"))
+        pct = _tok_pct(r.get("minted"), r.get("max_supply"))
+        hold = int(r.get("holder_count") or 0)
+        rule = _tok_rule(r.get("mint_auth"), compact=False)
+        txid = r.get("deploy_txid") or ""
+        dep = agent(r.get("deployer"), names=names) if r.get("deployer") else '<span class="na">Unknown</span>'
+        tx_html = tx_link(txid, n=(4, 4)) if txid else ""
+        out.append(
+            f'<tr style="--app:{_tok_accent(tick)}">'
+            f'<td data-l="Token"><div class="tok-cell-id">'
+            f'<a class="app-ico tok-ico tok-ico-sm" href="{href}" aria-label="{E(tick)}">{_sigil_svg(tick, tick, 2)}</a>'
+            f'<div><a class="tok-title-link" href="{href}">{E(tick)}</a>'
+            f'<span class="tok-cell-rule">{E(rule)}</span></div></div></td>'
+            f'<td data-l="Progress"><div class="tok-cell-prog">'
+            f'<div class="tok-cell-nums"><span class="num">{minted}</span><span class="tok-of">/ {cap}</span>'
+            f'<span class="tok-pct num">{E(pct)}</span></div>'
+            f'{_mint_bar(r.get("minted"), r.get("max_supply"))}</div></td>'
+            f'<td data-l="Holders" class="num">{hold:,}</td>'
+            f'<td data-l="Deployer">{dep}</td>'
+            f'<td data-l="Deploy">{tx_html}</td>'
+            f'</tr>'
+        )
     return (
-        f'<a class="tok-card" href="{href}" style="--app:{_tok_accent(tick)}">'
-        f'<div class="app-ico tok-ico" aria-hidden="true"><span>{mono}</span></div>'
-        f'<div class="app-body">'
-        f'<h3 class="app-name">{E(tick)}</h3>'
-        f'<p class="tok-fig"><span class="num">{minted}</span>'
-        f'<span class="tok-of">of {cap}</span></p>'
-        f'{_mint_bar(r.get("minted"), r.get("max_supply"))}'
-        f'<p class="app-ref"><span class="num">{hold:,}</span> holders · '
-        f'{agent(r.get("deployer"), names=names)}</p>'
-        f'</div></a>'
+        '<div class="tok-deck-wrap"><table class="tok-deck">'
+        '<thead><tr><th>Token</th><th>Supply</th><th>Holders</th><th>Deployer</th><th>Deploy</th></tr></thead>'
+        f'<tbody>{"".join(out)}</tbody></table></div>'
     )
 
 
-def _atp20_list(names, tick="", qs=None):
+def _atp20_list(names, tick="", qs=None, cat_stats=None):
     from . import atp20 as T
     T.ensure_fresh()
     cov = T.coverage()
-    cov_line = (f'<p class="pnote">{int(cov.get("tokens") or 0):,} ticks · '
+    cov_line = (f'<p class="pnote apps-cov">{int(cov.get("tokens") or 0):,} ticks · '
                 f'{int(cov.get("applied") or 0):,} applied · '
                 f'order {E(str(cov.get("ordering") or ""))}</p>')
     off = _off(qs)
@@ -689,18 +899,38 @@ def _atp20_list(names, tick="", qs=None):
             off = (total - 1) // PAGE * PAGE
         holders = T.holders_offset(tick, offset=off, limit=PAGE)
         who = agent(tok.get("deployer"), names=names)
+        rule = _tok_rule(tok.get("mint_auth"), compact=False)
+        pct = _tok_pct(tok.get("minted"), tok.get("max_supply"))
+        meta_bits = []
+        if tok.get("deployer"):
+            meta_bits.append(f'Deployer {who}')
+        if tok.get("deploy_txid"):
+            meta_bits.append(tx_link(tok.get("deploy_txid")))
+        if tok.get("deploy_ts"):
+            meta_bits.append(lt(tok.get("deploy_ts")))
+        if int(tok.get("burned") or 0) > 0:
+            meta_bits.append(f'Burned {_qty(tok.get("burned"), tok.get("decimals"))}')
+        if tok.get("meta_cid"):
+            meta_bits.append(f'CID {E(str(tok["meta_cid"]))}')
+        nums = (
+            '<section class="stats three app-stats" aria-label="Token metrics">'
+            + stat("Holders", f'<span class="num" data-cu="{total}">{total:,}</span>')
+            + stat("Progress", f'<span class="num">{E(pct)}</span>')
+            + stat("Supply", f'<span class="num">{_qty(tok.get("max_supply"), tok.get("decimals"))}</span>')
+            + "</section>"
+        )
         head = (
-            f'<div class="tok-hero" style="--app:{_tok_accent(tick)}">'
-            f'<div class="app-ico tok-ico" aria-hidden="true"><span>{E(tick[:1])}</span></div>'
+            f'<div class="app-feat-slot">'
+            f'<article class="app-card feat tok-feat" style="--app:{_tok_accent(tick)}">'
+            f'<div class="app-ico tok-ico" aria-hidden="true">{_sigil_svg(tick, tick, 2)}</div>'
             f'<div class="app-body">'
+            f'<div class="app-meta"><span class="app-cat">{E(rule)}</span></div>'
             f'<h2 class="app-name">{E(tick)}</h2>'
             f'<p class="tok-fig"><span class="num">{_qty(tok.get("minted"), tok.get("decimals"))}</span>'
-            f'<span class="tok-of">of {_qty(tok.get("max_supply"), tok.get("decimals"))}</span></p>'
+            f'<span class="tok-of">minted</span></p>'
             f'{_mint_bar(tok.get("minted"), tok.get("max_supply"))}'
-            f'<p class="app-ref">{int(tok.get("holder_count") or 0):,} holders'
-            + (f' · Deployer {who}' if tok.get("deployer") else "")
-            + (f' · {tx_link(tok.get("deploy_txid"))}' if tok.get("deploy_txid") else "")
-            + "</p></div></div>"
+            f'<p class="app-ref">{" · ".join(meta_bits)}</p>'
+            f'</div>{nums}</article></div>'
         )
         rows = [[agent(h["addr"], names=names), _qty(h.get("amount"), tok.get("decimals"))]
                 for h in holders]
@@ -712,16 +942,19 @@ def _atp20_list(names, tick="", qs=None):
     if total and off >= total:
         off = (total - 1) // PAGE * PAGE
     page_rows = T.tokens_offset(offset=off, limit=PAGE)
+    st = cat_stats if cat_stats is not None else T.stats()
+    asof = int(st.get("last") or 0)
+    feat_html = f'<div class="app-feat-slot">{_app_card(ATP20_APP, names, st, asof, feat=True)}</div>'
     if not page_rows:
         empty = (
             '<div class="app-empty app-soon">'
             '<p class="app-soon-line">Tokens arrive with the next index</p>'
             '</div>'
         )
-        return empty + cov_line + _source("atp20")
-    grid = "".join(_tok_card(r, names) for r in page_rows)
+        return f'<div class="atp20-store">{feat_html}{empty}{cov_line}{_source("atp20")}</div>'
+    body = _tok_deck_rows(page_rows, names)
     pg = pager(total, off, lambda o: _list_url("atp20", o))
-    return cov_line + f'<div class="tok-grid">{grid}</div>' + pg + _source("atp20")
+    return f'<div class="atp20-store">{feat_html}{body}{pg}{cov_line}{_source("atp20")}</div>' 
 
 
 def _ago(ts, asof):
@@ -815,7 +1048,6 @@ def _posts_list(names, bundle, qs=None):
         txl = (f'<a class="post-tx mono" href="/tx/{E(tx)}" title="{E(tx)}">{E(short(tx, 4, 3))}</a>') if tx else ""
         bits.append(
             f'<article class="post-card" style="--i:{i}">'
-            f'<div class="post-ava">{idn(it["addr"])}</div>'
             f'<div class="post-main">'
             f'<div class="post-meta"><i class="post-chip" aria-hidden="true"></i>'
             f'{_post_who(it["addr"], names)}{when}{txl}</div>'
@@ -831,7 +1063,12 @@ def _posts_list(names, bundle, qs=None):
 
 
 COL_META = {
-    "MAM-GENESIS": dict(post=3220, post_url="https://minepoa.com/lableak/#/post/3220"),
+    "MAM-GENESIS": dict(
+        logo="apps/mam-genesis.webp",
+        verified=True,
+        post=3220,
+        post_url="https://minepoa.com/lableak/#/post/3220",
+    ),
 }
 
 
@@ -886,7 +1123,7 @@ def _work_card(names, work, feat=False):
 
 def _col_card(names, tok, feat=False):
     col = tok["col"]
-    href = "/apps?tab=art&amp;col=" + E(col)
+    href = "/apps?tab=atp721&amp;col=" + E(col)
     minted = int(tok.get("minted") or 0)
     cap = int(tok.get("total") or 0)
     holders = int(tok.get("holder_count") or 0)
@@ -895,10 +1132,14 @@ def _col_card(names, tok, feat=False):
     mx = tok.get("max_per_addr")
     title = tok.get("title") or ""
     accent = _tok_accent(col)
-    tile = (f'<div class="app-ico art-tile" aria-hidden="true">'
-            f'<span class="app-mono">{E(col[:1])}</span></div>')
     links = []
     meta = COL_META.get(col) or {}
+    if meta.get("logo"):
+        tile = (f'<div class="app-ico has-logo art-col-logo">'
+                f'<img src="/static/{E(meta["logo"])}" alt="{E(col)}" width="112" height="112"></div>')
+    else:
+        tile = (f'<div class="app-ico art-tile art-emblem" aria-hidden="true">'
+                f'{_sigil_svg(col, tok.get("file_sha") or col, 2)}</div>')
     if tok.get("deploy_txid"):
         links.append(tx_link(tok["deploy_txid"]))
     if meta.get("post_url") and meta.get("post"):
@@ -906,13 +1147,17 @@ def _col_card(names, tok, feat=False):
     typ = "h2" if feat else "h3"
     name = E(col) if feat else f'<a href="{href}">{E(col)}</a>'
     fee_bit = f"{int(fee):,} {E(tick)}" if fee is not None and str(fee) != "" and tick else ""
-    ref = [f'<span class="num">{holders:,}</span> holders']
+    h_word = "holder" if holders == 1 else "holders"
+    ref = [f'<span class="nw"><span class="num">{holders:,}</span> {h_word}</span>']
     if fee_bit:
-        ref.append(fee_bit)
+        ref.append(f'<span class="nw">{fee_bit}</span>')
     if mx:
-        ref.append(f"Max {int(mx)}")
+        ref.append(f'<span class="nw">Max {int(mx)}</span>')
     ref.extend(links)
-    note = "Local tile. File fingerprint unverified." if feat else ""
+    if feat:
+        note = "Seal matches." if meta.get("verified") else "Monogram fallback. Artwork bytes not published for this hash."
+    else:
+        note = ""
     cls = "app-card art-col" + (" feat" if feat else "")
     return (
         f'<article class="{cls}" style="--app:{accent}">'
@@ -942,47 +1187,80 @@ def _units_table(names, col, qs, C):
     else:
         tbl = ('<div class="app-empty app-soon">'
                '<p class="app-soon-line">Units arrive with the next index</p></div>')
-    pg = pager(total, off, lambda o: _list_url("art", o, col=col))
+    pg = pager(total, off, lambda o: _list_url("atp721", o, col=col))
     return tbl + pg
 
 
-def _art_list(names, col="", qs=None):
+def _atp721_list(names, col="", qs=None, cat_stats=None):
     from . import atp721 as C
-    from . import ac1art as R
     C.ensure_fresh()
+    cov = C.coverage()
+    cov_line = (f'<p class="pnote apps-cov">Replay ({E(cov.get("ordering") or "ts_id")}). '
+                f'{int(cov.get("applied") or 0):,} memos applied. Debit not checked.</p>')
     if col:
         tok = C.collection(col)
         if not tok:
             return '<div class="app-empty"><p class="na">No such collection in the archive.</p></div>'
         head = _col_card(names, tok, feat=True)
-        cov = C.coverage()
-        cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
-                    f'{int(cov.get("applied") or 0):,} memos applied. Debit not checked.</p>')
-        back = '<p class="pnote"><a href="/apps?tab=art">All works</a></p>'
+        back = '<p class="pnote"><a href="/apps?tab=atp721">All collections</a></p>'
         return (
-            f'<div class="art-page">'
+            f'<div class="art-page atp721-store">'
             f'{back}<div class="app-feat-slot">{head}</div>'
-            f'{cov_line}{_units_table(names, col, qs, C)}</div>'
+            f'{cov_line}{_units_table(names, col, qs, C)}{_source("atp721")}</div>'
         )
-    items = [("work", w) for w in R.works()] + [("col", t) for t in C.collections()]
-    if not items:
-        return '<div class="app-empty app-soon"><p class="app-soon-line">Works arrive with the next index</p></div>'
-    feat_kind, feat_item = items[0]
-    rest = items[1:]
-    feat_html = _work_card(names, feat_item, feat=True) if feat_kind == "work" else _col_card(names, feat_item, feat=True)
-    grid = []
-    for kind, item in rest:
-        if kind == "work":
-            grid.append(_work_card(names, item, feat=False))
-        else:
-            grid.append(_col_card(names, item, feat=False))
-    body = f'<div class="app-feat-slot">{feat_html}</div>'
-    if grid:
-        body += f'<div class="app-grid">{"".join(grid)}</div>'
-    cov = C.coverage()
-    cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
-                f'Debit not checked.</p>')
-    return f'<div class="art-page">{body}{cov_line}</div>'
+    st = cat_stats if cat_stats is not None else C.stats()
+    asof = int(st.get("last") or 0)
+    feat_html = f'<div class="app-feat-slot">{_app_card(ATP721_APP, names, st, asof, feat=True)}</div>'
+    off = _off(qs)
+    total = C.collections_count()
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    cols = C.collections_offset(offset=off, limit=PAGE)
+    if not cols:
+        empty = (
+            '<div class="app-empty app-soon">'
+            '<p class="app-soon-line">Collections arrive with the next index</p>'
+            '</div>'
+        )
+        return f'<div class="art-page atp721-store">{feat_html}{empty}{cov_line}{_source("atp721")}</div>'
+    grid = "".join(_col_card(names, t, feat=False) for t in cols)
+    pg = pager(total, off, lambda o: _list_url("atp721", o))
+    return f'<div class="art-page atp721-store">{feat_html}<div class="tok-grid">{grid}</div>{pg}{cov_line}{_source("atp721")}</div>'
+
+
+def _art_stats(works):
+    memos = sum(int(w.get("parts") or 0) + (1 if w.get("seal_ts") else 0) for w in works)
+    addrs = {w.get("addr") for w in works if w.get("addr")}
+    times = [int(w.get("seal_ts") or 0) for w in works if w.get("seal_ts")]
+    last = max(times, default=0)
+    series = [0] * BARS
+    if last:
+        start = (last // DAY) * DAY - (BARS - 1) * DAY
+        for t in times:
+            i = (t - start) // DAY
+            if 0 <= i < BARS:
+                series[i] += 1
+    return dict(memos=memos, agents=len(addrs), last=last, series=series)
+
+
+def _art_list(names, qs=None, works=None):
+    if works is None:
+        from . import ac1art as R
+        works = R.works()
+    st = _art_stats(works)
+    asof = int(st.get("last") or 0)
+    feat_html = f'<div class="app-feat-slot">{_app_card(ART_APP, names, st, asof, feat=True)}</div>'
+    if not works:
+        empty = '<div class="app-empty app-soon"><p class="app-soon-line">Works arrive with the next index</p></div>'
+        return f'<div class="art-page">{feat_html}{empty}{_source("art")}</div>'
+    off = _off(qs)
+    total = len(works)
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    page_rows = works[off:off + PAGE]
+    grid = "".join(_work_card(names, w, feat=False) for w in page_rows)
+    pg = pager(total, off, lambda o: _list_url("art", o))
+    return f'<div class="art-page">{feat_html}<div class="app-grid">{grid}</div>{pg}{_source("art")}</div>'
 
 def warm_urls():
     """Collection, tick, and first pager pages the background warmer should keep, besides the tab roots in WARM.
@@ -1000,14 +1278,14 @@ def warm_urls():
             col = tok.get("col")
             if not col:
                 continue
-            add("/apps?tab=art&col=" + col)
+            add("/apps?tab=atp721&col=" + col)
             try:
                 total = C.units_count(col)
             except Exception:
                 total = int(tok.get("minted") or 0)
             pages = min((max(int(total or 0), 0) + PAGE - 1) // PAGE, 5)
             for i in range(1, pages):
-                add(f"/apps?tab=art&col={col}&offset={i * PAGE}")
+                add(f"/apps?tab=atp721&col={col}&offset={i * PAGE}")
     except Exception:
         pass
     try:
@@ -1035,39 +1313,51 @@ def warm_urls():
 def page_html(qs=None):
 
     from .views import page
+    from . import atp20 as _T, atp721 as _C, ac1art as _R
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""
-    col = _col(qs) if tab == "art" else ""
+    col = _col(qs) if tab == "atp721" else ""
     names = A.forum_names()
-    bundle = catalog_stats() if tab in ("games", "posts", "atp20") else dict(asof=0, games={})
-    if tab == "art":
-        from . import atp721 as _C
-        from . import ac1art as _R
-        try:
-            _C.ensure_fresh()
-        except Exception:
-            pass
-        try:
-            art_n = len(_R.works()) + _C.collections_count()
-        except Exception:
-            art_n = 0
-        bundle = dict(bundle, art_count=art_n)
+    bundle = catalog_stats()
+    try:
+        st20 = _T.stats()
+    except Exception:
+        st20 = dict(memos=0, agents=0, last=0, series=[0] * BARS)
+    try:
+        st721 = _C.stats()
+    except Exception:
+        st721 = dict(memos=0, agents=0, last=0, series=[0] * BARS)
+    try:
+        works = _R.works()
+    except Exception:
+        works = []
+    art_st = _art_stats(works)
+    total_writes = (
+        int((bundle.get("posts") or {}).get("memos") or 0)
+        + int((bundle.get("games_total") or {}).get("memos") or 0)
+        + int(st20.get("memos") or 0)
+        + int(st721.get("memos") or 0)
+        + int(art_st.get("memos") or 0)
+    )
     if tab == "games":
         body = _games_list(names, bundle)
         title = "Apps, games"
     elif tab == "atp20":
-        body = _atp20_list(names, tick, qs)
+        body = _atp20_list(names, tick, qs, cat_stats=st20)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
+    elif tab == "atp721":
+        body = _atp721_list(names, col, qs, cat_stats=st721)
+        title = "Apps, " + col if col else "Apps, ATP-721"
     elif tab == "art":
-        body = _art_list(names, col, qs)
-        title = "Apps, " + col if col else "Apps, art"
+        body = _art_list(names, qs, works=works)
+        title = "Apps, art"
     else:
         body = _posts_list(names, bundle, qs)
         title = "Apps"
-    head = _hero(bundle, tab)
     tabs = [(k, "/apps" if k == DEFAULT_TAB else "/apps?tab=" + k, lab, None) for k, lab in TABS]
-    mod = KIT.tabmod(tabs, tab, body, "", id="apps", label="Views")
-    return page(title, head + mod, "/apps")
+    toolbar = _bar_toolbar(total_writes)
+    mod = KIT.tabmod(tabs, tab, body, toolbar, id="apps", label="Views")
+    return page(title, '<h1 class="sr-only">Apps</h1>' + mod, "/apps")
 
 
 def page_route(qs=None):
