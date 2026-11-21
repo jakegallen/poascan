@@ -1617,3 +1617,32 @@ def page_html(qs=None):
 
 def page_route(qs=None):
     return page_html(qs)
+
+
+def art_items():
+    """Unique AC1 works mapped to the Apps card shape: {id, title, owner, image_ref, still_ref, seal}.
+    Only verified works (a raster that matched its on-chain sha256 seal) are listed."""
+    from . import ac1art as R
+    out = []
+    for w in R.works():
+        out.append(dict(
+            id=w.get("id"),
+            title=w.get("name"),
+            owner=w.get("addr"),
+            image_ref=w.get("gif"),
+            still_ref=w.get("still"),
+            seal=w.get("joined_sha"),
+            official=False,
+        ))
+    return out
+
+
+def http(path, qs):
+    """Unofficial Apps cross-surface read API (/api/apps/*). Raises ValueError for 400, LookupError for 404."""
+    from . import ac1art as R
+    if path == "/api/apps/art":
+        for k in (qs or {}):
+            if k not in ("limit",):
+                raise ValueError("unknown parameter")
+        return dict(official=False, official_note=R.OFFICIAL_NOTE, coverage=R.coverage(), art=art_items())
+    raise LookupError("unknown endpoint")
