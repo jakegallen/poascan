@@ -10,8 +10,7 @@ Assumptions (easy to change: ORDERING):
 - Deploy and mint must be self-transfers. The first valid deploy of a collection name wins.
 - A mint picks a unit number in 1..total. The first valid mint of that unit wins.
 - An address may hold at most max_per_addr units of a collection.
-- Fee debit in fee_tick (an ATP-20 tick) runs in the combined replay: a valid mint debits the
-  minter, burns burn_pct, and credits the rest to the deployer. A mint without the fee is ignored.
+- Fee debit in fee_tick (an ATP-20 tick) is not applied in this replay; coverage says so.
 - LIST / UNLIST / BUY and any other op are recorded and ignored.
 - Pending deploys do not reserve a name. Ownership is the last valid mint or transfer.
 - Figures are unofficial and may differ from other indexers.
@@ -37,10 +36,8 @@ OFFICIAL_NOTE = ("Unofficial replay of the ATP-721 memo convention. Ownership an
 ORDERING_NOTE = ("Replay sorts by (ts, id). The convention text names nonce at inclusion; "
                  "those keys are not in the public transfer list or in this archive, so this "
                  "follows the same practical order as unofficial ATP-20.")
-FEE_DEBIT = "minter"
-FEE_NOTE = ("On a valid mint, the fee in fee_tick is debited from the minter's unofficial ATP-20 "
-            "balance, burn_pct is burned, and the rest is credited to the collection deployer. "
-            "A mint whose minter lacks the fee is ignored (insufficient_fee_balance).")
+FEE_NOTE = ("Mint fee in fee_tick is not debited here. A mint that lacked the fee may still "
+            "count as valid in this replay.")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS atp721_ops(
@@ -53,8 +50,7 @@ CREATE INDEX IF NOT EXISTS atp721_ops_col ON atp721_ops(col, ts, txid);
 CREATE TABLE IF NOT EXISTS atp721_collections(
   col TEXT PRIMARY KEY, deployer TEXT, file_sha TEXT, mime TEXT, total INTEGER, fee TEXT,
   fee_tick TEXT, burn_pct INTEGER, burn_fee TEXT, max_per_addr INTEGER, title TEXT,
-  deploy_txid TEXT, deploy_ts INTEGER, minted INTEGER, holder_count INTEGER,
-  deployer_fees TEXT, fee_burned TEXT);
+  deploy_txid TEXT, deploy_ts INTEGER, minted INTEGER, holder_count INTEGER);
 CREATE TABLE IF NOT EXISTS atp721_units(
   col TEXT NOT NULL, unit INTEGER NOT NULL, addr TEXT NOT NULL, mint_txid TEXT, mint_ts INTEGER,
   last_txid TEXT, last_ts INTEGER, PRIMARY KEY(col, unit));
@@ -70,14 +66,6 @@ def init(conn=None):
     """Create tables. Called from db.init inside the write lock, or lazily."""
     c = conn or db.conn()
     c.executescript(SCHEMA)
-    names = {r[1] for r in c.execute("PRAGMA table_info(atp721_collections)")}
-    added = False
-    for col, typ in (("deployer_fees", "TEXT"), ("fee_burned", "TEXT")):
-        if col not in names:
-            c.execute(f"ALTER TABLE atp721_collections ADD COLUMN {col} {typ}")
-            added = True
-    if added and conn is None:
-        c.commit()
     _inited[0] = True
 
 
@@ -281,16 +269,134 @@ def backfill():
                           CAST(json_extract(d.json, '$.body.nonce') AS INTEGER) AS nonce
                    FROM txs t LEFT JOIN tx_detail d ON d.id = t.id
                    WHERE t.type='transfer' AND t.memo LIKE 'ATP-721|%'""")
-    n = ingest([dict(r) for r in rows], "backfill")
-    from . import atpreplay as AR
-    AR.ensure()
-    return n
+    return ingest([dict(r) for r in rows], "backfill")
 
 
 def replay():
-    """Rebuild collection and unit tables. Delegates to the combined ATP-20 plus ATP-721 replay."""
-    from . import atpreplay as AR
-    return AR.replay()
+    """Rebuild collection and unit tables from atp721_ops in (ts, id) order. Always a full replay."""
+    _ensure()
+    with _lock:
+        ops = [dict(r) for r in db.q("SELECT * FROM atp721_ops")]
+        ops.sort(key=sort_key)
+        cols, units, held = {}, {}, {}
+        results = []
+
+        for op in ops:
+            txid = op.get("txid")
+            if not int(op.get("final") or 0):
+                results.append((txid, None, "pending"))
+                continue
+            parsed, reason = parse_memo(op.get("memo"))
+            if reason or not parsed:
+                results.append((txid, 0, reason or "malformed"))
+                continue
+            kind, col = parsed["op"], parsed["col"]
+            fr, to = op.get("from_addr"), op.get("to_addr")
+            rec = cols.get(col)
+            if kind == "d":
+                if rec:
+                    results.append((txid, 0, "collection_already_deployed"))
+                    continue
+                if not _self(fr, to):
+                    results.append((txid, 0, "not_self_transfer"))
+                    continue
+                burn = burn_amount(parsed["fee"], parsed["burn_pct"])
+                cols[col] = dict(col=col, deployer=fr, file_sha=parsed["file_sha"], mime=parsed["mime"],
+                                 total=parsed["total"], fee=parsed["fee"], fee_tick=parsed["fee_tick"],
+                                 burn_pct=parsed["burn_pct"], burn_fee=str(burn) if burn is not None else None,
+                                 max_per_addr=parsed["max_per_addr"], title=parsed.get("title"),
+                                 deploy_txid=txid, deploy_ts=int(op.get("ts") or 0), minted=0)
+                held[col] = {}
+                results.append((txid, 1, None))
+                continue
+            if not rec:
+                results.append((txid, 0, "unknown_collection"))
+                continue
+            unit = parsed["unit"]
+            if unit < 1 or unit > int(rec["total"]):
+                results.append((txid, 0, "unit_range"))
+                continue
+            key = (col, unit)
+            if kind == "m":
+                if not _self(fr, to):
+                    results.append((txid, 0, "not_self_transfer"))
+                    continue
+                if key in units:
+                    results.append((txid, 0, "duplicate_unit"))
+                    continue
+                got = held[col].get(fr, 0)
+                if got >= int(rec["max_per_addr"]):
+                    results.append((txid, 0, "over_addr_cap"))
+                    continue
+                ts = int(op.get("ts") or 0)
+                units[key] = dict(col=col, unit=unit, addr=fr, mint_txid=txid, mint_ts=ts,
+                                  last_txid=txid, last_ts=ts)
+                held[col][fr] = got + 1
+                rec["minted"] += 1
+                results.append((txid, 1, None))
+                continue
+            if kind == "t":
+                if _self(fr, to):
+                    results.append((txid, 0, "self_transfer"))
+                    continue
+                cur = units.get(key)
+                if not cur or cur["addr"] != fr:
+                    results.append((txid, 0, "not_owner"))
+                    continue
+                got = held[col].get(to, 0)
+                if got >= int(rec["max_per_addr"]):
+                    results.append((txid, 0, "over_addr_cap"))
+                    continue
+                held[col][fr] = held[col].get(fr, 1) - 1
+                if held[col][fr] <= 0:
+                    held[col].pop(fr, None)
+                held[col][to] = got + 1
+                ts = int(op.get("ts") or 0)
+                cur["addr"] = to
+                cur["last_txid"] = txid
+                cur["last_ts"] = ts
+                results.append((txid, 1, None))
+                continue
+            results.append((txid, 0, "unknown_op"))
+
+        db.write("DELETE FROM atp721_collections")
+        db.write("DELETE FROM atp721_units")
+        if cols:
+            holders = {}
+            for (c, _u), u in units.items():
+                holders.setdefault(c, set()).add(u["addr"])
+            db.write("""INSERT INTO atp721_collections(col,deployer,file_sha,mime,total,fee,fee_tick,burn_pct,burn_fee,max_per_addr,title,deploy_txid,deploy_ts,minted,holder_count)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     [(t["col"], t["deployer"], t["file_sha"], t["mime"], t["total"], t["fee"], t["fee_tick"],
+                       t["burn_pct"], t.get("burn_fee"), t["max_per_addr"], t.get("title"), t["deploy_txid"],
+                       t["deploy_ts"], t["minted"], len(holders.get(t["col"]) or ()))
+                      for t in cols.values()], many=True)
+        if units:
+            db.write("""INSERT INTO atp721_units(col,unit,addr,mint_txid,mint_ts,last_txid,last_ts)
+              VALUES(?,?,?,?,?,?,?)""",
+                     [(u["col"], u["unit"], u["addr"], u["mint_txid"], u["mint_ts"], u["last_txid"], u["last_ts"])
+                      for u in units.values()], many=True)
+        if results:
+            db.write("UPDATE atp721_ops SET valid=?, reason=? WHERE txid=?",
+                     [(v, r, tid) for tid, v, r in results], many=True)
+        applied = sum(1 for _, v, _ in results if v == 1)
+        ignored = sum(1 for _, v, _ in results if v == 0)
+        pending = sum(1 for _, v, _ in results if v is None)
+        ts_vals = [int(o.get("ts") or 0) for o in ops if int(o.get("final") or 0) and o.get("ts")]
+        _put_state({
+            "ordering": ORDERING,
+            "fee_debit": "unchecked",
+            "applied": str(applied),
+            "ignored": str(ignored),
+            "pending": str(pending),
+            "collections": str(len(cols)),
+            "units": str(len(units)),
+            "first_ts": str(min(ts_vals) if ts_vals else 0),
+            "last_ts": str(max(ts_vals) if ts_vals else 0),
+            "replayed_at": str(int(time.time())),
+            "ops": str(len(ops)),
+        })
+        return dict(applied=applied, ignored=ignored, pending=pending, collections=len(cols))
 
 
 def _put_state(d):
@@ -316,7 +422,7 @@ def coverage():
         official_note=OFFICIAL_NOTE,
         ordering=st.get("ordering") or ORDERING,
         ordering_note=ORDERING_NOTE,
-        fee_debit=st.get("fee_debit") or FEE_DEBIT,
+        fee_debit=st.get("fee_debit") or "unchecked",
         fee_note=FEE_NOTE,
         applied=_i("applied"),
         ignored=_i("ignored"),
@@ -464,12 +570,10 @@ def _envelope(**extra):
 
 
 def ensure_fresh():
-    """Create tables and backfill once if this process has never replayed. Replays again if the fee rule changed."""
-    from . import atpreplay as AR
+    """Create tables and backfill once if this process has never replayed. Local database only."""
     _ensure()
     if not _get_state().get("replayed_at"):
         backfill()
-    AR.ensure()
 
 
 def _page_rows(rows, nxt):
@@ -516,6 +620,28 @@ def units_page(col, cursor=None, limit=LIMIT_DEFAULT):
         nxt = str(rows[limit - 1]["unit"])
         rows = rows[:limit]
     return rows, nxt
+
+
+def editions_page(col, cursor=None, limit=LIMIT_DEFAULT, image_ref=None):
+    """Every minted unit with its current owner and the collection art pointer:
+    {unit, owner, image_ref, mint_txid, mint_ts}. image_ref is the collection sha256 art digest
+    (ATP-721 references art by digest, it is not stored inline). Keyset-paged by unit ascending."""
+    ensure_fresh()
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    if cursor:
+        try:
+            unit = int(cursor[0])
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("bad cursor")
+        rows = db.q("SELECT unit, addr, mint_txid, mint_ts FROM atp721_units WHERE col=? AND unit>? ORDER BY unit LIMIT ?",
+                    (col, unit, limit + 1))
+    else:
+        rows = db.q("SELECT unit, addr, mint_txid, mint_ts FROM atp721_units WHERE col=? ORDER BY unit LIMIT ?",
+                    (col, limit + 1))
+    page = [dict(unit=r["unit"], owner=r["addr"], image_ref=image_ref,
+                 mint_txid=r["mint_txid"], mint_ts=r["mint_ts"], official=OFFICIAL) for r in rows[:limit]]
+    nxt = str(page[-1]["unit"]) if len(rows) > limit else None
+    return page, nxt
 
 
 def holders_page(col, cursor=None, limit=LIMIT_DEFAULT):
@@ -613,6 +739,15 @@ def http(path, qs):
             raise LookupError("unknown collection")
         rows, nxt = txs_page(col, _cursor(qs, 2), _limit(qs))
         return _envelope(collection=col, txs=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/editions$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        col = m.group(1)
+        tok = collection(col)
+        if tok is None:
+            raise LookupError("unknown collection")
+        rows, nxt = editions_page(col, _cursor(qs, 1), _limit(qs), image_ref=tok.get("file_sha"))
+        return _envelope(collection=col, editions=rows, next_cursor=nxt)
     if path.startswith("/api/atp721/"):
         raise LookupError("unknown endpoint")
     raise LookupError("unknown endpoint")
