@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.421] - 2026-11-21
+
+### Added
+- Unofficial ATP-721 editions and Apps art gallery API (#225).
+- Unofficial combined Apps activity feed and SSE catch-up (#226).
+- Unofficial Apps trending API (#227).
+- Unofficial Apps search API (#228).
+- Unofficial OG preview cards for ATP-20 tokens and ATP-721 collections at /apps/og/atp20/{tick} and /apps/og/atp721/{col} (#223).
+
 ## [1.26.420] - 2026-11-21
 
 ### Added
