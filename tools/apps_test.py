@@ -115,7 +115,7 @@ check("games tab uses inline SVG icon buttons, not Website/Post X/Telegram text"
       and ">Post X<" not in html_games and ">Telegram<" not in html_games)
 check("games tab has no catalog source line", "POAScan catalog." not in html_games)
 check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
-check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games)
+check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games and "/static/apps/proof-of-mass.png" in html_games)
 check("games link official sites and socials", "poadice.grok.me" in html_games and "cgtrivia.creativegrace.tech" in html_games and "x.com/DCTreeofLife" in html_games and "t.me/VaultGameHub" in html_games and "github.com/maximusmaximus/poa-dice" in html_games)
 check("games include POA Dice outbound host", "poadice.grok.me" in html_games and 'rel="noopener noreferrer"' in html_games)
 check("games have no wallet-connect or payment CTA",
@@ -125,6 +125,20 @@ check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games a
 import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
+_pom = _re.search(r'<article class="app-card"[^>]*data-app="proof-of-mass".*?</article>', html_games, _re.S)
+check("Proof of Mass is listed with no invented prefix",
+      "Proof of Mass" in html_games and "proof-of-mass" in html_games
+      and "mass.arwyn.party" in html_games
+      and "mass.arwyn.party/arena.html" in html_games
+      and "lableak/#/post/2995" in html_games
+      and "x.com/arwyn_official" not in html_games
+      and "/static/apps/proof-of-mass.png" in html_games)
+check("Proof of Mass hides empty memo stats",
+      bool(_pom) and "app-nums" not in _pom.group(0) and "None" not in _pom.group(0))
+check("Proof of Mass uses Live board, not a second Arena label",
+      bool(_pom) and ">Arena<" in _pom.group(0) and _pom.group(0).count(">Arena<") == 1
+      and "Live board" in _pom.group(0)
+      and "arena" not in (_pom.group(0).split("app-blurb",1)[-1].split("</p>",1)[0].lower()))
 check("no em or en dash in Apps HTML",
       all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
 check("version is 1.26.419", AG.VERSION == "1.26.419")

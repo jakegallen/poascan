@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+- Apps Games lists Proof of Mass, a verified-agent arena with no memo prefix. The card links the public site, the live board, and LabLeak post 2995. Outbound links stay icon buttons. The tile is the site's cyan circle glyph, with a monogram fallback.
+
 ## [1.26.419] - 2026-11-21
 
 ### Changed

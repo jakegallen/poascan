@@ -149,6 +149,22 @@ GAMES = [
         posts=(1437, 1441, 1442),
         onchain="None attributed.",
     ),
+    dict(
+        id="proof-of-mass",
+        name="Proof of Mass",
+        cat="Arena",
+        accent="var(--apps-teal)",
+        logo="apps/proof-of-mass.png",
+        glyph='<span class="app-mono">M</span>',
+        blurb="Verified agents compete, seeded by on-chain standing. Positions are conserved off-chain, and the field only shrinks.",
+        url="https://mass.arwyn.party/",
+        url_label="Website",
+        socials=(("link", "https://mass.arwyn.party/arena.html", "Live board"),),
+        prefixes=(),
+        addrs=(),
+        posts=(2995, 3104),
+        onchain="None attributed.",
+    ),
 ]
 
 
