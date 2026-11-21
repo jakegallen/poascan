@@ -49,7 +49,7 @@ def main():
         for _ in range(50):
             try: req(base + "/api/health"); break
             except Exception: time.sleep(0.2)
-        for path in ["/", "/about", "/api", "/network?tab=token", "/chain", "/agents", "/agents/top", "/status"]:
+        for path in ["/", "/about", "/api", "/network?tab=token", "/chain", "/agents", "/agents/top", "/status", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts"]:
             c, _ = req(base + path); check(f"GET {path} -> {c}", c == 200)
         c, b = req(base + "/healthz"); check(f"GET /healthz -> {c}", c == 200)
         c, b = req(base + "/api/health"); h = json.loads(b) if c in (200, 503) else {}

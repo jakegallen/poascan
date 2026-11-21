@@ -447,6 +447,10 @@ check("version is 1.26.410 and the changelog records it",
 check("version is 1.26.411 and the changelog records it",
       _ver >= (1, 26, 411) and "## [1.26.411]" in cl and "/api/v1/atp20" in cl
       and not any(ch in cl.split("## [1.26.411]")[1].split("## [")[0] for ch in dash))
+check("version is 1.26.412 and the changelog records it",
+      _ver >= (1, 26, 412) and "## [1.26.412]" in cl and "/apps" in cl
+      and "wallet-connect" in cl
+      and not any(ch in cl.split("## [1.26.412]")[1].split("## [")[0] for ch in dash))
 check("1.26.318 changelog entry is still present", "## [1.26.318]" in cl and "Answer pay" in cl)
 
 # minted series continuity: both closes still have minted, so a minted-vs-burned chart has no gap

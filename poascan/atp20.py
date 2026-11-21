@@ -586,6 +586,37 @@ def ensure_fresh():
         backfill()
 
 
+def tokens_count():
+    ensure_fresh()
+    rows = db.q("SELECT COUNT(*) AS n FROM atp20_tokens")
+    return int((rows[0]["n"] if rows else 0) or 0)
+
+
+def tokens_offset(offset=0, limit=LIMIT_DEFAULT):
+    """The token list in deploy order, 20 at a time, for the shared offset pager."""
+    ensure_fresh()
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    offset = max(0, int(offset or 0))
+    rows = db.q("SELECT * FROM atp20_tokens ORDER BY deploy_ts ASC, tick ASC LIMIT ? OFFSET ?", (limit, offset))
+    return [_token_row(r) for r in rows]
+
+
+def holders_offset(tick, offset=0, limit=LIMIT_DEFAULT):
+    """Holders of a tick, largest balance first, 20 at a time, for the shared offset pager."""
+    ensure_fresh()
+    if not TICK_RE.fullmatch(tick or ""):
+        raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
+    if token(tick) is None:
+        raise LookupError("unknown tick")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    offset = max(0, int(offset or 0))
+    rows = db.q("SELECT tick, addr, amount, mint_count FROM atp20_balances "
+                "WHERE tick=? AND CAST(amount AS INTEGER) > 0 "
+                "ORDER BY CAST(amount AS INTEGER) DESC, addr ASC LIMIT ? OFFSET ?",
+                (tick, limit, offset))
+    return [_bal_row(r) for r in rows]
+
+
 def tokens_page(cursor=None, limit=LIMIT_DEFAULT):
     ensure_fresh()
     limit = max(1, min(LIMIT_MAX, int(limit)))

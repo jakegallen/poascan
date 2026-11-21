@@ -790,7 +790,7 @@ window.poaRows={cap:rowcap,even:even}})();
    click, or any error: the link just loads. Reduced motion swaps with no fade. */
 (function(){var D=document,W=window,K=W.poaKit||{},RM=!!K.rm,busy=0;
 function mod(){return D.querySelector('.kit-mod[data-kit="tabs"]')}
-function after(m){if(K.lt)K.lt(m);if(K.tips)K.tips();if(W.poaRows){W.poaRows.cap();W.poaRows.even()}
+function after(m){if(K.lt)K.lt(m);if(K.tips)K.tips();if(K.apps)K.apps();if(W.poaRows){W.poaRows.cap();W.poaRows.even()}
 }
 function swap(url,push){var m=mod();if(!m||busy)return false;busy=1;var body=m.querySelector(".kit-body"),tools=m.querySelector(".kit-tools"),h=body.offsetHeight;
  var tm=setTimeout(function(){m.classList.add("kit-busy")},160);
@@ -817,3 +817,28 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
 function cu(){D.querySelectorAll("[data-cu]").forEach(function(n){var v=+n.getAttribute("data-cu");n.removeAttribute("data-cu");if(RM||!(v>0))return;var t0=null,d=900;
  function f(t){if(t0===null)t0=t;var p=Math.min(1,(t-t0)/d),q=1-Math.pow(1-p,3);n.textContent=Math.round(v*q).toLocaleString("en-US");if(p<1)W.requestAnimationFrame(f)}W.requestAnimationFrame(f)})}
 cu()})();
+
+/* Apps storefront: cycle the featured card through live catalog entries. Reduced motion keeps the first. */
+(function(){var D=document,W=window,t=null,paused=0,idx=0,root=null,timer=null;
+function stop(){if(t){clearInterval(t);t=null}}
+function start(){stop();if(!root)return;t=W.setInterval(tick,8000)}
+function count(){var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ D.querySelectorAll(".appshero [data-cu], .app-store [data-cu]").forEach(function(n){var v=+n.getAttribute("data-cu");n.removeAttribute("data-cu");if(RM||!(v>0))return;var t0=null,d=900;
+  function f(t){if(t0===null)t0=t;var p=Math.min(1,(t-t0)/d),q=1-Math.pow(1-p,3);n.textContent=Math.round(v*q).toLocaleString("en-US");if(p<1)W.requestAnimationFrame(f)}W.requestAnimationFrame(f)})}
+function tick(){if(paused||!root)return;var slot=root.querySelector(".app-feat-slot"),grid=root.querySelector(".app-grid");if(!slot||!grid)return;
+ var order=(root.getAttribute("data-order")||"").trim().split(/\s+/).filter(Boolean);if(order.length<2)return;
+ idx=(idx+1)%order.length;var id=order[idx],cur=slot.querySelector(".app-card"),nxt=grid.querySelector('.app-card[data-app="'+id+'"]');if(!nxt)return;
+ var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ function put(){if(cur)grid.appendChild(cur);slot.appendChild(nxt);slot.classList.remove("xfade");count()}
+ if(RM)put();else{slot.classList.add("xfade");clearTimeout(timer);timer=W.setTimeout(put,280)}}
+function bind(){stop();root=D.querySelector(".app-store[data-apps-rotate]");count();if(!root)return;
+ var order=(root.getAttribute("data-order")||"").trim().split(/\s+/).filter(Boolean);
+ var feat=root.querySelector(".app-feat-slot .app-card");idx=feat?Math.max(0,order.indexOf(feat.getAttribute("data-app"))):0;
+ if(order.length<2)return;
+ var RM=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;if(RM)return;
+ root.addEventListener("mouseenter",function(){paused=1});root.addEventListener("mouseleave",function(){paused=0});
+ root.addEventListener("focusin",function(){paused=1});root.addEventListener("focusout",function(){paused=0});
+ start()}
+W.poaKit=W.poaKit||{};W.poaKit.apps=bind;
+D.addEventListener("visibilitychange",function(){if(D.hidden)stop();else if(root)start()});
+bind()})();

@@ -24,6 +24,7 @@ from . import addrlight as AL
 from . import apitel as APT
 from . import apisamples as ASM
 from . import agentshub as AH
+from . import apps as AP
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 ROOT_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"), "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -557,6 +558,7 @@ def page(path, qs):
     if path == "/agents/census": return AH.census_page(tab, qs)
     if path == "/agents/community": return AH.community(tab, qs)
     if path == "/network": return V.network(tab, (qs.get("range") or [""])[0])
+    if path == "/apps": return AP.page_route(qs)
     if path == "/agents": return AH.top_page("", qs)
     routes = {"/agents/operators": AH.operators, "/about": V.about, "/privacy": V.privacy}
     if path in routes: return routes[path]()
@@ -578,6 +580,7 @@ HC.register_tabs("/governance", [k for k, _ in GV.TABS])
 HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
 HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
 HC.register_tabs("/agents/census", ["journey", "rates"])
+HC.register_tabs("/apps", [k for k, _ in AP.TABS])
 HC.LATEST_EPOCH = lambda: max((int(r["epoch"]) for r in A.epoch_rows()), default=None)   # 1.26.405: the warm pass also keeps the latest closed epoch pages
 # 1.26.288 (P0): the page a human gets when every slot is held and no copy of the page is stored. Self-contained (no
 # DB, no render, no request), reloads itself; the API and MCP keep the plain text 503 their clients parse.
@@ -620,7 +623,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
