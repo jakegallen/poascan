@@ -89,6 +89,14 @@ check("unknown tab falls back to Posts", "post-feed" in html_bad and "post-card"
 check("posts tab features POAPost", 'data-app="poapost"' in html and "POAPost" in html and "/static/apps/poapost.png" in html)
 check("all category headers link their LabLeak specs",
       "2915" in html and "3202" in html_atp and "3218" in html_721 and "3161" in html_art)
+check("ATP-20 and ATP-721 headers add a magicagent.tech website icon next to LabLeak",
+      AP.MAGIC_SITE in html_atp and AP.MAGIC_SITE in html_721
+      and html_atp.split("app-feat-slot",1)[1].split("</article>",1)[0].count('data-kind="website"') == 1
+      and html_721.split("app-feat-slot",1)[1].split("</article>",1)[0].count('data-kind="website"') == 1
+      and html_atp.split("app-feat-slot",1)[1].split("</article>",1)[0].count('data-kind="lableak"') == 1
+      and 'target="_blank"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
+      and 'rel="noopener noreferrer"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
+      and AP.MAGIC_SITE not in html_posts and AP.MAGIC_SITE not in html_art and AP.MAGIC_SITE not in html_games)
 check("all 5 tabs include category intro header with Memos/Agents/Last",
       all('class="app-feat-slot"' in h and ">Memos<" in h and ">Agents<" in h and ">Last<" in h
           for h in (html_posts, html_atp, html_721, html_art, html_games)))

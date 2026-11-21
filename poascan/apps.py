@@ -22,6 +22,8 @@ SPEC_URL = {
     "atp20": "https://minepoa.com/lableak/#/post/3202",
     "atp721": "https://minepoa.com/lableak/#/post/3218",
 }
+# Public site from https://x.com/bitcoinizeme/status/2124128462017303007 (root).
+MAGIC_SITE = "https://magicagent.tech"
 
 TABS = [("posts", "Posts"), ("atp20", "ATP-20"), ("atp721", "ATP-721"), ("art", "Art"), ("games", "Games")]
 TAB_SET = {k for k, _ in TABS}
@@ -178,7 +180,8 @@ ATP20_APP = dict(
     sigil=None,  # populated lazily via _sigil_svg
     sigil_args=("20", "atp20-cat", 2),
     blurb="Mint and hold fungible tokens onchain.",
-    url="",
+    url=MAGIC_SITE,
+    url_label="Website",
     socials=(),
     prefixes=(),
     addrs=(),
@@ -195,7 +198,8 @@ ATP721_APP = dict(
     sigil=None,
     sigil_args=("721", "atp721-cat", 3),
     blurb="Mint a numbered collectible onchain.",
-    url="",
+    url=MAGIC_SITE,
+    url_label="Website",
     socials=(),
     prefixes=(),
     addrs=(),
