@@ -103,6 +103,8 @@ jobs:
         run: python tools/ac1art_test.py
       - name: Unofficial Apps tab
         run: python tools/apps_test.py
+      - name: Apps tab snapshots (pinned stale copies, no request-path art backfill)
+        run: python tools/appspin_test.py
       - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
         run: python tools/earn_test.py
       - name: Pay by channel (E76 Answer pay and Grading pay from published fields only; null and Split pending when unpublished; never inferred)
