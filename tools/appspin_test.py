@@ -103,6 +103,9 @@ chunk = src[idx:idx + 800] if idx >= 0 else ""
 ok(idx >= 0 and "IMMUTABLE" in chunk and "max-age=3600" not in chunk,
    "art rasters are served with the long immutable cache header")
 ok(SV.IMMUTABLE == "public, max-age=31536000, immutable", "IMMUTABLE is a year-long immutable policy")
+ok("/apps/memo-img/" in src and "AP.memo_raster" in src and src.count('startswith("/apps/memo-img/")') >= 2,
+   "memo image route is slot-free and uses memo_raster")
+ok("img-src 'self' data:" in SV.CSP, "CSP allows data images; the memo route is still same-origin")
 
 ok(AG.VERSION == "1.26.415", "version is 1.26.415")
 cl = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "CHANGELOG.md"), encoding="utf-8").read()

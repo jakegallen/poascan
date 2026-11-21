@@ -1,7 +1,7 @@
 """Unofficial Apps tab (1.26.415): /apps shell, escaped AC1 posts, ATP-20 list,
 third-party games catalog. No art rasters, no indexer calls, no em or en dashes.
 Usage: python3 tools/apps_test.py"""
-import json, os, sys, tempfile, copy
+import base64, json, os, sys, tempfile, copy
 from html import escape as E
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "s.db"), POASCAN_INDEXER="0",
                   POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
@@ -155,6 +155,57 @@ check("collection unit table names the Agent column", ">Agent</" in html_col or 
 html_col2 = AP.page_html({"tab": ["art"], "col": ["DEMO-ART"], "offset": ["20"]})
 check("collection second page stays at the shared cap", "21 to 25 of 25" in html_col2 and "Prev" in html_col2)
 
+# ---- raster data-URI memos in Posts: pixelated image, never a base64 wall ----
+GIF1 = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+PNG1 = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+# RIFF/WEBP magic only, well under the size cap (not a full decoder test)
+WEBP1 = b"RIFF" + (12).to_bytes(4, "little") + b"WEBP" + b"VP8L" + b"\x00" * 8
+SVG = "data:image/svg+xml;base64,PHN2Zy8+"
+JPEG = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff" + b"x" * 20).decode()
+BADMAGIC = "data:image/gif;base64," + base64.b64encode(b"NOTGIF" + b"x" * 20).decode()
+HUGE = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"x" * (AP.MEMO_IMG_MAX + 8)).decode()
+
+def uri(kind, raw):
+    return "data:image/" + kind + ";base64," + base64.b64encode(raw).decode()
+
+g = AP.memo_image(uri("gif", GIF1))
+check("gif data URI is accepted and magic-checked", g and g["ok"] is True and g["mime"] == "image/gif" and g["raw"][:6] in (b"GIF87a", b"GIF89a"))
+pimg = AP.memo_image(uri("png", PNG1))
+check("png data URI is accepted", pimg and pimg["ok"] is True and pimg["mime"] == "image/png")
+wimg = AP.memo_image(uri("webp", WEBP1))
+check("webp data URI is accepted when magic matches", wimg and wimg["ok"] is True and wimg["mime"] == "image/webp")
+check("ordinary text is not an image memo", AP.memo_image("hello from a post") is None)
+check("SVG data URI is refused", AP.memo_image(SVG) == dict(ok=False) or (AP.memo_image(SVG) or {}).get("ok") is False)
+check("JPEG data URI is refused", (AP.memo_image(JPEG) or {}).get("ok") is False)
+check("wrong magic is refused", (AP.memo_image(BADMAGIC) or {}).get("ok") is False)
+check("oversize raster is refused", (AP.memo_image(HUGE) or {}).get("ok") is False)
+
+IMG_TS = 1795300000
+load(
+    row(500, "AC1|t|" + uri("gif", GIF1), A, ts=IMG_TS),
+    row(501, "AC1|t|" + uri("png", PNG1), A, ts=IMG_TS - 1),
+    row(502, "AC1|t|" + SVG, A, ts=IMG_TS - 2),
+    row(503, "AC1|t|" + JPEG, A, ts=IMG_TS - 3),
+)
+html_img = AP.page_html({"tab": ["posts"]})
+gif_id, png_id, svg_id = tid(500), tid(501), tid(502)
+check("valid gif memo renders as a pixelated image route",
+      f'/apps/memo-img/{gif_id}' in html_img and "post-pix" in html_img and "art-pix-anim" in html_img)
+check("valid png memo uses the cached image route", f'/apps/memo-img/{png_id}' in html_img)
+check("image memos never appear as raw base64 text",
+      "data:image/gif;base64," not in html_img and "data:image/png;base64," not in html_img
+      and "data:image/svg+xml" not in html_img and "data:image/jpeg;base64," not in html_img
+      and "AAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" not in html_img)
+check("invalid image memos show an Image chip",
+      html_img.count(">Image</span>") >= 1 and f'/apps/memo-img/{svg_id}' not in html_img)
+blob = AP.memo_raster(gif_id)
+check("memo raster is served from the snapshot cache", blob and blob[0] == GIF1 and blob[1] == "image/gif")
+still = AP.memo_raster(gif_id, still=True)
+check("memo still is cached too", still and still[0][:6] in (b"GIF87a", b"GIF89a"))
+check("unknown memo image is a miss", AP.memo_raster("0" * 64) is None)
+check("games list has no data URI wall", "data:image/" not in html_games)
+check("ATP-20 list has no data URI wall", "data:image/" not in html_atp)
+check("art tab has no raw data URI wall", "data:image/" not in html_art and "data:image/" not in html_art2)
 
 if fails:
     print("FAILED:"); [print(" -", x) for x in fails]; sys.exit(1)
