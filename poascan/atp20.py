@@ -301,16 +301,131 @@ def backfill():
                           CAST(json_extract(d.json, '$.body.nonce') AS INTEGER) AS nonce
                    FROM txs t LEFT JOIN tx_detail d ON d.id = t.id
                    WHERE t.type='transfer' AND t.memo LIKE 'ATP-20|%'""")
-    n = ingest([dict(r) for r in rows], "backfill")
-    from . import atpreplay as AR
-    AR.ensure()
-    return n
+    return ingest([dict(r) for r in rows], "backfill")
 
 
 def replay():
-    """Rebuild token and balance tables. Delegates to the combined ATP-20 plus ATP-721 replay."""
-    from . import atpreplay as AR
-    return AR.replay()
+    """Rebuild token and balance tables from atp20_ops in sort_key order. Always a full replay (cheap at current size)."""
+    _ensure()
+    with _lock:
+        ops = [dict(r) for r in db.q("SELECT * FROM atp20_ops")]
+        ops.sort(key=sort_key)
+        tokens, bals, mints = {}, {}, {}
+        results = []  # (txid, valid, reason)
+
+        def bal(tick, addr):
+            return bals.get((tick, addr), 0)
+
+        def add(tick, addr, delta):
+            k = (tick, addr)
+            n = bals.get(k, 0) + delta
+            if n < 0:
+                return False
+            if n == 0:
+                bals.pop(k, None)
+            else:
+                bals[k] = n
+            return True
+
+        for op in ops:
+            txid = op.get("txid")
+            if not int(op.get("final") or 0):
+                results.append((txid, None, "pending"))
+                continue
+            if _slot_superseded(txid, op.get("from_addr"), op.get("nonce")):
+                results.append((txid, 0, "superseded")); continue
+            parsed, reason = parse_memo(op.get("memo"))
+            if reason or not parsed:
+                results.append((txid, 0, reason or "malformed")); continue
+            kind, tick = parsed["op"], parsed["tick"]
+            fr, to = op.get("from_addr"), op.get("to_addr")
+            tok = tokens.get(tick)
+            if kind == "d":
+                if tok:
+                    results.append((txid, 0, "tick_already_deployed")); continue
+                if not _self(fr, to):
+                    results.append((txid, 0, "not_self_transfer")); continue
+                tokens[tick] = dict(tick=tick, deployer=fr, max_supply=parsed["max_supply"],
+                                    decimals=parsed["decimals"], meta_cid=parsed.get("meta_cid"),
+                                    mint_auth=parsed.get("mint_auth") or "deployer",
+                                    deploy_txid=txid, deploy_ts=int(op.get("ts") or 0), minted=0, burned=0)
+                results.append((txid, 1, None)); continue
+            if not tok:
+                results.append((txid, 0, "unknown_tick")); continue
+            if kind in ("m", "b") and not _self(fr, to):
+                results.append((txid, 0, "not_self_transfer")); continue
+            if kind == "t" and _self(fr, to):
+                results.append((txid, 0, "self_transfer")); continue
+            amt = int(parsed["amt"])
+            if kind == "m":
+                auth = parse_auth(tok.get("mint_auth"))
+                if auth is None:
+                    results.append((txid, 0, "bad_mint_auth")); continue
+                if auth[0] == "deployer" and fr != tok["deployer"]:
+                    results.append((txid, 0, "mint_not_authorized")); continue
+                if auth[0] == "open" and len(auth) == 3:
+                    per, cap = auth[1], auth[2]
+                    if amt != per:
+                        results.append((txid, 0, "mint_amount")); continue
+                    if mints.get((tick, fr), 0) >= cap:
+                        results.append((txid, 0, "mint_cap")); continue
+                if tok["minted"] + amt > int(tok["max_supply"]):
+                    results.append((txid, 0, "mint_overflow")); continue
+                add(tick, fr, amt)
+                tok["minted"] += amt
+                mints[(tick, fr)] = mints.get((tick, fr), 0) + 1
+                results.append((txid, 1, None)); continue
+            if kind == "t":
+                if bal(tick, fr) < amt:
+                    results.append((txid, 0, "insufficient_balance")); continue
+                add(tick, fr, -amt)
+                add(tick, to, amt)
+                results.append((txid, 1, None)); continue
+            if kind == "b":
+                acct = burn_account(op, tok)
+                if not acct:
+                    results.append((txid, 0, "burn_no_account")); continue
+                if bal(tick, acct) < amt:
+                    results.append((txid, 0, "insufficient_balance")); continue
+                add(tick, acct, -amt)
+                tok["burned"] += amt
+                results.append((txid, 1, None)); continue
+            results.append((txid, 0, "unknown_op"))
+
+        db.write("DELETE FROM atp20_tokens")
+        db.write("DELETE FROM atp20_balances")
+        if tokens:
+            holders = {}
+            for (tick, addr), n in bals.items():
+                holders[tick] = holders.get(tick, 0) + 1
+            db.write("""INSERT INTO atp20_tokens(tick,deployer,max_supply,decimals,meta_cid,mint_auth,deploy_txid,deploy_ts,minted,burned,holder_count)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                     [(t["tick"], t["deployer"], t["max_supply"], t["decimals"], t.get("meta_cid"), t.get("mint_auth"),
+                       t["deploy_txid"], t["deploy_ts"], str(t["minted"]), str(t["burned"]), holders.get(t["tick"], 0))
+                      for t in tokens.values()], many=True)
+        if bals:
+            db.write("INSERT INTO atp20_balances(tick,addr,amount,mint_count) VALUES(?,?,?,?)",
+                     [(tick, addr, str(n), int(mints.get((tick, addr), 0))) for (tick, addr), n in bals.items()], many=True)
+        if results:
+            db.write("UPDATE atp20_ops SET valid=?, reason=? WHERE txid=?",
+                     [(v, r, tid) for tid, v, r in results], many=True)
+        applied = sum(1 for _, v, _ in results if v == 1)
+        ignored = sum(1 for _, v, _ in results if v == 0)
+        pending = sum(1 for _, v, _ in results if v is None)
+        ts_vals = [int(o.get("ts") or 0) for o in ops if int(o.get("final") or 0) and o.get("ts")]
+        _put_state({
+            "ordering": ORDERING,
+            "burn": BURN_DEBIT,
+            "applied": str(applied),
+            "ignored": str(ignored),
+            "pending": str(pending),
+            "tokens": str(len(tokens)),
+            "first_ts": str(min(ts_vals) if ts_vals else 0),
+            "last_ts": str(max(ts_vals) if ts_vals else 0),
+            "replayed_at": str(int(time.time())),
+            "ops": str(len(ops)),
+        })
+        return dict(applied=applied, ignored=ignored, pending=pending, tokens=len(tokens))
 
 
 def _put_state(d):
@@ -448,6 +563,19 @@ LIMIT_DEFAULT = 20
 LIMIT_MAX = 200
 _QS_PAGE = {"cursor", "limit", "format"}
 _QS_NONE = {"format"}
+_QS_TXS = _QS_PAGE | {"op"}
+# op= filter on /txs: human name to the stored opcode (deploy is not a filter choice)
+_TXS_OPS = {"mint": "m", "transfer": "t", "burn": "b"}
+
+
+def _op_filter(qs, allowed):
+    v = ((qs or {}).get("op") or [""])[0].strip()
+    if not v:
+        return None
+    code = allowed.get(v)
+    if code is None:
+        raise ValueError("op must be one of " + ", ".join(sorted(allowed)))
+    return code
 
 
 def _limit(qs):
@@ -484,12 +612,10 @@ def _envelope(**extra):
 
 
 def ensure_fresh():
-    """Create tables and backfill once if this process has never replayed. Replays again if the fee rule changed."""
-    from . import atpreplay as AR
+    """Create tables and backfill once if this process has never replayed. Local database only."""
     _ensure()
     if not _get_state().get("replayed_at"):
         backfill()
-    AR.ensure()
 
 
 def tokens_count():
@@ -556,8 +682,9 @@ def holders_page(tick, cursor=None, limit=LIMIT_DEFAULT):
     return page, nxt
 
 
-def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT):
-    """Final ops for a tick, newest first, including ignored ones (valid=0 and reason). Pending ops are on /pending."""
+def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT, op=None):
+    """Final ops for a tick, newest first, including ignored ones (valid=0 and reason). Pending ops are on /pending.
+    op, when given, is a stored opcode (m, t, b) to filter to that kind only."""
     ensure_fresh()
     if not TICK_RE.fullmatch(tick or ""):
         raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
@@ -565,6 +692,9 @@ def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT):
         raise LookupError("unknown tick")
     limit = max(1, min(LIMIT_MAX, int(limit)))
     w, a = "tick=? AND final=1", [tick]
+    if op:
+        w += " AND op=?"
+        a.append(op)
     if cursor:
         ts, txid = cursor
         w += " AND (ts < ? OR (ts = ? AND txid < ?))"
@@ -618,9 +748,9 @@ def http(path, qs):
         return _envelope(tick=tick, holders=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})/txs$", path)
     if m:
-        _params(qs, _QS_PAGE)
+        _params(qs, _QS_TXS)
         tick = m.group(1)
-        rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs))
+        rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs), _op_filter(qs, _TXS_OPS))
         return _envelope(tick=tick, txs=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp20/pending/([A-Z0-9]{3,12})$", path)
     if m:

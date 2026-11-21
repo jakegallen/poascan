@@ -105,6 +105,20 @@ check("ignored wrong-amount mint is in the txs list with a reason",
 all_tx = tx["txs"] + tx2["txs"]
 check("txs are newest first", all(all_tx[i]["ts"] >= all_tx[i+1]["ts"] for i in range(len(all_tx) - 1)))
 
+# ---- op= filter: mint (23 mint ops incl ignored), no transfers or burns, deploy excluded ----
+mt = api("/api/v1/atp20/token/MAM/txs", op="mint")
+mt2 = api("/api/v1/atp20/token/MAM/txs", op="mint", cursor=mt["next_cursor"])
+mints = mt["txs"] + mt2["txs"]
+check("op=mint returns only mint ops and all 23 of them",
+      len(mints) == 23 and mt2["next_cursor"] is None and all(r["op"] == "m" for r in mints)
+      and tid(3) not in [r["txid"] for r in mints])
+check("op=transfer returns an empty page with no cursor",
+      api("/api/v1/atp20/token/MAM/txs", op="transfer") == api("/api/v1/atp20/token/MAM/txs", op="transfer")
+      and len(api("/api/v1/atp20/token/MAM/txs", op="transfer")["txs"]) == 0
+      and api("/api/v1/atp20/token/MAM/txs", op="transfer")["next_cursor"] is None)
+check("op=burn is accepted (valid name) and empty here", len(api("/api/v1/atp20/token/MAM/txs", op="burn")["txs"]) == 0)
+check("unknown op value is 400", "op must be one of" in expect_bad("/api/v1/atp20/token/MAM/txs", op="swap"))
+
 # ---- pending ----
 pend = api("/api/v1/atp20/pending/MAM")
 check("pending lists the unfinalized mint only",
