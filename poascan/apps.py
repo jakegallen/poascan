@@ -1946,7 +1946,8 @@ def http(path, qs):
         for k in (qs or {}):
             if k not in ():
                 raise ValueError("unknown parameter")
-        return trending()    if path == "/api/apps/art":
+        return trending()
+    if path == "/api/apps/art":
         for k in (qs or {}):
             if k not in ("limit",):
                 raise ValueError("unknown parameter")
