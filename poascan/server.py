@@ -1642,6 +1642,12 @@ class H(BaseHTTPRequestHandler):
                     d["lite"] = True
                 if path == "/api/summary" and not lite: hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **hd))
+            if self._norm() == "/api/apps/feed/stream":
+                # Emit-and-close SSE catch-up (poll/reconnect style): never holds a request slot open.
+                leid = self.headers.get("Last-Event-ID")
+                body = AP.feed_sse(qs, leid)
+                return self.send(200, body, "text/event-stream; charset=utf-8",
+                                 {"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*", "X-Accel-Buffering": "no"})
             if path.startswith("/art/raster/"):
                 from . import ac1art as _ART
                 m = re.fullmatch(r"/art/raster/([0-9a-f]{8,32})(/still)?", path)
