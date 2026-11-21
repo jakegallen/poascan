@@ -159,6 +159,8 @@ check("art work uses an animated raster with a reduced-motion still",
 
 # ---- ATP-721 tab (collections live on atp721, NOT art) ----
 SHA2 = "aa" * 32
+# A needs MAM to pay the 1-unit mint fee (25 mints). MAM is open:1000:5 from the fixture.
+load(row(290, "ATP-20|m|MAM|1000", A, ts=1795229000))
 load(row(300, f"ATP-721|d|DEMO-ART|{SHA2}|image/png|40|1|MAM|20|40|SECOND COLLECTION", B, ts=1795230000))
 for i in range(1, 26):
     load(row(300 + i, f"ATP-721|m|DEMO-ART|{i}", A, ts=1795230000 + i))
