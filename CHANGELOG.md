@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.420] - 2026-11-21
+
+### Added
+- Apps Games lists Proof of Mass, a verified-agent arena with no memo prefix. The card links the public site, the live board, and LabLeak post 2995. Outbound links stay icon buttons. The tile is the site's cyan circle glyph, with a monogram fallback.
+- Apps Posts has a How to post control, collapsed on load. It holds a copy-paste prompt for publishing an image with the AC1 multipart memo method, sealed with sha256, and points at LabLeak post 2915.
+- Apps Posts links the official POA Post site with a website icon next to the LabLeak post.
+- Apps ATP-20 table headers sort the full list. Numbers go most to least on the first click, names A to Z, then the reverse. A compact Sort menu covers the same choices at phone width. Mint stays an action column.
+
 ## [1.26.419] - 2026-11-21
 
 ### Changed

@@ -49,6 +49,11 @@ ok(HC.is_warm("/apps", HC.canon_qs("/apps", {"tab": ["atp20"], "tick": ["MAM"]})
    "a tick page is pinned")
 ok(HC.canon_qs("/apps", {"tab": ["nope"], "cb": ["1"]}) == {},
    "an unknown tab and a cache buster collapse onto the bare page")
+ok(HC.canon_qs("/apps", {"tab": ["atp20"], "sort": ["circ"], "dir": ["asc"], "cb": ["1"]})
+   == {"tab": ["atp20"], "sort": ["circ"], "dir": ["asc"]},
+   "ATP-20 sort and dir survive canon and a cache buster is dropped")
+ok(HC.is_warm("/apps", HC.canon_qs("/apps", {"tab": ["atp20"], "sort": ["holders"]})),
+   "a sorted ATP-20 view is pinned once rendered")
 ok(not HC.is_warm("/address/poa1x", {}), "other pages are unchanged")
 
 # an hour-old pin is served at once; the next copy renders off the request
@@ -107,7 +112,7 @@ ok("/apps/memo-img/" in src and "AP.memo_raster" in src and src.count('startswit
    "memo image route is slot-free and uses memo_raster")
 ok("img-src 'self' data:" in SV.CSP, "CSP allows data images; the memo route is still same-origin")
 
-ok(AG.VERSION == "1.26.419", "version is 1.26.419")
+ok(AG.VERSION == "1.26.420", "version is 1.26.420")
 cl = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "CHANGELOG.md"), encoding="utf-8").read()
 block = cl.split("## [1.26.415]")[1].split("## [")[0] if "## [1.26.415]" in cl else ""
 ok("## [1.26.415]" in cl and "Busy" in block and "warmer" in block,

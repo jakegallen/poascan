@@ -97,6 +97,20 @@ check("ATP-20 and ATP-721 headers add a magicagent.tech website icon next to Lab
       and 'target="_blank"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
       and 'rel="noopener noreferrer"' in html_atp.split("app-feat-slot",1)[1].split('data-kind="website"',1)[1].split(">",1)[0]
       and AP.MAGIC_SITE not in html_posts and AP.MAGIC_SITE not in html_art and AP.MAGIC_SITE not in html_games)
+# Official POA Post URL (Jake, 21 Nov 2026, t729u: "Use anyway"): allowlist this host only.
+_posts_feat = html_posts.split("app-feat-slot",1)[1].split("</article>",1)[0]
+_posts_web = _posts_feat.split('data-kind="website"',1)[1].split(">",1)[0]
+check("Posts header adds the official POA Post website icon next to LabLeak",
+      AP.POAPOST_SITE in html_posts and AP.POAPOST_SITE in _posts_feat
+      and _posts_feat.count('data-kind="website"') == 1
+      and _posts_feat.count('data-kind="lableak"') == 1
+      and _posts_feat.index('data-kind="website"') < _posts_feat.index('data-kind="lableak"')
+      and 'aria-label="Website: POA Post"' in _posts_web
+      and 'title="Website: POA Post"' in _posts_web
+      and 'target="_blank"' in _posts_web
+      and 'rel="noopener noreferrer"' in _posts_web
+      and AP.POAPOST_SITE not in html_atp and AP.POAPOST_SITE not in html_721
+      and AP.POAPOST_SITE not in html_art and AP.POAPOST_SITE not in html_games)
 check("all 5 tabs include category intro header with Memos/Agents/Last",
       all('class="app-feat-slot"' in h and ">Memos<" in h and ">Agents<" in h and ">Last<" in h
           for h in (html_posts, html_atp, html_721, html_art, html_games)))
@@ -115,7 +129,7 @@ check("games tab uses inline SVG icon buttons, not Website/Post X/Telegram text"
       and ">Post X<" not in html_games and ">Telegram<" not in html_games)
 check("games tab has no catalog source line", "POAScan catalog." not in html_games)
 check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
-check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games)
+check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games and "/static/apps/proof-of-mass.png" in html_games)
 check("games link official sites and socials", "poadice.grok.me" in html_games and "cgtrivia.creativegrace.tech" in html_games and "x.com/DCTreeofLife" in html_games and "t.me/VaultGameHub" in html_games and "github.com/maximusmaximus/poa-dice" in html_games)
 check("games include POA Dice outbound host", "poadice.grok.me" in html_games and 'rel="noopener noreferrer"' in html_games)
 check("games have no wallet-connect or payment CTA",
@@ -125,9 +139,23 @@ check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games a
 import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
+_pom = _re.search(r'<article class="app-card"[^>]*data-app="proof-of-mass".*?</article>', html_games, _re.S)
+check("Proof of Mass is listed with no invented prefix",
+      "Proof of Mass" in html_games and "proof-of-mass" in html_games
+      and "mass.arwyn.party" in html_games
+      and "mass.arwyn.party/arena.html" in html_games
+      and "lableak/#/post/2995" in html_games
+      and "x.com/arwyn_official" not in html_games
+      and "/static/apps/proof-of-mass.png" in html_games)
+check("Proof of Mass hides empty memo stats",
+      bool(_pom) and "app-nums" not in _pom.group(0) and "None" not in _pom.group(0))
+check("Proof of Mass uses Live board, not a second Arena label",
+      bool(_pom) and ">Arena<" in _pom.group(0) and _pom.group(0).count(">Arena<") == 1
+      and "Live board" in _pom.group(0)
+      and "arena" not in (_pom.group(0).split("app-blurb",1)[-1].split("</p>",1)[0].lower()))
 check("no em or en dash in Apps HTML",
       all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
-check("version is 1.26.419", AG.VERSION == "1.26.419")
+check("version is 1.26.420", AG.VERSION == "1.26.420")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
@@ -185,8 +213,40 @@ check("SEAL page prompt is deployer only and has the safety line",
 check("How to mint is not on Posts, Art, or Games",
       "mint-card" not in html and "mint-card" not in html_posts
       and "mint-card" not in html_art and "mint-card" not in html_games
+      and 'id="apps-mint"' not in html_posts
+      and "How to mint" not in html_posts and "How to mint" not in html_art
+      and "How to mint" not in html_games
       and ">Mint</" not in html and ">Mint</" not in html_posts
       and ">Mint</" not in html_art and ">Mint</" not in html_games)
+check("Posts tab has a collapsed How to post card and a generic prompt",
+      'id="apps-post"' in html_posts and "How to post" in html_posts
+      and '<details class="howto-card" id="apps-post"' in html_posts
+      and 'aria-expanded="false"' in html_posts
+      and "<details class=\"howto-card\" id=\"apps-post\" open" not in html_posts
+      and 'id="apps-post" open' not in html_posts
+      and "AC1|m|&lt;CID&gt;|&lt;N&gt;/&lt;TOTAL&gt;|&lt;CHUNK&gt;" in html_posts
+      and "AC1|s|&lt;CID&gt;|sha256:&lt;HEX&gt;" in html_posts
+      and "AC1|t|&lt;DATA_URI&gt;" in html_posts
+      and "Emblem Wallet" in html_posts and AP.WALLET_CMD in html_posts
+      and AP.MINT_SAFE in html_posts and "Never ask me for keys" in html_posts
+      and "/post/2915" in html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0])
+check("wallet and payment lines on How to post live only in the prompt",
+      "mint-wallet" not in html_posts and "mint-safe" not in html_posts and "mint-spec" not in html_posts
+      and html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.WALLET_CMD) == 1
+      and html_posts.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.MINT_SAFE) == 1
+      and AP.WALLET_CMD not in html_posts.split("</pre>",1)[1]
+      and AP.MINT_SAFE not in html_posts.split("</pre>",1)[1]
+      and "Never ask me for keys" not in html_posts.split("</pre>",1)[1]
+      and html_posts.count(AP.POAPOST_SITE) == 1
+      and "referral" not in html_posts.lower()
+      and html_posts.count("How to post") == 1)
+check("How to post is not on ATP-20, ATP-721, Art, or Games",
+      'id="apps-post"' not in html_atp and 'id="apps-post"' not in html_721
+      and 'id="apps-post"' not in html_art and 'id="apps-post"' not in html_games
+      and "How to post" not in html_atp and "How to post" not in html_721
+      and "How to post" not in html_art and "How to post" not in html_games
+      and "howto-card" not in html_atp and "howto-card" not in html_721
+      and "howto-card" not in html_art and "howto-card" not in html_games)
 check("tab one-liners are the plain language blurbs",
       "Mint and hold fungible tokens onchain." in html_atp
       and "Mint a numbered collectible onchain." in html_721
@@ -246,9 +306,45 @@ mam_circ = mam_minted - mam_burned
 html_atp_circ = AP.page_html({"tab": ["atp20"]})
 check("MAM fee burns are counted after DEMO-ART mints", mam_burned == 25 and mam_circ == mam_minted - 25)
 check("ATP-20 table header is Circulating and shows the post-burn figure, not minted",
-      ">Circulating</th>" in html_atp_circ
+      ">Circulating<" in html_atp_circ
       and f">{mam_circ:,}<" in html_atp_circ
       and f">{mam_minted:,}<" not in html_atp_circ)
+def _ticks(h):
+    return _re.findall(r'class="tok-title-link"[^>]*>([^<]+)', h)
+def _th(h, label):
+    bits = _re.findall(r"<th[^>]*>.*?</th>", h, _re.S)
+    for cell in bits:
+        if f">{label}<" in cell or f">{label}</a>" in cell or f">{label}<i" in cell:
+            return cell
+    return ""
+check("ATP-20 headers are sortable with aria-sort, and Mint is not",
+      'class="sortsel"' in html_atp_circ
+      and 'aria-sort="ascending"' in _th(html_atp_circ, "Deploy")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Token")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Circulating")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Holders")
+      and 'aria-sort="none"' in _th(html_atp_circ, "Deployer")
+      and 'href="/apps?tab=atp20&amp;sort=circ"' in _th(html_atp_circ, "Circulating")
+      and "aria-sort" not in _th(html_atp_circ, "Mint") and "hsb" not in _th(html_atp_circ, "Mint")
+      and _ticks(html_atp_circ) == ["SEAL", "MAM"])
+html_tick = AP.page_html({"tab": ["atp20"], "sort": ["tick"]})
+html_tick_rev = AP.page_html({"tab": ["atp20"], "sort": ["tick"], "dir": ["asc"]})
+check("ATP-20 Token sorts A to Z, then Z to A",
+      _ticks(html_tick) == ["MAM", "SEAL"] and 'aria-sort="ascending"' in _th(html_tick, "Token")
+      and _ticks(html_tick_rev) == ["SEAL", "MAM"] and 'aria-sort="descending"' in _th(html_tick_rev, "Token"))
+html_circ_sort = AP.page_html({"tab": ["atp20"], "sort": ["circ"]})
+circ_order = [r["tick"] for r in sorted(T.tokens(), key=lambda r: AP._circ(r), reverse=True)]
+check("ATP-20 Circulating sorts most to least on the first click",
+      _ticks(html_circ_sort) == circ_order
+      and 'aria-sort="descending"' in _th(html_circ_sort, "Circulating")
+      and 'dir=asc' in _th(html_circ_sort, "Circulating"))
+check("ATP-20 pager keeps the chosen sort",
+      AP._list_url("atp20", 20, sort="circ", direction="desc") == "/apps?tab=atp20&amp;sort=circ&amp;offset=20"
+      and "dir=asc" in AP._list_url("atp20", 20, sort="tick", direction="asc")
+      and "sort=nope" not in AP.page_html({"tab": ["atp20"], "sort": ["nope"]})
+      and _ticks(AP.page_html({"tab": ["atp20"], "sort": ["nope"]})) == ["SEAL", "MAM"])
+check("ATP-721 catalog stays a grid, not a collections table",
+      "tok-grid" in html_721_2 and "tok-deck" not in html_721_2)
 mam_page = AP.page_html({"tab": ["atp20"], "tick": ["MAM"]})
 check("MAM page headline is circulating",
       "circulating" in mam_page and f">{mam_circ:,}<" in mam_page)

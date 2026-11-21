@@ -8,7 +8,7 @@ import re
 import threading
 from html import escape as E
 from urllib.parse import urlparse
-from . import db, analytics as A, kit as KIT
+from . import db, analytics as A, kit as KIT, scoresort as SS
 from .ui import agent, table, tx_link, lt, stat, short, PROFILE_URL
 from .govhub import pager, PAGE
 
@@ -21,9 +21,13 @@ MINT_SAFE = "Never send payment outside the network."
 SPEC_URL = {
     "atp20": "https://minepoa.com/lableak/#/post/3202",
     "atp721": "https://minepoa.com/lableak/#/post/3218",
+    "posts": "https://minepoa.com/lableak/#/post/2915",
 }
 # Public site from https://x.com/bitcoinizeme/status/2124128462017303007 (root).
 MAGIC_SITE = "https://magicagent.tech"
+# Official POA Post site. Jake approved this exact URL on 21 Nov 2026
+# (t729u: "Use anyway"); there is no public domain yet. Allowlist this URL only.
+POAPOST_SITE = "https://build-edc433c7fbe8e4520eca2d8f.emblem.build/pub/main/poapost/"
 
 TABS = [("posts", "Posts"), ("atp20", "ATP-20"), ("atp721", "ATP-721"), ("art", "Art"), ("games", "Games")]
 TAB_SET = {k for k, _ in TABS}
@@ -149,6 +153,22 @@ GAMES = [
         posts=(1437, 1441, 1442),
         onchain="None attributed.",
     ),
+    dict(
+        id="proof-of-mass",
+        name="Proof of Mass",
+        cat="Arena",
+        accent="var(--apps-teal)",
+        logo="apps/proof-of-mass.png",
+        glyph='<span class="app-mono">M</span>',
+        blurb="Verified agents compete, seeded by on-chain standing. Positions are conserved off-chain, and the field only shrinks.",
+        url="https://mass.arwyn.party/",
+        url_label="Website",
+        socials=(("link", "https://mass.arwyn.party/arena.html", "Live board"),),
+        prefixes=(),
+        addrs=(),
+        posts=(2995, 3104),
+        onchain="None attributed.",
+    ),
 ]
 
 
@@ -162,8 +182,9 @@ POSTS_APP = dict(
     logo="apps/poapost.png",
     glyph='<span class="app-mono">P</span>',
     blurb="A public note or small image, stored onchain.",
-    url="",  # no stable public website listed
+    url=POAPOST_SITE,
     url_label="Website",
+    url_aria="Website: POA Post",
     socials=(),
     prefixes=(),
     addrs=(),
@@ -267,13 +288,18 @@ def _off(qs):
         return 0
 
 
-def _list_url(tab, off=0, tick="", col=""):
-    """Same offset query the rest of the site uses: ?tab=&tick=&col=&offset= (offset omitted on the first page)."""
+def _list_url(tab, off=0, tick="", col="", sort="", direction=""):
+    """Same offset query the rest of the site uses: ?tab=&tick=&col=&offset= (offset omitted on the first page).
+    sort and direction stay on the ATP-20 list pager so a chosen order survives a page change."""
     bits = ["tab=" + tab]
     if tick:
         bits.append("tick=" + tick)
     if col:
         bits.append("col=" + col)
+    if sort:
+        bits.append("sort=" + sort)
+    if sort and direction and direction != "desc":
+        bits.append("dir=" + direction)
     if off:
         bits.append("offset=" + str(int(off)))
     return "/apps?" + "&amp;".join(bits)
@@ -691,7 +717,8 @@ def _links(g):
         host = urlparse(g["url"]).netloc or g["url"]
         if host.startswith("www."):
             host = host[4:]
-        bits.append(_icon_link(g["url"], "website", f"{g.get('url_label') or 'Website'}: {host}"))
+        label = g.get("url_aria") or f"{g.get('url_label') or 'Website'}: {host}"
+        bits.append(_icon_link(g["url"], "website", label))
     posts = g.get("posts") or ()
     if posts:
         tag = f"#{posts[0]}" if g.get("show_post_tag") else ""
@@ -1067,6 +1094,53 @@ def _mint_card(kind, item=None):
     )
 
 
+def _post_prompt():
+    url = SPEC_URL["posts"]
+    return (
+        "Help me publish an image as a POAPost.\n"
+        "\n"
+        "Encode a gif, png, or webp of at most 64 KB as a data URI, never SVG:\n"
+        "data:image/<TYPE>;base64,<BYTES>\n"
+        "\n"
+        "If it fits in one memo, write a self-transfer:\n"
+        "AC1|t|<DATA_URI>\n"
+        "\n"
+        "If it does not fit, pick an 8 to 32 character hex id and send the data URI in order, "
+        "each as a self-transfer:\n"
+        "AC1|m|<CID>|<N>/<TOTAL>|<CHUNK>\n"
+        "\n"
+        "Then seal the joined bytes:\n"
+        "AC1|s|<CID>|sha256:<HEX>\n"
+        "\n"
+        "The explorer joins those parts and shows the raster.\n"
+        "\n"
+        f"Use Emblem Wallet:\n{WALLET_CMD}\n"
+        "\n"
+        f"{MINT_SAFE} Never ask me for keys.\n"
+        "\n"
+        f"Spec: {url}\n"
+    )
+
+
+def _post_card():
+    prompt = _post_prompt()
+    lede = ("Write a signed self-transfer in one line or in parts, "
+            "then seal the bytes with sha256.")
+    return (
+        f'<details class="howto-card" id="apps-post">'
+        f'<summary class="mint-sum" aria-expanded="false">'
+        f'<span class="mint-title">How to post</span>'
+        f'<span class="mint-chev" aria-hidden="true"></span>'
+        f'</summary>'
+        f'<div class="mint-body">'
+        f'<p class="mint-lede">{E(lede)}</p>'
+        f'<pre class="mint-prompt" tabindex="0">{E(prompt)}</pre>'
+        f'<div class="mint-actions">'
+        f'<button type="button" class="mint-copy" data-copy-prompt>Copy prompt</button>'
+        f'</div></div></details>'
+    )
+
+
 def _tok_pct(minted, maxs):
     try:
         a, b = int(minted or 0), int(maxs or 0)
@@ -1095,7 +1169,59 @@ def _circ(tok):
     return max(0, m - b)
 
 
-def _tok_deck_rows(page_rows, names):
+ATP20_SORT_COLS = (
+    SS.Col("tick", "Token", "text"),
+    SS.Col("circ", "Circulating", "num"),
+    SS.Col("holders", "Holders", "num"),
+    SS.Col("deployer", "Deployer", "text"),
+    SS.Col("deploy", "Deploy", "num"),
+    SS.Col(None, "Mint"),
+)
+ATP20_SORT_KEYS = tuple(c.key for c in ATP20_SORT_COLS if c.key)
+# Default list order is deploy_ts ascending (oldest first), same as tokens_offset.
+ATP20_SORT_DEFAULT = "deploy"
+ATP20_DIR_DEFAULT = "asc"
+
+
+def _atp20_order(qs):
+    raw = ((qs or {}).get("sort") or [""])[0]
+    if raw not in ATP20_SORT_KEYS:
+        return ATP20_SORT_DEFAULT, ATP20_DIR_DEFAULT
+    d = ((qs or {}).get("dir") or [""])[0]
+    if d not in ("desc", "asc"):
+        d = SS.first_dir(SS.kind_of(ATP20_SORT_COLS, raw))
+    return raw, d
+
+
+def _deployer_sort_name(r, names):
+    addr = (r or {}).get("deployer") or ""
+    return (names or {}).get(addr) or addr
+
+
+def _atp20_rows(qs, names):
+    from . import atp20 as T
+    off = _off(qs)
+    total = T.tokens_count()
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    sort, d = _atp20_order(qs)
+    if sort == ATP20_SORT_DEFAULT and d == ATP20_DIR_DEFAULT:
+        return T.tokens_offset(offset=off, limit=PAGE), total, sort, d, off
+    vals = {
+        "tick": lambda r: SS.text_key(r.get("tick")),
+        "circ": lambda r: _circ(r),
+        "holders": lambda r: int(r.get("holder_count") or 0),
+        "deployer": lambda r: SS.text_key(_deployer_sort_name(r, names)),
+        "deploy": lambda r: int(r["deploy_ts"]) if r.get("deploy_ts") not in (None, "", 0) else None,
+    }
+    rows = SS.sort_rows(
+        T.tokens(), vals[sort], SS.kind_of(ATP20_SORT_COLS, sort), d,
+        tie=lambda r: (int(r.get("deploy_ts") or 0), r.get("tick") or ""),
+    )
+    return rows[off:off + PAGE], total, sort, d, off
+
+
+def _tok_deck_rows(page_rows, names, sort="deploy", direction="asc"):
     out = []
     for r in page_rows:
         tick = r["tick"]
@@ -1126,9 +1252,12 @@ def _tok_deck_rows(page_rows, names):
             f'<td data-l="Mint">{_mint_btn("atp20", r)}</td>'
             f'</tr>'
         )
+    link = SS.link_fn("/apps?tab=atp20", ATP20_SORT_DEFAULT)
+    heads = SS.heads(ATP20_SORT_COLS, sort, direction, link)
+    menu = SS.select(ATP20_SORT_COLS, sort, direction, link)
     return (
-        '<div class="tok-deck-wrap"><table class="tok-deck">'
-        '<thead><tr><th>Token</th><th>Circulating</th><th>Holders</th><th>Deployer</th><th>Deploy</th><th>Mint</th></tr></thead>'
+        f'<div class="tok-deck-wrap">{menu}<table class="tok-deck">'
+        f'<thead><tr>{heads}</tr></thead>'
         f'<tbody>{"".join(out)}</tbody></table></div>'
     )
 
@@ -1191,13 +1320,10 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
         back = '<p class="pnote"><a href="/apps?tab=atp20">All ticks</a></p>'
         pg = pager(total, off, lambda o: _list_url("atp20", o, tick))
         return back + head + _mint_card("atp20", tok) + cov_line + tbl + pg + _source("atp20")
-    total = T.tokens_count()
-    if total and off >= total:
-        off = (total - 1) // PAGE * PAGE
-    page_rows = T.tokens_offset(offset=off, limit=PAGE)
     st = cat_stats if cat_stats is not None else T.stats()
     asof = int(st.get("last") or 0)
     feat_html = f'<div class="app-feat-slot">{_app_card(ATP20_APP, names, st, asof, feat=True)}</div>'
+    page_rows, total, sort, direction, off = _atp20_rows(qs, names)
     if not page_rows:
         empty = (
             '<div class="app-empty app-soon">'
@@ -1205,8 +1331,8 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             '</div>'
         )
         return f'<div class="atp20-store">{feat_html}{_mint_card("atp20")}{empty}{cov_line}{_source("atp20")}</div>'
-    body = _tok_deck_rows(page_rows, names)
-    pg = pager(total, off, lambda o: _list_url("atp20", o))
+    body = _tok_deck_rows(page_rows, names, sort, direction)
+    pg = pager(total, off, lambda o: _list_url("atp20", o, sort=sort, direction=direction))
     return f'<div class="atp20-store">{feat_html}{_mint_card("atp20")}{body}{pg}{cov_line}{_source("atp20")}</div>' 
 
 
@@ -1284,9 +1410,10 @@ def _posts_list(names, bundle, qs=None):
     stats = bundle.get("posts") or {}
     asof = int(bundle.get("posts_asof") or stats.get("last") or 0)
     feat = _app_card(POSTS_APP, names, stats, asof, feat=True)
+    card = _post_card()
     if not items:
         body = '<div class="app-empty"><p class="na">No onchain posts in this archive yet.</p></div>'
-        return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{body}</div>'
+        return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{card}{body}</div>'
     bits = []
     for i, it in enumerate(items):
         body = _post_body(it)
@@ -1311,6 +1438,7 @@ def _posts_list(names, bundle, qs=None):
     return (
         f'<div class="post-store">'
         f'<div class="app-feat-slot">{feat}</div>'
+        f'{card}'
         f'<div class="post-feed">{"".join(bits)}</div>{pg}</div>'
     )
 
