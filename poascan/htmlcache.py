@@ -19,23 +19,36 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/network?view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/apps?tab=posts", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=art", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/network?view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.415: every Apps tab (a tab click fetched the full page and, unpinned, could hold a slot long enough to serve Busy); 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
 # 1.26.405: the latest few closed epoch pages are warmed too (a cold /epoch/N render read every close for the first visitor). The
 # numbers change at each close, so they live in EXTRA, rebuilt at the start of each warm pass from LATEST_EPOCH (set by server.py).
 EPOCH_WARM_N = 3
 EXTRA = []
 LATEST_EPOCH = None   # callable -> the newest closed epoch number, or None
+APP_EXTRA = []
+APPS_WARM = None   # callable -> extra /apps subpage URLs (collections, ticks, first pager pages)
 
-def _all_warm(): return WARM + EXTRA
+def _all_warm(): return WARM + EXTRA + APP_EXTRA
 
 def _refresh_extra():
-    if not LATEST_EPOCH: return
-    try: n = LATEST_EPOCH()
-    except Exception: return
-    want = [f"/epoch/{i}" for i in range(int(n), max(int(n) - EPOCH_WARM_N, -1), -1)] if n is not None else []
-    if want != EXTRA:
-        EXTRA[:] = want; _warm_set.clear(); _warm_url_by.clear()
+    want = list(EXTRA)
+    if LATEST_EPOCH:
+        try:
+            n = LATEST_EPOCH()
+            want = [f"/epoch/{i}" for i in range(int(n), max(int(n) - EPOCH_WARM_N, -1), -1)] if n is not None else []
+        except Exception:
+            pass
+    apps_want = list(APP_EXTRA)
+    if APPS_WARM:
+        try:
+            apps_want = [u for u in (APPS_WARM() or []) if isinstance(u, str) and u.startswith("/apps")]
+        except Exception:
+            apps_want = list(APP_EXTRA)
+    if want != EXTRA or apps_want != APP_EXTRA:
+        EXTRA[:] = want
+        APP_EXTRA[:] = apps_want
+        _warm_set.clear(); _warm_url_by.clear()
 # 1.26.308: /chain/txs warmed (a visitor saw the full page Busy card: no pinned copy and no free slot). 1.26.306: /network?tab=token warmed too; a new tab with no pin could not get a slot under an API storm and served the busy page
 WARM_GRACE = 75   # 1.26.203: a warmed page's copy is served up to this long past its TTL while the warmer renders the next one
 # 1.26.284 (E5): the pin set is kept only in memory, so every deploy or OOM restart serves heavy pages cold until the
@@ -159,14 +172,44 @@ def _tab_pin(path, qst):
     if not qst: return True
     return len(qst) == 1 and qst[0][0] == "tab" and len(qst[0][1]) == 1 and qst[0][1][0] in _TAB_OK.get(path, ())
 
+def _apps_pin(path, qst):
+    """Any canonical /apps view (a tab, a collection, a tick, or a pager page) is kept like a
+    warmed page once rendered: visitors get the last good copy at any age with no serving slot.
+    A tab click fetches the full page, and a cold Art or pager render used to hold a slot long
+    enough for the next click to get the Busy page."""
+    if path != "/apps":
+        return False
+    if not qst:
+        return True
+    ok_tabs = _TAB_OK.get("/apps", ())
+    for k, vs in qst:
+        if len(vs) != 1:
+            return False
+        v = vs[0]
+        if k == "tab":
+            if v not in ok_tabs:
+                return False
+        elif k == "offset":
+            try:
+                if int(v) < 0:
+                    return False
+            except (TypeError, ValueError):
+                return False
+        elif k in ("tick", "col"):
+            if not v:
+                return False
+        else:
+            return False
+    return True
+
 def is_warm(path, qs):
     """True for a warmed visitor URL (the canonical query only)."""
     qst = _qs_tuple(qs)
-    return (path, qst) in _warm_pairs() or _tab_pin(path, qst)
+    return (path, qst) in _warm_pairs() or _tab_pin(path, qst) or _apps_pin(path, qst)
 
 def _pinned_key(k):
     """Warmed pages live outside the FIFO (any segment, visitor or crawler)."""
-    return (k[0], k[1]) in _warm_pairs() or _tab_pin(k[0], k[1])
+    return (k[0], k[1]) in _warm_pairs() or _tab_pin(k[0], k[1]) or _apps_pin(k[0], k[1])
 
 def note_close():
     """A new close landed. The warm loop rebuilds visitor pages and publishes each one when it is finished.

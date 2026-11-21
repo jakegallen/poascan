@@ -1,8 +1,10 @@
 """Unofficial Apps tab (1.26.411): local memo decoders for ATP-20, PoAPost text, and a
 community games catalog, shown as a storefront. Logos are local static rasters. No
 remote fetches, no third-party indexer calls."""
+import base64
 import datetime as dt
 import re
+import threading
 from html import escape as E
 from urllib.parse import urlparse
 from . import db, analytics as A, kit as KIT
@@ -19,6 +21,12 @@ DEFAULT_TAB = "posts"
 LIMIT = PAGE
 EXCERPT = 220
 HIDE = frozenset()
+# Raster memos in the Posts feed: only gif, png and webp, never SVG. Decoded cap is 64 KB.
+MEMO_IMG_MAX = 64 * 1024
+_DATA_IMG_RE = re.compile(r"^data:image/(gif|png|webp);base64,([A-Za-z0-9+/=\s]+)$", re.IGNORECASE)
+_TXID_RE = re.compile(r"^[0-9a-f]{64}$")
+_img_lock = threading.Lock()
+_img_store = {}
 _ACCENTS = ("var(--gold)", "var(--verd)", "var(--apps-teal)", "var(--apps-violet)", "var(--apps-magenta)")
 BARS = 14
 DAY = 86400
@@ -208,6 +216,106 @@ def parse_ac1(memo):
     return None
 
 
+def memo_image(text):
+    """Classify a post body as a raster data URI. Returns None when it is ordinary text.
+    A value with ok True has mime, raw, still, still_mime, width and height. ok False
+    means it looked like a data image (including SVG or JPEG) but must not be shown as text."""
+    t = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not t.lower().startswith("data:image/"):
+        return None
+    m = _DATA_IMG_RE.fullmatch(t)
+    if not m:
+        return dict(ok=False)
+    kind = m.group(1).lower()
+    try:
+        raw = base64.b64decode(m.group(2), validate=True)
+    except Exception:
+        return dict(ok=False)
+    if not raw or len(raw) > MEMO_IMG_MAX:
+        return dict(ok=False)
+    mime = {"gif": "image/gif", "png": "image/png", "webp": "image/webp"}[kind]
+    if kind == "gif":
+        if raw[:6] not in (b"GIF87a", b"GIF89a"):
+            return dict(ok=False)
+    elif kind == "png":
+        if raw[:8] != b"\x89PNG\r\n\x1a\n":
+            return dict(ok=False)
+    else:
+        if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WEBP":
+            return dict(ok=False)
+    width = height = None
+    still, still_mime = raw, mime
+    try:
+        from . import ac1art as R
+        info = R.raster_info(raw, mime) or {}
+        width = info.get("width")
+        height = info.get("height")
+        if mime == "image/gif" and (info.get("frames") or 1) > 1:
+            frame = R.gif_still(raw)
+            if frame:
+                still, still_mime = frame, "image/gif"
+    except Exception:
+        pass
+    try:
+        width = int(width) if width else None
+        height = int(height) if height else None
+    except (TypeError, ValueError):
+        width = height = None
+    if width is not None and (width <= 0 or width > 4096):
+        width = None
+    if height is not None and (height <= 0 or height > 4096):
+        height = None
+    return dict(ok=True, mime=mime, raw=raw, still=still, still_mime=still_mime,
+                width=width, height=height)
+
+
+def _img_put(txid, img):
+    if not img or not img.get("ok") or not _TXID_RE.fullmatch(txid or ""):
+        return
+    with _img_lock:
+        _img_store[txid] = dict(mime=img["mime"], raw=img["raw"], still=img["still"],
+                                still_mime=img["still_mime"], width=img.get("width"),
+                                height=img.get("height"))
+
+
+def _img_from_tx(txid):
+    """Load one transfer memo and classify it. Multipart bodies are joined only by the posts snapshot."""
+    if not _TXID_RE.fullmatch(txid or ""):
+        return None
+    rows = db.q("SELECT memo FROM txs WHERE id=? AND type='transfer' AND final=1", (txid,))
+    if not rows:
+        return None
+    p = parse_ac1(rows[0].get("memo") or "")
+    if not p or p.get("op") != "t":
+        return None
+    img = memo_image(p.get("text") or "")
+    if img and img.get("ok"):
+        _img_put(txid, img)
+        return img
+    return None
+
+
+def memo_raster(txid, still=False):
+    """Cached raster bytes for a Posts memo image, or None. Filled when the posts snapshot is built."""
+    txid = (txid or "").lower()
+    if not _TXID_RE.fullmatch(txid):
+        return None
+    with _img_lock:
+        row = _img_store.get(txid)
+    if not row:
+        row = _img_from_tx(txid)
+        if not row:
+            return None
+        # _img_from_tx already stored a full dict; read it back in raster shape
+        with _img_lock:
+            row = _img_store.get(txid)
+        if not row:
+            return None
+    if still:
+        return row["still"], row["still_mime"]
+    return row["raw"], row["mime"]
+
+
 def _excerpt(text):
     t = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     if len(t) <= EXCERPT:
@@ -223,9 +331,19 @@ def _hidden(txid, cid=None):
     return False
 
 
-def posts(limit=LIMIT, offset=0, count=False):
-    """PoAPost / AC1 text items from archived transfer memos, newest first. Multipart rows are grouped.
-    Default is one page of 20. Pass count=True to get (page, total) for the shared offset pager."""
+def _posts_stamp():
+    """Cheap watermark so the assembled post list rebuilds only when the archive changes."""
+    rows = db.q(
+        "SELECT COUNT(*) AS n, MAX(ts) AS ts FROM txs "
+        "WHERE type='transfer' AND final=1 AND (memo LIKE 'AC1|m|%' OR memo LIKE 'AC1|t|%')"
+    )
+    r = rows[0] if rows else {}
+    return (int(r.get("n") or 0), int(r.get("ts") or 0))
+
+
+@A.cached("apps_posts_index", 60, light=True)
+def _posts_index(stamp):
+    """All assembled PoAPost items, newest first. stamp is the archive watermark (count, max ts)."""
     rows = db.q(
         "SELECT id, from_addr, to_addr, amount, memo, ts, final FROM txs "
         "WHERE type='transfer' AND final=1 AND (memo LIKE 'AC1|m|%' OR memo LIKE 'AC1|t|%') "
@@ -263,6 +381,23 @@ def posts(limit=LIMIT, offset=0, count=False):
                           addr=g["addr"], ts=g["ts"], amount=g["amount"], text=text,
                           parts=g["parts"], have=g["have"]))
     items.sort(key=lambda x: (-int(x["ts"] or 0), x["txid"] or ""))
+    for it in items:
+        img = memo_image(it.get("text") or "")
+        if img is None:
+            continue
+        it["image"] = "ok" if img.get("ok") else "bad"
+        if img.get("ok"):
+            it["img_w"] = img.get("width")
+            it["img_h"] = img.get("height")
+            _img_put(it.get("txid") or "", img)
+    return items
+
+
+def posts(limit=LIMIT, offset=0, count=False):
+    """PoAPost / AC1 text items from archived transfer memos, newest first. Multipart rows are grouped.
+    Default is one page of 20. Pass count=True to get (page, total) for the shared offset pager.
+    The assembled list is a cached snapshot, rebuilt only when the archive watermark changes."""
+    items = _posts_index(_posts_stamp())
     off = max(0, int(offset or 0))
     lim = max(0, int(limit))
     page = items[off:off + lim]
@@ -619,7 +754,42 @@ def _post_who(addr, names):
             f'rel="noopener noreferrer" title="LabLeak profile">{E(short(addr))}</a>')
 
 
+def _img_chip():
+    return '<span class="post-img-chip">Image</span>'
+
+
+def _post_pix(it):
+    tx = it.get("txid") or ""
+    w = int(it.get("img_w") or 28)
+    h = int(it.get("img_h") or w)
+    src = "/apps/memo-img/" + tx
+    still = src + "/still"
+    return (
+        f'<div class="art-pix post-pix" style="--pix:{w}">'
+        f'<img class="art-pix-anim" src="{E(src)}" width="{w}" height="{h}" alt="Image" decoding="async">'
+        f'<img class="art-pix-still" src="{E(still)}" width="{w}" height="{h}" alt="" decoding="async">'
+        f'</div>'
+    )
+
+
+def _post_body(it):
+    """Render a post body. Raster data URIs become a pixelated image or an Image chip, never raw base64."""
+    flag = it.get("image")
+    if flag is None:
+        flag = "ok" if (memo_image(it.get("text") or "") or {}).get("ok") else (
+            "bad" if (it.get("text") or "").lstrip().lower().startswith("data:image/") else None
+        )
+    if flag == "ok" and _TXID_RE.fullmatch(it.get("txid") or ""):
+        return _post_pix(it)
+    if flag == "bad" or (it.get("text") or "").lstrip().lower().startswith("data:image/"):
+        return f'<p class="post-text">{_img_chip()}</p>'
+    text = _excerpt(it.get("text") or "")
+    long = " is-long" if len(text) > 140 else ""
+    return f'<p class="post-text{long}">{E(text)}</p>'
+
+
 def _posts_list(names, bundle, qs=None):
+
     off = _off(qs)
     items, total = posts(PAGE, offset=off, count=True)
     if total and off >= total:
@@ -633,8 +803,7 @@ def _posts_list(names, bundle, qs=None):
         return f'<div class="post-store"><div class="app-feat-slot">{feat}</div>{body}</div>'
     bits = []
     for i, it in enumerate(items):
-        text = _excerpt(it["text"])
-        long = " is-long" if len(text) > 140 else ""
+        body = _post_body(it)
         ago = _ago(it["ts"], asof)
         iso = ""
         try:
@@ -650,7 +819,7 @@ def _posts_list(names, bundle, qs=None):
             f'<div class="post-main">'
             f'<div class="post-meta"><i class="post-chip" aria-hidden="true"></i>'
             f'{_post_who(it["addr"], names)}{when}{txl}</div>'
-            f'<p class="post-text{long}">{E(text)}</p>'
+            f'{body}'
             f'</div></article>'
         )
     pg = pager(total, off, lambda o: _list_url("posts", o))
@@ -781,10 +950,6 @@ def _art_list(names, col="", qs=None):
     from . import atp721 as C
     from . import ac1art as R
     C.ensure_fresh()
-    try:
-        R.backfill()
-    except Exception:
-        pass
     if col:
         tok = C.collection(col)
         if not tok:
@@ -819,7 +984,56 @@ def _art_list(names, col="", qs=None):
                 f'Debit not checked.</p>')
     return f'<div class="art-page">{body}{cov_line}</div>'
 
+def warm_urls():
+    """Collection, tick, and first pager pages the background warmer should keep, besides the tab roots in WARM.
+    Capped so one warmer pass stays inside the existing loop. Deeper pager pages pin on first render."""
+    urls, seen = [], set()
+
+    def add(u):
+        if u and u not in seen:
+            seen.add(u); urls.append(u)
+
+    try:
+        from . import atp721 as C
+        C.ensure_fresh()
+        for tok in C.collections():
+            col = tok.get("col")
+            if not col:
+                continue
+            add("/apps?tab=art&col=" + col)
+            try:
+                total = C.units_count(col)
+            except Exception:
+                total = int(tok.get("minted") or 0)
+            pages = min((max(int(total or 0), 0) + PAGE - 1) // PAGE, 5)
+            for i in range(1, pages):
+                add(f"/apps?tab=art&col={col}&offset={i * PAGE}")
+    except Exception:
+        pass
+    try:
+        _n = posts(1, 0, count=True)[1]
+        pages = min((max(int(_n or 0), 0) + PAGE - 1) // PAGE, 5)
+        for i in range(1, pages):
+            add(f"/apps?tab=posts&offset={i * PAGE}")
+    except Exception:
+        pass
+    try:
+        from . import atp20 as T
+        n = T.tokens_count()
+        pages = min((max(int(n or 0), 0) + PAGE - 1) // PAGE, 5)
+        for i in range(1, pages):
+            add(f"/apps?tab=atp20&offset={i * PAGE}")
+        for tok in T.tokens_offset(0, PAGE):
+            tick = tok.get("tick")
+            if tick:
+                add("/apps?tab=atp20&tick=" + tick)
+    except Exception:
+        pass
+    return urls
+
+
 def page_html(qs=None):
+
     from .views import page
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""
