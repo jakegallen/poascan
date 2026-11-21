@@ -269,7 +269,7 @@ def upgrade_details():
     dl = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     since = lt(M.STARTED)
     links = (f'<p class="upl small"><a href="{m["post_url"]}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
-             f'<span>Since {since}</span><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
+             f'<span>Since {since}</span><a href="/live">Uptime and latency</a>{_board()}</p>')
     return links + f'<details class="updet"><summary>Details</summary><dl class="upg">{dl}</dl></details>'
 
 def _when(ts):
@@ -314,7 +314,7 @@ def upgrade_done():
           + (_ts_row("Mining reopened", back) if back else "")
           + _ts_row("Grading reopened (notice)" if gst != "open" else "Grading reopened", c["at"], nl) + seals + _ts_row("Upgrade notice" if rh else "Upgrade complete", c["at"]) + f"<dt>Release</dt><dd>{_release()}</dd>")
     links = (f'<p class="upl small"><a href="{M.POST_URL}" target="_blank" rel="noopener noreferrer">Official post ↗</a>'
-             f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/network?tab=health">Uptime and latency on Health</a>{_board()}</p>')
+             f'<a href="/network?tab=charts">Milestones on Charts</a><a href="/live">Uptime and latency</a>{_board()}</p>')
     return f'<div class="upv2">{hero}<dl class="upg updone">{dl}</dl>{links}</div>'
 
 def _RWn(rh):
@@ -420,7 +420,7 @@ def status_body():
                   stat("Finality lag", intc(lagv), "blocks", tip="Blocks between the chain height and the finalized height"), cp_stat(), stat('<a href="/network?tab=anchors">Anchor · Solana</a>', anc_age("sol")), stat('<a href="/network?tab=anchors">Anchor · Base</a>', anc_age("base"))])
     # 1.26.201: Endpoints and Incidents sort by header, each with its own parameters (?esort=&edir=, ?isort=&idir=)
     from . import scoresort as SS, views as _V
-    hq = getattr(_V.REQ, "qs", None) or {}; hb = "/network?tab=health"
+    hq = getattr(_V.REQ, "qs", None) or {}; hb = "/live"
     kp = lambda p: {k: SS.q(hq, k) for k in (p + "sort", p + "dir")}
     ecols = [SS.Col("ep", "Endpoint", "text"), SS.Col("s1", "1h"), SS.Col("s24", "24h"), SS.Col("p50", "p50"), SS.Col("p95", "p95"), SS.Col("err", "Last error")]
     ev = {"ep": lambda e: SS.text_key(e["ep"].replace("probe ", "")), "s1": lambda e: e["s1"], "s24": lambda e: e["s24"], "p50": lambda e: e["p50"] or None,

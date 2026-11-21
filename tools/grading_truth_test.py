@@ -15,7 +15,7 @@ def check(name, ok):
 tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "g.db"); os.environ["POA_BASE"] = "http://127.0.0.1:9"
 import fixture; fixture.seed()
 from poascan import db, maint as M, analytics as A, hosted as R, views as V, views2 as V2, og as OG, pulse as P, ui as U
-LIVE = {"state": "live", "label": "Live", "why": "Live", "href": "/network?tab=health", "fetched_at": int(time.time())}
+LIVE = {"state": "live", "label": "Live", "why": "Live", "href": "/live", "fetched_at": int(time.time())}
 def pl(f=None): return U.status_pill(dict(f or LIVE))
 now = int(time.time())
 HALT = {"id": "2026-10-22-grading-halted", "issued_ts": 1792711337, "expires_ts": now + 86400, "msg": "Challenge GRADING is HALTED, grading + challenge-pool payouts paused until further notice."}
@@ -51,8 +51,8 @@ check("graders tile: Unconfirmed tag, no Halted", '<span class="tag warn">Unconf
 check("graders tooltip explains it", "no grade seals have landed in the last 30 minutes" in t)
 check("no home strip (1.26.169: the header status carries it)", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live())
 p = pl(); s = p["pop"]
-check("header: Live turns Partial, the note names grading and links /upgrade and Health", p["state"] == "partial" and p["label"] == "Partial"
-      and p["reasons"][-1:] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/network?tab=health">Health</a>' in s)
+check("header: Live turns Partial, the note names grading and links /upgrade and Feeds", p["state"] == "partial" and p["label"] == "Partial"
+      and p["reasons"][-1:] == ["Grading not yet confirmed. No recent seals."] and 'href="/upgrade">Details</a>' in s and 'href="/live?tab=feeds">Feeds</a>' in s)
 check("header note: Updated time in the reader's zone (data-upts)", f'<time data-upts="{LIVE["fetched_at"]}"' in s and "Updated" in s)
 p2 = pl(dict(LIVE, state="partial", label="Partial", why="Chain live. Not OK: Networks"))
 check("header: a feed not OK and grading both listed", p2["reasons"][0] == "Feed not OK: Networks." and p2["reasons"][-1] == "Grading not yet confirmed. No recent seals.")
@@ -76,7 +76,7 @@ check(f"two recent seals confirm open ({g['state']}, {g['basis']})", g["state"] 
 check("open: working has grading, unconfirmed empty", "grading" in st["working"] and st["unconfirmed"] == [] and st["headline"] == M.DONE_HEAD)
 check("open: no home strip, graders tile untagged", not hasattr(V, "upgrade_strip") and "upline" not in V.upgrade_live() and "tag warn" not in V.graders_tile(A.open_epoch()))
 p = pl()
-check("open: header Live, no grading line, Health link only", p["state"] == "live" and not any("rading" in x for x in p["reasons"]) and "/upgrade" not in p["pop"] and 'href="/network?tab=health">Health</a>' in p["pop"])
+check("open: header Live, no grading line, Feeds link only", p["state"] == "live" and not any("rading" in x for x in p["reasons"]) and "/upgrade" not in p["pop"] and 'href="/live?tab=feeds">Feeds</a>' in p["pop"])
 h = V2.upgrade_body()
 check("open: /upgrade says Upgrade complete, Grading in Working", '<h1 class="uph-t" id="uph-t">Upgrade complete</h1>' in h and "<span>Grading</span>" in h and 'data-grp="grading"' not in h)
 check("open: evidence counts", st["grading"]["seals_since_notice"] == 2 and st["grading"]["sealers_since_notice"] == 2 and st["grading"]["last_seal_at"])

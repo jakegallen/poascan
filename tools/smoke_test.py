@@ -49,7 +49,7 @@ def main():
         for _ in range(50):
             try: req(base + "/api/health"); break
             except Exception: time.sleep(0.2)
-        for path in ["/", "/about", "/api", "/network?tab=token", "/chain", "/agents", "/agents/top", "/status", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts"]:
+        for path in ["/", "/about", "/api", "/live", "/network?tab=token", "/chain", "/agents", "/agents/top", "/status", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts"]:
             c, _ = req(base + path); check(f"GET {path} -> {c}", c == 200)
         c, b = req(base + "/healthz"); check(f"GET /healthz -> {c}", c == 200)
         c, b = req(base + "/api/health"); h = json.loads(b) if c in (200, 503) else {}
@@ -160,7 +160,7 @@ def main():
         check("agents/view bad cursor -> 400", req(base + "/api/v1/agents/view?after=%%%")[0] == 400)
         c, b = req(base + "/chain"); check(f"/chain: Heartbeat hero on top, then one tab module (Epochs | Txs | Pending | Grading) -> {c}", c == 200 and b'data-live="answers"' in b and b'class="card benchc hpulse"' in b
               and b.index(b'class="card benchc hpulse"') < b.index(b'class="chips kit-tabs"') and b'href="/chain?tab=pending"' in b and b'href="/chain?tab=grading"' in b)
-        check("/epochs in sitemap + llms; 1.26.382: no header links or Ask agent on Home", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" not in req(base + "/sitemap.xml")[1]
+        check("/epochs in sitemap + llms; 1.26.382: no header links or Ask agent on Home", b"/chain</loc>" in req(base + "/sitemap.xml")[1] and b"/live</loc>" in req(base + "/sitemap.xml")[1]
               and b"/chain the open epoch" in req(base + "/llms.txt")[1] and b'class="more tklive"' not in req(base + "/")[1] and b'class="askb"' not in req(base + "/")[1])
         check("/token concentration (Top 1, 5, 10, 20 shares)", b"Concentration" in req(base + "/network?tab=token")[1] and b"Top 20" in req(base + "/network?tab=token")[1])
         import re as _re, sys as _sys, os as _os2
@@ -190,7 +190,7 @@ def main():
             _ok = _ok and _js.loads(_uq(_vs.group(1).split("?", 1)[1])) == {"name": "poa", "type": "http", "url": "https://minepoa.com/mcp"}
         check("/start (1.26.246): name step, then the picker, then the panel; View prompt (with Copy) under it; no connector install deeplinks or commands", not _cur and not _vs
               and _m.index("data-sv-name0") < _m.index("data-sv-pick") < _m.index("data-sv-panel") < _m.index("View prompt") < _m.index("data-copy-prompt") and "mcp add" not in _m)
-        check("pill: Stale (red) when our own fetch has nothing", b'id="livepill"><summary class="pill stale" aria-label="Status: Stale">' in req(base + "/")[1])
+        check("pill: Stale (red) when our own fetch has nothing", b'id="livepill" data-href="/live"><summary class="pill stale" aria-label="Status: Stale. Open Live">' in req(base + "/")[1])
         check("no in-page status pills", not any(x in req(base + u)[1] for u in ("/live", "/") for x in (b'class="pulse"', b"pill xpill", b"Catching up")))
         _nv = lambda h: h[h.index(b'<nav class="nav" id="nav">'):h.index(b"</nav>", h.index(b'<nav class="nav" id="nav">'))]
         _hm = req(base + "/")
@@ -240,7 +240,7 @@ def main():
             c, loc = req0(base + u)
             check(f"FAQ {u} -> 301 /about#{u[1:]}, section keeps its title", c == 301 and loc == "/about#" + u[1:] and f'id="{u[1:]}"'.encode() in ab and b'"FAQPage"' in ab
                   and f"https://poascan.io{u}<".encode() not in req(base + "/sitemap.xml")[1] and f"#{u[1:]}".encode() in req(base + "/llms.txt")[1])
-        moved = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health", "/find": "/#find",
+        moved = {"/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/live", "/find": "/#find",
                  "/find?q=Jade": "/search?q=Jade", "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
                  "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers", "/agents/leaderboard": "/agents/top?tab=ai",
                  "/agents/journey": "/agents/census?tab=journey"}
@@ -354,8 +354,8 @@ def backlog(base, check):
     check("backlog last close: origin, grew, dropped",
           lc.get("close") == 11 and lc.get("settled") == 1 and lc.get("settled_by_origin") == [{"epoch": 9, "count": 1}] and lc.get("grew") == 3
           and lc.get("grew_unknown") == 7 and lc.get("dropped") == 1 and rows[8]["dropped"] == 1 and len(d["closes"]) == 11)
-    lv = req(base + "/live")[1].decode()
-    check("/live backlog panel: Seals / quorum, expiry, settled origin, grew, dropped, unknown",
+    lv = req(base + "/chain?tab=pending")[1].decode()
+    check("Pending backlog panel: Seals / quorum, expiry, settled origin, grew, dropped, unknown",
           "Seals / 3" in lv and ">E8<small>" in lv and "Settled at E11" in lv and ">Grew<" in lv and ">Dropped<" in lv and "1 row" in lv and ">Next close<" in lv and lv.count(">Unknown<") == 1 and "\u2014" not in lv)
     spec = json.loads(req(base + "/openapi.json")[1]); llms = req(base + "/llms.txt")[1].decode()
     tl = json.loads(req(base + "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_pending_by_epoch", "arguments": {}}}).encode(),
@@ -604,17 +604,17 @@ def swap_module(base, spec, check):
 def maintenance(base, root, env, check):
     """Network upgrade: Upgrading pill (not Lagging) linking to /upgrade, one card on Network → Health, one line on /start, meta and MCP carry it.
     Red Stale still wins when our own reads fail; it clears itself once the checkpoint leaves its parked height."""
-    n = req(base + "/network")[1].decode(); s = req(base + "/network?view=details")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
+    n = req(base + "/live")[1].decode(); s = req(base + "/live?tab=feeds&view=details")[1].decode(); st = req(base + "/start")[1].decode(); stf = st; st = st[st.index("<main"):st.index("</main>")]
     check("maintenance: the header status shows Upgrading (1.26.181: no strip; its note carries the reason), one live indicator for app.js, checkpoint Parked not Stalled",
-          'id="livepill"><summary class="pill up" aria-label="Status: Upgrading">' in n and 'href="/upgrade">Details</a>' in n[n.index('id="livepill"'):n.index("</details>", n.index('id="livepill"'))] and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
+          'id="livepill" data-href="/live"><summary class="pill up" aria-label="Status: Upgrading. Open Live"' in n and 'href="/upgrade">Details</a>' in n[n.index('id="livepill"'):n.index("</details>", n.index('id="livepill"'))] and ">Upgrading<" in n and ">Lagging<" not in n and n.count('id="livepill"') == 1
           and 'aria-label="Parked: ' in n and ">Parked</summary>" in n and ">Stalled<" not in n)
     u = req(base + "/upgrade")[1].decode(); um = u[u.index("<main"):u.index("</main>")]
-    check("maintenance: Health keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
+    check("maintenance: Live keeps uptime and latency with one compact line to /upgrade and no recovery blocks",
           n.count('class="uphl"') == 1 and '<a href="/upgrade">Recovery details</a>' in n and 'id="upgrade"' not in n and 'class="uph"' not in n and 'class="grp' not in n
           and "Latency p50" in s and "Uptime" in s)   # 1.26.392: the recovery line leads Health; uptime and latency sit on its Details view
     check("maintenance: /upgrade is its own page: hero, routes meter, Working and Still paused, tiles, details with the post and no prompt box (Ask agent lives only in /start); no Health tab strip or panels",
           um.count('class="uph"') == 1 and um.count('class="seg"') == 6 and 'data-grp="working"' in um and 'data-grp="paused"' in um and 'class="stats four uptiles"' in um
-          and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency on Health") == 1
+          and "atabs" not in um and 'class="stats eight"' not in um and "Uptime · 7d" not in um and "Latency p50" not in um and um.count("Uptime and latency") == 1
           and "lableak/#/post/1357" in um and um.count('class="pbox"') == 0 and "data-copy-prompt" not in um and "24 to 72" not in um and ">Checkpoint<" in um
           and um.count('class="askb"') == 0 and "\u2014" not in um and 'class="nav' not in um)
     check("maintenance: /start keeps the prompt, no status strip (the header status note carries the state, no repeat under the button); the prompt backs off and checks hourly at a random minute",
@@ -675,7 +675,7 @@ def fixture_pages(check):
         site = [u.replace("https://poascan.io", "") or "/" for u in re.findall(r"<loc>([^<]+)</loc>", req(base + "/sitemap.xml")[1].decode())]
         paths = sorted(set(nav + site))
         bad = [(u, c) for u in paths for c in [req(base + u)[0]] if c != 200]
-        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 6 and len(paths) > 30 and not bad)
+        check(f"fixture (12 epochs): {len(nav)} nav + {len(site)} sitemap pages render, failures {bad[:5]}", len(nav) == 5 and len(paths) > 30 and not bad)
         g = req(base + "/grading")[1]; check("fixture /grading: older origins grouped", b">Older<" in g)
         op = req(base + "/agents/operators")[1]
         check("fixture: malformed address shown as plain text, never linked", b'href="/address/poa132rY' not in b"".join(req(base + u)[1] for u in ("/agents/operators", "/agents", "/agents/top", "/address/poa1" + b"C".decode() * 40)))
@@ -726,7 +726,7 @@ def fixture_pages(check):
         hm2 = req(base + "/")[1].decode()
         check("cards: 3 significant figures (no 4-figure compact values), Finalized height label",
               not re.search(r'<div class="sv[^"]*"[^>]*><span class="num[^"]*"[^>]*>\d{2,3}\.\d\d[KMB]<', hm2)
-              and ">Finalized<" in req(base + "/network")[1].decode() and ">Checkpoint<" not in hm2)
+              and ">Finalized<" in req(base + "/live")[1].decode() and ">Checkpoint<" not in hm2)
         hm = req(base + "/")[1].decode(); tk = req(base + "/network?tab=token")[1].decode()
         check("home: no Gas fee card, no ticker, Start glow plays once", ">Gas fee<" not in hm and 'id="ticker"' not in hm and "joinglow 2s ease-in-out 1;" in req(base + "/static/style.css")[1].decode())
         check("token: no Transfers card", ">Transfers<" not in tk)
@@ -742,10 +742,10 @@ def fixture_pages(check):
         check(f"1.26.382: no Ask agent button on these pages {_asks}", set(_asks.values()) == {0})
         from poascan import prompts as _PR
         check("new prompts are read-only and keyless", all(_PR.RO in p[1] and "SAVED_KEY" not in p[1] for p in (_PR.TXS, _PR.NETWORK, _PR.GROWTH)))
-        _n = req(base + "/network")[1].decode(); _s = req(base + "/network?view=details")[1].decode(); _ab = req(base + "/about")[1].decode()
+        _n = req(base + "/live")[1].decode(); _s = req(base + "/live?tab=feeds&view=details")[1].decode(); _ab = req(base + "/about")[1].decode()
         check("pill: Lagging (amber) when the checkpoint is stalled 6h+, and only one live indicator",
-              'id="livepill"><summary class="pill lag" aria-label="Status: Lagging">' in _n and "<span>Chain</span><b>Slow</b>" in _n and "Finalized height unchanged" not in _n[_n.index('id="livepill"'):_n.index("</details>", _n.index('id="livepill"'))] and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
-        check("/network: checkpoint flagged with a Stalled tag, no sub-lines",
+              'id="livepill" data-href="/live"><summary class="pill lag" aria-label="Status: Lagging. Open Live"' in _n and "<span>Chain</span><b>Slow</b>" in _n and "Finalized height unchanged" not in _n[_n.index('id="livepill"'):_n.index("</details>", _n.index('id="livepill"'))] and ">Lagging<" in _n and "Node data" not in _n and _n.count('id="livepill"') == 1)
+        check("/live: checkpoint flagged with a Stalled tag, no sub-lines",
               '<summary class="tag warn" aria-label="Stalled: ' in _n and 'class="asof' not in _n)
         check("/status: per-source freshness table, old read flagged", ">Freshness<" in _s and "<code>/api/params</code>" in _s and '<span class="amber"><time' in _s and _s.count(">Last read<") == 1)
         check("/about explains Live, Lagging, Stale", 'id="freshness"' in _ab)

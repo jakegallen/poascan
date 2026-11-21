@@ -17,8 +17,8 @@ check("census and community are warmed", "/agents/census" in HC.WARM and "/agent
 check("community caches 300 s like census", HC.ttl("/agents/community", {}) == 300 and HC.ttl("/agents/census", {}) == 300)
 full = threading.Semaphore(0)   # the cheap reserve, full: every background refresh is refused
 HC._reserve = lambda: full
-HC.WARM[:] = ["/network?tab=health"]; HC._warm_set.clear(); HC._warm_url_by.clear()
-k = HC.key("/network", {"tab": ["health"]}, None, False); t = HC.ttl("/network", {"tab": ["health"]})
+HC.WARM[:] = ["/live?tab=feeds"]; HC._warm_set.clear(); HC._warm_url_by.clear()
+k = HC.key("/live", {"tab": ["feeds"]}, None, False); t = HC.ttl("/live", {"tab": ["feeds"]})
 renders = []
 def rp(p, qs): renders.append((p, qs)); return f"<html>new {len(renders)}</html>"
 
@@ -29,7 +29,7 @@ check("inside the grace window: the old pin is served and the warmer does not re
 HC.put(k, "<html>old</html>", now=time.time() - (t + HC.WARM_GRACE + 600))   # ten minutes past grace, refresh refused
 HC.warm_once(rp)
 check("past TTL plus grace with the refresh refused: the warmer renders and publishes a new copy", HC.last(k) == "<html>new 1</html>" and len(renders) == 1 and HC.stats["warm_direct"] == 1)
-check("that direct render counts as a warm success", HC.warm_paths["/network?tab=health"]["ok"] >= 1)
+check("that direct render counts as a warm success", HC.warm_paths["/live?tab=feeds"]["ok"] >= 1)
 HC.warm_once(rp)
 check("the next pass finds a fresh copy and renders nothing", len(renders) == 1)
 check("no em or en dash in this test", not any(c in open(__file__, encoding="utf-8").read() for c in "\u2014\u2013"))

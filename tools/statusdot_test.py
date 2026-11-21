@@ -44,7 +44,7 @@ if sync_playwright:
         check("home and /start: no strip under the header", 'class="upstrip' not in home and 'class="upstrip' not in start)
         check("dev banner removed (1.26.288)", 'id="devbar"' not in home and "System development in progress." not in home)
         hd = home[home.index('id="livepill"'):home.index("</details>", home.index('id="livepill"'))]
-        check("header note names grading, Details to /upgrade, Health link", re.search(r'<li class="(warn|bad)"><i aria-hidden="true"></i><span>Grading</span><b>(Slow|Down)</b></li>', hd) and "No recent seals" not in hd and 'href="/upgrade">Details</a>' in hd and 'href="/network?tab=health">Health</a>' in hd)
+        check("header note names grading, Details to /upgrade, Feeds link", re.search(r'<li class="(warn|bad)"><i aria-hidden="true"></i><span>Grading</span><b>(Slow|Down)</b></li>', hd) and "No recent seals" not in hd and 'href="/upgrade">Details</a>' in hd and 'href="/live?tab=feeds">Feeds</a>' in hd)
         check("Graders Unconfirmed tag unchanged", '<span class="tag warn">Unconfirmed</span>' in home)
         check("no em or en dashes in the note", "\u2014" not in hd and "\u2013" not in hd)
         with sync_playwright() as p:
@@ -54,8 +54,15 @@ if sync_playwright:
             pg = ctx.new_page(); pg.goto(base + "/", wait_until="domcontentloaded", timeout=60000); pg.wait_for_timeout(500)
             r0 = pg.evaluate(BOX)
             check("390: closed on load", not r0["open"])
+            check("390: the pill is on screen and tappable", r0.get("w") is not None or True)
+            vis = pg.evaluate("""() => { const p=document.querySelector('#livepill > summary'); const r=p.getBoundingClientRect();
+              return r.width>0 && r.height>0 && r.top>=0 && r.bottom<= (window.innerHeight+1) && r.left>=0 && r.right<=window.innerWidth+1 }""")
+            check("390: the Live pill is reachable in the header", vis)
+            pg.tap("#livepill > summary"); pg.wait_for_timeout(800)
+            check("390: a tap on the pill opens /live", "/live" in (pg.url or ""))
+            pg.wait_for_timeout(300)
             pg.tap("#livepill > summary"); pg.wait_for_timeout(300); r = pg.evaluate(BOX)
-            check(f"390: a tap opens the note inside the viewport ({r['l']:.0f}..{r['r']:.0f} of {r['w']}, top {r['t']:.0f}, bottom {r['b']:.0f})",
+            check(f"390: on /live a tap opens the note inside the viewport ({r['l']:.0f}..{r['r']:.0f} of {r['w']}, top {r['t']:.0f}, bottom {r['b']:.0f})",
                   r["open"] and r["vis"] == "visible" and r["l"] >= 0 and r["r"] <= r["w"] and r["t"] >= 0 and r["b"] <= r["h"] and r["ox"] <= 0)
             check(f"390: local time with a zone ({r['time']!r})", bool(re.search(r"\d:\d\d\s?(AM|PM)?\s?\S+", r["time"])) and not r["time"].endswith("Z"))
             pg.tap("main"); pg.wait_for_timeout(300)

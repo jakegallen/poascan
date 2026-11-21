@@ -49,7 +49,7 @@ def get(p):
     try: r = urllib.request.urlopen(base + p, timeout=30); return r.status, r.read().decode()
     except urllib.error.HTTPError as e: return e.code, e.read().decode("utf-8", "replace")
 n = 0
-for p in ("/", "/chain", "/chain/txs", "/api", "/network", "/agents", "/agents/top", "/unlocks", "/epoch/3", f"/address/{fixture.A1}",
+for p in ("/", "/chain", "/chain/txs", "/api", "/live", "/network", "/agents", "/agents/top", "/unlocks", "/epoch/3", f"/address/{fixture.A1}",
           f"/tx/{fixture.TX}", "/upgrade", "/start", "/governance"):
     c, h = get(p)
     got = asks(h); n += len(got)

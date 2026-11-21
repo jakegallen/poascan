@@ -164,7 +164,7 @@ try:
     c, b, h = get("/chain"); check("history: earlier rows carry a plain date title, no markup leaking into the row (1.26.303)", c == 200 and "before the restart (<" not in b and re.search(r'title="Epoch \d+, before the restart \([A-Z][a-z]{2} \d{1,2}\)"', b) is not None)
     c, b, h = get("/chain?segment=1"); check("archived epoch list links stay in segment 1", c == 200 and 'href="/epoch/3?segment=1"' in b and "poa-mainnet-1-segment1" in b)
     c, b, h = get("/epoch/14?segment=1"); check("earlier epoch page still opens (old links), no archived label", c == 200 and "(archived)" not in b)
-    c, b, h = get("/network?tab=health"); check("health has no cut banner (1.26.301: one history)", c == 200 and "cutnote" not in b)
+    c, b, h = get("/live?tab=feeds"); check("feeds has no cut banner (1.26.301: one history)", c == 200 and "cutnote" not in b)
     c, b, h = get(f"/address/{X}"); check("address page shows per-segment nonce", c == 200 and ">S2 3</span>" in b and ">S1 395</span>" in b)
     c, b, h = get(f"/api/address/{X}/txs"); j = (json.loads(b) if c == 200 else {}).get("coverage") or {}
     check("coverage API: current nonce and by_segment", c == 200 and j.get("highest_nonce") == 3 and j.get("segment") == 2 and len(j.get("by_segment", [])) == 2)
@@ -185,7 +185,7 @@ try:
     check("records: segment 1 E0 immutable, bare E0 not, different bodies", c == 200 and c2 == 200 and "immutable" in (h.get("Cache-Control") or "")
           and "immutable" not in (h2.get("Cache-Control") or "") and b != b2)
     c, b, h = get("/about"); check("/about has the Segments method", c == 200 and 'id="segments"' in b)
-    for path in ("/chain", "/chain?segment=1", "/epoch/0", "/about", "/network?tab=health"):
+    for path in ("/chain", "/chain?segment=1", "/epoch/0", "/about", "/live?tab=feeds"):
         c, b, h = get(path); check(f"no en or em dash on {path}", "\u2013" not in b and "\u2014" not in b)
 finally:
     p.terminate(); p.wait(10)

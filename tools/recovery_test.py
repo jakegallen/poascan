@@ -202,15 +202,15 @@ try:
     c, hm = get("/"); main = hm[hm.index("<main"):hm.index("</main>")]
     _pn = lambda h: h[h.index('id="livepill"'):h.index("</details>", h.index('id="livepill"'))]
     check("1.26.181: no home strip; the header status note carries the recovery line, the Updated stamp and Details to /upgrade",
-          'class="upstrip' not in hm and '<summary class="pill up" aria-label="Status: Upgrading">' in hm
+          'class="upstrip' not in hm and '<summary class="pill up" aria-label="Status: Upgrading. Open Live">' in hm
           and '<span class="sp-r">Recovery in progress: new checkpoint 33,463, balances intact. Mining and grading reopen in stages.</span>' in _pn(hm)
           and _re.search(r'<span class="upts">Updated <time data-upts="\d+" datetime="[0-9T:-]+Z">\d\d:\d\dZ</time></span><a href="/upgrade">Details</a>', _pn(hm)))
     check(f"home main: no em dash, no 'Accounts', no outside docs {clean(main)}", not clean(main))
     c, up = get("/upgrade"); card = up[up.index("<main"):up.index("</main>")]
     hero = card[card.index('class="uph"'):card.index('class="stats four uptiles"')]
-    check("/upgrade: 200, own layout: hero first, no Network tab strip, no Health panels, one small link to Health",
+    check("/upgrade: 200, own layout: hero first, no Network tab strip, no Health panels, one small link to Live",
           c == 200 and card.index('class="uph"') < card.index("uptiles") < card.index('class="updet"') and "atabs" not in card and "Latency p50" not in card
-          and "Uptime · 7d" not in card and "Incidents" not in card and card.count('<a href="/network?tab=health">Uptime and latency on Health</a>') == 1)
+          and "Uptime · 7d" not in card and "Incidents" not in card and card.count('<a href="/live">Uptime and latency</a>') == 1)
     check("/upgrade hero: Recovery in progress, Updated stamp, sub-line, routes meter 0 of 6 with six Paused segments",
           '<h1 class="uph-t" id="uph-t">Recovery in progress</h1>' in hero and _re.search(r'<span class="upts">Updated <time data-upts="\d+"[^>]*>\d\d:\d\dZ</time></span>', hero)
           and '<p class="uph-s">Mining and grading reopen in stages.</p>' in hero and '<span class="lbl">Endpoints responding</span><b class="mtr-n"><span class="green">0</span> of 6</b>' in hero
@@ -234,10 +234,10 @@ try:
     check(f"/upgrade: clean {clean(card)}", not clean(card))
     c, stp = get("/start")
     check("/start: no status strip; the header status note carries the Updated stamp", 'class="upstrip' not in stp and '<span class="upts">Updated <time data-upts=' in _pn(stp))
-    c, hl = get("/network?tab=health")
-    check("Health: one compact recovery line with the headline and stamp, links /upgrade; no hero, groups or route meter",
+    c, hl = get("/live?tab=feeds")
+    check("Live Feeds: one compact recovery line with the headline and stamp, links /upgrade; no upgrade hero or groups",
           hl.count('class="uphl"') == 1 and "Recovery in progress: new checkpoint 33,463, balances intact." in hl and '<a href="/upgrade">Recovery details</a>' in hl
-          and 'class="uph"' not in hl and "data-grp" not in hl and 'class="seg"' not in hl)
+          and 'class="uph"' not in hl and "data-grp" not in hl)
     c, fr = get("/fragment/upgrade")
     check("/fragment/upgrade serves the live view with its signature; the snapshot carries upsig", c == 200 and fr.startswith('<div data-upview data-sig="') and 'class="uph"' in fr)
     m = json.loads(get("/api/v1/status")[1] or "{}").get("meta", {}).get("maintenance") or {}
@@ -261,7 +261,7 @@ try:
     seed({"mining": "open"}, notice=False); db.put_blob("mining_back", {"at": int(time.time()) - M.BACK_GRACE_S - 60})
     import http.client
     c, hm = get("/"); hc = http.client.HTTPConnection("127.0.0.1", port, timeout=20); hc.request("GET", "/upgrade"); rr = hc.getresponse(); c2 = rr.status; rr.read(); hc.close()
-    check(f"mining back and notice gone: no strip, /upgrade redirects to Health ({c2}, strip {'class=\"upstrip\"' in hm})", 'class="upstrip"' not in hm and c2 == 302)
+    check(f"mining back and notice gone: no strip, /upgrade redirects to Live ({c2}, strip {'class=\"upstrip\"' in hm})", 'class="upstrip"' not in hm and c2 == 302)
 finally:
     p.terminate(); p.wait(10)
 print("all passed" if not fails else f"{len(fails)} failed")

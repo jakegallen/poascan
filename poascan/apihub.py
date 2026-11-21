@@ -14,7 +14,11 @@ from .ui import *
 from . import ui as _ui
 
 PAGE = 20
-TABS = [("rest", "/api", "REST"), ("mcp", "/api?tab=mcp", "MCP"), ("spec", "/api?tab=spec", "Spec")]
+BASE = "/api"
+def tab_rows(base=None):
+    b = base or BASE
+    return [("rest", b, "REST"), ("mcp", f"{b}?tab=mcp", "MCP"), ("spec", f"{b}?tab=spec", "Spec")]
+TABS = tab_rows()
 HEAD = '<link rel="stylesheet" href="/static/api.css?v={}"><script src="/static/api.js?v={}" defer></script>'
 LANES = [("rest", "HTTP"), ("mcp", "Tools"), ("csv", "CSV")]
 FIX = os.path.join(os.path.dirname(__file__), "..", "tools", "fixtures")
@@ -70,7 +74,7 @@ def hero(groups, tools):
     l = OC.links("poascan", AG.MCP_URL); fb = OC.fallback("poascan", AG.MCP_URL)
     chips = "".join(f'<a class="chip app" href="{E(l[k])}" data-mcp="{k.replace("_", "-")}"' + (' target="_blank" rel="noopener noreferrer"' if k in OC.WEB else "")
                     + f' data-mcpcopy="{E(fb[k])}" data-app="{E(n)}">{label(n)}</a>' for k, n in OC.BUTTONS[:4])
-    chips += '<a class="chip" href="/api?tab=spec" data-kit-tab="spec">Other</a>'
+    chips += f'<a class="chip" href="{BASE}?tab=spec" data-kit-tab="spec">Other</a>'
     url = lambda u: f'<div class="aurl"><code>{E(u.split("://", 1)[1])}</code>{copy(u)}</div>'
     conn = f'<div class="bl aconn"><span class="lbl">Connect</span>{url(AG.MCP_URL)}{url(AG.BASE + AG.API_PREFIX)}<div class="achips">{chips}</div></div>'
     leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for k, n in LANES)
@@ -100,7 +104,7 @@ def _grouped(groups):
 
 def _u(**o):
     keep = [(k, v) for k, v in o.items() if v not in ("", None, 0)]
-    return "/api" + ("?" + "&amp;".join(f"{k}={urllib.parse.quote(str(v), safe='/{}')}" for k, v in keep) if keep else "")
+    return BASE + ("?" + "&amp;".join(f"{k}={urllib.parse.quote(str(v), safe='/{}')}" for k, v in keep) if keep else "")
 
 def _pager(total, off, mk):
     if total <= PAGE: return ""
@@ -151,7 +155,7 @@ def rest_body(qs, groups):
         url = AG.BASE + (cur[3] or cur[1]); run = _u(group=grp if grp != order[0] else "", q=q, sel=cur[1], offset=off or "", run="1")
         pane = _pane("rest", cur[1], cur[0], f"curl -s '{url}'", smp.get(cur[1]), run, None, ran=_q(qs, "run") == "1") if cur[0] == "GET" else _pane("rest", cur[1], cur[0], f"curl -s -X {cur[0]} '{url}'", None, "")
     else: pane = '<div class="apane" data-apane></div>'
-    form = (f'<form class="aq" role="search" method="get" action="/api"><input type="hidden" name="tab" value="rest">'
+    form = (f'<form class="aq" role="search" method="get" action="{BASE}"><input type="hidden" name="tab" value="rest">'
             f'<input type="search" name="q" value="{E(q)}" placeholder="Find an endpoint" aria-label="Find an endpoint" autocomplete="off" data-aq></form>')
     return form + f'<div class="ares" data-ares><nav class="chips kit-sub scroll" aria-label="Group">{chips}</nav>' + KIT.split(lst_html, pane) + "</div>"
 
@@ -172,7 +176,7 @@ def mcp_body(qs, tools):
         args = ("Arguments: " + ", ".join(props) + (f". Required: {', '.join(req)}" if req else "")) if props else ""
         pane = _pane("mcp", name, "tools/call", f"curl -s {AG.MCP_URL} -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{json.dumps(json.loads(call))}'", None, "", call, args)
     else: pane = '<div class="apane" data-apane></div>'
-    form = (f'<form class="aq" role="search" method="get" action="/api"><input type="hidden" name="tab" value="mcp">'
+    form = (f'<form class="aq" role="search" method="get" action="{BASE}"><input type="hidden" name="tab" value="mcp">'
             f'<input type="search" name="q" value="{E(q)}" placeholder="Find a tool" aria-label="Find a tool" autocomplete="off" data-aq></form>')
     return form + '<div class="ares" data-ares>' + KIT.split(lst_html, pane) + "</div>"
 
@@ -194,5 +198,5 @@ def page(qs, page_fn):
     qs = qs or {}; tab = _q(qs, "tab"); tab = tab if tab in ("rest", "mcp", "spec") else "rest"
     groups = AG.api_groups(); tools = AG.TOOLS
     body = (tab == "mcp" and mcp_body(qs, tools)) or (tab == "spec" and spec_body()) or rest_body(qs, groups)
-    mod = KIT.tabmod([(k, h, t, None) for k, h, t in TABS], tab, body, "", id="apimod", label="API")
-    return page_fn("API", f'<div class="sechead"><h1 class="sr-only">API</h1></div>{hero(groups, tools)}{mod}', "/api", head=HEAD.format(_asset_v("api.css"), _asset_v("api.js")))
+    mod = KIT.tabmod([(k, h, t, None) for k, h, t in tab_rows()], tab, body, "", id="apimod", label="Reference")
+    return page_fn("API", f'<div class="sechead"><h1 class="sr-only">API</h1></div>{hero(groups, tools)}{mod}', BASE, head=HEAD.format(_asset_v("api.css"), _asset_v("api.js")))

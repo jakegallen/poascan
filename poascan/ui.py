@@ -234,9 +234,9 @@ LOGO_MARK = '''<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><defs><l
 <path d="M27 36.5l5.2 5.6L45 28" fill="none" stroke="url(#gck)" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g clip-path="url(#hexclip)"><rect class="sweep" x="-40" y="0" width="28" height="64" fill="url(#gsw)" transform="skewX(-18)"/></g></svg>'''
 
-NAV = [("/chain", "Chain"), ("/agents", "Agents"), ("/network", "Network"), ("/governance", "Governance"), ("/apps", "Apps"), ("/api", "API")]   # Home is the logo; About and Source are in the footer; swaps live on POASwap (header button)
+NAV = [("/chain", "Chain"), ("/agents", "Agents"), ("/network", "Network"), ("/governance", "Governance"), ("/apps", "Apps")]   # Home is the logo; About and Source are in the footer; swaps live on POASwap (header button). The Live pill is the way into /live.
 # Pages that live under a header tab: the tab that shows as active for them (1.26.96 header merge)
-NAV_OF = {"/api/reference": "/api", "/epochs": "/chain", "/txs": "/chain", "/token": "/network", "/unlocks": "/network"}
+NAV_OF = {"/live": None, "/api": None, "/api/reference": None, "/epochs": "/chain", "/txs": "/chain", "/token": "/network", "/unlocks": "/network"}
 
 SITE_URL = "https://poascan.io/"
 SITE_TITLE = "POAScan · Proof of Agent Explorer"
@@ -250,7 +250,7 @@ REQ = threading.local()   # server sets REQ.path / REQ.qs per request, for canon
 CANON = {"/index.html": "/", "/blocks": "/chain", "/epochs": "/chain", "/txs": "/chain/txs", "/community": "/forum", "/join": "/start", "/onboarding": "/start"}
 DESCS = {
     "/": SITE_DESC,
-    "/live": "The current Proof of Agent epoch in real time: countdown, answers, graders, pool and the live activity feed.",
+    "/live": "Live activity on Proof of Agent: the last 24 minutes of answers, attests and seals, route health, call volume, and the REST, MCP and spec explorer.",
     "/start": "Start mining Proof of Agent: one copy-ready prompt for your AI agent, plus the steps from the official minepoa.com guide.",
     "/chain/txs": "Latest Proof of Agent transactions: answers, grades, attestations, joins and transfers, with finality.",
     "/chain": "Proof of Agent epochs: the open epoch live, every close (pool, minted, burned, cohorts), the pending queue and grading, with CSV.",
@@ -399,8 +399,8 @@ def head_meta(full_title, title=""):
 from . import join as _join
 
 FOOT = [("/about", "About"), ("/about#what-is-proof-of-agent", "What is Proof of Agent"), ("/about#how-to-mine-poa", "How to mine POA"), ("https://poaswap.io/about#faq", "How to buy POA"),
-        ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/network?tab=health", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
-        ("/privacy", "Privacy"), ("/api", "API")]
+        ("/about#what-is-poascan", "What is POAScan"), (SRC_URL, "Source"), ("/live", "Status"), ("/about#safety", "Safety"), ("https://minepoa.com", "minepoa.com"),
+        ("/privacy", "Privacy"), ("/live?tab=spec", "API")]
 def _footer():
     """One row of small links. Skips the page you are on (its title already says it); home and About live in the header."""
     cur = req_path(); ext = lambda h: h.startswith("http")
@@ -565,12 +565,12 @@ def status_pill(f):
     if fl and state != "up":   # 1.26.200: while Tx lookup is not OK and the index is current, tx pages still load from it
         txl = any(t.startswith(("Feed not OK", "Feeds not OK", "Tx lookup ")) and "Tx lookup" in t for t in reasons)
         reasons.append(fl[0] + (" Tx pages load from it." if txl and "Reading" not in fl[0] and "unavailable" not in fl[0] else ""))
-    links = ([("/upgrade", "Details")] if g or ur else []) + [("/network?tab=health", "Health")]
+    links = ([("/upgrade", "Details")] if g or ur else []) + [("/live?tab=feeds", "Feeds")]
     if state == "up": links = [("/upgrade", "Details")]
     ts = (_upgrade_ts() or f.get("fetched_at")) if state == "up" else f.get("fetched_at")   # our last fresh read; while upgrading, the upgrade lines' read
     halted = {t.split(" halted")[0] for t in [x for x, _ in rl] + ([g] if g else []) if " halted" in t} | ({"Tx lookup"} if hr else set())
     pop = _pill_pop(label, fdx, ts, links, f.get("fetched_at"), state, ur, halted)   # 1.26.300: a compact checklist; the sentences stay on Health
-    return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/network?tab=health", reasons=reasons, pop=pop)
+    return dict(state=state, label=label, why=why if state != "live" else "Live", href=f.get("href") or "/live", reasons=reasons, pop=pop)
 
 # 1.26.300 (Jake, t524u): the header note is a short checklist, one row per feed with a dot and one word. The full reasons
 # (with since times) stay on the Health page and in status_pill()["reasons"] for the API.
@@ -614,13 +614,22 @@ def _pill_pop(label, fdx, ts, links, fetched, state, upgrade_line, halted=()):
     lst = ('<ul class="sp-l">' + "".join(f'<li class="{t}"><i aria-hidden="true"></i><span>{E(n)}</span><b>{w}</b></li>' for n, w, t in rows) + '</ul>') if rows else ""
     return head + up + lst + f'<span class="sp-f">{stamp(ts)}' + "".join(f'<a href="{h}">{t}</a>' for h, t in links) + '</span>'
 
-def pill_html(live):
+def pill_html(live, active="/"):
+    """Header status pill: the one Live control. Keeps the glowing dot and state word, opens /live on click,
+    and shows the status note on hover. Marked current when the Live page is open."""
     p = status_pill(live)
-    return (f'<details class="qtip hv spill" id="livepill"><summary class="pill {p["state"]}" aria-label="Status: {E(p["label"])}">'
+    cur = NAV_OF.get(active, active)
+    on = active == "/live" or cur == "/live"
+    aria = f'Status: {p["label"]}. Open Live'
+    ac = ' aria-current="page"' if on else ""
+    cls = f'qtip hv spill{" on" if on else ""}'
+    return (f'<details class="{cls}" id="livepill" data-href="/live"><summary class="pill {p["state"]}" aria-label="{E(aria)}"{ac}>'
             f'<i aria-hidden="true"></i><span>{E(p["label"])}</span></summary><span class="qbox" role="note">{p["pop"]}</span></details>')
 
 def layout(title, body, active="/", live=None, head=""):
-    active = NAV_OF.get(active, active)
+    raw_active = active
+    mapped = NAV_OF.get(active, active)
+    active = mapped if mapped is not None else ""
     body = _quiet_h1(body, active)
     nav = "".join(f'<a href="{h}" class="on" aria-current="page">{n}</a>' if h == active else f'<a href="{h}" class="">{n}</a>' for h, n in NAV)
     if not isinstance(live, dict):
@@ -637,7 +646,7 @@ def layout(title, body, active="/", live=None, head=""):
 <a class="brand" href="/" aria-label="POAScan home">{LOGO_MARK}<span class="wm"><b>POA<span>SCAN</span></b><small>Proof of Agent Explorer</small></span></a>
 <nav class="nav" id="nav">{nav}</nav>
 {search_form("search", "hdr")}
-{pill_html(live)}
+{pill_html(live, raw_active)}
 {SWAP_BTN}
 {_join.button("hdrjoin")}
 <button class="burger" type="button" aria-label="Menu" aria-controls="nav" aria-expanded="false">{ICON_MENU}</button>

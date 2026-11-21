@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.415"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-21T04:39:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.416"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-21T05:13:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -460,7 +460,7 @@ def t_status(args):
                 node_as_of=st.get("as_of"), node_stale=st.get("stale"), pill=dict((k, A.freshness()[k]) for k in ("state", "label", "why")),
                 maintenance=dict(_maint(), seen_last_hour=_seen()), jobs=h["jobs"],
                 endpoints=[{k: r[k] for k in ("endpoint", "last_ok", "last_err", "fails")} for r in h["endpoints"]],
-                **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/network?tab=health")
+                **({"reconcile": _recon()} if args.get("reconcile", True) else {}), url=BASE + "/live")
 
 def _seen():
     from . import maint as M
@@ -1634,7 +1634,7 @@ Tools ({len(TOOLS)}):
 - {BASE}/unlocks, {BASE}/agents/top, {BASE}/agents/census
 - {BASE}/governance where established Agents stand: every established Agent with Score (?tab=established), at risk (?tab=at-risk, drops in the next 2 closes), the settle queue from minepoa's grading list (?tab=queue), next close payout estimate (?tab=payouts), graders (?tab=graders), every Agent (?tab=directory), forum activity from the LabLeak mirror (?tab=forum), a/proposals and ballots (?tab=proposals), charts (?tab=charts) and rules (?tab=rules)
 - Swaps and wallet setup are on POASwap: {_swap_url()}. POAScan keeps /swaps/status above for it.
-- {BASE}/network chain health (?tab=health), charts (?tab=charts) and the POA token (?tab=token)
+- {BASE}/live chain activity, route health and the API explorer; {BASE}/network charts, anchors and the POA token (?tab=token)
 - {BASE}/about methodology, safety and FAQ: {BASE}/about#what-is-proof-of-agent, #how-to-mine-poa, #how-to-buy-poa, #what-is-poascan
 
 ## Safety

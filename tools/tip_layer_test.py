@@ -50,7 +50,7 @@ db.write("INSERT OR IGNORE INTO txs(id, type, from_addr, ts, final) VALUES(?,?,?
 """
 PAGES = ["/", "/start?tab=check", "/start?tab=check&address=poa1" + "A" * 40, "/start?tab=check&address=poa1" + "B" * 40, "/governance", "/governance?tab=established", "/governance?tab=at-risk", "/governance?tab=queue", "/governance?tab=intake", "/governance?tab=graders",
          "/governance?tab=payouts", "/governance?tab=directory", "/governance?tab=charts", "/governance?tab=rules", "/governance?tab=protocol",
-         "/network", "/network?tab=token", "/network?tab=health", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10", "/start?tab=earn"]
+         "/network", "/network?tab=token", "/live?tab=feeds", "/address/poa1" + "A" * 40, "/start", "/agents/census", "/epoch/10", "/start?tab=earn"]
 
 # Is box the topmost element at its centre and four inset corners, and fully inside the viewport? Notes that ignore the
 # pointer (chart readouts) take pointer events for the measurement only, since elementFromPoint skips pointer-events:none.
@@ -119,7 +119,11 @@ def run(base, p, w, h, mobile, kinds):
                 pg.evaluate(f"""()=>{{const s=document.querySelector('{sel} > summary');let c=s.parentElement;
                   while(c&&!(c.scrollWidth>c.clientWidth&&/auto|scroll/.test(getComputedStyle(c).overflowX)))c=c.parentElement;
                   if(c){{const a=s.getBoundingClientRect(),b=c.getBoundingClientRect();c.scrollLeft+=a.right-(b.right-8)}}}}""")
-                # 1.26.300: a mouse click on the status pill opens Health, so at 1280 its note is opened by hover
+                # Off /live, a tap on the status pill opens /live (statusdot_test). Skip it here so
+                # the rest of the notes stay on this page. At 1280 hover still opens the note.
+                is_pill = "spill" in q["k"] and "pill" in q["k"]
+                if mobile and is_pill and not path.startswith("/live"):
+                    continue
                 (s.tap if mobile else s.hover if "spill" in q["k"] else s.click)(timeout=3000)
             except Exception as e:
                 check(f"{w}: {path} {q['k']} '{q['label']}': opens ({type(e).__name__})", False); bad += 1; continue
@@ -135,7 +139,7 @@ def run(base, p, w, h, mobile, kinds):
         if path == "/" and not mobile:   # 1.26.300 (t524u): a click on the status pill goes to Health
             pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
             pg.mouse.move(0, 400); pg.locator("#livepill > summary").click(timeout=3000); pg.wait_for_timeout(1200)
-            check(f"{w}: a click on the status pill opens Health", "/network?tab=health" in pg.url)
+            check(f"{w}: a click on the status pill opens Live", "/live" in (pg.url or "") and "/network" not in (pg.url or ""))
             pg.goto(base + path, wait_until="domcontentloaded", timeout=60000); pg.wait_for_timeout(400); pg.mouse.move(640, 790)
         # chart hover readouts (.xt) at the left edge, middle and right edge of up to 4 charts
         pg.evaluate("()=>{document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'));if(document.activeElement&&document.activeElement.blur)document.activeElement.blur()}"); pg.mouse.move(1, 1); pg.wait_for_timeout(250)   # 1.26.397: a status pill note still open from the hover step above (slow runner) covered the hero chart readout
@@ -217,7 +221,7 @@ def run(base, p, w, h, mobile, kinds):
             check(f"{w}: {path}: wallet binding {wb_ok} of {len(ids)} notes topmost and inside", len(ids) >= 1 and wb_ok == len(ids))   # UI/UX P2: the binding tag stays, the ? tips are gone
             if wb_ok and wb_ok == len(ids): kinds.add("wallet binding")
         # Route halts (routewatch): the Stale tag on a Health Routes row, opened on its own
-        if "tab=health" in path:
+        if "tab=feeds" in path:
             sel = 'ul.nrt li[data-route="path_actions"] details.qtip'
             pg.evaluate("()=>document.querySelectorAll('details.qtip[open]').forEach(d=>d.removeAttribute('open'))")
             try:

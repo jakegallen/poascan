@@ -17,11 +17,11 @@ def unit():
              ("/blocks", "page=2"): "/chain?page=2", ("/txs", "type=join&page=3"): "/chain/txs?type=join&page=3", ("/transactions", ""): "/chain/txs",
              ("/token", ""): "/network?tab=token", ("/token", "tab=x&range=7d"): "/network?tab=token&range=7d",
              ("/agents/at-risk", "sort=-drop"): "/governance?tab=at-risk&sort=-drop", ("/agents/graders", "sort=n&segment=1"): "/governance?tab=graders&sort=n&segment=1",
-             ("/live", ""): "/chain?tab=pending", ("/grading", ""): "/chain?tab=grading", ("/at-risk", ""): "/governance?tab=at-risk"}
+             ("/grading", ""): "/chain?tab=grading", ("/at-risk", ""): "/governance?tab=at-risk"}
     got = {k: S.moved(k[0], q(k[1])) for k in cases}
     check(f"moved(): new routes, query kept, target tab wins {[(k, v) for k, v in got.items() if v != cases[k]]}", got == cases)
-    check("sitemap routes: new homes in, old list URLs out", all(p in S.STATIC_ROUTES for p in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=rules"))
-          and not any(p in S.STATIC_ROUTES for p in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders")))
+    check("sitemap routes: new homes in, old list URLs out", all(p in S.STATIC_ROUTES for p in ("/chain", "/chain/txs", "/network?tab=token", "/governance", "/governance?tab=rules", "/live"))
+          and not any(p in S.STATIC_ROUTES for p in ("/epochs", "/txs", "/token", "/agents/at-risk", "/agents/graders", "/api")))
 
 def fresh():
     """Standing starts fresh in each segment: only the selected segment's own close records count."""
@@ -99,16 +99,16 @@ def live():
             except Exception: time.sleep(0.2)
         # 301s over HTTP
         for old, new in (("/epochs?segment=1", "/chain?segment=1"), ("/txs?type=join", "/chain/txs?type=join"), ("/token", "/network?tab=token"),
-                         ("/agents/at-risk", "/governance?tab=at-risk"), ("/agents/graders?sort=n", "/governance?tab=graders&sort=n"), ("/live", "/chain?tab=pending")):
+                         ("/agents/at-risk", "/governance?tab=at-risk"), ("/agents/graders?sort=n", "/governance?tab=graders&sort=n"), ("/api", "/live"), ("/api?tab=mcp", "/live?tab=mcp"), ("/network?tab=health", "/live?tab=feeds"), ("/status", "/live")):
             c, _, h = get(old); check(f"GET {old} -> 301 {h.get('Location')}", c == 301 and h.get("Location") == new)
-        for u in ("/epoch/2", "/unlocks", "/agents", "/agents/top", "/about"):
+        for u in ("/epoch/2", "/unlocks", "/agents", "/agents/top", "/about", "/live"):
             cu = get(u); check(f"GET {u} stays 200 ({cu[0]})", cu[0] == 200)
         # header: Home plus exactly 4 tabs, About in the footer
         home = get("/")[1]
         nav = home[home.index('<nav class="nav" id="nav">'):]; nav = nav[:nav.index("</nav>")]
         links = re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', nav)
-        check(f"nav is Chain, Agents, Network, Governance, Apps, API (1.26.414) {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance", "Apps", "API"]
-              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance", "/apps", "/api"])
+        check(f"nav is Chain, Agents, Network, Governance, Apps {links}", [t for _, t in links] == ["Chain", "Agents", "Network", "Governance", "Apps"]
+              and [h for h, _ in links] == ["/chain", "/agents", "/network", "/governance", "/apps"])
         check("About is in the footer, not the nav", 'href="/about"' not in nav and re.search(r'<footer.*href="/about"', home, re.S) is not None)
         foot = home[home.index("<footer"):] if "<footer" in home else ""
         check("Apps is in the nav, not the footer", ('/apps', 'Apps') in links and 'href="/apps"' not in foot)
@@ -125,11 +125,15 @@ def live():
               and 'href="/chain" class="chip on" data-kit-tab="closed"' in ch and 'href="/chain/txs" class="chip " data-kit-tab="txs"' in ch and 'href="/chain/txs" class="chip on" data-kit-tab="txs"' in tx
               and 'data-kit-tab="grading"' in ch and 'class="card benchc hpulse"' in ch and 'class="card benchc hpulse"' in tx)
         check("Chain: epoch tabs and type chips use the new routes", 'href="/chain?tab=pending"' in ch and 'href="/epochs' not in ch and 'href="/txs' not in tx and 'href="/chain/txs?type=' in tx)
-        # Network: Token tab, Overview and Health intact
-        c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]; hl = get("/network?tab=health")[1]
-        check("Network (1.26.392): Token tab is one tab of the Network module, POA only, one h1", c == 200 and 'href="/network?tab=token" class="chip on" data-kit-tab="token"' in tk
+        # Network keeps Charts, Anchors and Token. Health and the live hero moved to /live.
+        c, tk, _ = get("/network?tab=token"); ov = get("/network")[1]
+        st, _, hd = get("/network?tab=health"); lv = get("/live")[1]
+        check("Network: Token tab is one tab of the Network module, POA only, one h1", c == 200 and 'href="/network?tab=token" class="chip on" data-kit-tab="token"' in tk
               and "Concentration" in tk and "Vesting" in tk and 'class="usd"' not in tk and tk.count("<h1") == 1)
-        check("Network (1.26.392): Overview opens Health, with the live hero and the Feeds chip", 'href="/network" class="chip on" data-kit-tab="health"' in ov and "Last anchor" in ov and 'data-kit-sub="feeds"' in hl)
+        check("Network default is Charts, no live hero", 'data-kit-tab="charts"' in ov and 'class="chip on"' in ov and "Last anchor" not in ov and 'data-kit-tab="health"' not in ov)
+        check("Health URL moves to /live?tab=feeds", st == 301 and hd.get("Location") == "/live?tab=feeds")
+        check("/live is 200 with both 24-minute boards and route health", get("/live")[0] == 200 and "Last 24 min" in lv and "Routes" in lv and 'data-kit-tab="rest"' in lv)
+        check("Live is not a nav tab; the pill is the entry", all(t != "Live" and t != "API" for _, t in links) and 'id="livepill"' in home and 'data-href="/live"' in home)
         # Agents sub-tabs no longer carry Graders or At risk
         ag = get("/agents")[1]; check("Agents sub-tabs: no Graders or At risk", 'href="/agents/graders"' not in ag and 'href="/agents/at-risk"' not in ag)
         # Governance (1.26.395): one hero and one module: Standing, Closes, Payouts, Graders, Proposals, Rules. Old tab URLs land on the right place.
@@ -231,9 +235,9 @@ def live():
         check(f"API ?segment=1 OK, unknown segment 400 ({c1} {c2})", c1 == 200 and J.loads(b1).get("segment") == 1 and c2 == 400)
         bad = [get(u)[0] for u in ("/api/v1/governance/directory?sort=x", "/api/v1/governance/at-risk?level=x", "/api/v1/governance/forum?range=1y", "/api/v1/governance/graders?limit=a", "/api/v1/governance?x=1", "/api/v1/governance/nope")]
         check(f"API bad params 400, unknown endpoint 404 {bad}", bad == [400, 400, 400, 400, 400, 404])
-        sp = J.loads(get("/openapi.json")[1]); ap = get("/api")[1]
+        sp = J.loads(get("/openapi.json")[1]); ap = get("/live")[1]
         check("OpenAPI and /api docs list every governance endpoint with segment", all(f"/api/v1/governance{x}" in sp["paths"] for x in ("", "/at-risk", "/payouts", "/graders", "/directory", "/forum", "/proposals"))
-              and all(any(q.get("name") == "segment" for q in sp["paths"][f"/api/v1/governance{x}"]["get"]["parameters"]) for x in ("", "/directory")) and "/governance/directory" in __import__("json").dumps(sp["paths"]) and "list_governance_directory" in get("/api?tab=mcp&q=governance")[1])   # 1.26.395: the index pages 20 rows; read the spec and search the MCP list
+              and all(any(q.get("name") == "segment" for q in sp["paths"][f"/api/v1/governance{x}"]["get"]["parameters"]) for x in ("", "/directory")) and "/governance/directory" in __import__("json").dumps(sp["paths"]) and "list_governance_directory" in get("/live?tab=mcp&q=governance")[1])   # 1.26.395: the index pages 20 rows; read the spec and search the MCP list
         # MCP
         def rpc(m, prm):
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)

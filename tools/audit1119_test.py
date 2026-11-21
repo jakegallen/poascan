@@ -152,7 +152,7 @@ c2 = SH.check_body({"address": ["poa1" + "A" * 40]})
 check("an unpaid Agent with no seal cast still watches the seal cast stage", "Watching" in c2 and "stl-now" in c2)
 SH.lifecycle = lambda a: dict(lc, first_seal_cast_ts=None, first_seal_ts=now - 3 * day)
 check("an older payload that carries first_seal_ts only still fills the stage", SH.check_body({"address": ["poa1" + "A" * 40]}).count("stl-done") >= 4)
-check("warm list: Network details, Earned and the latest epoch pages", "/network?view=details" in HC.WARM and "/agents/top?tab=richlist" in HC.WARM
+check("warm list: Feeds details, Earned and the latest epoch pages", "/live?tab=feeds&view=details" in HC.WARM and "/live" in HC.WARM and "/agents/top?tab=richlist" in HC.WARM
       and all(u in HC.WARM for u in ("/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/governance?tab=settleage", "/agents/top?tab=active", "/agents/top?tab=rising")))
 HC.LATEST_EPOCH = lambda: 105
 HC._refresh_extra()

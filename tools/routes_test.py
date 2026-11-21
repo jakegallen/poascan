@@ -6,7 +6,7 @@ os.environ.setdefault("POASCAN_SEGMENTS", "1")   # synthetic history is relative
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ROUTES = ["/", "/start", "/upgrade", "/chain", "/chain/txs", "/agents", "/network?tab=token", "/network", "/about", "/privacy", "/status",
-          "/network?tab=health", "/api/v1/swaps", "/api/v1/swaps.csv", "/api/v1/swaps/status", "/api/v1/status", "/api/v1/summary",
+          "/live", "/network?tab=health", "/api/v1/swaps", "/api/v1/swaps.csv", "/api/v1/swaps/status", "/api/v1/status", "/api/v1/summary",
           "/api/v1/agents/poa1" + "A" * 40 + "/addresses", "/api/v1/address/poa1" + "A" * 40]
 
 def seed(path):
@@ -55,7 +55,7 @@ def main():
         home = urllib.request.urlopen(base + "/", timeout=20).read().decode()
         llms = urllib.request.urlopen(base + "/llms-full.txt", timeout=20).read().decode()
         import re as _re
-        upg = urllib.request.urlopen(base + "/upgrade", timeout=20).read().decode(); hl = urllib.request.urlopen(base + "/network?tab=health", timeout=20).read().decode()
+        upg = urllib.request.urlopen(base + "/upgrade", timeout=20).read().decode(); hl = urllib.request.urlopen(base + "/live", timeout=20).read().decode()
         wt = upg[upg.index('data-grp="paused"'):]; wt = wt[:wt.index("</ul>")] if 'data-grp="paused"' in upg else ""
         ok = ("Hosted mining and joining paused" in home
               and "<span>Joining</span>" in wt and "Joining open" not in upg and 'class="uphl"' in hl and "joining paused" in hl.lower()
@@ -80,7 +80,7 @@ def main():
         pages = {u: urllib.request.urlopen(base + u, timeout=20).read().decode() for u in ("/chain", "/about", "/address/poa1" + "A" * 40, "/privacy")}
         pl = json.loads(urllib.request.urlopen(base + "/api/v1/summary", timeout=20).read()).get("pill") or {}
         pages["/"] = home
-        ok = pl.get("state") == "up" and all('id="updot"' not in h and 'class="upstrip' not in h and h.count('<details class="qtip hv spill" id="livepill"><summary class="pill up" aria-label="Status: Upgrading">') == 1
+        ok = pl.get("state") == "up" and all('id="updot"' not in h and 'class="upstrip' not in h and h.count('<details class="qtip hv spill" id="livepill" data-href="/live"><summary class="pill up" aria-label="Status: Upgrading. Open Live">') == 1
                                                and '<span class="sp-r">Hosted mining' in h and 'href="/upgrade">Details</a>' in h for h in pages.values())
         print(("ok   " if ok else "FAIL ") + "Upgrading (1.26.181): the header status shows Upgrading on every page, home too, its note gives the reason and links /upgrade; no strip, no separate dot"); ok or fails.append("updot")
         A1, A2 = "poa1" + "A" * 40, "poa1" + "B" * 40
