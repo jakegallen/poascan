@@ -464,6 +464,25 @@ def coverage():
     )
 
 
+def stats(days=14):
+    """Summary counts and 14-day applied memo series from the local replay tables."""
+    ensure_fresh()
+    cov = coverage()
+    last = int(cov.get("last_ts") or 0)
+    memos = int(cov.get("applied") or 0)
+    r = db.q("SELECT COUNT(DISTINCT from_addr) AS n FROM atp20_ops WHERE valid=1 AND from_addr IS NOT NULL AND from_addr!=''")
+    agents = int((r[0]["n"] if r else 0) or 0)
+    series = [0] * days
+    if last and days > 0:
+        day = 86400
+        start = (last // day) * day - (days - 1) * day
+        for row in db.q("SELECT ts FROM atp20_ops WHERE valid=1 AND ts>=?", (start,)):
+            i = (int(row["ts"] or 0) - start) // day
+            if 0 <= i < days:
+                series[i] += 1
+    return dict(memos=memos, agents=agents, last=last, series=series, cov=cov)
+
+
 def _token_row(r):
     if not r:
         return None

@@ -60,36 +60,56 @@ check("inline svg memo is present as text, not dropped", any("<svg>" in (it["tex
 disc = AP.DISCLAIMER
 html = AP.page_html({})
 html_posts = AP.page_html({"tab": ["posts"]})
-html_games = AP.page_html({"tab": ["games"]})
 html_atp = AP.page_html({"tab": ["atp20"]})
+html_721 = AP.page_html({"tab": ["atp721"]})
+html_art = AP.page_html({"tab": ["art"]})
+html_games = AP.page_html({"tab": ["games"]})
 html_bad = AP.page_html({"tab": ["nope"]})
 
 def nodash(s):
     return all(ch not in s for ch in DASH)
 
-check("default tab is Posts and shows the feed", "post-feed" in html and "post-text" in html and "post-card" in html and 'aria-current="page"' in html and "Posts" in html)
+check("tab order is Posts, ATP-20, ATP-721, Art, Games",
+      html.index('data-kit-tab="posts"') < html.index('data-kit-tab="atp20"')
+      < html.index('data-kit-tab="atp721"') < html.index('data-kit-tab="art"')
+      < html.index('data-kit-tab="games"'))
+check("tab bar uses the accessible info tooltip with the full disclaimer",
+      "appshero" not in html and "apps-bar-note" not in html
+      and "apps-tip" in html and "apps-tip-pop" in html and disc in html)
+check("ATP-20 list is the table layout, not a card grid",
+      "tok-deck" in html_atp and "tok-grid" not in html_atp)
+check("preview query switches are gone",
+      "apps-bar-note" not in AP.page_html({"top": ["b"]})
+      and "tok-grid" not in AP.page_html({"tab": ["atp20"], "view": ["b"]})
+      and "tok-deck" in AP.page_html({"tab": ["atp20"], "view": ["b"]}))
+check("default tab is Posts and shows the feed without empty post-ava boxes",
+      "post-feed" in html and "post-text" in html and "post-card" in html
+      and "post-ava" not in html and 'aria-current="page"' in html and "Posts" in html)
 check("unknown tab falls back to Posts", "post-feed" in html_bad and "post-card" in html_bad)
 check("posts tab features POAPost", 'data-app="poapost"' in html and "POAPost" in html and "/static/apps/poapost.png" in html)
-check("posts tab links the LabLeak post", "2915" in html)
-check("disclaimer appears once on each tab", html.count(E(disc)) == 1 and html_posts.count(E(disc)) == 1 and html_games.count(E(disc)) == 1)
-check("disclaimer is exact", disc in html.replace("&amp;", "&") or E(disc) in html)
-# The disclaimer has no chars that need escape except maybe none. It's plain ASCII.
-check("disclaimer raw exact on the page", disc in html)
-check("games tab has no unofficial line", "Unofficial" not in html_games.split(disc, 1)[1])
-check("posts tab has no unofficial line", "Unofficial" not in html.split(disc, 1)[1] and "Unofficial" not in html_posts.split(disc, 1)[1])
-check("ATP-20 source says unofficial once", "Unofficial" not in disc and html_atp.split(disc, 1)[1].count("Unofficial") == 1)
+check("all category headers link their LabLeak specs",
+      "2915" in html and "3202" in html_atp and "3218" in html_721 and "3161" in html_art)
+check("all 5 tabs include category intro header with Memos/Agents/Last",
+      all('class="app-feat-slot"' in h and ">Memos<" in h and ">Agents<" in h and ">Last<" in h
+          for h in (html_posts, html_atp, html_721, html_art, html_games)))
+check("games tab has no unofficial line", "Unofficial" not in html_games)
+check("posts tab has no unofficial line", "Unofficial" not in html and "Unofficial" not in html_posts)
+check("ATP-20 and ATP-721 say unofficial once",
+      html_atp.count("Unofficial") == 1 and html_721.count("Unofficial") == 1)
 check("posts tab escapes svg and script",
       "&lt;svg&gt;&lt;script&gt;x&lt;/script&gt;&lt;/svg&gt;" in html_posts
       and "<svg><script>x</script></svg>" not in html_posts
       and "<script>x</script>" not in html_posts)
 check("posts tab shows grouped excerpt", "part one" in html_posts)
 check("short posts list has no pager", "gpager" not in html and "gpager" not in html_posts)
-check("games tab has no unendorsed or third-party tag", "Unendorsed" not in html_games and "Third-party" not in html_games.split(disc, 1)[-1])
+check("games tab uses inline SVG icon buttons, not Website/Post X/Telegram text",
+      "app-icon-btn" in html_games and ">Website<" not in html_games
+      and ">Post X<" not in html_games and ">Telegram<" not in html_games)
 check("games tab has no catalog source line", "POAScan catalog." not in html_games)
 check("games show live memo stats", 'data-app="poa-dice"' in html_games and 'data-memos="1"' in html_games and "app-stats" in html_games)
 check("games use local logos when they exist", "/static/apps/dice.png" in html_games and "/static/apps/betai.webp" in html_games and "/static/apps/league.webp" in html_games and "/static/apps/trivia.png" in html_games)
 check("games link official sites and socials", "poadice.grok.me" in html_games and "cgtrivia.creativegrace.tech" in html_games and "x.com/DCTreeofLife" in html_games and "t.me/VaultGameHub" in html_games and "github.com/maximusmaximus/poa-dice" in html_games)
-check("games include POA Dice outbound host", "poadice.grok.me" in html_games and "rel=\"noopener noreferrer\"" in html_games)
+check("games include POA Dice outbound host", "poadice.grok.me" in html_games and 'rel="noopener noreferrer"' in html_games)
 check("games have no wallet-connect or payment CTA",
       "wallet-connect" not in html_games.lower() and "walletconnect" not in html_games.lower()
       and "deposit" not in html_games.lower() and "connect wallet" not in html_games.lower())
@@ -97,13 +117,14 @@ check("PROOF PIT is listed with no invented prefix", "PROOF PIT" in html_games a
 import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
-check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
-check("version is 1.26.416", AG.VERSION == "1.26.416")
+check("no em or en dash in Apps HTML",
+      all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
+check("version is 1.26.417", AG.VERSION == "1.26.417")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
 seal_page = AP.page_html({"tab": ["atp20"], "tick": ["SEAL"]})
-check("tick drill-down shows unofficial SEAL holders", "SEAL" in seal_page and "Holder" in seal_page and disc in seal_page)
+check("tick drill-down shows unofficial SEAL holders", "SEAL" in seal_page and "Holder" in seal_page and "Unofficial" in seal_page)
 check("20-row cap constant", AP.LIMIT == 20)
 
 # flood of inline posts stays capped and pages with the shared 20-row offset pager
@@ -124,35 +145,32 @@ check("a short list has no pager", "gpager" not in html_games)
 # no raw svg path even if someone put svg in a game blurb (catalog is escaped)
 check("game blurbs are escaped in HTML", all(E(g["blurb"]) in html_games or g["blurb"] in html_games for g in AP.GAMES))
 
-# ---- Art tab ----
-html_art = AP.page_html({"tab": ["art"]})
+# ---- Art tab (unique AC1 works only, no ATP-721) ----
 check("art tab titles Genesis with a Digivatar credit",
-      ">Genesis</h2>" in html_art and "by Digivatar" in html_art)
-check("art tab tagline counts works, not game catalogs",
-      "onchain work" in html_art and "catalogs in this archive" not in html_art)
+      ">Genesis</h3>" in html_art and "by Digivatar" in html_art)
 check("art tab has no mint or buy CTA",
       "wallet-connect" not in html_art.lower()
       and "mint now" not in html_art.lower() and "buy now" not in html_art.lower()
       and ">Mint</" not in html_art and ">Buy</" not in html_art)
-check("art tab does not repeat the unofficial decoder footer",
-      html_art.count("POAScan decoder. Unofficial.") == 0)
 check("art tab has no typographic dash", not any(d in html_art for d in DASH))
-check("featured work uses an animated raster with a reduced-motion still",
+check("art work uses an animated raster with a reduced-motion still",
       "art-pix-anim" in html_art and "art-pix-still" in html_art
       and "prefers-reduced-motion" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "style.css"), encoding="utf-8").read())
 
-# second synthetic collection appears without per-collection UI code; unit list pages 20 at a time
+# ---- ATP-721 tab (collections live on atp721, NOT art) ----
 SHA2 = "aa" * 32
 load(row(300, f"ATP-721|d|DEMO-ART|{SHA2}|image/png|40|1|MAM|20|40|SECOND COLLECTION", B, ts=1795230000))
 for i in range(1, 26):
     load(row(300 + i, f"ATP-721|m|DEMO-ART|{i}", A, ts=1795230000 + i))
+html_721_2 = AP.page_html({"tab": ["atp721"]})
 html_art2 = AP.page_html({"tab": ["art"]})
-check("art catalog lists the second collection by ticker", "DEMO-ART" in html_art2 and "SECOND COLLECTION" in html_art2)
-html_col = AP.page_html({"tab": ["art"], "col": ["DEMO-ART"]})
+check("ATP-721 catalog lists the second collection by ticker", "DEMO-ART" in html_721_2 and "SECOND COLLECTION" in html_721_2)
+check("Art tab excludes ATP-721 collections", "DEMO-ART" not in html_art2 and "SECOND COLLECTION" not in html_art2)
+html_col = AP.page_html({"tab": ["atp721"], "col": ["DEMO-ART"]})
 check("collection page uses the shared 20-row pager",
       "gpager" in html_col and "1 to 20 of 25" in html_col and ">Next</a>" in html_col)
 check("collection unit table names the Agent column", ">Agent</" in html_col or ">Agent</th>" in html_col or "Agent" in html_col)
-html_col2 = AP.page_html({"tab": ["art"], "col": ["DEMO-ART"], "offset": ["20"]})
+html_col2 = AP.page_html({"tab": ["atp721"], "col": ["DEMO-ART"], "offset": ["20"]})
 check("collection second page stays at the shared cap", "21 to 25 of 25" in html_col2 and "Prev" in html_col2)
 
 # ---- raster data-URI memos in Posts: pixelated image, never a base64 wall ----
