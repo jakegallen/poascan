@@ -152,6 +152,16 @@ check("ATP-20 tab has a How to mint card and a generic prompt",
       and "ATP-20|m|&lt;TICK&gt;|&lt;AMOUNT&gt;" in html_atp
       and "Emblem Wallet" in html_atp and AP.WALLET_CMD in html_atp
       and AP.MINT_SAFE in html_atp)
+check("How to mint is a collapsed details row on load",
+      '<details class="mint-card" id="apps-mint"' in html_atp
+      and 'aria-expanded="false"' in html_atp
+      and "mint-sum" in html_atp and "mint-chev" in html_atp
+      and "<details class=\"mint-card\" id=\"apps-mint\" open" not in html_atp
+      and 'id="apps-mint" open' not in html_atp)
+check("wallet and payment lines live only in the prompt, not under the copy button",
+      "mint-wallet" not in html_atp and "mint-safe" not in html_atp and "mint-spec" not in html_atp
+      and html_atp.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.WALLET_CMD) == 1
+      and html_atp.split("mint-prompt",1)[1].split("</pre>",1)[0].count(AP.MINT_SAFE) == 1)
 check("ATP-20 list Mint buttons prefill MAM rules",
       "open:1000:5" in str(T.token("MAM")) or True)
 mam_btn = "data-mint-prompt" in html_atp and "ATP-20|m|MAM|1000" in html_atp
@@ -214,6 +224,11 @@ check("ATP-721 tab has a How to mint card after collections land",
       'id="apps-mint"' in html_721_2 and "How to mint" in html_721_2
       and "ATP-721|m|&lt;COLLECTION&gt;|&lt;UNIT&gt;" in html_721_2
       and AP.WALLET_CMD in html_721_2 and AP.MINT_SAFE in html_721_2)
+check("ATP-721 How to mint starts collapsed",
+      '<details class="mint-card" id="apps-mint"' in html_721_2
+      and 'aria-expanded="false"' in html_721_2
+      and 'id="apps-mint" open' not in html_721_2
+      and "mint-wallet" not in html_721_2 and "mint-safe" not in html_721_2)
 check("DEMO-ART Mint button prefills fee, burn, and max editions",
       "ATP-721|m|DEMO-ART|&lt;UNIT&gt;" in html_721_2
       and "1 MAM" in html_721_2 and "20% of the fee is burned" in html_721_2

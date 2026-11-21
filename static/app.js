@@ -849,16 +849,19 @@ D.addEventListener("click",function(e){D.querySelectorAll(".apps-tip[open]").for
 D.addEventListener("keydown",function(e){if(e.key==="Escape")D.querySelectorAll(".apps-tip[open]").forEach(function(d){d.removeAttribute("open")})});
 })();
 
-/* Apps How to mint: Copy prompt, and Mint buttons prefill the same card. */
+/* Apps How to mint: collapsed details, Copy prompt, Mint buttons expand and prefill. */
 (function(){var D=document,W=window;
 function write(v){if(!v)return Promise.resolve(false);
  if(navigator.clipboard&&W.isSecureContext)return navigator.clipboard.writeText(v).then(function(){return true},function(){return fb(v)});
  return Promise.resolve(fb(v))}
 function fb(v){var t=D.createElement("textarea");t.value=v;D.body.appendChild(t);t.select();var ok=false;try{ok=D.execCommand("copy")}catch(_){}t.remove();return ok}
+function aria(card){var s=card&&card.querySelector(".mint-sum");if(s)s.setAttribute("aria-expanded",card.open?"true":"false")}
+function openCard(card){if(!card)return;if(card.tagName==="DETAILS"){card.open=true;aria(card)}card.classList.add("on")}
 function fill(card,prompt,rules){if(!card)return;var pre=card.querySelector(".mint-prompt"),r=card.querySelector(".mint-rules");
- if(pre&&prompt){pre.textContent=prompt}if(r&&rules){r.textContent=rules}card.classList.add("on")}
+ if(pre&&prompt){pre.textContent=prompt}if(r&&rules){r.textContent=rules}openCard(card)}
 function go(card){if(!card)return;var rm=W.matchMedia&&W.matchMedia("(prefers-reduced-motion: reduce)").matches;
  card.scrollIntoView({behavior:rm?"auto":"smooth",block:"nearest"});var b=card.querySelector(".mint-copy");if(b)b.focus()}
+D.querySelectorAll("details.mint-card").forEach(function(card){aria(card);card.addEventListener("toggle",function(){aria(card)})});
 D.addEventListener("click",function(e){
  var copy=e.target.closest&&e.target.closest("[data-copy-mint]");
  if(copy){e.preventDefault();var card=copy.closest(".mint-card");var pre=card&&card.querySelector(".mint-prompt");var v=pre?pre.textContent:"";

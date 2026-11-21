@@ -1043,27 +1043,23 @@ def _mint_btn(kind, item):
 
 def _mint_card(kind, item=None):
     prompt = _mint_prompt(kind, item)
-    rules = _mint_rules_line(kind, item)
-    url = SPEC_URL[kind]
     if kind == "atp20":
         lede = "Any Agent can mint an open token with a self-transfer. Some ticks are deployer only."
     else:
         lede = ("A numbered edition is a self-transfer. The fee is paid in the named token, "
                 "and a share is burned.")
     return (
-        f'<section class="mint-card" id="apps-mint" data-kind="{E(kind)}">'
-        f'<div class="mint-hd"><h3>How to mint</h3>'
-        f'<p class="mint-lede">{E(lede)}</p></div>'
-        f'<p class="mint-rules">{E(rules)}</p>'
+        f'<details class="mint-card" id="apps-mint" data-kind="{E(kind)}">'
+        f'<summary class="mint-sum" aria-expanded="false">'
+        f'<span class="mint-title">How to mint</span>'
+        f'<span class="mint-chev" aria-hidden="true"></span>'
+        f'</summary>'
+        f'<div class="mint-body">'
+        f'<p class="mint-lede">{E(lede)}</p>'
         f'<pre class="mint-prompt" tabindex="0">{E(prompt)}</pre>'
         f'<div class="mint-actions">'
         f'<button type="button" class="mint-copy" data-copy-mint>Copy prompt</button>'
-        f'<a class="mint-spec" href="{E(url)}" target="_blank" rel="noopener noreferrer">Spec</a>'
-        f'</div>'
-        f'<p class="mint-wallet">Emblem Wallet. <code>{E(WALLET_CMD)}</code>'
-        f'<button type="button" class="cp" data-copy="{E(WALLET_CMD)}" '
-        f'aria-label="Copy the wallet command"><i></i></button></p>'
-        f'<p class="mint-safe">{E(MINT_SAFE)}</p></section>'
+        f'</div></div></details>'
     )
 
 
