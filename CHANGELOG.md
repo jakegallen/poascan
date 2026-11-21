@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.415] - 2026-11-20
+
+### Fixed
+- Apps tab switches and subpages no longer run a heavy replay or art decode on the visitor request, and no longer show the Busy page when those clicks coincide. Every tab, collection, tick and pager page is served from a pinned snapshot (stale is fine) and refreshed by the existing background warmer. Art listing uses the already-built cache instead of reassembling every work on each view. Verified rasters stay on disk and are sent with a long immutable cache header.
+
 ## [1.26.414] - 2026-11-20
 
 ### Added

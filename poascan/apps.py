@@ -223,9 +223,19 @@ def _hidden(txid, cid=None):
     return False
 
 
-def posts(limit=LIMIT, offset=0, count=False):
-    """PoAPost / AC1 text items from archived transfer memos, newest first. Multipart rows are grouped.
-    Default is one page of 20. Pass count=True to get (page, total) for the shared offset pager."""
+def _posts_stamp():
+    """Cheap watermark so the assembled post list rebuilds only when the archive changes."""
+    rows = db.q(
+        "SELECT COUNT(*) AS n, MAX(ts) AS ts FROM txs "
+        "WHERE type='transfer' AND final=1 AND (memo LIKE 'AC1|m|%' OR memo LIKE 'AC1|t|%')"
+    )
+    r = rows[0] if rows else {}
+    return (int(r.get("n") or 0), int(r.get("ts") or 0))
+
+
+@A.cached("apps_posts_index", 60, light=True)
+def _posts_index(stamp):
+    """All assembled PoAPost items, newest first. stamp is the archive watermark (count, max ts)."""
     rows = db.q(
         "SELECT id, from_addr, to_addr, amount, memo, ts, final FROM txs "
         "WHERE type='transfer' AND final=1 AND (memo LIKE 'AC1|m|%' OR memo LIKE 'AC1|t|%') "
@@ -263,6 +273,14 @@ def posts(limit=LIMIT, offset=0, count=False):
                           addr=g["addr"], ts=g["ts"], amount=g["amount"], text=text,
                           parts=g["parts"], have=g["have"]))
     items.sort(key=lambda x: (-int(x["ts"] or 0), x["txid"] or ""))
+    return items
+
+
+def posts(limit=LIMIT, offset=0, count=False):
+    """PoAPost / AC1 text items from archived transfer memos, newest first. Multipart rows are grouped.
+    Default is one page of 20. Pass count=True to get (page, total) for the shared offset pager.
+    The assembled list is a cached snapshot, rebuilt only when the archive watermark changes."""
+    items = _posts_index(_posts_stamp())
     off = max(0, int(offset or 0))
     lim = max(0, int(limit))
     page = items[off:off + lim]
@@ -781,10 +799,6 @@ def _art_list(names, col="", qs=None):
     from . import atp721 as C
     from . import ac1art as R
     C.ensure_fresh()
-    try:
-        R.backfill()
-    except Exception:
-        pass
     if col:
         tok = C.collection(col)
         if not tok:
@@ -819,7 +833,56 @@ def _art_list(names, col="", qs=None):
                 f'Debit not checked.</p>')
     return f'<div class="art-page">{body}{cov_line}</div>'
 
+def warm_urls():
+    """Collection, tick, and first pager pages the background warmer should keep, besides the tab roots in WARM.
+    Capped so one warmer pass stays inside the existing loop. Deeper pager pages pin on first render."""
+    urls, seen = [], set()
+
+    def add(u):
+        if u and u not in seen:
+            seen.add(u); urls.append(u)
+
+    try:
+        from . import atp721 as C
+        C.ensure_fresh()
+        for tok in C.collections():
+            col = tok.get("col")
+            if not col:
+                continue
+            add("/apps?tab=art&col=" + col)
+            try:
+                total = C.units_count(col)
+            except Exception:
+                total = int(tok.get("minted") or 0)
+            pages = min((max(int(total or 0), 0) + PAGE - 1) // PAGE, 5)
+            for i in range(1, pages):
+                add(f"/apps?tab=art&col={col}&offset={i * PAGE}")
+    except Exception:
+        pass
+    try:
+        _n = posts(1, 0, count=True)[1]
+        pages = min((max(int(_n or 0), 0) + PAGE - 1) // PAGE, 5)
+        for i in range(1, pages):
+            add(f"/apps?tab=posts&offset={i * PAGE}")
+    except Exception:
+        pass
+    try:
+        from . import atp20 as T
+        n = T.tokens_count()
+        pages = min((max(int(n or 0), 0) + PAGE - 1) // PAGE, 5)
+        for i in range(1, pages):
+            add(f"/apps?tab=atp20&offset={i * PAGE}")
+        for tok in T.tokens_offset(0, PAGE):
+            tick = tok.get("tick")
+            if tick:
+                add("/apps?tab=atp20&tick=" + tick)
+    except Exception:
+        pass
+    return urls
+
+
 def page_html(qs=None):
+
     from .views import page
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""

@@ -1,4 +1,4 @@
-"""Unofficial Apps tab (1.26.413): /apps shell, escaped AC1 posts, ATP-20 list,
+"""Unofficial Apps tab (1.26.415): /apps shell, escaped AC1 posts, ATP-20 list,
 third-party games catalog. No art rasters, no indexer calls, no em or en dashes.
 Usage: python3 tools/apps_test.py"""
 import json, os, sys, tempfile, copy
@@ -98,7 +98,7 @@ import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
-check("version is 1.26.414", AG.VERSION == "1.26.414")
+check("version is 1.26.415", AG.VERSION == "1.26.415")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)

@@ -1,4 +1,4 @@
-"""ATP-721 unofficial read API (1.26.413): keyset-paged collections, units, holders and txs,
+"""ATP-721 unofficial read API (1.26.415): keyset-paged collections, units, holders and txs,
 every figure labeled unofficial, coverage fields, default 20 rows, no upstream reads, no em or en dashes.
 Usage: python3 tools/atp721_api_test.py"""
 import os, sys, tempfile, copy, json
@@ -126,7 +126,7 @@ for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-721 and art routes",
       "/atp721/collections" in txt and "/art/works" in txt and "official is always false" in txt)
-check("version is 1.26.414", AG.VERSION == "1.26.414")
+check("version is 1.26.415", AG.VERSION == "1.26.415")
 check("no em or en dash in new API strings",
       not any(d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in json.dumps(lst) or d in txt for d in DASH))
 

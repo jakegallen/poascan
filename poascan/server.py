@@ -593,6 +593,7 @@ HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
 HC.register_tabs("/agents/census", ["journey", "rates"])
 HC.register_tabs("/apps", [k for k, _ in AP.TABS])
 HC.LATEST_EPOCH = lambda: max((int(r["epoch"]) for r in A.epoch_rows()), default=None)   # 1.26.405: the warm pass also keeps the latest closed epoch pages
+HC.APPS_WARM = AP.warm_urls   # 1.26.415: collection, tick and first pager pages join the same warmer pass
 # 1.26.288 (P0): the page a human gets when every slot is held and no copy of the page is stored. Self-contained (no
 # DB, no render, no request), reloads itself; the API and MCP keep the plain text 503 their clients parse.
 BUSY_HTML = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -1635,7 +1636,7 @@ class H(BaseHTTPRequestHandler):
                 blob = _ART.raster(m.group(1), still=bool(m.group(2))) if m else None
                 if not blob:
                     return self.send(404, "not found", "text/plain")
-                return self.send(200, blob[0], blob[1], {"Cache-Control": "public, max-age=3600"})
+                return self.send(200, blob[0], blob[1], {"Cache-Control": IMMUTABLE})   # content-addressed by id, already on disk
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")

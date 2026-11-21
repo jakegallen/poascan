@@ -565,14 +565,21 @@ def discover_cids():
 
 
 def works():
-    """Verified works only. Failed or incomplete seals are omitted."""
+    """Verified works only. Failed or incomplete seals are omitted.
+    The listing is a snapshot: rebuilt after ingest invalidates it, never by a visitor request
+    calling backfill (that used to reassemble every work on each Art page view)."""
+    with _lock:
+        if _listed[0] is not None:
+            return list(_listed[0])
     rows = []
     for cid in discover_cids():
         row = work(cid)
         if row.get("ok") and (row.get("gif") or row.get("still")):
             rows.append(row)
     rows.sort(key=lambda r: (int(r.get("seal_ts") or 0) or 10**12, r.get("id") or ""))
-    return rows
+    with _lock:
+        _listed[0] = list(rows)
+    return list(rows)
 
 
 def invalidate(cids=None):
