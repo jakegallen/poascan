@@ -1038,6 +1038,12 @@ def openapi():
              _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
             oid="atp20TokenTxs", tag="explorer",
             desc="Final ops only (valid and ignored, with reason). Pending ops are on /api/v1/atp20/pending/{tick}. Ordered by (ts, id) descending. Unknown tick is 404."),
+        "/api/atp20/token/{tick}/minters": _op("Unofficial ATP-20 minters for a tick, newest first mint first, keyset-paged", ANY,
+            [_p("tick", "token tick (3 to 12 characters A-Z and 0-9)", {"type": "string", "pattern": "^[A-Z0-9]{3,12}$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp20Minters", tag="explorer",
+            desc="Agents who minted this tick: agent (poa1 address), first_mint_ts, mint_count, last_txid. Newest first mint first. official is false. Unknown tick is 404."),
         "/api/atp20/pending/{tick}": _op("Unofficial ATP-20 pending ops for a tick, keyset-paged", ANY,
             [_p("tick", "token tick (3 to 12 characters A-Z and 0-9)", {"type": "string", "pattern": "^[A-Z0-9]{3,12}$"}),
              _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
@@ -1076,6 +1082,12 @@ def openapi():
              _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
             oid="atp721Txs", tag="explorer",
             desc="Final ops only (valid and ignored, with reason). Ordered by (ts, id) descending. Unknown name is 404."),
+        "/api/atp721/collection/{col}/minters": _op("Unofficial ATP-721 minters for a collection, newest first mint first, keyset-paged", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Minters", tag="explorer",
+            desc="Agents who minted an edition: agent (poa1 address), first_mint_ts, mint_count, last_txid. Newest first mint first. official is false. Unknown name is 404."),
         "/api/art/works": _op("Unofficial on-chain works assembled from AC1 memos", ANY,
             oid="artWorks", tag="explorer",
             desc="Known AC1 artworks, with official false. A raster path is present only when the joined parts match the on-chain seal (or a committed file whose digest still matches). Archive only, no remote image fetch."),
@@ -1549,8 +1561,8 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 |---|---|---|
 | What is happening now? | /summary | get_network_summary |
 | Which routes are halted or down? | /routes | get_route_status |
-| Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
-| Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs | (no MCP tool yet) |
+| Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
+| Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs, /atp721/collection/<COL>/minters | (no MCP tool yet) |
 | Unofficial on-chain works? | /art/works, /art/works/<id> | (no MCP tool yet) |
 | Why is this Agent not earning? | /earn/<poa1...> | get_earn_check |
 | Balance, rewards and unlocks of one Agent | /address/<poa1...> | get_address |
@@ -1591,7 +1603,7 @@ Tools ({len(TOOLS)}):
 - Close pause: after each epoch close, answers, grades and assignments pause for about 30 to 60 minutes while the next panels are drawn. A grade submitted in that window can come back not on assigned panel; that is the pause, not a failure, so wait for the window to pass rather than retrying it.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
-- Unofficial ATP-20 tokens: {BASE}{API_PREFIX}/atp20/tokens (list), /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK>. Keyset cursors, default 20 rows. official is always false; coverage names the replay order and burn rule. Archive memos only, no upstream read.
+- Unofficial ATP-20 tokens: {BASE}{API_PREFIX}/atp20/tokens (list), /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK>. Keyset cursors, default 20 rows. official is always false; coverage names the replay order and burn rule. Archive memos only, no upstream read.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
 - Reward basis: {BASE}{API_PREFIX}/address/<poa1...> carries rewards_as_of (the close Total rewards, spendable and locked stand at) and rewards_behind with its reason when the balance already includes a newer close. Method at {BASE}/about#reward-basis.
 - Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).

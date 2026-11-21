@@ -678,6 +678,38 @@ def txs_page(col, cursor=None, limit=LIMIT_DEFAULT):
 _COL_PATH = r"([A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9]))"
 
 
+def minters_page(col, cursor=None, limit=LIMIT_DEFAULT):
+    """Agents who minted an edition of this collection, the newest first mint first:
+    {agent, first_mint_ts, mint_count, last_txid}. agent is the poa1 address; names are attached in the UI."""
+    ensure_fresh()
+    if not COL_RE.fullmatch(col or ""):
+        raise ValueError("collection id must be 2 to 32 characters A-Z, 0-9 and hyphen")
+    if collection(col) is None:
+        raise LookupError("unknown collection")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "", []
+    if cursor:
+        try:
+            fts, agent = int(cursor[0]), cursor[1]
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("bad cursor")
+        w = " WHERE (first_mint_ts < ? OR (first_mint_ts = ? AND agent < ?))"
+        a = [fts, fts, str(agent)]
+    rows = db.q("SELECT agent, first_mint_ts, mint_count FROM "
+                "(SELECT addr AS agent, MIN(mint_ts) AS first_mint_ts, COUNT(*) AS mint_count "
+                " FROM atp721_units WHERE col=? AND mint_ts IS NOT NULL AND addr IS NOT NULL GROUP BY addr)"
+                + w + " ORDER BY first_mint_ts DESC, agent DESC LIMIT ?", (col, *a, limit + 1))
+    page = [dict(r) for r in rows[:limit]]
+    for r in page:
+        lt = db.q("SELECT mint_txid FROM atp721_units WHERE col=? AND addr=? AND mint_ts IS NOT NULL "
+                  "ORDER BY mint_ts DESC, unit DESC LIMIT 1", (col, r["agent"]))
+        r["first_mint_ts"], r["mint_count"] = int(r["first_mint_ts"]), int(r["mint_count"])
+        r["last_txid"] = lt[0]["mint_txid"] if lt else None
+        r["official"] = OFFICIAL
+    nxt = f"{page[-1]['first_mint_ts']}|{page[-1]['agent']}" if len(rows) > limit else None
+    return page, nxt
+
+
 def http(path, qs):
     """Unofficial ATP-721 read API. Raises ValueError or LookupError for the server to map."""
     ensure_fresh()
@@ -717,6 +749,14 @@ def http(path, qs):
             raise LookupError("unknown collection")
         rows, nxt = txs_page(col, _cursor(qs, 2), _limit(qs))
         return _envelope(collection=col, txs=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/minters$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        col = m.group(1)
+        if collection(col) is None:
+            raise LookupError("unknown collection")
+        rows, nxt = minters_page(col, _cursor(qs, 2), _limit(qs))
+        return _envelope(collection=col, minters=rows, next_cursor=nxt)
     if path.startswith("/api/atp721/"):
         raise LookupError("unknown endpoint")
     raise LookupError("unknown endpoint")

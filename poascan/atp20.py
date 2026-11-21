@@ -708,6 +708,35 @@ def pending_page(tick, cursor=None, limit=LIMIT_DEFAULT):
     return page, nxt
 
 
+def minters_page(tick, cursor=None, limit=LIMIT_DEFAULT):
+    """Agents who minted this tick, the newest first mint first: {agent, first_mint_ts, mint_count, last_txid}.
+    agent is the poa1 address; names are attached in the UI. Valid final mints only."""
+    ensure_fresh()
+    if not TICK_RE.fullmatch(tick or ""):
+        raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
+    if token(tick) is None:
+        raise LookupError("unknown tick")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "", []
+    if cursor:
+        fts, agent = cursor
+        w = " WHERE (first_mint_ts < ? OR (first_mint_ts = ? AND agent < ?))"
+        a = [int(fts), int(fts), str(agent)]
+    rows = db.q("SELECT agent, first_mint_ts, mint_count FROM "
+                "(SELECT to_addr AS agent, MIN(ts) AS first_mint_ts, COUNT(*) AS mint_count "
+                " FROM atp20_ops WHERE tick=? AND op='m' AND final=1 AND valid=1 AND to_addr IS NOT NULL GROUP BY to_addr)"
+                + w + " ORDER BY first_mint_ts DESC, agent DESC LIMIT ?", (tick, *a, limit + 1))
+    page = [dict(r) for r in rows[:limit]]
+    for r in page:
+        lt = db.q("SELECT txid FROM atp20_ops WHERE tick=? AND op='m' AND final=1 AND valid=1 AND to_addr=? "
+                  "ORDER BY ts DESC, txid DESC LIMIT 1", (tick, r["agent"]))
+        r["agent"], r["first_mint_ts"], r["mint_count"] = r["agent"], int(r["first_mint_ts"]), int(r["mint_count"])
+        r["last_txid"] = lt[0]["txid"] if lt else None
+        r["official"] = OFFICIAL
+    nxt = HI.enc(page[-1]["first_mint_ts"], page[-1]["agent"]) if len(rows) > limit else None
+    return page, nxt
+
+
 def http(path, qs):
     """JSON bodies for /api/atp20/* (and the /api/v1 alias). Raises ValueError for 400, LookupError for 404."""
     ensure_fresh()
@@ -735,6 +764,12 @@ def http(path, qs):
         tick = m.group(1)
         rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs))
         return _envelope(tick=tick, txs=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})/minters$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        tick = m.group(1)
+        rows, nxt = minters_page(tick, _cursor(qs, 2), _limit(qs))
+        return _envelope(tick=tick, minters=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp20/pending/([A-Z0-9]{3,12})$", path)
     if m:
         _params(qs, _QS_PAGE)

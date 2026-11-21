@@ -129,11 +129,25 @@ check("limit above max is clamped to 200", len(api("/api/v1/atp20/token/MAM/hold
 check("bare /api/atp20 is 404", "unknown" in expect_404("/api/atp20"))
 check("unknown atp20 path is 404", "unknown" in expect_404("/api/v1/atp20/nope"))
 
+# ---- minters: newest first mint first, default 20, HOLDERS[0] minted twice ----
+mn = api("/api/v1/atp20/token/MAM/minters")
+check("minters default page is 20 with a next cursor",
+      len(mn["minters"]) == 20 and mn["next_cursor"] and all(x["official"] is False for x in mn["minters"]))
+mn2 = api("/api/v1/atp20/token/MAM/minters", cursor=mn["next_cursor"])
+check("minters second page completes the 21 agents with no further cursor",
+      len(mn["minters"]) + len(mn2["minters"]) == 21 and mn2["next_cursor"] is None)
+allm = {x["agent"]: x for x in mn["minters"] + mn2["minters"]}
+check("the twice-minter shows mint_count 2 and a last_txid", allm[HOLDERS[0]]["mint_count"] == 2 and bool(allm[HOLDERS[0]]["last_txid"]))
+check("minters rows carry agent, first_mint_ts, mint_count and last_txid",
+      all({"agent", "first_mint_ts", "mint_count", "last_txid"} <= set(x) for x in mn["minters"]))
+check("unknown tick minters is 404", "unknown" in expect_404("/api/v1/atp20/token/ZZZ/minters"))
+check("bad minters cursor is 400", expect_bad("/api/v1/atp20/token/MAM/minters", cursor="!!!") == "bad cursor")
+
 # ---- OpenAPI and llms ----
 spec = AG.openapi()
 paths = spec["paths"]
 for pth in ("/api/v1/atp20/tokens", "/api/v1/atp20/token/{tick}", "/api/v1/atp20/token/{tick}/holders",
-            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}"):
+            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/token/{tick}/minters", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-20 routes", "/atp20/tokens" in txt and "official is always false" in txt)
