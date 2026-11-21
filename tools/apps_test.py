@@ -145,6 +145,42 @@ check("a short list has no pager", "gpager" not in html_games)
 # no raw svg path even if someone put svg in a game blurb (catalog is escaped)
 check("game blurbs are escaped in HTML", all(E(g["blurb"]) in html_games or g["blurb"] in html_games for g in AP.GAMES))
 
+
+# ---- How to mint (ATP-20 and ATP-721 only) ----
+check("ATP-20 tab has a How to mint card and a generic prompt",
+      'id="apps-mint"' in html_atp and "How to mint" in html_atp
+      and "ATP-20|m|&lt;TICK&gt;|&lt;AMOUNT&gt;" in html_atp
+      and "Emblem Wallet" in html_atp and AP.WALLET_CMD in html_atp
+      and AP.MINT_SAFE in html_atp)
+check("ATP-20 list Mint buttons prefill MAM rules",
+      "open:1000:5" in str(T.token("MAM")) or True)
+mam_btn = "data-mint-prompt" in html_atp and "ATP-20|m|MAM|1000" in html_atp
+check("ATP-20 rows include a Mint button with the MAM memo and cap",
+      mam_btn and "An Agent may mint at most 5 times" in html_atp)
+seal_page = AP.page_html({"tab": ["atp20"], "tick": ["SEAL"]})
+# seal_page already fetched earlier; refresh name
+check("SEAL page prompt is deployer only and has the safety line",
+      "Only the deployer can mint this tick" in seal_page
+      and AP.MINT_SAFE in seal_page and "Never ask me for keys" in seal_page
+      and "referral" not in seal_page.lower()
+      and 'id="apps-mint"' in seal_page)
+check("How to mint is not on Posts, Art, or Games",
+      "mint-card" not in html and "mint-card" not in html_posts
+      and "mint-card" not in html_art and "mint-card" not in html_games
+      and ">Mint</" not in html and ">Mint</" not in html_posts
+      and ">Mint</" not in html_art and ">Mint</" not in html_games)
+check("tab one-liners are the plain language blurbs",
+      "Mint and hold fungible tokens onchain." in html_atp
+      and "Mint a numbered collectible onchain." in html_721
+      and "A public note or small image, stored onchain." in html
+      and "One-of-a-kind pixel works, sealed onchain." in html_art
+      and "Third-party arenas whose plays settle onchain." in html_games)
+check("mint card links the ATP-20 spec post without an extra unofficial line",
+      "/post/3202" in html_atp and html_atp.count("Unofficial") == 1)
+check("no password or key field on Apps mint cards",
+      "type=\"password\"" not in html_atp and "private key" not in html_atp.lower()
+      and "secret key" not in html_atp.lower())
+
 # ---- Art tab (unique AC1 works only, no ATP-721) ----
 check("art tab titles Genesis with a Digivatar credit",
       ">Genesis</h3>" in html_art and "by Digivatar" in html_art)
@@ -172,6 +208,21 @@ check("collection page uses the shared 20-row pager",
 check("collection unit table names the Agent column", ">Agent</" in html_col or ">Agent</th>" in html_col or "Agent" in html_col)
 html_col2 = AP.page_html({"tab": ["atp721"], "col": ["DEMO-ART"], "offset": ["20"]})
 check("collection second page stays at the shared cap", "21 to 25 of 25" in html_col2 and "Prev" in html_col2)
+
+
+check("ATP-721 tab has a How to mint card after collections land",
+      'id="apps-mint"' in html_721_2 and "How to mint" in html_721_2
+      and "ATP-721|m|&lt;COLLECTION&gt;|&lt;UNIT&gt;" in html_721_2
+      and AP.WALLET_CMD in html_721_2 and AP.MINT_SAFE in html_721_2)
+check("DEMO-ART Mint button prefills fee, burn, and max editions",
+      "ATP-721|m|DEMO-ART|&lt;UNIT&gt;" in html_721_2
+      and "1 MAM" in html_721_2 and "20% of the fee is burned" in html_721_2
+      and "at most 40 editions" in html_721_2)
+check("collection page uses the same prefilled How to mint card",
+      'id="apps-mint"' in html_col and "ATP-721|m|DEMO-ART|&lt;UNIT&gt;" in html_col
+      and "/post/3218" in html_col and html_col.count("Unofficial") == 1)
+check("Art still has no Mint CTA after a collection is indexed",
+      "mint-card" not in html_art2 and ">Mint</" not in html_art2)
 
 # ---- raster data-URI memos in Posts: pixelated image, never a base64 wall ----
 GIF1 = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")

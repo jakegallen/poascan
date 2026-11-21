@@ -782,7 +782,7 @@ td a.mono{display:inline-block;min-width:24px}
 .subtabs{margin:-4px 0 14px}.subtabs .chip{min-height:30px;padding:3px 12px;font-size:var(--t12)}
 .rng{margin:0 0 12px}
 .smalls{grid-template-columns:repeat(3,minmax(0,1fr))}
-.smalls .mls .cb{max-height:200px;overflow:auto}
+.smalls .mls .cb{max-height:280px;overflow:auto}
 .tabnote{margin:0 0 12px}
 @media (max-width:1100px){.smalls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:900px){.stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}.top5{grid-template-columns:minmax(0,1fr)}}
@@ -2341,4 +2341,29 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:reduce){
  .tok-grid .art-col,.apps-tip-btn{transition:none}
  .tok-grid .art-col:hover{transform:none}
+}
+
+/* Apps How to mint (ATP-20 and ATP-721) */
+.mint-card{margin:4px 18px 18px;padding:18px 20px;border:var(--hair);border-radius:var(--r-lg);background:color-mix(in srgb,var(--ink-1) 72%,transparent);display:grid;gap:10px}
+.mint-hd h3{margin:0;font:600 var(--t16)/1.25 var(--ui);color:var(--hi)}
+.mint-lede,.mint-rules,.mint-wallet,.mint-safe{margin:0;font:var(--t13)/1.45 var(--ui);color:var(--mute)}
+.mint-rules{color:var(--bone-1)}
+.mint-prompt{margin:0;padding:12px 14px;border-radius:var(--r-md);border:1px solid var(--line);background:color-mix(in srgb,var(--ink-0) 88%,transparent);color:var(--txt);font:var(--t13)/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}
+.mint-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.mint-copy,.mint-btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid color-mix(in srgb,var(--gold) 32%,var(--line));background:color-mix(in srgb,var(--gold) 10%,var(--ink-1));color:var(--hi);font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;cursor:pointer}
+.mint-copy:hover,.mint-btn:hover{border-color:color-mix(in srgb,var(--gold) 55%,var(--line));background:color-mix(in srgb,var(--gold) 16%,var(--ink-1))}
+.mint-copy.ok{color:var(--green);border-color:color-mix(in srgb,var(--verd) 45%,var(--line))}
+.mint-spec{font:600 var(--t12)/1 var(--ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--bone-2)}
+.mint-spec:hover{color:var(--amber)}
+.mint-wallet{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.mint-wallet code{font:var(--t12)/1.4 var(--mono);color:var(--bone-1);overflow-wrap:anywhere}
+.mint-row{margin:10px 0 0}
+.tok-deck td[data-l="Mint"]{white-space:nowrap}
+@media (max-width:640px){
+ .mint-card{margin:4px 12px 14px;padding:14px}
+ .mint-prompt{max-height:280px;padding:10px 12px}
+ .tok-deck td[data-l="Mint"]{justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){
+ .mint-copy,.mint-btn{transition:none}
 }
