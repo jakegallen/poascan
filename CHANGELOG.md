@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.413] - 2026-11-20
+
+### Added
+- Unofficial Art tab on /apps, after ATP-20. A catalog shows on-chain works and ATP-721 collections, 20 to a page with the shared pager. MAM-GENESIS opens a unit list (holders link to LabLeak) with mint progress and coverage that names replay order (ts, id) and that the mint fee is not debited. The official collection file is not shown until a local raster matches the deploy fingerprint. Digivatar's 28 x 28 GIF is assembled from archived AC1 memos (message e85fe08f, 54 parts plus a seal); it is shown only after the joined bytes and the file digest match, scaled with nearest-neighbour pixels, and a still frame under reduced motion. No mint, list or buy controls. Read APIs under /api/v1/atp721 and /api/v1/art/works, official always false, coverage included. Local decoder only; no remote image fetch and no raw SVG.
+
 ## [1.26.412] - 2026-11-20
 
 ### Added

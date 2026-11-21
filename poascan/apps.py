@@ -13,7 +13,7 @@ from .govhub import pager, PAGE
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
-TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20")]
+TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20"), ("art", "Art")]
 TAB_SET = {k for k, _ in TABS}
 DEFAULT_TAB = "posts"
 LIMIT = PAGE
@@ -162,6 +162,11 @@ def _tick(qs):
     return t if re.fullmatch(r"[A-Z0-9]{3,12}", t) else ""
 
 
+def _col(qs):
+    t = ((qs or {}).get("col") or [""])[0].strip().upper()
+    return t if re.fullmatch(r"[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])", t) else ""
+
+
 def _off(qs):
     try:
         return max(0, int(((qs or {}).get("offset") or ["0"])[0]))
@@ -169,11 +174,13 @@ def _off(qs):
         return 0
 
 
-def _list_url(tab, off=0, tick=""):
-    """Same offset query the rest of the site uses: ?tab=&tick=&offset= (offset omitted on the first page)."""
+def _list_url(tab, off=0, tick="", col=""):
+    """Same offset query the rest of the site uses: ?tab=&tick=&col=&offset= (offset omitted on the first page)."""
     bits = ["tab=" + tab]
     if tick:
         bits.append("tick=" + tick)
+    if col:
+        bits.append("col=" + col)
     if off:
         bits.append("offset=" + str(int(off)))
     return "/apps?" + "&amp;".join(bits)
@@ -647,10 +654,147 @@ def _posts_list(names, bundle, qs=None):
     )
 
 
+MAM_FILE_SHA = "f24fe8eb6b21cc3f86bd2b3f79b28f65964dbde0fd79f91bee5f644594d59d8e"
+RUNBOOK_3220 = "https://minepoa.com/lableak/#/post/3220"
+
+
+def _art_pix(work):
+    """Verified local raster, pixelated. Animation yields to a still frame when motion is reduced."""
+    if not work or not work.get("ok") or not work.get("gif"):
+        return ('<div class="app-ico art-tile" aria-hidden="true">'
+                '<span class="app-mono">D</span></div>')
+    still = work.get("still") or work["gif"]
+    return (
+        f'<div class="art-pix" style="--app:var(--gold)">'
+        f'<img class="art-pix-anim" src="{E(work["gif"])}" width="{int(work.get("width") or 28)}" '
+        f'height="{int(work.get("height") or 28)}" alt="" decoding="async">'
+        f'<img class="art-pix-still" src="{E(still)}" width="{int(work.get("width") or 28)}" '
+        f'height="{int(work.get("height") or 28)}" alt="" decoding="async">'
+        f'</div>'
+    )
+
+
+def _digi_card(names, work):
+    tile = _art_pix(work) if work.get("ok") else (
+        '<div class="app-ico art-tile" aria-hidden="true"><span class="app-mono">D</span></div>'
+    )
+    links = []
+    if work.get("post"):
+        links.append(_out_link(f"https://minepoa.com/lableak/#/post/{int(work['post'])}", "Post " + str(int(work["post"]))))
+    if work.get("source"):
+        links.append(_out_link(work["source"], "Source"))
+    if work.get("addr"):
+        links.append(agent(work["addr"], names=names))
+    note = "Seal matches." if work.get("ok") else "Local tile. Seal unverified."
+    return (
+        f'<article class="tok-hero art-hero art-work" style="--app:var(--gold)">'
+        f'{tile}<div class="app-body">'
+        f'<h2 class="app-name">Digivatar</h2>'
+        f'<p class="app-blurb">{E(work.get("blurb") or "28 x 28, 12.5 fps.")}</p>'
+        f'<p class="app-ref">' + " · ".join(links) + "</p>"
+        f'<p class="art-tile-note">{E(note)}</p>'
+        f'</div></article>'
+    )
+
+
+def _col_card(names, tok, feat=False):
+    col = tok["col"]
+    href = "/apps?tab=art&amp;col=" + E(col)
+    minted = int(tok.get("minted") or 0)
+    cap = int(tok.get("total") or 0)
+    holders = int(tok.get("holder_count") or 0)
+    fee = tok.get("fee")
+    tick = tok.get("fee_tick") or ""
+    mx = tok.get("max_per_addr")
+    title = tok.get("title") or ""
+    tile = ('<div class="app-ico art-tile" aria-hidden="true">'
+            f'<span class="app-mono">{E(col[:1])}</span></div>')
+    links = []
+    if tok.get("deploy_txid"):
+        links.append(tx_link(tok["deploy_txid"]))
+    if col == "MAM-GENESIS":
+        links.append(_out_link(RUNBOOK_3220, "Post 3220"))
+    typ = "h2" if feat else "h3"
+    wrap_o, wrap_c = (f'<a class="tok-card art-col" href="{href}" style="--app:var(--gold)">', "</a>") if not feat else (
+        '<div class="tok-hero art-hero" style="--app:var(--gold)">', "</div>"
+    )
+    fee_bit = f"{int(fee):,} {E(tick)}" if fee is not None and str(fee) != "" and tick else ""
+    ref = [f'<span class="num">{holders:,}</span> holders']
+    if fee_bit:
+        ref.append(fee_bit)
+    if mx:
+        ref.append(f"Max {int(mx)}")
+    ref.extend(links)
+    note = "Local tile. File fingerprint unverified." if col == "MAM-GENESIS" else ""
+    return (
+        f'{wrap_o}{tile}<div class="app-body">'
+        f'<{typ} class="app-name">{E(col)}</{typ}>'
+        + (f'<p class="app-blurb">{E(title)}</p>' if title else "")
+        + f'<p class="tok-fig"><span class="num">{minted:,}</span>'
+        f'<span class="tok-of">of {cap:,}</span></p>'
+        f'{_mint_bar(minted, cap)}'
+        f'<p class="app-ref">{" · ".join(ref)}</p>'
+        + (f'<p class="art-tile-note">{E(note)}</p>' if note else "")
+        + f'</div>{wrap_c}'
+    )
+
+
+def _art_list(names, col="", qs=None):
+    from . import atp721 as C
+    from . import ac1art as R
+    C.ensure_fresh()
+    off = _off(qs)
+    digi = R.work("e85fe08f")
+    if col:
+        tok = C.collection(col)
+        if not tok:
+            return '<div class="app-empty"><p class="na">No such collection in the archive.</p></div>'
+        total = C.units_count(col)
+        if total and off >= total:
+            off = (total - 1) // PAGE * PAGE
+        page_rows = C.units_offset(col, offset=off, limit=PAGE)
+        head = _col_card(names, tok, feat=True)
+        if page_rows:
+            rows = [[f'#{int(u["unit"])}', agent(u.get("addr"), names=names),
+                     tx_link(u.get("last_txid") or u.get("mint_txid") or "")]
+                    for u in page_rows]
+            tbl = table(["Unit", "Holder", "Tx"], rows, cls="wrapt", pri=[0, 1, 2])
+        else:
+            tbl = ('<div class="app-empty app-soon">'
+                   '<p class="app-soon-line">Units arrive with the next index</p></div>')
+        pg = pager(total, off, lambda o: _list_url("art", o, col=col))
+        back = '<p class="pnote"><a href="/apps?tab=art">All works</a></p>'
+        cov = C.coverage()
+        cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
+                    f'{int(cov.get("applied") or 0):,} memos applied. Debit not checked.</p>')
+        return back + head + cov_line + tbl + pg
+    # Catalog: Digivatar plus every ATP-721 collection, 20 cards at a time with the shared pager.
+    cards = [("digi", digi)] + [("col", t) for t in C.collections()]
+    total = len(cards)
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    page_cards = cards[off:off + PAGE]
+    bits = []
+    for kind, item in page_cards:
+        if kind == "digi":
+            bits.append(_digi_card(names, item))
+        else:
+            bits.append(_col_card(names, item, feat=False))
+    body = '<div class="art-store">' + "".join(bits) + "</div>" if bits else (
+        '<div class="app-empty app-soon"><p class="app-soon-line">Works arrive with the next index</p></div>'
+    )
+    pg = pager(total, off, lambda o: _list_url("art", o))
+    cov = C.coverage()
+    cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
+                f'Debit not checked.</p>')
+    return body + cov_line + pg
+
+
 def page_html(qs=None):
     from .views import page
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""
+    col = _col(qs) if tab == "art" else ""
     names = A.forum_names()
     bundle = catalog_stats() if tab in ("games", "posts", "atp20") else dict(asof=0, games={})
     if tab == "games":
@@ -659,6 +803,9 @@ def page_html(qs=None):
     elif tab == "atp20":
         body = _atp20_list(names, tick, qs)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
+    elif tab == "art":
+        body = _art_list(names, col, qs)
+        title = "Apps, " + col if col else "Apps, art"
     else:
         body = _posts_list(names, bundle, qs)
         title = "Apps"

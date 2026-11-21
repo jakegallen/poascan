@@ -154,6 +154,17 @@ def api(path, qs):
             raise BadRequest(str(e) or "bad request")
         except LookupError as e:
             raise NotFound(str(e) or "not found")
+    if path == "/api/atp721" or path.startswith("/api/atp721/") or path == "/api/art" or path.startswith("/api/art/"):
+        try:
+            if path.startswith("/api/art"):
+                from . import ac1art as _ART
+                return _ART.http(path, qs), False
+            from . import atp721 as _ATP721
+            return _ATP721.http(path, qs), False
+        except ValueError as e:
+            raise BadRequest(str(e) or "bad request")
+        except LookupError as e:
+            raise NotFound(str(e) or "not found")
     if path == "/api/txs":
         ov = (qs.get("offset") or [""])[0]
         if INT_RX.match(ov or "") and int(ov) > OFFSET_MAX: raise BadRequest(f"offset must be at most {OFFSET_MAX}; page deeper with /api/v1/address/<a>/txs?cursor=")   # 1.26.285: never silently clamp (a clamp served the wrong page)
@@ -623,7 +634,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/apps?tab=art", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 

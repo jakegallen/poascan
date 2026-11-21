@@ -1,4 +1,4 @@
-"""Unofficial Apps tab (1.26.412): /apps shell, escaped AC1 posts, ATP-20 list,
+"""Unofficial Apps tab (1.26.413): /apps shell, escaped AC1 posts, ATP-20 list,
 third-party games catalog. No art rasters, no indexer calls, no em or en dashes.
 Usage: python3 tools/apps_test.py"""
 import json, os, sys, tempfile, copy
@@ -98,7 +98,7 @@ import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
-check("version is 1.26.412", AG.VERSION == "1.26.412")
+check("version is 1.26.413", AG.VERSION == "1.26.413")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
@@ -123,6 +123,16 @@ check("a short list has no pager", "gpager" not in html_games)
 
 # no raw svg path even if someone put svg in a game blurb (catalog is escaped)
 check("game blurbs are escaped in HTML", all(E(g["blurb"]) in html_games or g["blurb"] in html_games for g in AP.GAMES))
+
+# ---- Art tab ----
+html_art = AP.page_html({"tab": ["art"]})
+check("art tab lists Digivatar", "Digivatar" in html_art)
+check("art tab has no mint or buy affordance",
+      "Mint" not in html_art and "Buy" not in html_art and "wallet-connect" not in html_art.lower())
+check("art tab does not repeat the unofficial decoder footer",
+      html_art.count("POAScan decoder. Unofficial.") == 0)
+check("art tab has no typographic dash", not any(d in html_art for d in DASH))
+
 
 if fails:
     print("FAILED:"); [print(" -", x) for x in fails]; sys.exit(1)
