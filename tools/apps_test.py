@@ -1,4 +1,4 @@
-"""Unofficial Apps tab (1.26.412): /apps shell, escaped AC1 posts, ATP-20 list,
+"""Unofficial Apps tab (1.26.413): /apps shell, escaped AC1 posts, ATP-20 list,
 third-party games catalog. No art rasters, no indexer calls, no em or en dashes.
 Usage: python3 tools/apps_test.py"""
 import json, os, sys, tempfile, copy
@@ -98,7 +98,7 @@ import re as _re
 _pit = _re.search(r'<article class="app-card"[^>]*data-app="proof-pit".*?</article>', html_games, _re.S)
 check("PROOF PIT hides empty memo stats", bool(_pit) and "app-nums" not in _pit.group(0) and "None" not in _pit.group(0))
 check("no em or en dash in Apps HTML", nodash(html) and nodash(html_posts) and nodash(html_games) and nodash(html_atp))
-check("version is 1.26.412", AG.VERSION == "1.26.412")
+check("version is 1.26.413", AG.VERSION == "1.26.413")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
@@ -123,6 +123,38 @@ check("a short list has no pager", "gpager" not in html_games)
 
 # no raw svg path even if someone put svg in a game blurb (catalog is escaped)
 check("game blurbs are escaped in HTML", all(E(g["blurb"]) in html_games or g["blurb"] in html_games for g in AP.GAMES))
+
+# ---- Art tab ----
+html_art = AP.page_html({"tab": ["art"]})
+check("art tab titles Genesis with a Digivatar credit",
+      ">Genesis</h2>" in html_art and "by Digivatar" in html_art)
+check("art tab tagline counts works, not game catalogs",
+      "onchain work" in html_art and "catalogs in this archive" not in html_art)
+check("art tab has no mint or buy CTA",
+      "wallet-connect" not in html_art.lower()
+      and "mint now" not in html_art.lower() and "buy now" not in html_art.lower()
+      and ">Mint</" not in html_art and ">Buy</" not in html_art)
+check("art tab does not repeat the unofficial decoder footer",
+      html_art.count("POAScan decoder. Unofficial.") == 0)
+check("art tab has no typographic dash", not any(d in html_art for d in DASH))
+check("featured work uses an animated raster with a reduced-motion still",
+      "art-pix-anim" in html_art and "art-pix-still" in html_art
+      and "prefers-reduced-motion" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "style.css"), encoding="utf-8").read())
+
+# second synthetic collection appears without per-collection UI code; unit list pages 20 at a time
+SHA2 = "aa" * 32
+load(row(300, f"ATP-721|d|DEMO-ART|{SHA2}|image/png|40|1|MAM|20|40|SECOND COLLECTION", B, ts=1795230000))
+for i in range(1, 26):
+    load(row(300 + i, f"ATP-721|m|DEMO-ART|{i}", A, ts=1795230000 + i))
+html_art2 = AP.page_html({"tab": ["art"]})
+check("art catalog lists the second collection by ticker", "DEMO-ART" in html_art2 and "SECOND COLLECTION" in html_art2)
+html_col = AP.page_html({"tab": ["art"], "col": ["DEMO-ART"]})
+check("collection page uses the shared 20-row pager",
+      "gpager" in html_col and "1 to 20 of 25" in html_col and ">Next</a>" in html_col)
+check("collection unit table names the Agent column", ">Agent</" in html_col or ">Agent</th>" in html_col or "Agent" in html_col)
+html_col2 = AP.page_html({"tab": ["art"], "col": ["DEMO-ART"], "offset": ["20"]})
+check("collection second page stays at the shared cap", "21 to 25 of 25" in html_col2 and "Prev" in html_col2)
+
 
 if fails:
     print("FAILED:"); [print(" -", x) for x in fails]; sys.exit(1)

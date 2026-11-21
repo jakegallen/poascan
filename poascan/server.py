@@ -154,6 +154,17 @@ def api(path, qs):
             raise BadRequest(str(e) or "bad request")
         except LookupError as e:
             raise NotFound(str(e) or "not found")
+    if path == "/api/atp721" or path.startswith("/api/atp721/") or path == "/api/art" or path.startswith("/api/art/"):
+        try:
+            if path.startswith("/api/art"):
+                from . import ac1art as _ART
+                return _ART.http(path, qs), False
+            from . import atp721 as _ATP721
+            return _ATP721.http(path, qs), False
+        except ValueError as e:
+            raise BadRequest(str(e) or "bad request")
+        except LookupError as e:
+            raise NotFound(str(e) or "not found")
     if path == "/api/txs":
         ov = (qs.get("offset") or [""])[0]
         if INT_RX.match(ov or "") and int(ov) > OFFSET_MAX: raise BadRequest(f"offset must be at most {OFFSET_MAX}; page deeper with /api/v1/address/<a>/txs?cursor=")   # 1.26.285: never silently clamp (a clamp served the wrong page)
@@ -623,7 +634,7 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/apps?tab=art", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
                  "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
 
@@ -1313,7 +1324,7 @@ class H(BaseHTTPRequestHandler):
     def _is_free(self):
         """Cheap immutable files: no heavy slot, no wait, no `server busy`."""
         p = self._path_only()
-        if p.startswith("/static/") or p.startswith("/mark/") or p.startswith("/hallmark/"): return True
+        if p.startswith("/static/") or p.startswith("/mark/") or p.startswith("/hallmark/") or p.startswith("/art/raster/"): return True
         # 1.26.356: link previews need no heavy slot. og.py already serves its cache or the generic card, and new renders
         # run one at a time from its own small token bucket (one every 5 s), so CPU stays bounded without the slot wait
         # that was shedding /og/* with 503s under crawl.
@@ -1496,7 +1507,7 @@ class H(BaseHTTPRequestHandler):
         """A GET for a human page (not the API, MCP, a fragment, ops, static or a data file)."""
         if getattr(self, "command", "GET") != "GET": return False
         p = self._path_only()
-        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/")): return False
+        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/", "/art/raster/")): return False
         return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
     def _shed_bucket(self):
         """Coarse route bucket for the shed counter (plan v2 C step 1): addr_html, tx_html, api, other."""
@@ -1618,6 +1629,13 @@ class H(BaseHTTPRequestHandler):
                     d["lite"] = True
                 if path == "/api/summary" and not lite: hd["CDN-Cache-Control"] = self.SUMMARY_CDN   # refresh the edge copy; a 503 must not revive an old epoch
                 return self.send(200, json.dumps(d, default=str), "application/json", dict(AG.meta_headers(m), **hd))
+            if path.startswith("/art/raster/"):
+                from . import ac1art as _ART
+                m = re.fullmatch(r"/art/raster/([0-9a-f]{8,32})(/still)?", path)
+                blob = _ART.raster(m.group(1), still=bool(m.group(2))) if m else None
+                if not blob:
+                    return self.send(404, "not found", "text/plain")
+                return self.send(200, blob[0], blob[1], {"Cache-Control": "public, max-age=3600"})
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[8:]))
                 if not f.startswith(os.path.normpath(STATIC)) or not os.path.isfile(f): return self.send(404, "not found", "text/plain")

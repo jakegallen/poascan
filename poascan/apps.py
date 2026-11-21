@@ -13,7 +13,7 @@ from .govhub import pager, PAGE
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
-TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20")]
+TABS = [("posts", "Posts"), ("games", "Games"), ("atp20", "ATP-20"), ("art", "Art")]
 TAB_SET = {k for k, _ in TABS}
 DEFAULT_TAB = "posts"
 LIMIT = PAGE
@@ -162,6 +162,11 @@ def _tick(qs):
     return t if re.fullmatch(r"[A-Z0-9]{3,12}", t) else ""
 
 
+def _col(qs):
+    t = ((qs or {}).get("col") or [""])[0].strip().upper()
+    return t if re.fullmatch(r"[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])", t) else ""
+
+
 def _off(qs):
     try:
         return max(0, int(((qs or {}).get("offset") or ["0"])[0]))
@@ -169,11 +174,13 @@ def _off(qs):
         return 0
 
 
-def _list_url(tab, off=0, tick=""):
-    """Same offset query the rest of the site uses: ?tab=&tick=&offset= (offset omitted on the first page)."""
+def _list_url(tab, off=0, tick="", col=""):
+    """Same offset query the rest of the site uses: ?tab=&tick=&col=&offset= (offset omitted on the first page)."""
     bits = ["tab=" + tab]
     if tick:
         bits.append("tick=" + tick)
+    if col:
+        bits.append("col=" + col)
     if off:
         bits.append("offset=" + str(int(off)))
     return "/apps?" + "&amp;".join(bits)
@@ -448,7 +455,14 @@ def _app_card(g, names, s, asof, feat=False):
     )
 
 
-def _tagline(bundle):
+def _tagline(bundle, tab=""):
+    if tab == "art":
+        n = int(bundle.get("art_count") or 0)
+        if n == 1:
+            return "1 onchain work in this archive."
+        if n:
+            return f"{n} onchain works in this archive."
+        return "Onchain works in this archive."
     stats = bundle.get("games") or {}
     writes = sum(int((stats.get(g["id"]) or {}).get("memos") or 0) for g in GAMES)
     n = len(GAMES)
@@ -457,8 +471,8 @@ def _tagline(bundle):
     return f'{n} catalogs in this archive.'
 
 
-def _hero(bundle):
-    tag = _tagline(bundle)
+def _hero(bundle, tab=""):
+    tag = _tagline(bundle, tab)
     return (
         f'<section class="card benchc hpulse appshero" aria-label="Apps">'
         f'<div class="apps-wash" aria-hidden="true"></div>'
@@ -647,22 +661,196 @@ def _posts_list(names, bundle, qs=None):
     )
 
 
+COL_META = {
+    "MAM-GENESIS": dict(post=3220, post_url="https://minepoa.com/lableak/#/post/3220"),
+}
+
+
+def _art_pix(work):
+    """Verified local raster, pixelated. Animation yields to a still frame when motion is reduced."""
+    if not work or not work.get("ok") or not work.get("gif"):
+        letter = (work.get("name") or work.get("id") or "A")[:1].upper()
+        return (f'<div class="app-ico art-tile" aria-hidden="true">'
+                f'<span class="app-mono">{E(letter)}</span></div>')
+    still = work.get("still") or work["gif"]
+    w = int(work.get("width") or 28)
+    h = int(work.get("height") or 28)
+    return (
+        f'<div class="art-pix" style="--pix:{w}">'
+        f'<img class="art-pix-anim" src="{E(work["gif"])}" width="{w}" '
+        f'height="{h}" alt="" decoding="async">'
+        f'<img class="art-pix-still" src="{E(still)}" width="{w}" '
+        f'height="{h}" alt="" decoding="async">'
+        f'</div>'
+    )
+
+
+def _art_accent(key):
+    return _ACCENTS[sum(ord(c) for c in (key or "")) % len(_ACCENTS)]
+
+
+def _work_card(names, work, feat=False):
+    accent = "var(--gold)" if feat else _art_accent(work.get("id") or work.get("name") or "")
+    tile = _art_pix(work)
+    links = []
+    if work.get("post"):
+        links.append(_out_link(f"https://minepoa.com/lableak/#/post/{int(work['post'])}", str(int(work["post"]))))
+    if work.get("source"):
+        links.append(_out_link(work["source"], "Source"))
+    if work.get("addr"):
+        links.append(agent(work["addr"], names=names))
+    typ = "h2" if feat else "h3"
+    cls = "app-card art-work" + (" feat" if feat else "")
+    credit = work.get("credit") or ""
+    note = "Seal matches." if feat and work.get("ok") else ""
+    return (
+        f'<article class="{cls}" style="--app:{accent}">'
+        f'{tile}<div class="app-body">'
+        f'<{typ} class="app-name">{E(work.get("name") or work.get("id") or "")}</{typ}>'
+        + (f'<p class="app-credit">by {E(credit)}</p>' if credit else "")
+        + (f'<p class="app-blurb">{E(work["blurb"])}</p>' if work.get("blurb") else "")
+        + (f'<p class="app-ref">{" · ".join(links)}</p>' if links else "")
+        + (f'<p class="art-tile-note">{E(note)}</p>' if note else "")
+        + "</div></article>"
+    )
+
+
+def _col_card(names, tok, feat=False):
+    col = tok["col"]
+    href = "/apps?tab=art&amp;col=" + E(col)
+    minted = int(tok.get("minted") or 0)
+    cap = int(tok.get("total") or 0)
+    holders = int(tok.get("holder_count") or 0)
+    fee = tok.get("fee")
+    tick = tok.get("fee_tick") or ""
+    mx = tok.get("max_per_addr")
+    title = tok.get("title") or ""
+    accent = _tok_accent(col)
+    tile = (f'<div class="app-ico art-tile" aria-hidden="true">'
+            f'<span class="app-mono">{E(col[:1])}</span></div>')
+    links = []
+    meta = COL_META.get(col) or {}
+    if tok.get("deploy_txid"):
+        links.append(tx_link(tok["deploy_txid"]))
+    if meta.get("post_url") and meta.get("post"):
+        links.append(_out_link(meta["post_url"], str(int(meta["post"]))))
+    typ = "h2" if feat else "h3"
+    name = E(col) if feat else f'<a href="{href}">{E(col)}</a>'
+    fee_bit = f"{int(fee):,} {E(tick)}" if fee is not None and str(fee) != "" and tick else ""
+    ref = [f'<span class="num">{holders:,}</span> holders']
+    if fee_bit:
+        ref.append(fee_bit)
+    if mx:
+        ref.append(f"Max {int(mx)}")
+    ref.extend(links)
+    note = "Local tile. File fingerprint unverified." if feat else ""
+    cls = "app-card art-col" + (" feat" if feat else "")
+    return (
+        f'<article class="{cls}" style="--app:{accent}">'
+        f'{tile}<div class="app-body">'
+        f'<{typ} class="app-name">{name}</{typ}>'
+        + (f'<p class="app-blurb">{E(title)}</p>' if title else "")
+        + f'<p class="tok-fig"><span class="num">{minted:,}</span>'
+        f'<span class="tok-of">of {cap:,}</span></p>'
+        f'{_mint_bar(minted, cap)}'
+        f'<p class="app-ref">{" · ".join(ref)}</p>'
+        + (f'<p class="art-tile-note">{E(note)}</p>' if note else "")
+        + "</div></article>"
+    )
+
+
+def _units_table(names, col, qs, C):
+    off = _off(qs)
+    total = C.units_count(col)
+    if total and off >= total:
+        off = (total - 1) // PAGE * PAGE
+    page_rows = C.units_offset(col, offset=off, limit=PAGE)
+    if page_rows:
+        rows = [[f'#{int(u["unit"])}', agent(u.get("addr"), names=names),
+                 tx_link(u.get("last_txid") or u.get("mint_txid") or "")]
+                for u in page_rows]
+        tbl = table(["Unit", "Agent", "Tx"], rows, cls="wrapt", pri=[0, 1, 2])
+    else:
+        tbl = ('<div class="app-empty app-soon">'
+               '<p class="app-soon-line">Units arrive with the next index</p></div>')
+    pg = pager(total, off, lambda o: _list_url("art", o, col=col))
+    return tbl + pg
+
+
+def _art_list(names, col="", qs=None):
+    from . import atp721 as C
+    from . import ac1art as R
+    C.ensure_fresh()
+    try:
+        R.backfill()
+    except Exception:
+        pass
+    if col:
+        tok = C.collection(col)
+        if not tok:
+            return '<div class="app-empty"><p class="na">No such collection in the archive.</p></div>'
+        head = _col_card(names, tok, feat=True)
+        cov = C.coverage()
+        cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
+                    f'{int(cov.get("applied") or 0):,} memos applied. Debit not checked.</p>')
+        back = '<p class="pnote"><a href="/apps?tab=art">All works</a></p>'
+        return (
+            f'<div class="art-page">'
+            f'{back}<div class="app-feat-slot">{head}</div>'
+            f'{cov_line}{_units_table(names, col, qs, C)}</div>'
+        )
+    items = [("work", w) for w in R.works()] + [("col", t) for t in C.collections()]
+    if not items:
+        return '<div class="app-empty app-soon"><p class="app-soon-line">Works arrive with the next index</p></div>'
+    feat_kind, feat_item = items[0]
+    rest = items[1:]
+    feat_html = _work_card(names, feat_item, feat=True) if feat_kind == "work" else _col_card(names, feat_item, feat=True)
+    grid = []
+    for kind, item in rest:
+        if kind == "work":
+            grid.append(_work_card(names, item, feat=False))
+        else:
+            grid.append(_col_card(names, item, feat=False))
+    body = f'<div class="app-feat-slot">{feat_html}</div>'
+    if grid:
+        body += f'<div class="app-grid">{"".join(grid)}</div>'
+    cov = C.coverage()
+    cov_line = (f'<p class="pnote">Replay ({E(cov.get("ordering") or "ts_id")}). '
+                f'Debit not checked.</p>')
+    return f'<div class="art-page">{body}{cov_line}</div>'
+
 def page_html(qs=None):
     from .views import page
     tab = _tab(qs)
     tick = _tick(qs) if tab == "atp20" else ""
+    col = _col(qs) if tab == "art" else ""
     names = A.forum_names()
     bundle = catalog_stats() if tab in ("games", "posts", "atp20") else dict(asof=0, games={})
+    if tab == "art":
+        from . import atp721 as _C
+        from . import ac1art as _R
+        try:
+            _C.ensure_fresh()
+        except Exception:
+            pass
+        try:
+            art_n = len(_R.works()) + _C.collections_count()
+        except Exception:
+            art_n = 0
+        bundle = dict(bundle, art_count=art_n)
     if tab == "games":
         body = _games_list(names, bundle)
         title = "Apps, games"
     elif tab == "atp20":
         body = _atp20_list(names, tick, qs)
         title = "Apps, " + tick if tick else "Apps, ATP-20"
+    elif tab == "art":
+        body = _art_list(names, col, qs)
+        title = "Apps, " + col if col else "Apps, art"
     else:
         body = _posts_list(names, bundle, qs)
         title = "Apps"
-    head = _hero(bundle)
+    head = _hero(bundle, tab)
     tabs = [(k, "/apps" if k == DEFAULT_TAB else "/apps?tab=" + k, lab, None) for k, lab in TABS]
     mod = KIT.tabmod(tabs, tab, body, "", id="apps", label="Views")
     return page(title, head + mod, "/apps")

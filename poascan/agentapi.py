@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.412"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-21T00:00:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.413"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-21T01:52:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1049,6 +1049,40 @@ def openapi():
              _p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})],
             oid="atp20Balance", tag="explorer",
             desc="amount and mint_count, always with official false. A known tick with no balance returns amount 0. Unknown tick is 404."),
+        "/api/atp721/collections": _op("Unofficial ATP-721 collection list, keyset-paged", ANY,
+            [_p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Collections", tag="explorer",
+            desc="Unofficial replay of the ATP-721 memo convention from archived transfer memos. official is always false. Coverage names the replay order (ts, id) and that the mint fee is not debited. Ordered by (deploy_ts, col). Archive only, no upstream read."),
+        "/api/atp721/collection/{col}": _op("Unofficial ATP-721 collection summary", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"})],
+            oid="atp721Collection", tag="explorer",
+            desc="Deploy facts, minted, holder_count and fee fields for one collection. official is false. Unknown name is 404."),
+        "/api/atp721/collection/{col}/units": _op("Unofficial ATP-721 units for a collection, keyset-paged", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Units", tag="explorer",
+            desc="Minted units in number order, with current holder and last tx. Each row has official false. Unknown name is 404."),
+        "/api/atp721/collection/{col}/holders": _op("Unofficial ATP-721 holders for a collection, keyset-paged", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Holders", tag="explorer",
+            desc="Holders by unit count, highest first. Each row has official false. Unknown name is 404."),
+        "/api/atp721/collection/{col}/txs": _op("Unofficial ATP-721 ops for a collection, newest first, keyset-paged", ANY,
+            [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp721Txs", tag="explorer",
+            desc="Final ops only (valid and ignored, with reason). Ordered by (ts, id) descending. Unknown name is 404."),
+        "/api/art/works": _op("Unofficial on-chain works assembled from AC1 memos", ANY,
+            oid="artWorks", tag="explorer",
+            desc="Known AC1 artworks, with official false. A raster path is present only when the joined parts match the on-chain seal (or a committed file whose digest still matches). Archive only, no remote image fetch."),
+        "/api/art/works/{id}": _op("Unofficial on-chain work by AC1 message id", ANY,
+            [_p("id", "AC1 message id (lowercase hex)", {"type": "string", "pattern": "^[0-9a-f]{8,32}$"})],
+            oid="artWork", tag="explorer",
+            desc="Assembly and seal check for one work. official is false. Unknown id is 404."),
         "/api/tx/{hash}": _op("One transaction", params=[_p("hash", "64-hex tx id", {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"})], oid="getTx",
                               desc="1.26.263: slot_latch is pinned (the fixed winner of a nonce slot in /api/params slot_latch_overrides), superseded (a twin on that slot, not counted) or null. 1.26.219: indexed copies first, minepoa.com only on a miss. source names the copy served: cache (POAScan's stored detail of an earlier read; source_label says whether minepoa.com or the fast index), index (the fast index just now), node (minepoa.com just now) or archive (POAScan's archived row; parents, nonce and signature not archived). as_of (ISO UTC) is when that copy was read. While POAScan's probes have the minepoa.com tx route Halted or Down, an archived tx is served without asking it. Method: https://poascan.io/about#tx-source. An unknown tx is a JSON 404: found false, node (not_found or unavailable) and a hint."),
         "/api/address/{address}": _op("One address: balance, rewards, streak, census, txs", params=[_p("address", "poa1 address", {"type": "string", "pattern": "^poa1\\w+$"})], csv=True, oid="getAddress",
@@ -1516,6 +1550,8 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 | What is happening now? | /summary | get_network_summary |
 | Which routes are halted or down? | /routes | get_route_status |
 | Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
+| Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs | (no MCP tool yet) |
+| Unofficial on-chain works? | /art/works, /art/works/<id> | (no MCP tool yet) |
 | Why is this Agent not earning? | /earn/<poa1...> | get_earn_check |
 | Balance, rewards and unlocks of one Agent | /address/<poa1...> | get_address |
 | Will this Agent lose Established? | /address/<poa1...>/standing | get_standing |

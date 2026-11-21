@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.413] - 2026-11-20
+
+### Added
+- Unofficial Art tab on /apps, after ATP-20. The local indexer picks up any sealed AC1 multipart work and any ATP-721 collection by ticker, so later mints appear with no per-item code. A matching seal is decoded to a cached raster and listed on the catalog; failed or incomplete seals are skipped. The featured card is titled Genesis, credited by Digivatar: a 28 x 28 GIF at 12.5 fps, scaled with nearest-neighbour pixels, and a still frame under reduced motion. Collections use a typographic tile until a local raster matches the deploy fingerprint. A collection page shows a 20-row unit list (Agents link to LabLeak) with the shared pager, mint progress, and coverage that names replay order (ts, id) and that the mint fee is not debited. No mint, list or buy controls. Read APIs under /api/v1/atp721 and /api/v1/art/works list every verified work and collection, official always false, coverage included. Local decoder only; no remote image fetch and no raw SVG.
+
 ## [1.26.412] - 2026-11-20
 
 ### Added

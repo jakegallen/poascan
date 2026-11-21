@@ -93,6 +93,14 @@ jobs:
         run: python tools/atp20_test.py
       - name: ATP-20 unofficial read API (keyset pages, unofficial labels, coverage, no upstream)
         run: python tools/atp20_api_test.py
+      - name: Unofficial ATP-721 memo replay
+        run: python tools/atp721_test.py
+      - name: Unofficial ATP-721 and art APIs
+        run: python tools/atp721_api_test.py
+      - name: AC1 artwork assembly
+        run: python tools/ac1art_test.py
+      - name: Unofficial Apps tab
+        run: python tools/apps_test.py
       - name: Earn check (/help Start earning, /api/v1/earn, MCP get_earn_check; verdict, its record and checklist from public payloads; forum counts only, never text; no key, never submits)
         run: python tools/earn_test.py
       - name: Pay by channel (E76 Answer pay and Grading pay from published fields only; null and Split pending when unpublished; never inferred)
