@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.414] - 2026-11-20
+
+### Added
+- Apps is in the main header, between Governance and API, and is the active item on /apps. It is no longer repeated in the footer. /apps stays in the sitemap.
+
 ## [1.26.413] - 2026-11-20
 
 ### Added
