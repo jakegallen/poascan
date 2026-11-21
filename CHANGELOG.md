@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.418] - 2026-11-21
+
+### Fixed
+- Unofficial ATP-20 supply now subtracts ATP-721 mint fees. A valid mint debits the fee in fee_tick from the minter, burns burn_pct, and credits the rest to the collection deployer, in one (ts, id) order with ATP-20 ops. A mint whose minter lacks the fee is ignored. Coverage fee_debit is minter, no longer unchecked.
+
 ## [1.26.417] - 2026-11-21
 
 ### Changed
