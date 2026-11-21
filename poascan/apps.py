@@ -1910,17 +1910,10 @@ def feed_sse(qs=None, last_event_id=None):
     if since:
         page = [r for r in page if (r["ts"], r["id"]) > since]
     page = list(reversed(page))   # oldest first so the client appends in order
-    out = ["retry: 5000
-", ": apps feed catch-up; reconnect to poll for more
-
-"]
+    out = ["retry: 5000\n", ": apps feed catch-up; reconnect to poll for more\n\n"]
     for r in page:
         eid = "%s|%s|%s" % (r["ts"], r["type"], r["id"])
-        out.append("id: %s
-event: %s
-data: %s
-
-" % (eid, r["type"], json.dumps(r, separators=(",", ":"))))
+        out.append("id: %s\nevent: %s\ndata: %s\n\n" % (eid, r["type"], json.dumps(r, separators=(",", ":"))))
     return "".join(out)
 
 
@@ -1945,4 +1938,5 @@ def http(path, qs):
                                limit=int(limit) if limit else _FEED_LIMIT_DEFAULT)
         return dict(official=False, official_note=OFFICIAL_NOTE_FEED,
                     coverage=dict(official=False, source="local_archive"),
-                    types=sorted(_feed_enabled(qs.get("type"))), feed=rows, next_cursor=nxt)    raise LookupError("unknown endpoint")
+                    types=sorted(_feed_enabled(qs.get("type"))), feed=rows, next_cursor=nxt)
+    raise LookupError("unknown endpoint")
