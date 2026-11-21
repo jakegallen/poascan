@@ -1,11 +1,11 @@
 """ATP-721 unofficial memo replay (1.26.413): local transfer memos only, upsert hook,
-first-valid unit, per-address cap, no fee debit, no upstream reads, no em or en dashes.
+first-valid unit, per-address cap, mint fee debit, no upstream reads, no em or en dashes.
 Usage: python3 tools/atp721_test.py"""
 import os, sys, tempfile, copy
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "s.db"), POASCAN_INDEXER="0",
                   POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from poascan import db, atp721 as T, indexer as IX
+from poascan import db, atp721 as T, atp20 as T20, indexer as IX
 
 fails = []
 def check(name, ok):
@@ -29,6 +29,12 @@ def row(i, memo, fr, to=None, ts=1795214976, final=1, typ="transfer"):
 def load(*rows, source="test"):
     IX.upsert_txs([copy.deepcopy(r) for r in rows], source)
 
+def fund(*addrs, tick="MAM", amt=1000000, ts=1795174507):
+    """Deploy an open ATP-20 tick and mint amt to each address, earlier than any ATP-721 op."""
+    load(row(8000, f"ATP-20|d|{tick}|21000000|0|open", DEP, ts=ts))
+    for i, addr in enumerate(addrs):
+        load(row(8001 + i, f"ATP-20|m|{tick}|{amt}", addr, ts=ts + 1 + i))
+
 p, err = T.parse_memo(DEPLOY)
 check("deploy parse: cap, fee, burn 23, title",
       err is None and p["col"] == "MAM-GENESIS" and p["total"] == 3333 and p["fee"] == "111"
@@ -39,6 +45,8 @@ check("svg mime refused", T.parse_memo(f"ATP-721|d|XCOL|{SHA}|image/svg+xml|1|1|
 check("unknown op ignored", T.parse_memo("ATP-721|l|MAM-GENESIS|1")[1] == "unknown_op")
 check("non ATP memo", T.parse_memo("ATP-20|m|MAM|1")[1] == "malformed")
 
+C = "poa1cccccccccccccccccccccccccccccccccccccccccc"
+fund(A, B, DEP)
 load(row(1, DEPLOY, DEP, ts=1795214976))
 tok = T.collection("MAM-GENESIS")
 check("deploy applied, unofficial, zero minted",
@@ -116,9 +124,10 @@ check("backfill replays stored ATP-721 memos", n > 0 and T.collection("MAM-GENES
       and [u for u in T.units_offset("MAM-GENESIS") if u["unit"] == 1][0]["addr"] == A)
 
 cv = T.coverage()
-check("coverage is unofficial, ts_id, fee unchecked",
+check("coverage is unofficial, ts_id, fee debit from the minter",
       cv["official"] is False and "Unofficial" in cv["official_note"]
-      and cv["ordering"] == "ts_id" and cv["fee_debit"] == "unchecked"
+      and cv["ordering"] == "ts_id" and cv["fee_debit"] == "minter"
+      and "insufficient_fee_balance" in cv["fee_note"]
       and cv["applied"] >= 1 and cv["ignored"] >= 1)
 check("join txs are not ingested", not any(o["txid"] == tid(90) for o in T.ops()) or True)
 load(row(90, "ATP-721|m|MAM-GENESIS|201", B, typ="join", ts=1795219900))
@@ -144,8 +153,57 @@ check("collections() lists both tickers with no hardcoded filter",
 check("first collection counts are unchanged by the second ticker",
       T.collection("MAM-GENESIS")["minted"] >= 6)
 
+
+# mint fee debit
+col = T.collection("MAM-GENESIS")
+mam = T20.token("MAM")
+# A minted 5 units (1-5); B minted 99 and 200 (2). DEP never keeps unit 200 in the final order,
+# so that mint is duplicate_unit and does not pay a fee.
+# DEMO-ART: B minted 2 units at fee 1 (separate collection).
+fee_mints_mam = 5 + 2
+check("MAM-GENESIS fee burns and deployer credits",
+      col["fee_burned"] == str(fee_mints_mam * 23) and col["deployer_fees"] == str(fee_mints_mam * 88)
+      and int(mam["burned"]) >= fee_mints_mam * 23)
+check("deployer received fee remainder in MAM",
+      int(T20.balance("MAM", DEP)["amount"]) >= fee_mints_mam * 88)
+
+# insufficient fee: C has no MAM
+load(row(300, "ATP-721|m|MAM-GENESIS|300", C, ts=1795221000))
+op_c = [o for o in T.ops("MAM-GENESIS") if o["txid"] == tid(300)][0]
+check("mint without the fee is ignored",
+      op_c["valid"] == 0 and op_c["reason"] == "insufficient_fee_balance"
+      and not any(u["unit"] == 300 for u in T.units_offset("MAM-GENESIS", 0, 200)))
+
+# interleaving: D gets 50 MAM (less than fee 111), mint fails; then a later ATP-20 mint funds D and a later 721 mint succeeds
+D = "poa1dddddddddddddddddddddddddddddddddddddddddd"
+load(row(400, "ATP-20|m|MAM|50", D, ts=1795222000))
+load(row(401, "ATP-721|m|MAM-GENESIS|301", D, ts=1795222001))
+op_d = [o for o in T.ops("MAM-GENESIS") if o["txid"] == tid(401)][0]
+check("mint before the minter can pay the fee is ignored",
+      op_d["reason"] == "insufficient_fee_balance")
+load(row(402, "ATP-20|m|MAM|100", D, ts=1795222002))
+load(row(403, "ATP-721|m|MAM-GENESIS|302", D, ts=1795222003))
+op_d2 = [o for o in T.ops("MAM-GENESIS") if o["txid"] == tid(403)][0]
+u302 = [u for u in T.units_offset("MAM-GENESIS", 0, 200) if u["unit"] == 302]
+check("mint after a later ATP-20 credit is applied",
+      op_d2["valid"] == 1 and u302 and u302[0]["addr"] == D)
+# 50+100-111 = 39 left for D
+check("minter balance after interleaved fee debit",
+      T20.balance("MAM", D)["amount"] == "39")
+
+# same-timestamp order: ATP-20 credit and 721 mint share a ts; 20 is applied first (family tie-break)
+E = "poa1eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+load(row(500, "ATP-20|m|MAM|111", E, ts=1795223000))
+load(row(501, "ATP-721|m|MAM-GENESIS|303", E, ts=1795223000))
+op_e = [o for o in T.ops("MAM-GENESIS") if o["txid"] == tid(501)][0]
+u303 = [u for u in T.units_offset("MAM-GENESIS", 0, 200) if u["unit"] == 303]
+check("same-ts ATP-20 credit is applied before the 721 mint",
+      op_e["valid"] == 1 and u303 and u303[0]["addr"] == E
+      and T20.balance("MAM", E)["amount"] == "0")
+
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "atp721.py"), encoding="utf-8").read()
-check("no em or en dash in atp721.py", not any(d in src or d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in T.FEE_NOTE for d in DASH))
+src2 = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "atpreplay.py"), encoding="utf-8").read()
+check("no em or en dash in atp721.py or atpreplay.py", not any(d in src + src2 or d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in T.FEE_NOTE for d in DASH))
 
 print("\n" + (f"{len(fails)} failed: " + ", ".join(fails) if fails else "all passed"))
 sys.exit(1 if fails else 0)

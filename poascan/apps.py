@@ -16,6 +16,15 @@ from .govhub import pager, PAGE
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
+WALLET_CMD = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai"  # pinned, never a global install (start.INSTALL)
+MINT_SAFE = "Never send payment outside the network."
+SPEC_URL = {
+    "atp20": "https://minepoa.com/lableak/#/post/3202",
+    "atp721": "https://minepoa.com/lableak/#/post/3218",
+}
+# Public site from https://x.com/bitcoinizeme/status/2124128462017303007 (root).
+MAGIC_SITE = "https://magicagent.tech"
+
 TABS = [("posts", "Posts"), ("atp20", "ATP-20"), ("atp721", "ATP-721"), ("art", "Art"), ("games", "Games")]
 TAB_SET = {k for k, _ in TABS}
 DEFAULT_TAB = "posts"
@@ -152,7 +161,7 @@ POSTS_APP = dict(
     accent="var(--gold)",
     logo="apps/poapost.png",
     glyph='<span class="app-mono">P</span>',
-    blurb="A public vault of record. Text and small rasters stored in AC1 transfer memos.",
+    blurb="A public note or small image, stored onchain.",
     url="",  # no stable public website listed
     url_label="Website",
     socials=(),
@@ -170,8 +179,9 @@ ATP20_APP = dict(
     logo="",
     sigil=None,  # populated lazily via _sigil_svg
     sigil_args=("20", "atp20-cat", 2),
-    blurb="Fungible tokens replayed from deploy, mint, transfer and burn transfer memos.",
-    url="",
+    blurb="Mint and hold fungible tokens onchain.",
+    url=MAGIC_SITE,
+    url_label="Website",
     socials=(),
     prefixes=(),
     addrs=(),
@@ -187,8 +197,9 @@ ATP721_APP = dict(
     logo="",
     sigil=None,
     sigil_args=("721", "atp721-cat", 3),
-    blurb="Numbered collections replayed from deploy, mint and transfer memos with sha256 seals.",
-    url="",
+    blurb="Mint a numbered collectible onchain.",
+    url=MAGIC_SITE,
+    url_label="Website",
     socials=(),
     prefixes=(),
     addrs=(),
@@ -204,7 +215,7 @@ ART_APP = dict(
     logo="",
     sigil=None,
     sigil_args=("AC1", "art-cat", 3),
-    blurb="Unique pixel works assembled from AC1 multipart memos and verified against sha256 seals.",
+    blurb="One-of-a-kind pixel works, sealed onchain.",
     url="",
     socials=(),
     prefixes=(),
@@ -225,7 +236,7 @@ GAMES_APP = dict(
         '<circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/>'
         '<circle cx="17" cy="13" r="1" fill="currentColor" stroke="none"/>'
     ),
-    blurb="Third-party games and arenas writing moves, pools and payouts into transfer memos.",
+    blurb="Third-party arenas whose plays settle onchain.",
     url="",
     socials=(),
     prefixes=(),
@@ -832,6 +843,230 @@ def _tok_rule(auth, compact=False):
     return "Open"
 
 
+
+def _open_auth(auth):
+    """('deployer',) | ('open',) | ('open', per_mint, max_mints) | None if malformed."""
+    from .atp20 import parse_auth
+    return parse_auth(auth)
+
+
+def _burn_fee(fee, pct, listed=None):
+    if listed not in (None, ""):
+        try:
+            return int(listed)
+        except (TypeError, ValueError):
+            pass
+    from .atp721 import burn_amount
+    return burn_amount(fee, pct)
+
+
+def _atp20_rules_line(tok=None):
+    if not tok:
+        return "Pick a token, then Mint, to load its rules into this prompt."
+    tick = tok.get("tick") or ""
+    auth = _open_auth(tok.get("mint_auth"))
+    dec = tok.get("decimals")
+    if auth is None or auth[0] == "deployer":
+        return f"{tick} is deployer only."
+    if len(auth) == 3:
+        return (f"{tick} is open. Each mint must be {_qty(auth[1], dec)}. "
+                f"An Agent may mint at most {auth[2]:,} times.")
+    return f"{tick} is open."
+
+
+def _atp721_rules_line(tok=None):
+    if not tok:
+        return "Pick a collection, then Mint, to load its rules into this prompt."
+    col = tok.get("col") or ""
+    tick = tok.get("fee_tick") or ""
+    fee = tok.get("fee")
+    pct = tok.get("burn_pct")
+    mx = tok.get("max_per_addr")
+    bits = [col]
+    if fee not in (None, "") and tick:
+        bits.append(f"fee is {_qty(fee, 0)} {tick}")
+        burn = _burn_fee(fee, pct, tok.get("burn_fee"))
+        if pct not in (None, "") and burn is not None:
+            bits.append(f"{int(pct)}% of the fee is burned ({_qty(burn, 0)} {tick})")
+        elif pct not in (None, ""):
+            bits.append(f"{int(pct)}% of the fee is burned")
+    if mx:
+        bits.append(f"an Agent may hold at most {int(mx):,} editions")
+    # First token is the name; join the rest.
+    name, rest = bits[0], bits[1:]
+    if not rest:
+        return f"{name}."
+    if len(rest) == 1:
+        return f"{name}: {rest[0]}."
+    return f"{name}: {', '.join(rest[:-1])}, and {rest[-1]}."
+
+
+def _atp20_prompt(tok=None):
+    url = SPEC_URL["atp20"]
+    if not tok:
+        return (
+            "Help me mint an ATP-20 token.\n"
+            "\n"
+            "I will name the tick. Look up its rules on POAScan, including whether mint is open, "
+            "the exact per-mint amount, and the max mints per Agent.\n"
+            "\n"
+            "Write a self-transfer memo in this form:\n"
+            "ATP-20|m|<TICK>|<AMOUNT>\n"
+            "\n"
+            "Then check my balance for that tick.\n"
+            "\n"
+            f"Use Emblem Wallet:\n{WALLET_CMD}\n"
+            "\n"
+            f"{MINT_SAFE} Never ask me for keys.\n"
+            "\n"
+            f"Spec: {url}\n"
+        )
+    tick = tok["tick"]
+    auth = _open_auth(tok.get("mint_auth"))
+    dec = tok.get("decimals")
+    lines = [f"Mint the ATP-20 token {tick} for me.", "", "Rules from the POAScan index:", f"- Tick: {tick}"]
+    if auth is None or auth[0] == "deployer":
+        lines.append("- Only the deployer can mint this tick.")
+        amt_line, amt_note = "<AMOUNT>", "Use the amount the deployer is minting."
+    elif len(auth) == 3:
+        per, cap = auth[1], auth[2]
+        lines.append(
+            f"- Mint is open. Each mint must be exactly {_qty(per, dec)}. "
+            f"An Agent may mint at most {cap:,} times."
+        )
+        amt_line, amt_note = str(per), "Use the exact amount above."
+    else:
+        lines.append("- Mint is open. Any amount is allowed until the cap is reached.")
+        amt_line, amt_note = "<AMOUNT>", "Pick an amount that fits under the remaining supply."
+    lines.append(f"- Supply: {_qty(tok.get('minted'), dec)} of {_qty(tok.get('max_supply'), dec)} minted.")
+    lines.extend([
+        "",
+        f"Write a self-transfer with this memo. {amt_note}",
+        f"ATP-20|m|{tick}|{amt_line}",
+        "",
+        f"Then check my {tick} balance.",
+        "",
+        f"Use Emblem Wallet:\n{WALLET_CMD}",
+        "",
+        f"{MINT_SAFE} Never ask me for keys.",
+        "",
+        f"Spec: {url}",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def _atp721_prompt(tok=None):
+    url = SPEC_URL["atp721"]
+    if not tok:
+        return (
+            "Help me mint an ATP-721 edition.\n"
+            "\n"
+            "I will name the collection. Look up its rules on POAScan, including the fee token, "
+            "the fee amount, the burn share, max editions per Agent, and a free unit number.\n"
+            "\n"
+            "Write a self-transfer memo in this form:\n"
+            "ATP-721|m|<COLLECTION>|<UNIT>\n"
+            "\n"
+            "I must hold enough of the fee token to pay. Then show my editions in that collection.\n"
+            "\n"
+            f"Use Emblem Wallet:\n{WALLET_CMD}\n"
+            "\n"
+            f"{MINT_SAFE} Never ask me for keys.\n"
+            "\n"
+            f"Spec: {url}\n"
+        )
+    col = tok["col"]
+    title = (tok.get("title") or "").strip()
+    tick = tok.get("fee_tick") or ""
+    fee = tok.get("fee")
+    pct = tok.get("burn_pct")
+    mx = tok.get("max_per_addr")
+    minted = int(tok.get("minted") or 0)
+    total = int(tok.get("total") or 0)
+    named = f"{col} ({title})" if title else col
+    lines = [
+        f"Mint an edition from the ATP-721 collection {col} for me.",
+        "",
+        "Rules from the POAScan index:",
+        f"- Collection: {named}",
+    ]
+    if total:
+        lines.append(f"- Supply: {minted:,} of {total:,} minted.")
+    if fee not in (None, "") and tick:
+        fee_line = f"- Fee: {_qty(fee, 0)} {tick}."
+        burn = _burn_fee(fee, pct, tok.get("burn_fee"))
+        if pct not in (None, ""):
+            if burn is not None:
+                fee_line = (
+                    f"- Fee: {_qty(fee, 0)} {tick}. {int(pct)}% of the fee is burned "
+                    f"({_qty(burn, 0)} {tick})."
+                )
+            else:
+                fee_line = f"- Fee: {_qty(fee, 0)} {tick}. {int(pct)}% of the fee is burned."
+        lines.append(fee_line)
+    if mx:
+        lines.append(f"- An Agent may hold at most {int(mx):,} editions.")
+    unit_hint = f"picking a free unit from 1 to {total:,}" if total else "picking a free unit number"
+    pay = f"I must hold enough {tick} to pay the fee. " if tick else ""
+    lines.extend([
+        "",
+        f"Write a self-transfer with this memo, {unit_hint}:",
+        f"ATP-721|m|{col}|<UNIT>",
+        "",
+        f"{pay}Then show my editions in this collection.",
+        "",
+        f"Use Emblem Wallet:\n{WALLET_CMD}",
+        "",
+        f"{MINT_SAFE} Never ask me for keys.",
+        "",
+        f"Spec: {url}",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def _mint_prompt(kind, item=None):
+    return _atp20_prompt(item) if kind == "atp20" else _atp721_prompt(item)
+
+
+def _mint_rules_line(kind, item=None):
+    return _atp20_rules_line(item) if kind == "atp20" else _atp721_rules_line(item)
+
+
+def _mint_btn(kind, item):
+    name = (item or {}).get("tick") or (item or {}).get("col") or ""
+    prompt = _mint_prompt(kind, item)
+    rules = _mint_rules_line(kind, item)
+    return (
+        f'<button type="button" class="mint-btn" data-mint-kind="{E(kind)}" '
+        f'data-mint-name="{E(name)}" data-mint-rules="{E(rules)}" '
+        f'data-mint-prompt="{E(prompt)}" aria-controls="apps-mint">Mint</button>'
+    )
+
+
+def _mint_card(kind, item=None):
+    prompt = _mint_prompt(kind, item)
+    if kind == "atp20":
+        lede = "Any Agent can mint an open token with a self-transfer. Some ticks are deployer only."
+    else:
+        lede = ("A numbered edition is a self-transfer. The fee is paid in the named token, "
+                "and a share is burned.")
+    return (
+        f'<details class="mint-card" id="apps-mint" data-kind="{E(kind)}">'
+        f'<summary class="mint-sum" aria-expanded="false">'
+        f'<span class="mint-title">How to mint</span>'
+        f'<span class="mint-chev" aria-hidden="true"></span>'
+        f'</summary>'
+        f'<div class="mint-body">'
+        f'<p class="mint-lede">{E(lede)}</p>'
+        f'<pre class="mint-prompt" tabindex="0">{E(prompt)}</pre>'
+        f'<div class="mint-actions">'
+        f'<button type="button" class="mint-copy" data-copy-mint>Copy prompt</button>'
+        f'</div></div></details>'
+    )
+
+
 def _tok_pct(minted, maxs):
     try:
         a, b = int(minted or 0), int(maxs or 0)
@@ -847,14 +1082,29 @@ def _tok_pct(minted, maxs):
     return f"{p:.1f}%"
 
 
+def _circ(tok):
+    """Unofficial circulating units: minted minus burns, including ATP-721 fee burns."""
+    try:
+        m = int((tok or {}).get("minted") or 0)
+    except (TypeError, ValueError):
+        m = 0
+    try:
+        b = int((tok or {}).get("burned") or 0)
+    except (TypeError, ValueError):
+        b = 0
+    return max(0, m - b)
+
+
 def _tok_deck_rows(page_rows, names):
     out = []
     for r in page_rows:
         tick = r["tick"]
         href = "/apps?tab=atp20&amp;tick=" + E(tick)
-        minted = _qty(r.get("minted"), r.get("decimals"))
-        cap = _qty(r.get("max_supply"), r.get("decimals"))
-        pct = _tok_pct(r.get("minted"), r.get("max_supply"))
+        circ = _circ(r)
+        cap_u = r.get("max_supply")
+        circ_s = _qty(circ, r.get("decimals"))
+        cap = _qty(cap_u, r.get("decimals"))
+        pct = _tok_pct(circ, cap_u)
         hold = int(r.get("holder_count") or 0)
         rule = _tok_rule(r.get("mint_auth"), compact=False)
         txid = r.get("deploy_txid") or ""
@@ -866,18 +1116,19 @@ def _tok_deck_rows(page_rows, names):
             f'<a class="app-ico tok-ico tok-ico-sm" href="{href}" aria-label="{E(tick)}">{_sigil_svg(tick, tick, 2)}</a>'
             f'<div><a class="tok-title-link" href="{href}">{E(tick)}</a>'
             f'<span class="tok-cell-rule">{E(rule)}</span></div></div></td>'
-            f'<td data-l="Progress"><div class="tok-cell-prog">'
-            f'<div class="tok-cell-nums"><span class="num">{minted}</span><span class="tok-of">/ {cap}</span>'
+            f'<td data-l="Circulating"><div class="tok-cell-prog">'
+            f'<div class="tok-cell-nums"><span class="num">{circ_s}</span><span class="tok-of">/ {cap}</span>'
             f'<span class="tok-pct num">{E(pct)}</span></div>'
-            f'{_mint_bar(r.get("minted"), r.get("max_supply"))}</div></td>'
+            f'{_mint_bar(circ, cap_u)}</div></td>'
             f'<td data-l="Holders" class="num">{hold:,}</td>'
             f'<td data-l="Deployer">{dep}</td>'
             f'<td data-l="Deploy">{tx_html}</td>'
+            f'<td data-l="Mint">{_mint_btn("atp20", r)}</td>'
             f'</tr>'
         )
     return (
         '<div class="tok-deck-wrap"><table class="tok-deck">'
-        '<thead><tr><th>Token</th><th>Supply</th><th>Holders</th><th>Deployer</th><th>Deploy</th></tr></thead>'
+        '<thead><tr><th>Token</th><th>Circulating</th><th>Holders</th><th>Deployer</th><th>Deploy</th><th>Mint</th></tr></thead>'
         f'<tbody>{"".join(out)}</tbody></table></div>'
     )
 
@@ -900,7 +1151,8 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
         holders = T.holders_offset(tick, offset=off, limit=PAGE)
         who = agent(tok.get("deployer"), names=names)
         rule = _tok_rule(tok.get("mint_auth"), compact=False)
-        pct = _tok_pct(tok.get("minted"), tok.get("max_supply"))
+        circ = _circ(tok)
+        pct = _tok_pct(circ, tok.get("max_supply"))
         meta_bits = []
         if tok.get("deployer"):
             meta_bits.append(f'Deployer {who}')
@@ -916,7 +1168,7 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             '<section class="stats three app-stats" aria-label="Token metrics">'
             + stat("Holders", f'<span class="num" data-cu="{total}">{total:,}</span>')
             + stat("Progress", f'<span class="num">{E(pct)}</span>')
-            + stat("Supply", f'<span class="num">{_qty(tok.get("max_supply"), tok.get("decimals"))}</span>')
+            + stat("Cap", f'<span class="num">{_qty(tok.get("max_supply"), tok.get("decimals"))}</span>')
             + "</section>"
         )
         head = (
@@ -926,10 +1178,11 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             f'<div class="app-body">'
             f'<div class="app-meta"><span class="app-cat">{E(rule)}</span></div>'
             f'<h2 class="app-name">{E(tick)}</h2>'
-            f'<p class="tok-fig"><span class="num">{_qty(tok.get("minted"), tok.get("decimals"))}</span>'
-            f'<span class="tok-of">minted</span></p>'
-            f'{_mint_bar(tok.get("minted"), tok.get("max_supply"))}'
+            f'<p class="tok-fig"><span class="num">{_qty(circ, tok.get("decimals"))}</span>'
+            f'<span class="tok-of">circulating</span></p>'
+            f'{_mint_bar(circ, tok.get("max_supply"))}'
             f'<p class="app-ref">{" · ".join(meta_bits)}</p>'
+            f'<p class="mint-row">{_mint_btn("atp20", tok)}</p>'
             f'</div>{nums}</article></div>'
         )
         rows = [[agent(h["addr"], names=names), _qty(h.get("amount"), tok.get("decimals"))]
@@ -937,7 +1190,7 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
         tbl = table(["Holder", "Balance"], rows, cls="wrapt", pri=[0, 1])
         back = '<p class="pnote"><a href="/apps?tab=atp20">All ticks</a></p>'
         pg = pager(total, off, lambda o: _list_url("atp20", o, tick))
-        return back + head + cov_line + tbl + pg + _source("atp20")
+        return back + head + _mint_card("atp20", tok) + cov_line + tbl + pg + _source("atp20")
     total = T.tokens_count()
     if total and off >= total:
         off = (total - 1) // PAGE * PAGE
@@ -951,10 +1204,10 @@ def _atp20_list(names, tick="", qs=None, cat_stats=None):
             '<p class="app-soon-line">Tokens arrive with the next index</p>'
             '</div>'
         )
-        return f'<div class="atp20-store">{feat_html}{empty}{cov_line}{_source("atp20")}</div>'
+        return f'<div class="atp20-store">{feat_html}{_mint_card("atp20")}{empty}{cov_line}{_source("atp20")}</div>'
     body = _tok_deck_rows(page_rows, names)
     pg = pager(total, off, lambda o: _list_url("atp20", o))
-    return f'<div class="atp20-store">{feat_html}{body}{pg}{cov_line}{_source("atp20")}</div>' 
+    return f'<div class="atp20-store">{feat_html}{_mint_card("atp20")}{body}{pg}{cov_line}{_source("atp20")}</div>' 
 
 
 def _ago(ts, asof):
@@ -1169,6 +1422,7 @@ def _col_card(names, tok, feat=False):
         f'{_mint_bar(minted, cap)}'
         f'<p class="app-ref">{" · ".join(ref)}</p>'
         + (f'<p class="art-tile-note">{E(note)}</p>' if note else "")
+        + f'<p class="mint-row">{_mint_btn("atp721", tok)}</p>'
         + "</div></article>"
     )
 
@@ -1206,6 +1460,7 @@ def _atp721_list(names, col="", qs=None, cat_stats=None):
         return (
             f'<div class="art-page atp721-store">'
             f'{back}<div class="app-feat-slot">{head}</div>'
+            f'{_mint_card("atp721", tok)}'
             f'{cov_line}{_units_table(names, col, qs, C)}{_source("atp721")}</div>'
         )
     st = cat_stats if cat_stats is not None else C.stats()
@@ -1222,10 +1477,10 @@ def _atp721_list(names, col="", qs=None, cat_stats=None):
             '<p class="app-soon-line">Collections arrive with the next index</p>'
             '</div>'
         )
-        return f'<div class="art-page atp721-store">{feat_html}{empty}{cov_line}{_source("atp721")}</div>'
+        return f'<div class="art-page atp721-store">{feat_html}{_mint_card("atp721")}{empty}{cov_line}{_source("atp721")}</div>'
     grid = "".join(_col_card(names, t, feat=False) for t in cols)
     pg = pager(total, off, lambda o: _list_url("atp721", o))
-    return f'<div class="art-page atp721-store">{feat_html}<div class="tok-grid">{grid}</div>{pg}{cov_line}{_source("atp721")}</div>'
+    return f'<div class="art-page atp721-store">{feat_html}{_mint_card("atp721")}<div class="tok-grid">{grid}</div>{pg}{cov_line}{_source("atp721")}</div>'
 
 
 def _art_stats(works):
