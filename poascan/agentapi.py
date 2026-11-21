@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.417"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-21T16:48:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.419"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-21T18:48:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1054,7 +1054,7 @@ def openapi():
             [_p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
              _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
             oid="atp721Collections", tag="explorer",
-            desc="Unofficial replay of the ATP-721 memo convention from archived transfer memos. official is always false. Coverage names the replay order (ts, id) and that the mint fee is not debited. Ordered by (deploy_ts, col). Archive only, no upstream read."),
+            desc="Unofficial replay of the ATP-721 memo convention from archived transfer memos. official is always false. Coverage names the replay order (ts, id) and that a valid mint debits the fee in fee_tick from the minter, burns burn_pct, and credits the rest to the deployer. A mint without the fee is ignored. Ordered by (deploy_ts, col). Archive only, no upstream read."),
         "/api/atp721/collection/{col}": _op("Unofficial ATP-721 collection summary", ANY,
             [_p("col", "collection name (A-Z, 0-9 and hyphen)", {"type": "string", "pattern": "^[A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9])$"})],
             oid="atp721Collection", tag="explorer",
