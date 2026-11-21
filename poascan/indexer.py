@@ -582,6 +582,11 @@ def upsert_txs(rows, source):
         _ATP721.ingest(rows, source)
     except Exception:
         log.exception("atp721 ingest")
+    try:
+        from . import ac1art as _ART
+        _ART.ingest(rows, source)
+    except Exception:
+        log.exception("ac1art ingest")
     return len(out)
 
 def _known(ids):
@@ -1368,6 +1373,11 @@ def job_atp721():
     from . import atp721 as _ATP721
     _ATP721.backfill()
 
+def job_ac1art():
+    """Refresh unofficial AC1 artwork from transfer memos already in txs. Local only; no upstream."""
+    from . import ac1art as _ART
+    _ART.backfill()
+
 JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("live", job_live, live_every, None),   # LIVE_S, or LIVE_DEGRADED_S while upstream is degraded; each read backs off on its own
     _SWAP_JOBS[0][:2] + (SWAPS_S,) + _SWAP_JOBS[0][3:],   # swaps: open-offer book, SWAPS_S (60 s)
@@ -1390,6 +1400,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("forum", job_forum, FORUM_S, "/lableak/api/communities"),
     ("atp20", job_atp20, 300, None),   # unofficial ATP-20 replay from the local txs table; no minepoa traffic
     ("atp721", job_atp721, 300, None),   # unofficial ATP-721 replay from the local txs table; no minepoa traffic
+    ("ac1art", job_ac1art, 300, None),   # unofficial AC1 artwork from the local txs table; no minepoa traffic
     ("sample", job_sample, 1800, "/api/explorer/tx/:id"),
     ("links", job_links, 600, "/api/explorer/tx/:id"),   # chains-update tx bodies, once each
     ("vault_links", lambda: __import__("poascan.wallet", fromlist=["x"]).job(), 600, "/api/links"),   # 1.26.187: bulk /api/links (about 1 KB) every 10 min
@@ -1486,6 +1497,10 @@ def start(seed_dir=None):
         from . import atp721 as _ATP721
         _ATP721.backfill()
     except Exception as e: log.warning("atp721 backfill: %s", type(e).__name__)
+    try:
+        from . import ac1art as _ART
+        _ART.backfill()
+    except Exception as e: log.warning("ac1art backfill: %s", type(e).__name__)
     try: log.info("join labels repaired: %d", repair_join_labels())
     except Exception as e: log.warning("join label repair: %s", type(e).__name__)
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()

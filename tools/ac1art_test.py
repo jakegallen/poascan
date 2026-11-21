@@ -63,16 +63,89 @@ svg_got = R.assemble("deadbeef", rows=[
 ])
 check("SVG data URI is refused", svg_got["ok"] is False and svg_got["reason"] == "unsupported_payload")
 
-# known Digivatar work: committed raster hashes
+# known Digivatar work: committed raster hashes, titled Genesis with credit
 w = R.work("e85fe08f")
-check("known work serves the hash-checked local GIF",
-      w["ok"] is True and w["name"] == "Digivatar"
+check("known work is Genesis by Digivatar with a hash-checked local GIF",
+      w["ok"] is True and w["name"] == "Genesis" and w.get("credit") == "Digivatar"
       and w["file_sha"] == "415322abc005eb984a8200868fb4fe6ddf0e126dd024b03e21d3eae7d232d217"
-      and w["gif"] == "/static/apps/digivatar-e85fe08f.gif" and w["still"] == "/static/apps/digivatar-e85fe08f.png")
+      and (w["gif"] in ("/static/apps/digivatar-e85fe08f.gif", "/art/raster/e85fe08f"))
+      and (w["still"] in ("/static/apps/digivatar-e85fe08f.png", "/art/raster/e85fe08f/still")))
+
+# still frame from the committed animated GIF
+gif_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "apps", "digivatar-e85fe08f.gif")
+raw_gif = open(gif_path, "rb").read()
+info = R.gif_info(raw_gif)
+still = R.gif_still(raw_gif)
+sinfo = R.gif_info(still) if still else None
+check("Genesis GIF is 28 x 28 with 12 frames at 80 ms",
+      info and info["width"] == 28 and info["height"] == 28 and info["frames"] == 12 and info["ms"] == 80)
+check("still extractor keeps one 28 x 28 frame",
+      still and still.startswith(b"GIF89a") and sinfo and sinfo["frames"] == 1
+      and sinfo["width"] == 28 and sinfo["height"] == 28)
+
+# second synthetic artwork (PNG), not in KNOWN, must be auto-listed after a matching seal
+import struct, zlib
+def _png(w=2, h=2):
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    raw = b"".join(b"\x00" + b"\x00\xff\x00" * w for _ in range(h))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+PNG = _png()
+URI2 = "data:image/png;base64," + base64.b64encode(PNG).decode()
+mid2 = len(URI2) // 2
+q1, q2 = URI2[:mid2], URI2[mid2:]
+sha2 = hashlib.sha256((q1 + q2).encode()).hexdigest()
+file2 = hashlib.sha256(PNG).hexdigest()
+CID2 = "b0b0cafe"
+IX.upsert_txs([
+    row(11, f"AC1|m|{CID2}|01/02|{q1}", ts=1795071001),
+    row(12, f"AC1|m|{CID2}|02/02|{q2}", ts=1795071002),
+    row(13, f"AC1|s|{CID2}|sha256:{sha2}", ts=1795071003),
+], "test")
+R.invalidate()
+got3 = R.assemble(CID2)
+check("second synthetic PNG work decodes against its seal",
+      got3["ok"] is True and got3["file_sha"] == file2 and got3["mime"] == "image/png"
+      and got3["width"] == 2 and got3["height"] == 2)
+listed = {r["id"]: r for r in R.works()}
+check("works() auto-lists the second synthetic work without a KNOWN entry",
+      CID2 in listed and listed[CID2]["ok"] is True and listed[CID2]["name"] == CID2
+      and listed[CID2]["gif"] == "/art/raster/" + CID2
+      and listed[CID2].get("credit") in (None, ""))
+check("works() also lists the first synthetic GIF work",
+      CID in listed and listed[CID]["ok"] is True)
+blob = R.raster(CID2)
+still_blob = R.raster(CID2, still=True)
+check("cached raster and still are served for the new work",
+      blob and blob[0] == PNG and blob[1] == "image/png" and still_blob and still_blob[0])
+
+# a sealed but mismatched work is skipped, not shown as a broken card
+CID3 = "dead0001"
+IX.upsert_txs([
+    row(21, f"AC1|m|{CID3}|01/01|{URI2}", ts=1795072001),
+    row(22, f"AC1|s|{CID3}|sha256:{'ab'*32}", ts=1795072002),
+], "test")
+R.invalidate()
+bad2 = R.assemble(CID3)
+listed2 = {r["id"] for r in R.works()}
+check("mismatched seal is not listed", bad2["ok"] is False and CID3 not in listed2)
+try:
+    R.http("/api/art/works/" + CID3, {})
+    api_bad = "no-error"
+except LookupError:
+    api_bad = "404"
+check("API 404s a failed work instead of returning a broken body", api_bad == "404")
+
+api = R.http("/api/art/works", {})
+ids = {r["id"] for r in api["works"]}
+check("API lists every verified work, including the synthetic PNG",
+      CID2 in ids and api["official"] is False and "raw" not in api["works"][0])
 
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "ac1art.py"), encoding="utf-8").read()
 check("no em or en dash in ac1art.py", not any(d in src or d in R.OFFICIAL_NOTE for d in DASH))
-check("module does not fetch remote images", "http://" not in src and "https://" not in src.split("source=")[0])
+check("module does not fetch remote images",
+      "urlopen" not in src and "requests." not in src and "http://" not in src.split("source=")[0])
 
 print("\n" + (f"{len(fails)} failed: " + ", ".join(fails) if fails else "all passed"))
 sys.exit(1 if fails else 0)

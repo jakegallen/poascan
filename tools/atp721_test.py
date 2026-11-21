@@ -125,6 +125,25 @@ load(row(90, "ATP-721|m|MAM-GENESIS|201", B, typ="join", ts=1795219900))
 check("join txs are not ingested as collection ops", not any(o["txid"] == tid(90) for o in T.ops()))
 check("empty ingest is a no-op", T.ingest([], "test") == 0)
 
+# second synthetic collection, no per-collection code
+SHA2 = "aa" * 32
+DEP2 = "ATP-721|d|DEMO-ART|" + SHA2 + "|image/png|10|1|MAM|20|2|SECOND COLLECTION"
+load(row(200, DEP2, B, ts=1795220000))
+load(row(201, "ATP-721|m|DEMO-ART|1", B, ts=1795220001))
+load(row(202, "ATP-721|m|DEMO-ART|2", B, ts=1795220002))
+load(row(203, "ATP-721|m|DEMO-ART|3", B, ts=1795220003))
+demo = T.collection("DEMO-ART")
+check("second collection deploys and mints under its own cap",
+      demo and demo["total"] == 10 and demo["minted"] == 2 and demo["holder_count"] == 1
+      and demo["official"] is False and demo["title"] == "SECOND COLLECTION")
+check("third mint on DEMO-ART hits that collection's per-address cap",
+      [o for o in T.ops("DEMO-ART") if o["txid"] == tid(203)][0]["reason"] == "over_addr_cap")
+cols = {c["col"] for c in T.collections()}
+check("collections() lists both tickers with no hardcoded filter",
+      "MAM-GENESIS" in cols and "DEMO-ART" in cols)
+check("first collection counts are unchanged by the second ticker",
+      T.collection("MAM-GENESIS")["minted"] >= 6)
+
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "poascan", "atp721.py"), encoding="utf-8").read()
 check("no em or en dash in atp721.py", not any(d in src or d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in T.FEE_NOTE for d in DASH))
 

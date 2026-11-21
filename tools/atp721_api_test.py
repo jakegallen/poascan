@@ -105,10 +105,12 @@ check("unknown atp721 path is 404", "unknown" in expect_404("/api/v1/atp721/nope
 
 # art works API (static hash, no memos in this temp db)
 works = api("/api/v1/art/works")
-check("art works unofficial and names Digivatar",
+check("art works unofficial and names Genesis by Digivatar",
       works["official"] is False and works["coverage"]["official"] is False
-      and works["works"][0]["id"] == "e85fe08f" and works["works"][0]["name"] == "Digivatar"
-      and works["works"][0]["ok"] is True and works["works"][0]["gif"] == "/static/apps/digivatar-e85fe08f.gif")
+      and works["works"][0]["id"] == "e85fe08f" and works["works"][0]["name"] == "Genesis"
+      and works["works"][0].get("credit") == "Digivatar"
+      and works["works"][0]["ok"] is True
+      and works["works"][0]["gif"] in ("/static/apps/digivatar-e85fe08f.gif", "/art/raster/e85fe08f"))
 onew = api("/api/v1/art/works/e85fe08f")
 check("one work is unofficial and hash-checked",
       onew["official"] is False and onew["work"]["ok"] is True
