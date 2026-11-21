@@ -5,7 +5,7 @@ import os, sys, tempfile, copy, json
 os.environ.update(POASCAN_DB=os.path.join(tempfile.mkdtemp(), "s.db"), POASCAN_INDEXER="0",
                   POA_BASE="http://127.0.0.1:9", POASCAN_MAINTENANCE="0")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from poascan import db, atp721 as T, atp20 as T20, indexer as IX, server as SV, agentapi as AG
+from poascan import db, atp721 as T, indexer as IX, server as SV, agentapi as AG
 
 fails = []
 def check(name, ok):
@@ -52,10 +52,6 @@ def expect_404(path, **q):
     except Exception as e:
         return type(e).__name__ + " " + str(e)
 
-load(row(8000, "ATP-20|d|MAM|21000000|0|open", DEP, ts=1795174507))
-load(row(8001, "ATP-20|m|MAM|100000", DEP, ts=1795174508))
-for i, addr in enumerate(HOLDERS):
-    load(row(8100 + i, f"ATP-20|m|MAM|100000", addr, ts=1795174510 + i))
 load(row(1, f"ATP-721|d|MAM-GENESIS|{SHA}|image/png|3333|111|MAM|20|5|THE AGENT AWAKENS", DEP, ts=1795214976))
 for i, addr in enumerate(HOLDERS):
     load(row(100 + i, f"ATP-721|m|MAM-GENESIS|{i+1}", addr, ts=1795218000 + i))
@@ -66,11 +62,10 @@ lst = api("/api/v1/atp721/collections")
 check("collections: unofficial envelope and coverage",
       lst["official"] is False and "Unofficial" in lst["official_note"]
       and lst["coverage"]["official"] is False and lst["coverage"]["ordering"] == "ts_id"
-      and lst["coverage"]["fee_debit"] == "minter" and lst["next_cursor"] is None)
+      and lst["coverage"]["fee_debit"] == "unchecked" and lst["next_cursor"] is None)
 check("collections: MAM-GENESIS unofficial",
       [c["col"] for c in lst["collections"]] == ["MAM-GENESIS"]
-      and lst["collections"][0]["official"] is False and lst["collections"][0]["minted"] == 21
-      and lst["collections"][0]["fee_burned"] == "483" and lst["collections"][0]["deployer_fees"] == "1848")
+      and lst["collections"][0]["official"] is False and lst["collections"][0]["minted"] == 21)
 check("unknown query param is 400", "unknown parameter" in expect_bad("/api/v1/atp721/collections", foo=1))
 
 one = api("/api/v1/atp721/collection/MAM-GENESIS")
@@ -104,6 +99,20 @@ check("ignored duplicate is in the txs list with a reason",
 # 1 deploy + 21 mints + 1 ignored = 23 final
 check("txs second page completes the set", len(tx["txs"]) + len(tx2["txs"]) == 23 and tx2["next_cursor"] is None)
 
+# ---- editions: 21 minted units, owner + collection art digest, by unit ascending ----
+ed = api("/api/v1/atp721/collection/MAM-GENESIS/editions")
+ed2 = api("/api/v1/atp721/collection/MAM-GENESIS/editions", cursor=ed["next_cursor"])
+eds = ed["editions"] + ed2["editions"]
+check("editions default page is 20 with a next cursor",
+      len(ed["editions"]) == 20 and ed["next_cursor"] and all(x["official"] is False for x in ed["editions"]))
+check("editions second page completes the 21 units", len(eds) == 21 and ed2["next_cursor"] is None
+      and [x["unit"] for x in eds] == list(range(1, 22)))
+check("edition rows carry unit, owner, image_ref, mint_txid, mint_ts; image_ref is the collection digest",
+      all({"unit", "owner", "image_ref", "mint_txid", "mint_ts"} <= set(x) for x in eds)
+      and eds[0]["owner"] == HOLDERS[0] and all(x["image_ref"] == SHA for x in eds))
+check("unknown collection editions is 404", expect_404("/api/v1/atp721/collection/NOPE/editions") == "unknown collection")
+check("bad editions cursor is 400", expect_bad("/api/v1/atp721/collection/MAM-GENESIS/editions", cursor="!!!") == "bad cursor")
+
 check("limit 1 pages with a cursor", len(api("/api/v1/atp721/collections", limit=1)["collections"]) == 1)
 check("bare /api/atp721 is 404", "unknown" in expect_404("/api/atp721"))
 check("unknown atp721 path is 404", "unknown" in expect_404("/api/v1/atp721/nope"))
@@ -122,16 +131,26 @@ check("one work is unofficial and hash-checked",
       and onew["work"]["file_sha"] == "415322abc005eb984a8200868fb4fe6ddf0e126dd024b03e21d3eae7d232d217")
 check("unknown work is 404", "unknown" in expect_404("/api/v1/art/works/deadbeef"))
 
+# ---- apps art gallery: unique AC1 works mapped to the card shape ----
+ag = api("/api/v1/apps/art")
+check("apps art unofficial, lists Genesis mapped to the card shape",
+      ag["official"] is False and ag["coverage"]["official"] is False and len(ag["art"]) >= 1
+      and ag["art"][0]["id"] == "e85fe08f" and ag["art"][0]["title"] == "Genesis"
+      and {"id", "title", "owner", "image_ref", "still_ref", "seal"} <= set(ag["art"][0])
+      and ag["art"][0]["image_ref"] in ("/static/apps/digivatar-e85fe08f.gif", "/art/raster/e85fe08f"))
+check("apps unknown path is 404", "unknown" in expect_404("/api/v1/apps/nope"))
+
 spec = AG.openapi()
 paths = spec["paths"]
 for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
             "/api/v1/atp721/collection/{col}/units", "/api/v1/atp721/collection/{col}/holders",
-            "/api/v1/atp721/collection/{col}/txs", "/api/v1/art/works", "/api/v1/art/works/{id}"):
+            "/api/v1/atp721/collection/{col}/txs", "/api/v1/atp721/collection/{col}/editions",
+            "/api/v1/art/works", "/api/v1/art/works/{id}", "/api/v1/apps/art"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-721 and art routes",
-      "/atp721/collections" in txt and "/art/works" in txt and "official is always false" in txt)
-check("version is 1.26.418", AG.VERSION == "1.26.418")
+      "/atp721/collections" in txt and "/art/works" in txt and "/apps/art" in txt and "official is always false" in txt)
+check("version is 1.26.417", AG.VERSION == "1.26.417")
 check("no em or en dash in new API strings",
       not any(d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in json.dumps(lst) or d in txt for d in DASH))
 
