@@ -1334,7 +1334,7 @@ class H(BaseHTTPRequestHandler):
         # 1.26.356: link previews need no heavy slot. og.py already serves its cache or the generic card, and new renders
         # run one at a time from its own small token bucket (one every 5 s), so CPU stays bounded without the slot wait
         # that was shedding /og/* with 503s under crawl.
-        if p.startswith("/og/"): return True
+        if p.startswith("/og/") or p.startswith("/apps/og/"): return True
         # 1.26.361: an Agent's Established history is a few ms from cached indexes (agents.settled_index); a cold rebuild
         # still takes a heavy slot inside @cached. Waiting at the door for a slot only shed it with 503s under crawl.
         if EST_RX.match(p): return True
@@ -1513,7 +1513,7 @@ class H(BaseHTTPRequestHandler):
         """A GET for a human page (not the API, MCP, a fragment, ops, static or a data file)."""
         if getattr(self, "command", "GET") != "GET": return False
         p = self._path_only()
-        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/mark/", "/hallmark/", "/.well-known/", "/art/raster/", "/apps/memo-img/")): return False
+        if p.startswith("/api") or p in ("/mcp", "/ws") or p.startswith(("/mcp/", "/fragment/", "/ops/", "/static/", "/og/", "/apps/og/", "/mark/", "/hallmark/", "/.well-known/", "/art/raster/", "/apps/memo-img/")): return False
         return not p.endswith((".json", ".txt", ".xml", ".svg", ".png", ".ico", ".csv", ".webmanifest"))
     def _shed_bucket(self):
         """Coarse route bucket for the shed counter (plan v2 C step 1): addr_html, tx_html, api, other."""
@@ -1662,10 +1662,10 @@ class H(BaseHTTPRequestHandler):
                 svg = (MK.agent_svg if path.startswith("/mark/") else MK.hall_svg)(k[:-4]) if k.endswith(".svg") else None
                 if not svg: return self.send(404, "not found", TXT)
                 return self.send(200, svg, "image/svg+xml", {"Cache-Control": MK.CACHE})
-            if path.startswith("/og/"):
+            if path.startswith("/og/") or path.startswith("/apps/og/"):
                 r = OG.render(path) if OG.available() else None
                 if r: return self.send(200, r[0], "image/png", {"Cache-Control": f"public, max-age={r[1]}"})
-                if OG.ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
+                if OG.ROUTE.match(path) or OG.APPS_ROUTE.match(path) or path == "/og/upgrade.png": return self.send(200, open(os.path.join(STATIC, "og-card.png"), "rb").read(), "image/png", {"Cache-Control": "public, max-age=3600"})
                 return self.send(404, "not found", TXT)
             if path == "/healthz":   # answered by a request thread after a real DB read, so a hung server or locked DB fails it
                 db.q1("SELECT 1 AS x"); return self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"})
