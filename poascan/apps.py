@@ -1917,11 +1917,36 @@ def feed_sse(qs=None, last_event_id=None):
     return "".join(out)
 
 
+def trending(window_s=3600, top=3):
+    """Top entities by activity in the trailing window: {kind, id, label, events_1h, last_ts}.
+    kind is tick (ATP-20) or collection (ATP-721); ranked by event count then recency."""
+    from . import atp20 as T, atp721 as C
+    T.ensure_fresh()
+    C.ensure_fresh()
+    asof = int(dt.datetime.now(dt.timezone.utc).timestamp())
+    floor = asof - int(window_s)
+    items = []
+    for r in db.q("SELECT tick AS id, COUNT(*) AS n, MAX(ts) AS last_ts FROM atp20_ops "
+                  "WHERE final=1 AND valid=1 AND ts>=? AND tick IS NOT NULL GROUP BY tick", (floor,)):
+        items.append(dict(kind="tick", id=r["id"], label=r["id"],
+                          events_1h=int(r["n"]), last_ts=int(r["last_ts"] or 0)))
+    for r in db.q("SELECT col AS id, COUNT(*) AS n, MAX(ts) AS last_ts FROM atp721_ops "
+                  "WHERE final=1 AND valid=1 AND ts>=? AND col IS NOT NULL GROUP BY col", (floor,)):
+        items.append(dict(kind="collection", id=r["id"], label=r["id"],
+                          events_1h=int(r["n"]), last_ts=int(r["last_ts"] or 0)))
+    items.sort(key=lambda x: (x["events_1h"], x["last_ts"]), reverse=True)
+    return dict(official=False, official_note=OFFICIAL_NOTE_FEED,
+                items=items[:max(1, int(top))], window_s=int(window_s), asof=asof)
+
 def http(path, qs):
     """Unofficial Apps cross-surface read API (/api/apps/*). Raises ValueError for 400, LookupError for 404.
     The SSE stream (/api/apps/feed/stream) is served raw by the server, not through here."""
     from . import ac1art as R
-    if path == "/api/apps/art":
+    if path == "/api/apps/trending":
+        for k in (qs or {}):
+            if k not in ():
+                raise ValueError("unknown parameter")
+        return trending()    if path == "/api/apps/art":
         for k in (qs or {}):
             if k not in ("limit",):
                 raise ValueError("unknown parameter")
