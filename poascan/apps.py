@@ -16,7 +16,7 @@ from .govhub import pager, PAGE
 DISCLAIMER = ("Community apps built on Proof of Agent. These are third-party projects, not official "
               "Proof of Agent. Have fun, and do your own research before you interact.")
 
-WALLET_CMD = "npm install -g @emblemvault/agentwallet"
+WALLET_CMD = "npx -y -p @emblemvault/agentwallet@3.3.0 emblemai --hustle-url https://emblemvault.ai"  # pinned, never a global install (start.INSTALL)
 MINT_SAFE = "Never send payment outside the network."
 SPEC_URL = {
     "atp20": "https://minepoa.com/lableak/#/post/3202",
