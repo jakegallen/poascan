@@ -39,7 +39,7 @@ mb = HC.MAX_BYTES; HC.MAX_BYTES = 8000
 for i in range(20): HC.put(HC.key(f"/e{i}", {}, None, False), "z" * 900, now=time.time() + i)
 check("byte cap evicts the oldest", HC.state()["bytes"] <= 8000 and HC.get(HC.key("/e19", {}, None, False), 15) and not HC.get(HC.key("/e0", {}, None, False), 15))
 HC.MAX_BYTES = mb
-check("warmed pages get a grace past their TTL, others none", HC.grace("/network", {"tab": ["health"]}) == HC.WARM_GRACE > 0 and HC.grace("/network", {"tab": ["token"]}) == HC.WARM_GRACE and HC.grace("/network", {"tab": ["holders"]}) == 0 and HC.grace("/privacy", {}) == 0)
+check("warmed pages get a grace past their TTL, others none", HC.grace("/live", {}) == HC.WARM_GRACE > 0 and HC.grace("/network", {"tab": ["token"]}) == HC.WARM_GRACE and HC.grace("/network", {"tab": ["holders"]}) == 0 and HC.grace("/privacy", {}) == 0)
 check("network overview is warmed (served pinned, no heavy slot, like health)", HC.is_warm("/network", {}) and HC.grace("/network", {}) == HC.WARM_GRACE > 0)
 check("address freshness window 300 s", V.ADDR_TTL == 300)
 check("1.26.308: the Transactions list is warmed (a pinned copy, never the full page Busy card)", HC.is_warm("/chain/txs", {}) and HC.grace("/chain/txs", {}) == HC.WARM_GRACE and not HC.is_warm("/chain/txs", {"type": ["grade"]}))
@@ -65,11 +65,11 @@ calls = []
 real = SV.page
 def counting(p, qs): calls.append(p); return real(p, qs)
 SV.page = counting
-t0 = time.time(); a = get("/network?tab=health"); t1 = time.time(); b = get("/network?tab=health"); t2 = time.time()
-check("Health: 200 twice, rendered once", a[0] == b[0] == 200 and calls.count("/network") == 1)
+t0 = time.time(); a = get("/live?tab=feeds"); t1 = time.time(); b = get("/live?tab=feeds"); t2 = time.time()
+check("Feeds: 200 twice, rendered once", a[0] == b[0] == 200 and calls.count("/live") == 1)
 print(f"     cold {1000*(t1-t0):.0f} ms, cached {1000*(t2-t1):.0f} ms")
-get("/network?tab=token")
-check("another tab is its own entry", calls.count("/network") == 2)
+get("/live?tab=spec")
+check("another tab is its own entry", calls.count("/live") == 2)
 c = get("/api/v1/health")
 check("API answers bypass the page cache and report it", c[0] in (200, 503) and '"page_cache"' in c[1] and "/api/health" not in calls)
 check("an unknown page stays a 404", get("/no-such-page")[0] == 404)

@@ -13,8 +13,8 @@ from . import db, analytics as A, kit as KIT, segments as SG
 from .ui import *
 from . import ui as _ui
 
-TABS = [("health", "/network", "Health"), ("charts", "/network?tab=charts", "Charts"), ("anchors", "/network?tab=anchors", "Anchors"), ("token", "/network?tab=token", "Token")]
-ALIAS = {"overview": "health", "records": "anchors", "": "health"}
+TABS = [("charts", "/network", "Charts"), ("anchors", "/network?tab=anchors", "Anchors"), ("token", "/network?tab=token", "Token")]
+ALIAS = {"overview": "charts", "records": "anchors", "": "charts"}
 METRICS = [("joins", "Joins"), ("agents", "Agents"), ("holders", "Holders"), ("supply", "Supply"), ("txs", "Txs"), ("answers", "Answers"), ("forum", "Forum")]
 RANGES = [("24h", "24h", 86400), ("7d", "7d", 7 * 86400), ("30d", "30d", 30 * 86400), ("all", "All", None)]
 EV_TYPES = [("", "All"), ("anchor", "Anchor"), ("release", "Release"), ("notice", "Notice"), ("record", "Record")]
@@ -71,7 +71,7 @@ def anchor_ring(eta, now):
             f'<svg viewBox="0 0 240 240" aria-hidden="true"><circle class="rt" cx="120" cy="120" r="104"/>'
             f'<circle class="rp" cx="120" cy="120" r="104" pathLength="100" stroke-dasharray="{f * 100:.2f} 100"/>{tk}</svg>'
             f'<i class="rhd" aria-hidden="true"><i></i></i><i class="rpl" aria-hidden="true"></i><i class="rpl r2" aria-hidden="true"></i>'
-            f'<div class="rc"><span class="lbl">Last anchor</span><b class="bn num{" long" if age is not None and len(short_age(age)) > 5 else ""}" data-aage>{short_age(age)}</b>'
+            f'<div class="rc"><span class="lbl">Since</span><b class="bn num{" long" if age is not None and len(short_age(age)) > 5 else ""}" data-aage>{short_age(age)}</b>'
             f'</div></div>')
 
 def _iso_ts(s):
@@ -103,8 +103,8 @@ def minute_strip(now, minutes=60):
         o, h, d = v; cls = "bad" if (h or d) and not o else "warn" if (h or d) else "ok"
         cells.append(f'<i class="{cls}" title="{E(time.strftime("%H:%MZ", time.gmtime(m)))} open {o}, halted {h}, down {d}"></i>')
     seen = bool(by)
-    return (f'<div class="nmin" data-minutes="{minutes}"><span class="lbl">Last hour</span>'
-            + (f'<span class="nstrip" role="img" aria-label="Route probes">{"".join(cells)}</span>' if seen else '<span class="na">No probes this hour</span>') + '</div>')
+    return (f'<div class="nmin" data-minutes="{minutes}"><span class="lbl">Probes</span>'
+            + (f'<span class="nstrip" role="img" aria-label="Route probes">{"".join(cells)}</span>' if seen else '<span class="na">None yet.</span>') + '</div>')
 
 def height_series(now, hours=24, n=48):
     """Chain height over the last day from the snapshots POAScan already stores (one number per snapshot), thinned to about n points."""
@@ -375,8 +375,10 @@ def module(tab, qs):
     return KIT.tabmod(tabs, tab, body, tools, id="netmod", label="Network")
 
 def page(tab, qs):
-    _tl.s = Seen(*[t for _, _, t in TABS], "Live", "Last anchor", "Next", "Cadence", "Anchored", "Routes", "Last hour", "Open", "Halted", "Down", "Feeds", "Details")
-    V = _V(); tab = ALIAS.get(tab, tab); tab = tab if tab in dict((k, 0) for k, _, _ in TABS) else "health"
-    title = {"health": "Network", "charts": "Network charts", "anchors": "Network events", "token": "POA token"}[tab]
-    body = f'<div class="sechead"><h1 class="sr-only">Network</h1></div>{hero()}{module(tab, qs)}'
+    """Charts, Anchors and Token only. The live hero and Health now live on /live (the header pill)."""
+    _tl.s = Seen(*[t for _, _, t in TABS], "Last anchor", "Next", "Cadence", "Anchored", "Routes", "Last hour", "Open", "Halted", "Down")
+    V = _V(); tab = ALIAS.get(tab, tab); tab = tab if tab in dict((k, 0) for k, _, _ in TABS) else "charts"
+    title = {"charts": "Network charts", "anchors": "Network events", "token": "POA token"}[tab]
+    h1 = {"charts": "Charts", "anchors": "Events", "token": "Token"}[tab]
+    body = f'<div class="sechead"><h1 class="sr-only">{h1}</h1></div>{module(tab, qs)}'
     return V.page(title, body, "/network", head=head())

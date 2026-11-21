@@ -1091,7 +1091,7 @@ def freshness():
     elif (fd := feeds())["state"] == "Partial": state, why = "partial", "Chain live. Not OK: " + ", ".join(fd["core_not_ok"])
     else: state, why = "live", "Live"
     return dict(state=state, label={"live": "Live", "partial": "Partial", "lag": "Lagging", "stale": "Stale", "up": "Upgrading"}[state], why=why,
-                href="/upgrade" if state == "up" else "/network?tab=health", maintenance=up,
+                href="/upgrade" if state == "up" else "/live", maintenance=up,
                 fetched_at=live, node_age_s=node_age, node_stale=node_lag, checkpoint_moved=moved, checkpoint_age_s=cp_age, checkpoint_stalled=cp_lag and not up, tx_feed_down=tx_down)
 
 # ---- per-feed state: one source for Network > Health, /api/health and the header pill (1.26.94)

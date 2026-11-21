@@ -1,8 +1,12 @@
-/* API hub (apihub.py): Connect plus live lanes, five KPIs, the explorer. Loaded on /api only. */
+/* Live hub (livehub.py): boards, six KPIs, Connect, the explorer. Loaded on /live. */
 .hpulse .kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
 .hpulse .kpis.five .stat{padding-left:16px;padding-right:16px}
 @media (max-width:900px){.hpulse .kpis.five{grid-template-columns:repeat(3,minmax(0,1fr))}.hpulse .kpis.five .stat:nth-child(4){border-left:var(--hair)}.hpulse .kpis.five .stat:nth-child(3n+1){border-left:0}}
 @media (max-width:640px){.hpulse .kpis.five{grid-template-columns:repeat(2,minmax(0,1fr))}.hpulse .kpis.five .stat:nth-child(n){border-left:0;border-top:var(--hair)}.hpulse .kpis.five .stat:nth-child(2n){border-left:var(--hair)}}
+.hpulse .kpis.six{grid-template-columns:repeat(6,minmax(0,1fr))}
+.hpulse .kpis.six .stat{padding-left:12px;padding-right:12px}
+@media (max-width:900px){.hpulse .kpis.six{grid-template-columns:repeat(3,minmax(0,1fr))}.hpulse .kpis.six .stat:nth-child(4){border-left:var(--hair)}.hpulse .kpis.six .stat:nth-child(3n+1){border-left:0}}
+@media (max-width:640px){.hpulse .kpis.six{grid-template-columns:repeat(2,minmax(0,1fr))}.hpulse .kpis.six .stat:nth-child(n){border-left:0;border-top:var(--hair)}.hpulse .kpis.six .stat:nth-child(2n){border-left:var(--hair)}}
 .abench{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr)}
 @media (max-width:900px){.abench{grid-template-columns:minmax(0,1fr)}}
 .aconn{display:flex;flex-direction:column;gap:12px;justify-content:center}
@@ -50,3 +54,40 @@
 .kit-body>.lbl{display:block;margin:18px 0 8px}
 .gpager{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end}.gpager .chip{min-height:32px;padding:3px 12px;font-size:var(--t12)}
 @media (max-width:640px){.aspec li{grid-template-columns:minmax(0,1fr) auto}.aspec li code{grid-column:1/-1;order:3}}
+
+/* Live hub (livehub.py): activity boards, routes, explorer */
+.lhero .lboard{padding:16px 22px 10px}
+.lhero .lboard.inmod{padding:0 0 8px}
+.lhero .lboard>.bh{margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.lpair{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:8px 0;align-items:start}
+.lpk:first-child{border-right:var(--hair);padding-right:32px;margin-right:32px}
+.lpk .bh{margin:0 0 2px;min-height:22px}
+.lpk .legend{display:flex;flex-wrap:wrap;gap:6px 12px}
+.lcalls .alanes{margin-top:8px}
+.lcalls .aaxis{margin:10px 56px 0 0}
+.lconnect{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 22px 14px;border-top:var(--hair)}
+.lconnect .lbl{margin-right:4px}
+.lconnect .aurl{flex:1 1 200px;max-width:380px;min-width:0}
+.lconnect .achips{display:flex;flex-wrap:wrap;gap:8px}
+.lslim{padding:0}
+.lslim .lconnect{border-top:0;padding:16px 22px}
+@media (max-width:900px){
+  .lpair{grid-template-columns:minmax(0,1fr);gap:18px}
+  .lpk:first-child{border-right:0;padding-right:0;margin-right:0}
+  .lhero .lboard{padding:14px 16px 8px}
+  .lconnect{padding:12px 16px 14px}
+}
+@media (max-width:640px){
+  .lhero .lboard{padding:12px 14px 6px}
+  .lconnect{padding:10px 14px 12px;gap:8px 12px}
+  .lconnect .aurl{flex:1 1 100%;max-width:none}
+  .lcalls .aaxis{margin-right:48px}
+  .lpk .legend{gap:6px 10px}
+}
+
+.lhero .lnet{margin:0;padding:8px 22px 4px;border-top:var(--hair)}
+@media (max-width:900px){.lhero .lnet{padding:8px 16px 4px}}
+@media (max-width:640px){.lhero .lnet{padding:8px 14px 4px}.lhero .nbench{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){
+  .lhero .astrip i,.lhero .ldot{animation:none}
+}

@@ -28,7 +28,7 @@ check("Upgrading: Details to /upgrade, label Upgrading", 'href="/upgrade">Detail
 p2 = ui.status_pill({"state": "stale", "label": "Stale", "why": "No fresh read from minepoa.com"})
 check("Stale outranks Upgrading: the note still carries the upgrade line and Details", (not up) or (want in p2["reasons"] and 'href="/upgrade">Details</a>' in p2["pop"]))
 h = ui.pill_html({"state": "up", "label": "Upgrading", "why": ""})
-check("the header pill is never hidden (Upgrading included)", '<details class="qtip hv spill" id="livepill"><summary class="pill up"' in h and " hidden" not in h[:80])
+check("the header pill is never hidden (Upgrading included)", '<details class="qtip hv spill" id="livepill" data-href="/live"><summary class="pill up"' in h and " hidden" not in h[:80])
 home = V.home() if hasattr(V, "home") else ""
 fs = A.freshness()["state"]
 check(f"home: no strip; while the header shows Upgrading its note carries the line (state {fs})", bool(home) and 'class="upstrip' not in home and (fs != "up" or f'<span class="sp-r">{want}</span>' in home))

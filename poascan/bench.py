@@ -246,7 +246,7 @@ def bench_html(o, graders, now=None, feed=(), score=True):
     strip = score_html(now, ticker_html(feed, now)) if score else ""
     return (f'<div class="bench">'
             f'<div class="bl">{ring_html(o, cd, now)}</div>'
-            f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
+            f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl">Last 24 min{tip("live")}</span>'
             f'<span class="legend">{leg}</span></div>{strip}{trio}</div></div>')
 
 def est_ring_html(est, total):
@@ -267,7 +267,7 @@ def agents_bench_html(est, total, trio, feed=(), now=None):
     now = time.time() if now is None else now
     leg = "".join(f'<span><i class="sw {k}"></i>{n}</span>' for n, k in (("Answer", "a"), ("Attest", "t"), ("Seal", "s")))
     return (f'<div class="bench"><div class="bl">{est_ring_html(est, total)}</div>'
-            f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl on">Live</span><span class="lbl">Last 24 min{tip("live")}</span>'
+            f'<div class="br"><div class="bh"><i class="ldot" aria-hidden="true"></i><span class="lbl">Last 24 min{tip("live")}</span>'
             f'<span class="legend">{leg}</span></div>{score_html(now, ticker_html(feed, now))}{trio}</div></div>')
 
 def pour_html(last):

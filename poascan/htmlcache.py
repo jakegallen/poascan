@@ -16,10 +16,11 @@ TTLS = [
     (re.compile(r"^/network$"), None, 60),   # 1.26.x: all Network tabs (overview + health/charts/…) cache 60s, not just health
     (re.compile(r"^/governance$"), None, 60),
     (re.compile(r"^/apps$"), None, 60),
+    (re.compile(r"^/live$"), None, 60),
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/network", "/network?tab=health", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/network?view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/network", "/live", "/live?tab=feeds", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/live?tab=feeds&view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
 # 1.26.405: the latest few closed epoch pages are warmed too (a cold /epoch/N render read every close for the first visitor). The
 # numbers change at each close, so they live in EXTRA, rebuilt at the start of each warm pass from LATEST_EPOCH (set by server.py).

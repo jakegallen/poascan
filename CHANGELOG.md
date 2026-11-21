@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.415] - 2026-11-20
+
+### Added
+- The header Live pill opens /live, a single page for the last 24 minutes of chain activity, route and feed health, call volume, and the REST, MCP and spec explorer. API leaves the header; /api, /status, and Network Health URLs redirect there. Charts, Anchors and Token stay under Network.
+
 ## [1.26.414] - 2026-11-20
 
 ### Added

@@ -570,6 +570,9 @@ def page(path, qs):
     if path == "/agents/community": return AH.community(tab, qs)
     if path == "/network": return V.network(tab, (qs.get("range") or [""])[0])
     if path == "/apps": return AP.page_route(qs)
+    if path == "/live":
+        from . import livehub as LH
+        return LH.page(qs, V.page)
     if path == "/agents": return AH.top_page("", qs)
     routes = {"/agents/operators": AH.operators, "/about": V.about, "/privacy": V.privacy}
     if path in routes: return routes[path]()
@@ -586,7 +589,9 @@ AG.ON_TOOL = lambda name: VS.COUNTER.event("mcp", name)   # tool name only, neve
 # 1.26.280: register each page's valid tab values with the HTML cache (the source of truth stays in the view modules; no
 # import cycle). An unknown tab renders the default page, so the cache drops it and ?tab=random busters collapse onto the
 # default copy. census only branches on tab=journey; everything else renders the census overview.
-HC.register_tabs("/network", [k for k, _ in V.NET_TABS])
+from . import nethub as NH, livehub as LH
+HC.register_tabs("/network", [k for k, _, _ in NH.TABS] + list(NH.ALIAS))
+HC.register_tabs("/live", [k for k, _, _ in LH.tabs()])
 HC.register_tabs("/governance", [k for k, _ in GV.TABS])
 HC.register_tabs("/agents/top", [k for k, _ in V4.TABS] + list(V4.ALIAS) + list(V4.PAGE_ALIAS))
 HC.register_tabs("/agents/community", [k for k, _ in V.COMMUNITY_TABS])
@@ -634,12 +639,12 @@ ROBOTS = ("User-agent: *\n" + _RB + "\n" + "".join(f"User-agent: {b}\n" for b in
 
 AGENTPEERING_VERIFY = "ap-verify-cec18af41a029ed83d4e21ee0268f52c"  # public verification string for agentpeering.com
 
-STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/apps?tab=art", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
+STATIC_ROUTES = ["/", "/start", "/chain", "/chain/txs", "/apps", "/apps?tab=games", "/apps?tab=atp20", "/apps?tab=posts", "/apps?tab=art", "/live", "/live?tab=feeds", "/network?tab=token", "/network?tab=anchors", "/unlocks", "/swaps", "/agents", "/agents/top", "/agents/census",
                  "/agents/operators", "/agents/community", "/network", "/governance", "/governance?tab=closes", "/governance?tab=payouts", "/governance?tab=graders",
-                 "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy", "/api"]
+                 "/governance?tab=proposals", "/governance?tab=rules", "/about", "/privacy"]
 
 # Batch 3 merged pages into tabs. Every old URL keeps working: 301 to its new home (query strings that still mean something are kept).
-MOVED = {"/live": "/chain?tab=pending", "/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/network?tab=health",
+MOVED = {"/grading": "/chain?tab=grading", "/growth": "/network?tab=charts", "/status": "/live",
          "/forum": "/agents/community", "/community": "/agents/community", "/agents/social": "/agents/community?tab=social",
          "/agents/builders": "/agents/community?tab=builders", "/agents/answers": "/agents/community?tab=answers",
          "/agents/leaderboard": "/agents/top?tab=ai", "/agents/journey": "/agents/census?tab=journey", "/at-risk": "/governance?tab=at-risk",
@@ -1680,10 +1685,18 @@ class H(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(AG.ai_catalog(), indent=1), "application/ai-catalog+json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
             if path in ("/llms.txt", "/.well-known/llms.txt"): return self.send(200, AG.llms_txt(), TXT, {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
             if path == "/.well-known/mcp.json": return self.send(200, json.dumps(AG.mcp_manifest(), indent=1), "application/json", {"Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=300"})
-            if path == "/api": return self.send(200, AG.doc_page("api", lambda: AG.api_page(V.page, V.card)))
+            if path == "/api":
+                raw = urllib.parse.urlsplit(self.path).query
+                loc = "/live" + (("?" + raw) if raw else "")
+                return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             if path == "/api/reference": return self.send(200, AG.doc_page("reference", lambda: AG.reference_page(V.page, V.card)))
             if path == "/mining": return self.send(302, "", extra={"Location": "/agents"})
-            if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/network?tab=health"})
+            if path == "/upgrade" and not MT.state()["active"] and not MT.complete(): return self.send(302, "", extra={"Location": "/live"})
+            if path == "/network":
+                ntab = (qs.get("tab") or [""])[0]; nview = (qs.get("view") or [""])[0]
+                if ntab in ("health", "overview") or (ntab == "" and nview == "details"):
+                    loc = "/live?tab=feeds&view=details" if nview == "details" else "/live?tab=feeds"
+                    return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
             # the raw query: ?segment= was taken out of qs above, and a moved list URL keeps it
             loc = moved(path, urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True) if path in MOVED_Q else qs)
             if loc: return self.send(301, "", TXT, {"Location": loc, "Cache-Control": "public, max-age=3600"})
