@@ -118,6 +118,19 @@ check("edition rows carry unit, owner, image_ref, mint_txid, mint_ts; image_ref 
 check("unknown collection editions is 404", expect_404("/api/v1/atp721/collection/NOPE/editions") == "unknown collection")
 check("bad editions cursor is 400", expect_bad("/api/v1/atp721/collection/MAM-GENESIS/editions", cursor="!!!") == "bad cursor")
 
+# ---- op= filter: mint (21 + 1 ignored dup = 22), no transfers, burn is not an ATP-721 op ----
+mt = api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="mint")
+mt2 = api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="mint", cursor=mt["next_cursor"])
+mints = mt["txs"] + mt2["txs"]
+check("op=mint returns only mint ops and all 22 of them",
+      len(mints) == 22 and mt2["next_cursor"] is None and all(r["op"] == "m" for r in mints)
+      and tid(1) not in [r["txid"] for r in mints])
+check("op=transfer returns an empty page with no cursor",
+      len(api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="transfer")["txs"]) == 0
+      and api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="transfer")["next_cursor"] is None)
+check("op=burn is 400 for ATP-721", "op must be one of" in expect_bad("/api/v1/atp721/collection/MAM-GENESIS/txs", op="burn"))
+check("unknown op value is 400", "op must be one of" in expect_bad("/api/v1/atp721/collection/MAM-GENESIS/txs", op="swap"))
+
 check("limit 1 pages with a cursor", len(api("/api/v1/atp721/collections", limit=1)["collections"]) == 1)
 check("bare /api/atp721 is 404", "unknown" in expect_404("/api/atp721"))
 check("unknown atp721 path is 404", "unknown" in expect_404("/api/v1/atp721/nope"))

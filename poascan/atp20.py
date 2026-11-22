@@ -448,6 +448,19 @@ LIMIT_DEFAULT = 20
 LIMIT_MAX = 200
 _QS_PAGE = {"cursor", "limit", "format"}
 _QS_NONE = {"format"}
+_QS_TXS = _QS_PAGE | {"op"}
+# op= filter on /txs: human name to the stored opcode (deploy is not a filter choice)
+_TXS_OPS = {"mint": "m", "transfer": "t", "burn": "b"}
+
+
+def _op_filter(qs, allowed):
+    v = ((qs or {}).get("op") or [""])[0].strip()
+    if not v:
+        return None
+    code = allowed.get(v)
+    if code is None:
+        raise ValueError("op must be one of " + ", ".join(sorted(allowed)))
+    return code
 
 
 def _limit(qs):
@@ -556,8 +569,9 @@ def holders_page(tick, cursor=None, limit=LIMIT_DEFAULT):
     return page, nxt
 
 
-def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT):
-    """Final ops for a tick, newest first, including ignored ones (valid=0 and reason). Pending ops are on /pending."""
+def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT, op=None):
+    """Final ops for a tick, newest first, including ignored ones (valid=0 and reason). Pending ops are on /pending.
+    op, when given, is a stored opcode (m, t, b) to filter to that kind only."""
     ensure_fresh()
     if not TICK_RE.fullmatch(tick or ""):
         raise ValueError("tick must be 3 to 12 characters A-Z and 0-9")
@@ -565,6 +579,9 @@ def txs_page(tick, cursor=None, limit=LIMIT_DEFAULT):
         raise LookupError("unknown tick")
     limit = max(1, min(LIMIT_MAX, int(limit)))
     w, a = "tick=? AND final=1", [tick]
+    if op:
+        w += " AND op=?"
+        a.append(op)
     if cursor:
         ts, txid = cursor
         w += " AND (ts < ? OR (ts = ? AND txid < ?))"
@@ -618,9 +635,9 @@ def http(path, qs):
         return _envelope(tick=tick, holders=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp20/token/([A-Z0-9]{3,12})/txs$", path)
     if m:
-        _params(qs, _QS_PAGE)
+        _params(qs, _QS_TXS)
         tick = m.group(1)
-        rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs))
+        rows, nxt = txs_page(tick, _cursor(qs, 2), _limit(qs), _op_filter(qs, _TXS_OPS))
         return _envelope(tick=tick, txs=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp20/pending/([A-Z0-9]{3,12})$", path)
     if m:
