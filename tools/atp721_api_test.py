@@ -122,6 +122,18 @@ check("limit 1 pages with a cursor", len(api("/api/v1/atp721/collections", limit
 check("bare /api/atp721 is 404", "unknown" in expect_404("/api/atp721"))
 check("unknown atp721 path is 404", "unknown" in expect_404("/api/v1/atp721/nope"))
 
+# ---- minters: newest first mint first, default 20, 21 agents each minting one ----
+mn = api("/api/v1/atp721/collection/MAM-GENESIS/minters")
+check("minters default page is 20 with a next cursor",
+      len(mn["minters"]) == 20 and mn["next_cursor"] and all(x["official"] is False for x in mn["minters"]))
+mn2 = api("/api/v1/atp721/collection/MAM-GENESIS/minters", cursor=mn["next_cursor"])
+check("minters second page completes the 21 agents with no further cursor",
+      len(mn["minters"]) + len(mn2["minters"]) == 21 and mn2["next_cursor"] is None)
+check("minters rows carry agent, first_mint_ts, mint_count and last_txid",
+      all({"agent", "first_mint_ts", "mint_count", "last_txid"} <= set(x) and x["mint_count"] >= 1 for x in mn["minters"]))
+check("unknown collection minters is 404", expect_404("/api/v1/atp721/collection/NOPE/minters") == "unknown collection")
+check("bad minters cursor is 400", expect_bad("/api/v1/atp721/collection/MAM-GENESIS/minters", cursor="!!!") == "bad cursor")
+
 # art works API (static hash, no memos in this temp db)
 works = api("/api/v1/art/works")
 check("art works unofficial and names Genesis by Digivatar",
@@ -150,6 +162,7 @@ paths = spec["paths"]
 for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
             "/api/v1/atp721/collection/{col}/units", "/api/v1/atp721/collection/{col}/holders",
             "/api/v1/atp721/collection/{col}/txs", "/api/v1/atp721/collection/{col}/editions",
+            "/api/v1/atp721/collection/{col}/minters",
             "/api/v1/art/works", "/api/v1/art/works/{id}", "/api/v1/apps/art"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
