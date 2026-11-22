@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.422] - 2026-11-22
+
+### Added
+- Unofficial ATP-20 and ATP-721 minters endpoints: `/api/v1/atp20/token/{tick}/minters` and `/api/v1/atp721/collection/{col}/minters`, each row `{agent, first_mint_ts, mint_count, last_txid}`, newest-first-mint first, keyset-paged, official false (#229, was #217).
+- Optional `op=` filter on the ATP-20 and ATP-721 `/txs` endpoints (`mint`/`transfer`, plus `burn` for ATP-20) mapped to the stored opcode; ATP-721 rejects `burn` and any unknown value is 400 (#230, was #218).
+
 ## [1.26.421] - 2026-11-21
 
 ### Added

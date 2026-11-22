@@ -105,6 +105,20 @@ check("ignored wrong-amount mint is in the txs list with a reason",
 all_tx = tx["txs"] + tx2["txs"]
 check("txs are newest first", all(all_tx[i]["ts"] >= all_tx[i+1]["ts"] for i in range(len(all_tx) - 1)))
 
+# ---- op= filter: mint (23 mint ops incl ignored), no transfers or burns, deploy excluded ----
+mt = api("/api/v1/atp20/token/MAM/txs", op="mint")
+mt2 = api("/api/v1/atp20/token/MAM/txs", op="mint", cursor=mt["next_cursor"])
+mints = mt["txs"] + mt2["txs"]
+check("op=mint returns only mint ops and all 23 of them",
+      len(mints) == 23 and mt2["next_cursor"] is None and all(r["op"] == "m" for r in mints)
+      and tid(3) not in [r["txid"] for r in mints])
+check("op=transfer returns an empty page with no cursor",
+      api("/api/v1/atp20/token/MAM/txs", op="transfer") == api("/api/v1/atp20/token/MAM/txs", op="transfer")
+      and len(api("/api/v1/atp20/token/MAM/txs", op="transfer")["txs"]) == 0
+      and api("/api/v1/atp20/token/MAM/txs", op="transfer")["next_cursor"] is None)
+check("op=burn is accepted (valid name) and empty here", len(api("/api/v1/atp20/token/MAM/txs", op="burn")["txs"]) == 0)
+check("unknown op value is 400", "op must be one of" in expect_bad("/api/v1/atp20/token/MAM/txs", op="swap"))
+
 # ---- pending ----
 pend = api("/api/v1/atp20/pending/MAM")
 check("pending lists the unfinalized mint only",
@@ -129,11 +143,25 @@ check("limit above max is clamped to 200", len(api("/api/v1/atp20/token/MAM/hold
 check("bare /api/atp20 is 404", "unknown" in expect_404("/api/atp20"))
 check("unknown atp20 path is 404", "unknown" in expect_404("/api/v1/atp20/nope"))
 
+# ---- minters: newest first mint first, default 20, HOLDERS[0] minted twice ----
+mn = api("/api/v1/atp20/token/MAM/minters")
+check("minters default page is 20 with a next cursor",
+      len(mn["minters"]) == 20 and mn["next_cursor"] and all(x["official"] is False for x in mn["minters"]))
+mn2 = api("/api/v1/atp20/token/MAM/minters", cursor=mn["next_cursor"])
+check("minters second page completes the 21 agents with no further cursor",
+      len(mn["minters"]) + len(mn2["minters"]) == 21 and mn2["next_cursor"] is None)
+allm = {x["agent"]: x for x in mn["minters"] + mn2["minters"]}
+check("the twice-minter shows mint_count 2 and a last_txid", allm[HOLDERS[0]]["mint_count"] == 2 and bool(allm[HOLDERS[0]]["last_txid"]))
+check("minters rows carry agent, first_mint_ts, mint_count and last_txid",
+      all({"agent", "first_mint_ts", "mint_count", "last_txid"} <= set(x) for x in mn["minters"]))
+check("unknown tick minters is 404", "unknown" in expect_404("/api/v1/atp20/token/ZZZ/minters"))
+check("bad minters cursor is 400", expect_bad("/api/v1/atp20/token/MAM/minters", cursor="!!!") == "bad cursor")
+
 # ---- OpenAPI and llms ----
 spec = AG.openapi()
 paths = spec["paths"]
 for pth in ("/api/v1/atp20/tokens", "/api/v1/atp20/token/{tick}", "/api/v1/atp20/token/{tick}/holders",
-            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}"):
+            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/token/{tick}/minters", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-20 routes", "/atp20/tokens" in txt and "official is always false" in txt)

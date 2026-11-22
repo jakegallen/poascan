@@ -118,9 +118,34 @@ check("edition rows carry unit, owner, image_ref, mint_txid, mint_ts; image_ref 
 check("unknown collection editions is 404", expect_404("/api/v1/atp721/collection/NOPE/editions") == "unknown collection")
 check("bad editions cursor is 400", expect_bad("/api/v1/atp721/collection/MAM-GENESIS/editions", cursor="!!!") == "bad cursor")
 
+# ---- op= filter: mint (21 + 1 ignored dup = 22), no transfers, burn is not an ATP-721 op ----
+mt = api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="mint")
+mt2 = api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="mint", cursor=mt["next_cursor"])
+mints = mt["txs"] + mt2["txs"]
+check("op=mint returns only mint ops and all 22 of them",
+      len(mints) == 22 and mt2["next_cursor"] is None and all(r["op"] == "m" for r in mints)
+      and tid(1) not in [r["txid"] for r in mints])
+check("op=transfer returns an empty page with no cursor",
+      len(api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="transfer")["txs"]) == 0
+      and api("/api/v1/atp721/collection/MAM-GENESIS/txs", op="transfer")["next_cursor"] is None)
+check("op=burn is 400 for ATP-721", "op must be one of" in expect_bad("/api/v1/atp721/collection/MAM-GENESIS/txs", op="burn"))
+check("unknown op value is 400", "op must be one of" in expect_bad("/api/v1/atp721/collection/MAM-GENESIS/txs", op="swap"))
+
 check("limit 1 pages with a cursor", len(api("/api/v1/atp721/collections", limit=1)["collections"]) == 1)
 check("bare /api/atp721 is 404", "unknown" in expect_404("/api/atp721"))
 check("unknown atp721 path is 404", "unknown" in expect_404("/api/v1/atp721/nope"))
+
+# ---- minters: newest first mint first, default 20, 21 agents each minting one ----
+mn = api("/api/v1/atp721/collection/MAM-GENESIS/minters")
+check("minters default page is 20 with a next cursor",
+      len(mn["minters"]) == 20 and mn["next_cursor"] and all(x["official"] is False for x in mn["minters"]))
+mn2 = api("/api/v1/atp721/collection/MAM-GENESIS/minters", cursor=mn["next_cursor"])
+check("minters second page completes the 21 agents with no further cursor",
+      len(mn["minters"]) + len(mn2["minters"]) == 21 and mn2["next_cursor"] is None)
+check("minters rows carry agent, first_mint_ts, mint_count and last_txid",
+      all({"agent", "first_mint_ts", "mint_count", "last_txid"} <= set(x) and x["mint_count"] >= 1 for x in mn["minters"]))
+check("unknown collection minters is 404", expect_404("/api/v1/atp721/collection/NOPE/minters") == "unknown collection")
+check("bad minters cursor is 400", expect_bad("/api/v1/atp721/collection/MAM-GENESIS/minters", cursor="!!!") == "bad cursor")
 
 # art works API (static hash, no memos in this temp db)
 works = api("/api/v1/art/works")
@@ -150,12 +175,13 @@ paths = spec["paths"]
 for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
             "/api/v1/atp721/collection/{col}/units", "/api/v1/atp721/collection/{col}/holders",
             "/api/v1/atp721/collection/{col}/txs", "/api/v1/atp721/collection/{col}/editions",
+            "/api/v1/atp721/collection/{col}/minters",
             "/api/v1/art/works", "/api/v1/art/works/{id}", "/api/v1/apps/art"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-721 and art routes",
       "/atp721/collections" in txt and "/art/works" in txt and "/apps/art" in txt and "official is always false" in txt)
-check("version is 1.26.421", AG.VERSION == "1.26.421")
+check("version is 1.26.422", AG.VERSION == "1.26.422")
 check("no em or en dash in new API strings",
       not any(d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in json.dumps(lst) or d in txt for d in DASH))
 

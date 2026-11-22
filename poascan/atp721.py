@@ -453,6 +453,19 @@ def _params(qs, allowed):
 
 _QS_NONE = frozenset()
 _QS_PAGE = frozenset(("limit", "cursor"))
+_QS_TXS = _QS_PAGE | {"op"}
+# op= filter on /txs: human name to the stored opcode. ATP-721 has no burn op.
+_TXS_OPS = {"mint": "m", "transfer": "t"}
+
+
+def _op_filter(qs, allowed):
+    v = ((qs or {}).get("op") or [""])[0].strip()
+    if not v:
+        return None
+    code = allowed.get(v)
+    if code is None:
+        raise ValueError("op must be one of " + ", ".join(sorted(allowed)))
+    return code
 
 
 def _envelope(**extra):
@@ -567,23 +580,27 @@ def holders_page(col, cursor=None, limit=LIMIT_DEFAULT):
     return rows, nxt
 
 
-def txs_page(col, cursor=None, limit=LIMIT_DEFAULT):
-    """Final ops only, newest first, includes ignored."""
+def txs_page(col, cursor=None, limit=LIMIT_DEFAULT, op=None):
+    """Final ops only, newest first, includes ignored.
+    op, when given, is a stored opcode (m, t) to filter to that kind only."""
     ensure_fresh()
     limit = max(1, min(LIMIT_MAX, int(limit)))
+    opw, opa = ("", [])
+    if op:
+        opw, opa = (" AND op=?", [op])
     if cursor:
         try:
             ts, txid = int(cursor[0]), cursor[1]
         except (TypeError, ValueError, IndexError):
             raise ValueError("bad cursor")
-        rows = db.q("""SELECT * FROM atp721_ops WHERE col=? AND final=1
+        rows = db.q("""SELECT * FROM atp721_ops WHERE col=? AND final=1""" + opw + """
                        AND (ts < ? OR (ts=? AND txid < ?))
                        ORDER BY ts DESC, txid DESC LIMIT ?""",
-                    (col, ts, ts, txid, limit + 1))
+                    (col, *opa, ts, ts, txid, limit + 1))
     else:
-        rows = db.q("""SELECT * FROM atp721_ops WHERE col=? AND final=1
+        rows = db.q("""SELECT * FROM atp721_ops WHERE col=? AND final=1""" + opw + """
                        ORDER BY ts DESC, txid DESC LIMIT ?""",
-                    (col, limit + 1))
+                    (col, *opa, limit + 1))
     rows = [dict(r, official=OFFICIAL) for r in rows]
     nxt = None
     if len(rows) > limit:
@@ -594,6 +611,38 @@ def txs_page(col, cursor=None, limit=LIMIT_DEFAULT):
 
 
 _COL_PATH = r"([A-Z0-9](?:[A-Z0-9-]{0,30}[A-Z0-9]))"
+
+
+def minters_page(col, cursor=None, limit=LIMIT_DEFAULT):
+    """Agents who minted an edition of this collection, the newest first mint first:
+    {agent, first_mint_ts, mint_count, last_txid}. agent is the poa1 address; names are attached in the UI."""
+    ensure_fresh()
+    if not COL_RE.fullmatch(col or ""):
+        raise ValueError("collection id must be 2 to 32 characters A-Z, 0-9 and hyphen")
+    if collection(col) is None:
+        raise LookupError("unknown collection")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "", []
+    if cursor:
+        try:
+            fts, agent = int(cursor[0]), cursor[1]
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("bad cursor")
+        w = " WHERE (first_mint_ts < ? OR (first_mint_ts = ? AND agent < ?))"
+        a = [fts, fts, str(agent)]
+    rows = db.q("SELECT agent, first_mint_ts, mint_count FROM "
+                "(SELECT addr AS agent, MIN(mint_ts) AS first_mint_ts, COUNT(*) AS mint_count "
+                " FROM atp721_units WHERE col=? AND mint_ts IS NOT NULL AND addr IS NOT NULL GROUP BY addr)"
+                + w + " ORDER BY first_mint_ts DESC, agent DESC LIMIT ?", (col, *a, limit + 1))
+    page = [dict(r) for r in rows[:limit]]
+    for r in page:
+        lt = db.q("SELECT mint_txid FROM atp721_units WHERE col=? AND addr=? AND mint_ts IS NOT NULL "
+                  "ORDER BY mint_ts DESC, unit DESC LIMIT 1", (col, r["agent"]))
+        r["first_mint_ts"], r["mint_count"] = int(r["first_mint_ts"]), int(r["mint_count"])
+        r["last_txid"] = lt[0]["mint_txid"] if lt else None
+        r["official"] = OFFICIAL
+    nxt = f"{page[-1]['first_mint_ts']}|{page[-1]['agent']}" if len(rows) > limit else None
+    return page, nxt
 
 
 def http(path, qs):
@@ -629,11 +678,11 @@ def http(path, qs):
         return _envelope(collection=col, holders=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/txs$", path)
     if m:
-        _params(qs, _QS_PAGE)
+        _params(qs, _QS_TXS)
         col = m.group(1)
         if collection(col) is None:
             raise LookupError("unknown collection")
-        rows, nxt = txs_page(col, _cursor(qs, 2), _limit(qs))
+        rows, nxt = txs_page(col, _cursor(qs, 2), _limit(qs), _op_filter(qs, _TXS_OPS))
         return _envelope(collection=col, txs=rows, next_cursor=nxt)
     m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/editions$", path)
     if m:
@@ -644,6 +693,14 @@ def http(path, qs):
             raise LookupError("unknown collection")
         rows, nxt = editions_page(col, _cursor(qs, 1), _limit(qs), image_ref=tok.get("file_sha"))
         return _envelope(collection=col, editions=rows, next_cursor=nxt)
+    m = re.match(r"^/api/atp721/collection/" + _COL_PATH + r"/minters$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        col = m.group(1)
+        if collection(col) is None:
+            raise LookupError("unknown collection")
+        rows, nxt = minters_page(col, _cursor(qs, 2), _limit(qs))
+        return _envelope(collection=col, minters=rows, next_cursor=nxt)
     if path.startswith("/api/atp721/"):
         raise LookupError("unknown endpoint")
     raise LookupError("unknown endpoint")
