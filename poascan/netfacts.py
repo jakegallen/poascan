@@ -134,6 +134,9 @@ def params_extra(p=None):
     cd = p.get("close_ts_derived_from_epoch")
     if isinstance(cd, int) and not isinstance(cd, bool):
         out.append(dict(key="close_ts_derived_from_epoch", label="Close time derived from", value=cd, text=f"E{cd}"))
+    al = p.get("att_log_from_epoch")
+    if isinstance(al, int) and not isinstance(al, bool):
+        out.append(dict(key="att_log_from_epoch", label="Attestation log from", value=al, text=f"E{al}"))
     return out
 
 

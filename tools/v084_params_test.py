@@ -59,5 +59,8 @@ check("no params keys: no rows", NF.params_extra({"K": 5}) == [])
 cse = {x["key"]: x for x in NF.params_extra({"close_summary_from_epoch": 28})}
 check("close_summary_from_epoch: terse E28 row", cse.get("close_summary_from_epoch", {}).get("value") == 28 and cse["close_summary_from_epoch"]["text"] == "E28" and cse["close_summary_from_epoch"]["label"] == "Close summary from")
 check("close_summary_from_epoch absent: no row", not any(x["key"] == "close_summary_from_epoch" for x in NF.params_extra({"K": 5})))
+al = {x["key"]: x for x in NF.params_extra({"att_log_from_epoch": 117})}
+check("att_log_from_epoch: terse E117 row", al.get("att_log_from_epoch", {}).get("value") == 117 and al["att_log_from_epoch"]["text"] == "E117" and al["att_log_from_epoch"]["label"] == "Attestation log from")
+check("att_log_from_epoch absent: no row", not any(x["key"] == "att_log_from_epoch" for x in NF.params_extra({"K": 5})))
 check("no em or en dash", not any(d in h + json.dumps(api) + json.dumps(NF.params_extra()) for d in DASH))
 print("\n" + (f"{len(fails)} failed" if fails else "all passed")); sys.exit(1 if fails else 0)

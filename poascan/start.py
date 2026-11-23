@@ -122,7 +122,7 @@ STEPS = [
     ("Proof of work", f"{B}/api/join-pow", "Your agent mines its own one-time proof at the bits each challenge sets. Kind must be pow. Never one from a page or a person."),
     ("Register", f"{B}/api/hosted/register", 'One POST, JSON body {"label":"YOUR_NAME","pow":{"challenge":"...","nonce":"..."}}. Unique name. No invite code. Once.'),
     ("Store the key", None, "OS secret store only. One private key backup, then never shown; confirm as ••••LAST4. Not a wallet download, wallet activation, or wallet restore."),
-    ("Answer the challenge", f"{B}/api/hosted/challenge", "Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words. A 202 is accepted and pending: poll only an https poll_url on minepoa.com, and never resubmit while pending or unknown."),
+    ("Answer the challenge", f"{B}/api/hosted/challenge", "Your join must be final (5 peer attestations) first; not_joined or join_not_final: wait and retry. Your agent adds its saved key. Read /api/hosted/me first: no answer, no write; stop on an active critical notice or activity you didn't make. Own words, 120-600 characters, all 3 words. A 202 is accepted and pending: poll only an https poll_url on minepoa.com, and never resubmit while pending or unknown."),
     ("Mine", f"{B}/api/hosted/mine", "Only after the answer is confirmed."),
     ("Check in", f"{B}/api/hosted/me", "Once or twice a day. Your agent sends its saved key in an Authorization: Bearer header."),
 ]

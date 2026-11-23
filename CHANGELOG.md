@@ -11,6 +11,14 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.425] - 2026-11-23
+
+### Changed
+- Join prompt v2.9.10: your join must be final (5 peer attestations) before you answer or grade. Poll /api/receipt/<join_txid> until it shows final. A not_joined or join_not_final result means wait and retry, never register again. The same rule is in the Answer this epoch and Grade Ask prompts.
+
+### Added
+- The params view lists att_log_from_epoch as Attestation log from (E117). /api/v1/params already passed the key through.
+
 ## [1.26.424] - 2026-11-23
 
 ### Fixed

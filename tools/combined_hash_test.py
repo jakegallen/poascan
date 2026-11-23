@@ -11,7 +11,7 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-TS = "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5"
+TS = "8e5034358da8f3eb02ef3b49444d8755d6c092e1642d6116191d22d3f7bf5e05"
 tmp = tempfile.mkdtemp()
 def wr(name, data):
     p = os.path.join(tmp, name); open(p, "wb").write(data); return p
@@ -19,29 +19,29 @@ def wr(name, data):
 # ---- the slot and its rule, no server
 # 1.26.84: POASwap's combined prompt (https://poaswap.io/start/prompt.txt), byte identical (1.26.76 text plus the line 14 offers cancel line).
 # v2.9 (release/prompt-v29): its join core is the v2.9 full template with the name slot filled as NAME (/api/v1/prompts/join?name=NAME),
-# sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. v2.9.2 (1.26.232): same head, join core sha256 4f0b2f69, 6,370 characters (a 503 halt stops the join). v2.9.3 (1.26.243): same head, join core sha256 a2c61f75, 6,171 characters (key in the X-Api-Key header only, never shown in the chat). v2.9.4 (1.26.244): same head, join core sha256 4f0b2f69, 6,370 characters (a 401 or 403 key error on challenge, answer or mine stops mining). v2.9.5 (1.26.259): same head, join core sha256 e4066541, 6,385 characters (stop only when kind is present and is not pow). v2.9.6 (1.26.333): same head, join core sha256 c31fda3d, 7,944 characters (the answer step handles HTTP 202, rule ANSWER_202). v2.9.7 (1.26.345): same head, join core sha256 91d7c28b, 8,300 characters (the 202 poll_url may be root-absolute, /api/job/ or /chain/ then /api/job/, resolved against https://minepoa.com). v2.9.8 (1.26.348): same head (its legacy-key line now says Authorization: Bearer), join core sha256 81313358, 8,237 characters (the key travels in an Authorization: Bearer header, and the 202 rule drops one now-redundant non-job-URL sentence). v2.9.9 (1.26.423): same head, join core sha256 a3f42ec8, 8,532 characters (the hosted answer is written as plain text with normal spaces and URL-encoded exactly once by the HTTP client; never pre-encode spaces or encode twice; at least 12 words). POASwap must ship the same bytes.
-SHIPPED, SHIPPED_LEN = "d9686f1e30fd2e75c54bb25dd56d76c3935bde5def933b37985b056f7fe9038e", 12659
-CORE = "a3f42ec838525cc2bd9b84bfc0bf9400dcb86fcabe9dc1280d54ae5bf1806b3f"
+# sha256 0e9f1cc2, 6,030 characters (v2.9.1, 1.26.226: same head, join core sha256 94776c87, 6,167 characters); the head adds the pow to the join-connected line and a fresh proof to the name retry. v2.9.2 (1.26.232): same head, join core sha256 4f0b2f69, 6,370 characters (a 503 halt stops the join). v2.9.3 (1.26.243): same head, join core sha256 a2c61f75, 6,171 characters (key in the X-Api-Key header only, never shown in the chat). v2.9.4 (1.26.244): same head, join core sha256 4f0b2f69, 6,370 characters (a 401 or 403 key error on challenge, answer or mine stops mining). v2.9.5 (1.26.259): same head, join core sha256 e4066541, 6,385 characters (stop only when kind is present and is not pow). v2.9.6 (1.26.333): same head, join core sha256 c31fda3d, 7,944 characters (the answer step handles HTTP 202, rule ANSWER_202). v2.9.7 (1.26.345): same head, join core sha256 91d7c28b, 8,300 characters (the 202 poll_url may be root-absolute, /api/job/ or /chain/ then /api/job/, resolved against https://minepoa.com). v2.9.8 (1.26.348): same head (its legacy-key line now says Authorization: Bearer), join core sha256 81313358, 8,237 characters (the key travels in an Authorization: Bearer header, and the 202 rule drops one now-redundant non-job-URL sentence). v2.9.9 (1.26.423): same head, join core sha256 a3f42ec8, 8,532 characters (the hosted answer is written as plain text with normal spaces and URL-encoded exactly once by the HTTP client; never pre-encode spaces or encode twice; at least 12 words). v2.9.10 (1.26.425): same head, join core sha256 dc4b7dc7, 8,856 characters (the join must be final, 5 peer attestations, before answers or grades; not_joined or join_not_final means wait and retry). POASwap must ship the same bytes.
+SHIPPED, SHIPPED_LEN = "caacf9e2de13b800a962184a80a720e60670c9bd33f37e6190228d2c947fa97c", 12983
+CORE = "dc4b7dc743003c1b3bc97d0960c4ac2d72382444a6824cd2d3804744ab30d421"
 if os.path.exists(CB.SLOT):   # once POASwap's text lands, the shipped file must follow the rule
     t, h, err = CB.load(CB.SLOT); raw = open(CB.SLOT, "rb").read()
     check("shipped combined_prompt.txt follows the rule (UTF-8, LF only, no BOM, at most one trailing LF, not empty)", err is None and h is not None)
-    check("shipped slot is the v2.9.9 combined text byte for byte: 12,659 characters, no trailing newline, sha256 d9686f1e", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
+    check("shipped slot is the v2.9.10 combined text byte for byte: 12,983 characters, no trailing newline, sha256 caacf9e2", raw == t.encode() and len(t) == SHIPPED_LEN and h == SHIPPED == CB.SHA256 == hashlib.sha256(raw).hexdigest())
     core = S.prompt("NAME", "full")
-    check("shipped text ends with the v2.9.9 join core (full template, name slot NAME, 8,532 characters, sha256 a3f42ec8), once; pow on the connected join",
-          t.endswith(core) and t.count(core) == 1 and len(core) == 8532 and hashlib.sha256(core.encode()).hexdigest() == CORE
+    check("shipped text ends with the v2.9.10 join core (full template, name slot NAME, 8,856 characters, sha256 dc4b7dc7), once; pow on the connected join",
+          t.endswith(core) and t.count(core) == 1 and len(core) == 8856 and hashlib.sha256(core.encode()).hexdigest() == CORE
           and 'POST /api/join-connected, its JSON body with a "pow" you mined as in the join part' in t and "register?label=" not in t)
     check("shipped text: no em or en dash", not any(c in t for c in "\u2014\u2013"))
 else:
     check("slot absent: TEXT, SHA256 and ERROR are None", CB.TEXT is None and CB.SHA256 is None and CB.ERROR is None and CB.load(os.path.join(tmp, "none.txt")) == (None, None, None))
     check("slot absent: hash_fields carries combined_sha256 null", S.hash_fields()["combined_sha256"] is None and S.hash_fields("connector")["combined_sha256"] is None)
-    check("slot absent: the phash line is byte for byte the v2.7 one", S.phash() == f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9.9</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>')
+    check("slot absent: the phash line is byte for byte the v2.7 one", S.phash() == f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9.10</span><span>sha256 <code>{TS[:12]}</code></span></button><a href="/about#prompt-hash">Verify</a></p>')
 TXT = "Combined prompt slot test text.\nSecond line, YOUR_NAME left in place."
 H = hashlib.sha256(TXT.encode()).hexdigest()
 check("one trailing LF is dropped; the hash is of the text without it", CB.load(wr("a.txt", (TXT + "\n").encode())) == (TXT, H, None) and CB.load(wr("b.txt", TXT.encode())) == (TXT, H, None))
 for nm, data, why in (("crlf", TXT.replace("\n", "\r\n").encode(), "CR newline"), ("bom", ("\ufeff" + TXT).encode(), "BOM"), ("empty", b"\n", "empty"),
                       ("blank", b"  \n\n", "empty"), ("two", (TXT + "\n\n").encode(), "more than one trailing newline"), ("latin1", "caf\xe9".encode("latin-1"), "not UTF-8")):
     check(f"bad file ({nm}) publishes nothing: {why}", CB.load(wr(nm + ".txt", data)) == (None, None, why))
-check("join prompt template_sha256 is v2.9.9 (59174b29)", S.template_sha256() == TS)
+check("join prompt template_sha256 is v2.9.10 (8e503435)", S.template_sha256() == TS)
 check("Dockerfile ships the slot with poascan/ (COPY poascan/ poascan/)", "COPY poascan/ poascan/" in open(os.path.join(ROOT, "Dockerfile")).read())
 check("CI runs this test", "python tools/combined_hash_test.py" in open(os.path.join(ROOT, ".github", "workflows", "deploy.yml")).read())
 check("no em or en dash in the module or this test", not any(c in open(os.path.join(ROOT, f), encoding="utf-8").read() for f in ("poascan/combined.py", "tools/combined_hash_test.py") for c in "\u2014\u2013"))
@@ -80,7 +80,7 @@ def common(tag, d):
     check(f"{tag}: OpenAPI documents combined_sha256 on JoinPrompt and /api/v1/prompts/combined", "combined_sha256" in oa["components"]["schemas"]["JoinPrompt"]["properties"]
           and "/api/v1/prompts/combined" in oa["paths"] and "CombinedPrompt" in oa["components"]["schemas"])
     check(f"{tag}: /api/v1/prompts/combined 200, /api alias identical, any parameter 400", d["comb"][0] == 200 and d["alias"] == d["comb"] and d["bad"] == 400)
-    check(f"{tag}: join prompt is v2.9.9 on the API (59174b29)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
+    check(f"{tag}: join prompt is v2.9.10 on the API (8e503435)", d["join"]["template_sha256"] == TS == d["claude"]["template_sha256"] and d["mcp"]["template_sha256"] == TS)
 
 p, base = serve({"POASCAN_COMBINED_PROMPT": os.path.join(tmp, "none.txt")})   # absent, even once the shipped slot exists
 try:
@@ -115,11 +115,11 @@ if os.path.exists(CB.SLOT):
     p, base = serve({})   # the slot as shipped in the image
     try:
         d = surfaces(base); c = json.loads(d["comb"][1])
-        check("shipped: /api/v1/prompts/combined available, text 12,659 characters, combined_sha256 d9686f1e, same on /prompts/join, claude and MCP",
+        check("shipped: /api/v1/prompts/combined available, text 12,983 characters, combined_sha256 caacf9e2, same on /prompts/join, claude and MCP",
               c["available"] is True and len(c["text"]) == SHIPPED_LEN and c["combined_sha256"] == SHIPPED and all(x["combined_sha256"] == SHIPPED for x in (d["join"], d["claude"], d["mcp"])))
         check("shipped: /start carries the Combined sha256 button; llms.txt the hash line; join hashes unchanged",
               f'data-phash="{SHIPPED}"' in d["start"] and ("Combined prompt sha256: " + SHIPPED) in d["llms"]
-              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("dccf7ec6"))
+              and d["join"]["template_sha256"] == TS and S.variant_sha256("connector").startswith("2bbd98cd"))
     finally:
         p.terminate(); p.wait(10)
 sys.exit(1 if fails else 0)

@@ -223,11 +223,12 @@ _STX.reset(); db.write("DELETE FROM fetch_log")
 from poascan import netfacts as NF, swaprefund as SR, nethub as NH
 _p = {"escrow_autorefund_from_epoch": 107, "escrow_autorefund_per_close": 500,
       "escrow_fill_seen_backfill": {"through_ts": now - 100, "offers": [], "sha256": "aa"},
-      "att_distinct_verifier_from_ts": now, "close_ts_derived_from_epoch": 108, "swap_fee_bp": 100}
+      "att_distinct_verifier_from_ts": now, "close_ts_derived_from_epoch": 108, "att_log_from_epoch": 117, "swap_fee_bp": 100}
 _px = {x["key"]: x for x in NF.params_extra(_p)}
 check("params extra: auto-refund from E107 and 500 per close", _px["escrow_autorefund_from_epoch"]["text"] == "E107" and _px["escrow_autorefund_per_close"]["text"] == "500")
 check("params extra: an empty fill-backfill object is a count, not a dumped table", _px["escrow_fill_seen_backfill"]["text"].startswith("0 offers") and "through_ts" not in _px["escrow_fill_seen_backfill"]["text"])
 check("params extra: distinct verifier and close-time-derived keys render", "att_distinct_verifier_from_ts" in _px and _px["close_ts_derived_from_epoch"]["text"] == "E108")
+check("params extra: attestation log from E117", _px.get("att_log_from_epoch", {}).get("text") == "E117" and _px["att_log_from_epoch"]["label"] == "Attestation log from")
 check("params extra: no em or en dash in the new labels", not re.search("[\\u2013\\u2014]", "".join(x["label"] + x["text"] for x in _px.values())))
 _v2 = SR.swap_v2_state(_p)
 check("swap v2: Shipped, not active when swap_v2_from_ts is absent", _v2["state"] == "shipped" and _v2["label"] == "Shipped, not active")

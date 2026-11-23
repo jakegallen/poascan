@@ -22,7 +22,7 @@ check("template: one {NAME} slot inside the register POST body (v2.9), identical
 check("start.prompt() renders the template with the cleaned name; PROMPT, the Join modal and llms text use it",
       S.prompt("test-agent-7") == fx.replace("{NAME}", "test-agent-7") and S.PROMPT == fx.replace("{NAME}", "YOUR_NAME") and J.PROMPT == S.PROMPT
       and S.prompt("bad name!!") == fx.replace("{NAME}", "badname"))
-check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.9.9" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
+check("v2: version and wording; no wallet or swap setup, no setup code path (REG_STEP and reg_attrs gone)", OP.VERSION == "v2.9.10" and "go.md LINK" not in OP.TEMPLATE and "Swaps and wallets are separate: only if I ask, per go.md's swap steps." in OP.TEMPLATE
       and "read /api/hosted/me with the key in an Authorization: Bearer header." in OP.TEMPLATE and "Send the key only in that Authorization: Bearer header, on every call below. Never put a key or token in a URL: if a call wants the credential in the URL, stop and tell me." in OP.TEMPLATE
       and not re.search(r"[?&](?:key|token)=", OP.TEMPLATE) and "token=AUTH_TOKEN" not in OP.TEMPLATE
       and "Stop, do not retry, never move the key into the URL, and tell me what it said." in OP.TEMPLATE and "retry that call once with key=" not in OP.TEMPLATE
@@ -103,7 +103,7 @@ check("v2.5 (LabLeak 1398): every variant opens with the pasted-only line; NOTIC
 check("v2.9: the opener names the proof of work and one POST; key links are paths after https://minepoa.com; the name prefill lands in the body's label",
       T.startswith(PASTED + ". Joining takes a one-time proof of work you compute yourself, then one POST. " + KEEP + " Full steps: https://minepoa.com/go.md (Step 0/1).")
       and "Then: build each link below yourself as https://minepoa.com plus the path shown, with the key in the Authorization: Bearer header." in T
-      and all(x in T for x in ("6. Get your challenge: /api/hosted/challenge\n", "8. Mine: /api/hosted/mine\n", "from /api/hosted/me. ", "Submit it to /api/hosted/answer")) and "lableak" not in T
+      and all(x in T for x in ("7. Get your challenge: /api/hosted/challenge\n", "9. Mine: /api/hosted/mine\n", "from /api/hosted/me. ", "Submit it to /api/hosted/answer")) and "lableak" not in T
       and '{"label":"test-agent-7","pow":{"challenge":"CHALLENGE","nonce":"NONCE"}}' in S.prompt("test-agent-7") and "call poa_register once with label test-agent-7" in S.prompt("test-agent-7", "connector"))
 check("v2.2 order: resume and the capability check come before the about and Joining lines; the key line opens the key rules before rule 1",
       T.index(V22[3]) < T.index(V22[1]) < T.index("PoA is a free") < T.index("Proof of work:") < T.index("Joining:") and T.index("Your key (the api_key") < T.index(V22[0]) < T.index("\n1. Save it")
@@ -116,7 +116,7 @@ for nm in ("test-agent-7", "YOUR_NAME", "x" * 32):
 bl = dict(OP.blocks(S.prompt("n")))
 check("blocks: notice (the pasted-only line) first, registration has the link, resume and capability_check follow it, key_safety rules 1 to 5, mining steps 7 to 9, expectations; no wallet block; closing the payment rule",
       bl["opener"] == PASTED.split("\n")[0] + "\n" and bl["registration"].startswith("Join Proof of Agent for me") and OP.SLOT not in bl["registration"] and '"label":"n"' in bl["joining"] and bl["proof_of_work"].startswith("Proof of work: GET https://minepoa.com/api/join-pow.") and bl["key_safety"].startswith("Your key (the api_key")
-      and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("6. Get your challenge") and "8. Mine:" in bl["mining"]
+      and all(f"\n{i}. " in "\n" + bl["key_safety"] for i in range(1, 6)) and bl["mining"].startswith("6. Your join must be final") and "9. Mine:" in bl["mining"]
       and bl["expectations"].startswith("Set my expectations") and "wallet" not in bl and "Never send payment outside the network." in bl["closing"]
       and bl["resume"].startswith("Before you register, and whenever I paste this again") and bl["capability_check"].startswith("Before you join, check that you can run code and send a POST")
       and "checkin_start" not in bl and "checkin_joined" not in bl
@@ -207,7 +207,7 @@ check("a prefill link over the limit falls back to copy and open (paste kind, no
 # ---- v2.4 variants: every key safety line in every variant
 VT = {v: S.prompt("test-agent-7", v) for v in ("full", "connector")}
 # v2.7.2 (LabLeak 3514, 3517, 3531): one re-fetch line where each variant answers, before the submit; once per variant
-RF = {"full": "Right before you submit, read step 6 again: words can change mid-epoch and stale ones are rejected. Write the answer as plain text with normal spaces.",
+RF = {"full": "Right before you submit, read step 7 again: words can change mid-epoch and stale ones are rejected. Write the answer as plain text with normal spaces.",
       "connector": "Right before poa_answer, call poa_challenge again: words can change mid-epoch and stale ones are rejected. Call poa_answer once"}
 check("v2.7.2: every variant re-reads the challenge right before answering, once, inside its answer step (block ids unchanged)",
       all(VT[v].count(t) == 1 and VT[v].count("stale ones are rejected") == 1 for v, t in RF.items())
@@ -223,6 +223,16 @@ check("v2.9.9: hosted answer is encoded once; no bare ?answer=YOUR_TEXT; spaces 
               and "at least 12 words" in t and "curl --data-urlencode" in t
               and "params or query option" in t
               for t in (OP.TEMPLATE, _AE)))
+check("v2.9.10: join must be final before answers or grades; not_joined / join_not_final means wait and retry",
+      "6. Your join must be final before you can earn." in OP.TEMPLATE
+      and "5 peer attestations" in OP.TEMPLATE
+      and "/api/receipt/<join_txid>" in OP.TEMPLATE
+      and "not_joined" in OP.TEMPLATE and "join_not_final" in OP.TEMPLATE
+      and "7. Get your challenge:" in OP.TEMPLATE and "9. Mine:" in OP.TEMPLATE and "10. Report my address" in OP.TEMPLATE
+      and "read step 7 again" in OP.TEMPLATE
+      and all("Your join must be final (5 peer attestations)" in t and "not_joined or join_not_final" in t
+              for t in (VT["connector"], _AE, PR.GRADE[1]))
+      and "Your join must be final (5 peer attestations) first" in S.STEPS[3][2])
 # v2.8 (Patches, POA Observatory): leak watch and critical-notice stop, one sentence in every variant, after a read of /me
 # (connector: poa_status), before the first write; mirrored in the one-liners, the All steps and the MCP safety list
 _W = "No answer, no write. On an active critical notice or a next_nonce or address change you didn't make, stop all writes and tell me."
@@ -230,7 +240,7 @@ _FB = dict(OP.blocks(S.prompt("YOUR_NAME", "full")))
 check("v2.8: the leak watch sentence once in every variant (full: rule 5 after the /me read; short: the start of step 3, before the challenge); both key shapes named",
       OP.WATCH == _W and all(VT[v].count(_W) == 1 for v in VT) and _W in _FB["key_safety"] and "5. Each visit, before your first write, read /api/hosted/me" in _FB["key_safety"]
       and all(_W in dict(OP.blocks(S.prompt("YOUR_NAME", v), v))["mining"] for v in ("connector",))
-      and "3. Call poa_status first. " + _W + " Then call poa_challenge." in VT["connector"]
+      and "3. Call poa_status first. " + _W + " Your join must be final (5 peer attestations) first; on not_joined or join_not_final, wait and retry. Then call poa_challenge." in VT["connector"]
       and "Your key (the api_key, pk_... or a GUID)" in VT["full"] and "2. The api_key the join returns is your agent." in VT["connector"]
       and S.WATCH_RULE in S.data()["safety"] and "active critical notice" in S.STEPS[3][2] and "Authorization: Bearer" in S.STEPS[5][2]
       and "swap" not in _W and "cap" not in _W.lower())
@@ -447,14 +457,14 @@ try:
     full_t = unescape(re.search(r'<pre hidden data-sv-tpl="full">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, nm0)
     check(f"byte-identical: /start full template == API text for the same name; API (no name) == MCP == the prompt inside llms.txt; version {api_y['version']}",
           full_t == api_n["text"] == S.prompt(nm0) and api_y["text"] == mp == S.PROMPT and ("\n" + S.PROMPT + "\n") in ll
-          and api_y["version"] == api_n["version"] == "v2.9.9" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
+          and api_y["version"] == api_n["version"] == "v2.9.10" and api_y["notice"] == api_n["notice"] == NOTICE and ("Prompt (" + NOTICE + ")") in ll and api_y["updated_ts"] == OP.UPDATED_TS and api_n["sha256"] == sha(full_t))
     con_t = unescape(re.search(r'<pre hidden data-sv-tpl="connector">(.*?)</pre>', h, re.S).group(1)).replace(OP.SLOT, "YOUR_NAME")
     check("byte-identical: /start View prompt == the full prompt (YOUR_NAME); the Claude strip's connector template tagged for claude == API ?client=claude for the same name",
           pre == S.prompt("YOUR_NAME") and con_t == S.prompt("YOUR_NAME", "connector") and (pre := con_t) is not None and nm0 not in pre and OP.tagged(pre.replace("YOUR_NAME", nm0), "claude") == api_c["text"] == S.client_prompt(nm0, "claude")
           and api_c["sha256"] == sha(api_c["text"]) and api_c["notice"] == NOTICE)
     up = req("/upgrade")[2]
     check("/upgrade Details: Join prompt row with the version, the release time (time data-upts, UTC; app.js adds the reader's zone) and the note",
-          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.9.9</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
+          '<dt>Join prompt</dt><dd><a href="/api/v1/prompts/join">v2.9.10</a>, <span class="upts">released <time data-upts="' in up and OP.RELEASE_NOTE in up.replace("&#x27;", "'"))
     check("/upgrade Details: Release row with this version, its time (data-upts, UTC; app.js adds the reader's zone, PT for Jake) and the line",
           '<dt>Release</dt><dd>' + AG.VERSION + ', <span class="upts">released <time data-upts="' in up and AG.RELEASE_LINE in up)
     check("v2.5: the API, MCP and llms.txt serve text with no check-in URL at all",
@@ -550,9 +560,9 @@ try:
     j0 = json.loads(raw0); txt0 = j0["text"]
     check(f"v2.7 hash: stable, the rule's SHA-256 of the no-name no-client text (UTF-8, LF only, no BOM, no trailing newline) {TS[:16]}",
           re.fullmatch(r"[0-9a-f]{64}", TS) and TS == S.template_sha256() == S.variant_sha256("full") == hashlib.sha256(S.PROMPT.encode("utf-8")).hexdigest()
-          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.9.9")
+          and "\r" not in S.PROMPT and not S.PROMPT.endswith("\n") and not S.PROMPT.startswith("\ufeff") and "YOUR_NAME" in S.PROMPT and OP.VERSION == "v2.9.10")
     check("v2.7 hash: recomputing from the served API text matches (bytes of .text, as jq -j prints them)",
-          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.9.9"
+          hashlib.sha256(txt0.encode("utf-8")).hexdigest() == TS == j0["template_sha256"] == j0["variant_sha256"] == j0["sha256"] and j0["prompt_version"] == "v2.9.10"
           and j0["hash_rule"] == S.HASH_RULE and j0["verify"] == S.VERIFY)
     jq = subprocess.run("jq -j .text | sha256sum", shell=True, input=raw0, capture_output=True)
     check(f"v2.7 hash: the published one-line check reproduces it (jq -j .text | sha256sum on the API body) {jq.stdout[:16]!r}", jq.returncode == 0 and jq.stdout.decode().split()[0] == TS
@@ -561,7 +571,7 @@ try:
     for cid in ("claude", "kimi", "cursor", "muse"):
         vs[cid] = json.loads(json.dumps(S.api_join(None, cid)))   # in process: the HTTP burst limit is spent by now
     check("v2.7 hash: every client response carries the same template_sha256 and its own variant_sha256, which recomputes from its text; no-path is null",
-          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.9.9" for v in vs.values())
+          all(v["template_sha256"] == TS and v["prompt_version"] == "v2.9.10" for v in vs.values())
           and vs["claude"]["variant_sha256"] == hashlib.sha256(vs["claude"]["text"].encode()).hexdigest() == S.variant_sha256("connector") != TS
           and vs["kimi"]["variant_sha256"] is None and vs["kimi"]["text"] is None
           and vs["cursor"]["variant_sha256"] == TS and vs["muse"]["variant_sha256"] is None)
@@ -571,11 +581,11 @@ try:
     hp = req("/")[2]; sp = req("/start")[2]; ab = req("/about")[2]; lf = req("/llms-full.txt")[2]; ll2 = req("/llms.txt")[2]
     from poascan import combined as _CB; _c = _CB.SHA256   # 1.26.74: the combined prompt button sits between the template button and Verify
     _cb = (f'<button type="button" data-phash="{_c}" title="Combined prompt sha256 {_c}" aria-label="Copy the combined prompt sha256"><span>Combined</span><span>sha256 <code>{_c[:12]}</code></span></button>') if _c else ""
-    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9.9</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
+    pl = f'<p class="phash"><button type="button" data-phash="{TS}" title="Template sha256 {TS}" aria-label="Copy the template sha256"><span>Prompt v2.9.10</span><span>sha256 <code>{TS[:12]}</code></span></button>{_cb}<a href="/about#prompt-hash">Verify</a></p>'
     sm = sp[sp.index("<main"):sp.index("</main>")]
     check("v2.7 hash: every surface reports the same value: MCP, llms.txt, llms-full.txt, /start beside the widget, /about",
-          ms["prompt_version"] == "v2.9.9" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
-          and all(("Prompt version: v2.9.9\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
+          ms["prompt_version"] == "v2.9.10" and ms["template_sha256"] == TS and ms["hash_rule"] == S.HASH_RULE and hashlib.sha256(ms["prompt"].encode()).hexdigest() == TS
+          and all(("Prompt version: v2.9.10\nTemplate sha256: " + TS) in x and ("Verify: `" + S.VERIFY + "`") in x for x in (ll2, lf))
           and sm.count(pl) == 1 and sm.index("data-pnote") < sm.index('class="phash"') < sm.index("sv-view")
           and 'id="prompt-hash"' in ab and TS in ab and "jq -j .text | sha256sum" in ab and not any(c in pl + ab for c in "\u2014\u2013"))
     oa = json.loads(req("/openapi.json")[2])["components"]["schemas"]["JoinPrompt"]["properties"]
