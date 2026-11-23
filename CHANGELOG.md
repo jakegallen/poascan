@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.426] - 2026-11-23
+
+### Added
+- Verified 512px artwork for the ten POA ATP-721 collections from POA-SAPPHIRE through POA-GOLD, so the Apps tab shows the coin tiles and Seal matches instead of the monogram fallback (#234, Max Infeld).
+
 ## [1.26.425] - 2026-11-23
 
 ### Changed
