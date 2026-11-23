@@ -35,6 +35,10 @@ log = logging.getLogger("server")
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 STARTED = int(time.time())
 _TRACK_SALT = os.urandom(8).hex()   # 1.26.362: per-boot salt for the spike dump's client net hash; never stored
+_HEALTH_ONLY = threading.local()   # 1.26.424: True when a thread came from the /healthz connection reserve
+SUMMARY_WAIT = float(os.environ.get("POASCAN_SUMMARY_WAIT_S", "3.0"))
+_SUMMARY_LAST = {"swaps": None, "concentration": None}
+_SUMMARY_LOCK = threading.Lock()
 COMMIT = os.environ.get("GIT_SHA") or None   # deployed git SHA (Dockerfile ENV from the deploy build-arg); None in local builds
 # Process start/restart count, persisted in a DB blob on the Fly volume so it survives restarts (the guard exits the
 # process on a hang or an OOM, Fly restarts it, and the next boot bumps this). boot_at is this process's start time;
@@ -1000,6 +1004,12 @@ class H(BaseHTTPRequestHandler):
         for k, v in hdr.items(): self.send_header(k, KS.redact(str(v)))
         self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
+    def _health_reserve_guard(self):
+        if not getattr(_HEALTH_ONLY, "on", False): return False
+        self.close_connection = True
+        if getattr(self, "command", "GET") in ("GET", "HEAD") and self._path_only() == "/healthz":
+            db.q1("SELECT 1 AS x"); self.send(200, "ok\n", TXT, {"Cache-Control": "no-store"}); return True
+        self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "15", "Cache-Control": "no-store"}); return True
     def do_HEAD(self): self.do_GET()
     def cond(self, body, sha, cache, extra):
         """Strong ETag = the body's sha256 (of the decoded bytes, whatever the transfer encoding); 304 on a matching If-None-Match."""
@@ -1095,10 +1105,12 @@ class H(BaseHTTPRequestHandler):
             try: self.send(500, json.dumps(AG._err(None, -32603, "internal error")), "application/json", MCP_HDRS)
             except Exception: pass
     def do_OPTIONS(self):
+        if self._health_reserve_guard(): return
         if self.cf_origin_blocked(): return
         if (urllib.parse.urlparse(self.path).path.rstrip("/") or "/") == "/mcp": return self.send(204, b"", "text/plain", MCP_HDRS)
         return self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
     def do_PUT(self):
+        if self._health_reserve_guard(): return
         if self.cf_origin_blocked(): return
         self.send(405, "read-only", "text/plain", {"Allow": "GET, HEAD"})
     do_DELETE = do_PATCH = do_PUT
@@ -1584,11 +1596,13 @@ class H(BaseHTTPRequestHandler):
             GD.note_req(self._shed_bucket(), k)
         except Exception: pass
     def do_GET(self):
+        if self._health_reserve_guard(): return
         self._track(); MT.request_scope(True)
         try: return self._gated(self._get)
         finally:
             SG.reset(); MT.request_scope(False); GD.ACTIVE.pop(threading.get_ident(), None)
     def do_POST(self):
+        if self._health_reserve_guard(): return
         self._track()
         try: return self._gated(self._post)
         finally: GD.ACTIVE.pop(threading.get_ident(), None)   # the segment a request reads (?segment=) never leaks into the next one on this thread
@@ -1627,12 +1641,33 @@ class H(BaseHTTPRequestHandler):
                 return HUB.accept(self)
             if path in ("/api/swaps/status", "/api/trading/status"): return self._swap_status_fast()
             if path in ("/api/summary", "/api/live"):
-                snap = HUB.snapshot() if path == "/api/summary" else None
+                snap = HUB.snapshot(wait=SUMMARY_WAIT) if path == "/api/summary" else None
                 if path == "/api/summary" and snap is None:   # 1.26.331: first snapshot still building after a boot
                     return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store"})
-                m = AG.meta(); d = json.loads(snap) if path == "/api/summary" else dict(HUB.stats())
+                try:
+                    with A.fast(wait=SUMMARY_WAIT):
+                        m = AG.meta(); d = json.loads(snap) if path == "/api/summary" else dict(HUB.stats())
+                        if isinstance(d, dict) and path == "/api/summary":
+                            sw = SC.status(strict=True); conc = A.concentration()
+                            d["swaps"] = sw; d["concentration"] = conc
+                            with _SUMMARY_LOCK:
+                                if sw: _SUMMARY_LAST["swaps"] = sw
+                                if conc: _SUMMARY_LAST["concentration"] = conc
+                except (SW.Busy, A.Busy):
+                    if path != "/api/summary":
+                        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store"})
+                    with _SUMMARY_LOCK:
+                        sw = _SUMMARY_LAST["swaps"]; conc = _SUMMARY_LAST["concentration"]
+                    if sw is None or conc is None:
+                        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store"})
+                    try:
+                        with A.fast(wait=SUMMARY_WAIT): m = AG.meta()
+                    except A.Busy:
+                        return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store"})
+                    d = json.loads(snap)
+                    if isinstance(d, dict):
+                        d["swaps"] = sw; d["concentration"] = conc
                 if isinstance(d, dict):
-                    if path == "/api/summary": d["swaps"] = SC.status(); d["concentration"] = A.concentration()
                     d.setdefault("meta", m)
                 hd = {"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"}
                 lite = path == "/api/summary" and (qs.get("lite") or [""])[0] == "1"
@@ -1838,9 +1873,11 @@ class H(BaseHTTPRequestHandler):
                 except KeyError: return self.send(404, json.dumps({"error": "unknown endpoint"}), "application/json", {"X-API-Version": AG.VERSION})
                 except BadRequest as e: return self.send(400, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Access-Control-Allow-Origin": "*"})
                 except TooMany as e: return self.send(429, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": str(e.retry), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+                except (SW.Busy, A.Busy) as e: return self.send(503, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": "10", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 except Unavailable as e: return self.send(503, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": "60", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 m = AG.meta(); mh = AG.meta_headers(m)
-                tag = SW.etag(p) if fmt != "csv" else None   # swap list routes: weak ETag of the data (SC-010)
+                try: tag = SW.etag(p) if fmt != "csv" else None   # swap list routes: weak ETag of the data (SC-010)
+                except (SW.Busy, A.Busy) as e: return self.send(503, json.dumps({"error": str(e)}), "application/json", {"X-API-Version": AG.VERSION, "Retry-After": "10", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
                 if tag and p == "/api/swaps" and any(k in qs for k in ("offset", "limit", "status", "include_expired")):
                     # 1.26.347: fold the filter/paging params into the ETag so a filtered or paged copy never shares one
                     # with the full list (which would 304 the wrong body); the default list keeps the base tag.
@@ -1945,21 +1982,39 @@ class Server(ThreadingHTTPServer):
     request_queue_size = 256
     def __init__(self, *a, **k):
         super().__init__(*a, **k); self.detached = set()
+        self._conn_slot = {}; self._conn_lock = threading.Lock()
     def process_request(self, request, client_address):
         # 1.26.254: bound TOTAL in-flight threads here (not heavy work) and shed the overflow fast instead of queueing
         # it hundreds deep (a deep backlog just holds crawler connections open). The heavy-work cap (GD.slots, HEAVY_CAP)
-        # is taken inside the handler, and SERVE_RESERVE slots (GD.cheap) stay for the homepage and /chain. /healthz,
-        # /api/health and /static never wait on either, so a full heavy pool cannot pull the machine or blank the page.
-        if not GD.conns.acquire(timeout=GD.CONN_WAIT):
-            try: self.shutdown_request(request)
-            finally: return
+        # is taken inside the handler, and SERVE_RESERVE slots (GD.cheap) stay for the homepage and /chain.
+        # 1.26.424: when GD.conns is exhausted, /healthz still has dedicated reserve semaphores (health_conns and
+        # loopback_health) so a full connection pool cannot starve the watchdog or Fly health checks.
+        kind, sem = "conns", GD.conns
+        if not sem.acquire(timeout=GD.CONN_WAIT):
+            is_loop = bool(client_address and client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"))
+            if GD.health_conns.acquire(timeout=(0.2 if is_loop else 0.0)):
+                kind, sem = "health", GD.health_conns
+            elif is_loop and GD.loopback_health.acquire(timeout=0.5):
+                kind, sem = "loopback", GD.loopback_health
+            else:
+                try: self.shutdown_request(request)
+                finally: return
+        with self._conn_lock: self._conn_slot[id(request)] = (kind, sem)
         try: super().process_request(request, client_address)
-        except Exception: GD.conns.release(); raise
+        except Exception:
+            with self._conn_lock: self._conn_slot.pop(id(request), None)
+            sem.release(); raise
     def process_request_thread(self, request, client_address):
+        with self._conn_lock: kind, sem = self._conn_slot.pop(id(request), ("conns", GD.conns))
+        if kind != "conns":
+            _HEALTH_ONLY.on = True
+            try: request.settimeout(1.0)
+            except OSError: pass
         try: super().process_request_thread(request, client_address)
         finally:
+            _HEALTH_ONLY.on = False
             db.release()   # 1.26.227: this thread's SQLite connection goes now, not at the next full GC
-            GD.conns.release()
+            sem.release()
     def shutdown_request(self, request):
         if request in self.detached:      # upgraded to WebSocket: the hub owns it now
             self.detached.discard(request); return

@@ -395,6 +395,8 @@ jobs:
         run: python tools/accuracy_test.py
       - name: Watchdog tells CPU-busy from hung (a slow render while heavy slots are in use gets a longer self-check and counts toward BUSY_FAILS, not HANG_FAILS; a sustained busy run and a real hang both still exit; heavy_busy fails safe to no exemption)
         run: python tools/busy_watchdog_test.py
+      - name: Outage fix 1123 (/healthz dedicated connection reserve under MAX_CONNS exhaustion, swap/api.py bounded wait with stale fallback or 503 Retry-After, analytics fast mode serves stale over long locks and fails fast on cold miss)
+        run: python tools/outage_fix_1123_test.py
       - name: Re-admission flag (back in established_after one close after removal, no eligibility record; history, standing state, address card)
         run: python tools/readmit_test.py
       - name: HTML page cache (weak ETag ignores what app.js recomputes, 304 on a match, 15 s browser and 30 s plus 15 s shared reuse, Vary once; /ops stays no-store)

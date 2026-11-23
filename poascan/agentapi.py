@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.423"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-23T00:58:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.424"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-23T16:18:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -29,12 +29,14 @@ def meta():
     expired stamp the others serve the previous copy (only the very first build waits)."""
     now = time.time()
     if now - _META[0] > 5 or _META[1] is None:
-        got = _META_LOCK.acquire(blocking=_META[1] is None)
+        got = _META_LOCK.acquire(blocking=False) if _META[1] is not None else _META_LOCK.acquire(timeout=5.0)
         if got:
             try:
                 if _META[1] is None or time.time() - _META[0] > 5: _META[1] = _meta_build(now); _META[0] = now
             finally:
                 _META_LOCK.release()
+        elif _META[1] is None:
+            raise A.Busy("meta busy, retry shortly")
     from . import strain as _ST   # strain notice guard: not cached with the rest, so it clears the moment a real read lands
     un = _ST.public(now)
     if un: return dict(_META[1], stale=True, upstream_notice=un, generated_at=_iso(now))

@@ -9,6 +9,8 @@ q, q1, write, get_blob, put_blob = _db.q, _db.q1, _db.write, _db.get_blob, _db.p
 # ---- cache decorator (key, ttl seconds) ----
 from .. import analytics as _A
 cached = _A.cached
+analytics_fast = _A.fast
+AnalyticsBusy = _A.Busy
 
 # ---- network facts the module needs from the core indexer ----
 def params(): return _A.params()                     # /api/params (swap_fee_bp)

@@ -32,10 +32,13 @@ def _call(path): return _get(path) if REMOTE else _local(path)
 
 def price():
     """/api/v1/price: the POA/USD reference from fills only."""
-    return _call("/price") or dict(usd_per_poa=None, usd_per_1m_poa=None, shown=False, thin=None, sig_figs=None)
-def status():
+    try: return _call("/price") or dict(usd_per_poa=None, usd_per_1m_poa=None, shown=False, thin=None, sig_figs=None)
+    except Exception: return dict(usd_per_poa=None, usd_per_1m_poa=None, shown=False, thin=None, sig_figs=None)
+def status(strict=False):
     """/api/v1/swaps/status: availability, open offers and market (market cap, FDV, trades, volume, last trade, best ask).
-    The live local book, so open_offers is the real count. An unread database returns {}."""
+    The live local book, so open_offers is the real count. An unread database returns {} (or raises Busy when strict=True)."""
+    if strict:
+        return _call("/swaps/status") or {}
     try: return _call("/swaps/status") or {}
     except Exception: return {}
 def trading_status():
@@ -52,14 +55,17 @@ def trading_status():
     except Exception: return {}
 def offers(status=None):
     """/api/v1/swaps: every offer, newest activity first; status filters one state (open, filled, cancelled, expired, delisted)."""
-    rows = _call("/swaps") or []
+    try: rows = _call("/swaps") or []
+    except Exception: rows = []
     return rows if not status else [r for r in rows if r.get("status") == status]
 def offer(oid):
     """/api/v1/swaps/<offer_id>: {offer, events} or None."""
-    return _call("/swaps/" + oid) if oid else None
+    try: return _call("/swaps/" + oid) if oid else None
+    except Exception: return None
 def price_history():
     """/api/v1/swaps/price-history."""
-    return _call("/swaps/price-history") or []
+    try: return _call("/swaps/price-history") or []
+    except Exception: return []
 
 def book():
     """Open unexpired asks and last fill per pair from the ingested book (1.26.322).

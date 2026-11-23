@@ -11,6 +11,13 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.424] - 2026-11-23
+
+### Fixed
+- Reserved connection slots (`health_conns` and `loopback_health` in `guard.py` / `server.py`) so `/healthz` answers 200 even when `MAX_CONNS` (200) is full of slow or stalled connections, while non-health requests on the reserve shed immediately with 503.
+- Bounded `swap/api.py` `_cached` wait (`BUILD_WAIT = 3.0s`): concurrent waiters serve the last cached value immediately while one refresher runs instead of blocking behind `_rc_build` locks, or fail fast with 503 `Retry-After` on a cold miss.
+- Added `analytics.fast` bounded-wait stale-preferring mode for `/api/summary`, `/api/v1/summary`, and `swap/api.py` builds so long `analytics` locks serve stale data at any age when a refresher or `_heavy` slot is busy, or fail fast with 503 `Retry-After` on a cold miss.
+
 ## [1.26.423] - 2026-11-22
 
 ### Changed

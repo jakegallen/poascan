@@ -12,6 +12,6 @@ Layout
 
 The host wires it in at three points: db.init -> store.init, indexer JOBS += indexer.JOBS, server -> api.api. The explorer
 reads swap data only through the API (poascan/swapclient.py)."""
-from .api import api, etag  # noqa: F401
+from .api import api, etag, Busy  # noqa: F401
 from .indexer import JOBS  # noqa: F401
 from .store import init as init_db  # noqa: F401

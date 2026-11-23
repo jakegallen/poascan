@@ -11,8 +11,25 @@ CACHE_MAX = 256
 _heavy = threading.BoundedSemaphore(int(os.environ.get("POASCAN_HEAVY_MAX", "2")))   # cold computes running at once
 _depth = threading.local()
 _bg = threading.local()
+_fast = threading.local()
 STALE_MAX = 300   # seconds a visitor may be served a previous value while every cold slot is busy
 _bg_heavy = threading.BoundedSemaphore(1)   # 1.26.364: background renders hold at most one of the _heavy slots
+
+class Busy(Exception): pass   # 1.26.424: fast-mode bounded wait expired with no stale copy available
+
+class fast:
+    """Bounded-wait, stale-preferring analytics mode for latency-sensitive routes (/api/summary, swap/api.py):
+    any cached value (at any age) is served immediately when _inflight or _heavy is busy; cold misses wait at most
+    `wait` seconds and then raise analytics.Busy instead of blocking request threads indefinitely."""
+    def __init__(self, wait=2.0):
+        self.wait = float(wait)
+        self.prev = None
+    def __enter__(self):
+        self.prev = getattr(_fast, "wait", None)
+        _fast.wait = self.wait if self.prev is None else min(self.prev, self.wait)
+        return self
+    def __exit__(self, *a):
+        _fast.wait = self.prev
 
 def background():
     """Mark this thread as a background renderer (warm loop, stale refresh, doc warm). Its cold computes take at most one
@@ -29,6 +46,8 @@ def cached(key, ttl=30, light=False):
     def deco(fn):
         def wrap(*a):
             k = (key, S.selected()) + a; own = True   # every cached value is per segment (segments.py)
+            fw = getattr(_fast, "wait", None)
+            deadline = (time.time() + fw) if fw is not None else None
             while True:
                 with _lock:
                     hit = _cache.get(k)
@@ -40,34 +59,59 @@ def cached(key, ttl=30, light=False):
                 if hit: return hit[1]          # someone is already refreshing it: serve the previous value
                 if getattr(_depth, "n", 0):    # nested inside our own compute: never wait on another thread (no lock cycle)
                     own = False; ev = threading.Event(); break
-                ev.wait(60)                    # first compute in progress: wait for it, then re-check
-                with _lock:
-                    hit = _cache.get(k)
-                if hit: return hit[1]
+                if deadline is not None:
+                    rem = deadline - time.time()
+                    if rem <= 0: raise Busy(f"analytics busy: {key}")
+                    ev.wait(rem)
+                    with _lock:
+                        hit = _cache.get(k)
+                    if hit: return hit[1]
+                    if time.time() >= deadline:
+                        raise Busy(f"analytics busy: {key}")
+                else:
+                    ev.wait(60)                # first compute in progress: wait for it, then re-check
+                    with _lock:
+                        hit = _cache.get(k)
+                    if hit: return hit[1]
             outer = not getattr(_depth, "n", 0)
             slot = outer and not light
             bg = slot and getattr(_bg, "on", False)
-            got = False
-            if slot and own and hit and not bg and time.time() - hit[0] < max(STALE_MAX, 4 * ttl):
-                # 1.26.364: a visitor refreshing a value it already has never waits for a cold slot; it serves the
-                # previous value and the next caller that finds a slot free refreshes it
-                got = _heavy.acquire(blocking=False)
-                if not got:
-                    with _lock: _inflight.pop(k, None)
-                    ev.set(); return hit[1]
-            if bg: _bg_heavy.acquire()
-            if slot and not got: _heavy.acquire()        # nested cached calls run inside the outer slot (no self-deadlock)
-            _depth.n = getattr(_depth, "n", 0) + 1
+            got = False; got_bg = False
             try:
-                v = fn(*a)
-                with _lock:
-                    _cache[k] = (time.time(), v); _cache.move_to_end(k)
-                    while len(_cache) > CACHE_MAX: _cache.popitem(last=False)
-                return v
+                if slot and own and hit and not bg and (deadline is not None or time.time() - hit[0] < max(STALE_MAX, 4 * ttl)):
+                    # 1.26.364: a visitor refreshing a value it already has never waits for a cold slot; it serves the
+                    # previous value and the next caller that finds a slot free refreshes it.
+                    # 1.26.424: in fast mode, any stale hit (even older than STALE_MAX) takes this non-blocking path.
+                    got = _heavy.acquire(blocking=False)
+                    if not got: return hit[1]
+                if bg:
+                    if deadline is not None:
+                        got_bg = _bg_heavy.acquire(timeout=max(0.0, deadline - time.time()))
+                        if not got_bg:
+                            if hit: return hit[1]
+                            raise Busy(f"analytics busy: {key}")
+                    else:
+                        _bg_heavy.acquire(); got_bg = True
+                if slot and not got:
+                    if deadline is not None:
+                        got = _heavy.acquire(timeout=max(0.0, deadline - time.time()))
+                        if not got:
+                            if hit: return hit[1]
+                            raise Busy(f"analytics busy: {key}")
+                    else:
+                        _heavy.acquire(); got = True        # nested cached calls run inside the outer slot (no self-deadlock)
+                _depth.n = getattr(_depth, "n", 0) + 1
+                try:
+                    v = fn(*a)
+                    with _lock:
+                        _cache[k] = (time.time(), v); _cache.move_to_end(k)
+                        while len(_cache) > CACHE_MAX: _cache.popitem(last=False)
+                    return v
+                finally:
+                    _depth.n -= 1
             finally:
-                _depth.n -= 1
-                if slot: _heavy.release()
-                if bg: _bg_heavy.release()
+                if got: _heavy.release()
+                if got_bg: _bg_heavy.release()
                 if own:
                     with _lock: _inflight.pop(k, None)
                     ev.set()
