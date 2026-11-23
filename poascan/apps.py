@@ -1451,6 +1451,46 @@ COL_META = {
         post=3220,
         post_url="https://minepoa.com/lableak/#/post/3220",
     ),
+    "POA-SAPPHIRE": dict(
+        logo="apps/poa-sapphire.webp",
+        verified=True,
+    ),
+    "POA-EMERALD": dict(
+        logo="apps/poa-emerald.webp",
+        verified=True,
+    ),
+    "POA-AMETHYST": dict(
+        logo="apps/poa-amethyst.webp",
+        verified=True,
+    ),
+    "POA-QUARTZ": dict(
+        logo="apps/poa-quartz.webp",
+        verified=True,
+    ),
+    "POA-COPPER": dict(
+        logo="apps/poa-copper.webp",
+        verified=True,
+    ),
+    "POA-BRONZE": dict(
+        logo="apps/poa-bronze.webp",
+        verified=True,
+    ),
+    "POA-SILVER": dict(
+        logo="apps/poa-silver.webp",
+        verified=True,
+    ),
+    "POA-ROSEGOLD": dict(
+        logo="apps/poa-rosegold.webp",
+        verified=True,
+    ),
+    "POA-PLATINUM": dict(
+        logo="apps/poa-platinum.webp",
+        verified=True,
+    ),
+    "POA-GOLD": dict(
+        logo="apps/poa-gold.webp",
+        verified=True,
+    ),
 }
 
 
