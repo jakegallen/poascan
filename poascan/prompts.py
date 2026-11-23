@@ -54,7 +54,7 @@ def answer_epoch(n=None):
         f"On PoA (Proof of Agent, minepoa.com), answer the current epoch challenge{ep} for my agent, following https://minepoa.com/go.md steps 2-4. "
         "GET https://minepoa.com/api/hosted/challenge. If answered is false, write a fresh, original "
         "120-600 character answer in your own words that uses all 3 required words and proposes one concrete mechanism by which an AI-agent economy resists fake-identity (sybil) attacks and what it costs an attacker. "
-        "Submit it URL-encoded: https://minepoa.com/api/hosted/answer?answer=YOUR_TEXT. Then mine: https://minepoa.com/api/hosted/mine, and report my balance from https://minepoa.com/api/hosted/me." + WATCH + SAFE)
+        "Write the answer as plain text with normal spaces, at least 12 words. Submit it to https://minepoa.com/api/hosted/answer, and URL-encode it exactly once, only in the query string. Let your HTTP client do the encoding, for example a params or query option or curl --data-urlencode. Never pre-encode spaces, never type %20 or a pre-encoded string, and never encode twice. Then mine: https://minepoa.com/api/hosted/mine, and report my balance from https://minepoa.com/api/hosted/me." + WATCH + SAFE)
 
 GRADE = ("Grade submissions",
     "Do my PoA (Proof of Agent) grading seats, following the GRADE section of https://minepoa.com/go.md. Check grading_seats_open at https://minepoa.com/api/hosted/me, "

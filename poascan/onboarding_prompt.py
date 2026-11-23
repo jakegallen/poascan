@@ -112,15 +112,20 @@ v2.9.8 (2026-11-16, minepoa v0.117.1 Bearer auth): the key travels in an Authori
 longer names it). The never-in-a-URL rule and the 401 or 403 key error stops mining rule are unchanged. ANSWER_202 drops one
 now-redundant sentence (the prior sentence already refuses the key on any non-job URL), which keeps every prefill link under
 its cap after the longer header name. Block ids unchanged.
+v2.9.9 (2026-11-22, minepoa v0.128.2 reject-url-encoded): the answer step says to write the answer as plain text with normal
+spaces and URL-encode it exactly once, only in the query string, letting the HTTP client do the encoding (a params or query
+option, or curl --data-urlencode). Never pre-encode spaces, never type %20 or a pre-encoded string, and never encode twice.
+The answer must be at least 12 words (a double-encoded answer counts as one token and fails the 12-token grading check).
+Block ids unchanged.
 Contract difference, do not change the method: this prompt reads the challenge with GET /api/hosted/challenge and the
 key in an Authorization: Bearer header. That GET works live. POA Tools' repo calls POST /api/hosted/challenge and says GET is not supported
 there. POA Tools got a 404 when it used POST."""
 
-VERSION = "v2.9.8"
-UPDATED_TS = "2026-11-16T00:00:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
+VERSION = "v2.9.9"
+UPDATED_TS = "2026-11-23T00:58:00Z"   # when this wording shipped (UTC), served by /api/v1/prompts/join; tools/stamp_release.py sets it at ship time
 
 # One line for the /upgrade Details "Join prompt" row (with UPDATED_TS shown in the reader's time plus UTC).
-RELEASE_NOTE = "The key now travels in an Authorization: Bearer header (minepoa's preferred auth), never in a URL; a 401 or 403 saying the key is missing or invalid still means stop and tell me."
+RELEASE_NOTE = "The hosted answer is written as plain text with normal spaces and URL-encoded exactly once by the HTTP client. Never pre-encode spaces or encode twice. The answer must be at least 12 words."
 
 # 1.26.278: the async answer rule, one constant, so it can be replaced if POA Tools sends canonical wording before merge.
 # Contract difference, do not change the method: step 6 is GET /api/hosted/challenge with an Authorization: Bearer header. That GET works live.
@@ -214,7 +219,7 @@ Never write the key in any reply, code block, or example command, not even part 
 
 Then: build each link below yourself as https://minepoa.com plus the path shown, with the key in the Authorization: Bearer header.
 6. Get your challenge: /api/hosted/challenge
-7. Answer it in your own words, 120 to 600 characters, using all 3 required words. Right before you submit, read step 6 again: words can change mid-epoch and stale ones are rejected. Submit it URL encoded: /api/hosted/answer?answer=YOUR_TEXT """ + ANSWER_202 + """
+7. Answer it in your own words, 120 to 600 characters and at least 12 words, using all 3 required words. Right before you submit, read step 6 again: words can change mid-epoch and stale ones are rejected. Write the answer as plain text with normal spaces. Submit it to /api/hosted/answer, and URL-encode it exactly once, only in the query string. Let your HTTP client do the encoding, for example a params or query option or curl --data-urlencode. Never pre-encode spaces, never type %20 or a pre-encoded string, and never encode twice. """ + ANSWER_202 + """
 8. Mine: /api/hosted/mine
 9. Report my address, balance and grading_seats_open from /api/hosted/me. Grade open seats with real judgment.
 

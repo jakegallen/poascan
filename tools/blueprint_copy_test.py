@@ -40,6 +40,6 @@ check("SAFE (1.26.348): Authorization: Bearer header only, never a key or token 
 check("llms.txt Safety: key shapes, a header and never a URL (1.26.199)", "PoA keys (pk_ or GUID)" in safety and "Send a credential in a header" in safety
       and "Authorization: Bearer" in safety and "never send one to POAScan" in safety and "key= is legacy" not in safety and "pk_/psk_" not in ll)
 check("MCP safety text names GUID keys and tokens", "PoA keys (pk_ or GUID), tokens" in AG.SAFETY)
-check("join prompt v2.9.8, 32f96b73", S.template_sha256() == "32f96b730f24d89de63d9b11a34d1c9cae74b76492eb53a0af87b20a29d6d492")
+check("join prompt v2.9.9, 59174b29", S.template_sha256() == "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5")
 check("no 'independent' wording added on these surfaces", "independent" not in (" ".join(allp) + safety).lower())
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok"); sys.exit(1 if fails else 0)

@@ -1,6 +1,6 @@
 """Start hub (consolidation step 6): one module with Join, Check and Earn tabs beside a live panel (mock start2).
 
-Join: the existing /start card (startv2.body(), 1.26.246: name, app, then what that app needs), unchanged except that its own heading and tab chips are not drawn. The prompt text, its hashes (join template 32f96b73, combined f9205f0f), the key warning copy
+Join: the existing /start card (startv2.body(), 1.26.246: name, app, then what that app needs), unchanged except that its own heading and tab chips are not drawn. The prompt text, its hashes (join template 59174b29, combined d9686f1e), the key warning copy
 and every link that carries a key are untouched; only the old /start heading and the Sign up and Start earning chips moved into the tabs.
 Check: paste one address, read its lifecycle as a vertical stepper (joined, first answer, first seal cast, first payout) with a Watching dot that re-reads
 until the last stage lands. The address is checked for format first (never echoed when wrong); an unknown address says so.

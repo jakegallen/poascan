@@ -34,7 +34,7 @@ try:
         seg = h[i:h.index("</a>", i)]
         check(f"{p}: credit links x.com/Jakegallen in a new tab, X logo, @Jakegallen", CRED.replace('<a href', '<a class="fcredit" href') in h and "<svg" in seg and "<b>@Jakegallen</b>" in seg and "jakegallen_" not in seg.lower())
         check(f"{p}: no dashes and no share in the credit", "\u2014" not in seg and "\u2013" not in seg and "share" not in seg.lower())
-    j = json.loads(get("/api/v1/prompts/join")); check("join prompt is v2.9.8 (32f96b73)", j.get("template_sha256", "").startswith("32f96b73"))
+    j = json.loads(get("/api/v1/prompts/join")); check("join prompt is v2.9.9 (59174b29)", j.get("template_sha256", "").startswith("59174b29"))
 finally:
     srv.terminate(); srv.wait(10)
 print(f"\n{len(fails)} failure(s)"); sys.exit(1 if fails else 0)
