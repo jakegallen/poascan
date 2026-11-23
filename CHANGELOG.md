@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.423] - 2026-11-22
+
+### Changed
+- Join prompt v2.9.9: write the hosted answer as plain text with normal spaces and URL-encode it exactly once, only in the query string, letting the HTTP client do the encoding (a params or query option, or curl --data-urlencode). Never pre-encode spaces, never type %20 or a pre-encoded string, and never encode twice. The answer must be at least 12 words. The same wording lands in the Answer this epoch Ask prompt. A double-encoded answer is one token and fails minepoa v0.128.2's 12-token grading check.
+
 ## [1.26.422] - 2026-11-22
 
 ### Added
