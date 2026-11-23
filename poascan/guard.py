@@ -70,7 +70,10 @@ cheap = threading.BoundedSemaphore(RESERVE_CAP) if RESERVE_CAP else None   # Non
 SCRAPE_MAX = int(os.environ.get("POASCAN_SCRAPE_MAX", "3"))
 SCRAPE_WAIT = float(os.environ.get("POASCAN_SCRAPE_WAIT", "0.05"))
 scrape = threading.BoundedSemaphore(max(1, SCRAPE_MAX))
+HEALTH_CONNS = int(os.environ.get("POASCAN_HEALTH_CONNS", "4"))   # 1.26.424: reserved threads /healthz can use when conns is full
 conns = threading.BoundedSemaphore(MAX_CONNS)   # 1.26.254: total-thread cap; kept well above MAX_WORKERS so the Fly health check never starves behind a flood of slow renders
+health_conns = threading.BoundedSemaphore(max(1, HEALTH_CONNS))
+loopback_health = threading.BoundedSemaphore(2)   # dedicated reserve so loopback /healthz cannot be raced
 
 # R2 (1.26.291): a per-IP concurrency gate IN FRONT of the heavy slot. The per-IP PAGE_LIMIT (server.py) is a rate limit
 # (a burst of requests a second); it does not stop one IP from holding several heavy slots AT ONCE, which starves other

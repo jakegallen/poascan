@@ -36,14 +36,14 @@ class Hub:
         self.ip_of = {}; self.per_ip = {}   # sock -> client key, client key -> open sockets
 
     # ---- snapshot shared with the polling fallback ----
-    def snapshot(self, max_age=PUMP_EVERY):
+    def snapshot(self, max_age=PUMP_EVERY, wait=None):
         """The last good snapshot. When one exists, a reader returns it at once and one refresh runs in the background.
         The previous JSON stays until that refresh assigns the new one."""
         if self.last_json is None:
             # 1.26.330: one first build; on a cold boot every /ws and /api/summary reader used to build its own
             # 1.26.331: a reader that waited 60 s returns None instead of building its own copy. On 1.26.330 the first
             # build waited on heavy slots for over a minute, then every waiter fell through and built (py-spy: 99 threads).
-            if not self._first.acquire(timeout=self.FIRST_WAIT): return self.last_json
+            if not self._first.acquire(timeout=(self.FIRST_WAIT if wait is None else wait)): return self.last_json
             try:
                 if self.last_json is None: self._refresh()
             finally:

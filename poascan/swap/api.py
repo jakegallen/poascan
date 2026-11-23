@@ -1,7 +1,7 @@
 """The module's HTTP surface. The host server calls api() for JSON; it takes paths without the
 /v1 prefix (the host maps /api/v1/... onto /api/...). The explorer side reads swaps only through these same routes
 (poascan/swapclient.py): /api/v1/price, /api/v1/swaps, /api/v1/swaps/status, /api/v1/swaps/price-history, /api/v1/swaps/<offer_id>."""
-import hashlib, json, re, threading, time
+import contextlib, hashlib, json, os, re, threading, time
 from . import config as C, market as M, store as S, host as H, state as ST
 
 OFFER = re.compile(r"^/api/swaps/([A-Za-z0-9_-]{1,128})$")   # after /status and /price-history
@@ -94,7 +94,10 @@ def offer_json(oid):
 # chains blob or the status and epochs blobs change, or the upstream read health changes. Mirrors polling every 60 s
 # (POASwap) get a stored copy instead of paying a cold recompute. One build per route at a time.
 CACHE_TTL = 30
+BUILD_WAIT = float(os.environ.get("POASCAN_SWAP_WAIT_S", "3.0"))   # 1.26.424: bounded cold wait on _rc_build before failing fast
 _rc, _rc_lock, _rc_build = {}, threading.Lock(), {}
+
+class Busy(Exception): pass   # raised when a cold build is held past BUILD_WAIT with no cached copy available
 
 def _version():
     v = H.q1("SELECT (SELECT MAX(updated) FROM swaps) AS u, (SELECT COUNT(*) FROM swaps) AS n, (SELECT COUNT(*) FROM swap_events) AS e, "
@@ -117,26 +120,50 @@ def _build(path):
     raise KeyError(path)
 
 def _cached(path):
-    """(data, is_list, etag) from the cache when the version matches and the copy is under CACHE_TTL s old, else rebuilt."""
+    """(data, is_list, etag) from the cache when the version matches and the copy is under CACHE_TTL s old;
+    when stale or version-changed, one thread rebuilds under bounded analytics mode while concurrent waiters
+    serve the last cached copy immediately or fail fast with Busy after BUILD_WAIT on a cold miss."""
     now = time.time(); ver = _version()
     with _rc_lock:
         hit = _rc.get(path)
         if hit and hit[1] == ver and now - hit[0] < CACHE_TTL: return hit[2]
         lk = _rc_build.setdefault(path, threading.Lock())
-    with lk:
+    got = lk.acquire(blocking=False)
+    if not got:
+        if hit is not None:
+            return hit[2]
+        got = lk.acquire(timeout=BUILD_WAIT)
+        if not got:
+            with _rc_lock:
+                hit2 = _rc.get(path)
+            if hit2 is not None:
+                return hit2[2]
+            raise Busy("swap cache busy, retry shortly")
+    try:
         with _rc_lock:
             hit = _rc.get(path)
             if hit and hit[1] == ver and time.time() - hit[0] < CACHE_TTL: return hit[2]
+        afast = getattr(H, "analytics_fast", None)
+        abusy = getattr(H, "AnalyticsBusy", None) or ()
         try:
-            data, is_list = _build(path)
+            with (afast(BUILD_WAIT) if afast else contextlib.nullcontext()):
+                data, is_list = _build(path)
+        except abusy as e:
+            if hit is not None:
+                return hit[2]
+            with _rc_lock: _rc_build.pop(path, None)
+            raise Busy(str(e) or "swap cache busy, retry shortly") from e
         except Exception:
-            with _rc_lock: _rc_build.pop(path, None)   # 1.26.249: an unknown id must not leave its build lock behind forever
+            if hit is None:
+                with _rc_lock: _rc_build.pop(path, None)   # 1.26.249: an unknown id must not leave its build lock behind forever
             raise
         tag = 'W/"' + hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:20] + '"'
         with _rc_lock:
             if len(_rc) > 512: _rc.clear(); _rc_build.clear()
             _rc[path] = (time.time(), ver, (data, is_list, tag))
         return data, is_list, tag
+    finally:
+        lk.release()
 
 def _fresh_age(d):
     """The status copy may be up to CACHE_TTL s old: its age field is recomputed per request."""
