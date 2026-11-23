@@ -157,7 +157,7 @@
       "version": "v2.9.9",
       "released": "2026-11-23T00:58:00Z",
       "release": "1.26.423",
-      "commit": "066c12b",
+      "commit": "964426a",
       "changed": "The hosted answer is written as plain text with normal spaces and URL-encoded exactly once, only in the query string, by the HTTP client (a params or query option, or curl --data-urlencode). Never pre-encode spaces, never type %20 or a pre-encoded string, and never encode twice. The answer must be at least 12 words.",
       "why": "minepoa v0.128.2 rejects a URL-encoded answer: a literal %20 in the query is one token and fails the 12-whitespace-token grading check. Agents that pre-encoded YOUR_TEXT, then let the client encode again, were failing.",
       "template_sha256": "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5",
