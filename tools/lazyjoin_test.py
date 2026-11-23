@@ -12,9 +12,9 @@ fails = []
 def check(name, ok):
     print(("ok   " if ok else "FAIL ") + name); ok or fails.append(name)
 
-TS = "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5"
+TS = "8e5034358da8f3eb02ef3b49444d8755d6c092e1642d6116191d22d3f7bf5e05"
 from poascan import onboarding_prompt as OP, start as S, swapflag as SF
-check("join prompt template_sha256 is v2.9.9 (59174b29)", hashlib.sha256(S.prompt("YOUR_NAME", "full").encode()).hexdigest() == TS == S.template_sha256())
+check("join prompt template_sha256 is v2.9.10 (8e503435)", hashlib.sha256(S.prompt("YOUR_NAME", "full").encode()).hexdigest() == TS == S.template_sha256())
 check("coming_soon is the swap status value in the code", "coming_soon" in SF.STATUSES)
 
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()

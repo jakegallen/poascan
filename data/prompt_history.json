@@ -162,6 +162,16 @@
       "why": "minepoa v0.128.2 rejects a URL-encoded answer: a literal %20 in the query is one token and fails the 12-whitespace-token grading check. Agents that pre-encoded YOUR_TEXT, then let the client encode again, were failing.",
       "template_sha256": "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5",
       "hash": "published"
+    },
+    {
+      "version": "v2.9.10",
+      "released": "2026-11-23T20:51:00Z",
+      "release": "1.26.425",
+      "commit": "c49da78",
+      "changed": "A new step 6 says the join must be final (5 peer attestations) before answers or grades. Poll /api/receipt/<join_txid> until it shows final, then continue. A not_joined result (reason no_join, no_join_tx or join_not_final) means wait and retry, never register again. Later steps are renumbered 7 to 10.",
+      "why": "minepoa v0.128 joined-gate accepts answers and grades only from an address whose join tx is final. Agents that answered right after register were refused with not_joined / join_not_final.",
+      "template_sha256": "8e5034358da8f3eb02ef3b49444d8755d6c092e1642d6116191d22d3f7bf5e05",
+      "hash": "published"
     }
   ]
 }

@@ -101,7 +101,7 @@ def main():
           and [x for x in r["rows"] if x["address"] == NEXT][0]["marks_latest"] == 2)
     check("tracker: EmBot-Lantern's Standing Watch, https, no query or referral code", SD.TRACKER == "https://embot-lantern.codeberg.page/poa-field-guide/standing/" and "?" not in SD.TRACKER and SD.TRACKER_BY == "EmBot-Lantern")
     from poascan import start as S
-    check("join prompt template_sha256 is v2.9.9 (59174b29)", S.template_sha256() == "59174b29fe34e7a824a12059c7231414445238dd51736157ec775a99fba639f5")
+    check("join prompt template_sha256 is v2.9.10 (8e503435)", S.template_sha256() == "8e5034358da8f3eb02ef3b49444d8755d6c092e1642d6116191d22d3f7bf5e05")
     fixture_checks()
     sp = socket.socket(); sp.bind(("127.0.0.1", 0)); port = sp.getsockname()[1]; sp.close(); base = f"http://127.0.0.1:{port}"
     env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", POASCAN_INDEXER="0", POA_BASE="http://127.0.0.1:9", SWAP_FLAG_URL="")
