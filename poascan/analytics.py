@@ -614,7 +614,14 @@ def _epoch_rows_shared():
     try:
         hit = _er.get(seg)
         if hit and hit[0] == sig and time.time() - hit[1] < ER_TTL: return hit[2]
-        rows = _epoch_rows_build(raw, pp)
+        # 1.26.427: build as a nested compute, so a cached read inside the build (minted_before, ...) never waits for a
+        # _heavy or _bg_heavy slot while this thread holds the single-flight lock. Stuck dumps on 1.26.426 (Nov 24, 4:03 PM
+        # and again after the 6:43 PM PT restart): a warm render held this lock and blocked on _heavy, while both _heavy
+        # holders (funnel, answerers) waited 30 s on this lock per epoch_of_ts call, so every heavy slot, the slow indexer
+        # loop (gradehist) and the live snapshot stalled for hours.
+        _depth.n = getattr(_depth, "n", 0) + 1
+        try: rows = _epoch_rows_build(raw, pp)
+        finally: _depth.n -= 1
         _er[seg] = (sig, time.time(), rows, raw, pp)
         return rows
     finally:

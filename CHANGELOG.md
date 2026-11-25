@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.427] - 2026-11-24
+
+### Fixed
+- Lock cycle that left the site answering "server busy" from about 4:03 PM PT on Nov 24. A warm render held the shared epoch rows build lock and waited for a cold compute slot, while both slot holders (Agent rankings and address pages) waited on that lock. Heavy API routes shed 503, the slow indexer loop stopped and the protocol badge stayed on v0.132. The build now runs as a nested compute, so it never waits for a slot while holding its lock (`analytics._epoch_rows_shared`, test `tools/er_flight_test.py`).
+
 ## [1.26.426] - 2026-11-23
 
 ### Added
