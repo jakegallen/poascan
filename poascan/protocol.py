@@ -50,14 +50,21 @@ def _ensure():
     _ready[0] = True
     if not db.q1("SELECT 1 AS x FROM protocol_events LIMIT 1"): seed()
 
-def _add(ukey, ts, kind, first_seen=None, **kw):
-    """Insert one event once (ukey is unique). True when new."""
+def _add(ukey, ts, kind, first_seen=None, invalidate=True, **kw):
+    """Insert one event once (ukey is unique). True when new. invalidate=False during seed so the baseline
+    rows do not drop a Protocol tab pin."""
     _ensure()
     det = kw.pop("detail", None)
     cols = dict(ukey=ukey, ts=int(ts), kind=kind, first_seen=int(first_seen or time.time()), detail=json.dumps(det, separators=(",", ":")) if det is not None else None,
                 **{k: kw.get(k) for k in ("file", "sha_old", "sha_new", "version", "txid", "matches_release")})
     if db.q1("SELECT 1 AS x FROM protocol_events WHERE ukey=?", (ukey,)): return False
     db.write(f"INSERT OR IGNORE INTO protocol_events({','.join(cols)}) VALUES({','.join('?' * len(cols))})", tuple(cols.values()))
+    if invalidate and kind in ("release", "params_change"):
+        try:
+            from . import htmlcache as HC
+            HC.drop_protocol_pins()   # 1.26.431: the Protocol tab must not keep a last-good copy of an older release
+        except Exception:
+            pass
     return True
 
 def _rel_detail(r):
@@ -67,9 +74,9 @@ def seed():
     """The shipped baseline: the live signed release and both file hashes (idempotent)."""
     _ready[0] = True
     r = SEED_RELEASE
-    _add("release:" + r["txid"], r["ts"], "release", SEED_TS, version=r["version"], txid=r["txid"], detail=_rel_detail(r))
+    _add("release:" + r["txid"], r["ts"], "release", SEED_TS, version=r["version"], txid=r["txid"], detail=_rel_detail(r), invalidate=False)
     for f, (sha, n) in SEED_HASHES.items():
-        _add(f"baseline:{f}", SEED_TS, "baseline", SEED_TS, file=f, sha_new=sha, matches_release=r["version"], detail=dict(bytes=n))
+        _add(f"baseline:{f}", SEED_TS, "baseline", SEED_TS, file=f, sha_new=sha, matches_release=r["version"], detail=dict(bytes=n), invalidate=False)
     m = meta()
     if not m.get("files"):
         db.put_blob(META, dict(m, files={f: dict(sha=sha, bytes=n, first_seen=SEED_TS) for f, (sha, n) in SEED_HASHES.items()}))

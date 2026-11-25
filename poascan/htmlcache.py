@@ -20,7 +20,7 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/apps?tab=posts", "/apps?tab=atp20", "/apps?tab=atp721", "/apps?tab=art", "/apps?tab=games", "/network", "/live", "/live?tab=feeds", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/live?tab=feeds&view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/apps?tab=posts", "/apps?tab=atp20", "/apps?tab=atp721", "/apps?tab=art", "/apps?tab=games", "/network", "/live", "/live?tab=feeds", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/governance?tab=protocol", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/live?tab=feeds&view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.431: Protocol tab warmed so a last-good pin cannot sit on an older release than /api/v1/protocol; 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
 # 1.26.405: the latest few closed epoch pages are warmed too (a cold /epoch/N render read every close for the first visitor). The
 # numbers change at each close, so they live in EXTRA, rebuilt at the start of each warm pass from LATEST_EPOCH (set by server.py).
@@ -224,6 +224,62 @@ def note_close():
     _close_due[0] = True
     _wake.set()
 
+# 1.26.431: /governance?tab=protocol is also PIN_TABS, so a last-good pin was served at any age. It was not in WARM,
+# so the warm loop never rebuilt it and a failed background refresh left visitors on an older release than /api/v1/protocol.
+PROTOCOL_QS = (("tab", ("protocol",)),)
+
+def _is_protocol_key(k):
+    return k and k[0] == "/governance" and k[1] == PROTOCOL_QS
+
+def drop_protocol_pins():
+    """Drop every stored /governance?tab=protocol copy (every segment, visitor or crawler). The next render or warm
+    pass shows the current /api/v1/protocol release. Called when a release or params_change is first seen. No
+    upstream read."""
+    n = 0
+    with _lock:
+        keys = [k for k in list(_pin) + list(_c) if _is_protocol_key(k)]
+        for k in keys:
+            if k in _pin:
+                _pin.pop(k, None); n += 1
+            old = _c.pop(k, None)
+            if old:
+                _bytes[0] -= old[2]
+                n += 1
+    if n:
+        _wake.set()
+    return n
+
+def _protocol_event_ts():
+    """Newest first_seen of a release or params_change in the local protocol_events table, or None. Stored copy only."""
+    try:
+        from . import protocol as PT
+        from . import db
+        PT._ensure()
+        row = db.q1("SELECT MAX(first_seen) AS t FROM protocol_events WHERE kind IN ('release','params_change')")
+        t = None if not row else row["t"]
+        return int(t) if t is not None else None
+    except Exception:
+        return None
+
+def protocol_pin_expired(k):
+    """True when a stored Protocol tab copy is older than, or as old as, the newest local release or params_change."""
+    if not _is_protocol_key(k):
+        return False
+    with _lock:
+        e = _entry(k)
+        ts = e[0] if e else None
+    if ts is None:
+        return False
+    ev = _protocol_event_ts()
+    return ev is not None and ts <= ev
+
+def _drop_key(k):
+    with _lock:
+        _pin.pop(k, None)
+        old = _c.pop(k, None)
+        if old:
+            _bytes[0] -= old[2]
+
 def ttl(path, qs):
     for rx, test, t in TTLS:
         if rx.match(path) and (test is None or test(qs)): return t
@@ -354,10 +410,12 @@ def render(k, t, fn, stale=0):
     stale: when the fresh copy has expired but a page younger than this many seconds is stored, return it now and
     refresh in the background. The caller does not wait on that render and does not hold a serving slot for it."""
     if not ENABLED: return fn()
+    if protocol_pin_expired(k):
+        _drop_key(k)
     h = get(k, t)
     if h is not None: return h
     if stale or _pinned_key(k):
-        old = last(k) if _pinned_key(k) else within(k, stale)   # a pin is served at any age
+        old = last(k) if _pinned_key(k) else within(k, stale)   # a pin is served at any age, except a Protocol tab older than the API
         if old is not None:
             with _lock: stats["hit"] += 1
             _refresh(k, fn); return old
