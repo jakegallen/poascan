@@ -143,8 +143,11 @@ def _ask(addr):
 
 def earn_body():
     from . import earn as EA
+    from .earnview import THIN
     rows = "".join(f'<tr><td>{E(w["label"])}</td><td>{E(w["pays"])}</td><td>{E(w["qualifies"])}</td><td>{E(w["next"])}</td></tr>' for w in EA.ways())
-    return _ask(None) + f'<div class="tw"><table class="hist stearn"><thead><tr><th>Way</th><th>Pays</th><th>Qualifies</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    return (_ask(None)
+            + f'<p class="ewnote dim small">{E(THIN)}</p>'
+            + f'<div class="tw"><table class="hist stearn"><thead><tr><th>Way</th><th>Pays</th><th>Qualifies</th><th>Next</th></tr></thead><tbody>{rows}</tbody></table></div>')
 
 NEXT = ["Pick app", "Paste prompt", "Get graded", "Get paid"]
 

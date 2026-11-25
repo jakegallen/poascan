@@ -193,7 +193,7 @@ A._cache.clear() if hasattr(A, "_cache") else None
 st = {x["label"]: x["state"] for x in A.feeds()["feeds"]}
 check(f"Tx list OK on /api/txs while the explorer feed fails ({st.get('Tx list')})", st.get("Tx list") == "OK")
 check(f"Epochs OK when it is not needed and not failing ({st.get('Epochs')})", st.get("Epochs") == "OK")
-check(f"Swaps OK: book fresh, swap tx reads idle for 2h ({st.get('Swaps')})", st.get("Swaps") == "OK")
+check(f"Swaps OK: book fresh (fill-tx key is not part of the Swaps feed) ({st.get('Swaps')})", st.get("Swaps") == "OK")
 check(f"Tx lookup OK after a recent good read ({st.get('Tx lookup')})", st.get("Tx lookup") == "OK")
 db.write("UPDATE fetch_log SET fails=3, last_err=? WHERE endpoint='/api/epochs'", (t - 60,))
 A._cache.clear() if hasattr(A, "_cache") else None

@@ -1442,6 +1442,29 @@ def loop_state(now=None):
     now = int(now or time.time())
     return [dict(name=k, last_pass_s=(now - v["pass_ts"]) if v.get("pass_ts") else None, errors=v.get("errors", 0), restarts=v.get("restarts", 0)) for k, v in sorted(LOOPS.items())]
 
+STALL_S = 3600          # 1.26.429: no finished pass for this long trips the watchdog (dump stacks, then exit so Fly restarts)
+STALL_GRACE_S = 3600    # first pass after boot is allowed this long; a loop that never starts also waits this long
+STALL_LOOPS = ("indexer",)  # the slow loop (epochs, release, params, grading); the one that died overnight Nov 24/25
+
+def stall_reason(now=None, started=None, stall_s=STALL_S, grace_s=STALL_GRACE_S):
+    """Why the slow indexer loop should trip the watchdog, or None. A missing last pass is allowed for grace_s after started."""
+    now = now if now is not None else time.time()
+    if started is None:
+        try:
+            from .server import STARTED as _ST
+            started = _ST
+        except Exception:
+            started = now
+    if now - started < grace_s:
+        return None
+    for row in loop_state(now):
+        if row["name"] not in STALL_LOOPS: continue
+        if row["last_pass_s"] is None:
+            return "indexer loop %s has not finished a pass in %d s" % (row["name"], int(now - started))
+        if row["last_pass_s"] >= stall_s:
+            return "indexer loop %s last passed %d s ago" % (row["name"], int(row["last_pass_s"]))
+    return None
+
 def run_forever(stop=None, jobs=None):
     jobs = JOBS if jobs is None else jobs
     t0 = time.time(); tname = threading.current_thread().name
