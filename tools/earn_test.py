@@ -119,6 +119,15 @@ check("page: disclaimer line under the input, go.md and skill.md linked", 'class
 check("page: history under the verdict, sortable headers, mobile columns", html.index('id="history"') > html.index("ecv0") and "sort=paid" in html and 'class="ehist pri"' in html and "#history" in html)
 check("page: no ? tooltips (UI/UX P2: the method is on /about)", 'class="qtip hv"' not in html and ">?</summary>" not in html)
 check("page: Grading and Ways to earn cards", 'id="grading"' in html and ">Ways to earn<" in html and "Help my agent earn" in html)
+check("page: thin-total line on Ways", EV.THIN in html and EV.THIN in EV.ways())
+check("page: thin-total line has no em or en dash", "\u2014" not in EV.THIN and "\u2013" not in EV.THIN)
+_labs = "Ways to earn Answers Attestations Grading seats Established and intake Invites Does not pay directly Ask your agent Pays Qualifies Next"
+check("page: thin-total line repeats no Ways label word", not (set(EV.THIN.lower().replace(".", "").split()) & set(_labs.lower().split())))
+blank = EV.page({}, lambda t, b, act: b, lambda a: None)
+check("page: the line is on the default Earn page too", EV.THIN in blank)
+from poascan import starthub as SH
+check("start Earn tab carries the thin-total line", EV.THIN in SH.earn_body())
+
 check("page: no em or en dashes, Agents not Accounts", "\u2014" not in html and "\u2013" not in html and "Account" not in html)
 check("method link is /about#earn-check", EA.METHOD == "/about#earn-check" and "/about#earn-check" in html)
 # 1.26.359: an accepted receipt with no epoch yet (lookup gap) used to raise in sorted() and 500 the /help earn check

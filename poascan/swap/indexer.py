@@ -58,18 +58,11 @@ NEW_PER_RUN, RECHECK_PER_RUN = 20, 5
 _miss = {}   # offer_id -> consecutive book reads without it (memory only)
 _all = [False]   # first run after start: every settled offer is resolved once under these rules
 
-def _book_status(exp, now):
+def _book_status(exp, now, state=None):
+    """1.26.429: an upstream state=expired listing is expired, even if expires_ts is still in the future. A missing
+    or other state (open, held) still follows expires_ts, so a listed open offer past expiry is expired."""
+    if state == "expired": return "expired"
     return "expired" if exp is not None and _f(exp) is not None and _f(exp) <= now else "open"
-
-def _state_mismatch(o, now):
-    """1.26.348 (#1214): upstream's new per-offer 'state' (open, held, expired) against POAScan's derived book status.
-    Returns (upstream_state, our_status) only when upstream says 'expired' while our clock still reads 'open', the one
-    disagreement worth watching before we consider adopting upstream expiry; None otherwise. Ops signal only: the caller
-    logs it and never changes what we store or show. A row without 'state' (the field is still absent upstream) returns
-    None, so this is a pass-through no-op until minepoa populates it."""
-    if o.get("state") != "expired": return None
-    ours = _book_status(o.get("expires_ts"), now)
-    return ("expired", ours) if ours == "open" else None
 
 def job_swaps():
     now = int(time.time())
@@ -100,19 +93,15 @@ def backfill_offer_fields(now=None):
       updated=? WHERE created_ts IS NULL AND EXISTS(SELECT 1 FROM txs t WHERE t.id=swaps.offer_id AND t.type='swap-offer' AND t.ts IS NOT NULL)""", (now,))
 
 def apply_book(d, now):
-    """One upstream book read: upsert listed offers (open, or expired past expires_ts), then handle the ones it lacks."""
-    mism = []   # 1.26.348 (#1214): offers where upstream state=expired but our status still reads open (ops signal only)
+    """One upstream book read: upsert listed offers (open, or expired past expires_ts or with upstream state=expired), then handle the ones it lacks."""
     for o in d:
         if not isinstance(o, dict) or not o.get("offer_id"): continue
         w = o.get("want") or {}; fee = o.get("fee") or {}
-        if _state_mismatch(o, now): mism.append(o["offer_id"])
         H.write("""INSERT INTO swaps(offer_id,maker,poa,chain,asset,want,pay_to,expires_ts,status,fee_bp,last_open_seen,updated)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(offer_id) DO UPDATE SET status=CASE WHEN swaps.status IN ('filled','cancelled') THEN swaps.status
           ELSE excluded.status END, last_open_seen=excluded.last_open_seen, updated=excluded.updated, fee_bp=excluded.fee_bp, expires_ts=excluded.expires_ts""",
                 (o["offer_id"], o.get("maker"), _f(o.get("poa_locked")), w.get("chain"), w.get("asset"), _f(w.get("amount")), w.get("to"),
-                 o.get("expires_ts"), _book_status(o.get("expires_ts"), now), fee.get("fee_bp"), now, now))
-    if mism:   # ops only: we keep showing our derived status; this just flags disagreement for a later adopt-upstream-expiry decision
-        log.info("swap state cross-check: upstream state=expired but our status=open for %d offer(s): %s", len(mism), ", ".join(mism[:5]))
+                 o.get("expires_ts"), _book_status(o.get("expires_ts"), now, o.get("state")), fee.get("fee_bp"), now, now))
     listed = {o["offer_id"] for o in d if isinstance(o, dict) and o.get("offer_id")}
     for k in list(_miss):
         if k in listed: _miss.pop(k, None)

@@ -1147,10 +1147,12 @@ def freshness():
 
 # ---- per-feed state: one source for Network > Health, /api/health and the header pill (1.26.94)
 # 1.26.98: a row with "best" is one feed with alternative paths (OK when either path serves it); the others take the
-# worst of their callers. Tx lookup and swap tx reads try /chain/<id>/api/tx/<txid> first, so their keys cover both paths.
+# worst of their callers. Tx lookup tries /chain/<id>/api/tx/<txid> first, so its keys cover both paths.
+# 1.26.429: Swaps is the /api/swaps book only. Swap fill-tx reads share the halted tx lookup route and used to paint
+# the book Down even while the book itself was current.
 FEEDS = [("Status", ("/api/status",)), ("Networks", ("/api/networks",)), ("Tx list", ("/api/txs", "/api/explorer/txs"), "best"), ("Epochs", ("/api/epochs",)),
          ("Close records", ()), ("Tx lookup", ("/api/explorer/tx/:id (on demand)", "/api/explorer/tx/:id")), ("Address lookup", ("/api/explorer/address/:addr",)),
-         ("Swaps", ("/api/swaps", "/api/explorer/tx/:id (swaps)")), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
+         ("Swaps", ("/api/swaps",)), ("Anchors", ("/api/anchors",)), ("Agents", ("/api/agents",)),
          ("Notices", ("/api/notices",)), ("Ballots", ("/api/ballots",)), ("Release", ("/api/release",)), ("Params", ("/api/params",)),
          ("Forum", ("/lableak/api/communities", "/lableak/api/posts")), ("Grading list", ("/api/explorer/grading",))]
 FEED_ON_NEED = ("/api/epochs",)   # read only when a close record is missing: judged by its failures, like an on-view read

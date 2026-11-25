@@ -276,6 +276,23 @@ def _stuck_dump(busy, jam_n, jam_s):
     except Exception as e:
         log.warning("guard: stuck dump failed: %s", type(e).__name__)
 
+def _stall_dump(why):
+    """Thread stacks when the slow indexer loop has not passed for STALL_S, written next to the stuck dumps. Code stacks
+    and counts only: faulthandler writes no variable values, so no request data, headers, IPs or tokens appear."""
+    try:
+        os.makedirs(DUMP_DIR, exist_ok=True)
+        now = time.time()
+        path = os.path.join(DUMP_DIR, time.strftime("stall-%Y%m%d-%H%M%SZ.txt", time.gmtime(now)))
+        with open(path, "w") as f:
+            f.write("POAScan stall dump %s UTC: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(now)), why))
+            f.write("rss %s MB\n\n--- all thread stacks ---\n" % state.get("rss_mb"))
+            f.flush()
+            faulthandler.dump_traceback(file=f, all_threads=True)
+        log.warning("guard: indexer stall; wrote %s", path)
+        _prune_dumps()
+    except Exception as e:
+        log.warning("guard: stall dump failed: %s", type(e).__name__)
+
 def _exit(why):
     log.critical("guard: %s; exiting so the machine restarts", why)
     logging.shutdown(); os._exit(70)
@@ -312,6 +329,13 @@ def _watch(port):
             over += 1; state["rss_over"] = state.get("rss_over", 0) + 1; log.warning("guard: resident memory %d MB over %d MB (%d)", m, RSS_EXIT_MB, over)
             if over >= 2: _exit(f"resident memory {m} MB stayed over {RSS_EXIT_MB} MB")
         else: over = 0
+        try:   # 1.26.429: the slow indexer loop can hang on a db write lock or die mid-pass while /healthz stays green
+            from . import indexer as _IX
+            why = _IX.stall_reason(now)
+            if why:
+                _stall_dump(why); _exit(why)
+        except Exception as e:
+            log.warning("guard: indexer stall check failed: %s", type(e).__name__)
         time.sleep(max(1, CHECK_EVERY - (time.time() - t0)))
 
 # 1.26.362: spike catcher. Every SPIKE_EVERY s: when resident memory rose SPIKE_MB or more within SPIKE_WINDOW s, or every

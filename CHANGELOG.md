@@ -11,6 +11,15 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.429] - 2026-11-25
+
+### Added
+- Earn page: a one-line note on Ways to earn, "A thin total usually means nothing was settled that round."
+- Guard watchdog: dump thread stacks and exit when the slow indexer loop has not finished a pass for 60 minutes, with a 60 minute startup grace, so a hang on the db write lock (or a silent mid-pass death) restarts the machine. /api/health already lists each loop.
+
+### Fixed
+- Swaps health followed the book and the swap fill-tx path, so a halted minepoa tx lookup painted Swap reads down while /api/swaps was current. The Swaps feed is the book only. The book now stores upstream state=expired.
+
 
 ## [1.26.428] - 2026-11-25
 

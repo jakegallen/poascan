@@ -184,13 +184,19 @@ def _sw():
 db.write("DELETE FROM fetch_log")
 _fl("/api/swaps", now - 60, None, 0, 0, None)
 _fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now + 600, "HTTP 503 halted")
-check("feeds: a key held by its own halt reads Paused upstream", _sw()["state"] == "Paused upstream")
-_fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now + 600, "TimeoutError: The read operation timed out")
-_fl("/api/explorer/tx/:id", now - 900, now - 100, 2, now + 600, "HTTP 503 halted")
-_s = _sw()
-check("feeds: a timeout on the swap key is not relabeled by a sibling key's halt", _s["state"] != "Paused upstream" and not _s.get("paused_upstream"))
-_fl("/api/explorer/tx/:id (swaps)", now - 5, now - 300, 0, 0, None)
-check("feeds: the label clears once the key reads again", _sw()["state"] == "OK")
+check("feeds: Swaps follows the book; a halted fill-tx key does not mark the book Down", _sw()["state"] == "OK")
+# Tx lookup still uses the per-key halt rule (on demand + scheduled)
+def _tx():
+    A._cache.clear(); return next(f for f in A.feeds()["feeds"] if f["label"] == "Tx lookup")
+_fl("/api/explorer/tx/:id (on demand)", now - 90000, now - 300, 12, now + 600, "HTTP 503 halted")
+_fl("/api/explorer/tx/:id", now - 90000, now - 300, 12, now + 600, "HTTP 503 halted")
+check("feeds: a key held by its own halt reads Paused upstream", _tx()["state"] == "Paused upstream")
+_fl("/api/explorer/tx/:id (on demand)", now - 90000, now - 300, 12, now + 600, "TimeoutError: The read operation timed out")
+_s = _tx()
+check("feeds: a timeout on one tx key is not relabeled by a sibling key's halt", _s["state"] != "Paused upstream" and not _s.get("paused_upstream"))
+_fl("/api/explorer/tx/:id (on demand)", now - 5, now - 300, 0, 0, None)
+_fl("/api/explorer/tx/:id", now - 5, now - 300, 0, 0, None)
+check("feeds: the Tx lookup label clears once the keys read again", _tx()["state"] == "OK")
 db.write("DELETE FROM fetch_log")
 
 # ---- 1.26.407: protocol.check() names the engine and server hashes of the stored /api/release current, none hardcoded ----
@@ -212,11 +218,11 @@ check("governance rules: the new card has no em or en dash", bool(_pc) and not r
 # ---- 1.26.408: a live halt record on the shared tx template does not label a sibling key that failed another way ----
 from poascan import strain as _STX
 db.write("DELETE FROM fetch_log")
-_fl("/api/swaps", now - 60, None, 0, 0, None)
-_fl("/api/explorer/tx/:id (swaps)", now - 90000, now - 300, 12, now - 100, "TimeoutError: The read operation timed out")
+_fl("/api/explorer/tx/:id (on demand)", now - 90000, now - 300, 12, now - 100, "TimeoutError: The read operation timed out")
+_fl("/api/explorer/tx/:id", now - 60, None, 0, 0, None)
 _STX.record_halt("/api/explorer/tx/abc", {"text": "endpoint temporarily halted"}, now - 30)
-_s = _sw()
-check("feeds: a halt recorded for the tx template does not relabel a swap key that timed out", _s["state"] != "Paused upstream")
+A._cache.clear(); _t = next(f for f in A.feeds()["feeds"] if f["label"] == "Tx lookup")
+check("feeds: a halt recorded for the tx template does not relabel a tx key that timed out", _t["state"] != "Paused upstream")
 _STX.reset(); db.write("DELETE FROM fetch_log")
 
 # ---- 1.26.409: new params keys in the read-only view, refund empty state, v2 not on, lag flag ----

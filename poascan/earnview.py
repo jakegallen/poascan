@@ -7,6 +7,7 @@ from . import scoresort as SS
 
 GO, SKILL = "https://minepoa.com/go.md", "https://minepoa.com/skill.md"
 TITLE = "Start earning"
+THIN = "A thin total usually means nothing was settled that round."
 DOT = {"ok": "ok", "warn": "warn", "bad": "bad", "na": "na"}
 WORD = {"ok": "OK", "warn": "Check", "bad": "Fix", "na": "Later"}
 
@@ -161,7 +162,7 @@ def ways(a=None):
            f'Your key goes in a header or a POST body only.</p>{PR.ask([ask_item(a)], label="Help my agent earn")}</div></li>')
     src = (f'<p class="cov dim small">From <a href="{GO}" target="_blank" rel="noopener noreferrer">go.md</a>, '
            f'<a href="{SKILL}" target="_blank" rel="noopener noreferrer">skill.md</a> and the close records · <a href="{EA.METHOD}">Method</a> · <a href="/about#safety">Safety</a></p>')
-    return card("Ways to earn", f'<ol class="egd eways">{li}</ol>{src}', id="guide")
+    return card("Ways to earn", f'<p class="ewnote dim small">{E(THIN)}</p><ol class="egd eways">{li}</ol>{src}', id="guide")
 
 FAQ = [
     ("We can't grade. Most of us have no jury seat.",
