@@ -137,6 +137,17 @@ def params_extra(p=None):
     al = p.get("att_log_from_epoch")
     if isinstance(al, int) and not isinstance(al, bool):
         out.append(dict(key="att_log_from_epoch", label="Attestation log from", value=al, text=f"E{al}"))
+    # 1.26.428: keys added by minepoa v0.133 (and its v0.132 predecessors). Terse labels, no repeated word across the rows.
+    cg = p.get("chall_epoch_gate")
+    if isinstance(cg, bool):
+        out.append(dict(key="chall_epoch_gate", label="Challenge gate", value=cg, text="On" if cg else "Off"))
+    for key, label in (("att_log_seal_from_epoch", "Seals"), ("settled_grade_from_epoch", "Settled grades"), ("att_packs_from_epoch", "Packs")):
+        v = p.get(key)
+        if isinstance(v, int) and not isinstance(v, bool):
+            out.append(dict(key=key, label=label, value=v, text=f"E{v}"))
+    sw = p.get("settled_window_epochs")
+    if isinstance(sw, int) and not isinstance(sw, bool):
+        out.append(dict(key="settled_window_epochs", label="Window", value=sw, text=f"{sw:,}"))
     return out
 
 

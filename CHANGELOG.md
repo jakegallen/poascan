@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+- Protocol params list five minepoa v0.133 keys: Challenge gate, Seals (E123), Settled grades (E123), Window (17) and Packs (E124), each shown only when /api/params carries it.
+
 ## [1.26.427] - 2026-11-24
 
 ### Fixed
