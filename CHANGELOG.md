@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Fixed
+- The slow indexer loop could end silently, which froze every job it runs (close records, release, params, grading) while /healthz stayed green. Nothing a job, its bookkeeping write or the backoff check raises can end the loop now, and a supervisor restarts it if anything still escapes. /api/health lists each loop with the age of its last pass and its error and restart counts (additive field `loops`).
+
 ## [1.26.427] - 2026-11-24
 
 ### Fixed

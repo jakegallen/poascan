@@ -468,5 +468,5 @@ def start():
         except Exception as e: log.warning("seal link seed: %s", type(e).__name__)
     threading.Thread(target=seed_links, daemon=True, name="fx-links").start()
     from . import indexer as I
-    th = threading.Thread(target=I.run_forever, kwargs=dict(jobs=jobs()), daemon=True, name="fastindex"); th.start()
+    th = threading.Thread(target=I.supervised, kwargs=dict(jobs=jobs()), daemon=True, name="fastindex"); th.start()
     return th

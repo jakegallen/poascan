@@ -141,6 +141,8 @@ jobs:
         run: python tools/bgslot_test.py
       - name: Epoch rows build never waits for a cold compute slot while holding its single-flight lock (1.26.427)
         run: python tools/er_flight_test.py
+      - name: Indexer loops survive a job, db or backoff error and restart after anything escapes; /api/health lists loops (1.26.428)
+        run: python tools/indexer_loop_test.py
       - name: Pending row interning keyed by repr groups the same rows (1.26.365)
         run: python tools/intern_test.py
       - name: Governance tabs kept as pinned pages, refreshed in the background (1.26.366)

@@ -1435,33 +1435,61 @@ def _ran(name):
 
 JOB_RETRY_S = _ei("POASCAN_JOB_RETRY_S", 300, 30)   # 1.26.82: failed hourly reads waited an hour (chains, params, release 2 h old)
 
+LOOPS = {}   # 1.26.428: thread name -> {pass_ts, errors, restarts}; /api/health "loops" shows a loop that stopped passing
+
+def loop_state(now=None):
+    """[{name, last_pass_s, errors, restarts}] per indexer loop; last_pass_s is None before the first pass finishes."""
+    now = int(now or time.time())
+    return [dict(name=k, last_pass_s=(now - v["pass_ts"]) if v.get("pass_ts") else None, errors=v.get("errors", 0), restarts=v.get("restarts", 0)) for k, v in sorted(LOOPS.items())]
+
 def run_forever(stop=None, jobs=None):
     jobs = JOBS if jobs is None else jobs
-    t0 = time.time()
+    t0 = time.time(); tname = threading.current_thread().name
+    LOOPS.setdefault(tname, {})
     last = {name: max(_phase(name, every() if callable(every) else every, t0), min(_ran(name), t0)) for name, fn, every, ep in jobs}
     while not (stop and stop.is_set()):
         now = time.time()
         try: flush_counts()
         except Exception as e: log.warning("upstream counter flush: %s", type(e).__name__)
         for name, fn, every, ep in jobs:
-            if callable(every):
-                try: every = every()
-                except Exception: every = 60
-            if now - last.get(name, 0) < every: continue
-            if ep and not can_fetch(ep): skip_backoff(ep); continue
-            last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
-            ok = False
+            # 1.26.428: nothing a job, its bookkeeping or the db raises may end this loop. A loop that stopped silently left
+            # every slow job (epochs, release, params) frozen for hours while /healthz stayed green.
             try:
-                fn(); ok = True
-            except Busy as e:
-                log.warning("job %s busy: %s", name, e)
+                if callable(every):
+                    try: every = every()
+                    except Exception: every = 60
+                if now - last.get(name, 0) < every: continue
+                if ep and not can_fetch(ep): skip_backoff(ep); continue
+                last[name] = now + (random.uniform(-SWAP_JITTER_S, SWAP_JITTER_S) if name == "swaps" else 0)
+                ok = False
+                try:
+                    fn(); ok = True
+                except Busy as e:
+                    log.warning("job %s busy: %s", name, e)
+                except (Exception, SystemExit) as e:
+                    _etags.clear()   # the job may not have stored what it read: the next reads are plain GETs
+                    log.exception("job %s failed: %s", name, e)
+                if ok: db.put_blob("job:" + name, {"ran": int(time.time())})
+                elif every > JOB_RETRY_S: last[name] = now - every + JOB_RETRY_S   # a failed run retries soon (endpoint backoff still applies), not a full interval later
+                time.sleep(2)  # spacing between jobs
             except Exception as e:
-                _etags.clear()   # the job may not have stored what it read: the next reads are plain GETs
-                log.exception("job %s failed: %s", name, e)
-            if ok: db.put_blob("job:" + name, {"ran": int(time.time())})
-            elif every > JOB_RETRY_S: last[name] = now - every + JOB_RETRY_S   # a failed run retries soon (endpoint backoff still applies), not a full interval later
-            time.sleep(2)  # spacing between jobs
+                LOOPS[tname]["errors"] = LOOPS[tname].get("errors", 0) + 1
+                log.exception("indexer loop %s: job %s bookkeeping failed: %s", tname, name, e)
+                last[name] = now - every + JOB_RETRY_S if isinstance(every, (int, float)) and every > JOB_RETRY_S else now
+                time.sleep(2)
+        LOOPS[tname]["pass_ts"] = int(time.time())
         time.sleep(5 if len(jobs) > 2 else 1)
+
+def supervised(**kw):
+    """run_forever that starts again after anything escapes it (a SystemExit raised in a job, for one). Same arguments."""
+    stop = kw.get("stop"); tname = threading.current_thread().name
+    while not (stop and stop.is_set()):
+        try:
+            run_forever(**kw); return
+        except BaseException as e:
+            LOOPS.setdefault(tname, {})["restarts"] = LOOPS.setdefault(tname, {}).get("restarts", 0) + 1
+            log.exception("indexer loop %s ended (%s): restarting", tname, type(e).__name__)
+            time.sleep(5)
 
 def _purge_keys():
     from . import keysafe as _KS
@@ -1508,7 +1536,7 @@ def start(seed_dir=None):
     except Exception as e: log.exception("seed failed: %s", e)
     fast = [j for j in JOBS if j[0] in FAST]; slow = [j for j in JOBS if j[0] not in FAST]
     from . import swapflag as _SF; _SF.start()   # the shared swap flag, read only, its own thread (never on the minepoa budget)
-    threading.Thread(target=run_forever, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
-    th = threading.Thread(target=run_forever, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
+    threading.Thread(target=supervised, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
+    th = threading.Thread(target=supervised, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
     _FX.start()   # the fast index sync, its own thread and budget (no-op without FAST_INDEX_URL)
     return th
