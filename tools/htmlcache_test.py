@@ -43,6 +43,7 @@ check("warmed pages get a grace past their TTL, others none", HC.grace("/live", 
 check("network overview is warmed (served pinned, no heavy slot, like health)", HC.is_warm("/network", {}) and HC.grace("/network", {}) == HC.WARM_GRACE > 0)
 check("address freshness window 300 s", V.ADDR_TTL == 300)
 check("1.26.308: the Transactions list is warmed (a pinned copy, never the full page Busy card)", HC.is_warm("/chain/txs", {}) and HC.grace("/chain/txs", {}) == HC.WARM_GRACE and not HC.is_warm("/chain/txs", {"type": ["grade"]}))
+check("1.26.431: the Protocol tab is warmed", "/governance?tab=protocol" in HC.WARM and HC.is_warm("/governance", {"tab": ["protocol"]}) and HC.grace("/governance", {"tab": ["protocol"]}) == HC.WARM_GRACE and not HC.is_warm("/governance", {"tab": ["protocol"], "kind": ["release"]}))
 from poascan import analytics as _A
 _f0 = _A.feeds
 _A.feeds = lambda: {"feeds": [{"label": "Tx list", "state": "Down", "last_ok": time.time() - 1500}]}

@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.431] - 2026-11-25
+
+### Fixed
+- The Governance Protocol tab kept a last-good HTML pin at any age and was not in the warm set, so after a new minepoa release the page could still show the previous version while /api/v1/protocol was current. The tab is warmed, and a new release or params change drops that pin so the next render matches the API.
+
 ## [1.26.430] - 2026-11-25
 
 ### Added

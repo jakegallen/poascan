@@ -112,7 +112,7 @@ ok("/apps/memo-img/" in src and "AP.memo_raster" in src and src.count('startswit
    "memo image route is slot-free and uses memo_raster")
 ok("img-src 'self' data:" in SV.CSP, "CSP allows data images; the memo route is still same-origin")
 
-ok(AG.VERSION == "1.26.430", "version is 1.26.430")
+ok(AG.VERSION == "1.26.431", "version is 1.26.431")
 cl = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "CHANGELOG.md"), encoding="utf-8").read()
 block = cl.split("## [1.26.415]")[1].split("## [")[0] if "## [1.26.415]" in cl else ""
 ok("## [1.26.415]" in cl and "Busy" in block and "warmer" in block,
