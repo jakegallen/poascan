@@ -181,7 +181,7 @@ for pth in ("/api/v1/atp721/collections", "/api/v1/atp721/collection/{col}",
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-721 and art routes",
       "/atp721/collections" in txt and "/art/works" in txt and "/apps/art" in txt and "official is always false" in txt)
-check("version is 1.26.426", AG.VERSION == "1.26.426")
+check("version is 1.26.427", AG.VERSION == "1.26.427")
 check("no em or en dash in new API strings",
       not any(d in T.OFFICIAL_NOTE or d in T.ORDERING_NOTE or d in json.dumps(lst) or d in txt for d in DASH))
 
