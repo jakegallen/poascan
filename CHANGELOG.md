@@ -11,6 +11,12 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+
+## [1.26.428] - 2026-11-25
+
+### Added
+- Protocol params list five minepoa v0.133 keys: Challenge gate, Seals (E123), Settled grades (E123), Window (17) and Packs (E124), plus the v0.134 key slot_prelatch_from_height as Prelatch (H1,727,006), each shown only when /api/params carries it.
+
 ### Fixed
 - The slow indexer loop could end silently, which froze every job it runs (close records, release, params, grading) while /healthz stayed green. Nothing a job, its bookkeeping write or the backoff check raises can end the loop now, and a supervisor restarts it if anything still escapes. /api/health lists each loop with the age of its last pass and its error and restart counts (additive field `loops`).
 

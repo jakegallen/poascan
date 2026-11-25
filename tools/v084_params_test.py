@@ -62,5 +62,16 @@ check("close_summary_from_epoch absent: no row", not any(x["key"] == "close_summ
 al = {x["key"]: x for x in NF.params_extra({"att_log_from_epoch": 117})}
 check("att_log_from_epoch: terse E117 row", al.get("att_log_from_epoch", {}).get("value") == 117 and al["att_log_from_epoch"]["text"] == "E117" and al["att_log_from_epoch"]["label"] == "Attestation log from")
 check("att_log_from_epoch absent: no row", not any(x["key"] == "att_log_from_epoch" for x in NF.params_extra({"K": 5})))
+v133 = {x["key"]: x for x in NF.params_extra({"chall_epoch_gate": True, "att_log_seal_from_epoch": 123, "settled_grade_from_epoch": 123, "settled_window_epochs": 17, "att_packs_from_epoch": 124})}
+check("v0.133 keys: five terse rows", [(k, v["label"], v["text"]) for k, v in v133.items()] == [("chall_epoch_gate", "Challenge gate", "On"), ("att_log_seal_from_epoch", "Seals", "E123"),
+      ("settled_grade_from_epoch", "Settled grades", "E123"), ("att_packs_from_epoch", "Packs", "E124"), ("settled_window_epochs", "Window", "17")])
+pl = {x["key"]: x for x in NF.params_extra({"slot_prelatch_from_height": 1727006})}
+check("v0.134 slot_prelatch_from_height: terse height row", pl["slot_prelatch_from_height"]["label"] == "Prelatch" and pl["slot_prelatch_from_height"]["text"] == "H1,727,006" and pl["slot_prelatch_from_height"]["value"] == 1727006)
+check("v0.134 prelatch absent: no row", not any(x["key"] == "slot_prelatch_from_height" for x in NF.params_extra({"K": 5})))
+check("v0.133 values keep their type", v133["chall_epoch_gate"]["value"] is True and v133["att_packs_from_epoch"]["value"] == 124 and v133["settled_window_epochs"]["value"] == 17)
+check("v0.133 null or absent key: no row", not any(x["key"] == "att_packs_from_epoch" for x in NF.params_extra({"att_packs_from_epoch": None, "K": 5})))
+check("v0.133 gate off reads Off", {x["key"]: x for x in NF.params_extra({"chall_epoch_gate": False})}["chall_epoch_gate"]["text"] == "Off")
+_words = [w.lower() for x in v133.values() for w in x["label"].split()]
+check("v0.133 labels repeat no word", len(_words) == len(set(_words)))
 check("no em or en dash", not any(d in h + json.dumps(api) + json.dumps(NF.params_extra()) for d in DASH))
 print("\n" + (f"{len(fails)} failed" if fails else "all passed")); sys.exit(1 if fails else 0)
