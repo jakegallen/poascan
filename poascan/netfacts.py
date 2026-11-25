@@ -151,6 +151,9 @@ def params_extra(p=None):
     sw = p.get("settled_window_epochs")
     if isinstance(sw, int) and not isinstance(sw, bool):
         out.append(dict(key="settled_window_epochs", label="Window", value=sw, text=f"{sw:,}"))
+    sb = p.get("settled_bound_from_epoch")   # v0.134.1: bound starts at this epoch
+    if isinstance(sb, int) and not isinstance(sb, bool):
+        out.append(dict(key="settled_bound_from_epoch", label="Bound", value=sb, text=f"E{sb}"))
     return out
 
 

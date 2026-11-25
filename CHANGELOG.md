@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+- Protocol params list the minepoa v0.134.1 key settled_bound_from_epoch as Bound (E127), shown only when /api/params carries it.
+
 ## [1.26.429] - 2026-11-25
 
 ### Added
