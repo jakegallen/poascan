@@ -71,9 +71,12 @@ check("v0.134 prelatch absent: no row", not any(x["key"] == "slot_prelatch_from_
 sb = {x["key"]: x for x in NF.params_extra({"settled_bound_from_epoch": 127})}
 check("v0.134.1 settled_bound_from_epoch: terse E127 row", sb["settled_bound_from_epoch"]["label"] == "Bound" and sb["settled_bound_from_epoch"]["text"] == "E127" and sb["settled_bound_from_epoch"]["value"] == 127)
 check("v0.134.1 bound absent: no row", not any(x["key"] == "settled_bound_from_epoch" for x in NF.params_extra({"K": 5})))
-_all_labels = [x["label"] for x in NF.params_extra({"chall_epoch_gate": True, "att_log_seal_from_epoch": 123, "settled_grade_from_epoch": 123, "settled_window_epochs": 17, "att_packs_from_epoch": 124, "slot_prelatch_from_height": 1727006, "settled_bound_from_epoch": 127})]
+dg = {x["key"]: x for x in NF.params_extra({"att_disk_guard_from_height": 1756020})}
+check("v0.135 att_disk_guard_from_height: terse height row", dg["att_disk_guard_from_height"]["label"] == "Disk guard" and dg["att_disk_guard_from_height"]["text"] == "H1,756,020" and dg["att_disk_guard_from_height"]["value"] == 1756020)
+check("v0.135 disk guard absent: no row", not any(x["key"] == "att_disk_guard_from_height" for x in NF.params_extra({"K": 5})))
+_all_labels = [x["label"] for x in NF.params_extra({"chall_epoch_gate": True, "att_log_seal_from_epoch": 123, "settled_grade_from_epoch": 123, "settled_window_epochs": 17, "att_packs_from_epoch": 124, "slot_prelatch_from_height": 1727006, "settled_bound_from_epoch": 127, "att_disk_guard_from_height": 1756020})]
 _words = [w.lower() for lab in _all_labels for w in lab.split()]
-check("v0.133 through v0.134.1 labels repeat no word", len(_words) == len(set(_words)))
+check("v0.133 through v0.135 labels repeat no word", len(_words) == len(set(_words)))
 check("v0.133 values keep their type", v133["chall_epoch_gate"]["value"] is True and v133["att_packs_from_epoch"]["value"] == 124 and v133["settled_window_epochs"]["value"] == 17)
 check("v0.133 null or absent key: no row", not any(x["key"] == "att_packs_from_epoch" for x in NF.params_extra({"att_packs_from_epoch": None, "K": 5})))
 check("v0.133 gate off reads Off", {x["key"]: x for x in NF.params_extra({"chall_epoch_gate": False})}["chall_epoch_gate"]["text"] == "Off")

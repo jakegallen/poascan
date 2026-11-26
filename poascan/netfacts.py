@@ -154,6 +154,9 @@ def params_extra(p=None):
     sb = p.get("settled_bound_from_epoch")   # v0.134.1: bound starts at this epoch
     if isinstance(sb, int) and not isinstance(sb, bool):
         out.append(dict(key="settled_bound_from_epoch", label="Bound", value=sb, text=f"E{sb}"))
+    dg = p.get("att_disk_guard_from_height")   # v0.135: a chain height, not an epoch
+    if isinstance(dg, int) and not isinstance(dg, bool):
+        out.append(dict(key="att_disk_guard_from_height", label="Disk guard", value=dg, text=f"H{dg:,}"))
     return out
 
 
