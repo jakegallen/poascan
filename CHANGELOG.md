@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.433] - 2026-11-26
+
+### Added
+- The Home Replies today card opens the same pop-out chart as the other headline numbers, from daily public LabLeak replies, and the sparkline includes today.
+
 ## [1.26.432] - 2026-11-25
 
 ### Added

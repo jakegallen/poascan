@@ -608,7 +608,7 @@ D.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest(
    replaceState and both params go on close. No entrance fade or transform: the dialog and its chart are visible from the first frame.
    The series line may take a short glow and the fill may ease in. That is not an entrance fade. */
 /* chartq:begin (tools/chartpop_test.py runs cpParse and cpSearch in node) */
-var CPK=["mined","supply","circ","agents","joins","active","holders","txs","answers"],CPR=["24h","7d","30d","all","epoch"];
+var CPK=["mined","supply","circ","agents","joins","active","holders","txs","answers","replies"],CPR=["24h","7d","30d","all","epoch"];
 function cpParse(search){var q;try{q=new URLSearchParams(search||"")}catch(e){return null}var c=q.getAll("chart"),r=q.getAll("range");
  if(c.length!==1||CPK.indexOf(c[0])<0)return null;return {c:c[0],r:r.length===1&&CPR.indexOf(r[0])>=0?r[0]:""}}
 function cpSearch(search,c,r,keep){var q=new URLSearchParams(search||"");
