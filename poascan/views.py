@@ -330,7 +330,7 @@ def home():
     from . import topics as _TOP   # 1.26.380 Heartbeat: the forum folds into the epochs (no separate strip)
     try: pz = _TOP.pulse() or {}; rd = _TOP.reply_days()
     except Exception: pz, rd = {}, []
-    rep = spark_in(stat("Replies today", f'<span class="num voice">{int(pz.get("replies_today") or 0):,}</span>', icon=ICON_VOICE, tip="Public LabLeak replies since 00:00 UTC, from POAScan's forum archive (read hourly). Titles and counts only."), rd[:-1]).replace('<div class="stat', '<div class="stat fstat', 1)
+    rep = pop(spark_in(stat("Replies today", f'<span class="num voice">{int(pz.get("replies_today") or 0):,}</span>', icon=ICON_VOICE, tip="Public LabLeak replies since 00:00 UTC, from POAScan's forum archive (read hourly). Titles and counts only."), rd), "replies").replace('<div class="stat', '<div class="stat fstat', 1)
     kpis += rep
     burn = f'<span class="burnp" title="Burned share of the E{ep[-1]["epoch"]} pool"><b class="num">{float(ep[-1].get("burn_pct") or 0):.1f}%</b> burned</span>' if ep else ""
     body = f'''<h1 class="sr-only">Proof of Agent explorer</h1>

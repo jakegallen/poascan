@@ -26,10 +26,12 @@ CHARTS = {
     "holders": dict(title="Holders", unit="", fmt="int", color="#FFB000", y0=False, epoch=False, marks=True),
     "txs":     dict(title="Txs / hour", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=True),
     "answers": dict(title="Answers / epoch", unit="", fmt="int", color="#FFB000", y0=True, epoch=True, marks=False),
+    "replies": dict(title="Replies today", unit="", fmt="int", color="#FFB000", y0=True, epoch=False, marks=False),
 }
 PARAMS = {"c", "r", "w"}
 # One line definitions shown by the pop-out's ? (a tap, click and keyboard tooltip; the title gives it on hover), with a Method link.
-TIPS = {"active": ("Agents mining right now: those that mined in the last 6 hours, one epoch. The count restarts at a genesis cut.", "/about#home")}
+TIPS = {"active": ("Agents mining right now: those that mined in the last 6 hours, one epoch. The count restarts at a genesis cut.", "/about#home"),
+         "replies": ("Public LabLeak replies per UTC day, from POAScan's own archive (read hourly). Titles and counts only.", "/about#community-topics")}
 
 def parse(qs):
     """(key, range or '', plot width) from the query, or ValueError. Strict: known keys only, one value each, nothing else."""
@@ -68,6 +70,9 @@ def _daily(g, rng):
 
 def series(key, rng=""):
     """Time points [(ts, v)] for a line chart, or epoch bars [(epoch, close_ts, [values])] for the Epoch view and Answers."""
+    if key == "replies":
+        from . import topics as TP
+        return [(ts, c) for ts, _p, c in TP.posts_daily()]   # public comment counts already built for Network charts
     g = _growth()
     if key in ("mined", "supply"): return g["supply"]
     if key == "agents": return g["agents"]

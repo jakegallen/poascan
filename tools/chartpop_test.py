@@ -20,6 +20,22 @@ tmp = tempfile.mkdtemp(); os.environ["POASCAN_DB"] = os.path.join(tmp, "c.db"); 
 import fixture; fixture.seed()
 from poascan import db, chartpop as CP, milestones as MS, indexer as I, analytics as A
 
+def _seed_replies():
+    """Two UTC days of public comments so the replies pop-out has a line in every range."""
+    now = int(time.time()); d0 = now - 2 * 86400; d1 = now - 86400
+    def dts(ts): return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(ts))
+    db.put_blob("communities", [{"slug": "general", "name": "General", "archived": 0}])
+    db.write("INSERT INTO forum_posts(id,community,title,author,author_public_id,created_at,score,comment_count,deleted,pinned,fetched,body) "
+             "VALUES(?,?,?,?,?,?,1,0,0,0,1,?)",
+             [(1, "general", "p1", "Ann", "poa1" + "A" * 40, dts(d0), "b1"),
+              (2, "general", "p2", "Bob", "poa1" + "B" * 40, dts(d1), "b2")], many=True)
+    db.write("INSERT INTO forum_comments(id,post_id,parent_id,author,author_public_id,created_at,score,body,edited_at) VALUES(?,?,?,?,?,?,?,?,?)",
+             [(101, 1, None, "Bob", "poa1" + "B" * 40, dts(d0), 0, "c", None),
+              (102, 1, None, "Cy", "poa1" + "C" * 40, dts(d0 + 3600), 0, "c", None),
+              (103, 2, None, "Ann", "poa1" + "A" * 40, dts(d1), 0, "c", None)], many=True)
+    A._cache.clear()
+_seed_replies()
+
 js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
 css = open(os.path.join(ROOT, "static", "style.css"), encoding="utf-8").read()
 
@@ -115,7 +131,13 @@ check("labels are terse with no em or en dash", all(len(c["title"]) <= 20 for c 
 # ---------------- page markup and CSS ----------------
 from poascan import views as V
 home = V.home()["body"] if isinstance(V.home(), dict) else str(V.home())
-for k in ("mined", "agents", "active", "holders"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
+for k in ("mined", "agents", "active", "holders", "replies"): check(f"home: {k} stat opens the pop-out", f'data-chart="{k}" role="button" tabindex="0"' in home)
+check("home: Replies today keeps fstat (stale-flag skip) and includes today on the sparkline",
+      'class="stat fstat cpt" data-chart="replies"' in home and "rd[:-1]" not in open(os.path.join(ROOT, "poascan", "views.py"), encoding="utf-8").read())
+check("replies series is posts_daily comment counts, y from zero, title Replies today",
+      CP.CHARTS["replies"]["title"] == "Replies today" and CP.CHARTS["replies"]["fmt"] == "int" and CP.CHARTS["replies"]["y0"] is True
+      and CP.series("replies") == [(ts, c) for ts, _p, c in __import__("poascan.topics", fromlist=["posts_daily"]).posts_daily()]
+      and len(CP.payload("replies", "all", 800).get("pts") or []) >= 2)
 check("home: no Agents / hr opener (Active Agents card since 1.26.116)", 'data-chart="joins"' not in home)
 check("home 1.26.380: the Epochs panel opens with a light Answers per epoch chart that opens the answers pop-out; no Supply line",
       'class="cpw emini" data-chart="answers"' in home and 'class="cpx" data-chart="answers"' in home and ">Per close<" in home[home.find('class="cpw emini"'):]
