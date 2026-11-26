@@ -11,6 +11,9 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+- Protocol params list the minepoa v0.135 key att_disk_guard_from_height as Disk guard (H1,756,020), shown only when /api/params carries it.
+
 ## [1.26.431] - 2026-11-25
 
 ### Fixed
