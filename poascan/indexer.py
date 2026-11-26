@@ -1410,7 +1410,7 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
     ("halts", lambda: __import__("poascan.halts", fromlist=["x"]).job(), 600, None),   # private tracker, off the node; no-op without POASCAN_HALT_SRC
     ("hosted", lambda: __import__("poascan.hosted", fromlist=["x"]).job(), 900, None),
     ("grade_check", lambda: __import__("poascan.hosted", fromlist=["x"]).grade_job(), 60, None),   # 1.26.201: one keyless grade route GET about every 15 min (30 min when unchanged)
-    ("swap_writes", lambda: __import__("poascan.hosted", fromlist=["x"]).write_job(), 60, None),   # 1.26.127: one keyless swap-offer GET about every 10 min (30 min when unchanged); the stored next_at decides
+    ("swap_writes", lambda: __import__("poascan.hosted", fromlist=["x"]).write_job(), 60, None),   # 1.26.127: one keyless swap-offer GET about every 10 min (30 min when unchanged); the stored next_at decides. Runs on the indexer-writes thread, not the slow loop.
     ("grading", lambda: __import__("poascan.grading", fromlist=["x"]).job(), 60, None),   # 1.26.134: /api/explorer/grading every 10 min (5 near a close), backoff to 30 min; the stored next_at decides
     ("gradehist", lambda: __import__("poascan.gradehist", fromlist=["x"]).sync(), 900, None),   # 1.26.158: grade_history from close records and the grading list; no upstream call (1.26.160: every 15 min, incremental)
     ("open_seats", lambda: __import__("poascan.gradehist", fromlist=["x"]).job(), 60, None),   # 1.26.158: public /api/assignments/<addr> counts, at most 3 a minute, once per epoch per Agent
@@ -1421,7 +1421,11 @@ JOBS = [  # name, fn, interval seconds, endpoint key used for backoff
 # Jobs that drive the Live pill and swap freshness run in their own thread, so a slow forum, epochs or /api/txs read
 # never holds them back (SC-025). The swap read keeps a fixed phase SWAP_PHASE_S after the live read plus a little
 # jitter each run, so the two 60 s reads (and 60 s mirror polls of the cached swap API) do not line up (SC-004).
+# The swap-offer write probe has its own thread too (indexer-writes). Its freshness window is WRITE_STALE_S (1920 s):
+# 1800 s between identical reads, plus 60 s jitter, plus a 60 s tick. A slow-loop pass (epoch bodies, ATP-20 backfill)
+# can last longer than that grace, so leaving write_job on the slow loop lets a still-open route go stale.
 FAST = ("live", "swaps")
+WRITE_JOBS = ("swap_writes",)
 SWAP_PHASE_S, SWAP_JITTER_S = 30, 5
 
 def _phase(name, every, now):
@@ -1557,9 +1561,12 @@ def start(seed_dir=None):
     threading.Thread(target=_purge_keys, daemon=True, name="keyscrub").start()
     try: seed(seed_dir)
     except Exception as e: log.exception("seed failed: %s", e)
-    fast = [j for j in JOBS if j[0] in FAST]; slow = [j for j in JOBS if j[0] not in FAST]
+    fast = [j for j in JOBS if j[0] in FAST]
+    writes = [j for j in JOBS if j[0] in WRITE_JOBS]
+    slow = [j for j in JOBS if j[0] not in FAST and j[0] not in WRITE_JOBS]
     from . import swapflag as _SF; _SF.start()   # the shared swap flag, read only, its own thread (never on the minepoa budget)
     threading.Thread(target=supervised, kwargs=dict(jobs=fast), daemon=True, name="indexer-fast").start()
+    threading.Thread(target=supervised, kwargs=dict(jobs=writes), daemon=True, name="indexer-writes").start()
     th = threading.Thread(target=supervised, kwargs=dict(jobs=slow), daemon=True, name="indexer"); th.start()
     _FX.start()   # the fast index sync, its own thread and budget (no-op without FAST_INDEX_URL)
     return th

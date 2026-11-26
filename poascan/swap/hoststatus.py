@@ -9,7 +9,8 @@ The pin is rebuilt every 20s. A pin older than PIN_STALE_S (300s) is a dead refr
 the whole copy is UNKNOWN, so it cannot keep serving open.
 stale_after_s is hosted.WRITE_STALE_S (1920s): the swap-offer probe's steady gap.
 That probe runs every 600s, plus or minus 60s, and every 1800s plus or minus 60s after
-three identical reads. The indexer notices the stored next_at on its 60s tick.
+three identical reads. The indexer-writes thread notices the stored next_at on its 60s tick,
+so a slow-loop pass cannot age the read past WRITE_STALE_S.
 1800 + 60 + 60 = 1920. The same constant ages swap_route, so a read cannot be Down on
 one surface and unknown on another. A 300s cutoff would mark that healthy probe UNKNOWN
 for most of each cycle. Join-pow and

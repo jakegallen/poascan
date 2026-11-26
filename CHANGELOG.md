@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.434] - 2026-11-26
+
+### Fixed
+- The swap-offer write check runs on its own indexer-writes thread, so a long slow-loop pass (epoch bodies or an ATP-20 backfill) cannot age a still-open route past the freshness window.
+
 ## [1.26.433] - 2026-11-26
 
 ### Added

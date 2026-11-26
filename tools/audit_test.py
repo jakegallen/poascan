@@ -215,6 +215,7 @@ SA._build = real
 t0 = 1000.0
 check("SC-004 swap read is phased away from the live read", I._phase("swaps", 60, t0) == t0 - 60 + I.SWAP_PHASE_S and I._phase("live", 60, t0) == 0 and 0 < I.SWAP_JITTER_S <= 10)
 check("SC-025 live and swaps run in their own thread", set(I.FAST) == {"live", "swaps"})
+check("SC-025 swap write probe is not on the slow loop", set(I.WRITE_JOBS) == {"swap_writes"} and not set(I.WRITE_JOBS) & set(I.FAST))
 
 # ---------------- small units ----------------
 check("SC-015 CSV: formula cells get an apostrophe, numbers stay", SV.cell("=1+1") == "'=1+1" and SV.cell("@x") == "'@x" and SV.cell("-1.5") == "-1.5"
