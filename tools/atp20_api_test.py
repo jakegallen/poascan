@@ -161,7 +161,7 @@ check("bad minters cursor is 400", expect_bad("/api/v1/atp20/token/MAM/minters",
 spec = AG.openapi()
 paths = spec["paths"]
 for pth in ("/api/v1/atp20/tokens", "/api/v1/atp20/token/{tick}", "/api/v1/atp20/token/{tick}/holders",
-            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/token/{tick}/minters", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}"):
+            "/api/v1/atp20/token/{tick}/txs", "/api/v1/atp20/token/{tick}/minters", "/api/v1/atp20/pending/{tick}", "/api/v1/atp20/balance/{tick}/{address}", "/api/v1/atp20/address/{address}"):
     check(f"openapi has {pth}", pth in paths)
 txt = AG.llms_txt()
 check("llms.txt names the unofficial ATP-20 routes", "/atp20/tokens" in txt and "official is always false" in txt)

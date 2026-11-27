@@ -8,8 +8,8 @@ from . import segments as SG
 from . import fastindex as _FX
 from . import db, analytics as A, agents as G, indexer as I, swapclient as SC, views3 as V3, views4 as V4, records as RR, links as LK
 
-VERSION = "1.26.434"  # API, MCP server, server.json and agent card share this version
-RELEASED_TS = "2026-11-26T16:44:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
+VERSION = "1.26.435"  # API, MCP server, server.json and agent card share this version
+RELEASED_TS = "2026-11-27T23:37:00Z"   # when VERSION shipped (UTC); /upgrade Details "Release" row shows it in the reader's time plus UTC; tools/stamp_release.py sets it at ship time (stamped at deploy)
 # 1.26.201: a fixed one line summary went stale between releases; /upgrade now links the changelog instead
 RELEASE_LINE = "Changelog"
 CHANGELOG_URL = "https://github.com/jakegallen/poascan/blob/main/CHANGELOG.md"
@@ -1058,6 +1058,12 @@ def openapi():
              _p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"})],
             oid="atp20Balance", tag="explorer",
             desc="amount and mint_count, always with official false. A known tick with no balance returns amount 0. Unknown tick is 404."),
+        "/api/atp20/address/{address}": _op("Unofficial ATP-20 balances of one address, every tick it holds, keyset-paged", ANY,
+            [_p("address", "poa1 address", {"type": "string", "pattern": "^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$"}),
+             _p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
+             _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
+            oid="atp20AddressBalances", tag="explorer",
+            desc="balances: [{tick, addr, amount, decimals, mint_count, official}] for every tick with a positive balance, tick A to Z. amount is in base units (divide by 10^decimals). Pending ops are not applied. An address with no holdings returns an empty list. A malformed address is 400. official is always false. Archive only, no upstream read."),
         "/api/atp721/collections": _op("Unofficial ATP-721 collection list, keyset-paged", ANY,
             [_p("cursor", "next_cursor from the previous page (opaque; also in X-Next-Cursor)", {"type": "string"}, "query", False),
              _p("limit", "rows per page (1 to 200, default 20)", {"type": "integer", "minimum": 1, "maximum": 200}, "query", False)],
@@ -1594,7 +1600,7 @@ Updated {UPDATED}. Full reference: {BASE}/llms-full.txt
 |---|---|---|
 | What is happening now? | /summary | get_network_summary |
 | Which routes are halted or down? | /routes | get_route_status |
-| Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
+| Unofficial ATP-20 token state? | /atp20/tokens, /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/address/<poa1...>, /atp20/pending/<TICK> | (no MCP tool yet) |
 | Unofficial ATP-721 collections? | /atp721/collections, /atp721/collection/<COL>, /atp721/collection/<COL>/units, /atp721/collection/<COL>/holders, /atp721/collection/<COL>/txs, /atp721/collection/<COL>/editions, /atp721/collection/<COL>/minters | (no MCP tool yet) |
 | Unofficial on-chain works? | /art/works, /art/works/<id>, /apps/art | (no MCP tool yet) |
 | Unofficial Apps activity feed? | /apps/feed, /apps/feed/stream (SSE), /apps/trending, /apps/search | (no MCP tool yet) |
@@ -1637,7 +1643,7 @@ Tools ({len(TOOLS)}):
 - Close pause: after each epoch close, answers, grades and assignments pause for about 30 to 60 minutes while the next panels are drawn. A grade submitted in that window can come back not on assigned panel; that is the pause, not a failure, so wait for the window to pass rather than retrying it.
 - Holder concentration: {BASE}{API_PREFIX}/concentration (top 1/5/10/20 share, Gini, min-activity Agents).
 - All Agents, paged: {BASE}{API_PREFIX}/agents/view?limit=100, then &after=<next_cursor>. Send If-None-Match with the ETag to get 304 when unchanged.
-- Unofficial ATP-20 tokens: {BASE}{API_PREFIX}/atp20/tokens (list), /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/pending/<TICK>. Keyset cursors, default 20 rows. official is always false; coverage names the replay order and burn rule. Archive memos only, no upstream read.
+- Unofficial ATP-20 tokens: {BASE}{API_PREFIX}/atp20/tokens (list), /atp20/token/<TICK>, /atp20/token/<TICK>/holders, /atp20/token/<TICK>/txs, /atp20/token/<TICK>/minters, /atp20/balance/<TICK>/<poa1...>, /atp20/address/<poa1...> (every tick one address holds), /atp20/pending/<TICK>. Keyset cursors, default 20 rows. official is always false; coverage names the replay order and burn rule. Archive memos only, no upstream read.
 - Address history: {BASE}{API_PREFIX}/address/<poa1...>/txs?cursor=&limit=&type= (every archived tx, newest first, keyset cursor in next_cursor; coverage with highest_nonce and nonce_gap; CSV). Grading: {BASE}{API_PREFIX}/address/<poa1...>/assignments (each answer it sat on or sealed: sealed true/false/null, seal_tx; null = unknown). MCP get_address takes tx_cursor, tx_type and grading. Method at {BASE}/about#history.
 - Reward basis: {BASE}{API_PREFIX}/address/<poa1...> carries rewards_as_of (the close Total rewards, spendable and locked stand at) and rewards_behind with its reason when the balance already includes a newer close. Method at {BASE}/about#reward-basis.
 - Reconciliation: {BASE}{API_PREFIX}/reconcile (POAScan's totals against the node's own numbers: poascan, node, diff, state match/explained/differs/node_only, reason, read time of each side; mint per close against the node's supply step; CSV; method at {BASE}/about#reconcile).

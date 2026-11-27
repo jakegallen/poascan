@@ -11,6 +11,11 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.435] - 2026-11-27
+
+### Added
+- ATP-20 balances per address: `/api/v1/atp20/address/<poa1...>` lists every tick one address holds (tick, amount in base units, decimals, mint_count), A to Z, keyset-paged 20 at a time, `official` false, archive only. The address page shows an ATP-20 tab with those holdings, each tick linking to its token page, 20 a page with Next. The tab appears only when the address holds a tick. Indexed on `atp20_balances(addr, tick)`.
+
 ## [1.26.434] - 2026-11-26
 
 ### Fixed

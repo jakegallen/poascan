@@ -155,7 +155,7 @@ check("Proof of Mass uses Live board, not a second Arena label",
       and "arena" not in (_pom.group(0).split("app-blurb",1)[-1].split("</p>",1)[0].lower()))
 check("no em or en dash in Apps HTML",
       all(nodash(h) for h in (html, html_posts, html_atp, html_721, html_art, html_games)))
-check("version is 1.26.434", AG.VERSION == "1.26.434")
+check("version is 1.26.435", AG.VERSION == "1.26.435")
 
 # ATP-20 list uses official=false figures from the replay tables
 check("ATP-20 list shows SEAL and MAM from the local replay", "SEAL" in html_atp and "MAM" in html_atp)
