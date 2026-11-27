@@ -775,7 +775,7 @@ def address(a):
     qs = getattr(REQ, "qs", {}) or {}
     typ = qs.get("type", [""])[0] or ""
     tab = qs.get("tab", [""])[0] or ("txs" if typ else "overview")
-    tab = tab if tab in ("overview", "timeline", "rewards", "txs", "grading", "governance") else "overview"
+    tab = tab if tab in ("overview", "timeline", "rewards", "txs", "grading", "governance", "atp20") else "overview"
     warn = '<p class="note warn">Live lookup failed · archived data</p>' if err else ""
     nmx = nm.get(a) or p["forum_name"]
     head = (PF.head(a, nmx, addr_meta(a, bal, p), PF.tags(est, (srow or {}).get("level"), cen, a), X.usd_src()) +
@@ -783,6 +783,9 @@ def address(a):
             f'{stat("Spendable", poa(sp) + X.usd_of(sp), asof_text=rtag, flag_html=A.carry_flag("circ") if early else "")}{stat("Locked", poa(lk) + X.usd_of(lk), asof_text=rtag, flag_html=A.carry_flag("locked") if early else "")}</div>')
     tc = HI.type_counts(a); ntx = sum(tc.values()); ng = HI.assignments(a, None, 1)["assignments"]
     tabs = [("overview", "Overview", None), ("timeline", "Timeline", None), ("rewards", "Rewards", len(eps)), ("txs", "Transactions", ntx), ("grading", "Grading", ng), ("governance", "Governance", None)]
+    n20 = _atp20_count(a)   # 1.26.435: the ATP-20 tab only when this address holds a tick
+    if n20: tabs.append(("atp20", "ATP-20", n20))
+    elif tab == "atp20": tab = "overview"
     nav = '<nav class="chips atabs scroll" aria-label="Address sections">' + "".join(
         f'<a href="/address/{E(a)}{"" if k == "overview" else "?tab=" + k}" class="chip {"on" if k == tab else ""}"{" aria-current=\"page\"" if k == tab else ""}>{n}{f" <small>{c:,}</small>" if c else ""}</a>'
         for k, n, c in tabs) + f'<a href="/start?tab=check&amp;address={E(a)}" class="chip ecchip">Earn check</a></nav>'
@@ -806,6 +809,7 @@ def address(a):
     elif tab == "governance":
         from . import governance as GV
         main = GV.agent_tab(a, qs)
+    elif tab == "atp20": main = atp20_card(a, n20, qs)
     else:
         itree, n_inv = V3.invite_tree(a); rl = RC.for_address(a, 50)
         rcpt = card(f"Answers · {len(rl)}", RC.list_html(rl), f'<a class="more" href="/api/v1/receipts?address={E(a)}">API →</a>') if rl else ""
@@ -819,6 +823,27 @@ def address(a):
                 + rcpt + card(f"Invites · {n_inv}", '<div id="invites"></div>' + itree) + '</details>')
     if not rsum: nav += f'<p class="ecnote"><a href="/start?tab=check&amp;address={E(a)}">No POA yet. Why am I not earning? →</a></p>'
     return page("Address " + short(a), head + nav + main, "/")
+
+def _atp20_count(a):
+    try:
+        from . import atp20 as _T
+        return _T.address_count(a)
+    except Exception:
+        return 0   # never break the address page on a replay read
+
+def atp20_card(a, total, qs):
+    """Every ATP-20 tick this address holds (unofficial memo replay, archive only), A to Z, 20 a page with Next."""
+    from . import atp20 as _T, apps as _AP
+    from .govhub import pager, PAGE
+    off = _AP._off(qs)
+    if total and off >= total: off = (total - 1) // PAGE * PAGE
+    rows = _T.address_offset(a, off, PAGE)
+    body = table(["Tick", "Amount"], [[f'<a class="mono" href="{_AP._list_url("atp20", 0, r["tick"])}">{E(r["tick"])}</a>',
+                                       f'<span class="num">{_AP._qty(r["amount"], r["decimals"])}</span>'] for r in rows],
+                 cls="wrapt", pri=[0, 1])
+    pg = pager(total, off, lambda o: f"/address/{E(a)}?tab=atp20" + (f"&amp;offset={o}" if o else ""))
+    tag = f' <span class="tag" title="{E(_T.OFFICIAL_NOTE)}">Unofficial</span>'
+    return card("Holdings" + tag, body + pg, id="atp20")
 
 def _eps(ks):
     """E4, E5, E7 (or a range E2 to E9 for long runs)."""

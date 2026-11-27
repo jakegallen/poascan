@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS atp20_balances(
   tick TEXT NOT NULL, addr TEXT NOT NULL, amount TEXT NOT NULL, mint_count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(tick, addr));
 CREATE INDEX IF NOT EXISTS atp20_bal_tick ON atp20_balances(tick, amount DESC, addr);
+CREATE INDEX IF NOT EXISTS atp20_bal_addr ON atp20_balances(addr, tick);
 CREATE TABLE IF NOT EXISTS atp20_state(k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -641,6 +642,53 @@ def minters_page(tick, cursor=None, limit=LIMIT_DEFAULT):
     return page, nxt
 
 
+ADDR_RE = re.compile(r"^poa1[1-9A-HJ-NP-Za-km-z]{20,60}$")
+_ADDR_SQL = ("SELECT b.tick AS tick, b.addr AS addr, b.amount AS amount, b.mint_count AS mint_count, t.decimals AS decimals "
+             "FROM atp20_balances b LEFT JOIN atp20_tokens t ON t.tick=b.tick "
+             "WHERE b.addr=? AND CAST(b.amount AS INTEGER) > 0")
+
+
+def _addr_row(r):
+    d = _bal_row(r)
+    d["decimals"] = int(r["decimals"] or 0)
+    return d
+
+
+def address_count(addr):
+    """Ticks with a positive balance for one address (indexed on atp20_balances(addr, tick))."""
+    ensure_fresh()
+    if not ADDR_RE.fullmatch(addr or ""):
+        return 0
+    r = db.q1("SELECT COUNT(*) AS n FROM atp20_balances WHERE addr=? AND CAST(amount AS INTEGER) > 0", (addr,))
+    return int((r["n"] if r else 0) or 0)
+
+
+def address_offset(addr, offset=0, limit=LIMIT_DEFAULT):
+    """Every tick one address holds, A to Z, 20 at a time, for the shared offset pager."""
+    ensure_fresh()
+    if not ADDR_RE.fullmatch(addr or ""):
+        return []
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    offset = max(0, int(offset or 0))
+    return [_addr_row(r) for r in db.q(_ADDR_SQL + " ORDER BY b.tick ASC LIMIT ? OFFSET ?", (addr, limit, offset))]
+
+
+def address_page(addr, cursor=None, limit=LIMIT_DEFAULT):
+    """Every tick one address holds, A to Z, keyset-paged by tick. Archive only."""
+    ensure_fresh()
+    if not ADDR_RE.fullmatch(addr or ""):
+        raise ValueError("address must be a poa1 address")
+    limit = max(1, min(LIMIT_MAX, int(limit)))
+    w, a = "", [addr]
+    if cursor:
+        w = " AND b.tick > ?"
+        a.append(str(cursor[0]))
+    rows = db.q(_ADDR_SQL + w + " ORDER BY b.tick ASC LIMIT ?", tuple(a) + (limit + 1,))
+    page = [_addr_row(r) for r in rows[:limit]]
+    nxt = HI.enc(page[-1]["tick"]) if len(rows) > limit else None
+    return page, nxt
+
+
 def http(path, qs):
     """JSON bodies for /api/atp20/* (and the /api/v1 alias). Raises ValueError for 400, LookupError for 404."""
     ensure_fresh()
@@ -688,6 +736,14 @@ def http(path, qs):
         if row is None:
             raise LookupError("unknown tick")
         return _envelope(tick=tick, address=addr, amount=row["amount"], mint_count=row["mint_count"], official=OFFICIAL, official_note=OFFICIAL_NOTE)
+    m = re.match(r"^/api/atp20/address/([^/]+)$", path)
+    if m:
+        _params(qs, _QS_PAGE)
+        addr = m.group(1)
+        if not ADDR_RE.fullmatch(addr):
+            raise ValueError("address must be a poa1 address")
+        rows, nxt = address_page(addr, _cursor(qs, 1), _limit(qs))
+        return _envelope(address=addr, balances=rows, next_cursor=nxt)
     if path.startswith("/api/atp20/"):
         raise LookupError("unknown endpoint")
     raise LookupError("unknown endpoint")

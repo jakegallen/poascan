@@ -95,6 +95,8 @@ jobs:
         run: python tools/atp20_test.py
       - name: ATP-20 unofficial read API (keyset pages, unofficial labels, coverage, no upstream)
         run: python tools/atp20_api_test.py
+      - name: ATP-20 balances per address (API A to Z keyset 20, unofficial, indexed; address page ATP-20 tab only when held, 20 with Next)
+        run: python tools/atp20_address_test.py
       - name: Unofficial ATP-721 memo replay
         run: python tools/atp721_test.py
       - name: Unofficial ATP-721 and art APIs
