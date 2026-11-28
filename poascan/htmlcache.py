@@ -13,6 +13,8 @@ MAX_BYTES = int(os.environ.get("POASCAN_HTML_CACHE_BYTES", str(24 * 1024 * 1024)
 DEFAULT_TTL = 15
 # (path regex, query test or None, ttl s). First match wins.
 TTLS = [
+    (re.compile(r"^/chain$"), lambda qs: (qs.get("tab") or [""])[0] == "grading", 120),   # 1.26.437: warmed; a 15 s TTL would re-render it every warm pass
+    (re.compile(r"^/governance$"), lambda qs: (qs.get("level") or [""])[0] == "directory", 300),   # 1.26.437: warmed; its rows are cached 300 s
     (re.compile(r"^/network$"), None, 60),   # 1.26.x: all Network tabs (overview + health/charts/…) cache 60s, not just health
     (re.compile(r"^/governance$"), None, 60),
     (re.compile(r"^/apps$"), None, 60),
@@ -20,7 +22,7 @@ TTLS = [
     (re.compile(r"^/(about|api|privacy|agents/census|agents/operators|agents/community)$"), None, 300),   # 1.26.286: community (forum, social graph) moves slowly; it rendered 37 s cold on the one core
     (re.compile(r"^/(address|tx)/"), None, 30),
 ]
-WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/apps?tab=posts", "/apps?tab=atp20", "/apps?tab=atp721", "/apps?tab=art", "/apps?tab=games", "/network", "/live", "/live?tab=feeds", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/governance?tab=protocol", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/live?tab=feeds&view=details", "/agents/top?tab=richlist", "/swaps"]   # 1.26.431: Protocol tab warmed so a last-good pin cannot sit on an older release than /api/v1/protocol; 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
+WARM = ["/", "/chain/txs", "/start", "/about", "/apps", "/apps?tab=posts", "/apps?tab=atp20", "/apps?tab=atp721", "/apps?tab=art", "/apps?tab=games", "/network", "/live", "/live?tab=feeds", "/network?tab=token", "/governance", "/governance?tab=closes", "/governance?tab=settleage", "/governance?tab=protocol", "/chain", "/agents", "/agents/top", "/agents/census", "/agents/census?tab=journey", "/agents/census?tab=rates", "/agents/operators", "/agents/community", "/agents/community?tab=social", "/agents/community?tab=answers", "/agents/community?tab=topics", "/agents/top?tab=active", "/agents/top?tab=rising", "/network?tab=anchors", "/network?tab=charts", "/live?tab=feeds&view=details", "/agents/top?tab=richlist", "/swaps", "/governance?level=directory", "/chain?tab=grading"]   # 1.26.431: Protocol tab warmed so a last-good pin cannot sit on an older release than /api/v1/protocol; 1.26.405: Network details and Earned (the richlist tab) joined; 1.26.399: the tabs a first visitor waited 4 to 20 s for (audit M8), Governance Closes and Settle age instead of the two Standing aliases; 1.26.286: census (9 s) and community (37 s) rendered live on a visitor miss
 WARM_EVERY = 20
 # 1.26.405: the latest few closed epoch pages are warmed too (a cold /epoch/N render read every close for the first visitor). The
 # numbers change at each close, so they live in EXTRA, rebuilt at the start of each warm pass from LATEST_EPOCH (set by server.py).
@@ -168,10 +170,26 @@ def canon_qs(path, qs):
 # value are kept, so the number of copies stays bounded (one per tab, segment and visitor or crawler).
 PIN_TABS = ("/governance",)
 
+# 1.26.437: the Governance level chips (Directory read every close and every seal: 78 s cold) are kept the same way.
+GOV_LEVELS = ("safe", "watch", "risk", "never", "directory")
+
 def _tab_pin(path, qst):
     if path not in PIN_TABS: return False
     if not qst: return True
-    return len(qst) == 1 and qst[0][0] == "tab" and len(qst[0][1]) == 1 and qst[0][1][0] in _TAB_OK.get(path, ())
+    if len(qst) != 1 or len(qst[0][1]) != 1: return False
+    k, v = qst[0][0], qst[0][1][0]
+    if k == "level": return v in GOV_LEVELS
+    return k == "tab" and v in _TAB_OK.get(path, ())
+
+# 1.26.437: the Chain tabs and the tx type filters are kept like a warmed page once rendered (a fixed set, so the number
+# of copies stays bounded): under load a visitor gets the last good copy with no slot instead of the Busy page.
+CHAIN_TABS = ("pending", "grading")
+TX_TYPES = ("challenge", "grade-sealed", "grade", "attest-batch", "join", "transfer", "beacon", "swap-offer", "chains-update", "identity-link")
+
+def _chain_pin(path, qst):
+    if path not in ("/chain", "/chain/txs") or len(qst) != 1 or len(qst[0][1]) != 1: return False
+    k, v = qst[0][0], qst[0][1][0]
+    return (path == "/chain" and k == "tab" and v in CHAIN_TABS) or (path == "/chain/txs" and k == "type" and v in TX_TYPES)
 
 def _apps_pin(path, qst):
     """Any canonical /apps view (a tab, a collection, a tick, or a pager page) is kept like a
@@ -212,11 +230,11 @@ def _apps_pin(path, qst):
 def is_warm(path, qs):
     """True for a warmed visitor URL (the canonical query only)."""
     qst = _qs_tuple(qs)
-    return (path, qst) in _warm_pairs() or _tab_pin(path, qst) or _apps_pin(path, qst)
+    return (path, qst) in _warm_pairs() or _tab_pin(path, qst) or _apps_pin(path, qst) or _chain_pin(path, qst)
 
 def _pinned_key(k):
     """Warmed pages live outside the FIFO (any segment, visitor or crawler)."""
-    return (k[0], k[1]) in _warm_pairs() or _tab_pin(k[0], k[1]) or _apps_pin(k[0], k[1])
+    return (k[0], k[1]) in _warm_pairs() or _tab_pin(k[0], k[1]) or _apps_pin(k[0], k[1]) or _chain_pin(k[0], k[1])
 
 def note_close():
     """A new close landed. The warm loop rebuilds visitor pages and publishes each one when it is finished.

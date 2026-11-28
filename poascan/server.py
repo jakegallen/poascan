@@ -144,7 +144,7 @@ def api(path, qs):
         return dict(ok=fd["ok"], state=fd["state"], chain=fd["chain"], core=fd["core"], core_basis=fd["core_basis"], core_not_ok=fd["core_not_ok"], degraded=fd["degraded"],
                     routes=fd["routes"], feeds=fd["feeds"], swap_route=_HO.swap_route(), route_halts=_RW.state(), load_1h=dict(total_bytes=sum(load.values()), by_endpoint=load,
                     txlist_every_s=_IX._txlist_every[0], txlist_reads_1h=_IX.txlist_events_1h()), tx_reads=_IX.shed_state(), address_reads=dict(agent_list=V._roster_skips[0], read_path=V._roster_skips[1], agent_list_fresh_s=V.ROSTER_FRESH_S), started=STARTED, commit=COMMIT, live_last_ok=h["live_last_ok"], node_as_of=st.get("as_of"), node_stale=st.get("stale"),
-                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], loops=_IX.loop_state(), census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state(), page_cache=HC.state()), False
+                    txs_indexed=A.tx_counts()["n"], jobs=h["jobs"], loops=_IX.loop_state(), census=G.census_clock(), endpoints=h["endpoints"], fast_index=FX.public_state(), page_cache=HC.state(), boot=boot_state()), False
     if path == "/api/routes":   # 1.26.188: route halts from POAScan's existing probes (routewatch.py)
         from . import routewatch as _RW
         return _RW.public(), False
@@ -622,6 +622,16 @@ BUSY_HTML = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
              '.d:before{content:"";width:8px;height:8px;border-radius:50%;background:#FFB000}a{color:#FFB000;text-decoration:none;font:600 11px system-ui;letter-spacing:.12em}'
              'p{margin:18px 0 0}</style></head><body><div class="c"><div class="l">POA<b>SCAN</b></div><h1>Busy</h1>'
              '<span class="d">Reloading</span><p><a href="/api">API</a></p></div></body></html>')
+# 1.26.437: the same card during the first minutes after a restart, while caches warm. Same size and rules as Busy.
+WARM_HTML = BUSY_HTML.replace("<title>Busy · POAScan</title>", "<title>Warming up · POAScan</title>").replace("<h1>Busy</h1>", "<h1>Warming up</h1>").replace("Reloading", "Back in a moment")
+WARMUP_S = int(os.environ.get("POASCAN_WARMUP_S", "600"))   # a shed in this window after the server starts listening says Warming up
+BOOT = dict(serving_ts=None, done_ts=None, phases={})   # set by main() only; tests and imports are never warming
+def warming(now=None):
+    t = BOOT.get("serving_ts")
+    return bool(t) and ((now or time.time()) - t) < WARMUP_S
+def boot_state(now=None):
+    """/api/health boot: when the server began answering, when the boot work finished, seconds per phase, warming."""
+    return dict(serving_at=BOOT.get("serving_ts"), done_at=BOOT.get("done_ts"), phases_s=dict(BOOT.get("phases") or {}), warming=warming(now))
 EVENT_LIMIT = AG.Limiter(0.5, 20)   # POST /ops/e: per IP, in memory
 NAME_LIMIT = AG.Limiter(2, 40)      # GET /api/v1/agents/name-available: per IP, in memory (typing checks, debounced)
 PROMPT_LIMIT = AG.Limiter(0.5, 30)   # GET /api/v1/prompts/join: per IP, in memory
@@ -1567,8 +1577,10 @@ class H(BaseHTTPRequestHandler):
             if h: return self.send(200, h, extra={"Cache-Control": "no-store", "X-POAScan-Copy": "last-good"})
             retry = "60" if self._is_search_crawler() else "15"   # 1.26.342 (A): 15 (was 3) so a shed client backs off instead of hammer-retrying into the jam
             GD.note_shed(bkt, self._kind())
+            if warming(): return self.send(503, WARM_HTML, extra={"Retry-After": "10", "Cache-Control": "no-store", "X-POAScan-Warming": "1"})
             return self.send(503, BUSY_HTML, extra={"Retry-After": retry, "Cache-Control": "no-store"})
         GD.note_shed(kind=self._kind())
+        if warming(): return self.send(503, "warming up after a restart, retry shortly\n", TXT, {"Retry-After": "10", "Cache-Control": "no-store", "X-POAScan-Warming": "1"})
         return self.send(503, "server busy, retry shortly\n", TXT, {"Retry-After": "15", "Cache-Control": "no-store"})
     def _swap_status_fast(self):
         """Pinned swaps/status. No SQLite and no meta rebuild on this path (both can wait out a 30 s lock)."""
@@ -2048,17 +2060,23 @@ def warm_txs_micro():
     return ck, b, hd
 
 def main():
+    """1.26.437: answer first, then do the boot work. Before this the indexer's boot backfills, the txs micro warm and the
+    chart warm all ran before the server answered, so a deploy had about 4 minutes with nothing listening (Fly: no healthy
+    instance) and then a jam. Now the server listens right after the schema check and the reload of the last good pages,
+    and the rest of the boot runs beside it. Each phase is timed into BOOT (shown on /api/health as boot)."""
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     KS.install_log_filter()   # every log line: keys and credential parameters redacted
-    db.init()
-    try: warm_txs_micro()
-    except Exception as e: log.warning("txs micro warm: %s", type(e).__name__)
-    _record_start()   # bump the persisted process start/restart counter (surfaced on /api/status diagnostics)
+    ph = BOOT["phases"]
+    def timed(name, fn):
+        t0 = time.time()
+        try: fn()
+        except Exception as e: log.warning("boot %s: %s", name, type(e).__name__)
+        ph[name] = round(time.time() - t0, 2)
+    timed("db_init", db.init)
+    timed("record_start", _record_start)   # bump the persisted process start/restart counter (surfaced on /api/status diagnostics)
     VS.COUNTER.start()
-    try: CK.start()   # when signup check-ins began (since_ts on /ops/funnel)
-    except Exception as e: log.warning("check-in start: %s", type(e).__name__)
-    try: OI.start()   # when the /ops/internal counters began (since_ts)
-    except Exception as e: log.warning("ops internal start: %s", type(e).__name__)
+    timed("checkin_start", CK.start)   # when signup check-ins began (since_ts on /ops/funnel)
+    timed("ops_start", OI.start)   # when the /ops/internal counters began (since_ts)
     def _term(*_):   # flush the visit counts, then exit as before
         try: VS.COUNTER.flush(final=True)   # rare referrers go out as 'other', never by name
         except Exception: pass
@@ -2067,22 +2085,27 @@ def main():
         logging.shutdown(); os._exit(0)
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)   # Fly's default stop signal; fly.toml sets SIGTERM, this is the second safeguard
-    if os.environ.get("POASCAN_INDEXER", "1") == "1":
-        I.start(os.environ.get("POASCAN_SEED_DIR"))
-        if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
-        if HC.ENABLED:   # 1.26.202: heavy pages re-rendered in the background before their cached copy expires
-            try: HC.load_pins()   # 1.26.284 (E5): serve the previous run's warm pins at once, before the 60 s warm wait
-            except Exception as e: log.warning("htmlcache load pins: %s", type(e).__name__)
-            __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
-            __import__("threading").Thread(target=_doc_warm, daemon=True, name="docwarm").start()   # 1.26.306: /api pages rendered off the request
-        try: CP.start()   # 1.26.277: pin every chart and range off the request; a miss still builds on the first hit
-        except Exception as e: log.warning("chart warm: %s", type(e).__name__)
+    indexer = os.environ.get("POASCAN_INDEXER", "1") == "1"
+    if indexer and HC.ENABLED:
+        timed("load_pins", HC.load_pins)   # 1.26.284 (E5): the previous run's warm pins, served before anything renders
     host = os.environ.get("HOST", "0.0.0.0"); port = int(os.environ.get("PORT", "8080"))
     HUB.start()
     srv = Server((host, port), H)
     GD.start(port)
-    log.info("POASCAN listening on %s:%s", host, port)
-    srv.serve_forever()
+    st = __import__("threading").Thread(target=srv.serve_forever, daemon=True, name="serve"); st.start()
+    BOOT["serving_ts"] = time.time(); ph["to_listen"] = round(BOOT["serving_ts"] - STARTED, 2)
+    log.info("POASCAN listening on %s:%s (%.1fs after start)", host, port, ph["to_listen"])
+    timed("txs_micro", warm_txs_micro)
+    if indexer:
+        timed("indexer_start", lambda: I.start(os.environ.get("POASCAN_SEED_DIR")))
+        if os.environ.get("POASCAN_STATS_TOKEN"): OD.start(AG.VERSION)   # /ops/dashboard prebuilt on a timer, never built on a request once warm
+        if HC.ENABLED:   # 1.26.202: heavy pages re-rendered in the background before their cached copy expires
+            __import__("threading").Thread(target=lambda: (time.sleep(60), HC.warm_loop(_warm_render, SG.selected)), daemon=True, name="htmlwarm").start()
+            __import__("threading").Thread(target=_doc_warm, daemon=True, name="docwarm").start()   # 1.26.306: /api pages rendered off the request
+        timed("chart_start", lambda: CP.start())   # 1.26.277: pin every chart and range off the request; a miss still builds on the first hit
+    BOOT["done_ts"] = time.time()
+    log.info("POASCAN boot work done in %.1fs: %s", BOOT["done_ts"] - STARTED, ph)
+    while st.is_alive(): st.join(3600)
 
 if __name__ == "__main__":
     main()

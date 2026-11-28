@@ -89,6 +89,10 @@ jobs:
         run: python tools/v084_params_test.py
       - name: 1.26.436 polish (Agent chips once, bar labels thinned on a phone, tx_counts cached for /api/health, /about Reference)
         run: python tools/better1128_test.py
+      - name: 1.26.437 deploy and load (listen before boot work, Warming up card, Governance levels and Chain filters kept warm)
+        run: python tools/deploy1128_test.py
+      - name: Every live /api/params key has a Protocol label or is baselined
+        run: python tools/params_label_test.py
       - name: Params mirror (/api/params and /api/v1/params are one slot-exempt route served from the hourly blob with a last-good fallback, so no 503 under load; the emission keys including seal_load_frozen_from_epoch pass through, swap_fee* dropped)
         run: python tools/params_mirror_test.py
       - name: Slot latch pins (Pinned winner, Superseded twin, not counted in sent, type or seal counts; tx page, history, tx list, /api/v1/tx and MCP)
