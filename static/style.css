@@ -2374,3 +2374,5 @@ table.erows{width:100%;border-collapse:collapse}table.erows td{padding:0}
 @media (prefers-reduced-motion:reduce){
  .mint-chev,.mint-copy,.mint-btn{transition:none}
 }
+/* 1.26.436: bar charts with more than four date labels show every other one on a phone (ui.bars marks the odd ones .xo) */
+@media (max-width:640px){.ck .xl.xo{display:none}}
