@@ -86,6 +86,8 @@ def _num(v):
     try: return float(v)
     except (TypeError, ValueError): return 0.0
 
+FOLDED = {"att_cap_skip_verifiers": "att_cap_skip_from_epoch"}   # 1.26.437: keys shown inside another key's row (tools/params_label_test.py)
+
 def params_extra(p=None):
     """[{key, label, value, text}] for the v0.84 params keys present in /api/params (POAScan's hourly copy, no extra read).
     carry_correction: from_epoch, Agents, total and whether table_sha256 is the pinned ballot 2464 table.

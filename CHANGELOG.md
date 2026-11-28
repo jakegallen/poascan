@@ -11,6 +11,18 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.437] - 2026-11-28
+
+### Added
+- `/api/health` `boot` (additive): when the server began answering, when its boot work finished, seconds per boot phase, and `warming`.
+- CI check `tools/params_label_test.py`: every live `/api/params` key must have a Protocol label (or be folded into one, or be listed in `tools/params_baseline.json` as left raw on purpose), so a new minepoa param cannot ship unlabeled.
+
+### Changed
+- Boot answers first. The server opens its socket right after the schema check and the reload of the last good pages; the indexer boot work (ATP backfills, join label repair, kin sync), the txs micro warm and the chart warm run beside it. A deploy used to leave about 4 minutes with nothing listening.
+- In the first 10 minutes after a restart, a page with no stored copy that cannot get a slot shows a Warming up card (503, Retry-After 10, `X-POAScan-Warming: 1`) instead of Busy; the API's plain text 503 says it is warming up.
+- `/governance?level=directory` (78 s cold) and the other level chips are kept like warmed pages, and Directory is warmed in the background every 5 minutes.
+- `/chain?tab=grading` and `?tab=pending`, and `/chain/txs?type=` for each known tx type, are kept like warmed pages, so under load a visitor gets the last good copy instead of a 503. Grading is warmed every 2 minutes.
+
 ## [1.26.436] - 2026-11-28
 
 ### Added
