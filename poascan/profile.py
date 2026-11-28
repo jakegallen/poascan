@@ -2,7 +2,7 @@
 linking to its LabLeak profile, the address with copy, and census tags. The Overview opens with the Score (a dial and its four
 parts, with jury and standing facts), rewards per epoch, and an hour by day activity map (UTC from the server, the visitor's zone once app.js runs). All from
 POAScan's archive: Score and facts from governance.scores (cached 300 s), rewards from the close records, activity from the txs table (one indexed read per page)."""
-import time
+import re, time
 from . import db, marks as MK
 from .ui import E, card, copy, name_link, intc, short, bars, table, poa, pop_btn_local
 
@@ -23,7 +23,13 @@ def tags(est, level, cen, a=None):
         t.append(f'<span class="tag">{E(cen.get("eco") or "")}</span>' if cen.get("eco") else "")
         t.append(f'<span class="tag">{E(cen.get("detail") or "")}</span>' if cen.get("detail") else "")
         t += [f'<span class="tag">{E(h)}</span>' for h in (cen.get("harness") or [])[:3]]
-    t = [x for x in t if x]
+    seen = set(); out = []   # 1.26.436: model and harness both Undisclosed showed the same chip twice
+    for x in t:
+        if not x: continue
+        k = re.sub(r"<[^>]+>", "", x).strip().lower()
+        if k in seen: continue
+        seen.add(k); out.append(x)
+    t = out
     return f'<div class="ptags">{"".join(t)}</div>' if t else ""
 
 def head(a, name, meta, tagrow, usd=""):

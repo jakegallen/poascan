@@ -1032,6 +1032,8 @@ def bars(series, height=180, colors=("gold", "ember"), labels=None, fmt=compact,
             p = 100 * (x + (bw + dx) / 2) / VW
             lz = f' data-lts="{int(tss[i])}" data-f="{xk}"' if tss[i] else ""
             xl.append(_xlab(p, E(str(lab)), lz))
+    if len(xl) > 4:   # 1.26.436: at 390px six or seven date labels ran into each other; a phone shows every other one
+        xl = [x.replace('class="xl ', 'class="xl xo ', 1) if k % 2 else x for k, x in enumerate(xl)]
     lv = series[-1][1]; lvt = (compact3 if fmt is compact else fmt)(real[-1])   # the chip reads as the headline does
     cg = (_chg(real[-2], real[-1]) if n > 1 else "") if head else ""
     tags = _tag("lv b", VW, VH - VH * (tot(lv) / mx) - dy / 2, lvt, sub=cg)

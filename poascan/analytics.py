@@ -1078,6 +1078,7 @@ def sybil_public():
                note="measurements that can have innocent explanations; not a verdict on any Agent", method="https://poascan.io/about#sybil")
     return out
 
+@cached("tx_counts", 300, light=True)   # 1.26.436: a full scan of ~2M txs; /api/health ran it on every call (2.6 to 16 s)
 def tx_counts():
     r = db.q1("SELECT COUNT(*) AS n, MIN(ts) AS first, MAX(ts) AS last, MIN(first_seen) AS since FROM txs")
     r["by_type"] = db.q("SELECT type, COUNT(*) AS n FROM txs GROUP BY type ORDER BY n DESC")

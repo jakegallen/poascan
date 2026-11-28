@@ -157,6 +157,18 @@ def params_extra(p=None):
     dg = p.get("att_disk_guard_from_height")   # v0.135: a chain height, not an epoch
     if isinstance(dg, int) and not isinstance(dg, bool):
         out.append(dict(key="att_disk_guard_from_height", label="Disk guard", value=dg, text=f"H{dg:,}"))
+    # 1.26.436: minepoa v0.137 and v0.138-1742 keys. Terse, no word repeated from the rows above.
+    ar = p.get("att_log_recover_from_epoch")
+    if isinstance(ar, int) and not isinstance(ar, bool):
+        out.append(dict(key="att_log_recover_from_epoch", label="Recovery", value=ar, text=f"E{ar}"))
+    ce, cv = p.get("att_cap_skip_from_epoch"), p.get("att_cap_skip_verifiers")
+    if isinstance(ce, int) and not isinstance(ce, bool):
+        vs = [str(x) for x in cv if isinstance(x, str)] if isinstance(cv, list) else []
+        out.append(dict(key="att_cap_skip_from_epoch", label="Cap skip", value=dict(from_epoch=ce, verifiers=vs),
+                        text=f"E{ce}" + (f" · {len(vs)} verifier{'s' if len(vs) != 1 else ''}" if isinstance(cv, list) else "")))
+    bu = p.get("batch_unpark_from_epoch")
+    if isinstance(bu, int) and not isinstance(bu, bool):
+        out.append(dict(key="batch_unpark_from_epoch", label="Unpark", value=bu, text=f"E{bu}"))
     return out
 
 

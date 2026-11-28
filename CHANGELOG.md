@@ -11,6 +11,17 @@ All notable changes to POAScan. Format: [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [1.26.436] - 2026-11-28
+
+### Added
+- minepoa v0.137 and v0.138-1742 params on the Protocol Current list and in the econ params block: Recovery (`att_log_recover_from_epoch`, E135), Cap skip (`att_cap_skip_from_epoch` with its `att_cap_skip_verifiers`, E136 · 5 verifiers) and Unpark (`batch_unpark_from_epoch`, E136).
+
+### Fixed
+- `/api/health` took 2.6 to 16 s because every call counted all ~2M indexed txs. The count is cached for 5 minutes (`txs_indexed` can lag by that much).
+- Bar charts with more than four date labels (the Governance Per close chart and others) ran their labels into each other at 390px. A phone now shows every other label.
+- The Agent header showed Undisclosed twice when both model and harness were undisclosed. Each chip shows once.
+- /about API copy says Reference instead of Full list.
+
 ## [1.26.435] - 2026-11-27
 
 ### Added
